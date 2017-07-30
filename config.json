@@ -1,0 +1,39 @@
+{
+	"sealEngine": "PBFT",
+	"systemproxyaddress":"0x0",
+	"systemproxyaddressDfsFile":"",
+	"systemproxyaddressDfsServer":"",
+	"listenip":"127.0.0.1",
+	"rpcport":"6801",
+	"p2pport":"30303",
+	"wallet":"keys.info",
+	"keystoredir":"keystore/",
+	"datadir":"",
+	"vm":"interpreter",
+	"networkid":"12345",
+	"logverbosity":"4",
+	"coverlog":"OFF",
+	"eventlog":"ON",
+	"logconf":"log.conf",
+	"dfsNode":"de0fa385816b505799433e54b88788e21cb42092a6ff5bcaa2285d7ace906e5e6ce8ef2b30134ff276a5834d58721291acc5864e07e6d52469b79b28e699dfde",
+	"dfsGroup":"group1",
+	"dfsStorage":"filestorage",
+	"params": {
+		"accountStartNonce": "0x0",
+		"maximumExtraDataSize": "0x0",
+		"tieBreakingGas": false,
+		"blockReward": "0x0",
+		"networkID" : "0x0"
+	},
+	"NodeextraInfo":[
+	{
+	    "Nodeid":"de0fa385816b505799433e54b88788e21cb42092a6ff5bcaa2285d7ace906e5e6ce8ef2b30134ff276a5834d58721291acc5864e07e6d52469b79b28e699dfde", 
+	    "Nodedesc": "node1",
+	    "Agencyinfo": "node1",
+	    "Peerip": "127.0.0.1",
+	    "Identitytype": 1,
+	    "Port":30303,
+	    "Idx":0
+	}
+	]
+}

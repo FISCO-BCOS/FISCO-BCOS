@@ -1,0 +1,81 @@
+<html>
+    <head>
+        <script type="text/javascript" src="asn1hex.js"></script>
+        <script type="text/javascript" src="base64.js"></script>
+        <script type="text/javascript" src="rng.js"></script>
+        <script type="text/javascript" src="jsbn.js"></script>
+        <script type="text/javascript" src="rsa.js"></script>
+        <script type="text/javascript" src="paillierKey.js"></script>
+    </head>
+    <body>
+    <textarea id="txta" rows="500" cols="150">test</textarea>
+    <script type="text/javascript">
+        var txtObj = document.getElementById('txta');
+        var date1=new Date();  //开始时间
+
+        var paillier = new RSAKey();
+        paillier.generate(1024, "3");
+        txtObj.value = paillier.publicKeyToX509PemString();
+        txtObj.value = txtObj.value + "\n" + paillier.privateKeyToPkcs8PemString();
+        txtObj.value = txtObj.value + "\nN.length = " + paillier.n.bitLength();
+        var date2=new Date();    //结束时间
+        var date3=date2.getTime()-date1.getTime()  //时间差的毫秒数
+        txtObj.value = txtObj.value + "\ntime = " + date3;
+        date1=new Date();  //开始时间
+
+        var i1 = new BigInteger("100");
+        var c1 = paillier.paillierEncrypt(i1);
+        txtObj.value = txtObj.value + "\n C1.length:" + c1.length;
+        txtObj.value = txtObj.value + "\n-----BEGIN C1-----";
+        txtObj.value = txtObj.value + "\n" + paillier.splitKey(c1, 64);
+        txtObj.value = txtObj.value + "\n-----END C1-----";
+        date2=new Date();    //结束时间
+        date3=date2.getTime()-date1.getTime()  //时间差的毫秒数
+        txtObj.value = txtObj.value + "\ntime = " + date3;
+        date1=new Date();  //开始时间
+
+
+        var o1 = paillier.paillierDecrypt(c1);
+        txtObj.value = txtObj.value + "\n O1:" + o1.intValue();
+        date2=new Date();    //结束时间
+        date3=date2.getTime()-date1.getTime()  //时间差的毫秒数
+        txtObj.value = txtObj.value + "\ntime = " + date3;
+        date1=new Date();  //开始时间
+
+        var i2 = new BigInteger("-20000");
+        var c2 = paillier.paillierEncrypt(i2);
+        txtObj.value = txtObj.value + "\n C2.length:" + c2.length;
+        txtObj.value = txtObj.value + "\n-----BEGIN C2-----";
+        txtObj.value = txtObj.value + "\n" + paillier.splitKey(c2, 64);
+        txtObj.value = txtObj.value + "\n-----END C2-----";
+        date2=new Date();    //结束时间
+        date3=date2.getTime()-date1.getTime()  //时间差的毫秒数
+        txtObj.value = txtObj.value + "\ntime = " + date3;
+        date1=new Date();  //开始时间
+
+        var o2 = paillier.paillierDecrypt(c2);
+        txtObj.value = txtObj.value + "\n O2:" + o2.intValue();
+        date2=new Date();    //结束时间
+        date3=date2.getTime()-date1.getTime()  //时间差的毫秒数
+        txtObj.value = txtObj.value + "\ntime = " + date3;
+        date1=new Date();  //开始时间
+
+        var c3 = paillier.paillierAdd(c1, c2);
+        txtObj.value = txtObj.value + "\n C3.length:" + c3.length;
+        txtObj.value = txtObj.value + "\n-----BEGIN C3-----";
+        txtObj.value = txtObj.value + "\n" + paillier.splitKey(c3, 64);
+        txtObj.value = txtObj.value + "\n-----END C3-----";
+        date2=new Date();    //结束时间
+        date3=date2.getTime()-date1.getTime()  //时间差的毫秒数
+        txtObj.value = txtObj.value + "\ntime = " + date3;
+        date1=new Date();  //开始时间
+
+        var o3 = paillier.paillierDecrypt(c3);
+        txtObj.value = txtObj.value + "\n O3:" + o3.intValue();
+        date2=new Date();    //结束时间
+        date3=date2.getTime()-date1.getTime()  //时间差的毫秒数
+        txtObj.value = txtObj.value + "\ntime = " + date3;
+        date1=new Date();  //开始时间
+    </script>
+    </body>
+</html>
