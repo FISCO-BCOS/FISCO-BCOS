@@ -21,7 +21,7 @@ BCOS平台是聚焦于企业级应用服务的区块链技术平台，已经在�
 ## 技术白皮书
 
 参见[BCOS平台白皮书——面向分布式商业的区块链基础设施](https://github.com/bcosorg/bcos/blob/master/doc/BCOS_Whitepaper.pdf)。
-
+（如无法在浏览器上直接浏览，请下载到本地打开）
 
 ## License
 
