@@ -32,6 +32,7 @@ BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/bcosorg/
 微信群：添加群管理员微信号BCOS_FANS，拉您入BCOS官方技术交流群。
 
 群管理员微信二维码：
+
 ![](./doc/BCOS_FANS.jpeg)
 
 
