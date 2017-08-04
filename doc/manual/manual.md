@@ -191,7 +191,7 @@ mkdir -p /mydata/nodedata-1/log/
 mkdir -p /mydata/nodedata-1/keystore/
 bcoseth --gennetworkrlp  /mydata/nodedata-1/data/network.rlp
 ```
-将在/mydata/nodedata-1/ 目录下生成两个文件 network.rlp 和 network.rlp.pub。
+将在/mydata/nodedata-1/data/ 目录下生成两个文件 network.rlp 和 network.rlp.pub。
 network.rlp是节点身份的私钥二进制文件。
 network.rlp.pub是节点身份的NodeId文件。
 
