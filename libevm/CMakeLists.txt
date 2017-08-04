@@ -33,7 +33,7 @@ include_directories(../libodbc/include
 					../libodbc/include/sqllite
 					../libodbc/include/ss_linux
 					../libodbc/include/sybase
-					../libpailler)
+					../libpaillier)
 
 
 target_link_libraries(evm ${Eth_ETHCORE_LIBRARIES})
