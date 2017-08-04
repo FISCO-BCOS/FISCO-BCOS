@@ -4,7 +4,7 @@
 	"systemproxyaddressDfsFile":"",
 	"systemproxyaddressDfsServer":"",
 	"listenip":"127.0.0.1",
-	"rpcport":"6801",
+	"rpcport":"8545",
 	"p2pport":"30303",
 	"wallet":"/mydata/nodedata-1/keys.info",
 	"keystoredir":"/mydata/nodedata-1/keystore/",
