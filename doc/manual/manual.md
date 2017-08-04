@@ -31,7 +31,6 @@ BCOS区块链开源平台由深圳前海微众银行股份有限公司、万向�
 ①　安装nodejs(安装后版本nodejs版本大于6）、babel-node环境
 ```bash
 sudo yum install -y nodejs 
-sudo yum install 
 sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
 sudo cnpm install -g babel-cli babel-preset-es2017
 echo '{ "presets": ["es2017"] }' > ~/.babelrc
