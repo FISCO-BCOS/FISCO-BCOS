@@ -786,6 +786,7 @@ contract HelloWorld{
 工具目录下已有部署脚本。更新目录下config.js中的Ip（内网监听IP）和端口（RPC监听端口），及privKey（注意没有0x前缀）和account（注意有0x前缀）	（生成方法参看生成公私钥对）后直接使用即可。
 ```bash
 cd tool
+npm install
 vim config.js  
 babel-node deploy.js HelloWorld
 ```
@@ -877,6 +878,7 @@ web3.admin.getPeers(console.log)
 
 ```shell
 cd systemcontractv2
+npm install
 vim config.js 	#更新内网监听Ip和RPC监听端口，及privKey和account（可复用第四章部署合约 中的或重新生成）
 babel-node deploy.js
 ```
