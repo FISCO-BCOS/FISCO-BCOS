@@ -189,7 +189,7 @@ mkdir -p /mydata/nodedata-1/
 mkdir -p /mydata/nodedata-1/data/
 mkdir -p /mydata/nodedata-1/log/
 mkdir -p /mydata/nodedata-1/keystore/
-./build/eth/bcoseth --gennetworkrlp  /mydata/nodedata-1/network.rlp
+bcoseth --gennetworkrlp  /mydata/nodedata-1/network.rlp
 ```
 将在/mydata/nodedata-1/ 目录下生成两个文件 network.rlp 和 network.rlp.pub。
 network.rlp是节点身份的私钥二进制文件。
@@ -303,7 +303,7 @@ node accountManager.js
 ## 2.7．创世节点启动
 命令行：区块链执行程序路径 --genesis 创世块文件 --config 配置文件
 
-``` ./build/eth/bcoseth --genesis ./genesis.json --config ./config.json & ```
+``` bcoseth --genesis ./genesis.json --config ./config.json & ```
 
 查看日志是否正常出块 
 
@@ -1001,7 +1001,7 @@ vim node2.json
 执行以下命令启动区块链节点进程：
 
 ```shell
-./build/eth/bcoseth --genesis /mydata/nodedata-2/genesis.json --config /mydata/nodedata-2/config.json
+bcoseth --genesis /mydata/nodedata-2/genesis.json --config /mydata/nodedata-2/config.json
 ```
 
 查看块高变化及连接节点信息：
@@ -1397,7 +1397,7 @@ console.log("配置项:"+key+","+value);
 示例如下：
 
 ```
-./build/eth/bcoseth --genesis ./genesis.json --config ./config.json 	
+bcoseth --genesis ./genesis.json --config ./config.json 	
 --export-genesis ./genesis.file
 ```
 
