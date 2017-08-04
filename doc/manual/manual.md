@@ -1,3 +1,5 @@
+[toc]
+
 # 前言
 
 本文档是BCOS区块链开源平台的一部分。
@@ -22,13 +24,13 @@ BCOS区块链开源平台由深圳前海微众银行股份有限公司、万向�
 |操作系统|		|Ubuntu（16.04  64位）/CentOS （7.2  64位）|
 
 
-以下代码及操作命令以在Centos操作系统上为示例。
+以下代码及操作命令以在Centos7.2操作系统上为示例。
 
 ## 1.2软件环境
 
 ①　安装nodejs(安装后版本nodejs版本大于6）、babel-node环境
 ```bash
-sudo yum install nodejs 
+sudo yum install -y nodejs 
 sudo yum install 
 sudo npm config set registry https://registry.npm.taobao.org
 sudo cnpm install -g babel-cli babel-preset-es2017
@@ -48,7 +50,7 @@ sudo chmod +x /usr/bin/solc
 
 ③　安装控制台
 ```bash
-sudo yum install git
+sudo yum install -y git
 sudo cnpm install -g ethereum-console
 ```
 
@@ -90,7 +92,7 @@ sudo yum -y install cmake3
 ②　安装依赖的开发库
 
 ```bash
-sudo yum install openssl openssl-devel
+sudo yum install -y openssl openssl-devel
 chmod +x scripts/install_deps.sh
 ./scripts/install_deps.sh
 ```
@@ -99,7 +101,7 @@ chmod +x scripts/install_deps.sh
 ```bash
 mkdir -p build
 cd build/
-cmake -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. #注意命令末尾的..
+cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. #注意命令末尾的..
 make -j2
 ```
 
@@ -784,6 +786,7 @@ contract HelloWorld{
 工具目录下已有部署脚本。更新目录下config.js中的Ip（内网监听IP）和端口（RPC监听端口），及privKey（注意没有0x前缀）和account（注意有0x前缀）	（生成方法参看生成公私钥对）后直接使用即可。
 ```bash
 cd tool
+cnpm install
 vim config.js  
 babel-node deploy.js HelloWorld
 ```
@@ -874,9 +877,8 @@ web3.admin.getPeers(console.log)
 执行以下命令：
 
 ```shell
-cd systemcontractv2/output
-tar xvf linux.tar
-cd ..
+cd systemcontractv2
+cnpm install
 vim config.js 	#更新内网监听Ip和RPC监听端口，及privKey和account（可复用第四章部署合约 中的或重新生成）
 babel-node deploy.js
 ```
