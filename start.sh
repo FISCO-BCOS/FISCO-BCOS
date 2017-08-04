@@ -1,3 +1,3 @@
 #!/bin/sh
-./build/eth/eth  --genesis ./genesis.json --config ./config.json
+bcoseth   --genesis ../genesis.json --config ../config.json              2>abc  
   

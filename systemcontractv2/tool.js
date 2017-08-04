@@ -15,7 +15,7 @@ console.log(config);
 
 
 function getAbi(file){
-	var abi=JSON.parse(fs.readFileSync(config.Ouputpath+"./"+file+".sol:"+file+".abi",'utf-8'));
+	var abi=JSON.parse(fs.readFileSync(config.Ouputpath+"./"+file+".abi",'utf-8'));
 	return abi;
 }
 
