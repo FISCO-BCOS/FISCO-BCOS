@@ -24,11 +24,11 @@ include_directories(../libodbc/include
 					../libodbc/include/ss_linux
 					../libodbc/include/sybase)
 					
-target_link_libraries(eth ${Eth_EVM_LIBRARIES})
-target_link_libraries(eth ${Web3_WEB3JSONRPC_LIBRARIES})
-target_link_libraries(eth ${Web3_WEBTHREE_LIBRARIES})
-target_link_libraries(eth contract)
-target_link_libraries(eth JsonRpcCpp::Client)
+target_link_libraries(bcoseth ${Eth_EVM_LIBRARIES})
+target_link_libraries(bcoseth ${Web3_WEB3JSONRPC_LIBRARIES})
+target_link_libraries(bcoseth ${Web3_WEBTHREE_LIBRARIES})
+target_link_libraries(bcoseth contract)
+target_link_libraries(bcoseth JsonRpcCpp::Client)
 
 if (EVMJIT)
 	# Do we need include paths here?
@@ -40,4 +40,4 @@ if (UNIX AND NOT APPLE)
 	target_link_libraries(eth pthread)
 endif()
 
-install(TARGETS eth DESTINATION bin)
+install(TARGETS bcoseth DESTINATION bin)
