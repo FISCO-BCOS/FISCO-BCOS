@@ -18,8 +18,8 @@ console.log(config);
 var filename="TestPaillier";
 var address=fs.readFileSync(config.Ouputpath+filename+'.address','utf-8');
 var abi=JSON.parse(fs.readFileSync(config.Ouputpath/*+filename+".sol:"*/+filename+'.abi', 'utf-8'));
-var paillierjson = fs.readFileSync('./java/Pailler/paillier.json', 'utf-8');
-var paillie=JSON.parse(fs.readFileSync('./java/Pailler/paillier.json', 'utf-8'));
+var paillierjson = fs.readFileSync('./java/Paillier/paillier.json', 'utf-8');
+var paillie=JSON.parse(fs.readFileSync('./java/Paillier/paillier.json', 'utf-8'));
 var contract = web3.eth.contract(abi);
 var instance = contract.at(address);
 
