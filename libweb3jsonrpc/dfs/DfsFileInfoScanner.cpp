@@ -103,8 +103,11 @@ void DfsFileInfoScanner::doWork()
 		{
 			static int tag = 0;
 			if (tag == 0)
+			{
+				tag = 1;
 				dfs_debug << "init state is NOT OK, waiting... !!";
-				
+			}	
+			
 			usleep(1000);//1ms
 		}
 	}
