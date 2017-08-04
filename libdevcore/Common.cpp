@@ -30,7 +30,7 @@ namespace dev
 {
 
 char const* Version = ETH_PROJECT_VERSION;
-char const* Copyright="By OpenDl (c) 2017.";
+char const* Copyright="By BCOS (c) 2017.";
 
 const u256 Invalid256 = ~(u256)0;
 
