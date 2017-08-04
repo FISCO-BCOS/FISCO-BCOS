@@ -30,10 +30,10 @@ BCOS区块链开源平台由深圳前海微众银行股份有限公司、万向�
 
 ①　安装nodejs(安装后版本nodejs版本大于6）、babel-node环境
 ```bash
-
 sudo yum install -y nodejs 
+sudo yum install 
 sudo npm config set registry https://registry.npm.taobao.org
-sudo npm install -g babel-cli babel-preset-es2017
+sudo cnpm install -g babel-cli babel-preset-es2017
 echo '{ "presets": ["es2017"] }' > ~/.babelrc
 ```
 
@@ -51,7 +51,7 @@ sudo chmod +x /usr/bin/solc
 ③　安装控制台
 ```bash
 sudo yum install -y git
-sudo npm install -g ethereum-console
+sudo cnpm install -g ethereum-console
 ```
 
 ## 1.3源码编译
@@ -195,7 +195,7 @@ network.rlp.pub是节点身份的NodeId文件。
 
 ```bash
 cd tool
-npm install
+cnpm install
 node accountManager.js
 ```
 
@@ -786,7 +786,7 @@ contract HelloWorld{
 工具目录下已有部署脚本。更新目录下config.js中的Ip（内网监听IP）和端口（RPC监听端口），及privKey（注意没有0x前缀）和account（注意有0x前缀）	（生成方法参看生成公私钥对）后直接使用即可。
 ```bash
 cd tool
-npm install
+cnpm install
 vim config.js  
 babel-node deploy.js HelloWorld
 ```
@@ -878,7 +878,7 @@ web3.admin.getPeers(console.log)
 
 ```shell
 cd systemcontractv2
-npm install
+cnpm install
 vim config.js 	#更新内网监听Ip和RPC监听端口，及privKey和account（可复用第四章部署合约 中的或重新生成）
 babel-node deploy.js
 ```
