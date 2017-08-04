@@ -33,12 +33,12 @@ include_directories(../libodbc/include
 					../libodbc/include/sqllite
 					../libodbc/include/ss_linux
 					../libodbc/include/sybase
-					../libpailler)
+					../libpaillier)
 
 
 target_link_libraries(evm ${Eth_ETHCORE_LIBRARIES})
 target_link_libraries(evm ${Eth_EVMCORE_LIBRARIES})
-target_link_libraries(evm pailler)
+target_link_libraries(evm paillier)
 target_include_directories(evm PRIVATE .. ${JSONCPP_INCLUDE_DIR})
 
 if (EVMJIT)
