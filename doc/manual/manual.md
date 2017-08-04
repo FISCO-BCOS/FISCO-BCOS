@@ -481,18 +481,6 @@ JAVA SDK提供的接口功能包括文件上传，文件删除，文件下载，
 |**输出参数**|**参数类型**|**参数说明**|
 |NA|NA|NA|
 
-
-- 接口名称：addServer
-- 接口功能说明：添加文件服务器节点
-- 参数说明
-
-|输入参数|参数类型|参数说明|
-|:-----|:-----|:-----|
-|server|FileServer|文件服务节点信息|
-|ret|int|返回值|
-|**输出参数**|**参数类型**|**参数说明**|
-|NA|NA|NA|
-
 ###### b. 删除文件服务器节点
 
 - 接口名称：deleteServer
@@ -630,11 +618,11 @@ uploadFile(fileInfo, file);//上传文件，等待回调upload_file_back
 
 ## 3.3 加法同态接口使用说明
 对本版本所提供的加法同态运算功能，提供如下使用说明：
-1.Java的API实现的同态加密算法，可以完成对需要运算的数据完成加解密操作,相关的代码工程路径为：{git_root}\tool\java\Pailler;
+1.Java的API实现的同态加密算法，可以完成对需要运算的数据完成加解密操作,相关的代码工程路径为：{git_root}\tool\java\Paillier;
 
 2.Solidity合约语言提供一个Library，实现对两个加密后数据实现加法同态运算，相关的合约路径为：{git_root}\systemcontractv2\LibPaillier.sol;
 
-3.提供C语言同态加法算法实现，最终开放接口为智能合约同态加法运算API，相关代码路径为：{git_root}\libpailler;
+3.提供C语言同态加法算法实现，最终开放接口为智能合约同态加法运算API，相关代码路径为：{git_root}\libpaillier;
 
 4.扩展VM中的sha3指令用以支持合约与C代码底层能力的桥接和适配，相关代码路径为：{git_root}\libevm.
 
