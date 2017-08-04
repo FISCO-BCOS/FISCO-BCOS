@@ -17,7 +17,7 @@ extern "C"{
 #define Plus						0x00000000
 #define Minus						0x00000001
 
-//macro for BN in pailler
+//macro for BN in paillier
 #define PaiBNBitLen					1024
 #define PaiBNWordLen				32
 #define PaiPrimeWordLen				16
