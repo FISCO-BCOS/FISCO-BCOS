@@ -1,4 +1,4 @@
-#include "pailler.h"
+#include "paillier.h"
 
 void PAI_HomAdd(U8 *pbBN_Result, U8 *pbBN_c1, U8 *pbBN_c2, U8 *pbBN_n, S32 iBNWordLen)
 {
