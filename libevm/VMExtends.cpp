@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include "VMExtends.h"
 #include <boost/algorithm/string.hpp>
-#include "pailler.h"
+#include "paillier.h"
 
 using namespace std;
 using namespace dev;
