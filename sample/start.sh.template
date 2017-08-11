@@ -1,0 +1,3 @@
+#!/bin/sh
+bcoseth   --genesis {genesis} --config {config}              
+
