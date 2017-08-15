@@ -1,12 +1,5 @@
---- 
-title:  BCOS智能合约客户端开发指导
-tags: BCOS 
-notebook:  BCOS
----
-
 [TOC]
 # BCOS智能合约客户端开发指导
-@(BOSC) 
 
 ## 概要
 本文档主要提供基于BOSC区块链系统的智能合约应用开发指导，使得开发者能够使用流行的编程语言如Java、Nodejs等进行应用开发。 本文档中包含API介绍及其源码工程， 它们通过简单的范例介绍开发智能合约的方法， 帮助开发者快速入门区块链应用开发。
@@ -16,7 +9,8 @@ notebook:  BCOS
 * BCOS区块链客户端
 
 ## 智能合约
-智能合约语法及细节参考**[solidity官方文档](https://solidity.readthedocs.io/en/develop/solidity-in-depth.html)** ，  **BCOS区块链客户端**建议使用solidity编译器版本指定为0.4.2及以上， 合约编写可以使用任何文本编辑器(推荐使用sublime或vs code+solidity插件)。
+智能合约语法及细节参考 **[solidity官方文档](https://solidity.readthedocs.io/en/develop/solidity-in-depth.html)** ，  **BCOS区块链客户端**建议使用solidity编译器版本指定为0.4.2及以上， 合约编写可以使用任何文本编辑器(推荐使用sublime或vs code+solidity插件)。
+
 ### 合约范例
 这里例举一个简单的solidity智能合约，仅仅提供数据设置set和读取get方法，其中set为交易类型（Transaction）方法，get为call类型方法。在本文档中将使用这个范例作为唯一合约，展示如何构建操作SimpleStorage智能合约的应用程序。范例如下：
 ```
@@ -126,11 +120,12 @@ contract SimpleStorage {
     执行成功后将在output目录生成所有合约对应abi，bin，java文件，其文件名类似： **合约名字.[abi|bin|java]** 。至此编译完成。
     
 ## Java智能合约客户端开发
+
 ### 开发环境及工具
 * BCOS区块链客户端	 （参考[BCOS使用文档]）
 * JDK
 * **solc** solidity编译器（直接使用远程二机制源或源码安装）
-	* Ubuntu安装:
+	* Ubuntu安装
 		```apt install solc ``` 或 源码安装
 	* CentOS安装
 		```yum install solc``` 或 源码安装
