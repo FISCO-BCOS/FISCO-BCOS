@@ -1,4 +1,7 @@
 [TOC]
+* auto-gen TOC:
+{:toc}
+
 # BCOS智能合约开发指导
 @(BOSC) 
 
