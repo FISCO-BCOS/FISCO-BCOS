@@ -1,9 +1,3 @@
---- 
-title:  BCOS智能合约开发指导
-tags: juzhen 
-notebook:  juzhen
----
-
 [TOC]
 # BCOS智能合约开发指导
 @(BOSC) 
