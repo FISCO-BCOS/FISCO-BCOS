@@ -1,5 +1,10 @@
-__TOC__
+--- 
+title:  BCOS智能合约开发指导
+tags: BCOS 
+notebook:  BCOS
+---
 
+[TOC]
 # BCOS智能合约开发指导
 @(BOSC) 
 
@@ -127,7 +132,7 @@ contract SimpleStorage {
 * Java [web3j开发库]及其依赖库
 
 ### web3j介绍
-**[web3j]**是一个支持以太坊通信协议的客户端网络库，它提供了轻量、反应式、类型安全的Java和Android程序访问能力，使得开发以太坊应用更加便捷，其详细的教程可以参考[官方网站](https://docs.web3j.io/) 。在本范例中sample程序将使用**[web3j]**及相关库来开发Java应用程序，基于web3j的应用开发的流程为：
+**[web3j]** 是一个支持以太坊通信协议的客户端网络库，它提供了轻量、反应式、类型安全的Java和Android程序访问能力，使得开发以太坊应用更加便捷，其详细的教程可以参考[官方网站](https://docs.web3j.io/) 。在本范例中sample程序将使用 **[web3j]** 及相关库来开发Java应用程序，基于web3j的应用开发的流程为：
 1. 使用智能合约的abi和bin文件生成智能合约Java Wrapper类， 参考BCOS-Tools工具包的使用;
 2.  初始化web3j远程调用对象；
 3.  使用智能合约Java Wrapper类提供的load或deploy接口获取智能合约远程调用对象；（其依赖于：web3j远程调用对象）
@@ -147,6 +152,7 @@ contract SimpleStorage {
 	Parity web3j = Parity.build(httpService);
 ```
 2. 部署合约
+
 使用初始化的web3j对象和BcosRawTxManager交易管理器来部署智能合约，如果部署成功， Future对象即会返回合约调用对象
 ```
 Future<SimpleStorage> futureSimpleStorage = SimpleStorage.deploy(web3j, new BcosRawTxManager(web3j, credentials, 100, 100), gasPrice, gasLimited, new BigInteger("0"));
@@ -154,23 +160,28 @@ SimpleStorage simpleStorage = futureSimpleStorage.get();
 String deployAddr = simpleStorage.getContractAddress();
 ```
 3. 载入已经部署的合约
+
 合约部署成功后，可以获取到已经部署的合约地址：``` String deployAddr = simpleStorage.getContractAddress(); ```
 利用获取到部署合约地址，初始化的web3j对象和BcosRawTxManager交易管理器，可以载入智能合约调用对象
 ```
 SimpleStorage simpleStorage = SimpleStorage.load(deployAddr.toString(), web3j, new BcosRawTxManager(web3j, credentials, 100, 100), gasPrice, gasLimited);
 ```
 注意： 部署后可以直接使用返回的智能合约对象， 而无需再load载入！
+
 4. 发送交易
+
 发送交易通过直接调用已经部署或载入的智能合约调用对象执行合约对应接口即可， 比如智能合约SimpleStorage.sol的set方法，对应SimpleStorage.java的set方法，名字是相同的。 交易执行成功后将返回Receipt，Receipt包含交易hash和其他信息（如log）
 ```
 TransactionReceipt receipt = null;
 receipt = simpleStorage.set(new Uint256(new BigInteger("1000"))).get();
 ```
 5. call查询
+
 使用已经部署或载入的智能合约调用对象，直接执行对应智能合约中带constant修饰符的函数，即执行call类型调用
 ```
 Uint256 value = simpleStorage.get().get();
 ```
+
 #### sample工程使用说明
 BCOS参考中直接提供eclipse[sample完整工程](https://github.com/bcosorg/bcos/blob/master/sample/projects/java/sample) ， 可以直接导入工程。
 sample工程包括：
@@ -181,9 +192,8 @@ sample工程包括：
 3. bin文件夹， 程序运行目录
 导入工程后，配置好config.json对应rpc_host和rpc_port即可进行SimpleStorage合约的调测
 
-### sample工程如何运行
-### Nodejs智能合约开发
-### Python智能合约开发
+## Nodejs智能合约开发
+## Python智能合约开发
 
 *********************************************************
 [web3j开发库]:https://github.com/bcosorg/bcos/blob/master/tool/java/output/
