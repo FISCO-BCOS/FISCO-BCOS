@@ -1,11 +1,11 @@
 --- 
-title:  BCOS智能合约开发指导
+title:  BCOS智能合约客户端开发指导
 tags: BCOS 
 notebook:  BCOS
 ---
 
 [TOC]
-# BCOS智能合约开发指导
+# BCOS智能合约客户端开发指导
 @(BOSC) 
 
 ## 概要
@@ -113,14 +113,19 @@ contract SimpleStorage {
     └── output
 ```
 目录说明： contracts为需要编译的合约目录，bin为编译执行目录，lib为依赖库，output为编译后输出的abi、bin及java文件目录
- 3. 切换到/home/xxx/BCOS-Tools/bin目录，拷贝需要编译的智能合约到/home/xxx/BCOS-Tools/contracts目录
-   命令：cd /home/xxx/BCOS-Tools/bin  以及拷贝需要编译的智能合约到/home/xxx/BCOS-Tools/contracts目录
+
+ 3. 拷贝编译合约
+ 
+切换到/home/xxx/BCOS-Tools/bin目录，拷贝需要编译的智能合约到/home/xxx/BCOS-Tools/contracts目录
+
+执行命令：cd /home/xxx/BCOS-Tools/bin  以及拷贝需要编译的智能合约到/home/xxx/BCOS-Tools/contracts目录
 
  4. 智能合约编译及Java Wrap代码生成
+
     执行命令：sh compile.sh 【参数1：Java包名】
     执行成功后将在output目录生成所有合约对应abi，bin，java文件，其文件名类似： **合约名字.[abi|bin|java]** 。至此编译完成。
     
-## Java智能合约开发
+## Java智能合约客户端开发
 ### 开发环境及工具
 * BCOS区块链客户端	 （参考[BCOS使用文档]）
 * JDK
@@ -148,8 +153,8 @@ contract SimpleStorage {
 编写区块链应用程序，实际上是通过web3j生成的Java Wrapper类，通过JsonRPC调用和BCOS客户端节点通信，再由客户端返回JsonRPC请求响应。对合约的调用主要包括：web3j的初始，合约对象部署，合约对象加载，合约对象发送交易，合约对象call调用等
 1. web3j初始化
 ```
-	HttpService httpService = new HttpService(uri);//uri="http://10.10.8.219:8545"
-	Parity web3j = Parity.build(httpService);
+HttpService httpService = new HttpService(uri);//uri="http://10.10.8.219:8545"
+Parity web3j = Parity.build(httpService);
 ```
 2. 部署合约
 
@@ -192,7 +197,7 @@ sample工程包括：
 3. bin文件夹， 程序运行目录
 导入工程后，配置好config.json对应rpc_host和rpc_port即可进行SimpleStorage合约的调测
 
-## Nodejs智能合约开发
+## Nodejs智能合约客户端开发
 
 *********************************************************
 [web3j开发库]:https://github.com/bcosorg/bcos/blob/master/tool/java/output/
