@@ -193,7 +193,6 @@ sample工程包括：
 导入工程后，配置好config.json对应rpc_host和rpc_port即可进行SimpleStorage合约的调测
 
 ## Nodejs智能合约开发
-## Python智能合约开发
 
 *********************************************************
 [web3j开发库]:https://github.com/bcosorg/bcos/blob/master/tool/java/output/
