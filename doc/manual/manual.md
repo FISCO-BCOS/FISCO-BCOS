@@ -1,7 +1,9 @@
+[toc]
+
 # 前言
 
 本文档是BCOS区块链开源平台的一部分。
-BCOS区块链开源平台由深圳前海微众银行股份有限公司、万向区块链实验室和矩阵元Juzix共同发起。
+BCOS区块链开源平台由深圳前海微众银行股份有限公司、上海万向区块链股份公司、矩阵元技术（深圳）有限公司共同发起。
 本文档面向读者是了解区块链基本概念的区块链技术开发人员、测试人员、产品经理、区块链爱好者、金融行业从业者等等。
 
 为了让大家更好的了解BCOS区块链开源平台的使用方法。本文档按照Step By Step的步骤详细介绍了BCOS区块链的构建、安装、启动，智能合约部署、调用等初阶用法，还包括多节点组网、系统合约等高阶内容的介绍。
@@ -22,22 +24,22 @@ BCOS区块链开源平台由深圳前海微众银行股份有限公司、万向�
 |操作系统|		|Ubuntu（16.04  64位）/CentOS （7.2  64位）|
 
 
-以下代码及操作命令以在Centos操作系统上为示例。
+以下代码及操作命令以在Centos7.2操作系统上为示例。
 
 ## 1.2软件环境
 
 ①　安装nodejs(安装后版本nodejs版本大于6）、babel-node环境
 ```bash
-sudo yum install nodejs 
-sudo npm config set registry https://registry.npm.taobao.org
-sudo npm install -g babel-cli babel-preset-es2017
+sudo yum install -y nodejs 
+sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
+sudo cnpm install -g babel-cli babel-preset-es2017
 echo '{ "presets": ["es2017"] }' > ~/.babelrc
 ```
 
 ②　安装智能合约solidity编译器
 方式一：直接下载solc二进制执行程序
 ```bash
-wget https://github.com/ethereum/solidity/releases/download/v0.4.11/solc-static-linux
+wget https://github.com/ethereum/solidity/releases/download/v0.4.13/solc-static-linux
 sudo cp solc-static-linux  /usr/bin/solc
 sudo chmod +x /usr/bin/solc
 ```
@@ -47,8 +49,8 @@ sudo chmod +x /usr/bin/solc
 
 ③　安装控制台
 ```bash
-sudo yum install git
-sudo npm install -g ethereum-console
+sudo yum install -y git
+sudo cnpm install -g ethereum-console
 ```
 
 ## 1.3源码编译
@@ -89,7 +91,7 @@ sudo yum -y install cmake3
 ②　安装依赖的开发库
 
 ```bash
-sudo yum install openssl openssl-devel
+sudo yum install -y openssl openssl-devel
 chmod +x scripts/install_deps.sh
 ./scripts/install_deps.sh
 ```
@@ -98,11 +100,15 @@ chmod +x scripts/install_deps.sh
 ```bash
 mkdir -p build
 cd build/
-cmake -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. #注意命令末尾的..
+cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. #注意命令末尾的..
 make -j2
 ```
 
-编译成功，eth/eth 即是区块链可执行程序。
+编译成功，eth/bcoseth 即是区块链可执行程序。
+执行安装
+```
+make install
+```
 
 # 第二章、启动创世节点
 
@@ -179,9 +185,13 @@ make -j2
 ## 2.4．生成节点身份NodeId
 节点身份NodeId是一个公钥，代表节点的唯一身份标识。
 ```
-./build/eth/eth --gennetworkrlp  /mydata/nodedata-1/network.rlp
+mkdir -p /mydata/nodedata-1/
+mkdir -p /mydata/nodedata-1/data/
+mkdir -p /mydata/nodedata-1/log/
+mkdir -p /mydata/nodedata-1/keystore/
+bcoseth --gennetworkrlp  /mydata/nodedata-1/data/network.rlp
 ```
-将在/mydata/nodedata-1/ 目录下生成两个文件 network.rlp 和 network.rlp.pub。
+将在/mydata/nodedata-1/data/ 目录下生成两个文件 network.rlp 和 network.rlp.pub。
 network.rlp是节点身份的私钥二进制文件。
 network.rlp.pub是节点身份的NodeId文件。
 
@@ -192,6 +202,7 @@ network.rlp.pub是节点身份的NodeId文件。
 
 ```bash
 cd tool
+cnpm install
 node accountManager.js
 ```
 
@@ -292,7 +303,7 @@ node accountManager.js
 ## 2.7．创世节点启动
 命令行：区块链执行程序路径 --genesis 创世块文件 --config 配置文件
 
-``` ./build/eth/eth --genesis ./genesis.json --config ./config.json & ```
+``` bcoseth --genesis ./genesis.json --config ./config.json & ```
 
 查看日志是否正常出块 
 
@@ -770,6 +781,7 @@ contract HelloWorld{
 工具目录下已有部署脚本。更新目录下config.js中的Ip（内网监听IP）和端口（RPC监听端口），及privKey（注意没有0x前缀）和account（注意有0x前缀）	（生成方法参看生成公私钥对）后直接使用即可。
 ```bash
 cd tool
+cnpm install
 vim config.js  
 babel-node deploy.js HelloWorld
 ```
@@ -849,7 +861,7 @@ web3.admin.getPeers(console.log)
 
 本章详细介绍在一个创始节点已正常运行的前提下，如何一步步操作，加入新的区块链节 点，    组成区块链网络的操作流程。
 
-系统合约是 OpenDL 区块链的重要设计思路之一，也是控制网络节点加入和退出的重要方式，
+系统合约是 BCOS 区块链的重要设计思路之一，也是控制网络节点加入和退出的重要方式，
 
 因此[部署系统合约](#7.1 部署系统合约)是多节点组网的前提条件。并且仅需执行一次。
 
@@ -859,11 +871,11 @@ web3.admin.getPeers(console.log)
 
 执行以下命令：
 
+
 ```shell
-cd systemcontractv2/output
-tar xvf linux.tar
-cd ..
-vim config.js 	#更新内网监听Ip和RPC监听端口，及privKey和account（可复用第四章部署合约 中的或重新生成）
+cd systemcontractv2
+cnpm install
+vim config.js 	#更新内网监听Ip和RPC监听端口，及privKey和account（可复用2.5．生成管理员公私钥对 中的或重新生成）
 babel-node deploy.js
 ```
 
@@ -989,7 +1001,7 @@ vim node2.json
 执行以下命令启动区块链节点进程：
 
 ```shell
-./build/eth/eth --genesis /mydata/nodedata-2/genesis.json --config /mydata/nodedata-2/config.json
+bcoseth --genesis /mydata/nodedata-2/genesis.json --config /mydata/nodedata-2/config.json
 ```
 
 查看块高变化及连接节点信息：
@@ -1385,7 +1397,7 @@ console.log("配置项:"+key+","+value);
 示例如下：
 
 ```
-./build/eth/eth --genesis ./genesis.json --config ./config.json 	
+bcoseth --genesis ./genesis.json --config ./config.json 	
 --export-genesis ./genesis.file
 ```
 
