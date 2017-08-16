@@ -20,8 +20,7 @@ BCOS平台是聚焦于企业级应用服务的区块链技术平台，已经在�
 
 ## 技术白皮书
 
-参见[BCOS平台白皮书——面向分布式商业的区块链基础设施](https://github.com/bcosorg/bcos/blob/master/doc/BCOS_Whitepaper.pdf)。
-（如无法在浏览器上直接浏览，请下载到本地打开）
+参见[BCOS平台白皮书——面向分布式商业的区块链基础设施](https://github.com/bcosorg/whitepaper/blob/master/BCOS_Whitepaper.md)([PDF下载](https://raw.githubusercontent.com/bcosorg/bcos/master/doc/BCOS_Whitepaper.pdf))。
 
 ## License
 
@@ -30,6 +29,11 @@ BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/bcosorg/
 ## 联系我们
 邮箱：hi@bcos.org.cn。
 
+微信群：添加群管理员微信号BCOS_FANS，拉您入BCOS官方技术交流群。
+
+群管理员微信二维码：
+
+![](./doc/BCOS_FANS.jpeg)
 
 
 
