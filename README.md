@@ -18,6 +18,8 @@ BCOS平台是聚焦于企业级应用服务的区块链技术平台，已经在�
 
 初次安装时，请参考[BCOS使用说明书1.0](https://github.com/bcosorg/bcos/blob/master/doc/manual/manual.md)。
 
+如果你是初学者，想快速体验BCOS平台，强烈推荐[一键快速安装部署](https://github.com/bcosorg/bcos/wiki/%E4%B8%80%E9%94%AE%E5%BF%AB%E9%80%9F%E5%AE%89%E8%A3%85%E9%83%A8%E7%BD%B2)。
+
 ## 技术白皮书
 
 参见[BCOS平台白皮书——面向分布式商业的区块链基础设施](https://github.com/bcosorg/whitepaper/blob/master/BCOS_Whitepaper.md)([PDF下载](https://raw.githubusercontent.com/bcosorg/bcos/master/doc/BCOS_Whitepaper.pdf))。
@@ -25,6 +27,11 @@ BCOS平台是聚焦于企业级应用服务的区块链技术平台，已经在�
 ## License
 
 BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/bcosorg/bcos/blob/master/LICENSE)。
+
+## Wiki & Issues
+更多关于BCOS的学习资料，请参阅[Wiki](https://github.com/bcosorg/bcos/wiki)。
+
+也欢迎爱好者相互讨论、一起交流，请进入[提问专区](https://github.com/bcosorg/bcos/issues)。
 
 ## 联系我们
 邮箱：hi@bcos.org.cn。

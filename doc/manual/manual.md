@@ -927,7 +927,7 @@ babel-node tool.js NodeAction all
 
 5.更新```/mydata/nodedata-2/ ```的log.conf中的日志路径。
 
-6.追加非创世节点信息到 ```/mydata/nodedata-2/``` 的```config.json```文件中的 ```NodeextraInfo``` 字段。
+6.追加新节点信息到 ```/mydata/nodedata-2/``` 的```config.json```文件中的 ```NodeextraInfo``` 字段。
 
 示例如下：
 
