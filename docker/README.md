@@ -8,7 +8,7 @@
     - [2. 多节点网络](#2-多节点网络)
         - [2.1 配置系统合约](#21-配置系统合约)
         - [2.2 生成新节点配置文件](#22-生成新节点配置文件)
-        - [2.3 新加节点入网](#23-新加节点入网)
+        - [2.3 新节点入网](#23-新节点入网)
         - [2.4 查看网络状态](#24-查看网络状态)
 
 <!-- /TOC -->
@@ -20,7 +20,7 @@
 ### 1.1 生成配置文件与启动容器
 
 ```bash
-$ cd bcos/docker && chmod +x scripts/genConfig.sh && chmod +x scripts/start_bcos_docker.sh
+$ cd bcos/docker 
 # 产生配置文件位于文件夹node-0
 $ ./scripts/genConfig.sh
 # 启动容器
@@ -75,14 +75,15 @@ $ cd bcos/docker
 $ ./scripts/genConfig.sh 1 node-0
 ```
 
-### 2.3 新加节点入网
+### 2.3 新节点入网
 
 ```bash
 $ cd bcos/systemcontractv2
-# 新加节点信息写入合约
+# 新加节点node-1信息写入合约
 $ babel-node tool.js NodeAction registerNode ../docker/node-1/node.json 
-# 启动新加入节点，参数为新节点配置文件完整路径
-$ ../docker/scripts/start_bcos_docker.sh $PWD/node-1
+
+# 启动新加入节点node-1，参数为新节点配置文件完整路径
+$ ../docker/scripts/start_bcos_docker.sh $PWD/../docker/node-1 
 # 要加入更多节点只需要重复步骤2.2-2.3，启动新节点时参数改为新节点配置文件路径即可
 ```
 
@@ -114,5 +115,4 @@ Host:172.17.0.1:53301
 [Docker-Install]:https://docs.docker.com/engine/installation/
 [official mirror]:https://docs.docker.com/registry/recipes/mirror/#configure-the-docker-daemon
 [docker-accelerate]:https://yq.aliyun.com/articles/29941?spm=5176.100239.blogcont7695.18.jyYdbj
-[bcos-manual]:https://github.com/bcosorg/bcos/blob/master/doc/manual/manual.md
 [bcos-docker]:https://hub.docker.com/r/bcosorg/bcos/
