@@ -16,9 +16,12 @@ BCOS平台是聚焦于企业级应用服务的区块链技术平台，已经在�
 
 ## 安装说明
 
-初次安装时，请参考[BCOS使用说明书1.0](https://github.com/bcosorg/bcos/blob/master/doc/manual/manual.md)。
-
 如果你是初学者，想快速体验BCOS平台，强烈推荐[一键快速安装部署](https://github.com/bcosorg/bcos/wiki/%E4%B8%80%E9%94%AE%E5%BF%AB%E9%80%9F%E5%AE%89%E8%A3%85%E9%83%A8%E7%BD%B2)。
+
+如果你是Docker爱好者，也可以选择Docker安装一个或者多个节点，请参阅[使用Docker安装部署BCOS指南](https://github.com/bcosorg/bcos/tree/master/docker)。
+
+如果想源码编译并亲自动手配置、搭建BCOS区块链网络，请参考[BCOS使用说明书1.0](https://github.com/bcosorg/bcos/blob/master/doc/manual/manual.md)。
+
 
 ## 技术白皮书
 
