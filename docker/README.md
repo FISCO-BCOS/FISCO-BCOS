@@ -15,7 +15,7 @@
 
 ## 1. 单节点网络
 
-我们提供Dockerfile文件和`Docker Hub`上预构建的镜像([地址][bcos-docker])，下面示例中当`bcosorg/bcos`镜像不存在时，Docker会自动去仓库拉取，考虑到网络问题，建议配置国内的Docker镜像加速服务。Docker安装参照[官方文档][Docker-Install]。
+我们提供Dockerfile文件和`Docker Hub`上预构建的镜像([地址][bcos-docker])，下面示例中当`bcosorg/bcos`镜像不存在时，Docker会自动去仓库拉取，考虑到网络问题，建议配置国内的Docker镜像加速服务。Docker安装参照[官方文档][Docker-Install]。*注意：如果Docker Hub镜像无法启动，请使用本目录下的Dockerfile手动构建镜像运行，完成后需要修改scripts下脚本内的dockerImage参数为手动构建镜像的名称，继续按照本说明执行即可*
 
 ### 1.1 生成配置文件与启动容器
 
