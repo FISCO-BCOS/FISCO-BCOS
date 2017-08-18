@@ -30,11 +30,6 @@ genConfig()
     return -1
     fi
 
-    port=${idx}
-    if [ ${idx} -lt 10 ]; then
-    port=`printf "%02d" ${idx}`
-    fi
-
     output=$PWD/node-${idx}
     
     while ([ ${idx} -gt 0 ] && [ -d ${output} ]); do
@@ -43,6 +38,10 @@ genConfig()
     done
     if [ ! -d ${output} ]; then
     mkdir ${output}
+    fi
+    port=${idx}
+    if [ ${idx} -lt 10 ]; then
+    port=`printf "%02d" ${idx}`
     fi
     echo "------generate node-${idx}------"
     if ! id -nG $(whoami)|grep -qw "docker"; then SUDO='sudo'; else SUDO=''; fi
