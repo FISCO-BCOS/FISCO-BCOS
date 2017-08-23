@@ -5,7 +5,7 @@
     - [1. 单节点网络](#1-单节点网络)
         - [1.1 生成配置文件与启动容器](#11-生成配置文件与启动容器)
         - [1.2 查看工作状态](#12-查看工作状态)
-    - [2. 多节点网络](#2-多节点网络)
+    - [2. 单机多节点网络](#2-单机多节点网络)
         - [2.1 配置系统合约](#21-配置系统合约)
         - [2.2 生成新节点配置文件](#22-生成新节点配置文件)
         - [2.3 新节点入网](#23-新节点入网)
@@ -15,7 +15,7 @@
 
 ## 1. 单节点网络
 
-我们提供Dockerfile文件和`Docker Hub`上预构建的镜像([地址][bcos-docker])，下面示例中当`bcosorg/bcos`镜像不存在时，Docker会自动去仓库拉取，考虑到网络问题，建议配置国内的Docker镜像加速服务。Docker安装参照[官方文档][Docker-Install]。
+我们提供Dockerfile文件和`Docker Hub`上预构建的镜像([地址][bcos-docker])，下面示例中当`bcosorg/bcos`镜像不存在时，Docker会自动去仓库拉取，考虑到网络问题，建议配置国内的Docker镜像加速服务。Docker安装参照[官方文档][Docker-Install]，推荐使用Docker 17.03以上版本。
 
 *注意：如果Docker Hub镜像无法启动，请使用本目录下的Dockerfile手动构建镜像运行，完成后需要修改scripts下脚本内的dockerImage参数为手动构建镜像的名称，继续按照本说明执行即可*
 
@@ -43,7 +43,7 @@ INFO |2017-07-05 07:37:16|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=315,hash=2ae
 
 *********************************************************
 
-## 2. 多节点网络
+## 2. 单机多节点网络
 
 按照[步骤1](#1-单节点网络)**启动单节点网络**，然后按下述步骤操作
 
@@ -55,11 +55,14 @@ $ cnpm install
 # 修改config.js中proxy端口为35500
 $ sed -i 's/127.0.0.1:8545/127.0.0.1:35500/' config.js
 $ babel-node deploy.js
-# 将输出中，SystemProxy合约地址记下来
-SystemProxy合约地址 0xff27dc5cc5144c626b9fdc26b2f292d9df062470
+# 将输出中，SystemProxy合约地址记下来，例如 SystemProxy合约地址 0xff27dc5cc5144c626b9fdc26b2f292d9df062470
 
-# 修改docker/node-0/config.json中systemproxyaddress为上述输出
+# 修改docker/node-0/config.json中systemproxyaddress为上一步骤记录的SystemProxy合约地址 
 $ sed -i 's/"systemproxyaddress":"0x0"/"systemproxyaddress":"0xff27dc5cc5144c626b9fdc26b2f292d9df062470"/' ../docker/node-0/config.json
+
+# 检查node-0/config.json中系统合约字段是否正确
+$ cat node-0/config.json | grep systemproxyaddress
+
 # 重启node-0
 $ docker restart $(docker ps -a | grep bcos-node-0 | awk 'NR==1{print$1}')
 
