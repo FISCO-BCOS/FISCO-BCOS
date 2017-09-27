@@ -236,7 +236,7 @@ node accountManager.js
         "p2pport":      "30303",
         "wallet":"/mydata/nodedata-1/keys.info",
         "keystoredir":"/mydata/nodedata-1/keystore/",
-        "datadir":"/mydata/nodedata-1/",
+        "datadir":"/mydata/nodedata-1/data/",
         "vm":"interpreter",
         "networkid":"12345",
         "logverbosity":"4",
