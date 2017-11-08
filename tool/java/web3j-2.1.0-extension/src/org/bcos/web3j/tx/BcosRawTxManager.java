@@ -5,6 +5,8 @@ package org.bcos.web3j.tx;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.Calendar;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
@@ -28,6 +30,7 @@ public class BcosRawTxManager extends TransactionManager {
 
     private final byte chainId;
     private BcosTxEncoder transactionEncoder;
+    private Random random; 
 
     public BcosRawTxManager(Web3j web3j, Credentials credentials, byte chainId) {
         super(web3j);
@@ -35,6 +38,10 @@ public class BcosRawTxManager extends TransactionManager {
         this.credentials = credentials;
 
         this.chainId = chainId;
+        
+        random = new Random();
+        random.setSeed(Calendar.getInstance().getTimeInMillis());
+        
         this.transactionEncoder = new BcosTxEncoder();
     }
 
@@ -45,6 +52,9 @@ public class BcosRawTxManager extends TransactionManager {
         this.credentials = credentials;
 
         this.chainId = chainId;
+        
+        random = new Random();
+        random.setSeed(Calendar.getInstance().getTimeInMillis());
         this.transactionEncoder = new BcosTxEncoder();
     }
 
@@ -101,6 +111,11 @@ public class BcosRawTxManager extends TransactionManager {
         
         blockLimited = blockLimited.add(new BigInteger("100", 10));
         transactionEncoder.setBlockLimited(blockLimited);
+        
+        //generate ramdomid
+        BigInteger ramdomid = new BigInteger(256, random);
+        transactionEncoder.setRandomId(ramdomid);
+        
         if (chainId > ChainId.NONE) {
             signedMessage = transactionEncoder.signMessage(rawTransaction, chainId, credentials);
         } else {

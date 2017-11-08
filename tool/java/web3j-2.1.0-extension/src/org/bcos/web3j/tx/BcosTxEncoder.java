@@ -28,6 +28,7 @@ import org.web3j.utils.Numeric;
 public class BcosTxEncoder {
 	
 	private BigInteger blockLimited = new BigInteger("100");
+	private BigInteger random;
 	
 	/**
 	 * 
@@ -39,11 +40,8 @@ public class BcosTxEncoder {
             RawTransaction rawTransaction, SignatureData signatureData) {
         List<RlpType> result = new ArrayList<>();
 
-        Random random = new Random();
-        random.setSeed(Calendar.getInstance().getTimeInMillis());
         //rlp[0]  randomid
-        BigInteger ramdomid = new BigInteger(256, random);
-        result.add(RlpString.create(ramdomid));
+        result.add(RlpString.create(random));
         
         result.add(RlpString.create(rawTransaction.getGasPrice()));
         //result.add(RlpString.create(rawTransaction.getNonce()));
@@ -130,4 +128,8 @@ public class BcosTxEncoder {
         RlpList rlpList = new RlpList(values);
         return RlpEncoder.encode(rlpList);
     }
+
+	public void setRandomId(BigInteger ramdomid) {
+		random = ramdomid;
+	}
 }

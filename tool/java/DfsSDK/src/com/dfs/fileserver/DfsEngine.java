@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.bcos.web3j.tx.BcosRawTxManager;
 import org.junit.internal.runners.ErrorReportingRunner;
 import org.juzix.web3j.NonceTransactionManager;
 import org.juzix.web3j.protocol.CostomerWeb3j;
@@ -30,14 +31,12 @@ import org.web3j.abi.datatypes.Utf8String;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.WalletUtils;
-import org.web3j.protocol.Web3jService;
 import org.web3j.protocol.core.methods.response.EthAccounts;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.protocol.parity.Parity;
 import org.web3j.tx.ClientTransactionManager;
 import org.web3j.tx.RawTransactionManager;
-import org.web3j.tx.TransactionManager;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -53,7 +52,7 @@ import com.dfs.utils.DfsTimer;
 import com.dfs.web3j.FileInfoManager;
 import com.dfs.web3j.FileServerManager;
 import com.dfs.web3j.FileInfoManager.NotifyEventResponse;
-import com.dfs.web3j.tx.DfsRawTransactionManager;
+
 
 
 public class DfsEngine {
@@ -1168,7 +1167,7 @@ public class DfsEngine {
 			return FileInfoManager.load(addr, parity, new RawTransactionManager(parity, credentials, 100, 100) , gasPrice, gasLimited);
 		}
 		else if (use_transaction_type == UserTransactionType.WeiWanRawSigned) {
-			return FileInfoManager.load(addr, parity, new DfsRawTransactionManager(parity, credentials, 100, 100) , gasPrice, gasLimited);
+			return FileInfoManager.load(addr, parity, new BcosRawTxManager(parity, credentials, 100, 100) , gasPrice, gasLimited);
 		}
 		else//3 or other is default for nonceExtension
 		{
@@ -1200,7 +1199,7 @@ public class DfsEngine {
 			return FileServerManager.load(addr, parity, new RawTransactionManager(parity, credentials, 100, 100) , gasPrice, gasLimited);
 		}
 		else if (use_transaction_type == UserTransactionType.WeiWanRawSigned) {
-			return FileServerManager.load(addr, parity, new DfsRawTransactionManager(parity, credentials, 100, 100) , gasPrice, gasLimited);
+			return FileServerManager.load(addr, parity, new BcosRawTxManager(parity, credentials, 100, 100) , gasPrice, gasLimited);
 		}
 		else//3 or other is default for nonceExtension
 		{

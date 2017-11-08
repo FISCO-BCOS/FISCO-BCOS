@@ -33,5 +33,6 @@
 	<classpathentry kind="lib" path="lib/web3j-2.1.0_main.jar" sourcepath="/web3j-v2.0.1_src"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/DfsSDK"/>
 	<classpathentry kind="lib" path="lib/DfsSDK.jar"/>
+	<classpathentry kind="lib" path="lib/web3j-2.1.0-extension.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
