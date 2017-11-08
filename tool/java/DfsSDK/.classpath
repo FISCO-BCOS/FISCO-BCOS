@@ -31,5 +31,6 @@
 	<classpathentry kind="lib" path="lib/rxjava-1.2.4.jar"/>
 	<classpathentry kind="lib" path="lib/scrypt-1.4.0.jar"/>
 	<classpathentry kind="lib" path="lib/web3j-2.1.0_main.jar"/>
+	<classpathentry kind="lib" path="lib/web3j-2.1.0-extension.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

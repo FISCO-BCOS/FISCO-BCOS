@@ -1,7 +1,9 @@
 /**
  * 
  */
-package com.dfs.web3j.tx;
+
+package org.bcos.web3j.tx;
+
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -23,25 +25,23 @@ import org.web3j.utils.Numeric;
  * @author Administrator
  *
  */
-public class DfsTransactionEncoder {
+public class BcosTxEncoder {
 	
 	private BigInteger blockLimited = new BigInteger("100");
+	private BigInteger random;
 	
 	/**
 	 * 
 	 */
-	public DfsTransactionEncoder() {
+	public BcosTxEncoder() {
 	}
 
 	public List<RlpType> asRlpValues(
             RawTransaction rawTransaction, SignatureData signatureData) {
         List<RlpType> result = new ArrayList<>();
 
-        Random random = new Random();
-        random.setSeed(Calendar.getInstance().getTimeInMillis());
         //rlp[0]  randomid
-        BigInteger ramdomid = new BigInteger(256, random);
-        result.add(RlpString.create(ramdomid));
+        result.add(RlpString.create(random));
         
         result.add(RlpString.create(rawTransaction.getGasPrice()));
         //result.add(RlpString.create(rawTransaction.getNonce()));
@@ -128,4 +128,8 @@ public class DfsTransactionEncoder {
         RlpList rlpList = new RlpList(values);
         return RlpEncoder.encode(rlpList);
     }
+
+	public void setRandomId(BigInteger ramdomid) {
+		random = ramdomid;
+	}
 }

@@ -1,10 +1,12 @@
 /**
  * 
  */
-package com.dfs.web3j.tx;
+package org.bcos.web3j.tx;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.Calendar;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
@@ -21,38 +23,46 @@ import org.web3j.utils.Numeric;
  * @author Administrator
  *
  */
-public class DfsRawTransactionManager extends TransactionManager {
+public class BcosRawTxManager extends TransactionManager {
 
 	private final Web3j web3j;
     final Credentials credentials;
 
     private final byte chainId;
-    private DfsTransactionEncoder juTransactionEncoder;
+    private BcosTxEncoder transactionEncoder;
+    private Random random; 
 
-    public DfsRawTransactionManager(Web3j web3j, Credentials credentials, byte chainId) {
+    public BcosRawTxManager(Web3j web3j, Credentials credentials, byte chainId) {
         super(web3j);
         this.web3j = web3j;
         this.credentials = credentials;
 
         this.chainId = chainId;
-        this.juTransactionEncoder = new DfsTransactionEncoder();
+        
+        random = new Random();
+        random.setSeed(Calendar.getInstance().getTimeInMillis());
+        
+        this.transactionEncoder = new BcosTxEncoder();
     }
 
-    public DfsRawTransactionManager(
+    public BcosRawTxManager(
             Web3j web3j, Credentials credentials, byte chainId, int attempts, int sleepDuration) {
         super(web3j, attempts, sleepDuration);
         this.web3j = web3j;
         this.credentials = credentials;
 
         this.chainId = chainId;
-        this.juTransactionEncoder = new DfsTransactionEncoder();
+        
+        random = new Random();
+        random.setSeed(Calendar.getInstance().getTimeInMillis());
+        this.transactionEncoder = new BcosTxEncoder();
     }
 
-    public DfsRawTransactionManager(Web3j web3j, Credentials credentials) {
+    public BcosRawTxManager(Web3j web3j, Credentials credentials) {
         this(web3j, credentials, ChainId.NONE);
     }
 
-    public DfsRawTransactionManager(
+    public BcosRawTxManager(
             Web3j web3j, Credentials credentials, int attempts, int sleepDuration) {
         this(web3j, credentials, ChainId.NONE, attempts, sleepDuration);
     }
@@ -100,11 +110,16 @@ public class DfsRawTransactionManager extends TransactionManager {
 		}
         
         blockLimited = blockLimited.add(new BigInteger("100", 10));
-        juTransactionEncoder.setBlockLimited(blockLimited);
+        transactionEncoder.setBlockLimited(blockLimited);
+        
+        //generate ramdomid
+        BigInteger ramdomid = new BigInteger(256, random);
+        transactionEncoder.setRandomId(ramdomid);
+        
         if (chainId > ChainId.NONE) {
-            signedMessage = juTransactionEncoder.signMessage(rawTransaction, chainId, credentials);
+            signedMessage = transactionEncoder.signMessage(rawTransaction, chainId, credentials);
         } else {
-            signedMessage = juTransactionEncoder.signMessage(rawTransaction, credentials);
+            signedMessage = transactionEncoder.signMessage(rawTransaction, credentials);
         }
 
         String hexValue = Numeric.toHexString(signedMessage);

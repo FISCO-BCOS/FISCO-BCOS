@@ -1,7 +1,0 @@
-{
-    "networkid":"123456",
-    "nodedir":"/bcos-data/node0/",
-    "ip":"127.0.0.1",
-    "rpcport":8545,
-    "p2pport":30303
-}
