@@ -32,7 +32,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ## 技术白皮书
 
-参见[金融区块链底层平台FISCO BCOS白皮书——金融区块链基础设施与实践样本v1.0](https://github.com/FISCO-BCOS/whitepaper))。
+参见[金融区块链底层平台FISCO BCOS白皮书——金融区块链基础设施与实践样本v1.0](https://github.com/FISCO-BCOS/whitepaper)([PDF下载](https://raw.githubusercontent.com/FISCO-BCOS/whitepaper/master/FISCO-BCOS-WHITEPAPER.pdf))。
 
 ## License
 
