@@ -23,17 +23,16 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ## 安装说明
 
-如果您想快速体验FISCO BCOS，我们提供了[一键快速安装部署](待补充链接)工具。
+如果您想快速体验FISCO BCOS，我们提供了[一键快速安装部署](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/sample)工具。
 
-如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](待补充链接)。
+如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/docker)。
 
-如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书1.0](待补充链接)。
+如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书1.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/doc/manual)。
 
 
 ## 技术白皮书
 
-参见[FISCO BCOS白皮书v1.0————金融区块链基础设施与实践样本
-](https://github.com/FISCO-BCOS/whitepaper))。
+参见[金融区块链底层平台FISCO BCOS白皮书——金融区块链基础设施与实践样本v1.0](https://github.com/FISCO-BCOS/whitepaper))。
 
 ## License
 
