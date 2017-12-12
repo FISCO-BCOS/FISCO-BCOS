@@ -35,7 +35,23 @@
 #include "Terminal.h"
 #include <map>
 #include <string>
+namespace dev{
+  class ThreadContext
+  {
+  public:
+    ThreadContext(std::string const& _info) { push(_info); }
+    ~ThreadContext() { pop(); }
 
+    static void push(std::string const& _n);
+    static void pop();
+    static std::string join(std::string const& _prior);
+  };
+
+  void pthread_setThreadName(std::string const& _n);
+
+  /// Set the current thread's log name.
+  std::string getThreadName();
+}
 enum EWarningType
 {
 	GasUsedWarning=0,
