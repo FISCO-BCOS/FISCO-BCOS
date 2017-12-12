@@ -1,0 +1,6 @@
+json format of the http response：
+{
+	"ret":200, 							//http response code
+	"code":0,							//busi return code
+	"info":"bad parameters"				//infomation of response
+}

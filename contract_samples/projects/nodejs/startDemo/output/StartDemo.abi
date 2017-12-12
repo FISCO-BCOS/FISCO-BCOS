@@ -1,0 +1,1 @@
+[{"constant":true,"inputs":[],"name":"get","outputs":[{"name":"_ret","type":"int256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"x","type":"int256"}],"name":"set","outputs":[],"payable":false,"type":"function"},{"inputs":[],"payable":false,"type":"constructor"}]

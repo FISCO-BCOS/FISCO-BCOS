@@ -1,0 +1,3 @@
+#!/bin/sh
+nohup fisco-bcos   --genesis {genesis} --config {config} >> out.log 2>&1  &
+
