@@ -12,7 +12,7 @@
 1. **下载代码**
 
    ```shell
-   git clone https://github.com/bcosorg/fisco-bcos
+   git clone https://github.com/fisco-bcos/fisco-bcos
    ```
 
 2. **执行build**
