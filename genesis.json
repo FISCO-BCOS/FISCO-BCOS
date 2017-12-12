@@ -1,0 +1,13 @@
+{
+     "nonce": "0x0",
+     "difficulty": "0x0",
+     "mixhash": "0x0",
+     "coinbase": "0x0",
+     "timestamp": "0x0",
+     "parentHash": "0x0",
+     "extraData": "0x0",
+     "gasLimit": "0x13880000000000",
+     "god":"0x4d23de3297034cdd4a58db35f659a9b61fc7577b",
+     "alloc": {}, 	
+     "initMinerNodes":["33715c8fbc9cfa417c7d2f9f7b9bf79a23cdcc0e4e2517ea4856537d9616e1718a6ee6cb9ef927ee294ae20d9839f2b102f46bdc47fca0fd24df7797312a4817"]
+}

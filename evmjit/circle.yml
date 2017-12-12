@@ -1,0 +1,14 @@
+dependencies:
+  pre:
+    - sudo apt-add-repository -y ppa:george-edison55/cmake-3.x
+    - sudo apt -q update
+    - sudo apt -qy install cmake
+  override:
+    - BUILD_TYPE=RelWithDebInfo scripts/build.sh
+  cache_directories:
+    # TODO: add ccache
+    - build/llvm  # Cache llvm build
+
+test:
+  override:
+    - cd build && ctest
