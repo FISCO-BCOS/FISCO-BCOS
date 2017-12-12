@@ -1,6 +1,0 @@
-# CLion files
-/.idea/
-
-# Convenient binary output and build dirs
-/bin/
-/build/
