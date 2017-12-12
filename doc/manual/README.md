@@ -56,7 +56,7 @@ sudo chmod +x /usr/bin/fisco-solc
 ### 1.3.1获取源代码
 
 ```bash
-git clone https://github.com/fisco-bcosorg/fisco-bcos.git
+git clone https://github.com/fisco-bcos/fisco-bcos.git
 ```
 
 ### 1.3.2目录结构说明
