@@ -1,5 +1,16 @@
 #include "easylog.h"
-
+#include <string>
+#include <iostream>
+#include <thread>
+#ifdef __APPLE__
+#include <pthread.h>
+#endif
+#if !defined(ETH_EMSCRIPTEN)
+#include <boost/asio/ip/tcp.hpp>
+#endif
+#include "Guards.h"
+using namespace std;
+using namespace dev;
 
  struct ThreadLocalLogName
     {
