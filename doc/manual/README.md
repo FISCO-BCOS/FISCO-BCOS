@@ -442,13 +442,13 @@ tail -f /mydata/nodedata-1/log/log_* | grep "DEBUG"
 请直接参看相关特性说明文档：
 
 1. [AMOP](../amop使用说明文档.md)
-2. [CNS](../CNS(Contract Name Service)服务使用说明文档.md)
+2. [CNS](../CNS_Contract_Name_Service_服务使用说明文档.md)
 3. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
 4. [web3sdk](../web3sdk使用说明文档.md)
-5. [并行计算](../并行计算使用说明文档.md) TODO(不清楚并行计算这个名字是否官方)
+5. [并行计算](../并行计算使用说明文档.md)
 6. [分布式文件系统](../分布式文件系统使用说明.md)
 7. [监控统计日志](../监控统计日志说明文档.md)
-8. [同态加密](..同态加密说明文档.md)
+8. [同态加密](../同态加密说明文档.md)
 
 
 # 第四章、部署合约
@@ -1137,7 +1137,7 @@ babel-node monitor.js
 4.问题期望的表现
 5.源码文件及行数（如有）
 
-随时联系我们：hi@bcos.org.cn
+随时联系我们：service@fisco.com.cn
 
 
 # 第十三章、附录
