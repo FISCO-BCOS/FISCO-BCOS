@@ -1717,7 +1717,7 @@ void TypedConfigurations::insertFile(Level level, const std::string& fullFilenam
     base::LogStreamsReferenceMap::iterator filestreamIter = m_logStreamsReference->find(resolvedFilename);
     base::type::fstream_t* fs = nullptr;
     bool needNewStream = filestreamIter == m_logStreamsReference->end();
-    if (!needNewStream && filestreamIter->second.lock().get() == nullptr) {
+    if (!needNewStream && filestreamIter->second.lock() == nullptr) {
             // Filestream is expired
             needNewStream = true;
     }
@@ -1855,8 +1855,13 @@ void RegisteredLoggers::unsafeFlushAll(void) {
   ELPP_INTERNAL_INFO(1, "Flushing all log files");
   for (base::LogStreamsReferenceMap::iterator it = m_logStreamsReference.begin();
        it != m_logStreamsReference.end(); ++it) {
-    if (it->second.lock().get() == nullptr) continue;
-    it->second.lock()->flush();
+	if (auto h = it->second.lock())
+	{
+    	if (h->get())
+		{
+    		h->flush();
+		}
+	}
   }
 }
 
