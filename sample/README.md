@@ -24,7 +24,7 @@
 
    > 至此，bcoseth安装完毕，安装路径：/usr/local/bin/bcoseth
 
-   注意：在执行build.sh时，若boost库无法下载，一般是网络状况的问题。请先清除所有git clone下载的内容，重新clone代码。clone后进入到deps目录下，新建src文件夹，再将[boost\_1\_63_0.tar.gz](https://github.com/bcosorg/lib/blob/master/dependence/boost_1_63_0.tar.gz)下载到src文件夹内。最后再执行build.sh脚本。
+   
 ## 部署单机两节点
 
 本步骤指导完成两个区块链节点的部署，两个节点都在一台机器上。两个节点相互连接，形成一条由两个节点组成的区块链。
