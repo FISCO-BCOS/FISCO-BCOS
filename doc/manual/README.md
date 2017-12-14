@@ -117,7 +117,6 @@ make -j2
 sudo make install
 ```
 
-注意：在执行make -j2时，若boost库无法下载，或下载速度过慢，一般是网络状况的问题。可手动下载boost。在下载前，请先清除所有git clone下载的内容，重新clone代码。clone后进入到deps目录下，新建src文件夹，再将[boost\_1\_63_0.tar.gz](https://github.com/bcosorg/lib/blob/master/dependence/boost_1_63_0.tar.gz)下载到src文件夹内。最后重复本节步骤。
 
 # 第二章、启动创世节点
 
