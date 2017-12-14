@@ -1,7 +1,7 @@
 //
 //  Bismillah ar-Rahmaan ar-Raheem
 //
-//  Easylogging++ v9.95.3
+//  Easylogging++ v9.94.2
 //  Cross-platform logging library for C++ applications
 //
 //  Copyright (c) 2017 muflihun.com
@@ -613,10 +613,7 @@ void Logger::flush(Level level, base::type::fstream_t* fs) {
   }
   if (fs != nullptr) {
     fs->flush();
-    std::map<Level, unsigned int>::iterator iter = m_unflushedCount.find(level);
-    if (iter != m_unflushedCount.end()) {
-      iter->second = 0;
-    }
+    m_unflushedCount.find(level)->second = 0;
   }
 }
 
@@ -1001,8 +998,6 @@ const std::string OS::getBashOutput(const char* command) {
       hBuff[strlen(hBuff) - 1] = '\0';
     }
     return std::string(hBuff);
-  } else {
-    pclose(proc);
   }
   return std::string();
 #else
@@ -1154,11 +1149,7 @@ struct ::tm* DateTime::buildTimeInfo(struct timeval* currTime, struct ::tm* time
 #  if ELPP_COMPILER_MSVC
   ELPP_UNUSED(currTime);
   time_t t;
-#    if defined(_USE_32BIT_TIME_T)
-  _time32(&t);
-#    else
   _time64(&t);
-#    endif
   elpptime_s(timeInfo, &t);
   return timeInfo;
 #  else
@@ -1272,8 +1263,7 @@ bool CommandLineArgs::hasParamWithValue(const char* paramKey) const {
 }
 
 const char* CommandLineArgs::getParamValue(const char* paramKey) const {
-  std::map<std::string, std::string>::const_iterator iter = m_paramsWithValue.find(std::string(paramKey));
-  return iter != m_paramsWithValue.end() ? iter->second.c_str() : "";
+  return m_paramsWithValue.find(std::string(paramKey))->second.c_str();
 }
 
 bool CommandLineArgs::hasParam(const char* paramKey) const {
@@ -1946,11 +1936,9 @@ bool VRegistry::allowed(base::type::VerboseLevel vlevel, const char* file) {
   if (m_modules.empty() || file == nullptr) {
     return vlevel <= m_level;
   } else {
-    char baseFilename[base::consts::kSourceFilenameMaxLength] = "";
-    base::utils::File::buildBaseFilename(file, baseFilename);
     std::map<std::string, base::type::VerboseLevel>::iterator it = m_modules.begin();
     for (; it != m_modules.end(); ++it) {
-      if (base::utils::Str::wildCardMatch(baseFilename, it->first.c_str())) {
+      if (base::utils::Str::wildCardMatch(file, it->first.c_str())) {
         return vlevel <= it->second;
       }
     }
@@ -2348,8 +2336,6 @@ base::type::string_t DefaultLogBuilder::build(const LogMessage* logMessage, bool
     base::utils::Str::replaceFirstWithEscape(logLine, base::consts::kMessageFormatSpecifier, logMessage->message());
   }
 #if !defined(ELPP_DISABLE_CUSTOM_FORMAT_SPECIFIERS)
-  el::base::threading::ScopedLock lock_(ELPP->lock());
-  ELPP_UNUSED(lock_);
   for (std::vector<CustomFormatSpecifier>::const_iterator it = ELPP->customFormatSpecifiers()->begin();
        it != ELPP->customFormatSpecifiers()->end(); ++it) {
     std::string fs(it->formatSpecifier());
@@ -2370,6 +2356,7 @@ void LogDispatcher::dispatch(void) {
   if (!m_proceed) {
     return;
   }
+  base::threading::ScopedLock scopedLock(ELPP->lock());
   base::TypedConfigurations* tc = m_logMessage.logger()->m_typedConfigurations;
   if (ELPP->hasFlag(LoggingFlag::StrictLogFileSizeCheck)) {
     tc->validateFileRolling(m_logMessage.level(), ELPP->preRollOutCallback());
@@ -2445,13 +2432,12 @@ void Writer::initializeLogger(const std::string& loggerId, bool lookup, bool nee
     m_logger = ELPP->registeredLoggers()->get(loggerId, ELPP->hasFlag(LoggingFlag::CreateLoggerAutomatically));
   }
   if (m_logger == nullptr) {
-    {
-      base::threading::ScopedLock scopedLock(ELPP->lock());
-      if (!ELPP->registeredLoggers()->has(std::string(base::consts::kDefaultLoggerId))) {
-        // Somehow default logger has been unregistered. Not good! Register again
-        ELPP->registeredLoggers()->get(std::string(base::consts::kDefaultLoggerId));
-      }
+    ELPP->acquireLock();
+    if (!ELPP->registeredLoggers()->has(std::string(base::consts::kDefaultLoggerId))) {
+      // Somehow default logger has been unregistered. Not good! Register again
+      ELPP->registeredLoggers()->get(std::string(base::consts::kDefaultLoggerId));
     }
+    ELPP->releaseLock();  // Need to unlock it for next writer
     Writer(Level::Debug, m_file, m_line, m_func).construct(1, base::consts::kDefaultLoggerId)
         << "Logger [" << loggerId << "] is not registered yet!";
     m_proceed = false;
@@ -2526,7 +2512,7 @@ void Writer::triggerDispatch(void) {
     std::stringstream reasonStream;
     reasonStream << "Fatal log at [" << m_file << ":" << m_line << "]"
                  << " If you wish to disable 'abort on fatal log' please use "
-                 << "el::Loggers::addFlag(el::LoggingFlag::DisableApplicationAbortOnFatalLog)";
+                 << "el::Helpers::addFlag(el::LoggingFlag::DisableApplicationAbortOnFatalLog)";
     base::utils::abort(1, reasonStream.str());
   }
   m_proceed = false;
@@ -2986,11 +2972,11 @@ void Loggers::clearVModules(void) {
 // VersionInfo
 
 const std::string VersionInfo::version(void) {
-  return std::string("9.95.3");
+  return std::string("9.94.2");
 }
 /// @brief Release date of current version
 const std::string VersionInfo::releaseDate(void) {
-  return std::string("13-10-2017 1134hrs");
+  return std::string("12-04-2017 1621hrs");
 }
 
 } // namespace el
