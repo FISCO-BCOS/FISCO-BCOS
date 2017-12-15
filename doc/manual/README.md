@@ -131,7 +131,7 @@ god账号是区块链的最高权限，在启动区块链前必须配置。
 #### 2.2.1 生成god账号
 
 ```shell
-cd /mydata/fisco-bcos-master/tool #代码根目录下的tool文件夹
+cd /mydata/FISCO-BCOS/tool #代码根目录下的tool文件夹
 cnpm install #安装nodejs包，仅需运行一次，之后若需要再次在tool目录下使用nodejs，不需要重复运行此命令
 node accountManager.js > godInfo.txt
 cat godInfo.txt |grep address
@@ -1309,6 +1309,8 @@ openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
 
 **（2）生成节点证书server.key、server.crt**
 
+
+
 > 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，生成节点证书server.key、server.crt。
 
 ```shell
@@ -1621,20 +1623,24 @@ Host:127.0.0.1:30403
 FISCO BCOS的特性，请直接参看相关特性说明文档：
 
 1. [AMOP](../amop使用说明文档.md)
-2. [Contract_Name_Service](../[CNS_Contract_Name_Service_服务使用说明文档.md)
+2. [Contract_Name_Service](../CNS_Contract_Name_Service_服务使用说明文档.md)
 3. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
 4. [web3sdk](../web3sdk使用说明文档.md)
 5. [并行计算](../并行计算使用说明文档.md) 
 6. [分布式文件系统](../分布式文件系统使用说明.md)
 7. [监控统计日志](../监控统计日志说明文档.md)
-8. [同态加密](..同态加密说明文档.md)
+8. [同态加密](../同态加密说明文档.md)
+9. [机构证书准入](../CA机构身份认证说明文档.md)
 
 
 
 ## 第十一章 附录
 
 ### 11.1 源码目录结构说明
-<span id="11.1 源码目录结构说明"></span>
+
+
+
+
 | 目录                | 说明                                       |
 | ----------------- | ---------------------------------------- |
 | abi               | CNS(合约命名服务)模块代码                          |
