@@ -21,7 +21,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 本章主要介绍FISCO BCOS区块链环境的部署。包括机器配置，部署软件环境和编译源码。
 
-###1.1 机器配置
+### 1.1 机器配置
 
 | 配置   | 最低配置   | 推荐配置                                 |
 | ---- | ------ | ------------------------------------ |
@@ -33,7 +33,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ### 1.2 部署软件环境
 
-####1.2.1 安装依赖包
+#### 1.2.1 安装依赖包
 
 ```shell
 #安装依赖包
@@ -45,7 +45,7 @@ sudo cnpm install -g babel-cli babel-preset-es2017 ethereum-console
 echo '{ "presets": ["es2017"] }' > ~/.babelrc
 ```
 
-####1.2.2 安装FISCO BCOS的智能合约编译器
+#### 1.2.2 安装FISCO BCOS的智能合约编译器
 
 > 编译器名为fisco-solc，在源码根目录下：
 
@@ -57,7 +57,7 @@ sudo chmod +x /usr/bin/fisco-solc
 
 ### 1.3 编译源码
 
-####1.3.1 获取源码
+#### 1.3.1 获取源码
 
 > 假定在/mydata/下获取源码：
 
@@ -76,7 +76,7 @@ cd FISCO-BCOS
 
 源码目录说明请参考[附录：11.1 源码目录结构说明](#11.1 源码目录结构说明)
 
-####1.3.2 安装编译依赖
+#### 1.3.2 安装编译依赖
 
 > 根目录下执行：
 
@@ -85,7 +85,7 @@ chmod +x scripts/install_deps.sh
 ./scripts/install_deps.sh
 ```
 
-####1.3.3 编译
+#### 1.3.3 编译
 
 ```shell
 mkdir -p build
@@ -96,13 +96,11 @@ make
 
 > 若编译成功，则生成build/eth/fisco-bcos。
 
-####1.3.4 安装
+#### 1.3.4 安装
 
 ```shell
 sudo make install
 ```
-
-**注意：**在执行make -j2时，若boost库无法下载，或下载速度过慢，一般是网络状况的问题。可手动下载boost。在下载前，请先清除所有git clone下载的内容，重新clone代码。clone后进入到deps目录下，新建src文件夹，再将[boost\_1\_63_0.tar.gz](https://github.com/bcosorg/lib/blob/master/dependence/boost_1_63_0.tar.gz)下载到src文件夹内。最后重新编译安装。
 
 
 
@@ -110,7 +108,7 @@ sudo make install
 
 创世节点是区块链中的第一个节点，搭建区块链，从创建创世节点开始。
 
-###2.1 创建节点环境
+### 2.1 创建节点环境
 
 > 假定创世节点目录为/mydata/nodedata-1/，创建节点环境如下：
 
@@ -130,7 +128,7 @@ cp genesis.json config.json log.conf start.sh stop.sh /mydata/nodedata-1/
 
 god账号是区块链的最高权限，在启动区块链前必须配置。
 
-####2.2.1 生成god账号
+#### 2.2.1 生成god账号
 
 ```shell
 cd /mydata/fisco-bcos-master/tool #代码根目录下的tool文件夹
@@ -145,7 +143,7 @@ cat godInfo.txt |grep address
 address : 0x27214e01c118576dd5f481648f83bb909619a324
 ```
 
-####2.2.2 配置god账号
+#### 2.2.2 配置god账号
 
 > 将上述步骤生成的god的address配置入genesis.json的god字段：
 
@@ -163,7 +161,7 @@ vim /mydata/nodedata-1/genesis.json
 
 NodeId唯一标识了区块链中的某个节点，在节点启动前必须进行配置。
 
-####2.3.1 配置cryptomod.json文件
+#### 2.3.1 配置cryptomod.json文件
 
 > 在cryptomod.json文件中配置NodeId生成路径：
 
@@ -186,7 +184,7 @@ vim cryptomod.json
 
 cryptomod.json其它字段说明请参看[附录：11.2 cryptomod.json说明](#11.2 cryptomod.json说明)
 
-####2.3.2 生成节点身份文件
+#### 2.3.2 生成节点身份文件
 
 > 用上述修改好的cryptomod.json文件生成节点身份文件，生成路径为cryptomod.json中配置的路径。
 
@@ -203,7 +201,7 @@ ls /mydata/nodedata-1/data/
 network.rlp  network.rlp.pub
 ```
 
-####2.3.3 配置创世节点NodeId
+#### 2.3.3 配置创世节点NodeId
 
 （1）查看NodeId
 
@@ -343,7 +341,7 @@ vim /mydata/nodedata-1/genesis.json
 
 genesis.json其它字段说明请参看[附录：11.3 genesis.json说明](#11.3 genesis.json说明)
 
-####2.5.2 配置config.json（节点配置文件）
+#### 2.5.2 配置config.json（节点配置文件）
 
 config.json中配置节点的各种信息，包括网络地址，文件目录，节点身份等。
 
@@ -403,7 +401,7 @@ config.json其它字段说明请参看[附录：11.4 config.json说明](#11.4 co
 }
 ```
 
-####2.5.3 配置log.conf（日志配置文件）
+#### 2.5.3 配置log.conf（日志配置文件）
 
 log.conf中配置节点日志生成的格式和路径。
 
@@ -496,7 +494,7 @@ INFO|2017-12-12 17:52:19:907|+++++++++++++++++++++++++++ Generating seal on3530f
 
 ### 2.7 验证节点启动
 
-####2.7.1 验证进程
+#### 2.7.1 验证进程
 
 ```shell
 ps -ef |grep fisco-bcos
@@ -535,7 +533,7 @@ INFO|2017-12-12 17:52:19:907|+++++++++++++++++++++++++++ Generating seal on3530f
 
 智能合约通过solidity语言实现，用fisco-solc进行编译。本章以HelloWorld.sol智能合约为例介绍智能合约的部署和调用。
 
-###3.1 配置
+### 3.1 配置
 
 > 切换到部署合约的目录下
 
@@ -610,9 +608,9 @@ HelloWorld合约地址 0x1d2047204130de907799adaea85c511c7ce85b6d
 HelloWorld部署成功！
 ```
 
-###3.3 调用合约
+### 3.3 调用合约
 
-####3.3.1 编写合约调用程序
+#### 3.3.1 编写合约调用程序
 
 > 用nodejs实现，具体实现方法请直接看demoHelloWorld.js源码
 
@@ -723,7 +721,7 @@ ContractAbiMgr合约地址 0x9216757a91607668cf8a7a38f8ae56206a6e9f6b
 SystemProxy合约地址 0x919868496524eedc26dbb81915fa1547a20f8998
 ```
 
-###4.3 配置系统代理合约地址
+### 4.3 配置系统代理合约地址
 
 系统代理合约，是所有系统合约的路由，通过配置系统代理合约地址（SystemProxy），才能正确调用系统合约。给个区块链节点都应配置系统代理合约地址，才能正确调用系统合约。
 
@@ -1271,7 +1269,7 @@ babel-node tool.js NodeAction all
 
 
 
-##第七章 机构证书准入
+## 第七章 机构证书准入
 
 FISCO BCOS提供了证书准入的功能。在节点加入网络后，节点间是否能够通信，还可通过证书进行控制。
 
@@ -1324,7 +1322,7 @@ openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -days 
 
 全局证书验证开关能够控制是否采用证书验证机制。
 
-####7.2.1 开启全局开关
+#### 7.2.1 开启全局开关
 
 开关开启后，节点间的通信将进行证书的验证。默认所有证书都有效。若要让某个节点的证书失效，请参考[7.3 授权单个节点证书](#7.3 授权单个节点证书)
 
@@ -1365,8 +1363,8 @@ babel-node tool.js ConfigAction set CAVerify false
 > 获取server.crt的序列号
 
 ```shell
-/mydata/nodedata-2/data
-openssl x509  -serial -noout -in server.crt
+cd /mydata/nodedata-2/data
+openssl x509 -noout -in server.crt -serial
 ```
 
 > 可得到证书序列号
@@ -1375,7 +1373,7 @@ openssl x509  -serial -noout -in server.crt
 serial=8A4B2CDE94348D22
 ```
 
-####7.3.2 编写证书授权配置文件
+#### 7.3.2 编写证书授权配置文件
 
 > 在systemcontractv2目录下编写。
 
@@ -1401,7 +1399,7 @@ vim ca.json
 
 证书授权配置文件其它字段说明请参考[11.6 证书授权配置文件说明](#11.6 证书授权配置文件说明)
 
-####7.3.3 对证书进行授权
+#### 7.3.3 对证书进行授权
 
 > 执行以下命令，指定证书授权配置文件ca.json，控制证书是否可用。
 
@@ -1413,7 +1411,7 @@ babel-node tool.js CAAction update ca.json
 
 
 
-##第八章 使用控制台
+## 第八章 使用控制台
 
 控制台能够以IPC的方式直接连接区块链节点进程。登录控制台后，能够直接查看区块链的各种信息。
 
@@ -1552,13 +1550,13 @@ eb3.admin.getPeers(console.log)
 
 
 
-##第九章 其它可选工具
+## 第九章 其它可选工具
 
 ### 9.1 导出创世块工具
 
 FISCO BCOS支持把现有区块链中所有的合约全部导出到一个文件中。新的区块链可使用此文件作为创世块文件启动，进而继承原来区块链中所有的合约。
 
-####9.1.1 停止当前区块链节点
+#### 9.1.1 停止当前区块链节点
 
 > 在导出前，要将当前操作目录对应的区块链节点停掉
 
@@ -1567,7 +1565,7 @@ cd /mydata/nodedata-1
 ./stop.sh
 ```
 
-####9.1.2 导出创世块
+#### 9.1.2 导出创世块
 
 > 用--export-genesis字段指定导出的创世块文件名。
 
@@ -1577,7 +1575,7 @@ fisco-bcos --genesis ./genesis.json --config ./config.json 	--export-genesis ./n
 
 > 一段时间后，生成new_genesis.json。此文件即是导出的创世块，可作为新的区块链的创世块使用。
 
-###9.2 监控连接和块高
+### 9.2 监控连接和块高
 
 monitor.js脚本监控节点的连接情况和块高。在运行前，请确认：
 
@@ -1618,12 +1616,12 @@ Host:127.0.0.1:30403
 
 
 
-##第十章 FISCO BCOS 特性
+## 第十章 FISCO BCOS 特性
 
 FISCO BCOS的特性，请直接参看相关特性说明文档：
 
 1. [AMOP](../amop使用说明文档.md)
-2. [CNS](../CNS(Contract Name Service)服务使用说明文档.md)
+2. [Contract_Name_Service](../[CNS_Contract_Name_Service_服务使用说明文档.md)
 3. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
 4. [web3sdk](../web3sdk使用说明文档.md)
 5. [并行计算](../并行计算使用说明文档.md) 
@@ -1636,7 +1634,7 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 ## 第十一章 附录
 
 ### 11.1 源码目录结构说明
-
+<span id="11.1 源码目录结构说明"></span>
 | 目录                | 说明                                       |
 | ----------------- | ---------------------------------------- |
 | abi               | CNS(合约命名服务)模块代码                          |
@@ -1749,7 +1747,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 
 以下依次介绍各个系统合约的源码路径、已实现接口说明、调用例子、工具使用方法。
 
-####11.7.1 系统代理合约
+#### 11.7.1 系统代理合约
 
 系统代理合约是系统合约的统一入口。
 
@@ -1783,11 +1781,24 @@ babel-node tool.js SystemProxy
 
 示例输出如下：
 
-![output example](./images/i9.1.png)
+```log
+Soc File :SystemProxy
+Func :undefined
+系统合约地址0x919868496524eedc26dbb81915fa1547a20f8998
+-----------------系统路由表----------------------
+0 )TransactionFilterChain=>0x23df89a2893120f686a4aa03b41acf6836d11e5d,false,18
+       AuthorityFilter=>1.0,0x4437f8c9cd1e6a3e8ec9c3460c4bc209acdca052
+1 )ConfigAction=>0xfcd14ed03e6d94ca127d557a1883dd042a81ea11,false,19
+2 )NodeAction=>0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2,false,20
+3 )CAAction=>0x60d4ee5c461677840ab3552a6845fdf7db4a5317,false,21
+4 )ContractAbiMgr=>0x9216757a91607668cf8a7a38f8ae56206a6e9f6b,false,22
+5 )FileInfoManager=>0x73479ed8162e198b9627b962eb4aae7098bdc770,false,23
+6 )FileServerManager=>0x1406a0c559995562fc77bf2a214a2dcfab4f6b2b,false,24
+```
 
 输出中即是当前系统路由表的所有路由信息。
 
-####11.7.2 节点管理合约
+#### 11.7.2 节点管理合约
 
 节点管理合约主要功能是维护网络中节点列表。
 网络中节点加入或退出都需要与节点管理合约进行交互。
@@ -1813,7 +1824,7 @@ var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instan
 
 请参看 添加非创世节点入网、节点出网
 
-####11.7.3 机构证书合约
+#### 11.7.3 机构证书合约
 
 机构证书合约主要功能是维护机构证书信息。
 
@@ -1858,7 +1869,7 @@ babel-node tool.js CAAction update
 babel-node tool.js CAAction updateStatus
 ```
 
-####11.7.4 权限管理合约
+#### 11.7.4 权限管理合约
 
 权限管理合约是对区块链权限模型的实现。
 
@@ -1899,7 +1910,7 @@ babel-node tool.js AuthorityFilter 用户外部账户、合约地址、合约接
 
 继承TransactionFilterBase实现新的交易Filter合约。并通过addFilter接口将新Filter注册入TransactionFilterChain即可。
 
-####11.7.5 全网配置合约
+#### 11.7.5 全网配置合约
 
 全网配置合约维护了区块链中部分全网运行配置信息。
 
