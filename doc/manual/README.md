@@ -1529,7 +1529,7 @@ web3.eth.getBlock(2,console.log)
 
 > 可得到相应的区块信息
 
-```json
+```log
 > null { author: '0x0000000000000000000000000000000000000000',
   difficulty: { [String: '1'] s: 1, e: 0, c: [ 1 ] },
   extraData: '0xd78095312e302b2b302d524c696e75782f672b2b2f496e74',
@@ -1550,7 +1550,6 @@ web3.eth.getBlock(2,console.log)
   transactions: [ '0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee55dabd9c1013634e355' ],
   transactionsRoot: '0xc9c0b09f236fba3bad81f6fb92b9ca03b6ccb1aaf53ef600621c0a0fd0fd4bb1',
   uncles: [] }
-
 ```
 
 #### 8.2.2 查看交易
@@ -1563,7 +1562,7 @@ web3.eth.getTransaction('0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee55dabd9c
 
 > 可得到相应的交易信息
 
-```json
+```log
 > null { blockHash: '0xa3c2b1eda74f26c688e78bffcc71c8561e49dc70fbfbd71b85c3b79a2c16bc81',
   blockNumber: 2,
   from: '0x04804c06677d2009e52ca96c825d38056292cab6',
@@ -1587,7 +1586,7 @@ web3.eth.getTransactionReceipt('0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee5
 
 > 可得到相应的交易回执
 
-```json
+```log
 > null { blockHash: '0xa3c2b1eda74f26c688e78bffcc71c8561e49dc70fbfbd71b85c3b79a2c16bc81',
   blockNumber: 2,
   contractAddress: '0x0000000000000000000000000000000000000000',
