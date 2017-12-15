@@ -19,13 +19,14 @@
 ### 打开机构身份认证开关
 
 1.打开开关
-
+```shell
 cd systemcontractv2
 babel-node tool.js ConfigAction set CAVerify true
-
+```
 2.验证开关是否打开成功
-
+```shell
 babel-node tool.js ConfigAction get CAVerify
+```
 出现CAVerify=true则代表开关打开成功
 
 
@@ -33,10 +34,13 @@ babel-node tool.js ConfigAction get CAVerify
 
 1.获取机构证书序列号
 
-datadir下执行openssl x509 -noout -in server.crt -serial获取证书序列号。
+datadir下执行命令，获取证书序列号。
+```shell
+openssl x509 -noout -in server.crt -serial
+```
 
 2.证书序列号写入ca.json文件
-
+```json
 {
        "hash":"xxx",//获取的证书序列号
        "pubkey":"",//默认填空即可
@@ -47,18 +51,20 @@ datadir下执行openssl x509 -noout -in server.crt -serial获取证书序列号�
        "whitelist":"",//默认填空即可
        "blacklist":""//默认填空即可
 }
- 
+```
 3.机构证书信息上链
-
+```shell
 cd systemcontractv2
 babel-node tool.js CAAction update ca.json
-babel-node tool.js CAAction all查看写入的机构信息是否与ca.json相符。
-
+babel-node tool.js CAAction all #查看写入的机构信息是否与ca.json相符。
+```
 4.更新机构证书状态
 
 设置ca.json中的status设置为0表示使用该证书的节点不准入：
-babel-node tool.js CAAction updateStatus ca.json，可以重复录入多个机构证书信息。
-babel-node tool.js CAAction all查看写入的机构信息是否与ca.json相符。
+```shell
+babel-node tool.js CAAction updateStatus ca.json #可以重复录入多个机构证书信息。
+babel-node tool.js CAAction all #查看写入的机构信息是否与ca.json相符。
+```
 重启拒接连接的节点，该节点不能正常连接。
 注意:一般该操作由联盟链管理人员去控制节点准入
 
