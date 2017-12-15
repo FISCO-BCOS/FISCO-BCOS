@@ -40,9 +40,9 @@ openssl x509 -noout -in server.crt -serial
 ```
 
 2.证书序列号写入ca.json文件
-```json
+```log
 {
-       "hash":"xxx",//获取的证书序列号
+       "hash":"xxx",//<--------------证书序列号
        "pubkey":"",//默认填空即可
        "orgname":"",//根据需要选填
        "notbefore":20170223,//根据需要选填
