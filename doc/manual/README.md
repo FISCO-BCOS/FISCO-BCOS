@@ -74,7 +74,7 @@ git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git
 cd FISCO-BCOS 
 ```
 
-源码目录说明请参考[附录：11.1 源码目录结构说明](#11.1 源码目录结构说明)
+源码目录说明请参考<u>附录：11.1 源码目录结构说明</u>
 
 #### 1.3.2 安装编译依赖
 
@@ -166,8 +166,7 @@ NodeId唯一标识了区块链中的某个节点，在节点启动前必须进�
 > 在cryptomod.json文件中配置NodeId生成路径：
 
 ```shell
-cd /mydata/FISCO-BCOS/ 
-vim cryptomod.json
+vim /mydata/FISCO-BCOS/cryptomod.json
 ```
 
 > 通常情况下，只需将rlpcreatepath配置为/mydata/nodedata-1/data/network.rlp即可。配置后的cryptomod.json如下：
@@ -182,13 +181,14 @@ vim cryptomod.json
 }
 ```
 
-cryptomod.json其它字段说明请参看[附录：11.2 cryptomod.json说明](#11.2 cryptomod.json说明)
+cryptomod.json其它字段说明请参看<u>附录：11.2 cryptomod.json说明</u>
 
 #### 2.3.2 生成节点身份文件
 
 > 用上述修改好的cryptomod.json文件生成节点身份文件，生成路径为cryptomod.json中配置的路径。
 
 ```shell
+cd /mydata/FISCO-BCOS/ 
 fisco-bcos --gennetworkrlp  cryptomod.json #需要一段时间
 ls /mydata/nodedata-1/data/
 ```
@@ -280,7 +280,7 @@ openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
 > 若拷贝的是sample目录下的ca.crt，则继续拷贝sample目录下的server.crt、server.key作为节点的证书
 
 ```shell
-cd /mydata/fisco-bcos-master/sample
+cd /mydata/FISCO-BCOS/sample
 cp server.key server.crt  /mydata/nodedata-1/data/
 ```
 
@@ -339,7 +339,7 @@ vim /mydata/nodedata-1/genesis.json
 }
 ```
 
-genesis.json其它字段说明请参看[附录：11.3 genesis.json说明](#11.3 genesis.json说明)
+genesis.json其它字段说明请参看<u>附录：11.3 genesis.json说明</u>
 
 #### 2.5.2 配置config.json（节点配置文件）
 
@@ -355,7 +355,7 @@ vim /mydata/nodedata-1/config.json
 > - 目录相关：wallet、keystoredir、datadir、logconf
 > - 节点身份相关：NodeextraInfo中的Nodeid、Nodedesc、Agencyinfo、Peerip、Identitytype、Port、Idx（与网络连接相关对应上）
 
-config.json其它字段说明请参看[附录：11.4 config.json说明](#11.4 config.json说明)
+config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 
 > 配置好的config.json如下：
 
@@ -452,7 +452,7 @@ vim /mydata/nodedata-1/log.conf
     FILENAME                =   "/mydata/nodedata-1/log/verbose_log_%datetime{%Y%M%d%H}.log"
 ```
 
-log.conf其它字段说明请参看[附录：11.5 log.conf说明](#11.5 log.conf说明)
+log.conf其它字段说明请参看<u>附录：11.5 log.conf说明</u>
 
 ### 2.6 启动创世节点
 
@@ -538,7 +538,7 @@ INFO|2017-12-12 17:52:19:907|+++++++++++++++++++++++++++ Generating seal on3530f
 > 切换到部署合约的目录下
 
 ```shell
-cd /mydata/fisco-bcos-master/tool
+cd /mydata/FISCO-BCOS/tool
 ```
 
 > 安装依赖环境
@@ -553,7 +553,7 @@ cnpm install
 vim config.js
 ```
 
-> 仅需将proxy指向区块链节点的RPC端口即可。RPC端口在节点的config.json中查看（参考：[2.5.2 配置config.json（节点配置文件）](#2.5.2 配置config.json（节点配置文件）)）。
+> 仅需将proxy指向区块链节点的RPC端口即可。RPC端口在节点的config.json中查看（参考：<u>2.5.2 配置config.json（节点配置文件）</u>）。
 
 ```javascript
 var proxy="http://127.0.0.1:8545";
@@ -564,7 +564,7 @@ var proxy="http://127.0.0.1:8545";
 #### 3.2.1 实现合约
 
 ```shell
-cd /mydata/fisco-bcos-master/tool
+cd /mydata/FISCO-BCOS/tool
 vim HelloWorld.sol
 ```
 
@@ -645,14 +645,14 @@ HelloWorld合约address:0x1d2047204130de907799adaea85c511c7ce85b6d
 
 ## 第四章 部署系统合约
 
-系统合约是 FISCO BCOS 区块链的重要设计思路之一，也是控制网络节点加入和退出的重要方式，每条区块链仅需部署一次系统合约。系统合约的详细介绍，请参看[附录：11.7 系统合约介绍](#11.7 系统合约介绍)
+系统合约是 FISCO BCOS 区块链的重要设计思路之一，也是控制网络节点加入和退出的重要方式，每条区块链仅需部署一次系统合约。系统合约的详细介绍，请参看<u>附录：11.7 系统合约介绍</u>
 
 ### 4.1 配置
 
 > 切换到部署系统合约的目录下
 
 ```shell
-cd /mydata/fisco-bcos-master/systemcontractv2
+cd /mydata/FISCO-BCOS/systemcontractv2
 ```
 
 > 安装依赖环境
@@ -667,7 +667,7 @@ cnpm install
 vim config.js
 ```
 
-> 仅需将proxy指向区块链节点的RPC端口即可。RPC端口在节点的config.json中查看（参考：[2.5.2 配置config.json（节点配置文件）](#2.5.2 配置config.json（节点配置文件）)）。
+> 仅需将proxy指向区块链节点的RPC端口即可。RPC端口在节点的config.json中查看（参考：<u>2.5.2 配置config.json（节点配置文件）</u>）。
 
 ```javascript
 var proxy="http://127.0.0.1:8545";
@@ -746,7 +746,7 @@ chmod +x *.sh
 ./start.sh #执行此步骤后不断刷出打包信息，表明重启成功
 ```
 
-自此，系统合约生效，为配置多个节点的区块链做好了准备。系统合约的详细介绍，请参看[附录：11.7 系统合约介绍](#11.7 系统合约介绍)
+自此，系统合约生效，为配置多个节点的区块链做好了准备。系统合约的详细介绍，请参看<u>附录：11.7 系统合约介绍</u>
 
 
 
@@ -799,7 +799,7 @@ vim cryptomod.json
 }
 ```
 
-cryptomod.json其它字段说明请参看[附录：11.2 cryptomod.json说明](#11.2 cryptomod.json说明)
+cryptomod.json其它字段说明请参看<u>附录：11.2 cryptomod.json说明</u>
 
 #### 5.2.2 生成节点身份文件
 
@@ -887,7 +887,7 @@ cd /mydata/nodedata-1/data/
 cp server.key server.crt  /mydata/nodedata-2/data/
 ```
 
-> 若需要自己生成新的节点证书，则需要根证书的公私钥（ca.crt、ca.key）。ca.key是非公开的。若创建节点的根证书是手动生成的，存在ca.key，则基于此生成新的节点证书。若创世节点的ca.crt是从sample复制的，则需要重新手动生成根证书。请参考[2.4 配置证书](#2.4 配置证书) ，手动生成所有创世节点的证书后，再基于新生成的ca.crt、ca.key，生成新的节点证书。
+> 若需要自己生成新的节点证书，则需要根证书的公私钥（ca.crt、ca.key）。ca.key是非公开的。若创建节点的根证书是手动生成的，存在ca.key，则基于此生成新的节点证书。若创世节点的ca.crt是从sample复制的，则需要重新手动生成根证书。请参考<u>2.4 配置证书</u> ，手动生成所有创世节点的证书后，再基于新生成的ca.crt、ca.key，生成新的节点证书。
 
 ```shell
 cp /mydata/nodedata-1/data/ca.key /mydata/nodedata-2/data/
@@ -931,7 +931,7 @@ vim /mydata/nodedata-2/config.json
 > - 目录相关：wallet、keystoredir、datadir、logconf
 > - 节点身份相关：NodeextraInfo中的Nodeid、Nodedesc、Agencyinfo、Peerip、Identitytype、Port、Idx（与网络连接相关对应上）
 
-config.json其它字段说明请参看[附录：11.4 config.json说明](#11.4 config.json说明)
+config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 
 > 配置好的config.json如下：
 
@@ -1040,7 +1040,7 @@ vim /mydata/nodedata-2/log.conf
     FILENAME                =   "/mydata/nodedata-2/log/verbose_log_%datetime{%Y%M%d%H}.log"
 ```
 
-log.conf其它字段说明请参看[附录：11.5 log.conf说明](#11.5 log.conf说明)
+log.conf其它字段说明请参看<u>附录：11.5 log.conf说明</u>
 
 ### 5.5 启动节点
 
@@ -1049,7 +1049,7 @@ log.conf其它字段说明请参看[附录：11.5 log.conf说明](#11.5 log.conf
 - 证书文件（/mydata/nodedata-2/data）：ca.crt、network.rlp、network.rlp.pub、server.crt、server.key
 - 配置文件（/mydata/nodedata-2/）：genesis.json、config.json、log.conf
 
-> 启动节点，此时节点未被注册到区块链中，启动时只能看到进程，不能刷出打包信息。要让此节点正确的运行，请进入[第六章 多节点组网](#第六章 多节点组网) 。
+> 启动节点，此时节点未被注册到区块链中，启动时只能看到进程，不能刷出打包信息。要让此节点正确的运行，请进入<u>第六章 多节点组网</u> 。
 
 ```shell
 cd /mydata/nodedata-2/
@@ -1096,7 +1096,7 @@ FISCO BCOS区块链中的节点，只有被注册过，表示加入了网络，�
 > 以注册创世节点为例。
 
 ```shell
-cd /mydata/fisco-bcos-master/systemcontractv2/
+cd /mydata/FISCO-BCOS/systemcontractv2/
 vim node1.json
 ```
 
@@ -1183,7 +1183,7 @@ cd /mydata/nodedata-2/
 >再次查看入网情况：
 
 ```log
-cd /mydata/fisco-bcos-master/systemcontractv2/
+cd /mydata/FISCO-BCOS/systemcontractv2/
 babel-node tool.js NodeAction all
 ```
 
@@ -1271,9 +1271,9 @@ babel-node tool.js NodeAction all
 
 ## 第七章 机构证书准入
 
-FISCO BCOS提供了证书准入的功能。在节点加入网络后，节点间是否能够通信，还可通过证书进行控制。
+FISCO BCOS提供了证书准入的功能。在节点加入网络后，节点间是否能够通信，还可通过证书进行控制。在FISCO BCOS中，节点的证书代表了此节点属于某个机构。FISCO BCOS区块链中的管理者，可以通过配置机构的证书，控制相应证书的节点是否能够与其它节点通信。
 
-> 机构证书的准入依赖系统合约，在进行机构证书准入操作前，请确认：
+> 机构证书的准入依赖系统合约，在进行机构证书准入操作前，再次请确认：
 >
 > （1）系统合约已经被正确的部署。
 >
@@ -1295,7 +1295,9 @@ FISCO BCOS提供了证书准入的功能。在节点加入网络后，节点间�
 
 FISCO BCOS通过授权某节点对应的公钥server.crt，控制此节点是否能够与其它节点正常通信。
 
-具体配置过程请参考[2.4 配置证书](#2.4 配置证书) 。此处给出生成证书的相关的命令。
+具体配置过程请参考<u>2.4 配置证书</u> 。此处给出生成证书的相关的命令。
+
+**注意：若要尝试使用[AMOP（链上链下）](../amop使用说明文档.md)，请直接使用sample目录下的证书。AMOP暂不支持与新生成的证书进行连接。**
 
 **（1）生成根证书ca.crt**
 
@@ -1309,8 +1311,6 @@ openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
 
 **（2）生成节点证书server.key、server.crt**
 
-
-
 > 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，生成节点证书server.key、server.crt。
 
 ```shell
@@ -1320,45 +1320,35 @@ openssl req -new -key server.key  -out server.csr
 openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -days 365 -sha256 -out server.crt
 ```
 
-### 7.2 全局证书验证开关
+### 7.2 开启所有节点的SSL验证功能
 
-全局证书验证开关能够控制是否采用证书验证机制。
+在进行节点证书授权管理前，需开启区块链上每个节点的SSL验证功能。
 
-#### 7.2.1 开启全局开关
-
-开关开启后，节点间的通信将进行证书的验证。默认所有证书都有效。若要让某个节点的证书失效，请参考[7.3 授权单个节点证书](#7.3 授权单个节点证书)
-
-> 执行命令，CAVerify设置为true
+> 此处以创世节点为例，其它节点也应采用相同的操作。
 
 ```shell
-babel-node tool.js ConfigAction set CAVerify true
+cd /mydata/nodedata-1/
+vim config.json
 ```
 
-> 查看开关是否生效
+> 将ssl字段置为1，效果如下。
+
+```json
+"ssl":"1",
+```
+
+> 修改完成后重启节点，使其生效。
 
 ```shell
-babel-node tool.js ConfigAction get CAVerify
+./stop.sh
+./start.sh
 ```
 
->输出true，表示开关已打开
+> 其它节点也采用相同的操作，开启SSL验证功能。
 
-```log
-CAVerify=true,29
-```
+### 7.3 配置机构证书信息
 
-#### 7.2.2 关闭全局开关
-
-开关关闭后，节点间的通信不再验证证书。
-
->执行命令，CAVerify设置为false
-
-```shell
-babel-node tool.js ConfigAction set CAVerify false
-```
-
-### 7.3 授权单个节点证书
-
-此操作在全局开关打开后才有效。全局开关打开后，默认所有证书有效。若让某个节点的证书失效，该节点将不能和网络中的其它节点交互。
+将节点的证书写入系统合约，为接下来的证书准入做准备。每张证书都应该写入系统合约中。节点的证书若不写入系统合约，相应的节点将不允许通信。
 
 #### 7.3.1 获取证书序列号
 
@@ -1375,7 +1365,7 @@ openssl x509 -noout -in server.crt -serial
 serial=8A4B2CDE94348D22
 ```
 
-#### 7.3.2 编写证书授权配置文件
+#### 7.3.2 编写证书准入状态文件
 
 > 在systemcontractv2目录下编写。
 
@@ -1384,7 +1374,79 @@ serial=8A4B2CDE94348D22
 vim ca.json
 ```
 
-> 将序列号填入hash字段。配置status，0表示不可用，1表示可用。其它字段默认即可。如下，让node2的证书不可用。
+> 将序列号填入hash字段。配置status，0表示不可用，1表示可用。其它字段默认即可。如下，让node2的证书可用。即status置1。
+
+```json
+{
+        "hash" : "8A4B2CDE94348D22",
+        "status" : 1,
+        "pubkey":"",
+        "orgname":"",
+        "notbefore":20170223,
+        "notafter":20180223,
+        "whitelist":"",
+        "blacklist":""
+}
+```
+
+证书准入状态文件其它字段说明请参考<u>11.6 证书准入状态文件说明</u>
+
+#### 7.3.3 将证书准入状态写入系统合约
+
+> 执行以下命令，指定证书准入状态文件ca.json，将证书状态写入系统合约。
+
+```shell
+babel-node tool.js CAAction update ca.json
+```
+
+### 7.4 设置证书验证开关
+
+证书验证开关能够控制是否采用证书准入机制。开启后，将根据系统合约里的证书状态（status）控制节点间是否能够通信。不在系统合约中的证书对应的节点，将不允许通信。
+
+#### 7.4.1 开启全局开关
+
+> 执行命令，CAVerify设置为true
+
+```shell
+babel-node tool.js ConfigAction set CAVerify true
+```
+
+> 查看开关是否生效
+
+```shell
+babel-node tool.js ConfigAction get CAVerify
+```
+
+> 输出true，表示开关已打开
+
+```log
+CAVerify=true,29
+```
+
+#### 7.4.2 关闭全局开关
+
+开关关闭后，节点间的通信不再验证证书。
+
+> 执行命令，CAVerify设置为false
+
+```shell
+babel-node tool.js ConfigAction set CAVerify false
+```
+
+### 7.5 修改节点证书准入状态
+
+已经写入系统合约的证书状态，允许修改（可用/不可用）
+
+#### 7.5.1 修改证书准入状态文件
+
+> 修改相应证书对应的证书准入状态文件ca.json
+
+```shell
+/mydata/FISCO-BCOS/systemcontractv2
+vim ca.json
+```
+
+> 配置status，0表示不可用，1表示可用。其它字段默认即可。如下，让node2的证书不可用。即status置0。
 
 ```json
 {
@@ -1399,17 +1461,37 @@ vim ca.json
 }
 ```
 
-证书授权配置文件其它字段说明请参考[11.6 证书授权配置文件说明](#11.6 证书授权配置文件说明)
+证书准入状态文件其它字段说明请参考<u>11.6 证书准入状态文件说明</u>
 
-#### 7.3.3 对证书进行授权
+#### 7.5.2 更新证书准入状态
 
-> 执行以下命令，指定证书授权配置文件ca.json，控制证书是否可用。
+> 执行以下命令，指定证书准入状态文件ca.json，更新证书准入状态。
 
 ```shell
-babel-node tool.js CAAction update ca.json
+babel-node tool.js CAAction updateStatus ca.json
 ```
 
-> 若让某个节点的证书失效后，再重启此节点，此节点将不能与其它节点交互。
+> 查看证书状态
+
+```shell
+babel-node tool.js CAAction all
+```
+
+>可看到证书状态
+
+```log
+----------CA 0---------
+hash=8A4B2CDE94348D22
+pubkey=
+orgname=
+notbefore=20170223
+notafter=20180223
+status=0
+blocknumber=36
+whitelist=
+blacklist=
+
+```
 
 
 
@@ -1622,7 +1704,7 @@ Host:127.0.0.1:30403
 
 FISCO BCOS的特性，请直接参看相关特性说明文档：
 
-1. [AMOP](../amop使用说明文档.md)
+1. [AMOP（链上链下）](../amop使用说明文档.md)
 2. [Contract_Name_Service](../CNS_Contract_Name_Service_服务使用说明文档.md)
 3. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
 4. [web3sdk](../web3sdk使用说明文档.md)
@@ -1637,8 +1719,6 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 ## 第十一章 附录
 
 ### 11.1 源码目录结构说明
-
-
 
 
 | 目录                | 说明                                       |
@@ -1681,9 +1761,9 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | 配置项            | 说明                                       |
 | -------------- | ---------------------------------------- |
 | timestamp      | 创世块时间戳(毫秒)                               |
-| god            | 内置链管理员账号地址（填入[生成god账号](#2.2 生成god账号) 小节中生成的地址） |
+| god            | 内置链管理员账号地址（填入<u>2.2 生成god账号</u> 小节中生成的地址） |
 | alloc          | 内置合约数据                                   |
-| initMinerNodes | 创世块节点NodeId（填入[生成节点身份NodeId](#2.3 生成节点身份NodeId) 小节中生成的NodeId） |
+| initMinerNodes | 创世块节点NodeId（填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId） |
 
 ### 11.4 config.json说明
 
@@ -1709,7 +1789,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | eventlog           | 合约日志开关（ON或OFF）                           |
 | statlog            | 统计日志开关（ON或OFF）                           |
 | logconf            | 日志配置文件路径（日志配置文件可参看日志配置文件说明）              |
-| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入[生成节点身份NodeId](#2.3 生成节点身份NodeId) 小节中生成的NodeId |
+| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId |
 | dfsNode            | 分布式文件服务节点ID ，与节点身份NodeID一致 （可选功能配置参数）    |
 | dfsGroup           | 分布式文件服务组ID （10 - 32个字符）（可选功能配置参数）        |
 | dfsStorage         | 指定分布式文件系统所使用文件存储目录（可选功能配置参数）             |
@@ -1725,7 +1805,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | MAX_LOG_FILE_SIZE   | 最大日志文件大小                                 |
 | LOG_FLUSH_THRESHOLD | 超过多少条日志即可落盘                              |
 
-### 11.6 证书授权配置文件说明
+### 11.6 证书准入状态文件说明
 
 证书授权配置文件关键字段说明如下：
 
