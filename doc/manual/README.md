@@ -1,4 +1,4 @@
-# FISCO BCOS区块链操作手册
+# 1FISCO BCOS区块链操作手册
 
 [TOC]
 
@@ -26,9 +26,9 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 | 配置   | 最低配置   | 推荐配置                                 |
 | ---- | ------ | ------------------------------------ |
 | CPU  | 1.5GHz | 2.4GHz                               |
-| 内存   | 512MB  | 2GB                                  |
-| 核心   | 1核     | 2核                                   |
-| 带宽   | 512Kb  | 1Mb                                  |
+| 内存   | 1GB    | 4GB                                  |
+| 核心   | 2核     | 4核                                   |
+| 带宽   | 1Mb    | 5Mb                                  |
 | 操作系统 |        | CentOS （7.2  64位）或Ubuntu（16.04  64位） |
 
 ### 1.2 部署软件环境
@@ -37,7 +37,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ```shell
 #安装依赖包
-sudo yum install -y openssl openssl-devel deltarpm cmake3
+sudo yum install -y git openssl openssl-devel deltarpm cmake3
 #安装nodejs
 sudo yum install -y nodejs 
 sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
@@ -47,7 +47,7 @@ echo '{ "presets": ["es2017"] }' > ~/.babelrc
 
 #### 1.2.2 安装FISCO BCOS的智能合约编译器
 
-> 编译器名为fisco-solc，在源码根目录下：
+> 编译器名为fisco-solc。直接下载后放入系统目录下。
 
 ```shell
 wget https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master/fisco-solc 
@@ -263,8 +263,7 @@ vim /mydata/nodedata-1/config.json
 
 ```shell
 #拷贝跟证书文件
-cd /mydata/FISCO-BCOS/sample 
-cp ca.crt /mydata/nodedata-1/data/ #尝试使用，直接拷贝根证书ca.crt到节点相应目录
+cp /mydata/FISCO-BCOS/sample/ca.crt /mydata/nodedata-1/data/ #尝试使用，直接拷贝根证书ca.crt到节点相应目录
 ```
 
 > 若用于生产环境，请生成自己的ca.crt。生成步骤如下：
