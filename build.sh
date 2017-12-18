@@ -10,7 +10,7 @@ set -e
 
 #install package
 sudo yum -y install cmake3
-sudo yum install -y openssl openssl-devel
+sudo yum install -y git openssl openssl-devel
 
 #install nodejs 
 sudo yum install -y nodejs 
@@ -40,7 +40,7 @@ fi
 
 make
 
-make install
+sudo make install
 
 cd ..
 cd ./tool
