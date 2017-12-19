@@ -50,7 +50,7 @@ echo '{ "presets": ["es2017"] }' > ~/.babelrc
 > 编译器名为fisco-solc。直接下载后放入系统目录下。
 
 ```shell
-wget https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master/fisco-solc 
+wget https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/fisco-solc
 sudo cp fisco-solc  /usr/bin/fisco-solc
 sudo chmod +x /usr/bin/fisco-solc
 ```
