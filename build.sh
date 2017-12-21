@@ -39,7 +39,8 @@ fi
 
 make -j2
 
-make install
+# sudo make install
+sudo cp eth/bcoseth /usr/local/bin/
 
 cd ..
 cd ./tool
