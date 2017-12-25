@@ -226,12 +226,12 @@ contract Meshchain {
 
 	//验证签名 pubs,signs用";"分隔
 	function verifySign(string hash, string pubs, string signs, string idxs) constant public returns(uint) {
-			uint ret = LibVerifySign.verifySign(hash, pubs, signs, idxs);
-    		if (ret != 0) {
-    			return 10017;
-    		}
+		uint ret = LibVerifySign.verifySign(hash, pubs, signs, idxs);
+    	if (ret != 0) {
+    		return 10017;
+    	}
 
-			return ret;
+		return ret;
 	}
 
 	//热点户入账,目前demo只验证一个公钥存在即可
@@ -279,6 +279,27 @@ contract Meshchain {
     	MerchantInfo merchant = merchants[merchantId];
         return (merchant.assets,merchant.frozenAssets);
     }
+
+	//商户是否存在
+	function checkMerchantExisted(bytes32 merchantId) constant public returns(bool) {
+		if (merchants[merchantId].blockNumber > 0) {
+			return (true);
+		}
+
+    	return (false);
+    }
+
+    //查看用户的资产
+    function getUserAssets(bytes32 uid) constant public returns(uint) {
+    	if (users[uid].blockNumber <= 0) {
+    			return (0);
+    	}
+
+        UserInfo user = users[uid];
+        return (user.assets);
+    }
+
+
 
     function addPub(string pub) public returns (bool){
     	pubKeys[pub] = true;
