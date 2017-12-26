@@ -48,11 +48,40 @@ openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
 
 > 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，生成节点证书server.key、server.crt。
 
+```text
+拷贝以下内容在本地保存为cert.cnf文件
+[ca]
+default_ca=default_ca
+[default_ca]
+default_days = 365
+default_md = sha256
+
+[req] 
+distinguished_name = req_distinguished_name 
+req_extensions = v3_req
+[req_distinguished_name] 
+countryName = CN
+countryName_default = CN 
+stateOrProvinceName = State or Province Name (full name) 
+stateOrProvinceName_default =GuangDong 
+localityName = Locality Name (eg, city) 
+localityName_default = ShenZhen 
+organizationalUnitName = Organizational Unit Name (eg, section) 
+organizationalUnitName_default = webank
+commonName =  Organizational  commonName (eg, webank)
+commonName_default = webank
+commonName_max = 64 
+[ v3_req ] 
+# Extensions to add to a certificate request 
+basicConstraints = CA:FALSE 
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+```
+
 ```shell
 cd /mydata/nodedata-1/data/
 openssl genrsa -out server.key 2048
-openssl req -new -key server.key  -out server.csr
-openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -days 365 -sha256 -out server.crt
+openssl req -new -key server.key -config cert.cnf -out server.csr
+openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
 ```
 
 ### 2.2 开启所有节点的SSL验证功能
