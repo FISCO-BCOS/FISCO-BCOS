@@ -307,8 +307,8 @@ function generateProxyConfig()
              declare -i setIdx=${index}-2
              routes=${routes}'{
                     "set_name":"set'${setIdx}'Service",
-                    "set_warn_num":8,
-                    "set_max_num":10,
+                    "set_warn_num":2,
+                    "set_max_num":2,
                     "set_node_list":[]
               },'
         fi
