@@ -283,13 +283,50 @@ cd /mydata/FISCO-BCOS/sample
 cp server.key server.crt  /mydata/nodedata-1/data/
 ```
 
-> 若ca.crt是自己生成的，则需要基于ca.crt、ca.key来生成节点证书
+> 若ca.crt是自己生成的，则需要基于ca.crt、ca.key来生成节点证书。生成过程如下。
+
+> 直接编写配置文件cert.cnf。
+
+```shell
+vim /mydata/nodedata-1/data/cert.cnf
+```
+
+> 内容如下，无需做任何修改。
+
+```cnf
+[ca]
+default_ca=default_ca
+[default_ca]
+default_days = 365
+default_md = sha256
+[req] 
+distinguished_name = req_distinguished_name 
+req_extensions = v3_req
+[req_distinguished_name] 
+countryName = CN
+countryName_default = CN 
+stateOrProvinceName = State or Province Name (full name) 
+stateOrProvinceName_default =GuangDong 
+localityName = Locality Name (eg, city) 
+localityName_default = ShenZhen 
+organizationalUnitName = Organizational Unit Name (eg, section) 
+organizationalUnitName_default = webank
+commonName =  Organizational  commonName (eg, webank)
+commonName_default = webank
+commonName_max = 64 
+[ v3_req ] 
+# Extensions to add to a certificate request 
+basicConstraints = CA:FALSE 
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+```
+
+> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
 
 ```shell
 cd /mydata/nodedata-1/data/
 openssl genrsa -out server.key 2048
-openssl req -new -key server.key  -out server.csr
-openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -days 365 -sha256 -out server.crt
+openssl req -new -key server.key -config cert.cnf -out server.csr
+openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
 ```
 
 > 生成的server.crt、server.key即为节点证书文件
@@ -888,12 +925,49 @@ cp server.key server.crt  /mydata/nodedata-2/data/
 
 > 若需要自己生成新的节点证书，则需要根证书的公私钥（ca.crt、ca.key）。ca.key是非公开的。若创建节点的根证书是手动生成的，存在ca.key，则基于此生成新的节点证书。若创世节点的ca.crt是从sample复制的，则需要重新手动生成根证书。请参考<u>2.4 配置证书</u> ，手动生成所有创世节点的证书后，再基于新生成的ca.crt、ca.key，生成新的节点证书。
 
+> 直接编写配置文件cert.cnf。
+
+```shell
+vim /mydata/nodedata-1/data/cert.cnf
+```
+
+> 内容如下，无需做任何修改。
+
+```cnf
+[ca]
+default_ca=default_ca
+[default_ca]
+default_days = 365
+default_md = sha256
+[req] 
+distinguished_name = req_distinguished_name 
+req_extensions = v3_req
+[req_distinguished_name] 
+countryName = CN
+countryName_default = CN 
+stateOrProvinceName = State or Province Name (full name) 
+stateOrProvinceName_default =GuangDong 
+localityName = Locality Name (eg, city) 
+localityName_default = ShenZhen 
+organizationalUnitName = Organizational Unit Name (eg, section) 
+organizationalUnitName_default = webank
+commonName =  Organizational  commonName (eg, webank)
+commonName_default = webank
+commonName_max = 64 
+[ v3_req ] 
+# Extensions to add to a certificate request 
+basicConstraints = CA:FALSE 
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+```
+
+> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
+
 ```shell
 cp /mydata/nodedata-1/data/ca.key /mydata/nodedata-2/data/
 cd /mydata/nodedata-2/data/
 openssl genrsa -out server.key 2048
-openssl req -new -key server.key  -out server.csr 
-openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -days 365 -sha256 -out server.crt #根证书私钥ca.key需要手动生成
+openssl req -new -key server.key -config cert.cnf -out server.csr
+openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
 ```
 
 > 生成的server.crt、server.key即为节点证书文件
@@ -1310,16 +1384,20 @@ openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
 
 **（2）生成节点证书server.key、server.crt**
 
-> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，生成节点证书server.key、server.crt。
+> 直接编写配置文件cert.cnf。
 
-```text
-拷贝以下内容在本地保存为cert.cnf文件
+```shell
+vim /mydata/nodedata-1/data/cert.cnf
+```
+
+> 内容如下，无需做任何修改。
+
+```cnf
 [ca]
 default_ca=default_ca
 [default_ca]
 default_days = 365
 default_md = sha256
-
 [req] 
 distinguished_name = req_distinguished_name 
 req_extensions = v3_req
@@ -1340,6 +1418,8 @@ commonName_max = 64
 basicConstraints = CA:FALSE 
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 ```
+
+> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
 
 ```shell
 cd /mydata/nodedata-1/data/
