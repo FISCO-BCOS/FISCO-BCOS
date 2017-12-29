@@ -48,6 +48,14 @@ openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
 
 > 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，生成节点证书server.key、server.crt。
 
+> 直接编写配置文件cert.cnf。
+
+```shell
+vim /mydata/nodedata-1/data/cert.cnf
+```
+
+> 内容如下，无需做任何修改。
+
 ```text
 拷贝以下内容在本地保存为cert.cnf文件
 [ca]
@@ -55,7 +63,6 @@ default_ca=default_ca
 [default_ca]
 default_days = 365
 default_md = sha256
-
 [req] 
 distinguished_name = req_distinguished_name 
 req_extensions = v3_req
@@ -76,6 +83,8 @@ commonName_max = 64
 basicConstraints = CA:FALSE 
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 ```
+
+> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
 
 ```shell
 cd /mydata/nodedata-1/data/

@@ -22,9 +22,9 @@
    ./build.sh
    ```
 
-   > 至此，bcoseth安装完毕，安装路径：/usr/local/bin/bcoseth
+   > 至此，FISCO BCOS安装完毕，可执行文件安装路径：/usr/local/bin/fisco-bcos
 
-   
+
 ## 部署单机两节点
 
 本步骤指导完成两个区块链节点的部署，两个节点都在一台机器上。两个节点相互连接，形成一条由两个节点组成的区块链。
