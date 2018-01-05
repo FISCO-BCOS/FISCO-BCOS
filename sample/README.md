@@ -2,7 +2,7 @@
 
 本文档能够让初学者快速体验FISCO BCOS平台。提供了FISCO BCOS的快速安装和FISCO BCOS节点的快速部署步骤。
 ## 注意事项：
-1. 安装环境需满足FISCO BCOS运行的配置要求[（操作手册1.1）](../doc/manual/README.md)；
+1. 安装环境需满足FISCO BCOS运行的配置要求[（操作手册1.1节）](../doc/manual/README.md)；
 2. build.sh在centos和Ubuntu版本测试成功；
 3. 所有Linux发行版本请确保yum和git已安装，并能正常使用；
 4. 如遇到执行build.sh时中途依赖库下载失败，一般和网络状况有关。请删除掉所有git clone下载的内容，重新git clone。之后到 https://github.com/bcosorg/lib 找到相应的库，手动下载，并放到相应目录后，再执行build.sh脚本；  
