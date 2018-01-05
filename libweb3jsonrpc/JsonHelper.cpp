@@ -34,6 +34,7 @@
 #include <libwhisper/WhisperHost.h>
 #include <jsonrpccpp/common/exception.h>
 #include <abi/SolidityExp.h>
+#include <libdevcore/easylog.h>
 using namespace std;
 using namespace dev;
 using namespace eth;
@@ -403,17 +404,6 @@ void fromJsonGetParams(Json::Value const& _json, NameCallParams &params)
 	{
 		ABI_EXCEPTION_THROW("invalid json request, func param not find or not string format, _json=" + _json.toStyledString(), libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidArgument);
 	}
-
-	//version
-	if (_json.isMember("version") && _json["version"].isString())
-	{
-		params.strVersion = _json["version"].asString();
-	}
-	else
-	{
-		ABI_EXCEPTION_THROW("invalid json request, version param not find or not string format, json=" + _json.toStyledString(), libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidArgument);
-	}
-
 	//params
 	if (_json.isMember("params") && _json["params"].isArray())
 	{
@@ -423,19 +413,54 @@ void fromJsonGetParams(Json::Value const& _json, NameCallParams &params)
 	{
 		ABI_EXCEPTION_THROW("invalid json request, params param not find or not string format, json=" + _json.toStyledString(), libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidArgument);
 	}
+	
+	//version
+	if (_json.isMember("version") && _json["version"].isString())
+	{
+		params.strVersion = _json["version"].asString();
+	}
+	else
+	{
+		ABI_EXCEPTION_THROW("invalid json request, version param not find or not string format, json=" + _json.toStyledString(), libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidArgument);
+	}
 }
 
 bool fromJsonGetParams(std::string const& _json, NameCallParams &params)
 {
+	/*      
 	Json::Value root;
 	Json::Reader reader;
 	if (!reader.parse(_json, root, false))
 	{
-		return false;
+	return false;
 	}
 
 	fromJsonGetParams(root, params);
 	return true;
+	*/
+
+	try
+	{
+		Json::Value root;
+		Json::Reader reader;
+		if (reader.parse(_json, root, false) && root.isObject())
+		{
+			LOG(TRACE) << "#fromJsonGetParams# begin, _json = " << _json;
+
+			fromJsonGetParams(root, params);
+			return true;
+		}
+	}
+	catch (const  libabi::AbiException &e)
+	{
+		throw e;
+	}
+	catch (...)
+	{//其他异常
+		LOG(INFO) << "#fromJsonGetParams# other exception , _json = " << _json;
+	}
+
+	return false;
 }
 
 TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
