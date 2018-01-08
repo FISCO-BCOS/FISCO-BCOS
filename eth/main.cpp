@@ -217,8 +217,8 @@ string ethCredits(bool _interactive = false)
 
 void version()
 {
-	cout << "eth version " << dev::Version << "\n";
-	cout << "eth network protocol version: " << dev::eth::c_protocolVersion << "\n";
+	cout << "FISCO-BCOS version " << dev::Version << "\n";
+	cout << "FISCO-BCOS network protocol version: " << dev::eth::c_protocolVersion << "\n";
 	cout << "Client database version: " << dev::eth::c_databaseVersion << "\n";
 	cout << "Build: " << DEV_QUOTED(ETH_BUILD_PLATFORM) << "/" << DEV_QUOTED(ETH_BUILD_TYPE) << "\n";
 	exit(0);
