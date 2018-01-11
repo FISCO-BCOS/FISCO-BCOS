@@ -613,7 +613,10 @@ void Logger::flush(Level level, base::type::fstream_t* fs) {
   }
   if (fs != nullptr) {
     fs->flush();
-    m_unflushedCount.find(level)->second = 0;
+    std::map<Level, unsigned int>::iterator iter = m_unflushedCount.find(level);
+    if (iter != m_unflushedCount.end()) {
+      iter->second = 0;
+    }
   }
 }
 
@@ -1706,17 +1709,24 @@ void TypedConfigurations::insertFile(Level level, const std::string& fullFilenam
   auto create = [&](Level level) {
     base::LogStreamsReferenceMap::iterator filestreamIter = m_logStreamsReference->find(resolvedFilename);
     base::type::fstream_t* fs = nullptr;
-    if (filestreamIter == m_logStreamsReference->end()) {
+    bool needNewStream = filestreamIter == m_logStreamsReference->end();
+	auto ptr = filestreamIter->second.lock();
+	if(!ptr)
+	{
+		needNewStream = true;
+	}
+    
+    if (needNewStream) {
       // We need a completely new stream, nothing to share with
       fs = base::utils::File::newFileStream(resolvedFilename);
       m_filenameMap.insert(std::make_pair(level, resolvedFilename));
       m_fileStreamMap.insert(std::make_pair(level, base::FileStreamPtr(fs)));
-      m_logStreamsReference->insert(std::make_pair(resolvedFilename, base::FileStreamPtr(m_fileStreamMap.at(level))));
+      m_logStreamsReference->insert(std::make_pair(resolvedFilename, base::WeakFileStreamPtr(m_fileStreamMap.at(level))));
     } else {
       // Woops! we have an existing one, share it!
       m_filenameMap.insert(std::make_pair(level, filestreamIter->first));
-      m_fileStreamMap.insert(std::make_pair(level, base::FileStreamPtr(filestreamIter->second)));
-      fs = filestreamIter->second.get();
+      m_fileStreamMap.insert(std::make_pair(level, base::FileStreamPtr(filestreamIter->second.lock())));
+      fs = filestreamIter->second.lock().get();
     }
     if (fs == nullptr) {
       // We display bad file error from newFileStream()
@@ -1840,8 +1850,9 @@ void RegisteredLoggers::unsafeFlushAll(void) {
   ELPP_INTERNAL_INFO(1, "Flushing all log files");
   for (base::LogStreamsReferenceMap::iterator it = m_logStreamsReference.begin();
        it != m_logStreamsReference.end(); ++it) {
-    if (it->second.get() == nullptr) continue;
-    it->second->flush();
+	auto ptr = it->second.lock();
+	if(!ptr)continue;
+    ptr->flush();
   }
 }
 
