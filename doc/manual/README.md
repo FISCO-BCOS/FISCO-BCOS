@@ -1011,10 +1011,6 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 ```log
 {
         "sealEngine": "PBFT",
-        "systemproxyaddress":"0x0",
-        "listenip":"127.0.0.1",
-        "crypt{
-        "sealEngine": "PBFT",
         "systemproxyaddress":"0x919868496524eedc26dbb81915fa1547a20f8998",
         "listenip":"127.0.0.1",
         "cryptomod":"0",
