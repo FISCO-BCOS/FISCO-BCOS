@@ -854,7 +854,7 @@ ls /mydata/nodedata-2/data/
 network.rlp  network.rlp.pub
 ```
 
-#### 5.2.3 配置创世节点NodeId
+#### 5.2.3 配置节点NodeId
 
 （1）查看NodeId
 
@@ -923,9 +923,19 @@ cd /mydata/nodedata-1/data/
 cp server.key server.crt  /mydata/nodedata-2/data/
 ```
 
-> 若需要自己生成新的节点证书，则需要根证书的公私钥（ca.crt、ca.key）。ca.key是非公开的。若创建节点的根证书是手动生成的，存在ca.key，则基于此生成新的节点证书。若创世节点的ca.crt是从sample复制的，则需要重新手动生成根证书。请参考<u>2.4 配置证书</u> ，手动生成所有创世节点的证书后，再基于新生成的ca.crt、ca.key，生成新的节点证书。
+> 若需要自己生成新的节点证书，则需要根证书的公私钥（ca.crt、ca.key）。ca.key是非公开的。若创建节点的根证书是手动生成的，存在ca.key，则基于此为所有的节点生成新的节点证书。若创世节点的ca.crt是从sample复制的，则需要重新手动生成根证书。
 
-> 直接编写配置文件cert.cnf。
+> 重新生成根证书的公私钥（ca.crt、ca.key）：
+
+```shell
+cd /mydata/nodedata-1/data/
+openssl genrsa -out ca.key 2048
+openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
+```
+
+>  手动生成根证书公私钥后，再基于新生成的ca.crt、ca.key，为每个节点生成新的节点证书。
+
+> 手动生成node1的证书。直接编写配置文件cert.cnf。
 
 ```shell
 vim /mydata/nodedata-1/data/cert.cnf
@@ -963,8 +973,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 > 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
 
 ```shell
-cp /mydata/nodedata-1/data/ca.key /mydata/nodedata-2/data/
-cd /mydata/nodedata-2/data/
+cd /mydata/nodedata-1/data/
 openssl genrsa -out server.key 2048
 openssl req -new -key server.key -config cert.cnf -out server.csr
 openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
@@ -973,13 +982,23 @@ openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out s
 > 生成的server.crt、server.key即为节点证书文件
 
 ```shell
-ls /mydata/nodedata-2/data/
+ls /mydata/nodedata-1/data/
 ```
 
 > 此时目录下应存在有下述文件：
 
 ```log
 ca.crt  network.rlp  network.rlp.pub  server.crt  server.key
+```
+
+> node2的证书生成方法与node1相同。只需根证书和cert.cnf拷贝到node2的相应路径下，执行相同的openssl命令即可。
+
+```shell
+cp /mydata/nodedata-1/data/ca.key /mydata/nodedata-2/data/
+cd /mydata/nodedata-2/data/
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -config cert.cnf -out server.csr
+openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
 ```
 
 ### 5.4 配置相关配置文件
