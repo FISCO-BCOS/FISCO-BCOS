@@ -742,8 +742,8 @@ void BlockChain::insert(VerifiedBlockRef _block, bytesConstRef _receipts, bool _
 	verifyBlock(_block.block, m_onBad, ImportRequirements::InOrderChecks | ImportRequirements::CheckMinerSignatures);
 
 	// OK - we're happy. Insert into database.
-	ldb::WriteBatch blocksBatch;
-	ldb::WriteBatch extrasBatch;
+	BatchEncrypto blocksBatch;
+	BatchEncrypto extrasBatch;
 
 	BlockLogBlooms blb;
 	for (auto i : RLP(_receipts))
@@ -933,8 +933,8 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	preliminaryChecks = t.elapsed();
 	t.restart();
 #endif
-	ldb::WriteBatch blocksBatch;
-	ldb::WriteBatch extrasBatch;
+	BatchEncrypto blocksBatch;
+	BatchEncrypto extrasBatch;
 
 	h256 newLastBlockHash = currentHash();
 	unsigned newLastBlockNumber = number();
