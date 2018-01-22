@@ -255,81 +255,35 @@ vim /mydata/nodedata-1/config.json
 
 ### 2.4 配置证书
 
-区块链节点间的通信需要证书的认证。在节点运行前，需要为节点配置证书。其中ca.crt是根证书公钥，server.crt是节点公钥，server.key是节点私钥。公钥是公开的，私钥是保密的。
+区块链节点间的通信需要证书的认证。在节点运行前，需要为节点配置证书。证书包括：
 
-#### 2.4.1 配置根证书
+- ca.crt：根证书公钥，整条区块链共用。
+- ca.key：根证书私钥，私钥应保密，仅在生成节点证书公私钥时使用。
+- server.crt：节点证书的公钥。
+- server.key：节点证书的私钥，私钥应保密。
 
-> 若是尝试使用，可直接使用sample目录下的ca.crt。
+#### 2.4.1 生成根证书
 
-```shell
-#拷贝跟证书文件
-cp /mydata/FISCO-BCOS/sample/ca.crt /mydata/nodedata-1/data/ #尝试使用，直接拷贝根证书ca.crt到节点相应目录
-```
-
-> 若用于生产环境，请生成自己的ca.crt。生成步骤如下：
+> 将公私钥生成脚本拷贝到data目录，并执行命令生成根证书公私钥ca.key，ca.crt。
 
 ```shell
+cp /mydata/FISCO-BCOS/genkey.sh /mydata/nodedata-1/data/ 
 cd /mydata/nodedata-1/data/
-openssl genrsa -out ca.key 2048
-openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
+chmod +x genkey.sh
+./genkey.sh ca #此步骤需按照提示输入一些信息
 ```
 
-#### 2.4.2 配置节点证书
+> 在data目录下生成了证书公私钥ca.key，ca.crt。ca.key应保密，并妥善保存，以便后续生成更多节点的公私钥。
 
-> 若拷贝的是sample目录下的ca.crt，则继续拷贝sample目录下的server.crt、server.key作为节点的证书
+#### 2.4.2 生成节点证书
+
+> 用生成的根证书公私钥ca.crt和ca.key，生成节点自己的证书。
 
 ```shell
-cd /mydata/FISCO-BCOS/sample
-cp server.key server.crt  /mydata/nodedata-1/data/
+./genkey.sh server ./ca.key ./ca.crt #注意key和crt前后顺序不能错；此步骤需按照提示输入一些信息
 ```
 
-> 若ca.crt是自己生成的，则需要基于ca.crt、ca.key来生成节点证书。生成过程如下。
-
-> 直接编写配置文件cert.cnf。
-
-```shell
-vim /mydata/nodedata-1/data/cert.cnf
-```
-
-> 内容如下，无需做任何修改。
-
-```cnf
-[ca]
-default_ca=default_ca
-[default_ca]
-default_days = 365
-default_md = sha256
-[req] 
-distinguished_name = req_distinguished_name 
-req_extensions = v3_req
-[req_distinguished_name] 
-countryName = CN
-countryName_default = CN 
-stateOrProvinceName = State or Province Name (full name) 
-stateOrProvinceName_default =GuangDong 
-localityName = Locality Name (eg, city) 
-localityName_default = ShenZhen 
-organizationalUnitName = Organizational Unit Name (eg, section) 
-organizationalUnitName_default = webank
-commonName =  Organizational  commonName (eg, webank)
-commonName_default = webank
-commonName_max = 64 
-[ v3_req ] 
-# Extensions to add to a certificate request 
-basicConstraints = CA:FALSE 
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-```
-
-> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
-
-```shell
-cd /mydata/nodedata-1/data/
-openssl genrsa -out server.key 2048
-openssl req -new -key server.key -config cert.cnf -out server.csr
-openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
-```
-
-> 生成的server.crt、server.key即为节点证书文件
+> 生成的server.key、server.crt即为节点证书文件
 
 ```shell
 ls /mydata/nodedata-1/data/
@@ -904,7 +858,7 @@ vim /mydata/nodedata-2/config.json
 
 ### 5.3 配置证书
 
-区块链节点间的通信需要证书的认证。在节点运行前，需要为节点配置证书。其中ca.crt是根证书公钥，server.crt是节点公钥，server.key是节点私钥。公钥是公开的，私钥是保密的。
+区块链节点间的通信需要证书的认证。在节点运行前，需要为节点配置证书。其中ca.crt是整个区块链的根证书公钥，所有节点共用。
 
 #### 5.3.1 配置根证书
 
@@ -914,92 +868,29 @@ vim /mydata/nodedata-2/config.json
 cp /mydata/nodedata-1/data/ca.crt /mydata/nodedata-2/data/
 ```
 
-#### 5.3.2 配置节点证书
+#### 5.3.2 生成节点证书
 
-> 若是尝试使用，则可以和创世节点共用节点证书server.crt、server.key
-
-```shell
-cd /mydata/nodedata-1/data/
-cp server.key server.crt  /mydata/nodedata-2/data/
-```
-
-> 若需要自己生成新的节点证书，则需要根证书的公私钥（ca.crt、ca.key）。ca.key是非公开的。若创建节点的根证书是手动生成的，存在ca.key，则基于此为所有的节点生成新的节点证书。若创世节点的ca.crt是从sample复制的，则需要重新手动生成根证书。
-
-> 重新生成根证书的公私钥（ca.crt、ca.key）：
+> 生成普通节点证书（server.key、server.crt）的步骤与创世节点相同。在生成前，需要把生成脚本和根证书私钥（ca.key）配置到data目录下。
 
 ```shell
-cd /mydata/nodedata-1/data/
-openssl genrsa -out ca.key 2048
-openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
+cd /mydata/nodedata-2/data/
+cp /mydata/nodedata-1/data/ca.key . #假设根证书私钥放在node1的data目录下
+cp /mydata/nodedata-1/data/genkey.sh .
 ```
 
->  手动生成根证书公私钥后，再基于新生成的ca.crt、ca.key，为每个节点生成新的节点证书。
-
-> 手动生成node1的证书。直接编写配置文件cert.cnf。
+> 用根证书公私钥生成节点证书公私钥（server.key、server.crt）
 
 ```shell
-vim /mydata/nodedata-1/data/cert.cnf
+./genkey.sh server ./ca.key ./ca.crt
 ```
 
-> 内容如下，无需做任何修改。
-
-```cnf
-[ca]
-default_ca=default_ca
-[default_ca]
-default_days = 365
-default_md = sha256
-[req] 
-distinguished_name = req_distinguished_name 
-req_extensions = v3_req
-[req_distinguished_name] 
-countryName = CN
-countryName_default = CN 
-stateOrProvinceName = State or Province Name (full name) 
-stateOrProvinceName_default =GuangDong 
-localityName = Locality Name (eg, city) 
-localityName_default = ShenZhen 
-organizationalUnitName = Organizational Unit Name (eg, section) 
-organizationalUnitName_default = webank
-commonName =  Organizational  commonName (eg, webank)
-commonName_default = webank
-commonName_max = 64 
-[ v3_req ] 
-# Extensions to add to a certificate request 
-basicConstraints = CA:FALSE 
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-```
-
-> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
-
-```shell
-cd /mydata/nodedata-1/data/
-openssl genrsa -out server.key 2048
-openssl req -new -key server.key -config cert.cnf -out server.csr
-openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
-```
-
-> 生成的server.crt、server.key即为节点证书文件
-
-```shell
-ls /mydata/nodedata-1/data/
-```
-
-> 此时目录下应存在有下述文件：
+>  生成后，此时目录下应存在下述文件：
 
 ```log
 ca.crt  network.rlp  network.rlp.pub  server.crt  server.key
 ```
 
-> node2的证书生成方法与node1相同。只需根证书和cert.cnf拷贝到node2的相应路径下，执行相同的openssl命令即可。
-
-```shell
-cp /mydata/nodedata-1/data/ca.key /mydata/nodedata-2/data/
-cd /mydata/nodedata-2/data/
-openssl genrsa -out server.key 2048
-openssl req -new -key server.key -config cert.cnf -out server.csr
-openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
-```
+> 注意，ca.key在生成了节点证书后，应立即删除。
 
 ### 5.4 配置相关配置文件
 
@@ -1375,77 +1266,20 @@ FISCO BCOS提供了证书准入的功能。在节点加入网络后，节点间�
 
 节点的证书存放目录在节点文件目录的data文件夹下。包括：
 
-- ca.crt：区块链根证书公钥，所有节点共用。
-- server.crt：单个节点的证书公钥，可公开。
-- server.key：单个节点的证书私钥，应保密。
+- ca.crt：根证书公钥，整条区块链共用。
+- ca.key：根证书私钥，私钥应保密，仅在生成节点证书公私钥时使用。
+- server.crt：节点证书的公钥。
+- server.key：节点证书的私钥，私钥应保密。
 
 证书文件应严格按照上述命名方法命名。
 
 FISCO BCOS通过授权某节点对应的公钥server.crt，控制此节点是否能够与其它节点正常通信。
 
-具体配置过程请参考<u>2.4 配置证书</u> 。此处给出生成证书的相关的命令。
-
-**注意：若要尝试使用[AMOP（链上链下）](../amop使用说明文档.md)，请直接使用sample目录下的证书。AMOP暂不支持与新生成的证书进行连接。**
-
-**（1）生成根证书ca.crt**
-
-> 执行命令，可生成根证书公私钥ca.crt、ca.key。ca.key应保密，并妥善保管。供生成节点证书使用。
-
-```shell
-cd /mydata/nodedata-1/data/
-openssl genrsa -out ca.key 2048
-openssl req -new -x509 -days 3650 -key ca.key -out ca.crt
-```
-
-**（2）生成节点证书server.key、server.crt**
-
-> 直接编写配置文件cert.cnf。
-
-```shell
-vim /mydata/nodedata-1/data/cert.cnf
-```
-
-> 内容如下，无需做任何修改。
-
-```cnf
-[ca]
-default_ca=default_ca
-[default_ca]
-default_days = 365
-default_md = sha256
-[req] 
-distinguished_name = req_distinguished_name 
-req_extensions = v3_req
-[req_distinguished_name] 
-countryName = CN
-countryName_default = CN 
-stateOrProvinceName = State or Province Name (full name) 
-stateOrProvinceName_default =GuangDong 
-localityName = Locality Name (eg, city) 
-localityName_default = ShenZhen 
-organizationalUnitName = Organizational Unit Name (eg, section) 
-organizationalUnitName_default = webank
-commonName =  Organizational  commonName (eg, webank)
-commonName_default = webank
-commonName_max = 64 
-[ v3_req ] 
-# Extensions to add to a certificate request 
-basicConstraints = CA:FALSE 
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-```
-
-> 生成节点证书时需要根证书的公私钥ca.crt、ca.key。执行命令，用cert.cnf，生成节点证书server.key、server.crt。
-
-```shell
-cd /mydata/nodedata-1/data/
-openssl genrsa -out server.key 2048
-openssl req -new -key server.key -config cert.cnf -out server.csr
-openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
-```
+具体配置过程请参考<u>2.4 配置证书</u> 。在配置节点的步骤中已涵盖相关证书的配置方法，若按照步骤部署了节点，则可直接进入下一步骤。
 
 ### 7.2 开启所有节点的SSL验证功能
 
-在进行节点证书授权管理前，需开启区块链上每个节点的SSL验证功能。
+在进行节点证书授权管理前，需开启区块链上**每个节点**的SSL验证功能。
 
 > 此处以创世节点为例，其它节点也应采用相同的操作。
 
@@ -1468,6 +1302,8 @@ vim config.json
 ```
 
 > 其它节点也采用相同的操作，开启SSL验证功能。
+
+**注意：必须所有的节点都开启ssl功能，才能继续下一步骤。**
 
 ### 7.3 配置机构证书信息
 
