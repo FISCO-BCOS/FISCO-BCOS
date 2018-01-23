@@ -15,7 +15,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 本文档不介绍FISCO BCOS区块链设计理念及思路，详情请参看白皮书。
 
-以下代码及操作命令以在Centos7.2操作系统上为示例。
+以下代码及操作命令以在Centos7.2/Ubuntu 16.04操作系统上为示例。
 
 ## 第一章 部署FISCO BCOS环境
 
@@ -35,11 +35,25 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 #### 1.2.1 安装依赖包
 
+##### Centos安装
+
 ```shell
 #安装依赖包
 sudo yum install -y git openssl openssl-devel deltarpm cmake3
 #安装nodejs
-sudo yum install -y nodejs 
+sudo yum install -y nodejs
+sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
+sudo cnpm install -g babel-cli babel-preset-es2017 ethereum-console
+echo '{ "presets": ["es2017"] }' > ~/.babelrc
+```
+##### Ubuntu安装
+```shell
+#安装依赖包
+sudo apt-get -y install git openssl libssl-dev libkrb5-dev cmake
+#安装nodejs(注意： nodejs需要大于6以上的版本,ubuntu上面apt-get安装的默认版本为4.x版本,需要自己升级)
+sudo apt-get -y install nodejs-legacy
+sudo apt-get -y install npm
+sudo npm install -g secp256k1
 sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
 sudo cnpm install -g babel-cli babel-preset-es2017 ethereum-console
 echo '{ "presets": ["es2017"] }' > ~/.babelrc
@@ -90,7 +104,12 @@ chmod +x scripts/install_deps.sh
 ```shell
 mkdir -p build
 cd build/
-cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. #注意命令末尾的..
+
+[Centos] 
+cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF ..  #注意命令末尾的..
+[Ubuntu] 
+cmake  -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF ..  #注意命令末尾的..
+
 make
 ```
 
