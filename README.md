@@ -46,7 +46,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 ## 联系我们
 邮箱：service@fisco.com.cn
 
-微信群：添加群管理员微信号fiscobcosfan，拉您入BCOS官方技术交流群。
+微信群：添加群管理员微信号fiscobcosfan，拉您入FISCO BCOS官方技术交流群。
 
 群管理员微信二维码：
 
