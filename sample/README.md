@@ -177,5 +177,5 @@
    INFO|2017-11-23 15:39:48|+++++++++++++++++++++++++++ Generating seal on1c11cbd4a6e2b5bdd22e8830978fe3960755b6ec866f54aabf70d0d47a60be1b#1tx:0time:1511422788391
    ```
 
-   ​
+   如部署过程遇到问题，可参考：[FISCO BCOS常见问题](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98/README.md)
 
