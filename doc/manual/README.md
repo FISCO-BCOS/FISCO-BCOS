@@ -264,7 +264,7 @@ vim /mydata/nodedata-1/config.json
 		"Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
 		"Nodedesc": "node1",
 		"Agencyinfo": "node1",
-		"Peerip": "127.0.0.1",
+		"Peerip": "0.0.0.0",
 		"Identitytype": 1,
 		"Port":30303,
 		"Idx":0
@@ -372,7 +372,7 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"127.0.0.1",
+        "listenip":"0.0.0.0",
         "cryptomod":"0",
         "ssl":"0",
         "rpcport": "8545",
@@ -401,7 +401,7 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
                 "Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
                 "Nodedesc": "node1",
                 "Agencyinfo": "node1",
-                "Peerip": "127.0.0.1",
+                "Peerip": "0.0.0.0",
                 "Identitytype": 1,
                 "Port":30303,
                 "Idx":0
@@ -850,7 +850,7 @@ b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649
 vim /mydata/nodedata-2/config.json
 ```
 
-> 追加后，config.json中的NodeextraInfo字段如下。新追加的内容要与现有的内容有区别，Nodeid为刚生成的NodeId，Port是p2pport端口，Idx为上一条记录加1。
+> 追加后，config.json中的NodeextraInfo字段如下。新追加的内容要与现有的内容有区别，Nodeid为刚生成的NodeId，Port是p2pport端口，Idx为上一条记录加1。注意，若新部署的节点在另外一台机器上，则需要将NodeextraInfo中其它节点的Peerip改成其它节点对应的机器IP，让新部署的节点能够找到其它机器上的节点。
 
 ```log
 "NodeextraInfo":[
@@ -858,7 +858,7 @@ vim /mydata/nodedata-2/config.json
 	    "Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
 	    "Nodedesc": "node1",
 	    "Agencyinfo": "node1",
-	    "Peerip": "127.0.0.1",
+	    "Peerip": "0.0.0.0",
 	    "Identitytype": 1,
 	    "Port":30303,
 	    "Idx":0
@@ -867,7 +867,7 @@ vim /mydata/nodedata-2/config.json
 	    "Nodeid":"b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8",
 	    "Nodedesc": "node2",
 	    "Agencyinfo": "node2",
-	    "Peerip": "127.0.0.1",
+	    "Peerip": "0.0.0.0",
 	    "Identitytype": 1,
 	    "Port":30403,
 	    "Idx":1
@@ -941,7 +941,7 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x919868496524eedc26dbb81915fa1547a20f8998",
-        "listenip":"127.0.0.1",
+        "listenip":"0.0.0.0",
         "cryptomod":"0",
         "ssl":"0",
         "rpcport": "8546",
@@ -969,7 +969,7 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
                 "Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
                 "Nodedesc": "node1",
                 "Agencyinfo": "node1",
-                "Peerip": "127.0.0.1",
+                "Peerip": "0.0.0.0",
                 "Identitytype": 1,
                 "Port":30303,
                 "Idx":0
@@ -978,7 +978,7 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
                 "Nodeid":"b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8",
                 "Nodedesc": "node2",
                 "Agencyinfo": "node2",
-                "Peerip": "127.0.0.1",
+                "Peerip": "0.0.0.0",
                 "Identitytype": 1,
                 "Port":30403,
                 "Idx":1
@@ -1098,7 +1098,7 @@ cd /mydata/FISCO-BCOS/systemcontractv2/
 vim node1.json
 ```
 
-> 内容需要与节点config.json中NodeextraInfo字段的内容对应，编写好的注册配置文件如下：
+> 内容需要与节点config.json中NodeextraInfo字段的内容对应。若在不同机器上组网时，ip填写的是外网ip。编写好的注册配置文件如下：
 
 ```json
 {    "id":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
