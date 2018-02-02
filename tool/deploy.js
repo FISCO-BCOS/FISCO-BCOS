@@ -10,6 +10,7 @@ var config=require('./config');
 var fs=require('fs');
 var execSync =require('child_process').execSync;
 var web3sync = require('./web3sync');
+var cns_tool = require("./cns_tool.js");
 
 if (typeof web3 !== 'undefined') {
   web3 = new Web3(web3.currentProvider);
@@ -49,7 +50,13 @@ var binary=fs.readFileSync(config.Ouputpath+filename+'.bin', 'utf-8');
 (async function() {
 
   var Contract= await web3sync.rawDeploy(config.account, config.privKey,  filename);
-  console.log(filename+"部署成功！")
+  console.log(filename+"部署成功！");
+  try {
+	 //尝试添加cns服务,有可能失败
+	 cns_tool.cnsAdd(filename);   
+  } catch(e){
+  console.log(filename+'cns add failed , e = '+e);
+}
 
 })();
 
