@@ -33,19 +33,19 @@ function getAbi0(file){
 
     //console.log('account='+web3.eth.accounts[0]);
 
-	//部署合约，初始化参数
+	  //部署合约，初始化参数
     var SystemProxyReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "SystemProxy");
     var SystemProxy=web3.eth.contract(getAbi("SystemProxy")).at(SystemProxyReicpt.contractAddress);
 
     // 权限控制
-	//execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" AuthorityFilter.sol");
-	var AuthorityFilterReicpt= await web3sync.rawDeploy(config.account, config.privKey, "AuthorityFilter");
+	  //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" AuthorityFilter.sol");
+	  var AuthorityFilterReicpt= await web3sync.rawDeploy(config.account, config.privKey, "AuthorityFilter");
     var AuthorityFilter=web3.eth.contract(getAbi("AuthorityFilter")).at(AuthorityFilterReicpt.contractAddress);
     //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" Group.sol");
-	var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey, "Group");
+	  var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey, "Group");
     var Group=web3.eth.contract(getAbi("Group")).at(GroupReicpt.contractAddress);
-	//execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" TransactionFilterChain.sol");
-	var TransactionFilterChainReicpt= await web3sync.rawDeploy(config.account, config.privKey, "TransactionFilterChain");
+	  //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" TransactionFilterChain.sol");
+	  var TransactionFilterChainReicpt= await web3sync.rawDeploy(config.account, config.privKey, "TransactionFilterChain");
     var TransactionFilterChain=web3.eth.contract(getAbi("TransactionFilterChain")).at(TransactionFilterChainReicpt.contractAddress);
     
     var CAActionReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "CAAction");
@@ -67,14 +67,60 @@ function getAbi0(file){
     var ContractAbiMgrReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "ContractAbiMgr");
     var ContractAbiMgr=web3.eth.contract(getAbi("ContractAbiMgr")).at(ContractAbiMgrReicpt.contractAddress);
 
-    console.log("注册ContractAbiMgr abi address信息到管理合约....");
+    console.log("注册系统合约中部署的合约的信息到CNS管理合约");
+
     var func = "addAbi(string,string,string,string,address)";
+    //ContractAbiMgr
     var abi = getAbi0("ContractAbiMgr");
-    //var version = ContractAbiMgr.getVersion();
-    //var name = ("" == version ? "ContractAbiMgr" : "ContractAbiMgr" + "/" + version);
     var params  = ["ContractAbiMgr","ContractAbiMgr","",abi,ContractAbiMgrReicpt.contractAddress];
     console.log("contract abi manager ,params =>" + params.toString());
     var receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);    
+
+    //SystemProxy
+    abi = getAbi0("SystemProxy");
+    params  = ["SystemProxy","SystemProxy","",abi,SystemProxyReicpt.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+    //TransactionFilterChain
+    abi = getAbi0("TransactionFilterChain");
+    params  = ["TransactionFilterChain","TransactionFilterChain","",abi,TransactionFilterChainReicpt.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+    //AuthorityFilter
+    abi = getAbi0("AuthorityFilter");
+    params  = ["AuthorityFilter","AuthorityFilter","",abi,AuthorityFilterReicpt.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+    //Group
+    abi = getAbi0("Group");
+    params  = ["Group","Group","",abi,GroupReicpt.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+    //CAAction
+    abi = getAbi0("CAAction");
+    params  = ["CAAction","CAAction","",abi,CAActionReicpt.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+    //ConfigAction
+    abi = getAbi0("ConfigAction");
+    params  = ["ConfigAction","ConfigAction","",abi,ConfigActionReicpt.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+    //NodeAction
+    abi = getAbi0("NodeAction");
+    params  = ["NodeAction","NodeAction","",abi,NodeActionReicpt.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+    console.log("注册权限AuthorityFilter到TransactionFilterChain.....");
+	func = "addFilter(address)";
+	params = [AuthorityFilter.address];
+	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, TransactionFilterChain.address, func, params);
+
+
+    func = "setUserGroup(address,address)";
+	params = [config.account, Group.address];
+	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, AuthorityFilter.address, func, params);
+    console.log("授予"+config.account+"角色"+Group.address);
 
     console.log("注册TransactionFilterChain.....");
 	func = "setRoute(string,address,bool)";
@@ -94,7 +140,7 @@ function getAbi0(file){
     console.log("注册CAAction.....");
 	func = "setRoute(string,address,bool)";
 	params = ["CAAction", CAAction.address, false];
-    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
+        receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
     
     console.log("注册ContractAbiMgr.....");
 	func = "setRoute(string,address,bool)";
