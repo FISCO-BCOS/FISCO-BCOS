@@ -111,17 +111,6 @@ function getAbi0(file){
     params  = ["NodeAction","NodeAction","",abi,NodeActionReicpt.contractAddress];
     receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
 
-    console.log("注册权限AuthorityFilter到TransactionFilterChain.....");
-	func = "addFilter(address)";
-	params = [AuthorityFilter.address];
-	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, TransactionFilterChain.address, func, params);
-
-
-    func = "setUserGroup(address,address)";
-	params = [config.account, Group.address];
-	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, AuthorityFilter.address, func, params);
-    console.log("授予"+config.account+"角色"+Group.address);
-
     console.log("注册TransactionFilterChain.....");
 	func = "setRoute(string,address,bool)";
 	params = ["TransactionFilterChain", TransactionFilterChain.address, false];
