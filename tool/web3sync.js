@@ -773,48 +773,6 @@ async function sendRawTransactionByNameService(account, privateKey, contract, fu
 	});
 }
 
-//通过abi name服务发送交易
-async function sendTransactionByNameService(account, privateKey, contract, func, version, params) {
-
-  var namecallparams = {
-    "contract":contract,
-    "func":func,
-    "version":version,
-    "params":params
-  };
-
-  var strnamecallparams = JSON.stringify(namecallparams);
-  console.log("===>> namecall params = " + strnamecallparams);
-
-	var postdata = {
-		data: strnamecallparams,
-    from: account,
-    //to: to,
-		gas: 1000000,
-		randomid:Math.ceil(Math.random()*100000000),
-		blockLimit:await getBlockNumber() + 1000,
-  }
-  
-	return new Promise((resolve, reject) => {
-		web3.eth.sendTransaction(postdata, function(err, address) {
-			if (!err) {
-				console.log("发送交易成功: " + address);
-
-				checkForTransactionResult(address, (err, receipt) => {
-					resolve(receipt);
-				});
-
-				//resolve(address);
-			}
-			else {
-				console.log("发送交易失败！",err);
-
-				return;
-			}
-		});
-	});
-}
-
 async function sendRawTransaction(account, privateKey, to, func, params) {
 	var r = /^\w+\((.+)\)$/g.exec(func);
 	var types = r[1].split(',');
@@ -854,7 +812,6 @@ async function sendRawTransaction(account, privateKey, to, func, params) {
 
 exports.getBlockNumber = getBlockNumber;
 exports.callByNameService = callByNameService;
-exports.sendTransactionByNameService = sendTransactionByNameService;
 exports.sendRawTransactionByNameService = sendRawTransactionByNameService;
 exports.sendRawTransaction = sendRawTransaction;
 exports.unlockAccount = unlockAccount;
