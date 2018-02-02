@@ -183,6 +183,7 @@ bool BlockChain::isNonceOk(Transaction const&_ts, bool _needinsert) const
 
 u256 BlockChain::filterCheck(const Transaction & _t/*这里可以补节点信息*/, FilterCheckScene _checkscene) const
 {
+	LOG(TRACE) << "BlockChain::filterCheck Scene：" << (int)(_checkscene);
 	return m_interface->filterCheck(_t, _checkscene);
 }
 
