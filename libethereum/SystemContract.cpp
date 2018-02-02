@@ -641,10 +641,11 @@ h256 SystemContract::filterCheckTransCacheKey(const Transaction & _t) const
 
 u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
 
-    LOG(TRACE) << "SystemContract::transactionFilterCheck";
+    LOG(TRACE) << "SystemContract::transactionFilterCheck sender:" << transaction.safeSender();
 
     if ( isGod(transaction.safeSender()))
     {
+		LOG(TRACE) << "SystemContract::transactionFilterCheck God sender";
         return (u256)SystemContractCode::Ok;
     }
 
@@ -652,6 +653,29 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
 
 
     u256 checkresult = -1;
+	LOG(TRACE) << "SystemContract::transactionFilterCheck filter:" << m_transactionfilter.filter;
+    if (transaction.isCreation()) {
+        Address sender = transaction.safeSender();
+        LOG(TRACE) << "SystemContract::transactionFilterCheck sender:" << sender;
+        bytes inputBytes = dev::eth::ContractABI().abiIn(
+                               "deploy(address)",
+                               transaction.safeSender());
+
+        ExecutionResult res = call(m_transactionfilter.filter, inputBytes);
+
+        if (res.output.empty()) {
+            //未部署系统合约或权限合约
+            LOG(TRACE) << "SystemContract::transactionFilterCheck res.output.empty()";
+            checkresult = (u256)SystemContractCode::Ok;
+        }
+        else {
+            bool result = false;
+            dev::eth::ContractABI().abiOut(bytesConstRef(&res.output), result);
+            LOG(TRACE) << "SystemContract::transactionFilterCheck result:" << result;
+            checkresult = result ? ((u256)SystemContractCode::Ok) : (u256)SystemContractCode::Other;
+        }
+    }
+    else {
     h256 key = filterCheckTransCacheKey(transaction);
 
     DEV_READ_GUARDED(m_lockfilter)
@@ -668,11 +692,12 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
         //{
         //checkresult = iter->second;
         m_transcachehit++;
+		LOG(TRACE) << "SystemContract::transactionFilterCheck hit cache";
     }
     else {
         string input = toHex(transaction.data());
         string func = input.substr(0, 8);
-
+		LOG(TRACE) << "SystemContract::transactionFilterCheck input:" << input << ",func:" << func;
         bytes inputBytes = dev::eth::ContractABI().abiIn(
                                "process(address,address,address,string,string)",
                                transaction.safeSender(), transaction.from(), transaction.to(), func,
@@ -682,11 +707,13 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
 
         if (res.output.empty()) {
             //未部署系统合约或权限合约
+			LOG(TRACE) << "SystemContract::transactionFilterCheck res.output.empty()";
             checkresult = (u256)SystemContractCode::Ok;
         }
         else {
             bool result = false;
             dev::eth::ContractABI().abiOut(bytesConstRef(&res.output), result);
+			LOG(TRACE) << "SystemContract::transactionFilterCheck result:" << result;
             checkresult = result ? ((u256)SystemContractCode::Ok) : (u256)SystemContractCode::Other;
         }
         DEV_WRITE_GUARDED(m_lockfilter)
@@ -694,6 +721,7 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
             m_filterchecktranscache.insert(pair<h256, u256>(key, checkresult)); //更新cache
         }
     }
+	}
     if ( (u256)SystemContractCode::Ok != checkresult )
     {
         LOG(WARNING) << "SystemContract::transactionFilterCheck Fail!"  << toJS(transaction.sha3()) << ",from=" << toJS(transaction.from());
