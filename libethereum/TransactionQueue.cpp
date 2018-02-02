@@ -24,6 +24,7 @@
 #include <libethcore/Exceptions.h>
 #include "Transaction.h"
 #include "StatLog.h"
+#include "SystemContractApi.h"
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
@@ -186,17 +187,27 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 			LOG(WARNING) << "TransactionQueue::manageImport_WITH_LOCK BlockLimit fail! " << _transaction.sha3() << "," << _transaction.blockLimit();
 			return ImportResult::BlockLimitCheckFail;
 		}
-		/*
-		if( false == m_interface->filterCheck(_transaction,FilterCheckScene::CheckTx) )
+		// 权限判断逻辑
+		if( _transaction.isCreation())
 		{
-			LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK hasTxPermission fail! "<<_transaction.sha3();
-			return ImportResult::NoTxPermission;
+			// 部署合约
+			u256 ret = m_interface->filterCheck(_transaction,FilterCheckScene::CheckDeploy);
+			if( (u256)SystemContractCode::Ok != ret)
+			{
+				LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK hasDeployPermission fail! "<<_transaction.sha3();
+				return ImportResult::NoDeployPermission;
+			}
 		}
-		if( _transaction.isCreation() && !m_interface->filterCheck(_transaction,FilterCheckScene::CheckDeploy))
-		{
-			LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK hasDeployPermission fail! "<<_transaction.sha3();
-			return ImportResult::NoDeployPermission;
-		}*/
+		else {
+			// 合约调用
+			u256 ret = m_interface->filterCheck(_transaction,FilterCheckScene::CheckTx);
+			LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK FilterCheckScene::CheckTx ";
+			if( (u256)SystemContractCode::Ok != ret)
+			{
+				LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK hasTxPermission fail! "<<_transaction.sha3();
+				return ImportResult::NoTxPermission;
+			}
+		}
 
 		// Remove any prior transaction with the same nonce but a lower gas price.
 		// Bomb out if there's a prior transaction with higher gas price.
