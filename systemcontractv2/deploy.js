@@ -37,22 +37,16 @@ function getAbi0(file){
     var SystemProxyReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "SystemProxy");
     var SystemProxy=web3.eth.contract(getAbi("SystemProxy")).at(SystemProxyReicpt.contractAddress);
 
-    var TransactionFilterChainReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "TransactionFilterChain");
-    var TransactionFilterChain=web3.eth.contract(getAbi("TransactionFilterChain")).at(TransactionFilterChainReicpt.contractAddress);
-
-    var AuthorityFilterReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "AuthorityFilter");
+    // 权限控制
+	//execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" AuthorityFilter.sol");
+	var AuthorityFilterReicpt= await web3sync.rawDeploy(config.account, config.privKey, "AuthorityFilter");
     var AuthorityFilter=web3.eth.contract(getAbi("AuthorityFilter")).at(AuthorityFilterReicpt.contractAddress);
-    
-    var func = "setName(string)";
-    var params = ["AuthorityFilter"];
-    var receipt = await web3sync.sendRawTransaction(config.account, config.privKey, AuthorityFilter.address, func, params);
-	func = "setVersion(string)";
-    params = ["1.0"];
-    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, AuthorityFilter.address, func, params);
-    console.log("AuthorityFilter版本号1.0");
-
-    var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "Group");
+    //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" Group.sol");
+	var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey, "Group");
     var Group=web3.eth.contract(getAbi("Group")).at(GroupReicpt.contractAddress);
+	//execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" TransactionFilterChain.sol");
+	var TransactionFilterChainReicpt= await web3sync.rawDeploy(config.account, config.privKey, "TransactionFilterChain");
+    var TransactionFilterChain=web3.eth.contract(getAbi("TransactionFilterChain")).at(TransactionFilterChainReicpt.contractAddress);
     
     var CAActionReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "CAAction");
     var CAAction=web3.eth.contract(getAbi("CAAction")).at(CAActionReicpt.contractAddress);
@@ -81,17 +75,6 @@ function getAbi0(file){
     var params  = ["ContractAbiMgr","ContractAbiMgr","",abi,ContractAbiMgrReicpt.contractAddress];
     console.log("contract abi manager ,params =>" + params.toString());
     var receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);    
-    
-    console.log("注册权限AuthorityFilter到TransactionFilterChain.....");
-	func = "addFilter(address)";
-	params = [AuthorityFilter.address];
-	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, TransactionFilterChain.address, func, params);
-
-
-    func = "setUserGroup(address,address)";
-	params = [config.account, Group.address];
-	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, AuthorityFilter.address, func, params);
-    console.log("授予"+config.account+"角色"+Group.address);
 
     console.log("注册TransactionFilterChain.....");
 	func = "setRoute(string,address,bool)";
@@ -136,20 +119,6 @@ function getAbi0(file){
         var key=SystemProxy.getRouteNameByIndex(i).toString();
         var route=SystemProxy.getRoute(key);
         console.log(i+" )"+ key+"=>"+route[0].toString()+","+route[1].toString()+","+route[2].toString());
-
-        if( "TransactionFilterChain" == key ){
-            var contract = web3.eth.contract(getAbi("TransactionFilterChain"));
-			var instance = contract.at(route[0]);
-            var filterlength=instance.getFiltersLength();
-            for( var j=0;j<filterlength;j++){
-                var filter=instance.getFilter(j);
-                contract = web3.eth.contract(getAbi("TransactionFilterBase"));
-                instance = contract.at(filter);
-                var name= instance.name();
-                var version=instance.version();
-                console.log("       "+name+"=>"+version+","+filter);
-            }
-        }
     }
     
 
