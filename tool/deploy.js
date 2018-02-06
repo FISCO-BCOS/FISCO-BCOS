@@ -55,7 +55,7 @@ var binary=fs.readFileSync(config.Ouputpath+filename+'.bin', 'utf-8');
 	 //尝试添加cns服务,有可能失败
 	 cns_tool.cnsAdd(filename);   
   } catch(e){
-  console.log(filename+'cns add failed , e = '+e);
+  //console.log(filename+'cns add failed , e = '+e);
 }
 
 })();
