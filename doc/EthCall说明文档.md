@@ -101,11 +101,6 @@ enum EthCallIdList:callid_t
 ​         完整的代码如下：
 
 ```cpp
-/*
- *  @file EthCallDemo.h
- *  @author jimmyshi
- *  @date 2017.9.12
-*/
 #pragma once
 
 #include "EthCallEntry.h" 
@@ -224,6 +219,4 @@ public:
 ​	（3）string，bytes是否定义成memory类型。
 
 ​	（4）目前不支持array(vector) 类型的调用。
-
-[^jimmyshi, wehatli, kxzhang @webank]: 
 
