@@ -147,11 +147,6 @@ enum EthCallIdList:callid_t
 ​         完整的代码如下：
 
 ```cpp
-/*
- *  @file EthCallDemo.h
- *  @author jimmyshi
- *  @date 2017.9.12
-*/
 #pragma once
 
 #include "EthCallEntry.h" 
@@ -388,10 +383,6 @@ public:
 
 };
 ```
-
-
-
-[^jimmyshi, wheatli, kxzhang @webank]: 
 
 
 
