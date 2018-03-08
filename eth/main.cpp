@@ -542,7 +542,7 @@ int main(int argc, char** argv)
 	string remoteHost;
 	unsigned short remotePort = 16789;
 
-	unsigned peers = 11;
+	unsigned peers = 128;
 	unsigned peerStretch = 7;
 	std::map<NodeID, pair<NodeIPEndpoint, bool>> preferredNodes;
 	bool bootstrap = true;

@@ -384,7 +384,7 @@ namespace dev
 			std::list<std::weak_ptr<RLPXHandshake>> m_connecting;                                   ///< Pending connections.
 			Mutex x_connecting;                                                                     ///< Mutex for m_connecting.
 
-			unsigned m_idealPeerCount = 11;                                                         ///< Ideal number of peers to be connected to.
+			unsigned m_idealPeerCount = 128;                                                         ///< Ideal number of peers to be connected to.
 			unsigned m_stretchPeers = 7;                                                            ///< Accepted connection multiplier (max peers = ideal*stretch).
 
 			std::map<CapDesc, std::shared_ptr<HostCapabilityFace>> m_capabilities;  ///< Each of the capabilities we support.
