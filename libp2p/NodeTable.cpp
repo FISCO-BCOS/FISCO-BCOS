@@ -25,7 +25,9 @@ using namespace dev;
 using namespace dev::p2p;
 
 
-NodeEntry::NodeEntry(NodeID const& _src, Public const& _pubk, NodeIPEndpoint const& _gw): Node(_pubk, _gw), distance(NodeTable::distance(_src, _pubk)) {}
+NodeEntry::NodeEntry(NodeID const& _src, Public const& _pubk, NodeIPEndpoint const& _gw): Node(_pubk, _gw), distance(NodeTable::distance(_src, _pubk)) {
+	//LOG(INFO) <<"distance="<<distance<<","<<_gw.address.to_string()<<":"<<_gw.udpPort<<","<<_src<<","<<_pubk;
+}
 
 NodeTable::NodeTable(ba::io_service& _io, KeyPair const& _alias, NodeIPEndpoint const& _endpoint, bool _enabled):
 	m_node(Node(_alias.pub(), _endpoint)),
@@ -344,32 +346,66 @@ void NodeTable::noteActiveNode(Public const& _pubk, bi::udp::endpoint const& _en
 					removed = true;
 				return removed;
 			});
+			LOG(INFO) <<"distance="<<s.distance<< " s.nodes.size()=" <<s.nodes.size()<<",s_bucketSize="<<s_bucketSize<<",removed="<<removed;
 			
+			std::list<std::weak_ptr<NodeEntry>>::iterator tempw=s.nodes.begin();
+			while(tempw != s.nodes.end())
+			{
+				shared_ptr<NodeEntry> temps=(*tempw).lock();
+				if( temps )
+				{
+					LOG(INFO) <<temps->endpoint.address.to_string()<<":"<<temps->endpoint.udpPort;
+					tempw++;
+				}
+				else{
+					LOG(INFO) <<" clear node from bucket";
+					s.nodes.erase(tempw);
+					tempw = s.nodes.begin();
+				}
+			}
+			
+			//if (removed)
+			//		LOG(WARNING) << "DANGER: Bucket overflow when swapping node position.";
+
 			if (s.nodes.size() >= s_bucketSize)
 			{
-				if (removed)
-					LOG(WARNING) << "DANGER: Bucket overflow when swapping node position.";
-				
 				// It's only contested iff nodeentry exists
 				contested = s.nodes.front().lock();
 				if (!contested)
 				{
 					s.nodes.pop_front();
 					s.nodes.push_back(node);
-					if (!removed && m_nodeEventHandler)
+					
+					if (/*!removed &&*/ m_nodeEventHandler)
+					{
+						LOG(INFO) << "m_nodeEventHandler->appendEvent NodeEntryAdded";
 						m_nodeEventHandler->appendEvent(node->id, NodeEntryAdded);
+					}
+						
+				}
+				else
+				{
+					LOG(INFO) << "bucket is Full";
 				}
 			}
 			else
 			{
 				s.nodes.push_back(node);
 				if (!removed && m_nodeEventHandler)
+				{
+					LOG(INFO) << "m_nodeEventHandler->appendEvent NodeEntryAdded";
 					m_nodeEventHandler->appendEvent(node->id, NodeEntryAdded);
+				}
+					
 			}
 		}
 		
 		if (contested)
-			evict(contested, node);
+		{
+			LOG(INFO) << " contested=" <<contested;
+			evict(contested, node);		
+		}
+			
 	}
 }
 

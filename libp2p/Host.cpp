@@ -394,6 +394,10 @@ void Host::onNodeTableEvent(NodeID const& _n, NodeTableEventType const& _e)
 			}
 			if (peerSlotsAvailable(Egress))
 				connect(p);
+			else 
+			{
+				LOG(INFO)<<" too many egress peer!";
+			}
 		}
 	}
 	else if (_e == NodeEntryDropped)
