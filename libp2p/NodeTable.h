@@ -64,6 +64,8 @@ protected:
 	{
 		std::list<std::pair<NodeID, NodeTableEventType>> events;
 		{
+			LOG(INFO) <<"m_nodeEventHandler.size() "<<m_nodeEventHandler.size()<<",m_events="<<m_events;
+
 			Guard l(x_events);
 			if (!m_nodeEventHandler.size())
 				return;
@@ -73,12 +75,19 @@ protected:
 			m_nodeEventHandler.clear();
 			m_events.clear();
 		}
+		LOG(INFO) <<"events.size= "<<events.size();
 		for (auto const& e: events)
+		{
+			LOG(INFO) <<" processEvents "<<e.first<<","<<e.second;
 			processEvent(e.first, e.second);
+		}
+			
 	}
 
 	/// Called by NodeTable to append event.
-	virtual void appendEvent(NodeID _n, NodeTableEventType _e) { Guard l(x_events); m_nodeEventHandler.push_back(_n); m_events[_n] = _e; }
+	virtual void appendEvent(NodeID _n, NodeTableEventType _e) { 
+		LOG(INFO) <<" appendEvent "<<_n<<",event="<<_e;
+		Guard l(x_events); m_nodeEventHandler.push_back(_n); m_events[_n] = _e; }
 
 	Mutex x_events;
 	std::list<NodeID> m_nodeEventHandler;
@@ -176,7 +185,7 @@ private:
 
 	/// Chosen constants
 
-	static unsigned const s_bucketSize = 16;			///< Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
+	static unsigned const s_bucketSize = 128;			///< Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
 	static unsigned const s_alpha = 3;				///< Denoted by \alpha in [Kademlia]. Number of concurrent FindNode requests.
 
 	/// Intervals
