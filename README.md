@@ -23,7 +23,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ## 实践指引
 
-FISCO BCOS实践指引，建议优先阅读(https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%BC%95)。
+[FISCO BCOS实践指引](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E5%AE%9E%E8%B7%B5%E6%8C%87%E5%BC%95)，建议优先阅读。
 
 
 ## 安装说明
