@@ -1480,6 +1480,23 @@ whitelist=
 blacklist=
 
 ```
+### 7.6 证书常见问题FAQ
+
+**Q:证书验证的原理？**  
+A:假设A节点与B节点连接，相互连接的节点把本地的server.crt文件发送到对方节点，对方节点使用本地的ca.crt文件验证server.crt证书文件有效性，验证成功建立连接否则断连。所以要想成功建立连接确保节点的server.crt由同一ca颁发。
+
+**Q.CAAction合约验证的原理？**
+A:打开CAVerify开关,节点连接时在CAAction合约中查找节点证书是否在合约中，如果存在节点正常连接否则连接失败。打开CAVerify开关时确保CAAction合约中已经写入区块链上所有节点的证书信息，否则未写入合约的节点无法正常连接。
+
+**Q:打开ssl节点无法连接**
+A:1.确保所有节点的data目录下config.json配置文件中的ssl已配置为1。
+  2.打开CAVerify开关前确保所有节点的证书信息是否已写到CAACtion合约中。
+
+**Q:已打开CAVerify开关未写入节点证书信息到CAACtion合约中导致节点无法连接**
+A:在所有节点的data目录下config.json配置文件中ssl设置为0并重启节点，节点正常连接后把CAVerify设置为false，再重新把所有节点的config.json配置文件中的ssl设置为1。再重新把节点证书写入CAACtion合约中再打开CAVerify开关即可。
+
+**Q:证书有效期无法设置**
+A:生成证书脚本中ca根证书固定为10年，用户证书固定为1年，如有修改证书有效期需求可修改genkey.sh脚本中的日期即可。
 
 
 
