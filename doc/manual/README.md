@@ -1498,7 +1498,11 @@ A:在所有节点的data目录下config.json配置文件中ssl设置为0并重�
 **Q:证书有效期无法设置**  
 A:生成证书脚本中ca根证书固定为10年，用户证书固定为1年，如有修改证书有效期需求可修改genkey.sh脚本中的日期即可。
 
-
+**Q:java客户端无法与节点通信问题**  
+A:java客户端需使用与节点相同的ca.crt证书。如节点证书自生成则使用以下指令生成java客户端证书：  
+1、openssl pkcs12 -export -name client -in server.crt -inkey server.key -out keystore.p12  
+2、keytool -importkeystore -destkeystore client.keystore -srckeystore keystore.p12 -srcstoretype pkcs12 -alias client  
+3、Attention！ Password must be ”123456”  
 
 ## 第八章 使用控制台
 
