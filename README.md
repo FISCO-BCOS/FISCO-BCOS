@@ -63,7 +63,13 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 * [“仲裁链”：基于区块链的存证实践](https://github.com/FISCO-BCOS/Wiki/blob/master/%E3%80%90FISCO%20BCOS%E6%A1%88%E4%BE%8B%E4%BB%8B%E7%BB%8D%E3%80%91%E2%80%9C%E4%BB%B2%E8%A3%81%E9%93%BE%E2%80%9D%EF%BC%9A%E5%9F%BA%E4%BA%8E%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%AD%98%E8%AF%81%E5%AE%9E%E8%B7%B5/README.md) 
 
 
-# 5.常见问题
+# 5.其他
+
+## 5.1 区块链知识&行业动态
+详情参见[区块链知识&行业动态](https://github.com/FISCO-BCOS/Wiki/blob/master/README.md#%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9F%A5%E8%AF%86%E8%A1%8C%E4%B8%9A%E5%8A%A8%E6%80%81)
+
+## 5.2 常见问题
+
 FISCO BCOS常见问题，可参见[常见问题](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98/README.md)。
 
 也欢迎爱好者相互讨论、一起交流，请进入[提问专区](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)。
