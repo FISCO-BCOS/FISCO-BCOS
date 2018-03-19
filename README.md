@@ -64,7 +64,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 
 # 5.常见问题
-FISCO BCOS常见问题，可参见[常见问题](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98/README.md)
+FISCO BCOS常见问题，可参见[常见问题](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98/README.md)。
 
 也欢迎爱好者相互讨论、一起交流，请进入[提问专区](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)。
 
