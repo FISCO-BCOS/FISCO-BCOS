@@ -289,7 +289,7 @@ vim /mydata/nodedata-1/config.json
 cp /mydata/FISCO-BCOS/genkey.sh /mydata/nodedata-1/data/ 
 cd /mydata/nodedata-1/data/
 chmod +x genkey.sh
-./genkey.sh ca certdate #生成ca根证书 ep:./genkey.sh ca 365 生成ca证书有效期为365天
+./genkey.sh ca 365 #生成ca根证书有效期为365天
 ```
 
 > 在data目录下生成了证书公私钥ca.key，ca.crt。ca.key应保密，并妥善保存，以便后续生成更多节点的公私钥。
@@ -299,7 +299,7 @@ chmod +x genkey.sh
 > 用生成的根证书公私钥ca.crt和ca.key，生成节点自己的证书。
 
 ```shell
-./genkey.sh server ./ca.key ./ca.crt certdate#注意key和crt前后顺序不能错；此步骤需按照提示输入一些信息 ep:./genkey.sh server ./ca.key ./ca.crt 365 生成server证书有效期为365天
+./genkey.sh server ./ca.key ./ca.crt 365 #注意key和crt前后顺序不能错；此步骤需按照提示输入一些信息；生成server证书有效期为365天
 ```
 
 > 生成的server.key、server.crt即为节点证书文件
@@ -900,7 +900,7 @@ cp /mydata/nodedata-1/data/genkey.sh .
 > 用根证书公私钥生成节点证书公私钥（server.key、server.crt）
 
 ```shell
-./genkey.sh server ./ca.key ./ca.crt
+./genkey.sh server ./ca.key ./ca.crt 365 #生成server证书有效期为365天
 ```
 
 >  生成后，此时目录下应存在下述文件：
