@@ -1,6 +1,6 @@
 #!/bin/bash
 certtype=$1
-if [[ "$certtype" == "ca" ]];then
+if [ "$certtype" == "ca" ];then
 echo ">>>>>>>>>>>>>>>>>>>>>make ca cert begin<<<<<<<<<<<<<<<<<<<<<<<<<"
 certdate=$2
 
@@ -15,7 +15,7 @@ openssl req -new -x509 -days $certdate -key ca.key -out ca.crt
 fi
 
 echo ">>>>>>>>>>>>>>>>>>>>>make ca cert end<<<<<<<<<<<<<<<<<<<<<<<<<<<"
-elif [[ "$certtype" == "server" ]];then
+elif [ "$certtype" == "server" ];then
 echo ">>>>>>>>>>>>>>>>>>>>>make server cert begin<<<<<<<<<<<<<<<<<<<<<<<<<"
 cat >cert.cnf <<EOT
 [ca]
@@ -57,7 +57,7 @@ openssl req -new -key server.key -config cert.cnf -out server.csr
 openssl x509 -req -days $certdate -CA $cacrt -CAkey $cakey -CAcreateserial -in server.csr -out server.crt -extensions v3_req -extfile cert.cnf
 echo ">>>>>>>>>>>>>>>>>>>>make server cert end<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
 fi
-elif [[ "$certtype" == "p12" ]]; then
+elif [ "$certtype" == "p12" ]; then
 serverkey=$2
 servercrt=$3
 cacrt=$4
