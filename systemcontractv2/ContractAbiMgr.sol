@@ -30,12 +30,12 @@ contract ContractAbiMgr {
         AddOldAbi(cns_name, abi.contractname, abi.version, abi.abi, abi.addr, abi.blocknumber, abi.timestamp);
     }
 
-    //»ñÈ¡cns_name¶ÔÓ¦µÄ±»¸²¸ÇµÄabi addressĞÅÏ¢µÄ¸öÊı
+    //è·å–cns_nameå¯¹åº”çš„è¢«è¦†ç›–çš„abi addressä¿¡æ¯çš„ä¸ªæ•°
     function getHistoryAbiC(string cns_name) constant public returns(uint256) {
         return  map_history_cns_info[cns_name].length;
     }
 
-    //¸ù¾İcns_name Ë÷ÒıºÅ»ñÈ¡±»¸²¸ÇµÄabi addressĞÅÏ¢
+    //æ ¹æ®cns_name ç´¢å¼•å·è·å–è¢«è¦†ç›–çš„abi addressä¿¡æ¯
     function getHistoryAllByIndex(string cns_name, uint256 index) constant public returns(string,address,string,string,uint256,uint256) {
 
         if(index < map_history_cns_info[cns_name].length) {
