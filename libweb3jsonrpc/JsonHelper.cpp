@@ -141,6 +141,8 @@ Json::Value toJson(dev::eth::Transaction const& _t, std::pair<h256, unsigned> _l
 		res["transactionIndex"] = toJS(_location.second);
 		res["blockNumber"] = toJS(_blockNumber);
 		res["randomId"] = toJS(_t.randomid());
+		//添加operation字段
+		res["operation"] = _t.isCreation() ? Json::Value(Json::nullValue) : _t.cnsParams().toJsonObject();
 	}
 	return res;
 }
@@ -373,7 +375,7 @@ Json::Value toJsonByBlock(LocalisedLogEntries const& _entries)
 	return toJson(entriesByBlock, order);
 }
 
-void fromJsonGetParams(Json::Value const& _json, NameCallParams &params)
+void fromJsonGetParams(Json::Value const& _json, CnsParams &params)
 {
 	/*
 	格式：
@@ -413,19 +415,15 @@ void fromJsonGetParams(Json::Value const& _json, NameCallParams &params)
 	{
 		ABI_EXCEPTION_THROW("invalid json request, params param not find or not string format, json=" + _json.toStyledString(), libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidArgument);
 	}
-	
+
 	//version
 	if (_json.isMember("version") && _json["version"].isString())
 	{
 		params.strVersion = _json["version"].asString();
 	}
-	else
-	{
-		ABI_EXCEPTION_THROW("invalid json request, version param not find or not string format, json=" + _json.toStyledString(), libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidArgument);
-	}
 }
 
-bool fromJsonGetParams(std::string const& _json, NameCallParams &params)
+bool fromJsonGetParams(std::string const& _json, CnsParams &params)
 {
 	/*      
 	Json::Value root;
@@ -451,7 +449,7 @@ bool fromJsonGetParams(std::string const& _json, NameCallParams &params)
 			return true;
 		}
 	}
-	catch (const  libabi::AbiException &e)
+	catch (const libabi::AbiException &e)
 	{
 		throw e;
 	}
@@ -461,6 +459,8 @@ bool fromJsonGetParams(std::string const& _json, NameCallParams &params)
 	}
 
 	return false;
+
+
 }
 
 TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
@@ -497,6 +497,23 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
 	//增加blocklimit 参数
 	if (!_json["blockLimit"].empty())
 		ret.blockLimit = jsToU256(_json["blockLimit"].asString());
+
+	//CNS服务中data字段是json对象
+	if (!_json["data"].empty() && _json["data"].isObject())
+		ret.jData = _json["data"];
+
+	//添加协议版本号
+	if (!_json["version"].empty())
+		ret.strVersion = _json["version"].asString();
+
+	//添加CNS调用时的合约名称
+	if (!_json["contractName"].empty())
+		ret.strContractName = _json["contractName"].asString();
+
+	//保留的类型字段
+	if (!_json["type"].empty())
+		ret.type = jsToU256(_json["type"].asString());
+
 	return ret;
 }
 
