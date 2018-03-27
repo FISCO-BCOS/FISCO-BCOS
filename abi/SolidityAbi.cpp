@@ -32,6 +32,7 @@
 #include <libdevcore/Exceptions.h>
 #include <libethcore/Exceptions.h>
 #include <libdevcore/CommonJS.h>
+#include <libdevcore/SHA3.h>
 
 using namespace dev;
 using namespace dev::eth;
@@ -136,6 +137,7 @@ namespace libabi
 				{
 					Function f;
 					parserFunction(jValue, f);
+					f.setSha3Signature("0x" + dev::toString(dev::sha3(f.getSignature())).substr(0, 8));
 					addOFunction(f);
 
 					LOG(DEBUG) << "add one function ,name=" << f.strName
@@ -346,7 +348,7 @@ namespace libabi
 		return;
 	}
 
-	const SolidityAbi::Function& SolidityAbi::getFunction(const std::string &strFuncName) const
+	const SolidityAbi::Function &SolidityAbi::getFunctionByFuncName(const std::string &strFuncName) const
 	{
 		auto iter = std::find_if(m_allFunc.begin(), m_allFunc.end(), [&strFuncName](const Function &f)->bool {
 			return strFuncName == f.strName;
@@ -355,10 +357,71 @@ namespace libabi
 		if (iter == m_allFunc.end())
 		{
 			//不存在，直接抛异常
-			ABI_EXCEPTION_THROW("abi function not find, contract|version|func|addr=" + m_strContractName + "|" + m_strVersion + "|" + strFuncName + "|" + m_strContractAddr, EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeFunctionNotExist);
+			ABI_EXCEPTION_THROW("abi function not find, contract|version|strFunc|addr=" + m_strContractName + "|" + m_strVersion + "|" + strFuncName + "|" + m_strContractAddr, EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeFunctionNotExist);
 		}
 
 		return *iter;
+	}
+
+	const SolidityAbi::Function& SolidityAbi::getFunctionBySha3Sig(const std::string &strSha3Sig) const
+	{
+		auto iter = std::find_if(m_allFunc.begin(), m_allFunc.end(), [&strSha3Sig](const Function &f)->bool {
+			return strSha3Sig == f.getSha3Signature();
+		});
+
+		if (iter == m_allFunc.end())
+		{
+			//不存在，直接抛异常
+			ABI_EXCEPTION_THROW("abi function not find, contract|version|strSha3Sig|addr=" + m_strContractName + "|" + m_strVersion + "|" + strSha3Sig + "|" + m_strContractAddr, EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeFunctionNotExist);
+		}
+
+		return *iter;
+	}
+
+	//从函数的完整签名构建一个函数对象
+	SolidityAbi::Function SolidityAbi::constructFromFuncSig(const std::string &strFuncSig) const
+	{
+		Function f;
+		auto i0 = strFuncSig.find("(");
+		auto i1 = strFuncSig.find(")");
+		if ((i0 != std::string::npos) && (i1 != std::string::npos) && (i1 > i0))
+		{
+			//get(int,string,int,int[])
+			std::string strFuncName = strFuncSig.substr(0, i0);
+			std::string strParams = strFuncSig.substr(i0 + 1, i1 - i0 -1);
+			auto allParams = libabi::SolidityTools::splitString(strParams, ",");
+			f.strName = el::base::utils::Str::trim(strFuncName);
+			for (auto &s: allParams)
+			{
+				Function::Input i;
+				i.strType = el::base::utils::Str::trim(s);
+				f.allInputs.push_back(i);
+			}
+
+			f.setSha3Signature("0x" + dev::toString(dev::sha3(f.getSignature())).substr(0, 8));
+		}
+
+		return f;
+	}
+
+	const SolidityAbi::Function& SolidityAbi::getFunction(const std::string &strFunc) const
+	{
+		//判断传入的是否是函数签名
+		auto isFuncSignature = [](const std::string &name) -> bool {
+			auto i0 = name.find("(");
+			auto i1 = name.find(")");
+			return ((i0 != std::string::npos) && (i1 != std::string::npos) && (i1 > i0));
+		}(strFunc);
+		
+		if (isFuncSignature)
+		{
+			auto f = constructFromFuncSig(strFunc);
+			return getFunctionBySha3Sig(f.getSha3Signature());
+		}
+		else
+		{
+			return getFunctionByFuncName(strFunc);
+		}
 	}
 
 	std::string SolidityAbi::getFunctionSignature(const std::string & strName)
@@ -373,7 +436,7 @@ namespace libabi
 			ABI_EXCEPTION_THROW("abi function not find, contract|version|func|addr=" + m_strContractName + "|" + m_strVersion + "|" + strName + "|" + m_strContractAddr, EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeFunctionNotExist);
 		}
 
-		return iter->transformToFullName();
+		return iter->getSignature();
 	}
 
 	std::vector<std::string> SolidityAbi::getFunctionInputTypes(const std::string & strName)

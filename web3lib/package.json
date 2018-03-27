@@ -1,5 +1,5 @@
 {
-  "name": "accounttool",
+  "name": "systemcontract",
   "version": "1.0.0",
   "description": "tools for nodejs \"",
   "main": "deploy.js",

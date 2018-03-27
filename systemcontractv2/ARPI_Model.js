@@ -1,9 +1,9 @@
 var Web3=require('web3');
-var config=require('./config');
+var config=require('../web3lib/config');
 var execSync =require('child_process').execSync;
-var web3sync = require('./web3sync');
+var web3sync = require('../web3lib/web3sync');
 var fs=require('fs');
-var sha3 = require("./sha3")
+var sha3 = require("../web3lib/sha3")
 
 if (typeof web3 !== 'undefined') {
   web3 = new Web3(web3.currentProvider);

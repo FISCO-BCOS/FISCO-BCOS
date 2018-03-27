@@ -140,6 +140,24 @@ public:
 
 	virtual std::string eth_unverifiedTransactionsQueueSize()override;
 	virtual std::string eth_verifiedTransactionsQueueSize()override;
+
+	bool isDefaultCall(const TransactionSkeleton &t, CnsParams &params, const Json::Value &_json);
+	bool isOldCNSCall(const TransactionSkeleton &t, CnsParams &params ,const Json::Value &_json);
+	bool isNewCNSCall(const TransactionSkeleton &t);
+
+	void eth_sendTransactionOldCNSSetParams(TransactionSkeleton &t);
+	void eth_sendTransactionNewCNSSetParams(TransactionSkeleton &t);
+
+	std::string eth_callDefault(TransactionSkeleton &t, std::string const& _blockNumber);
+	std::string eth_callOldCNS(TransactionSkeleton &t,const CnsParams &params,std::string const& _blockNumber);
+	std::string eth_callNewCNS(TransactionSkeleton &t, std::string const& _blockNumber);
+
+	//CNS
+	virtual std::string eth_getCodeCNS(std::string const& strContractName, std::string const& _blockNumber) override;
+	virtual std::string eth_getBalanceCNS(std::string const& strContractName, std::string const& _blockNumber) override;
+	virtual std::string eth_getStorageAtCNS(std::string const& strContractName, std::string const& _position, std::string const& _blockNumber) override;
+	virtual std::string eth_getTransactionCountCNS(std::string const& strContractName, std::string const& _blockNumber) override;
+
 protected:
 
 	eth::Interface* client() { return &m_eth; }
