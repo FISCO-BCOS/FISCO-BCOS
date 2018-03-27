@@ -73,17 +73,31 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
 LogFilter toLogFilter(Json::Value const& _json);
 LogFilter toLogFilter(Json::Value const& _json, Interface const& _client);	// commented to avoid warning. Uncomment once in use @ PoC-7.
 
-//��name��ʽ���õĲ�����Ϣ
-struct NameCallParams
+//以name方式调用的参数信息
+struct CnsParams
 {
+	CnsParams():jParams(Json::nullValue)
+	{
+	}
+
 	std::string strContractName;
 	std::string strFunc;
 	std::string strVersion;
 	Json::Value jParams;
+
+	Json::Value toJsonObject() const
+	{
+		Json::Value jValue(Json::objectValue);
+		jValue["contractName"] = strContractName;
+		jValue["version"] = strVersion;
+		jValue["method"] = strFunc;
+		jValue["params"] = jParams;
+		return jValue;
+	}
 };
 
-void fromJsonGetParams(Json::Value const& _json, NameCallParams &params);
-bool fromJsonGetParams(std::string const& _json, NameCallParams &params);
+void fromJsonGetParams(Json::Value const& _json, CnsParams &params);
+bool fromJsonGetParams(std::string const& _json, CnsParams &params);
 
 class AddressResolver
 {

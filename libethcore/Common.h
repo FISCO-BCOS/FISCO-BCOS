@@ -25,6 +25,7 @@
 
 #include <string>
 #include <functional>
+#include <json/json.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcore/FixedHash.h>
@@ -210,6 +211,12 @@ struct TransactionSkeleton
 	u256 gas = Invalid256;
 	u256 gasPrice = Invalid256;
 	u256 blockLimit = Invalid256;
+
+	//CNS服务中jData有可能是json对象
+	Json::Value jData;
+	std::string strVersion;
+	std::string strContractName;
+	u256 type;
 
 	std::string userReadable(bool _toProxy, std::function<std::pair<bool, std::string>(TransactionSkeleton const&)> const& _getNatSpec, std::function<std::string(Address const&)> const& _formatAddress) const;
 };

@@ -28,6 +28,7 @@
 #include <unordered_map>
 
 #include <json/json.h>
+#include <libweb3jsonrpc/JsonHelper.h>
 #include "SolidityBaseType.h"
 #include "SolidityTools.h"
 #include "SolidityAbi.h"
@@ -84,6 +85,8 @@ namespace libabi
 		std::string encode(const SolidityAbi::Function &f, const std::string &strParams);
 		std::string encode(const SolidityAbi::Function &f, const Json::Value &jParams);
 		Json::Value decode(const SolidityAbi::Function &f, const std::string &strData);
+
+		void getCNSParams(const SolidityAbi &abi, dev::eth::CnsParams &params, const std::string &data);
 
 	private:
 		//根据接口abi信息序列化函数调用信息，返回为序列化之后的数据

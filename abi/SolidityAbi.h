@@ -68,18 +68,20 @@ namespace libabi
 
 			std::string strName;
 			std::string strType{ "function" }; //构造函数strType为constructor
+			std::string sha3Signature;
+
 			bool isConstant;
 			bool isPayable ;
 
 			std::vector<Input> allInputs;
 			std::vector<Output> allOutputs;
 
-			bool bConstant() const noexcept
+			inline bool bConstant() const noexcept
 			{
 				return isConstant;
 			}
 
-			bool bPayable() const noexcept
+			inline bool bPayable() const noexcept
 			{
 				return isPayable;
 			}
@@ -102,8 +104,18 @@ namespace libabi
 				return types;
 			}
 
+			inline void setSha3Signature(const std::string sha3Sig) noexcept 
+			{
+				sha3Signature = sha3Sig;
+			}
+
+			inline std::string getSha3Signature() const noexcept
+			{
+				return sha3Signature;
+			}
+
 			//获取函数签名
-			std::string transformToFullName() const noexcept
+			std::string getSignature() const noexcept
 			{
 				std::string strTmp = strName + "(";
 
@@ -144,6 +156,10 @@ namespace libabi
 
 			std::vector<Input> allInputs;
 		};
+
+	public:
+		//从函数的完整签名构建一个函数对象
+		Function constructFromFuncSig(const std::string &strFuncSig) const;
 
 	private:
 		//编译生成abi的合约的名称，不包含扩展名称
@@ -188,8 +204,13 @@ namespace libabi
 		void invalidAbiInputOrOutput(const std::string & strType);
 
 	public:
-		//获取函数
-		const Function &getFunction(const std::string &strFuncName) const;
+		//根据函数名称或者是完整的函数签名获取函数对象
+		// strFunc可以是函数名称         比如： get
+		//        也可以是函数的完整签名 比如： set(int,string,uint[])
+		// 调用cns服务时一般传入调用函数的名称即可,函数有重载的情况下,需要传入完整的函数签名,才能够决定调用哪个函数
+		const Function &getFunction(const std::string &strFunc) const;
+		const Function &getFunctionByFuncName(const std::string &strFuncName) const;
+		const Function &getFunctionBySha3Sig(const std::string &strSha3Sig) const;
 		//根据函数名获取函数完整签名
 		std::string getFunctionSignature(const std::string &strFuncName);
 		std::vector<std::string> getFunctionInputTypes(const std::string &strFuncName);

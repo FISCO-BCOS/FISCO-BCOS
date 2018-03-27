@@ -81,9 +81,9 @@ std::pair<ImportResult, h256> TransactionQueue::import(bytesConstRef _transactio
 			m_interface->startStatTranscation(h);
 
 			t = Transaction(_transactionRLP, CheckTransaction::Everything);
-			if (t.bNameCall())
-			{	//这里仅仅是检查根据调用的name能否找见对应的abi信息，找不见则抛出异常
-				t.addrAnddata();
+			if (t.isCNS())
+			{//这里仅仅是检查根据调用的name能否找见对应的abi信息，找不见则抛出异常
+				t.receiveAddress();
 			}
 
 			t.setImportTime(utcTime());
@@ -317,7 +317,9 @@ void TransactionQueue::insertCurrent_WITH_LOCK(std::pair<h256, Transaction> cons
 	makeCurrent_WITH_LOCK(t);
 	m_known.insert(_p.first);
 	// start tx trace log
-	dev::eth::TxFlowLog(_p.first, "0x" + _p.first.hex().substr(0, 5), false, true);	
+	// TODO FLAG 1  "0x" + _p.first.hex().substr(0, 5) => _p.first.hex()
+	// dev::eth::TxFlowLog(_p.first, "0x" + _p.first.hex().substr(0, 5), false, true);	
+	dev::eth::TxFlowLog(_p.first, _p.first.hex(), false, true);
 	LOG(INFO) << " Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",入队=" << utcTime();
 }
 

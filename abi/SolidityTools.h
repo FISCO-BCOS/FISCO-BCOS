@@ -46,14 +46,17 @@ namespace libabi
 		SolidityTools(SolidityTools &&) = delete;
 		SolidityTools& operator=(const SolidityTools &) = delete;
 
+		const static std::string CNS_SPLIT_STRING;
+
 	public:
+		static std::vector<std::string> splitString(const std::string &str, const std::string &splitString);
 		//数据类型如果是数组,则返回数组降维度后的数据类型 int[3] -> int ; int[2][3] -> int[2]
 		static std::string nestName(const std::string &strType);
 		//数据类型如果是数组,返回数组的各个维度信息  int[2][3][4] => "[2]"  "[3]"  "[4]"否则返回vector为空
 		static std::vector<std::string> nestTypes(const std::string &strTypeName);
 		//是否是动态类型
 		static bool isDynamic(const std::string &strType);
-		//数据类型是否是数据类型
+		//数据类型是否是数组类型
 		static bool isArray(const std::string &strType);
 		//数据类型是否是动态数组类型
 		static bool isDynamicArray(const std::string &strType);

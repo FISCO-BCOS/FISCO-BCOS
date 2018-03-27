@@ -36,6 +36,15 @@
 
 namespace libabi
 {
+	const std::string SolidityTools::CNS_SPLIT_STRING = "@";
+
+	std::vector<std::string> SolidityTools::splitString(const std::string &str, const std::string &splitString)
+	{
+		std::vector<std::string> splitVecString;
+		boost::split(splitVecString, str, boost::is_any_of(splitString));
+		return splitVecString;
+	}
+
 	std::string SolidityTools::nestName(const std::string & strType)
 	{
 		auto r = nestTypes(strType);
