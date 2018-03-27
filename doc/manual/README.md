@@ -1348,7 +1348,7 @@ serial=8A4B2CDE94348D22
 > 在systemcontractv2目录下编写。
 
 ```shell
-/mydata/FISCO-BCOS/systemcontractv2
+cd /mydata/FISCO-BCOS/systemcontractv2
 vim ca.json
 ```
 
@@ -1781,7 +1781,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | ------------------ | ---------------------------------------- |
 | sealEngine         | 共识算法（可选PBFT、RAFT、SinglePoint）            |
 | systemproxyaddress | 系统路由合约地址（生成方法可参看部署系统合约）                  |
-| listenip           | 监听IP（建议内网IP）                             |
+| listenip           | 节点监听IP                             |
 | cryptomod          | 加密模式默认为0（与cryptomod.json文件中cryptomod字段保持一致） |
 | ssl                | 是否启用SSL证书通信（0：非SSL通信 1：SSL通信 需在datadir目录下放置证书文件） |
 | rpcport            | RPC监听端口）（若在同台机器上部署多个节点时，端口不能重复）          |
@@ -1797,7 +1797,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | eventlog           | 合约日志开关（ON或OFF）                           |
 | statlog            | 统计日志开关（ON或OFF）                           |
 | logconf            | 日志配置文件路径（日志配置文件可参看日志配置文件说明）              |
-| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId |
+| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId。此处必须配置节点自身的信息。在配置其它节点信息时，确保节点间能够构成一个连通图。为了稳定性，推荐配置多个除自身以外的其它节点信息。 |
 | dfsNode            | 分布式文件服务节点ID ，与节点身份NodeID一致 （可选功能配置参数）    |
 | dfsGroup           | 分布式文件服务组ID （10 - 32个字符）（可选功能配置参数）        |
 | dfsStorage         | 指定分布式文件系统所使用文件存储目录（可选功能配置参数）             |
