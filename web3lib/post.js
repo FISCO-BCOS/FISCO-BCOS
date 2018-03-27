@@ -28,7 +28,7 @@ async function post(method,params) {
   
   return new Promise((resolve, reject) => {
        
-      //curl -X POST --data '{"jsonrpc":"2.0","method":"admin_peers","params":[],"id":74}'  127.0.0.1:8545
+      //curl -X POST --data '{"jsonrpc":"2.0","method":"admin_peers","params":[],"id":74}'  <ip:port> e.g.:127.0.0.1:8545
       var post_data = { 
          "jsonrpc":"2.0",
          "method":method,

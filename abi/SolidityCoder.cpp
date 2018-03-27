@@ -25,6 +25,7 @@
 
 #include "SolidityCoder.h"
 #include "SolidityExp.h"
+#include "ContractAbiMgr.h"
 
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
@@ -326,11 +327,11 @@ namespace libabi
 		//前缀0x
 		std::string strData = "0x";
 		//函数签名
-		strData += dev::toString(dev::sha3(f.transformToFullName())).substr(0, 8);
+		strData += dev::toString(dev::sha3(f.getSignature())).substr(0, 8);
 		//参数
 		strData += encodeParams(f.getAllInputType(), jParams);
 
-		LOG(TRACE) << "[SolidityCoder::encode] end, func=" << f.transformToFullName()
+		LOG(TRACE) << "[SolidityCoder::encode] end, func=" << f.getSignature()
 			<< " ,param=" << jParams.toStyledString()
 			<< " ,data=" << strData
 			;
@@ -340,7 +341,7 @@ namespace libabi
 
 	Json::Value SolidityCoder::decode(const SolidityAbi::Function &f, const std::string &strData)
 	{
-		std::string strFunc = f.transformToFullName();
+		std::string strFunc = f.getSignature();
 
 		std::string strResultData = strData;
 		if ((strResultData.compare(0, 2, "0x") == 0) || (strResultData.compare(0, 2, "0X") == 0))
@@ -359,6 +360,38 @@ namespace libabi
 			<< " ,result=" << jReturn.toStyledString();
 
 		return jReturn;
+	}
+
+	void SolidityCoder::getCNSParams(const SolidityAbi &abi, dev::eth::CnsParams &params, const std::string &data)
+	{
+		std::string sig;
+		std::string da;
+
+		if (data.compare(0, 2, "0x") == 0 || data.compare(0, 2, "0X") == 0)
+		{
+			sig = "0x" + data.substr(2, 8);
+			da = data.substr(10);
+		}
+		else
+		{
+			sig = "0x" + data.substr(0, 8);
+			da = data.substr(8);
+		}
+
+		params.strContractName = abi.getContractName();
+		params.strVersion = abi.getVersion();
+		const auto &f = abi.getFunctionBySha3Sig(sig);
+		params.strFunc = f.strName;
+
+		params.jParams = decodeParams(f.getAllInputType(), da);
+
+		LOG(DEBUG) << "## getCNSParams, contract= " << abi.getContractName()
+			<< " ,version= " << abi.getVersion()
+			<< " ,address= " << abi.getAddr()
+			<< " ,func= " << f.strName
+			<< " ,params= " << params.jParams.toStyledString()
+			<< " ,data= " << data;
+
 	}
 
 	//根据接口abi信息序列化函数调用信息，返回为序列化之后的数据

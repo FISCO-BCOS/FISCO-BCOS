@@ -68,14 +68,21 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("eth_notePassword", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN, "param1", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_notePasswordI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_syncing", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,  NULL), &dev::rpc::EthFace::eth_syncingI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_estimateGas", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_OBJECT, NULL), &dev::rpc::EthFace::eth_estimateGasI);
-        this->bindAndAddMethod(jsonrpc::Procedure("eth_jsonCall", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_OBJECT, NULL), &dev::rpc::EthFace::eth_jsonCallI);
+        //this->bindAndAddMethod(jsonrpc::Procedure("eth_jsonCall", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_OBJECT, NULL), &dev::rpc::EthFace::eth_jsonCallI);
         
         this->bindAndAddMethod(jsonrpc::Procedure("eth_unverifiedBlockQueueSize", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_unverifiedBlockQueueSizeI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_verifiedBlockQueueSize", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_verifiedBlockQueueSizeI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("eth_unverifiedTransactionsQueueSize", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_unverifiedTransactionsQueueSizeI);
-        this->bindAndAddMethod(jsonrpc::Procedure("eth_verifiedTransactionsQueueSize", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_verifiedTransactionsQueueSizeI);
-    }
+        this->bindAndAddMethod(jsonrpc::Procedure("eth_verifiedTransactionsQueueSize", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_verifiedTransactionsQueueSizeI);        
+		this->bindAndAddMethod(jsonrpc::Procedure("eth_jsonCall", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_OBJECT, NULL), &dev::rpc::EthFace::eth_jsonCallI);  
+
+		//CNS
+		this->bindAndAddMethod(jsonrpc::Procedure("eth_getCodeCNS", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getCodeCNSI);
+		this->bindAndAddMethod(jsonrpc::Procedure("eth_getBalanceCNS", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getBalanceCNSI);
+		this->bindAndAddMethod(jsonrpc::Procedure("eth_getStorageAtCNS", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getStorageAtCNSI);
+		this->bindAndAddMethod(jsonrpc::Procedure("eth_getTransactionCountCNS", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getTransactionCountCNSI);
+	}
 
     inline virtual void eth_protocolVersionI(const Json::Value &request, Json::Value &response)
     {
@@ -330,6 +337,24 @@ public:
         (void)request;
         response = this->eth_verifiedTransactionsQueueSize();
     }
+
+	inline virtual void eth_getCodeCNSI(const Json::Value &request, Json::Value &response)
+	{
+		response = this->eth_getCodeCNS(request[0u].asString(), request[1u].asString());
+	}
+	inline virtual void eth_getBalanceCNSI(const Json::Value &request, Json::Value &response)
+	{
+		response = this->eth_getBalanceCNS(request[0u].asString(), request[1u].asString());
+	}
+	inline virtual void eth_getStorageAtCNSI(const Json::Value &request, Json::Value &response)
+	{
+		response = this->eth_getStorageAtCNS(request[0u].asString(), request[1u].asString(), request[2u].asString());
+	}
+	inline virtual void eth_getTransactionCountCNSI(const Json::Value &request, Json::Value &response)
+	{
+		response = this->eth_getTransactionCountCNS(request[0u].asString(), request[1u].asString());
+	}
+
     virtual std::string eth_protocolVersion() = 0;
     virtual std::string eth_hashrate() = 0;
     virtual std::string eth_coinbase() = 0;
@@ -391,6 +416,12 @@ public:
 
     virtual std::string eth_unverifiedTransactionsQueueSize() = 0;
     virtual std::string eth_verifiedTransactionsQueueSize() = 0;
+
+	//CNS
+	virtual std::string eth_getCodeCNS(std::string const& strContractName, std::string const& _blockNumber) = 0;
+	virtual std::string eth_getBalanceCNS(std::string const& strContractName, std::string const& _blockNumber) = 0;
+	virtual std::string eth_getStorageAtCNS(std::string const& strContractName, std::string const& _position, std::string const& _blockNumber) = 0;
+	virtual std::string eth_getTransactionCountCNS(std::string const& strContractName, std::string const& _blockNumber) = 0;
 };
 
 }
