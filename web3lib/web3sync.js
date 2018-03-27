@@ -657,50 +657,50 @@ async function unlockAccount(account, password) {
 		})
 	});
 }
-async function rawDeploy(account,  privateKey,filename,types,params,debug) {
+async function rawDeploy(account,  privateKey,filename,types,params) {
     
     try{ 
       //用FISCO-BCOS的合约编译器fisco-solc进行编译
       execSync("fisco-solc --overwrite --abi  --bin -o " + config.Ouputpath + "  " + filename + ".sol");
-      if( debug )
         console.log(filename+'编译成功！');
     } catch(e){
-      if( debug )
         console.log(filename+'编译失败!' + e);
     }
 
         var abi=JSON.parse(fs.readFileSync(config.Ouputpath+ "./"+filename+'.abi', 'utf-8'));
         var binary=fs.readFileSync(config.Ouputpath+"./"+filename+".bin",'utf-8');
+        var cons_hex_params = "";
+        if( (typeof types != "undefined") && (typeof params != "undefined")) {
+          cons_hex_params = coder.codeParams(types,params);
+        }     
 
         var postdata = {
-                input: "0x"+binary+coder.codeParams(types,params),
+                input: "0x"+binary+cons_hex_params,
                 from: account,
                 to: null,
                 gas: 100000000,
                 randomid:Math.ceil(Math.random()*100000000),
                 blockLimit:await getBlockNumber() + 1000,
         }
+        
 
         var signTX = signTransaction(postdata, privateKey, null);
-
         return new Promise((resolve, reject) => {
                 web3.eth.sendRawTransaction(signTX, function(err, address) {
                         if (!err) {
-                                
+                                console.log("发送交易成功: " + address);
+
                                 checkForTransactionResult(address, (err, receipt) => {
                                 var addressjson={};
                                 if( receipt.contractAddress ){
-                                   
-
-                                    if( debug )
                                         console.log(filename+"合约地址 "+receipt.contractAddress);
                                     fs.writeFileSync(config.Ouputpath+filename+'.address', receipt.contractAddress, 'utf-8');       
 
                                 }//if
                                
-                                 var contract = web3.eth.contract(abi).at(receipt.contractAddress);
+                                // var contract = web3.eth.contract(abi).at(receipt.contractAddress);
 
-                                  resolve(contract);
+                                  resolve(receipt);
                                   return;
                                 });
 
@@ -715,7 +715,71 @@ async function rawDeploy(account,  privateKey,filename,types,params,debug) {
         });
 }
 
+//通过name服务调用call函数
+function callByNameService(contract, func, version, params) {
 
+  var namecallparams = {
+    "contract": contract,
+    "func": func,
+    "version": version,
+    "params": params
+  };
+
+  var strnamecallparams = JSON.stringify(namecallparams);
+  //console.log("===>> namecall params = " + strnamecallparams);
+
+  var postdata = {
+    data: namecallparams,
+    to: ""
+  };
+
+  var call_result = web3.eth.call(postdata);
+  return JSON.parse(call_result);
+}
+
+//通过abi name服务发送交易
+async function sendRawTransactionByNameService(account, privateKey, contract, func, version, params) {
+  
+  var namecallparams = {
+    "contract":contract,
+    "func":func,
+    "version":version,
+    "params":params
+  };
+
+  var strnamecallparams = JSON.stringify(namecallparams);
+  console.log("===>> namecall params = " + strnamecallparams);
+
+	var postdata = {
+		data: strnamecallparams,
+		from: account,
+	//to: to,
+		gas: 1000000,
+		randomid:Math.ceil(Math.random()*100000000),
+		blockLimit:await getBlockNumber() + 1000,
+	}
+
+	var signTX = signTransaction(postdata, privateKey, null);
+
+	return new Promise((resolve, reject) => {
+		web3.eth.sendRawTransaction(signTX, function(err, address) {
+			if (!err) {
+				console.log("发送交易成功: " + address);
+
+				checkForTransactionResult(address, (err, receipt) => {
+					resolve(receipt);
+				});
+
+				//resolve(address);
+			}
+			else {
+				console.log("发送交易失败！",err);
+
+				return;
+			}
+		});
+	});
+}
 
 async function sendRawTransaction(account, privateKey, to, func, params) {
 	var r = /^\w+\((.+)\)$/g.exec(func);
@@ -737,7 +801,7 @@ async function sendRawTransaction(account, privateKey, to, func, params) {
 	return new Promise((resolve, reject) => {
 		web3.eth.sendRawTransaction(signTX, function(err, address) {
 			if (!err) {
-				//console.log("发送交易成功: " + address);
+				console.log("发送交易成功: " + address);
 
 				checkForTransactionResult(address, (err, receipt) => {
 					resolve(receipt);
@@ -754,9 +818,11 @@ async function sendRawTransaction(account, privateKey, to, func, params) {
 	});
 }
 
-exports.getBlockNumber=getBlockNumber;
-exports.sendRawTransaction=sendRawTransaction;
-exports.unlockAccount=unlockAccount;
-exports.rawDeploy=rawDeploy;
+exports.getBlockNumber = getBlockNumber;
+exports.callByNameService = callByNameService;
+exports.sendRawTransactionByNameService = sendRawTransactionByNameService;
+exports.sendRawTransaction = sendRawTransaction;
+exports.unlockAccount = unlockAccount;
+exports.rawDeploy = rawDeploy;
 exports.signTransaction=signTransaction;
 //exports.deploy=deploy;

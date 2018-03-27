@@ -817,7 +817,10 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 	LOG(DEBUG) << "finish exec tx, blk=" << _req.height << ", time=" << utcTime();
 	// execed log
 	stringstream ss;
-	ss << "hash:" << _req.block_hash.abridged() << " realhash:" << outBlock.info().hash(WithoutSeal).abridged() 
+	// TODO FLAG2  hash means real hash!
+	// ss << "hash:" << _req.block_hash.abridged() << " realhash:" << outBlock.info().hash(WithoutSeal).abridged() 
+	// 	<< " height:" << _req.height << " txnum:" << outBlock.pending().size();
+	ss << "hash:" << outBlock.info().hash(WithoutSeal) << " unexected_hash:" << _req.block_hash.abridged()
 		<< " height:" << _req.height << " txnum:" << outBlock.pending().size();
 	PBFTFlowLog(m_highest_block.number() + m_view, ss.str());
 

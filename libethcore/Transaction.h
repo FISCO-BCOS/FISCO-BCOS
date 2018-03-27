@@ -190,18 +190,46 @@ protected:
 	SignatureStruct m_vrs;				///< The signature of the transaction. Encodes the sender.
 	int m_chainId = -4;					///< EIP155 value for calculating transaction hash https://github.com/ethereum/EIPs/issues/155
 
-	//是否是以name方式调用
-	bool m_isCalldByName{ false };
-	//是否已经获取地址跟data数据
-	mutable bool m_isGetAddrAndData{ false };
-	//name call方式的参数
-	NameCallParams m_params;
-	mutable std::pair<Address, bytes> m_nameCallAddrAndData;
+	//下面是CNS改造需要添加的一些参数
+	//交易的协议的类型
+	enum TransactionType
+	{
+		DefaultTransaction = 0,   //默认的调用
+		CNSOldTransaction = 1,    //cns方式的调用
+		CNSNewTransaction = 2     //cns二期改造后的调用
+	};
+	//交易的协议类型
+	int     m_transactionType { DefaultTransaction };
+	//是否已经获取了CNS调用方式的参数
+	mutable bool    m_isGetCNSParams { false };
+	mutable Address m_addressGetByCNS;
+	mutable bytes   m_dataGetByCNS;
+	mutable std::string m_strCNSName;
+	mutable std::string m_strCNSVer;
+	mutable u256 m_cnsType;
+	//CNS方式的参数
+	mutable CnsParams m_cnsParams;
+	
+	void doGetCNSparams() const;
 
 public:
-	bool bNameCall() const { return m_isCalldByName; }
-	NameCallParams   params() const { return m_params; }
-	std::pair<Address, bytes> addrAnddata() const;
+	//辅助函数,解析rlp
+	void transactionRLPDecode(bytesConstRef _rlp);
+	void transactionRLPDecode10Ele(const RLP &rlp);
+	void transactionRLPDecode13Ele(const RLP &rlp);
+
+	//区分不同的协议类型
+	bool isDefaultTransaction() const { return m_transactionType == DefaultTransaction; }
+	bool isCNSOldTransaction()  const { return m_transactionType == CNSOldTransaction; }
+	bool isCNSNewTransaction()  const { return m_transactionType == CNSNewTransaction; }
+
+	//区分不同的调用
+	bool isDefault()  const { return isDefaultTransaction() || (isCNSNewTransaction() && m_strCNSName.empty()); }
+	bool isOldCNS()   const { return isCNSOldTransaction(); }
+	bool isNewCNS()   const { return isCNSNewTransaction() && !m_strCNSName.empty(); }
+	bool isCNS()      const { return isOldCNS() || isNewCNS(); }
+
+	const CnsParams &cnsParams() const;
 
 protected:
 	u256 m_importtime = 0;				//入队时间 用来排序

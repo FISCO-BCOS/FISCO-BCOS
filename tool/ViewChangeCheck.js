@@ -6,12 +6,12 @@
  */
 
 var Web3= require('web3');
-var config=require('./config');
+var config=require('../web3lib/config');
 var fs=require('fs');
 var BigNumber = require('bignumber.js');
 
 
-var web3sync = require('./web3sync');
+var web3sync = require('../web3lib/web3sync');
 
 if (typeof web3 !== 'undefined') {
   web3 = new Web3(web3.currentProvider);

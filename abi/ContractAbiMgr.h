@@ -60,7 +60,10 @@ namespace libabi
 
 		//缓存的abi信息
 		mutable SharedMutex  m_abis_lock;//abi列表更新
+		//name到abi address的具体信息的映射
 		std::map <std::string, libabi::SolidityAbi > m_abis;
+		//地址到name的映射
+		std::map <std::string, std::string> m_addrToName;
 
 	public:
 		std::size_t getContractC();
@@ -68,6 +71,11 @@ namespace libabi
 		void getContractAbi(const std::string strContractName, const std::string &strVersion, SolidityAbi &abi);
 		void addContractAbi(const SolidityAbi &abi);
 		void addContractAbi(const std::string &strContractName, const std::string &strVersion, const std::string &strAbi, dev::Address addr, dev::u256 blocknumber, dev::u256 timestamp);
+
+		void getContractAbiByAddr(const std::string &strAddr, SolidityAbi &abi);
+		void getContractAbi0(const std::string strContractName, const std::string &strVersion, SolidityAbi &abi);
+		void getContractAbiFromAbiDBMgr(const std::string strContractName, const std::string &strVersion, SolidityAbi &abi);
+		void getContractAbiFromCache(const std::string strContractName, const std::string &strVersion, SolidityAbi &abi);
 
 		//根据name获取abi address信息
 		std::pair<Address, bytes> getAddrAndDataInfo(const std::string &strContractName, const std::string &strFunc,const std::string &strVer, const Json::Value &jParams);
