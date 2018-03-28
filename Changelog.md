@@ -14,4 +14,13 @@ eth_getStorageAtCNS         =>    eth_getStorageAt
 eth_getTransactionCountCNS   =>    eth_getTransactionCount
 
 * Fix:
-1. CNS调用合约支持合约重载的接口。
+1. CNS调用合约支持合约重载的接口。  
+
+### V2.0.0 (2018-03-28)  
+* Update
+1. 为查询block的RPC接口增加更多的返回字段。  
+2. FISCO BCOS用户手册更新, a. 在web3lib中需要增加cnpm install的操作  b. config.js文件放入weblib3目录中。  
+
+* Add:
+1. 添加打印监控日志的功能，适配于区块链浏览器的report agent。  
+2. scripts/install_deps.sh 依赖脚本添加Linux Oracle Server的支持。
