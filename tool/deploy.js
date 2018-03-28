@@ -21,7 +21,7 @@ if (typeof web3 !== 'undefined') {
 
 console.log('deploy.js  ........................Start........................');
 
-// 1 读取文件参数
+// 1 read file parameter
 var options = process.argv;
 if( options.length < 3 )
 {
@@ -34,14 +34,12 @@ if( options.length < 3 )
 var filename=options[2];
 console.log('Soc File :'+filename);
 
-console.log(filename);
-
 (async function() {
 
   var Contract= await web3sync.rawDeploy(config.account, config.privKey,  filename);
-  console.log(filename+"部署成功！");
+  console.log(filename+" deploy success!");
   try {
-	 //尝试添加cns服务,有可能失败
+	 //try to add cns service, catch exceptions
 	 cns_tool.cnsAdd(filename);   
   } catch(e){
   //console.log(filename+'cns add failed , e = '+e);
