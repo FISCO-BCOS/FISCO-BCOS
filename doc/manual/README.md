@@ -150,6 +150,8 @@ god账号是区块链的最高权限，在启动区块链前必须配置。
 #### 2.2.1 生成god账号
 
 ```shell
+cd /mydata/FISCO-BCOS/web3lib
+cnpm install #安装nodejs依赖, 在执行nodejs脚本之前, 该命令在该目录需要执行一次, 之后不需要再执行。
 cd /mydata/FISCO-BCOS/tool #代码根目录下的tool文件夹
 cnpm install #安装nodejs包，仅需运行一次，之后若需要再次在tool目录下使用nodejs，不需要重复运行此命令
 node accountManager.js > godInfo.txt
@@ -553,7 +555,10 @@ cd /mydata/FISCO-BCOS/tool
 > 安装依赖环境
 
 ```shell
-cnpm install
+cd /mydata/FISCO-BCOS/web3lib
+cnpm install #安装nodejs依赖, 在执行nodejs脚本之前, 如果已经执行过, 则忽略。
+cd /mydata/FISCO-BCOS/tool
+cnpm install #该命令在该目录执行一次即可, 如果之前已经执行过一次, 则忽略。
 ```
 
 > 设置区块链节点RPC端口
