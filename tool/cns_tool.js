@@ -1,8 +1,8 @@
 var Web3 = require('web3');
-var config = require('./config');
+var config = require('../web3lib/config');
 var fs = require('fs');
 var execSync = require('child_process').execSync;
-var web3sync = require('./web3sync');
+var web3sync = require('../web3lib/web3sync');
 var BigNumber = require('bignumber.js');
 var readline = require('readline');
 

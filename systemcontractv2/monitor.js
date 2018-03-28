@@ -6,11 +6,11 @@
  */
 
 var Web3= require('web3');
-var config=require('./config');
+var config=require('../web3lib/config');
 var fs=require('fs');
 var BigNumber = require('bignumber.js');
-var web3sync = require('./web3sync');
-var post=require('./post');
+var web3sync = require('../web3lib/web3sync');
+var post=require('../web3lib/post');
 
 if (typeof web3 !== 'undefined') {
   web3 = new Web3(web3.currentProvider);
@@ -18,6 +18,11 @@ if (typeof web3 !== 'undefined') {
   web3 = new Web3(new Web3.providers.HttpProvider(config.HttpProvider));
 }
 
+/*
+*   npm install --save-dev babel-cli babel-preset-es2017
+*   echo '{ "presets": ["es2017"] }' > .babelrc
+*   npm install secp256k1 keccak rlp
+*/
 
 
 async function getPeerCount() {
@@ -44,16 +49,18 @@ async function sleep(timeout) {
 while(1){
   console.log("已连接节点数："+ await getPeerCount() );
   var peers=await post.post("admin_peers",[]);
+ 
   try{
     peers=JSON.parse(peers);
-    for( var i=0;i<peers.result.length;i++){
-      console.log("...........Node "+i+".........");
-      console.log("NodeId:"+peers.result[i].id);
-      console.log("Host:"+peers.result[i].network.remoteAddress);
+    if( peers.result )
+    {
+       for( var i=0;i<peers.result.length;i++){
+        console.log("...........Node "+i+".........");
+        console.log("NodeId:"+peers.result[i].id);
+        console.log("Host:"+peers.result[i].network.remoteAddress);
+      }
     }
-    
-
-    console.log("");
+   
     console.log("当前块高"+await web3sync.getBlockNumber());
     console.log("--------------------------------------------------------------");
     await sleep(1500);
