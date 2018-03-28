@@ -30,7 +30,7 @@ chmod +x start_fisco_docker.sh
 	# tail -f /log-fisco-bcos/node0/* | grep ++++
 ```
 
-##验证节点正常运行
+## 验证节点正常运行
 
 ### 1. 验证进程
 
@@ -59,7 +59,7 @@ cat /log-fisco-bcos/node0/* | grep peers
 INFO|2017-11-29 07:26:48|Connected to 1 peers
 ```
 
-###3. 验证可共识
+### 3. 验证可共识
 
 > 执行命令
 
