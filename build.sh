@@ -35,7 +35,11 @@ chmod +x scripts/install_deps.sh
 ./scripts/install_deps.sh
 
 #install fisco-solc
+if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
+sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc
+else
 sudo cp fisco-solc  /usr/bin/fisco-solc
+fi
 sudo chmod +x /usr/bin/fisco-solc
 
 #install console
