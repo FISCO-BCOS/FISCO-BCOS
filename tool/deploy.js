@@ -6,10 +6,10 @@
  */
 
 var Web3= require('web3');
-var config=require('./config');
+var config=require('../web3lib/config');
 var fs=require('fs');
 var execSync =require('child_process').execSync;
-var web3sync = require('./web3sync');
+var web3sync = require('../web3lib/web3sync');
 var cns_tool = require("./cns_tool.js");
 
 if (typeof web3 !== 'undefined') {
@@ -26,26 +26,13 @@ var options = process.argv;
 if( options.length < 3 )
 {
 	console.log('Usage: node deplay.js xxx.soc ');
+	process.exit(0)
 
 }
 
 
 var filename=options[2];
 console.log('Soc File :'+filename);
-
-
-try{ 
-  //Use fisco-solc to compile
-  execSync("fisco-solc --abi  --bin   --overwrite -o "+config.Ouputpath+"  "+filename+".sol");
-  
-  console.log(filename+' compile success!');
-}catch(e){
-  
-  console.log(filename+' compile failed!'+e);
-}
-
-var abi=JSON.parse(fs.readFileSync(config.Ouputpath/*+filename+".sol:"*/+filename+'.abi', 'utf-8'));
-var binary=fs.readFileSync(config.Ouputpath+filename+'.bin', 'utf-8');
 
 (async function() {
 

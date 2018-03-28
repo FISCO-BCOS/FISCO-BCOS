@@ -1,7 +1,7 @@
 
 
 
-var proxy="http://127.0.0.1:9546";
+var proxy="http://127.0.0.1:8545";
 
 
 //console.log('RPC='+proxy);

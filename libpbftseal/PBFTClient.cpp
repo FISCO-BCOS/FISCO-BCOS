@@ -419,7 +419,11 @@ void PBFTClient::rejigSealing() {
 				DEV_WRITE_GUARDED(x_postSeal)
 				m_postSeal = m_working;
 				// execed log
-				PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), "hash:" + m_sealingInfo.hash(WithoutSeal).abridged());
+				// TODO FLAG3 m_sealingInfo.hash(WithoutSeal).abridged() => m_sealingInfo.hash(WithoutSeal)
+				// PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), "hash:" + m_sealingInfo.hash(WithoutSeal).abridged());
+				stringstream ss;
+				ss << "hash:" << m_sealingInfo.hash(WithoutSeal) << " height:" << m_sealingInfo.number();
+				PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), ss.str());
 
 				LOG(INFO) << "************************** Generating sign on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number() << "tx:" << tx_num << "time:" << utcTime();
 
