@@ -425,18 +425,14 @@ string Eth::eth_sendTransaction(Json::Value const& _json)
 		TransactionSkeleton t = toTransactionSkeleton(_json);
 		setTransactionDefaults(t);
 
-		//判断是否是name方式进行的调用
-		NameCallParams params;
-		if (_json.isMember("data") && _json["data"].isObject())
-		{	//name方式调用
-			t.creation = false;
-			fromJsonGetParams(_json["data"], params);
-			auto r = libabi::ContractAbiMgr::getInstance()->getAddrAndDataFromCache(params.strContractName, params.strFunc, params.strVersion, params.jParams);
-			t.to   = r.first;
-			t.data = r.second;
-
-			LOG(DEBUG) << "call contract address is => " << ("0x" + t.to.hex())
-			           << " ,json=" << _json.toStyledString();
+		CnsParams params;
+		if (isOldCNSCall(t, params, _json))
+		{//一期CNS服务
+			eth_sendTransactionOldCNSSetParams(t);
+		}
+		else if (isNewCNSCall(t))
+		{//二期CNS改造
+			eth_sendTransactionNewCNSSetParams(t);
 		}
 
 		if ( t.blockLimit == Invalid256 ) //默认帮忙设置个
@@ -624,7 +620,7 @@ Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _bloc
 
 	try
 	{
-		NameCallParams params;
+		CnsParams params;
 		//参数解析
 		fromJsonGetParams(_json, params);
 
@@ -699,79 +695,27 @@ string Eth::eth_call(Json::Value const& _json, string const& _blockNumber)
 {
 	try
 	{
+		LOG(DEBUG) << "eth_call # _json = " << _json.toStyledString();
+
 		TransactionSkeleton t = toTransactionSkeleton(_json);
 		setTransactionDefaults(t);
 
-		//noto by octopuswang 2017-09-11
-		bool isANSCall = false;
-		NameCallParams params;
-		//web3j的兼容
-		if (_json.isMember("data") && _json["data"].isString())
-		{
-			string string_data = _json["data"].asString();
-			if (string_data.compare(0,2,"0x") == 0 || string_data.compare(0, 2, "0X") == 0)
-			{
-				string_data.erase(0, 2);
-			}
-
-			string json;
-			boost::algorithm::unhex(string_data.begin(), string_data.end(), std::back_inserter(json));
-			if (fromJsonGetParams(json, params))
-			{
-				isANSCall = true;
-				LOG(DEBUG) << "web3j call contract data => " << string_data;
-				LOG(DEBUG) << "web3j call contract is => " << json;
-			}
+		std::string result;
+		CnsParams params;
+		if (isOldCNSCall(t, params, _json))
+		{//一期CNS服务
+			result = eth_callOldCNS(t, params, _blockNumber);
 		}
-		else if (_json.isMember("data") && _json["data"].isObject())
-		{
-			isANSCall = true;
-			fromJsonGetParams(_json["data"], params);
-		}
-
-		if (isANSCall)
-		{
-			libabi::SolidityAbi abiinfo;
-			//2. 获取abi信息
-			libabi::ContractAbiMgr::getInstance()->getContractAbi(params.strContractName, params.strVersion, abiinfo);
-
-			//encode abi
-			const auto &f = abiinfo.getFunction(params.strFunc);
-			//在非constant函数上面进行call调用
-			if (!f.bConstant())
-			{
-				ABI_EXCEPTION_THROW("call on not constant function ,contract|func|version=" + params.strContractName + "|" + params.strFunc + "|" + params.strVersion, libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidAbiTransactionOnConstantFunc);
-			}
-
-			//3. abi序列化
-			std::string strData = libabi::SolidityCoder::getInstance()->encode(abiinfo.getFunction(params.strFunc), params.jParams);
-			//4. 调用合约地址 执行代码赋值。
-			t.to   = dev::jsToAddress(abiinfo.getAddr());
-			t.data = dev::jsToBytes(strData);
-
-			LOG(DEBUG) << "call contract address is => " << abiinfo.getAddr()
-			           << " ,blockNumber= " << _blockNumber
-			           << " ,json=" << _json.toStyledString()
-			           ;
-			//5. call调用
-			ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
-			//6. 执行结果abi反序列化
-			auto jReturn = libabi::SolidityCoder::getInstance()->decode(f, toJS(er.output));
-
-			Json::FastWriter writer;
-			std::string out = writer.write(jReturn);
-
-			LOG(DEBUG) << "abi eth call is => "
-				<< " ,out=" << out
-				;
-
-			return out;
+		else if (isNewCNSCall(t))
+		{//二期CNS改造
+			result = eth_callNewCNS(t, _blockNumber);
 		}
 		else
-		{
-			ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
-			return toJS(er.output);
+		{//默认调用
+			result = eth_callDefault(t, _blockNumber);
 		}
+
+		return result;
 	}
 	catch ( NoCallPermission const &in)
 	{
@@ -1209,4 +1153,242 @@ string Eth::eth_verifiedTransactionsQueueSize()
 		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
 	}
 	return "";
+}
+
+std::string Eth::eth_getCodeCNS(std::string const& strContractName, std::string const& _blockNumber)
+{
+	try
+	{
+		LOG(TRACE) << "getCodeCNS begin , contract name = " << strContractName;
+
+		auto rVectorString = libabi::SolidityTools::splitString(strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
+		std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
+		std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
+
+		LOG(TRACE) << "getCodeCNS ## contract = " << contract << " ,version = " << version;
+
+		// 获取abi信息
+		libabi::SolidityAbi abiinfo;
+		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
+		LOG(DEBUG) << "getCodeCNS ## contract address is => " << abiinfo.getAddr();
+
+		return toJS(client()->codeAt(jsToAddress(abiinfo.getAddr()), jsToBlockNumber(_blockNumber)));
+	}
+	catch (...)
+	{
+		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+	}
+}
+
+std::string Eth::eth_getBalanceCNS(std::string const& strContractName, std::string const& _blockNumber)
+{
+	try
+	{
+		LOG(TRACE) << "getBalanceCNS begin , contract name = " << strContractName;
+
+		auto rVectorString = libabi::SolidityTools::splitString(strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
+		std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
+		std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
+
+		LOG(TRACE) << "getBalanceCNS ## contract = " << contract << " ,version = " << version;
+
+		// 获取abi信息
+		libabi::SolidityAbi abiinfo;
+		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
+
+		LOG(DEBUG) << "getBalanceCNS ## contract address is => " << abiinfo.getAddr();
+
+		return toJS(client()->balanceAt(jsToAddress(abiinfo.getAddr()), jsToBlockNumber(_blockNumber)));
+	}
+	catch (...)
+	{
+		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+	}
+}
+
+std::string Eth::eth_getStorageAtCNS(std::string const& strContractName, std::string const& _position, std::string const& _blockNumber)
+{
+	try
+	{
+		LOG(TRACE) << "getStorageAtCNS begin , contract name = " << strContractName;
+
+		auto rVectorString = libabi::SolidityTools::splitString(strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
+		std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
+		std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
+
+		LOG(TRACE) << "getStorageAtCNS ## contract = " << contract << " ,version = " << version;
+
+		// 获取abi信息
+		libabi::SolidityAbi abiinfo;
+		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
+		LOG(DEBUG) << "getStorageAtCNS ## contract address is => " << abiinfo.getAddr();
+
+		return toJS(toCompactBigEndian(client()->stateAt(jsToAddress(abiinfo.getAddr()), jsToU256(_position), jsToBlockNumber(_blockNumber)), 32));
+	}
+	catch (...)
+	{
+		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+	}
+}
+
+std::string Eth::eth_getTransactionCountCNS(std::string const& strContractName, std::string const& _blockNumber)
+{
+	try
+	{
+		LOG(TRACE) << "getTransactionCountCNS begin, contract name = " << strContractName;
+
+		auto rVectorString = libabi::SolidityTools::splitString(strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
+		std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
+		std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
+
+		LOG(TRACE) << "getTransactionCountCNS ## contract = " << contract << " ,version = " << version;
+
+		// 获取abi信息
+		libabi::SolidityAbi abiinfo;
+		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
+		LOG(DEBUG) << "getTransactionCountCNS ## contract address = " << abiinfo.getAddr();
+
+		return toJS(client()->countAt(jsToAddress(abiinfo.getAddr()), jsToBlockNumber(_blockNumber)));
+	}
+	catch (...)
+	{
+		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+	}
+}
+
+bool Eth::isDefaultCall(const TransactionSkeleton &t, CnsParams &params, const Json::Value &_json)
+{
+	return !isOldCNSCall(t,params,_json) && !isNewCNSCall(t);
+}
+
+bool Eth::isOldCNSCall(const TransactionSkeleton &t, CnsParams &params, const Json::Value &_json)
+{
+	//CNS服务传送的data字段是json object
+	if (!t.jData.empty())
+	{
+		fromJsonGetParams(t.jData, params); //解析参数
+		return true;
+	}
+ 
+	//为web3j做的兼容
+	string strData = _json["data"].asString();
+	if (strData.compare(0, 2, "0x") == 0 || strData.compare(0, 2, "0X") == 0)
+	{
+		strData.erase(0, 2);
+	}
+
+	string json;
+	boost::algorithm::unhex(strData.begin(), strData.end(), std::back_inserter(json));
+
+	return fromJsonGetParams(json, params);
+}
+
+bool Eth::isNewCNSCall(const TransactionSkeleton &t)
+{
+	return !t.strContractName.empty();
+}
+
+void Eth::eth_sendTransactionOldCNSSetParams(TransactionSkeleton &t)
+{
+	CnsParams params;
+	fromJsonGetParams(t.jData, params);
+	auto r = libabi::ContractAbiMgr::getInstance()->getAddrAndDataFromCache(params.strContractName, params.strFunc, params.strVersion, params.jParams);
+	t.to   = r.first;
+	t.data = r.second;
+	t.creation = false;
+
+	LOG(DEBUG) << "sendTransactionOldCNS # address = " << ("0x" + t.to.hex())
+		<< " ,contract = " << params.strContractName
+		<< " ,func = " << params.strFunc
+		<< " ,version = " << params.strVersion
+		;
+}
+
+void Eth::eth_sendTransactionNewCNSSetParams(TransactionSkeleton &t)
+{
+	//1. 获取合约名跟版本号
+	auto rVectorString = libabi::SolidityTools::splitString(t.strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
+	std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
+	std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
+
+	LOG(DEBUG) << "sendTransactionNewCNS ## contract = " << contract << " ,version = " << version;
+
+	//2. 获取abi信息
+	libabi::SolidityAbi abiinfo;
+	libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
+	LOG(DEBUG) << "sendTransactionNewCNS ## contract_name = " << t.strContractName << " ,contract_address = " << abiinfo.getAddr();
+
+	//3. 获取调用合约的地址
+	t.to = dev::jsToAddress(abiinfo.getAddr());
+	t.creation = false;
+}
+
+std::string Eth::eth_callDefault(TransactionSkeleton &t, std::string const& _blockNumber)
+{
+	LOG(DEBUG) << "eth_callDefault # " ;
+	ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
+	return toJS(er.output);
+}
+
+std::string Eth::eth_callOldCNS(TransactionSkeleton &t, const CnsParams &params, std::string const& _blockNumber)
+{
+	LOG(DEBUG) << "eth_callOldCNS # contract|version|func|params => " 
+		<< params.strContractName << "|"
+		<< params.strVersion << "|"
+		<< params.strFunc << "|"
+		<< params.jParams.toStyledString();
+
+	libabi::SolidityAbi abiinfo;
+	//2. 获取abi信息
+	libabi::ContractAbiMgr::getInstance()->getContractAbi(params.strContractName, params.strVersion, abiinfo);
+
+	//encode abi
+	const auto &f = abiinfo.getFunction(params.strFunc);
+	//在非constant函数上面进行call调用
+	if (!f.bConstant())
+	{
+		ABI_EXCEPTION_THROW("call on not constant function ,contract|func|version=" + params.strContractName + "|" + params.strFunc + "|" + params.strVersion, libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidAbiTransactionOnConstantFunc);
+	}
+
+	//3. abi序列化
+	std::string strData = libabi::SolidityCoder::getInstance()->encode(abiinfo.getFunction(params.strFunc), params.jParams);
+	//4. 调用合约地址 执行代码赋值。
+	t.to = dev::jsToAddress(abiinfo.getAddr());
+	t.data = dev::jsToBytes(strData);
+
+	LOG(DEBUG) << "eth_callOldCNS # address => " << abiinfo.getAddr();
+	//5. call调用
+	ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
+	//6. 执行结果abi反序列化
+	auto jReturn = libabi::SolidityCoder::getInstance()->decode(f, toJS(er.output));
+
+	Json::FastWriter writer;
+	std::string out = writer.write(jReturn);
+
+	LOG(DEBUG) << "eth_callOldCNS # result = " << out;
+
+	return out;
+}
+
+std::string Eth::eth_callNewCNS(TransactionSkeleton &t, std::string const& _blockNumber)
+{
+	//1. 获取合约名跟版本号
+	auto rVectorString = libabi::SolidityTools::splitString(t.strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
+	std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
+	std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
+
+	LOG(TRACE) << "eth_callNewCNS ## contract = " << contract << " ,version = " << version;
+
+	//2. 获取abi信息
+	libabi::SolidityAbi abiinfo;
+	libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
+	LOG(DEBUG) << "eth_callNewCNS ## contract_address = " << abiinfo.getAddr();
+
+	//3. 获取调用合约的地址
+	t.to = dev::jsToAddress(abiinfo.getAddr());
+
+	//4. call调用
+	ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
+
+	return toJS(er.output);
 }

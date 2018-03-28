@@ -6,7 +6,7 @@
  */
 
 var crypto = require('crypto')
-var utils = require('./utils.js')
+var utils = require('../web3lib/utils.js')
 
 function newAccount(pwd)
 {
