@@ -23,4 +23,8 @@ eth_getTransactionCountCNS   =>    eth_getTransactionCount
 
 * Add:
 1. 添加打印监控日志的功能，适配于区块链浏览器的report agent。  
-2. scripts/install_deps.sh 依赖脚本添加Linux Oracle Server的支持。
+2. scripts/install_deps.sh 依赖脚本添加Linux Oracle Server的支持。  
+
+### 2018-03-29  
+* Fix
+1. 修正一键安装脚本编译完成之后, 启动nodejs模块缺失的问题
