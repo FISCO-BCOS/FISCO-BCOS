@@ -55,6 +55,10 @@ make
 sudo make install
 
 cd ..
+cd ./web3lib
+cnpm install
+
+cd ..
 cd ./tool
 cnpm install
 
