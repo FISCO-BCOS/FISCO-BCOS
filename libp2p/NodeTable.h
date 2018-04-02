@@ -64,8 +64,6 @@ protected:
 	{
 		std::list<std::pair<NodeID, NodeTableEventType>> events;
 		{
-			LOG(INFO) <<"m_nodeEventHandler.size() "<<m_nodeEventHandler.size()<<",m_events="<<m_events;
-
 			Guard l(x_events);
 			if (!m_nodeEventHandler.size())
 				return;
@@ -75,10 +73,8 @@ protected:
 			m_nodeEventHandler.clear();
 			m_events.clear();
 		}
-		LOG(INFO) <<"events.size= "<<events.size();
 		for (auto const& e: events)
 		{
-			LOG(INFO) <<" processEvents "<<e.first<<","<<e.second;
 			processEvent(e.first, e.second);
 		}
 			
@@ -86,7 +82,6 @@ protected:
 
 	/// Called by NodeTable to append event.
 	virtual void appendEvent(NodeID _n, NodeTableEventType _e) { 
-		LOG(INFO) <<" appendEvent "<<_n<<",event="<<_e;
 		Guard l(x_events); m_nodeEventHandler.push_back(_n); m_events[_n] = _e; }
 
 	Mutex x_events;
