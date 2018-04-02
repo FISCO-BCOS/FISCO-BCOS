@@ -34,7 +34,7 @@ include(EthPolicy)
 eth_policy()
 
 # project name and version should be set after cmake_policy CMP0048
-project(FISCO-BCOS VERSION "V.1.0.0")
+project(FISCO-BCOS VERSION "V.1.1.0")
 
 if (NOT EXISTS ${CMAKE_SOURCE_DIR}/evmjit/)
     message(FATAL_ERROR "Git submodules not initialized, execute:\n  git submodule update --init")
