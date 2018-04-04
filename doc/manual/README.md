@@ -61,12 +61,19 @@ echo '{ "presets": ["es2017"] }' > ~/.babelrc
 
 #### 1.2.2 安装FISCO BCOS的智能合约编译器
 
-> 编译器名为fisco-solc。直接下载后放入系统目录下。
+> 下载对应平台的solidity编译器, 直接下载后放入系统目录下。
 
 ```shell
-wget https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/fisco-solc
-sudo cp fisco-solc  /usr/bin/fisco-solc
-sudo chmod +x /usr/bin/fisco-solc
+[ubuntu]：
+    wget https://github.com/FISCO-BCOS/fisco-solc/raw/master/fisco-solc-ubuntu
+    sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc
+    sudo chmod +x /usr/bin/fisco-solc
+    
+    
+[centos]：
+    wget https://github.com/FISCO-BCOS/fisco-solc/raw/master/fisco-solc-centos
+    sudo cp fisco-solc-centos  /usr/bin/fisco-solc
+    sudo chmod +x /usr/bin/fisco-solc
 ```
 
 ### 1.3 编译源码
@@ -546,17 +553,16 @@ INFO|2017-12-12 17:52:19:907|+++++++++++++++++++++++++++ Generating seal on3530f
 
 ### 3.1 配置
 
-> 切换到部署合约的目录下
-
-```shell
-cd /mydata/FISCO-BCOS/tool
-```
-
 > 安装依赖环境
 
 ```shell
 cd /mydata/FISCO-BCOS/web3lib
-cnpm install #安装nodejs依赖, 在执行nodejs脚本之前, 如果已经执行过, 则忽略。
+cnpm install #安装nodejs依赖, 在执行nodejs脚本之前该目录下面需要执行一次, 如果已经执行过, 则忽略。
+```
+
+> 切换到部署合约的目录下
+
+```shell
 cd /mydata/FISCO-BCOS/tool
 cnpm install #该命令在该目录执行一次即可, 如果之前已经执行过一次, 则忽略。
 ```
@@ -564,7 +570,7 @@ cnpm install #该命令在该目录执行一次即可, 如果之前已经执行�
 > 设置区块链节点RPC端口
 
 ```shell
-vim config.js
+vim ../web3lib/config.js
 ```
 
 > 仅需将proxy指向区块链节点的RPC端口即可。RPC端口在节点的config.json中查看（参考：<u>2.5.2 配置config.json（节点配置文件）</u>）。
@@ -678,7 +684,7 @@ cnpm install
 > 设置区块链节点RPC端口
 
 ```shell
-vim config.js
+vim ../web3lib/config.js
 ```
 
 > 仅需将proxy指向区块链节点的RPC端口即可。RPC端口在节点的config.json中查看（参考：<u>2.5.2 配置config.json（节点配置文件）</u>）。
@@ -1684,7 +1690,7 @@ monitor.js脚本监控节点的连接情况和块高。在运行前，请确认�
 
 ```shell
 cd /mydata/FISCO-BCOS/tool/
-vim config.js
+vim ../web3lib/config.js
 babel-node monitor.js
 ```
 
