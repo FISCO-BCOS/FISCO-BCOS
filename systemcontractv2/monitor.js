@@ -66,7 +66,6 @@ while(1){
     await sleep(1500);
 
   }catch(e){
-    console.log("admin_peers 返回解析失败！"+peers);
   }
   
   
