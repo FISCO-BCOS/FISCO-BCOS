@@ -54,7 +54,8 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 * [链上信使协议AMOP](https://github.com/FISCO-BCOS/Wiki/tree/master/AMOP%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)
 * [易用性提升](https://github.com/FISCO-BCOS/Wiki/tree/master/%E6%B5%85%E8%B0%88FISCO-BCOS%E7%9A%84%E6%98%93%E7%94%A8%E6%80%A7)
 * [FISCO BCOS权限模型](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E6%9D%83%E9%99%90%E6%A8%A1%E5%9E%8B)
-* [系统参数说明文档](https://github.com/FISCO-BCOS/Wiki/tree/master/%E7%B3%BB%E7%BB%9F%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E%E6%96%87%E6%A1%A3)
+* [系统参数说明文档](https://github.com/FISCO-BCOS/Wiki/tree/master/%E7%B3%BB%E7%BB%9F%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E%E6%96%87%E6%A1%A3)  
+* [FISCO BCOS上帝模式说明](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E4%B8%8A%E5%B8%9D%E6%A8%A1%E5%BC%8F%E8%AF%B4%E6%98%8E/FISCO-BCOS%E4%B8%8A%E5%B8%9D%E6%A8%A1%E5%BC%8F%E8%AF%B4%E6%98%8E.md)  
 
 # 4.应用案例
 * [FISCO BCOS应用实践](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5.pdf) 
