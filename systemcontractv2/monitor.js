@@ -47,10 +47,17 @@ async function sleep(timeout) {
 
 
 while(1){
+  console.log("--------------------------------------------------------------");
+  console.log("当前块高"+await web3sync.getBlockNumber());
   console.log("已连接节点数："+ await getPeerCount() );
-  var peers=await post.post("admin_peers",[]);
  
   try{
+    var peers=await post.post("admin_peers",[]);
+    if( peers == '' )
+    {
+	await sleep(2000);
+	continue;
+    }
     peers=JSON.parse(peers);
     if( peers.result )
     {
@@ -61,9 +68,7 @@ while(1){
       }
     }
    
-    console.log("当前块高"+await web3sync.getBlockNumber());
-    console.log("--------------------------------------------------------------");
-    await sleep(1500);
+    await sleep(2000);
 
   }catch(e){
   }
