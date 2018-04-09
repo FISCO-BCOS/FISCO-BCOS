@@ -312,7 +312,7 @@ void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 	if (_id <= ViewChangeReqPacket) {
 		NodeID nodeid;
 		auto session = _peer->session();
-		if ( session && (nodeid = session->id())  )
+		if (session && (nodeid = session->id()))
 		{
 			u256 idx = u256(0);
 			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
@@ -610,14 +610,14 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 		{
 			NodeID nodeid;
 			auto session = _p->session();
-			if ( session && ( nodeid = session->id() ) )
+			if (session && (nodeid = session->id()))
 			{
 				unsigned account_type = 0;
-				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type) ) {
+				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
 					LOG(ERROR) << "Cannot get account type for peer" << nodeid;
 					return true;
 				}
-				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode ) {
+				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
 					return true;
 				}
 				if (_filter.count(nodeid)) {  // 转发广播

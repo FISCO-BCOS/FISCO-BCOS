@@ -157,10 +157,10 @@ void Raft::onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 	if (_id <= RaftHeartBeatRespPacket) {
 		NodeID nodeid;
 		auto session = _peer->session();
-		if(  session && ( nodeid = session->id() ) )
+		if (session && (nodeid = session->id()))
 		{
 			u256 idx = u256(0);
-			if ( !NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx) ) {
+			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
 				LOG(ERROR) << "Recv an raft msg from unknown peer id=" << _id;
 				return;
 			}
@@ -508,7 +508,7 @@ void Raft::brocastMsg(unsigned _id, bytes const & _data) {
 		{
 			NodeID nodeid;
 			auto session = _p->session();
-			if ( session && ( nodeid = session->id() ) )
+			if (session && (nodeid = session->id()))
 			{
 				unsigned account_type = 0;
 				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type) || account_type != EN_ACCOUNT_TYPE_MINER ) {
@@ -541,7 +541,7 @@ bool Raft::sendResponse(u256 const & _to, h512 const & _node, unsigned _id, Raft
 		{
 			NodeID nodeid;
 			auto session = _p->session();
-			if ( session && ( nodeid = session->id() ) )
+			if (session && (nodeid = session->id()))
 			{
 				if ( nodeid != _node) {
 					return true;
