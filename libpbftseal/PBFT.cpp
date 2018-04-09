@@ -310,14 +310,19 @@ void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
 
 void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
 	if (_id <= ViewChangeReqPacket) {
-		//LOG(INFO) << "onPBFTMsg: id=" << _id;
-		u256 idx = u256(0);
-		if (!NodeConnManagerSingleton::GetInstance().getIdx(_peer->session()->id(), idx)) {
-			LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << _id;
-			return;
+		NodeID nodeid;
+		auto session = _peer->session();
+		if ( session && (nodeid = session->id())  )
+		{
+			u256 idx = u256(0);
+			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
+				LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << _id;
+				return;
+			}
+			//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
+			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data()));
 		}
-		//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
-		m_msg_queue.push(PBFTMsgPacket(idx, _peer->session()->id(), _id, _r[0].data()));
+
 	} else {
 		LOG(ERROR) << "Recv an illegal msg, id=" << _id;
 	}
@@ -603,27 +608,31 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<PBFTPeer> _p)
 		{
-			unsigned account_type = 0;
-			if (!NodeConnManagerSingleton::GetInstance().getAccountType(_p->session()->id(), account_type)) {
-				LOG(ERROR) << "Cannot get account type for peer" << _p->session()->id();
-				return true;
-			}
-			if (_id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
-				return true;
-			}
+			NodeID nodeid;
+			auto session = _p->session();
+			if ( session && ( nodeid = session->id() ) )
+			{
+				unsigned account_type = 0;
+				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type) ) {
+					LOG(ERROR) << "Cannot get account type for peer" << nodeid;
+					return true;
+				}
+				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode ) {
+					return true;
+				}
+				if (_filter.count(nodeid)) {  // 转发广播
+					this->broadcastMark(_key, _id, _p);
+					return true;
+				}
+				if (this->broadcastFilter(_key, _id, _p)) {
+					return true;
+				}
 
-			if (_filter.count(_p->session()->id())) {  // 转发广播
+				RLPStream ts;
+				_p->prep(ts, _id, 1).append(_data);
+				_p->sealAndSend(ts);
 				this->broadcastMark(_key, _id, _p);
-				return true;
 			}
-			if (this->broadcastFilter(_key, _id, _p)) {
-				return true;
-			}
-
-			RLPStream ts;
-			_p->prep(ts, _id, 1).append(_data);
-			_p->sealAndSend(ts);
-			this->broadcastMark(_key, _id, _p);
 			return true;
 		});
 		return true;

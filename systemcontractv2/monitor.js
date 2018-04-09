@@ -1,16 +1,10 @@
-/**
- * @file: monitor.js
- * @author: fisco-dev
- * 
- * @date: 2017
- */
 
 var Web3= require('web3');
-var config=require('../web3lib/config');
+var config=require('./config');
 var fs=require('fs');
 var BigNumber = require('bignumber.js');
-var web3sync = require('../web3lib/web3sync');
-var post=require('../web3lib/post');
+var web3sync = require('./web3sync');
+var post=require('./post');
 
 if (typeof web3 !== 'undefined') {
   web3 = new Web3(web3.currentProvider);
@@ -47,31 +41,32 @@ async function sleep(timeout) {
 
 
 while(1){
-  console.log("--------------------------------------------------------------");
-  console.log("当前块高"+await web3sync.getBlockNumber());
-  console.log("已连接节点数："+ await getPeerCount() );
- 
-  try{
-    var peers=await post.post("admin_peers",[]);
-    if( peers == '' )
-    {
-	await sleep(2000);
-	continue;
-    }
-    peers=JSON.parse(peers);
-    if( peers.result )
-    {
-       for( var i=0;i<peers.result.length;i++){
-        console.log("...........Node "+i+".........");
-        console.log("NodeId:"+peers.result[i].id);
-        console.log("Host:"+peers.result[i].network.remoteAddress);
-      }
-    }
-   
-    await sleep(2000);
+    console.log("--------------------------------------------------------------");
+    console.log("当前块高"+await web3sync.getBlockNumber());
+    console.log("已连接节点数："+ await getPeerCount() );
 
-  }catch(e){
-  }
+    
+    
+    try{
+      var peers=await post.post("admin_peers",[]);
+      if( peers == '' )
+      {
+        await sleep(2000);
+        continue;
+      }
+      peers=JSON.parse(peers);
+      if( peers.result )
+      {
+        for( var i=0;i<peers.result.length;i++){
+          console.log("...........Node "+i+".........");
+          console.log("NodeId:"+peers.result[i].id);
+          console.log("Host:"+peers.result[i].network.remoteAddress);
+        }
+      }
+      await sleep(2000);
+    }catch(e){
+      console.log("admin_peers 返回解析失败！"+peers);
+    }
   
   
 }
