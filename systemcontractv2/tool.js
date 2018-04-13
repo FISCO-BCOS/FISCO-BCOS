@@ -116,20 +116,6 @@ switch (filename){
         var key=SystemProxy.getRouteNameByIndex(i).toString();
         var route=SystemProxy.getRoute(key);
         console.log(i+" )"+ key+"=>"+route[0].toString()+","+route[1].toString()+","+route[2].toString());
-
-        if( "TransactionFilterChain" == key ){
-            var contract = web3.eth.contract(getAbi("TransactionFilterChain"));
-			      var instance = contract.at(route[0]);
-            var filterlength=instance.getFiltersLength();
-            for( var j=0;j<filterlength;j++){
-                var filter=instance.getFilter(j);
-                contract = web3.eth.contract(getAbi("TransactionFilterBase"));
-                instance = contract.at(filter);
-                var name= instance.name();
-                var version=instance.version();
-                console.log("       "+name+"=>"+version+","+filter);
-            }
-        }
     }
      
      
