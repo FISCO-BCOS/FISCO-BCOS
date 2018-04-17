@@ -1689,7 +1689,7 @@ monitor.js脚本监控节点的连接情况和块高。在运行前，请确认�
 > 配置config，并执行monitor.js
 
 ```shell
-cd /mydata/FISCO-BCOS/tool/
+cd /mydata/FISCO-BCOS/systemcontractv2/
 vim ../web3lib/config.js
 babel-node monitor.js
 ```
