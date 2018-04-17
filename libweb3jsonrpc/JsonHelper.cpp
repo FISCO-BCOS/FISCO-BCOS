@@ -114,8 +114,17 @@ Json::Value toJson(dev::eth::BlockHeader const& _bi, SealEngineFace* _sealer)
 		res["timestamp"] = toJS(_bi.timestamp());
 		res["difficulty"] = toJS(_bi.difficulty());
 		res["genIndex"] = toJS(_bi.genIndex());
+		
+		auto &nodeList = _bi.nodeList();
+		res["miner"] = Json::Value();
+		if(nodeList.size() > 0)
+			res["miner"] = nodeList[_bi.genIndex().convert_to<int>()].hex();
+
+		res["nodeList"] = Json::Value(Json::arrayValue);
+		for(unsigned int i = 0; i < nodeList.size(); i++)
+			res["nodeList"].append(nodeList[i].hex());
 		// TODO: remove once JSONRPC spec is updated to use "author" over "miner".
-		res["miner"] = toJS(_bi.author());
+		//res["miner"] = toJS(_bi.author());
 		if (_sealer)
 			for (auto const& i: _sealer->jsInfo(_bi))
 				res[i.first] = i.second;
