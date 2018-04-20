@@ -155,13 +155,22 @@ void Raft::reportBlock(BlockHeader const & _b) {
 
 void Raft::onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
 	if (_id <= RaftHeartBeatRespPacket) {
-		u256 idx = u256(0);
-		if (! NodeConnManagerSingleton::GetInstance().getIdx(_peer->session()->id(), idx)) {
-			LOG(ERROR) << "Recv an raft msg from unknown peer id=" << _id;
-			return;
+		NodeID nodeid;
+		auto session = _peer->session();
+		if (session && (nodeid = session->id()))
+		{
+			u256 idx = u256(0);
+			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
+					LOG(ERROR) << "Recv an raft msg from unknown peer id=" << _id;
+					return;
+			}
+			LOG(INFO) << "onRaftMsg: id=" << _id << ",from=" << idx;
+			m_msg_queue.push(RaftMsgPacket(idx, nodeid, _id, _r[0].data()));
 		}
-		LOG(INFO) << "onRaftMsg: id=" << _id << ",from=" << idx;
-		m_msg_queue.push(RaftMsgPacket(idx, _peer->session()->id(), _id, _r[0].data()));
+		else
+		{
+				LOG(ERROR) << "onRaftMsg: session id error!";
+		}
 	} else {
 		LOG(ERROR) << "Recv an illegal msg, id=" << _id;
 	}
@@ -496,15 +505,24 @@ void Raft::brocastMsg(unsigned _id, bytes const & _data) {
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<RaftPeer> _p)
 		{
-			unsigned account_type = 0;
-			if (! NodeConnManagerSingleton::GetInstance().getAccountType(_p->session()->id(), account_type) || account_type != EN_ACCOUNT_TYPE_MINER) {
-				return true;
-			}
+			NodeID nodeid;
+			auto session = _p->session();
+			if (session && (nodeid = session->id()))
+			{
+				unsigned account_type = 0;
+				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type) || account_type != EN_ACCOUNT_TYPE_MINER ) {
+						return true;
+				}
 
-			RLPStream ts;
-			_p->prep(ts, _id, 1).append(_data);
-			_p->sealAndSend(ts);
-			LOG(INFO) << "Sent [" << _id << "] raftmsg to " << _p->session()->id();
+				RLPStream ts;
+				_p->prep(ts, _id, 1).append(_data);
+				_p->sealAndSend(ts);
+				LOG(INFO) << "Sent [" << _id << "] raftmsg to " << nodeid;
+			}
+			else
+			{
+					LOG(ERROR) << "brocastMsg: session id error!";
+			}
 			return true;
 		});
 	}
