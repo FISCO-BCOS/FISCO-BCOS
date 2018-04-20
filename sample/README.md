@@ -1,5 +1,7 @@
 # 一键安装FISCO BCOS脚本使用说明
 
+[FISCO BCOS One-Click Installation Manual](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20One-Click%20Installation%20Manual)
+
 本文档能够让初学者快速体验FISCO BCOS平台。提供了FISCO BCOS的快速安装和FISCO BCOS节点的快速部署步骤。
 ## 注意事项：
 1. 安装环境需满足FISCO BCOS运行的配置要求[（操作手册1.1节）](../doc/manual/README.md)；
