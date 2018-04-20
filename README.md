@@ -32,11 +32,11 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 ## 2.2 安装说明
 
-如果您想快速体验FISCO BCOS，我们提供了[一键快速安装部署](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/sample)工具。
+如果您想快速体验FISCO BCOS，我们提供了[一键快速安装部署](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/sample)工具。[(FISCO BCOS One-Click Installation Manual)](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20One-Click%20Installation%20Manual)
 
-如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/docker)。
+如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/docker)。[(FISCO BCOS Docker Installation Manual)](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20Docker%20Installation%20Manual)
 
-如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书1.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/doc/manual)。
+如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书1.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/doc/manual)。[(FISCO-BCOS Manual)](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20manual)
 
 如果你想快速搭建生产上的可用环境, 请参考[FISCO-BCOS物料包工具](https://github.com/FISCO-BCOS/fisco-package-build-tool)。
 
