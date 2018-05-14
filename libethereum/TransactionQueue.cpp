@@ -82,7 +82,7 @@ std::pair<ImportResult, h256> TransactionQueue::import(bytesConstRef _transactio
 
 			t = Transaction(_transactionRLP, CheckTransaction::Everything);
 			if (t.isCNS())
-			{//这里仅仅是检查根据调用的name能否找见对应的abi信息，找不见则抛出异常
+			{
 				t.receiveAddress();
 			}
 
@@ -174,7 +174,6 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 	{
 		assert(_h == _transaction.sha3());
 
-		//回调client noncecheck类 检查nonce 这里判断是，nonce是否在chain上已经出现过
 		if ( false == m_interface->isNonceOk(_transaction))
 		{
 
@@ -187,10 +186,10 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 			LOG(WARNING) << "TransactionQueue::manageImport_WITH_LOCK BlockLimit fail! " << _transaction.sha3() << "," << _transaction.blockLimit();
 			return ImportResult::BlockLimitCheckFail;
 		}
-		// 权限判断逻辑
+		
 		if( _transaction.isCreation())
 		{
-			// 部署合约
+			
 			u256 ret = m_interface->filterCheck(_transaction,FilterCheckScene::CheckDeploy);
 			if( (u256)SystemContractCode::Ok != ret)
 			{
@@ -199,7 +198,7 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 			}
 		}
 		else {
-			// 合约调用
+			
 			u256 ret = m_interface->filterCheck(_transaction,FilterCheckScene::CheckTx);
 			LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK FilterCheckScene::CheckTx ";
 			if( (u256)SystemContractCode::Ok != ret)
@@ -503,7 +502,7 @@ void TransactionQueue::verifierBody()
 		try
 		{
 			Transaction t(work.transaction, CheckTransaction::Everything); //Signature will be checked later
-			//这里改为这里验证 后面Executive::initialize里面不验证了
+			
 			t.setImportTime(utcTime());
 			t.setImportType(1); // 1 for p2p
 			ImportResult ir = import(t);

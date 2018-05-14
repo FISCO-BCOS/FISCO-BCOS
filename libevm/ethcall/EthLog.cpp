@@ -1,3 +1,20 @@
+/*
+	This file is part of FISCO BCOS.
+
+	FISCO BCOS is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	FISCO BCOS is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with FISCO BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 /**
  * @file: EthLog.cpp
  * @author: fisco-dev
@@ -5,11 +22,13 @@
  * @date: 2017
  */
 
-#include "EthLog.h"
-#include <libdevcore/easylog.h>
-#include <libdevcore/Common.h>
 #include <string>
 #include <vector>
+
+#include <libdevcore/easylog.h>
+#include <libdevcore/Common.h>
+
+#include <libevm/ethcall/EthLog.h>
 
 using namespace std;
 using namespace dev;
@@ -21,8 +40,8 @@ namespace eth
 {
 
 /*
-采用easylogging打印日志
-level定义与easylogging++.h对应：
+Log using easylogging
+level are the same as easylogging++.h
 enum class Level : base::type::EnumType {
     /// @brief Generic level that represents all the levels. Useful when setting global configuration for all levels
     Global = 1, 

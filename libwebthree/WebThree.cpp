@@ -60,7 +60,7 @@ WebThreeDirect::WebThreeDirect(
 	m_net(_clientVersion, _n, _network, _params.statsInterval)
 {
 	LOG(INFO) << "My enode:" << enode();
-	//设置NodeConnParamsManager中的NetworkFace指针
+	//set NodeConnParamsManager's NetworkFace pointer
 	NodeConnManagerSingleton::GetInstance().setNetworkFace(this);
 	if (_dbPath.size())
 		Defaults::setDBPath(_dbPath);

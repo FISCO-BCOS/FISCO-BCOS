@@ -103,47 +103,28 @@ public:
 	static unsigned const c_oldProtocolVersion;
 	void foreachPeer(std::function<bool(std::shared_ptr<EthereumPeer>)> const& _f) const;
 
-	//广播自己的topic
-	//void broadcastTopics();
-
-	/**
-	* 给所有已连接节点发送新增的节点配置
-	* in : vParams - 需要新加的节点配置信息
-	*/
 	void addNodeConnParam(std::vector<NodeConnParams> const &vParams);
 
 
-	/**
-	* 给所有已连接节点发送删除节点配置
-	* in : sParams - 删除节点的NodeId
-	*/
 	void delNodeConnParam(std::string const &sParams);
 
 	void setWeb3Observer(Web3Observer::Ptr _observer);
 
-	/*
-	 * 链上链下通讯
-	 */
 	void sendCustomMessage(p2p::NodeID nodeID, std::shared_ptr<bytes> message);
 
-	//根据topic，获取节点nodeID列表
+	
 	std::vector<p2p::NodeID> getPeersByTopic(std::string topic);
-	//链上链下2期消息
-	//h512 sendChannelMessage(std::string topic, std::shared_ptr<bytes> message);
-	//链上链下2期回包消息
-	//bool sendChannelReplyMessage(p2p::NodeID nodeID, std::shared_ptr<bytes> message);
 
 	int getTopicsSeq() { return _topicsSeq; };
 
-	//设置自身的topics
+	
 	void setTopics(std::shared_ptr<std::set<std::string> > topics);
 
 	std::shared_ptr<std::set<std::string> > getTopics() { return _topics; };
 
-	//链上链下2期topics消息
+	
 	void sendTopicsMessage(p2p::NodeID nodeID, int type, int seq, std::shared_ptr<std::set<std::string> > topics);
 
-	//获取NodeId与块高的映射
 	void getPeersHeight(std::map<h512, u256>& mp);
 protected:
 	std::shared_ptr<p2p::Capability> newPeerCapability(std::shared_ptr<p2p::SessionFace> const& _s, unsigned _idOffset, p2p::CapDesc const& _cap, uint16_t _capID) override;

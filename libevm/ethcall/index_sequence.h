@@ -3,7 +3,7 @@
  * @author: fisco-dev
  * 
  * @date: 2017
- * c++11中需在此实现，c++14开始支持
+ * This is c++14 standard function, c++11 should add here
  */
 
 #include <tuple>

@@ -37,7 +37,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::eth;
 
-u256 TransactionBase::maxGas = 30000000; //默认二千万
+u256 TransactionBase::maxGas = 30000000; 
 
 TransactionBase::TransactionBase(TransactionSkeleton const& _ts, Secret const& _s):
 	m_type(_ts.creation ? ContractCreation : MessageCall),
@@ -61,94 +61,7 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
 	try
 	{
 		transactionRLPDecode(_rlpData);
-		/*
-		if (!rlp.isList())
-			BOOST_THROW_EXCEPTION(InvalidTransactionFormat() << errinfo_comment("transaction RLP must be a list"));
-
-		size_t rlpItemCount = rlp.itemCount();
-		if (rlpItemCount < 10)
-		{
-			LOG(WARNING) << "to little fields in the tracsaction RLP ,size=" << rlpItemCount;
-			BOOST_THROW_EXCEPTION(InvalidTransactionFormat() << errinfo_comment("to little fields in the transaction RLP"));
-		}
-
-		int index = 0;
-
-		m_randomid = rlp[field = (index++)].toInt<u256>(); //0
-		m_gasPrice = rlp[field = (index++)].toInt<u256>(); //1
-		m_gas      = rlp[field = (index++)].toInt<u256>(); //2
-		m_blockLimit = rlp[field = (index++)].toInt<u256>();//新加的  //3
-
-		auto tempRLP = rlp[field = (index++)];  //4
-
-		m_receiveAddress = tempRLP.isEmpty() ? Address() : tempRLP.toHash<Address>(RLP::VeryStrict);
-		//m_type = rlp[field = 4].isEmpty() ? ContractCreation : MessageCall;
-		m_value = rlp[field = (index++)].toInt<u256>(); //5
-
-		//if (!rlp[field = 6].isData())
-		//	BOOST_THROW_EXCEPTION(InvalidTransactionFormat() << errinfo_comment("transaction data RLP must be an array"));
-		auto dataRLP = rlp[field = (index++)];  //6
-		m_data = dataRLP.toBytes();
-
-		if (fromJsonGetParams(dataRLP.toString(), m_cnsParams))
-		{//判断是否是name方式调用
-			//name调用方式
-			m_type            = MessageCall;
-			m_transactionType = CNSOldTransaction;
-			
-			LOG(DEBUG) << "[TransactvionBase] [OldCNS] name|func|version|params=>"
-				<< m_cnsParams.strContractName << "|"
-				<< m_cnsParams.strFunc << "|"
-				<< m_cnsParams.strVersion << "|"
-				<< m_cnsParams.jParams.toStyledString()
-				;
-		}
-		else if (rlpItemCount == 13)
-		{//说明是CNS的改造后使用的协议
-			m_type = MessageCall;
-			m_transactionType = CNSNewTransaction;
-
-			std::string strCNSName = rlp[field = (index++)].toString();
-			std::string strCNSVer  = rlp[field = (index++)].toString();
-			u256 type = rlp[field = (index++)].toInt<u256>();
-
-			m_strCNSName = strCNSName;
-			m_strCNSVer  = strCNSVer;
-			m_cnsType    = type;
-			
-			LOG(DEBUG) << "[TransactionBase] [NewCNS] name|version|type=>"
-				<< strCNSName  << "|"
-				<< strCNSVer << "|"
-				<< type
-				;
-		}
-		else
-		{
-			//说明不是CNS方式的调用，按照正常情况处理
-			m_type = (m_receiveAddress == Address() ? ContractCreation : MessageCall);
-			m_transactionType = DefaultTransaction;
-
-			LOG(DEBUG) << "[TransactionBase] [Default] to address = " << m_receiveAddress;
-		}
-
-		if (rlpItemCount > (isCNSNewTransaction() ? 13 : 10))
-			BOOST_THROW_EXCEPTION(InvalidTransactionFormat() << errinfo_comment("to many fields in the transaction RLP"));
-
-		byte v = rlp[field = (index++)].toInt<byte>();
-		h256 r = rlp[field = (index++)].toInt<u256>();
-		h256 s = rlp[field = (index++)].toInt<u256>();
-
-		if (v > 36)
-			m_chainId = (v - 35) / 2;
-		else if (v == 27 || v == 28)
-			m_chainId = -4;
-		else
-			BOOST_THROW_EXCEPTION(InvalidSignature());
-
-		v = v - (m_chainId * 2 + 35);
-
-		m_vrs = SignatureStruct{ r, s, v };
-		*/
+		
 		if (_checkSig >= CheckTransaction::Cheap && !m_vrs.isValid()) {
 
 			BOOST_THROW_EXCEPTION(InvalidSignature());
@@ -193,8 +106,8 @@ void TransactionBase::transactionRLPDecode10Ele(const RLP &rlp)
 	m_gasPrice       = rlp[index++].toInt<u256>(); // 1
 	m_gas            = rlp[index++].toInt<u256>(); // 2
 	m_blockLimit     = rlp[index++].toInt<u256>(); // 3
-	m_receiveAddress = rlp[index/*注意这里没有++,条件表达式被使用了两次*/].isEmpty() ? Address() : rlp[index].toHash<Address>(RLP::VeryStrict); // 4
-	index++;  //跳过m_receiveAddress的++
+	m_receiveAddress = rlp[index].isEmpty() ? Address() : rlp[index].toHash<Address>(RLP::VeryStrict); // 4
+	index++;  
 	m_value          = rlp[index++].toInt<u256>(); // 5
 	auto dataRLP     = rlp[index++];               // 6
 	m_data           = dataRLP.toBytes();          
@@ -213,7 +126,7 @@ void TransactionBase::transactionRLPDecode10Ele(const RLP &rlp)
 	v = v - (m_chainId * 2 + 35);
 	m_vrs = SignatureStruct{ r, s, v };
 
-	//判断是否是CNS调用
+	
 	auto isOldCNS = fromJsonGetParams(dataRLP.toString(), m_cnsParams);
 	if (isOldCNS)
 	{
@@ -243,8 +156,8 @@ void TransactionBase::transactionRLPDecode13Ele(const RLP &rlp)
 	m_gasPrice        = rlp[index++].toInt<u256>(); //1
 	m_gas             = rlp[index++].toInt<u256>(); //2
 	m_blockLimit      = rlp[index++].toInt<u256>(); //3
-	m_receiveAddress  = rlp[index/*注意这里没有++,条件表达式被使用了两次*/].isEmpty() ? Address() : rlp[index].toHash<Address>(RLP::VeryStrict); //4
-	m_type            = rlp[index++/*跳过m_receiveAddress的++*/].isEmpty() ? ContractCreation : MessageCall;
+	m_receiveAddress  = rlp[index].isEmpty() ? Address() : rlp[index].toHash<Address>(RLP::VeryStrict); //4
+	m_type            = rlp[index++].isEmpty() ? ContractCreation : MessageCall;
 	m_value           = rlp[index++].toInt<u256>(); //5
 	if (!rlp[index].isData())
 		BOOST_THROW_EXCEPTION(InvalidTransactionFormat() << errinfo_comment("transaction data RLP must be an array"));
@@ -399,7 +312,7 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forE
 		return;
 
 	_s.appendList((_sig || _forEip155hash ? 3 : 0) + (isCNSNewTransaction() ? 10 : 7));
-	_s << m_randomid << m_gasPrice << m_gas << m_blockLimit ; //这里加入新字段
+	_s << m_randomid << m_gasPrice << m_gas << m_blockLimit ; 
 	if (m_receiveAddress==Address())
 	{
 		_s << "";
@@ -432,7 +345,7 @@ void TransactionBase::streamRLP(std::stringstream& _s, IncludeSignature _sig, bo
 	if (m_type == NullTransaction)
 		return;
 
-	_s << m_randomid << m_gasPrice << m_gas << m_blockLimit; //这里加入新字段
+	_s << m_randomid << m_gasPrice << m_gas << m_blockLimit; 
 	if (m_receiveAddress == Address())
 	{
 		_s << "";

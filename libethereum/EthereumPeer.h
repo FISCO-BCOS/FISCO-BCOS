@@ -152,7 +152,6 @@ public:
 
 	void setTopicsSeq(int topicsSeq);
 
-	// 设置该节点关注的topics列表
 	std::shared_ptr<std::vector<std::string> > getTopics();
 
 	void setTopics(std::shared_ptr<std::vector<std::string> > topics);
