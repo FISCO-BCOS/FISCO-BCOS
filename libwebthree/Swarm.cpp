@@ -46,7 +46,7 @@ bzz::Client::Client(WebThreeDirect* _web3):
 
 Pinneds bzz::Client::insertBundle(bytesConstRef _bundle)
 {
-	LOG(INFO) << "Bundle insert" << sha3(_bundle);
+	LOG(DEBUG) << "Bundle insert:" << sha3(_bundle);
 
 	Pinneds ret;
 	RLP rlp(_bundle);
@@ -56,7 +56,7 @@ Pinneds bzz::Client::insertBundle(bytesConstRef _bundle)
 			first = false;
 		else
 		{
-			LOG(INFO) << "   inserting slice" << sha3(r.toBytesConstRef());
+			LOG(DEBUG) << "inserting slice:" << sha3(r.toBytesConstRef());
 			ret.push_back(Pinned(m_cache[sha3(r.toBytesConstRef())] = make_shared<bytes>(r.toBytes())));
 		}
 	return ret;
@@ -65,7 +65,7 @@ Pinneds bzz::Client::insertBundle(bytesConstRef _bundle)
 Pinned bzz::Client::put(bytes const& _data)
 {
 	h256 ret = sha3(_data);
-	LOG(INFO) << "Inserting" << ret;
+	LOG(DEBUG) << "Inserting:" << ret;
 
 	if (!m_cache.count(ret))
 		m_cache[ret] = make_shared<bytes>(_data);
@@ -74,7 +74,7 @@ Pinned bzz::Client::put(bytes const& _data)
 	{
 		// send to IPFS...
 		h256 sha256hash = sha256(&_data);
-		LOG(INFO) << "IPFS-inserting" << sha256hash;
+		LOG(INFO) << "IPFS-inserting:" << sha256hash;
 
 		// set in blockchain
 		try
@@ -90,19 +90,19 @@ Pinned bzz::Client::put(bytes const& _data)
 
 Pinned bzz::Client::get(h256 const& _hash)
 {
-	LOG(INFO) << "Looking up" << _hash;
+	LOG(DEBUG) << "Looking up:" << _hash;
 	auto it = m_cache.find(_hash);
 	if (it != m_cache.end())
 		return it->second;
 
 	if (u256 sha256hash = m_owner->support()->sha256Hint(_hash))
 	{
-		LOG(INFO) << "IPFS Searching" << sha256hash;
+		LOG(DEBUG) << "IPFS Searching:" << sha256hash;
 		auto b = m_ipfs->getBlockForSHA256(sha256hash);
 		if (!b.empty())
 			return (m_cache[_hash] = make_shared<bytes>(b));
 	}
 
-	LOG(INFO) << "Not found" << _hash;
+	LOG(WARNING) << "Not found:" << _hash;
 	throw ResourceNotAvailable();
 }

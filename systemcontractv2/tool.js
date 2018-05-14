@@ -42,7 +42,7 @@ var func=options[3];
 console.log('Soc File :'+options[2]);
 console.log('Func :'+options[3]);
 
-console.log("系统合约地址"+getAddress("SystemProxy"));
+console.log("SystemProxy address " + getAddress("SystemProxy"));
 
 var initializer = {from: config.account,randomid:Math.ceil(Math.random()*100000000)};
 
@@ -53,7 +53,7 @@ var SystemProxy=web3.eth.contract(getAbi("SystemProxy")).at(getAddress("SystemPr
 
 function getAction(filename){
     var address=SystemProxy.getRoute(filename)[0].toString();
-    console.log(filename+"合约地址"+address);
+    console.log(filename+" address "+address);
     var contract = web3.eth.contract(getAbi(filename));
     return contract.at(address);
     
@@ -69,7 +69,7 @@ switch (filename){
       case "get":
       {
         if( options.length< 5 ){
-          console.log("请输入key");
+          console.log("please input key");
           break;
         }
         var key=options[4];
@@ -82,7 +82,7 @@ switch (filename){
       case "set":
       {
         if( options.length< 6 ){
-          console.log("请输入key，value");
+            console.log("please input key，value");
           break;
         }
         var key=options[4];
@@ -94,7 +94,7 @@ switch (filename){
         var params = [key,value];
         var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
 
-        console.log("配置项:"+key+","+value);
+        console.log("config :"+key+","+value);
        
         break;
       }
@@ -107,7 +107,7 @@ switch (filename){
   }
   case "SystemProxy":
   {
-    console.log("-----------------系统路由表----------------------")
+      console.log("-----------------SystemProxy route----------------------")
     
     
 
@@ -126,7 +126,7 @@ switch (filename){
   case "AuthorityFilter":
   {
         if( options.length< 6 ){
-            console.log("请输入账号、合约地址、函数名");
+            console.log("please input account、address、function");
             break;
         }
         console.log("origin :"+options[3]);
@@ -136,7 +136,7 @@ switch (filename){
       var AuthorityFilter=getAction("AuthorityFilter");
       //process(address origin, address from, address to, string func, string input)
 
-      console.log("权限校验结果:"+AuthorityFilter.process(options[3],"",options[4],options[5],""));
+      console.log("authority result :" + AuthorityFilter.process(options[3], "", options[4], options[5], ""));
 
     break;
   }
@@ -170,7 +170,7 @@ switch (filename){
        
         
        if( options.length< 5 ){
-          console.log("请输入node.json");
+          console.log("please input node.json");
           break;
         }
         console.log("node.json="+options[4]);
@@ -188,7 +188,7 @@ switch (filename){
       case "registerNode":
       {
         if( options.length< 5 ){
-          console.log("请输入node.json");
+          console.log("please input node.json");
           break;
         }
         console.log("node.json="+options[4]);
@@ -263,7 +263,7 @@ switch (filename){
       case "updateStatus":
       {
         if( options.length< 5 ){
-          console.log("清输入路径 ca.json");
+          console.log("please input path ： ca.json");
           break;
         }
         console.log("ca.json="+options[4]);

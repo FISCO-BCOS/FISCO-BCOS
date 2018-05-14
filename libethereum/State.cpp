@@ -56,7 +56,6 @@ State::State(u256 const& _accountStartNonce, OverlayDB const& _db, BaseState _bs
 {
 	if (_bs != BaseState::PreExisting)
 		// Initialise to the state entailed by the genesis block; this guarantees the trie is built correctly.
-		//由创世块创建根state，libdevcore/TrieDB.h
 		m_state.init();
 }
 
@@ -90,8 +89,8 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	//add by wheatli, for optimise
 	o.write_buffer_size = 100 * 1024 * 1024;
 	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
-	//
-	//初始化dbv
+
+
 	ldb::DB* db = nullptr;
 
 #if ETH_ODBC
@@ -105,10 +104,10 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	else
 	{
 		LOG(INFO) << "state ethodbc is not defined " << "\n";
-		//todo 打开失败 可能要throw exception
+		
 	}
 #else
-	//初始化state db
+	
 	ldb::Status status = ldb::DB::Open(o, path + "/state", &db);
 	if (!status.ok() || !db)
 	{
@@ -191,7 +190,7 @@ Account* State::account(Address const& _addr)
 		return nullptr;
 
 	// Populate basic info.
-	//从state中读出地址a的状态
+	
 	string stateBack = m_state.at(_addr);
 	if (stateBack.empty())
 	{
@@ -199,10 +198,10 @@ Account* State::account(Address const& _addr)
 		return nullptr;
 	}
 
-	//判断cache的淘汰
+	
 	clearCacheIfTooLarge();
 
-	//将DB内存储的数据反序列化为RLP格式
+	
 	RLP state(stateBack);
 	auto i = m_cache.emplace(
 	             std::piecewise_construct,
@@ -314,7 +313,7 @@ void State::incNonce(Address const& _addr)
 
 void State::addBalance(Address const& _id, u256 const& _amount)
 {
-	//不能直接return
+	
 
 	if (Account* a = account(_id))
 	{
@@ -560,7 +559,7 @@ void State::rollback(size_t _savepoint)
 
 std::pair<ExecutionResult, TransactionReceipt> State::execute(EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Transaction const& _t, Permanence _p, OnOpFunc const& _onOp)
 {
-	StatTxExecLogGuard guard;  // 监控统计交易执行时间
+	StatTxExecLogGuard guard;  
 	guard << "State::execute";
 	
 	LOG(TRACE) << "State::execute ";
@@ -587,13 +586,13 @@ std::pair<ExecutionResult, TransactionReceipt> State::execute(EnvInfo const& _en
 	e.finalize();
 
 	if (_p == Permanence::Dry) {
-		//什么也不做
+		
 	}
 	else if (_p == Permanence::Reverted)
 		m_cache.clear();
 	else
 	{
-		//commit(State::CommitBehaviour::KeepEmptyAccounts); // 一个块所有交易执行完再提交
+		
 	}
 
 	return make_pair(res, TransactionReceipt(rootHash(), startGasUsed + e.gasUsed(), e.logs(), e.newAddress()));

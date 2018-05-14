@@ -49,12 +49,10 @@ public:
 	};
 
 	struct ChannelMessageSession {
-		//节点主动发起链上链下消息时使用
 		dev::channel::ChannelSession::Ptr fromSession;
 		h512 toNodeID;
 		std::set<h512> failedNodeIDs;
 
-		//收到其它节点的链上链下消息时使用
 		h512 fromNodeID;
 		dev::channel::ChannelSession::Ptr toSession;
 		std::set<dev::channel::ChannelSession::Ptr> failedSessions;
@@ -73,34 +71,24 @@ public:
 	virtual bool StopListening() override;
 	virtual bool SendResponse(std::string const& _response, void* _addInfo = nullptr) override;
 
-	//收到连接
 	void onConnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 
-	//断开连接
 	void onDisconnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 
-	//收到请求
 	void onClientRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message);
 
-	//收到来自前置的链上链下请求
 	void onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	//收到来自前置的区块链请求
 	void onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	//来自前置的topic请求
 	void onClientTopicRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	//来自前置的链上链下二期请求
 	void onClientChannelRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	//收到来自其他节点的请求
 	void onNodeRequest(dev::h512 nodeID, std::shared_ptr<dev::bytes> message);
 
-	//收到来自其他节点的链上链下请求
 	void onNodeMessage(h512 nodeID, dev::channel::Message::Ptr message);
 
-	//收到来自其它节点的链上链下二期请求
 	void onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message);
 
 	void setListenAddr(const std::string &listenAddr);
@@ -135,15 +123,13 @@ private:
 	std::shared_ptr<dev::channel::ChannelServer> _server;
 	std::shared_ptr<std::thread> _topicThread;
 
-	std::map<int, dev::channel::ChannelSession::Ptr> _sessions; //所有当前session，用于下发消息
+	std::map<int, dev::channel::ChannelSession::Ptr> _sessions;
 
-	std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session; //用于查找seq对应的回包
+	std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
 	std::mutex _seqMutex;
 
-	std::map<std::string, ChannelMessageSession> _seq2MessageSession; //用于查找链上链下消息2期的session
+	std::map<std::string, ChannelMessageSession> _seq2MessageSession;
 	std::mutex _seqMessageMutex;
-
-	//std::map<std::string, h512> _seq2NodeID; //用于查找seq对应的nodeID
 
 	int _sessionCount = 1;
 

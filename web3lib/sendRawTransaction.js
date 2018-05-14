@@ -46,13 +46,13 @@ function sendRawTransaction()
 			console.log(err,address);
 			if (!err)
 			{
-				console.log("发送交易成功！|",address);
+				console.log("send transaction success !|",address);
 				process.exit();
 				return;
 			}
 			else
 			{
-				console.log("发送交易失败！",err);
+			    console.log("send transaction failed ！", err);
 				process.exit();
 				return;
 			}

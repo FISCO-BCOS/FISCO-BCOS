@@ -252,32 +252,36 @@ namespace dev
 			/// Get the node information.
 			p2p::NodeInfo nodeInfo() const { return NodeInfo(id(), (networkPreferences().publicIPAddress.empty() ? m_tcpPublic.address().to_string() : networkPreferences().publicIPAddress), m_tcpPublic.port(), m_clientVersion); }
 
-			//获取自己的签名数据 已经hash并签名
+			//get signature data
 			bool getSelfSignData(Signature &_sign) const;
 
 			/**
-            * 根据节点id 断掉连接
-            * 存在即断掉对应的peer连接
+            * @ function: disconnect peer according to node id
+            * @ params: 
+			*   sNodeId: node id of the peer to be disconnected
             */
 			void disconnectByNodeId(const std::string &sNodeId);
 
 			/**
-			 * 遍历所有的session，依据pub256来断开对应session
+			 * @ function: traverse all the sessions, disconnect specified peer according to pub256
+			 * @ params:
+			 * @ pub256: public key of the peer to be disconnected
 			 */
 			 void disconnectByPub256(const std::string &pub256);
 
 			/**
-			 * 遍历所有的session，当CA内容变更的时候，依据pub256重新检查签名的合法性
+			 * @ function: traverse all the sessions, check validity of signature according to public key after CA modified  
+			 * @ params: public key of the node
 			 */
 			 void recheckCAByPub256(const std::string &pub256);
 
 			/**
-			 * 遍历所有的session,当CAVerify改变的时候，重新检查所有链接节点的合法性
+			 * @ function: traverse all the sessions, check validity of the connected node after CAVerify updated
 			 */
 			void recheckAllCA();
 
 			/**
-			 *
+			 * 
 			 */
 			void saveCADataByNodeId(const std::string nodeId, CABaseData &baseData);
 		protected:
@@ -308,7 +312,10 @@ namespace dev
 			/// Ping the peers to update the latency information and disconnect peers which have timed out.
 			void keepAlivePeers();
 
-			//看所有的节点是否已经连接 如果没有 则进行连接
+	
+			/*
+			 * @ function: reconnect all disconnected peers
+			 */
 			void reconnectAllNodes();
 
 			/// Disconnect peers which didn't respond to keepAlivePeers ping prior to c_keepAliveTimeOut.
@@ -331,12 +338,14 @@ namespace dev
 			/// Get or create host identifier (KeyPair).
 			static KeyPair networkAlias(bytesConstRef _b);
 
-			//增加节点配置文件的节点信息到NodeTable中去
+			/*
+			 * @ function: load endpoint information of the nodes into node table from configuration file
+			 */
 			void addConnParamsToNodeTable();
 
-			////检查节点连接信息
-			////in - sEndPointNodeId   对端连接的nodeid
-			////in - sSign                     传入的加密数据
+			////check node connection 
+			////in - sEndPointNodeId   nodeid of the connected peer
+			////in - sSign             signature obtained from the connected peer
 			//bool checkNodeConnInfo(const std::string &sEndPointNodeId, const Public &pub, const Signature &sSign) const;
 
 			bytes m_restoreNetwork;                                                                 ///< Set by constructor and used to set Host key and restore network peers & nodes.
@@ -365,7 +374,7 @@ namespace dev
 			Mutex x_pendingNodeConns;
 
 			bi::tcp::endpoint m_tcpPublic;                                                          ///< Our public listening endpoint.
-			bi::tcp::endpoint m_tcpClient;//客户端连接的 IP端口信息
+			bi::tcp::endpoint m_tcpClient;// ip and port information of the connected peer
 			KeyPair m_alias;                                                                        ///< Alias for network communication. Network address is k*G. k is key material. TODO: Replace KeyPair.
 			std::shared_ptr<NodeTable> m_nodeTable;                                                 ///< Node table (uses kademlia-like discovery).
 

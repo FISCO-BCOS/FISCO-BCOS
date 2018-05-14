@@ -27,18 +27,18 @@ using namespace std;
 class CryptoParam
 {
 public:
-	int m_cryptoMod;//加密模式  0:不加密  1:本地加密 2:KeyCenter加密
-	string m_kcUrl;//keycenter访问路径
-	string m_superKey;//本地明文存储superkey数据
-	string m_nodekeyPath;//nodekey生成路径
-	string m_datakeyPath;//datakey生成路径
-	string m_privatekeyPath;//证书私钥明文存放路径
-	string m_enprivatekeyPath;//证书私钥密文存放路径
+	int m_cryptoMod;//cryptomod  0:not encrypt  1:local encrypt 2:KeyCenter encrypt
+	string m_kcUrl;//keycenter url
+	string m_superKey;//local encrypt superkey
+	string m_nodekeyPath;//nodekey create path
+	string m_datakeyPath;//datakey create path
+	string m_privatekeyPath;//certificate private path
+	string m_enprivatekeyPath;//certificate private encrypt path
 
-	//访问keycenter返回id?
+	//keycenter result 
 	int m_ID; //ID
-	int m_errCode; //错误码
-	string m_resData; //返回消息
+	int m_errCode; //errorData
+	string m_resData; //responseData
 public:
 	CryptoParam(void);
 	~CryptoParam(void);

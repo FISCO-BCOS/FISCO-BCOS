@@ -39,7 +39,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ```shell
 #安装依赖包
-sudo yum install -y git openssl openssl-devel deltarpm cmake3
+sudo yum install -y git openssl openssl-devel deltarpm cmake3 gcc-c++
 #安装nodejs
 sudo yum install -y nodejs
 sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
@@ -99,7 +99,7 @@ cd FISCO-BCOS
 
 #### 1.3.2 安装编译依赖
 
-> 根目录下执行：
+> 根目录下执行（若执行出错，请参考常见问题1）：
 
 ```shell
 chmod +x scripts/install_deps.sh
@@ -1689,7 +1689,7 @@ monitor.js脚本监控节点的连接情况和块高。在运行前，请确认�
 > 配置config，并执行monitor.js
 
 ```shell
-cd /mydata/FISCO-BCOS/systemcontractv2/
+cd /mydata/FISCO-BCOS/tool/
 vim ../web3lib/config.js
 babel-node monitor.js
 ```
@@ -1732,6 +1732,9 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 7. [监控统计日志](../监控统计日志说明文档.md)
 8. [同态加密](../同态加密说明文档.md)
 9. [机构证书准入](../CA机构身份认证说明文档.md)
+10. [可监管的零知识证明](../可监管的零知识证明说明.md)
+11. [群签名环签名](../启用_关闭群签名环签名ethcall.md)
+12. [弹性联盟链共识框架](../弹性联盟链共识框架说明文档.md)
 
 
 
@@ -1792,7 +1795,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | ------------------ | ---------------------------------------- |
 | sealEngine         | 共识算法（可选PBFT、RAFT、SinglePoint）            |
 | systemproxyaddress | 系统路由合约地址（生成方法可参看部署系统合约）                  |
-| listenip           | 节点监听IP                             |
+| listenip           | 节点监听IP                                   |
 | cryptomod          | 加密模式默认为0（与cryptomod.json文件中cryptomod字段保持一致） |
 | ssl                | 是否启用SSL证书通信（0：非SSL通信 1：SSL通信 需在datadir目录下放置证书文件） |
 | rpcport            | RPC监听端口）（若在同台机器上部署多个节点时，端口不能重复）          |
@@ -1808,7 +1811,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | eventlog           | 合约日志开关（ON或OFF）                           |
 | statlog            | 统计日志开关（ON或OFF）                           |
 | logconf            | 日志配置文件路径（日志配置文件可参看日志配置文件说明）              |
-| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId。此处必须配置节点自身的信息。在配置其它节点信息时，确保节点间能够构成一个连通图。为了稳定性，推荐配置多个除自身以外的其它节点信息。 |
+| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId。此处必须配置节点自身的信息。在配置其它节点信息时，确保节点间能够构成一个连通图。为了稳定性，推荐配置多个除自身以外的其它节点信息。 |
 | dfsNode            | 分布式文件服务节点ID ，与节点身份NodeID一致 （可选功能配置参数）    |
 | dfsGroup           | 分布式文件服务组ID （10 - 32个字符）（可选功能配置参数）        |
 | dfsStorage         | 指定分布式文件系统所使用文件存储目录（可选功能配置参数）             |
@@ -2063,3 +2066,36 @@ babel-node tool.js ConfigAction get 配置项
 ```shell
 babel-node tool.js ConfigAction set 配置项 配置值
 ```
+
+
+
+## 常见问题
+
+### 1 脚本执行时，格式错误
+
+**现象**
+
+执行脚本（如install_deps.sh，build.sh等）时，报如下格式错误。是windows格式和linux格式不一致导致。
+
+``` log
+xxxxx.sh: 行x： $'\r':未找到命令
+xxxxx.sh: 行x： $'\r':未找到命令
+xxxxx.sh: 行x： $'\r':未找到命令
+xxxxx.sh: 行x： $'\r':未找到命令
+```
+
+**解决方法**
+
+用dos2unix工具转换一下格式
+
+``` shell
+sudo yum -y install dos2unix
+dos2unix xxxxx.sh
+```
+
+
+
+
+
+
+
