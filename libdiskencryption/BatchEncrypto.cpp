@@ -22,7 +22,7 @@
  */
 
 #include "BatchEncrypto.h"
-#include <libdevcrypto/AES.h> // 通过AES加密
+#include <libdevcrypto/AES.h>
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
 //#include "LRUCache.h"

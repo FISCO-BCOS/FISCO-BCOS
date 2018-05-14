@@ -102,9 +102,9 @@ enum class FilterCheckScene {
 	CheckTx,
 	CheckCall,
 	CheckDeployAndTxAndCall,
-	PackTranscation,//打包交易场景  要校验 accountfilter、干预filter 要处理
-	ImportBlock, 	//bc import 新块  要校验 accountfilter、干预filter 要处理
-	BlockExecuteTransation// Block::execute 执行交易  通用入口
+	PackTranscation,
+	ImportBlock, 	
+	BlockExecuteTransation
 };
 
 enum class ImportResult
@@ -139,7 +139,7 @@ struct ImportRequirements
 		Parent = 64, ///< Check parent block header.
 		UncleParent = 128, ///< Check uncle parent block header.
 		PostGenesis = 256, ///< Require block to be non-genesis.
-		CheckMinerSignatures = 512, /// 检查签名，只有在落地块的地方才会需要
+		CheckMinerSignatures = 512, /// 
 		CheckUncles = UncleBasic | UncleSeals, ///< Check uncle seals.
 		CheckTransactions = TransactionBasic | TransactionSignatures, ///< Check transaction signatures.
 		OutOfOrderChecks = ValidSeal | CheckUncles | CheckTransactions, ///< Do all checks that can be done independently of prior blocks having been imported.
@@ -212,7 +212,6 @@ struct TransactionSkeleton
 	u256 gasPrice = Invalid256;
 	u256 blockLimit = Invalid256;
 
-	//CNS服务中jData有可能是json对象
 	Json::Value jData;
 	std::string strVersion;
 	std::string strContractName;
@@ -221,31 +220,29 @@ struct TransactionSkeleton
 	std::string userReadable(bool _toProxy, std::function<std::pair<bool, std::string>(TransactionSkeleton const&)> const& _getNatSpec, std::function<std::string(Address const&)> const& _formatAddress) const;
 };
 
-/**
-* 节点配置信息的结构
-*/
+
 class NodeConnParams {
 public:
-	std::string _sNodeId = "";	//节点的nodeid
-	std::string _sAgencyInfo = ""; //节点的机构信息
-	std::string _sIP = "";		//节点ip
-	int _iPort = 0;				//节点端口
-	int _iIdentityType = -1;	//节点类型 0-参与者，1-记账者
-	std::string _sAgencyDesc;	//节点描述
-	std::string _sCAhash;	//cahash
-	u256 _iIdx;					//节点索引
+	std::string _sNodeId = "";	
+	std::string _sAgencyInfo = ""; 
+	std::string _sIP = "";		
+	int _iPort = 0;				
+	int _iIdentityType = -1;	
+	std::string _sAgencyDesc;	
+	std::string _sCAhash;	
+	u256 _iIdx;					
 	std::string toString()const {
 		std::ostringstream os;
 		os << _sNodeId << "|" << _sIP << "|" << _iPort << "|" << _iIdentityType << "|" << _sAgencyInfo << "|" << _sAgencyDesc << "|" << _sCAhash << "|" << _iIdx;
 		return os.str();
 	}
-	//判断节点是否正确初始化
+	
 	bool Valid() const {
 		return _sNodeId != "" && _sIP != "" && _iPort != 0 && _iIdentityType != -1;
 	}
 	NodeConnParams() {};
 	NodeConnParams(const std::string & json);
-	//转换为enode 信息 enode://${nodeid}@${ip}:${port}
+	
 	std::string toEnodeInfo()const {
 		std::ostringstream os;
 		os << "enode://" << _sNodeId << "@" << _sIP << ":" << _iPort;

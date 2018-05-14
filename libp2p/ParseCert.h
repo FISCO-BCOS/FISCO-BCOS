@@ -40,9 +40,9 @@ private:
 	int mypint( const char ** s,int n,int min,int max,int * e);
 	time_t ASN1_TIME_get ( ASN1_TIME * a,int *err);
 private:
-	bool m_isExpire;//证书是否过期
-	string m_serialNumber;//证书序列号
-	int m_certType;//证书类型   CA根证书，用户证书
-	string m_subjectName;//证书主题信息 0:CA证书  1:用户证书
+	bool m_isExpire; //the certificate is expired or not
+	string m_serialNumber; //serial number of the certificate
+	int m_certType; // type of the certificate (include CA and user certificate) 
+	string m_subjectName;// subject of the certificate (0 represents CA, 1 represents user certificate)
 };
 

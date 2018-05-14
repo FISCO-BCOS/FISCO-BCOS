@@ -147,7 +147,7 @@ void PBFTClient::syncBlockQueue() {
 void PBFTClient::onTransactionQueueReady() {
 	m_syncTransactionQueue = true;
 	m_signalled.notify_all();
-	// 通知EthereumHost去广播交易
+	// info EhtereumHost to broadcast txs 通知EthereumHost去广播交易
 	if (auto h = m_host.lock()) {
 		h->noteNewTransactions();
 	}
@@ -175,7 +175,7 @@ void PBFTClient::syncTransactionQueue(u256 const& _max_block_txs)
 	if (!newPendingReceipts.empty())
 	{
 		DEV_WRITE_GUARDED(x_postSeal)
-		m_postSeal = m_working; //加上这一步是为了RPC接口eth_pendingTransactions能更加容易读到值	
+		m_postSeal = m_working; //add this to let RPC interface "eth_pendingTransactions" to get value 加上这一步是为了RPC接口eth_pendingTransactions能更加容易读到值	
 	}
 }
 
@@ -249,7 +249,7 @@ void PBFTClient::rejigSealing() {
 	bool is_major_syncing = isMajorSyncing();
 	if (would_seal && !is_major_syncing)
 	{
-		if (pbft()->shouldSeal(this)) // 自己是不是leader？
+		if (pbft()->shouldSeal(this)) // am i leader? 自己是不是leader？
 		{
 			uint64_t tx_num = 0;
 			bytes block_data;
@@ -278,11 +278,11 @@ void PBFTClient::rejigSealing() {
 				//auto passed_time = pbft()->view() == 0 ? (utcTime() - last_exec_finish_time) : (utcTime() - pbft()->lastConsensusTime());
 				auto passed_time = 0;
 				if (pbft()->view() != 0) {
-					// 出空块，或者发生异常视图切换。 按新一轮开始算
+					// empty block or other error reason to let viewchange, reset new time 出空块，或者发生异常视图切换。 按新一轮开始算
 					passed_time = utcTime() - pbft()->lastConsensusTime();
 				} else {
 					if (pbft()->lastConsensusTime() - last_exec_finish_time >= sealEngine()->getIntervalBlockTime()) {
-						// 共识阶段网络超时，按新一轮开始算
+						// timeout in consensus phases, reset new time 共识阶段网络超时，按新一轮开始算
 						passed_time = utcTime() - pbft()->lastConsensusTime();
 					} else {
 						passed_time = utcTime() - last_exec_finish_time;
@@ -296,7 +296,7 @@ void PBFTClient::rejigSealing() {
 				if (m_exec_time_per_tx != 0) {
 					max_block_txs = static_cast<uint64_t>(left_time / m_exec_time_per_tx);
 					if (left_time > 0 && left_time < m_exec_time_per_tx) {
-						max_block_txs = 1; // 只要还有时间，至少尝试再打一条
+						max_block_txs = 1; // try pack one tx at least 只要还有时间，至少尝试再打一条
 					}
 					if (max_block_txs > m_maxBlockTranscations) {
 						max_block_txs = m_maxBlockTranscations;
@@ -317,7 +317,7 @@ void PBFTClient::rejigSealing() {
 						VLOG(10) << "Wait for next interval, tx:" << tx_num;
 						return;
 					}
-					// 出块
+					// issue block 出块
 					m_working.resetCurrentTime();
 					m_working.setIndex(pbft()->nodeIdx());
 					m_working.setNodeList(pbft()->getMinerNodeList());
@@ -339,13 +339,13 @@ void PBFTClient::rejigSealing() {
 					<< " height:" << m_sealingInfo.number() << " txnum:" << tx_num;
 				PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), ss.str(), tx_num == 0);
 			}
-			// 广播（不含交易执行结果的块）
+			// broadcast which not contains execution result 广播（不含交易执行结果的块）
 			LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number() << "tx:" << tx_num << ",maxtx:" << max_block_txs << ",tq.num=" << m_tq.currentTxNum() << "time:" << utcTime();
 
 			u256 view = 0;
 			bool generate_ret = pbft()->generateSeal(m_sealingInfo, block_data, view);
 
-			// 空块切换
+			// empty block 空块切换
 			if (generate_ret && tx_num == 0 && m_omit_empty_block) {
 				m_empty_block_flag = true;
 				pbft()->changeViewForEmptyBlockWithLock();
@@ -363,12 +363,12 @@ void PBFTClient::rejigSealing() {
 					return;
 				}
 
-				if (tx_num != m_working.pending().size()) {// 交易数不一致可能是被reset过
+				if (tx_num != m_working.pending().size()) {// if txs number is not equal, it may be reset 交易数不一致可能是被reset过
 					m_working.resetCurrent();
 					return;
 				}
 
-				// 跑交易重新打包
+				// run txs 跑交易重新打包
 				auto start_exec_time = utcTime();
 
 				LOG(DEBUG) << "start exec tx, blk=" << m_sealingInfo.number() << ", time=" << start_exec_time;

@@ -32,23 +32,23 @@ using namespace dev::p2p;
 class GenKey
 {
 private:
-	int m_cryptoMod;//加密模式  0:不加密  1:本地加密 2:keycenter加密
-	string m_superKey1;//superkey内存分段存储
-	string m_kcUrl;//keycenter访问路径
-	string m_superKey;//本地明文存储superkey数据
-	string m_superKey2;//superkey内存分段存储
-	string m_nodekeyPath;//nodekey生成路径
-	string m_datakeyPath;//datakey生成路径
-	string m_superKey3;//superkey内存分段存储
-	string m_privatekeyPath;//证书privatekey明文存放路径
-	string m_enprivatekeyPath;//证书privatekey密文存放路径
+	int m_cryptoMod;//cryptomod  0:not encrypt  1:local encrypt 2:KeyCenter encrypt
+	string m_superKey1;//
+	string m_kcUrl;//keycenter url
+	string m_superKey;//local encrypt superkey
+	string m_superKey2;//superkey subsection memory storage 
+	string m_nodekeyPath;//nodekey create path
+	string m_datakeyPath;//datakey create path
+	string m_superKey3;//superkey subsection memory storage 
+	string m_privatekeyPath;//certificate private path
+	string m_enprivatekeyPath;//certificate private encrypt path
 
-	//与KeyCenter数据交互通信密码
+	//KeyCenter channel password
 	string m_changeKey1;
 	string m_changeKey2;
 	string m_changeKey3;
 	string m_changeKey4;
-	string m_superKey4; //superkey内存分段存储
+	string m_superKey4; //superkey subsection memory storage
 	enum CRYPTOTYPE
 	{
 		CRYPTO_DEFAULT = 0,
@@ -63,17 +63,17 @@ private:
 		KEY_DATA
 	};
 
-	void generateNetworkRlp(string const& sFilePath,int cryptoType,string const& keyData = "",string const& ivData = "",string const& kcUrl = "",int keyType = 1);//1:nodekey 3:datakey   鐢熸垚nodekey datakey鏂囦欢
-	string getKeycenterData(string const& b64data,string const& kcUrl,int keyType);//keycenter浜や簰
+	void generateNetworkRlp(string const& sFilePath,int cryptoType,string const& keyData = "",string const& ivData = "",string const& kcUrl = "",int keyType = 1);//1:nodekey 3:datakey
+	string getKeycenterData(string const& b64data,string const& kcUrl,int keyType);//keycenter response
 	string getSuperKey();
 	static int writer(char* data, size_t size, size_t nmemb, std::string* writer_data);
 public:
 	GenKey(void);
 	~GenKey(void);
-	void setKeyData();//生成nodekey   datakey 文件
-	bytes getKeyData();//获取明文 nodekey datakey 文件
-	void setPrivateKey();//私钥使用KeyCenter加密处理
-	string getPrivateKey();//获取私钥明文数据
+	void setKeyData();//create nodekey   datakey file
+	bytes getKeyData();//get nodekey datakey plaintext
+	void setPrivateKey();//privatekey encrypt
+	string getPrivateKey();//privatekey decrypt
 	string getPublicKey();
 	string getCaPublicKey();
 	void setCryptoMod(int cryptoMod);

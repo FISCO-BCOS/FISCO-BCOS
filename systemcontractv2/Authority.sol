@@ -3,15 +3,13 @@ import "TransactionFilterBase.sol";
 import "Group.sol";
 
 contract Authority is TransactionFilterBase {
-    bool private _enabled = false; //是否启用权限控制
-    mapping (address => address) private _groups; //用户对应的角色
+    bool private _enabled = false;                  // Whether a filter can check the permissions
+    mapping (address => address) private _groups;   // Account map to group
     
-    //设置用户的角色
     function setUserGroup(address user, address group) public {
         _groups[user] = group;
     }
     
-    //获取用户的角色
     function getUserGroup(address user) public constant returns(address) {
         return _groups[user];
     }
@@ -20,7 +18,7 @@ contract Authority is TransactionFilterBase {
         _enabled = true;
     }
     
-    //检查用户某个操作的权限
+    // Check whether the user has the permissions to call a function
     function process(address origin, address from, address to, string func, string input) public constant returns(bool) {
         if(!_enabled) {
             return true;
@@ -29,7 +27,6 @@ contract Authority is TransactionFilterBase {
         return Group(_groups[origin]).getPermission(to, func);
     }
     
-    //新建一个角色
     function newGroup() public returns(address) {
         return new Group();
     }

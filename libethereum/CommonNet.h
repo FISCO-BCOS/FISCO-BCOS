@@ -73,16 +73,16 @@ enum SubprotocolPacketType : byte
 	GetReceiptsPacket = 0x0f,
 	ReceiptsPacket = 0x10,
 
-	//同步配置
-	NodeInfoSync = 0x11,			//增加节点信息
-	DelNodeInfoSync = 0x12,			//删除节点信息
+	
+	NodeInfoSync = 0x11,			
+	DelNodeInfoSync = 0x12,			
 
-	//链上链下
+	
 	CustomMessage = 0x13,
 
-	//Topic广播
+	
 	Topics = 0x14,
-	//channel消息
+	
 	ChannelMessage = 0x15,
 
 	PacketCount

@@ -26,6 +26,7 @@
 #include <libdevcore/CommonData.h>
 #include <libevmcore/Instruction.h>
 #include <libethereum/Client.h>
+#include <libethereum/Pool.hpp>
 #include <libethereum/BlockQueue.h>
 #include <libpbftseal/PBFT.h>
 #include <libwebthree/WebThree.h>
@@ -145,8 +146,8 @@ Json::Value Eth::eth_getProofMerkle(string const& _blockHash, string const& _tra
     trieDb.init();
 
     /*
-     **用交易数据构建trie
-     **key是交易的index,value是transaction
+     **try to build MPT tree from transcations from block
+     **key is the transaction's index in blockk,value is transaction
      */
 
     for (unsigned i = 0; i < transactions.size(); ++i)
@@ -427,15 +428,15 @@ string Eth::eth_sendTransaction(Json::Value const& _json)
 
 		CnsParams params;
 		if (isOldCNSCall(t, params, _json))
-		{//一期CNS服务
+		{//CNS v1
 			eth_sendTransactionOldCNSSetParams(t);
 		}
 		else if (isNewCNSCall(t))
-		{//二期CNS改造
+		{//CNS v2
 			eth_sendTransactionNewCNSSetParams(t);
 		}
 
-		if ( t.blockLimit == Invalid256 ) //默认帮忙设置个
+		if ( t.blockLimit == Invalid256 ) //by default
 			t.blockLimit = client()->number() + 100;
 
 
@@ -479,12 +480,12 @@ string Eth::eth_sendTransaction(Json::Value const& _json)
 	}
 	catch (JsonRpcException&)
 	{
-		LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
+		LOG(ERROR) << boost::current_exception_diagnostic_information();
 		throw;
 	}
 	catch (...)
 	{
-		LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
+		LOG(ERROR) << boost::current_exception_diagnostic_information();
 		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
 	}
 	BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
@@ -532,7 +533,7 @@ string Eth::eth_sendRawTransaction(std::string const& _rlp)
 	try
 	{
 		auto tx_data = jsToBytes(_rlp, OnFailed::Throw);
-		std::pair<ImportResult, h256> ret = client()->injectTransaction(tx_data);//里面到import的时候会CheckTransaction::Everything 要求校验
+		std::pair<ImportResult, h256> ret = client()->injectTransaction(tx_data);//when do import, it will use CheckTransaction::Everything for check
 		ImportResult ir = ret.first;
 		if ( ImportResult::Success == ir)
 		{
@@ -580,11 +581,11 @@ string Eth::eth_sendRawTransaction(std::string const& _rlp)
 	}
 }
 
-//jsonCall接口添加
+//add jsonCall
 Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _blockNumber)
 {
 	/*
-	//请求
+	//request
 	{
 		"jsonrpc": "2.0",
 		"method" : "eth_json_call",
@@ -599,7 +600,7 @@ Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _bloc
 			"id": 1
 	}
 
-	//返回
+	//response
 	{
 		"id": 7,
 		"jsonrpc" : "2.0",
@@ -610,10 +611,10 @@ Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _bloc
 		}
 	}
 
-	//jsonCall处理流程:
-	1. 解析name =>  name格式为 ：合约名称-调用方法名称-版本号 注意： 版本号可以省略。
-	2. 根据合约名称+版本号从abi管理模块获取abi，合约地址信息。
-	3. 根据获取的调用方法的abi，以及params参数，序列化参数信息，生成evm直接识别的机器码。
+	//jsonCall process:
+	1. parse name =>  name format:contract name-function-version attention:version can be ignored 。
+	2. get abi info and contract address by contract name and version
+	3. then call the evm with params
 	*/
 
 	LOG(DEBUG) << "eth_jsonCall begin, blocknumber= " << _blockNumber << "json=" << _json.toStyledString();
@@ -621,16 +622,16 @@ Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _bloc
 	try
 	{
 		CnsParams params;
-		//参数解析
+		//parse params
 		fromJsonGetParams(_json, params);
 
 		libabi::SolidityAbi abiinfo;
-		//获取abi信息
+		//get abi info
 		libabi::ContractAbiMgr::getInstance()->getContractAbi(params.strContractName, params.strVersion, abiinfo);
 
 		//encode abi
 		const auto &f = abiinfo.getFunction(params.strFunc);
-		//在非constant函数上面进行call调用
+		//do call for non-constant function in contract
 		if (!f.bConstant())
 		{
 			ABI_EXCEPTION_THROW("call on not constant function ,contract|func|version=" + params.strContractName + "|" + params.strFunc + "|" + params.strVersion, libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidAbiTransactionOnConstantFunc);
@@ -639,19 +640,17 @@ Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _bloc
 		Json::Value jResult(Json::objectValue);
 		Json::Value jReturn;
 		{
-			//abi编码
+			//abi info
 			auto strData = libabi::SolidityCoder::getInstance()->encode(f, params.jParams);
 
-			//准备call调用
+        
 			TransactionSkeleton t;
 			setTransactionDefaults(t);
-			//合约地址转换
+			//get contract address
 			t.to = jsToAddress(abiinfo.getAddr());
-			//abi序列化代码
 			t.data = jsToBytes(strData);
-			//call 调用
 			ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
-			//abi解码
+			//abi decode
 			jReturn = libabi::SolidityCoder::getInstance()->decode(f, toJS(er.output));
 		}
 
@@ -703,15 +702,15 @@ string Eth::eth_call(Json::Value const& _json, string const& _blockNumber)
 		std::string result;
 		CnsParams params;
 		if (isOldCNSCall(t, params, _json))
-		{//一期CNS服务
+		{//CNS v1
 			result = eth_callOldCNS(t, params, _blockNumber);
 		}
 		else if (isNewCNSCall(t))
-		{//二期CNS改造
+		{//CNS v2
 			result = eth_callNewCNS(t, _blockNumber);
 		}
 		else
-		{//默认调用
+		{//default
 			result = eth_callDefault(t, _blockNumber);
 		}
 
@@ -1167,7 +1166,7 @@ std::string Eth::eth_getCodeCNS(std::string const& strContractName, std::string 
 
 		LOG(TRACE) << "getCodeCNS ## contract = " << contract << " ,version = " << version;
 
-		// 获取abi信息
+		// get abi info
 		libabi::SolidityAbi abiinfo;
 		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
 		LOG(DEBUG) << "getCodeCNS ## contract address is => " << abiinfo.getAddr();
@@ -1192,7 +1191,7 @@ std::string Eth::eth_getBalanceCNS(std::string const& strContractName, std::stri
 
 		LOG(TRACE) << "getBalanceCNS ## contract = " << contract << " ,version = " << version;
 
-		// 获取abi信息
+		// get abi info
 		libabi::SolidityAbi abiinfo;
 		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
 
@@ -1218,7 +1217,7 @@ std::string Eth::eth_getStorageAtCNS(std::string const& strContractName, std::st
 
 		LOG(TRACE) << "getStorageAtCNS ## contract = " << contract << " ,version = " << version;
 
-		// 获取abi信息
+		// get abi info
 		libabi::SolidityAbi abiinfo;
 		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
 		LOG(DEBUG) << "getStorageAtCNS ## contract address is => " << abiinfo.getAddr();
@@ -1243,7 +1242,7 @@ std::string Eth::eth_getTransactionCountCNS(std::string const& strContractName, 
 
 		LOG(TRACE) << "getTransactionCountCNS ## contract = " << contract << " ,version = " << version;
 
-		// 获取abi信息
+		// get abi info
 		libabi::SolidityAbi abiinfo;
 		libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
 		LOG(DEBUG) << "getTransactionCountCNS ## contract address = " << abiinfo.getAddr();
@@ -1263,14 +1262,14 @@ bool Eth::isDefaultCall(const TransactionSkeleton &t, CnsParams &params, const J
 
 bool Eth::isOldCNSCall(const TransactionSkeleton &t, CnsParams &params, const Json::Value &_json)
 {
-	//CNS服务传送的data字段是json object
+	//in CNS, data is json object
 	if (!t.jData.empty())
 	{
-		fromJsonGetParams(t.jData, params); //解析参数
+		fromJsonGetParams(t.jData, params); //parse params
 		return true;
 	}
  
-	//为web3j做的兼容
+	//compatible with web3j
 	string strData = _json["data"].asString();
 	if (strData.compare(0, 2, "0x") == 0 || strData.compare(0, 2, "0X") == 0)
 	{
@@ -1306,19 +1305,19 @@ void Eth::eth_sendTransactionOldCNSSetParams(TransactionSkeleton &t)
 
 void Eth::eth_sendTransactionNewCNSSetParams(TransactionSkeleton &t)
 {
-	//1. 获取合约名跟版本号
+	//1. get contract name and version
 	auto rVectorString = libabi::SolidityTools::splitString(t.strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
 	std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
 	std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
 
 	LOG(DEBUG) << "sendTransactionNewCNS ## contract = " << contract << " ,version = " << version;
 
-	//2. 获取abi信息
+	//2. get abi info
 	libabi::SolidityAbi abiinfo;
 	libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
 	LOG(DEBUG) << "sendTransactionNewCNS ## contract_name = " << t.strContractName << " ,contract_address = " << abiinfo.getAddr();
 
-	//3. 获取调用合约的地址
+	//3. get contract address
 	t.to = dev::jsToAddress(abiinfo.getAddr());
 	t.creation = false;
 }
@@ -1339,27 +1338,27 @@ std::string Eth::eth_callOldCNS(TransactionSkeleton &t, const CnsParams &params,
 		<< params.jParams.toStyledString();
 
 	libabi::SolidityAbi abiinfo;
-	//2. 获取abi信息
+	//2. get abi info
 	libabi::ContractAbiMgr::getInstance()->getContractAbi(params.strContractName, params.strVersion, abiinfo);
 
 	//encode abi
 	const auto &f = abiinfo.getFunction(params.strFunc);
-	//在非constant函数上面进行call调用
+	//do call invoke in non-constant function
 	if (!f.bConstant())
 	{
 		ABI_EXCEPTION_THROW("call on not constant function ,contract|func|version=" + params.strContractName + "|" + params.strFunc + "|" + params.strVersion, libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidAbiTransactionOnConstantFunc);
 	}
 
-	//3. abi序列化
+	//3. abi serialize
 	std::string strData = libabi::SolidityCoder::getInstance()->encode(abiinfo.getFunction(params.strFunc), params.jParams);
-	//4. 调用合约地址 执行代码赋值。
+	//4. call contract
 	t.to = dev::jsToAddress(abiinfo.getAddr());
 	t.data = dev::jsToBytes(strData);
 
 	LOG(DEBUG) << "eth_callOldCNS # address => " << abiinfo.getAddr();
-	//5. call调用
+	//5. do call
 	ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
-	//6. 执行结果abi反序列化
+	//6. decode result
 	auto jReturn = libabi::SolidityCoder::getInstance()->decode(f, toJS(er.output));
 
 	Json::FastWriter writer;
@@ -1372,23 +1371,118 @@ std::string Eth::eth_callOldCNS(TransactionSkeleton &t, const CnsParams &params,
 
 std::string Eth::eth_callNewCNS(TransactionSkeleton &t, std::string const& _blockNumber)
 {
-	//1. 获取合约名跟版本号
+	//1. get contract name and version
 	auto rVectorString = libabi::SolidityTools::splitString(t.strContractName, libabi::SolidityTools::CNS_SPLIT_STRING);
 	std::string contract = (!rVectorString.empty() ? rVectorString[0] : "");
 	std::string version = (rVectorString.size() > 1 ? rVectorString[1] : "");
 
 	LOG(TRACE) << "eth_callNewCNS ## contract = " << contract << " ,version = " << version;
 
-	//2. 获取abi信息
+	//2. get abi info
 	libabi::SolidityAbi abiinfo;
 	libabi::ContractAbiMgr::getInstance()->getContractAbi(contract, version, abiinfo);
 	LOG(DEBUG) << "eth_callNewCNS ## contract_address = " << abiinfo.getAddr();
 
-	//3. 获取调用合约的地址
+	//3. get contract address
 	t.to = dev::jsToAddress(abiinfo.getAddr());
 
-	//4. call调用
+	//4. call invoke
 	ExecutionResult er = client()->call(t.from, t.value, t.to, t.data, t.gas, t.gasPrice, jsToBlockNumber(_blockNumber), FudgeFactor::Lenient);
 
 	return toJS(er.output);
+}
+
+Json::Value Eth::eth_getCmByRange(Json::Value const &range)
+{
+	/*
+curl --data '{"jsonrpc":"2.0","method":"eth_getCmByRange","id":1,"params":[{"from":0,"to":-1}]}' localhost:8545
+*/
+	Json::Value ret;
+	ret["from"] = 0;
+	ret["to"] = 0;
+	Json::Value cms(Json::arrayValue);
+	try
+	{
+		// [from， to)
+		int64_t from = range["from"].asInt64();
+		int64_t to = range["to"].asInt64();
+
+		CMPool_Singleton &pool = CMPool_Singleton::Instance();
+		poolBlockNumber_t cbn = client()->number();
+
+		if (to <= 0)
+			to = (int64_t)pool.size(cbn);
+		else
+			to = min(to, (int64_t)pool.size(cbn));
+		//LOG(TRACE) << "pool size: " << pool.size(cbn) << std::endl;
+
+		ret["from"] = from;
+		ret["to"] = to;
+
+		//[from,to) error return [null]
+		if (from >= to || from < 0)
+		{
+			ret["cms"] = cms;
+			return ret;
+		}
+
+		for (; from < to; from++)
+		{
+			cms.append(pool.get(cbn, from));
+		}
+	}
+	catch (std::exception &e)
+	{
+		LOG(ERROR) << e.what() << endl;
+	}
+	ret["cms"] = cms;
+	return ret;
+}
+
+Json::Value Eth::eth_getGovDataByRange(Json::Value const &range)
+{
+	/*
+curl --data '{
+"jsonrpc":"2.0","method":"eth_getGovDataByRange","id":1,"params":[{"from":0,"to":-1}]
+}' localhost:8545
+*/
+	Json::Value ret;
+	ret["from"] = 0;
+	ret["to"] = 0;
+	Json::Value g_datas(Json::arrayValue);
+	try
+	{
+		// [from， to)
+		int64_t from = range["from"].asInt();
+		int64_t to = range["to"].asInt();
+
+		GovDataPool_Singleton &pool = GovDataPool_Singleton::Instance();
+		poolBlockNumber_t cbn = client()->number();
+
+		if (to <= 0)
+			to = (int64_t)pool.size(cbn);
+		else
+			to = min(to, (int64_t)pool.size(cbn));
+
+		ret["from"] = from;
+		ret["to"] = to;
+
+		//[from,to) error return [null]
+		if (from >= to || from < 0)
+		{
+			ret["G_datas"] = g_datas;
+			return ret;
+		}
+
+		for (; from < to; from++)
+		{
+			g_datas.append(pool.get(cbn, from));
+		}
+	}
+	catch (std::exception &e)
+	{
+		LOG(ERROR) << e.what() << endl;
+	}
+	ret["G_datas"] = g_datas;
+	return ret;
 }

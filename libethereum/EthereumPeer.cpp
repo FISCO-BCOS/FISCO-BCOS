@@ -234,18 +234,17 @@ void EthereumPeer::tick()
 		s->disconnect(PingTimeout);
 	}
 
-	//心跳断连逻辑
 	if(s && s->isConnected()
 			&& chrono::duration_cast<chrono::seconds>(std::chrono::steady_clock::now() - s->lastReceived()).count() > 30) { //使用pingpong代替lastTopicAck
 		try {
-			LOG(ERROR) << "超时未响应，断连节点:" << id() << "@"
+			LOG(WARNING) << "Timeout Disconnect:" << id() << "@"
 					<< session()->peer()->endpoint.address.to_string() << ":"
 					<< session()->peer()->endpoint.tcpPort;
 
 			s->disconnect(PingTimeout);
 		}
 		catch(exception &e) {
-			LOG(ERROR) << "错误:" << e.what();
+			LOG(ERROR) << "Error:" << e.what();
 		}
 	}
 }
@@ -307,7 +306,6 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 				break;
 			}
 
-			//取到对端要的head
 			pair<bytes, unsigned> const rlpAndItemCount = m_hostData->blockHeaders(blockId, numHeadersToSend, skip, reverse);
 
 			RLPStream s;
@@ -448,7 +446,7 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 		}
 		case NodeInfoSync:
 		{
-			//处理新加节点配置信息
+			
 			unsigned itemCount = _r.itemCount();
 			LOG(INFO) << "NodeInfoSync itemCount is : " << itemCount << "\n";
 			if (itemCount <= 0)
@@ -466,55 +464,49 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 				params._sIP = _r[i][4].toStringStrict();
 				params._iPort = _r[i][5].toInt();
 
-				//增加新节点到内存，并落地
+				
 				NodeConnManagerSingleton::GetInstance().addNewNodeConnInfo(params);
-				//尝试连接新节点 不进行连接 同步过来的节点只落地config.json中
-				//NodeConnManagerSingleton::GetInstance().connNode(params);
+				
 			}
 
 			break;
 		}
 		case DelNodeInfoSync:
 		{
-			//删除节点请求
+			
 			const string sNodeId = _r[0].toString();
 			LOG(INFO) << "DelNodeInfoSync nodeid is : " << sNodeId << std::endl;
 			bool bExisted = false;
 			NodeConnManagerSingleton::GetInstance().delNodeConnInfo(sNodeId, bExisted);
 			LOG(INFO) << "delNodeConnInfo " << sNodeId << "|" << bExisted << std::endl;
-			//存在则断掉连接   不进行断连，断连的节点只通过合约来控制
-			/*if (bExisted)
-			{
-				NodeConnManagerSingleton::GetInstance().disconnNode(sNodeId);
-			}*/
+			
 			break;
 		}
 		case CustomMessage: {
-			//链上链下消息
+			
 			std::shared_ptr<bytes> data(new bytes());
 			*data = _r[0].toBytes();
 
-			LOG(DEBUG) << "收到来自其它节点的链上链下消息";
+			LOG(TRACE) << "Recv Other Node Message";
 
-			//下发
 			m_observer->onCustomMessage(dynamic_pointer_cast<EthereumPeer>(shared_from_this()), data);
 
 			break;
 		}
 
-		//链上链下二期逻辑
+		
 		case Topics: {
-			//topic内容
+			
 			std::shared_ptr<std::vector<std::string> > topics(new std::vector<std::string>());
 
-			LOG(DEBUG) << "收到来自其它节点的topic消息 来自:" << id()
+			LOG(TRACE) << "Recv Other Node topic Message:" << id()
 					<< "@"
 					<< session()->peer()->endpoint.address.to_string()
 					<< ":"
 					<< session()->peer()->endpoint.tcpPort;
 
 			try {
-				int type = _r[0].toInt(); //1-广播seq 2-请求获取topics 3-发送topics
+				int type = _r[0].toInt(); 
 				int seq = _r[1].toInt();
 
 				if(type == 2) {
@@ -529,23 +521,23 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 				_channelObserver->onTopicMessage(dynamic_pointer_cast<EthereumPeer>(shared_from_this()), type, seq, topics);
 			}
 			catch(exception &e) {
-				LOG(ERROR) << "处理来自:" << id() << " 的topic广播异常:" << e.what();
+				LOG(ERROR) << "Process:" << id() << "  topic Exception:" << e.what();
 			}
 
 			break;
 		}
 		case ChannelMessage: {
-			//链上链下消息
+			
 			std::shared_ptr<bytes> data(new bytes());
 			*data = _r[0].toBytes();
 
-			LOG(DEBUG) << "收到来自其它节点的channel消息 来自:" << id()
+			LOG(TRACE) << "Recv Other Node channel Message:" << id()
 					<< "@"
 					<< session()->peer()->endpoint.address.to_string()
 					<< ":"
 					<< session()->peer()->endpoint.tcpPort;
 
-			//下发
+			
 			_channelObserver->onChannelMessage(dynamic_pointer_cast<EthereumPeer>(shared_from_this()), data);
 
 			break;

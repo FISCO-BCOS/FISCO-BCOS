@@ -553,9 +553,9 @@ async function deploy(args,account, filename) {
     //用FISCO-BCOS的合约编译器fisco-solc进行编译
 		execSync("fisco-solc --abi  --bin -o " + config.Ouputpath + "  " + filename + ".sol" + " &>/dev/null");
 
-		//console.log('编译成功！');
+		//console.log('complie success！');
 	} catch(e){
-		console.log('编译失败!' + e);
+		console.log('complie failed!' + e);
 	}
 
 	var abi=JSON.parse(fs.readFileSync(config.Ouputpath+filename+".sol:"+filename+'.abi', 'utf-8'));
@@ -574,7 +574,7 @@ async function deploy(args,account, filename) {
 				} else {
 
 
-					console.log(filename+"合约地址 "+contract.address);
+					console.log(filename+"contract address "+contract.address);
 
           addressjson[filename]=     contract.address;
           fs.writeFileSync(config.Ouputpath+'address.json', JSON.stringify(addressjson), 'utf-8');
@@ -662,9 +662,9 @@ async function rawDeploy(account,  privateKey,filename,types,params) {
     try{ 
       //用FISCO-BCOS的合约编译器fisco-solc进行编译
       execSync("fisco-solc --overwrite --abi  --bin -o " + config.Ouputpath + "  " + filename + ".sol");
-        console.log(filename+'编译成功！');
+        console.log(filename+'complie success！');
     } catch(e){
-        console.log(filename+'编译失败!' + e);
+        console.log(filename+'complie failed!' + e);
     }
 
         var abi=JSON.parse(fs.readFileSync(config.Ouputpath+ "./"+filename+'.abi', 'utf-8'));
@@ -688,12 +688,12 @@ async function rawDeploy(account,  privateKey,filename,types,params) {
         return new Promise((resolve, reject) => {
                 web3.eth.sendRawTransaction(signTX, function(err, address) {
                         if (!err) {
-                                console.log("发送交易成功: " + address);
+                                console.log("send transaction success: " + address);
 
                                 checkForTransactionResult(address, (err, receipt) => {
                                 var addressjson={};
                                 if( receipt.contractAddress ){
-                                        console.log(filename+"合约地址 "+receipt.contractAddress);
+                                        console.log(filename+"contract address "+receipt.contractAddress);
                                     fs.writeFileSync(config.Ouputpath+filename+'.address', receipt.contractAddress, 'utf-8');       
 
                                 }//if
@@ -707,7 +707,7 @@ async function rawDeploy(account,  privateKey,filename,types,params) {
                                 return;
                         }
                         else {
-                                console.log("发送交易失败！",err);
+                            console.log("send transaction failed！",err);
 
                                 return;
                         }
@@ -748,7 +748,6 @@ async function sendRawTransactionByNameService(account, privateKey, contract, fu
   };
 
   var strnamecallparams = JSON.stringify(namecallparams);
-  console.log("===>> namecall params = " + strnamecallparams);
 
 	var postdata = {
 		data: strnamecallparams,
@@ -764,7 +763,7 @@ async function sendRawTransactionByNameService(account, privateKey, contract, fu
 	return new Promise((resolve, reject) => {
 		web3.eth.sendRawTransaction(signTX, function(err, address) {
 			if (!err) {
-				console.log("发送交易成功: " + address);
+				console.log("send transaction success: " + address);
 
 				checkForTransactionResult(address, (err, receipt) => {
 					resolve(receipt);
@@ -773,7 +772,7 @@ async function sendRawTransactionByNameService(account, privateKey, contract, fu
 				//resolve(address);
 			}
 			else {
-				console.log("发送交易失败！",err);
+			    console.log("send transaction failed！",err);
 
 				return;
 			}
@@ -782,8 +781,12 @@ async function sendRawTransactionByNameService(account, privateKey, contract, fu
 }
 
 async function sendRawTransaction(account, privateKey, to, func, params) {
-	var r = /^\w+\((.+)\)$/g.exec(func);
-	var types = r[1].split(',');
+	// var r = /^\w+\((.+)\)$/g.exec(func);
+  var r = /^\w+\((.*)\)$/g.exec(func);
+  var types = []
+  if (r[1]) {
+    types = r[1].split(',');
+  }
 
 	var tx_data = coder.codeTxData(func,types,params);
 
@@ -801,7 +804,7 @@ async function sendRawTransaction(account, privateKey, to, func, params) {
 	return new Promise((resolve, reject) => {
 		web3.eth.sendRawTransaction(signTX, function(err, address) {
 			if (!err) {
-				console.log("发送交易成功: " + address);
+				console.log("send transaction success: " + address);
 
 				checkForTransactionResult(address, (err, receipt) => {
 					resolve(receipt);
@@ -810,7 +813,7 @@ async function sendRawTransaction(account, privateKey, to, func, params) {
 				//resolve(address);
 			}
 			else {
-				console.log("发送交易失败！",err);
+			    console.log("send transaction failed！",err);
 
 				return;
 			}
