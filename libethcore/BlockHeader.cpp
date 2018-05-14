@@ -42,7 +42,7 @@ BlockHeader::BlockHeader(bytesConstRef _block, BlockDataType _bdt, h256 const& _
 	populate(header);
 }
 
-u256 BlockHeader::maxBlockHeadGas = 2000000000; //默认20亿
+u256 BlockHeader::maxBlockHeadGas = 2000000000; 
 
 void BlockHeader::clear()
 {
@@ -82,7 +82,7 @@ void BlockHeader::streamRLPFields(RLPStream& _s) const
 {
 	_s	<< m_parentHash << m_sha3Uncles << m_author << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_logBloom
 	    << m_difficulty << m_number << m_gasLimit << m_gasUsed << m_timestamp << m_extraData << m_gen_idx;
-	// 公钥列表
+	
 	_s.appendVector(m_node_list);
 }
 
@@ -189,7 +189,7 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
 		auto txList = root[1];
 		auto expectedRoot = trieRootOver(txList.itemCount(), [&](unsigned i) { return rlp(i); }, [&](unsigned i) { return txList[i].data().toBytes(); });
 
-		LOG(INFO) << "Expected trie root:" << toString(expectedRoot);
+		LOG(TRACE) << "Expected trie root:" << toString(expectedRoot);
 		if (m_transactionsRoot != expectedRoot)
 		{
 			MemoryDB tm;
@@ -208,16 +208,16 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
 				txs.push_back(txList[i].data());
 				LOG(DEBUG) << toHex(k.out()) << toHex(txList[i].data());
 			}
-			LOG(DEBUG) << "trieRootOver" << expectedRoot;
-			LOG(DEBUG) << "orderedTrieRoot" << orderedTrieRoot(txs);
-			LOG(DEBUG) << "TrieDB" << transactionsTrie.root();
-			LOG(DEBUG) << "Contents:";
+			LOG(TRACE) << "trieRootOver" << expectedRoot;
+			LOG(TRACE) << "orderedTrieRoot" << orderedTrieRoot(txs);
+			LOG(TRACE) << "TrieDB" << transactionsTrie.root();
+			LOG(TRACE) << "Contents:";
 			for (auto const& t : txs)
-				LOG(DEBUG) << toHex(t);
+				LOG(TRACE) << toHex(t);
 
 			BOOST_THROW_EXCEPTION(InvalidTransactionsRoot() << Hash256RequirementError(expectedRoot, m_transactionsRoot));
 		}
-		LOG(INFO) << "Expected uncle hash:" << toString(sha3(root[2].data()));
+		LOG(TRACE) << "Expected uncle hash:" << toString(sha3(root[2].data()));
 		if (m_sha3Uncles != sha3(root[2].data()))
 			BOOST_THROW_EXCEPTION(InvalidUnclesHash() << Hash256RequirementError(sha3(root[2].data()), m_sha3Uncles));
 	}

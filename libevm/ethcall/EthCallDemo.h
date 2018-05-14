@@ -1,17 +1,35 @@
+/*
+	This file is part of FISCO BCOS.
+
+	FISCO BCOS is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	FISCO BCOS is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with FISCO BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 /**
  * @file: EthCallDemo.h
- * @author: fisco-dev
+ * @author: fisco-dev, jimmyshi
  * 
  * @date: 2017
  */
 
 #pragma once
-
-#include "EthCallEntry.h"
-#include <libdevcore/easylog.h>
-#include <libdevcore/Common.h>
 #include <string>
 #include <vector>
+
+#include <libdevcore/Common.h>
+#include <libdevcore/easylog.h>
+
+#include <libevm/ethcall/EthCallEntry.h>
 
 using namespace std;
 using namespace dev;
@@ -23,8 +41,8 @@ namespace eth
 {
 
 /*
-*   ethcall 接口编程举例
-*   例如在sol中，ethcall调用如下：
+*   ethcall program example
+*   In solidity, call ethcall like:
 *       int a;
 *       int b;
 *       bytes memory bstr;
@@ -34,39 +52,39 @@ namespace eth
 *       assembly{
 *           r := ethcall(callId, a, b, bstr, str, 0, 0, 0, 0, 0)
 *       }
-*   对应的EthCallExecutor，可以这么写：（EthCallDemo）
+*   So the corresponding EthCallExecutor can be write as follow: (EthCallDemo)
 */
 
-class EthCallDemo : EthCallExecutor<int, int, vector_ref<byte>, string> //按顺序定义除开callId之外的类型
+class EthCallDemo : EthCallExecutor<int, int, vector_ref<byte>, string> //Declare the type in the order correspond to ethcall(callId, type0, type1...) in solidity
 {
     /*
-    *   编写步骤如下：
-    *   1. 本文件引用头文件 EthCallEntry.h
+    *   Program steps:
+    *   1. Include EthCallEntry.h in this file.
     *
-    *   2. EthCallEntry.cpp 中引用本头文件
+    *   2. EthCallEntry.cpp include this header file.
     *
-    *   3. 在EthCallEntry.h中的EthCallList中声明一个CallId
-    *           如：EthCallIdList::DEMO = 0x66666
+    *   3. Declare a CallId in EthCallList of EthCallEntry.h
+    *           eg: EthCallIdList::DEMO = 0x66666
     *
-    *   4. 在EthCallEntry.cpp的EthCallContainer中添加下面这行，实例化EthCallDemo
-    *           如：static EthCallDemo ethCallDemo; 
+    *   4. Add a line like below in EthCallContainer of EthCallEntry.cpp to initialize EthCallDemo.
+    *           eg: static EthCallDemo ethCallDemo; 
     *   
-    *   5. 仿造本Demo实现相应功能：继承EthCallExecutor类，并实现类中的构造函数、ethcall、gasCost
+    *   5. Follow this Demo, to derive EthCallExecutor and overwrite this two functions: ethcall() and gasCost().
     */    
 public:
     EthCallDemo()
     {
-        //使用刚刚声明的CallId将EthCallDemo注册到ethCallTable中
+        //Register EthCallDemo into ethCallTable using CallId we decare before in EthCallList
         //LOG(DEBUG) << "ethcall bind EthCallDemo--------------------";
-        this->registerEthcall(EthCallIdList::DEMO); //EthCallList::DEMO = 0x66666为ethcall的callid
+        this->registerEthcall(EthCallIdList::DEMO); //EthCallList::DEMO = 0x66666 is EthCallDemo's CallId
     }
 
     u256 ethcall(int a, int b, vector_ref<byte>bstr, string str) override 
     {
         LOG(INFO) << "ethcall " <<  a + b << " " << bstr.toString() << str;
 
-        //用vector_ref定义的vector可直接对sol中的array赋值
-        //vector_ref的用法与vector类似，可参看libdevcore/vector_ref.h
+        //Using vector_ref instead of vector, can modify the solidity array directly.
+        //The usage of vector_ref is similar with vector, ref to libdevcore/vector_ref.h
         bstr[0] = '#';
         bstr[1] = '#';
         bstr[2] = '#';
@@ -74,16 +92,16 @@ public:
         bstr[4] = '#';
         bstr[5] = '#';
 
-        return 0; //返回值写入sol例子中的r变量中
+        return 0; //This return number is the r number of ethcall (r := ethcall(...) )
     }
 
     uint64_t gasCost(int a, int b, vector_ref<byte>bstr, string str) override 
     {
-        return sizeof(a) + sizeof(b) + bstr.size() + str.length(); //消耗的gas一般与处理的数据长度有关
+        return sizeof(a) + sizeof(b) + bstr.size() + str.length(); //Somtimes, gas cost is corresponding to the length of parameter
     }
 };
 
-///EthCallDemo举例结束///
+///EthCallDemo example end///
 
 
 }

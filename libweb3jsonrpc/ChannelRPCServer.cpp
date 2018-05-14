@@ -48,7 +48,7 @@ ChannelRPCServer::~ChannelRPCServer() {
 bool ChannelRPCServer::StartListening() {
 	if (!_running)
 	{
-		LOG(INFO) << "启动监听: " << _listenAddr << ":" << _listenPort;
+		LOG(INFO) << "start listen: " << _listenAddr << ":" << _listenPort;
 
 		_ioService = std::make_shared<boost::asio::io_service>();
 		std::shared_ptr<boost::asio::ssl::context> sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
@@ -69,33 +69,7 @@ bool ChannelRPCServer::StartListening() {
 
 		_server->run();
 
-#if 0
-		LOG(DEBUG) << "启动IO线程";
-		_serverThread = std::make_shared<std::thread>([ = ]() {
-			while (true) {
-				try {
-					_server->run();
-				}
-				catch (std::exception &e) {
-					LOG(ERROR) << "IO线程错误:" << e.what();
-				}
-
-				try {
-					LOG(ERROR) << "尝试重启 ";
-					_server->stop();
-				}
-				catch (exception &e) {
-					LOG(ERROR) << "错误:" << e.what();
-				}
-
-				sleep(1);
-			}
-		});
-
-		_serverThread->detach();
-#endif
-
-		LOG(INFO) << "启动心跳线程";
+		LOG(INFO) << "start heartbeat thread";
 		_topicThread = std::make_shared<std::thread>([ = ]() {
 			while (true) {
 				sleep(1);
@@ -103,14 +77,14 @@ bool ChannelRPCServer::StartListening() {
 					_host.lock()->sendTopicsMessage(p2p::NodeID(), 0, _host.lock()->getTopicsSeq(), std::make_shared<std::set<std::string> >());
 				}
 				catch (std::exception &e) {
-					LOG(ERROR) << "发送topics错误:" << e.what();
+					LOG(ERROR) << "send topics error:" << e.what();
 				}
 			}
 		});
 
 		_topicThread->detach();
 
-		LOG(INFO) << "已开始监听";
+		LOG(INFO) << "listen started";
 
 		_running = true;
 
@@ -131,7 +105,6 @@ bool ChannelRPCServer::StopListening()
 }
 
 bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo) {
-	//找到对应的connection
 	std::string addInfo = *((std::string*)_addInfo);
 
 	std::lock_guard<std::mutex> lock(_seqMutex);
@@ -140,7 +113,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 	delete (std::string*)_addInfo;
 
 	if (it != _seq2session.end()) {
-		LOG(DEBUG) << "发送ethereum响应 seq：" << it->first << " response:" << _response;
+		LOG(DEBUG) << "send ethereum response seq：" << it->first << " response:" << _response;
 
 		std::shared_ptr<bytes> resp(new bytes());
 
@@ -156,7 +129,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 		_seq2session.erase(it);
 	}
 	else {
-		LOG(ERROR) << "未找到来源seq，可能已超时:" << addInfo;
+		LOG(ERROR) << "source seq not found，probably timeout:" << addInfo;
 	}
 
 	return false;
@@ -172,7 +145,7 @@ void dev::ChannelRPCServer::removeSession(int sessionID) {
 
 void ChannelRPCServer::onConnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session) {
 	if (e.errorCode() == 0) {
-		LOG(INFO) << "channel收到新连接";
+		LOG(INFO) << "channel reveive new connection";
 
 		auto sessionID = ++_sessionCount;
 		_sessions.insert(std::make_pair(sessionID, session));
@@ -184,15 +157,15 @@ void ChannelRPCServer::onConnect(dev::channel::ChannelException e, dev::channel:
 		session->setMessageHandler(fp);
 
 		session->run();
-		LOG(INFO) << "开始接收数据";
+		LOG(INFO) << "start reveive data";
 	}
 	else {
-		LOG(ERROR) << "连接错误: " << e.errorCode() << ", " << e.what();
+		LOG(ERROR) << "connection error: " << e.errorCode() << ", " << e.what();
 	}
 }
 
 void ChannelRPCServer::onDisconnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session) {
-	LOG(ERROR) << "移除该session: " << session->host() << ":" << session->port() << " 成功";
+	LOG(ERROR) << "remove session: " << session->host() << ":" << session->port() << " successed";
 
 	for (auto it : _sessions) {
 		if (it.second == session) {
@@ -206,17 +179,17 @@ void ChannelRPCServer::onDisconnect(dev::channel::ChannelException e, dev::chann
 
 void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message) {
 	if (e.errorCode() == 0) {
-		LOG(DEBUG) << "接收来自sdk消息 length:" << message->length << " type:" << message->type << " sessionID:" << message->seq;
+		LOG(DEBUG) << "receive message from sdk length:" << message->length << " type:" << message->type << " sessionID:" << message->seq;
 
 		switch (message->type) {
-		case 0x20: //链上链下请求
-		case 0x21: //链上链下响应
+		case 0x20:
+		case 0x21:
 			onClientMessage(session, message);
 			break;
-		case 0x12://普通区块链请求
+		case 0x12:
 			onClientEthereumRequest(session, message);
 			break;
-		case 0x13: //心跳
+		case 0x13:
 		{
 			std::string data((char*)message->data->data(), message->data->size());
 
@@ -230,36 +203,34 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 			}
 			break;
 		}
-		case 0x30: //链上链下二期请求
-		case 0x31: //链上链下二期响应
+		case 0x30:
+		case 0x31:
 			onClientChannelRequest(session, message);
 			break;
-		case 0x32: //topic请求
+		case 0x32:
 			onClientTopicRequest(session, message);
 			break;
 		default:
-			LOG(ERROR) << "未知客户端消息类型: " << message->type;
+			LOG(ERROR) << "unknown client type: " << message->type;
 			break;
 		}
 	}
 	else {
-		LOG(ERROR) << "错误: " << e.errorCode() << ", " << e.what();
+		LOG(ERROR) << "error: " << e.errorCode() << ", " << e.what();
 
 		onDisconnect(dev::channel::ChannelException(), session);
 	}
 }
 
 void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
-	LOG(DEBUG) << "收到来自sdk的链上链下消息";
+	LOG(DEBUG) << "receive sdk channel message";
 
-	//取出目的地，NodeID类型，128字节，常量
 	if (message->data->size() < 128) {
-		//长度不足
-		LOG(ERROR) << "非法链上链下消息，长度过短:" << message->data->size();
+		LOG(ERROR) << "invaild channel message，too short:" << message->data->size();
 		return;
 	}
 
-	LOG(DEBUG) << "目的node:" << std::string((char*)message->data->data(), 128);
+	LOG(DEBUG) << "target node:" << std::string((char*)message->data->data(), 128);
 
 	h512 nodeID(std::string((char*)message->data->data(), 128), dev::h512::FromHex);
 
@@ -268,39 +239,37 @@ void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr se
 		std::lock_guard<std::mutex> lock(_seqMutex);
 		auto it = _seq2session.insert(std::make_pair(message->seq, session));
 		if (it.second == false) {
-			LOG(DEBUG) << "seq已存在";
+			LOG(DEBUG) << "seq exists";
 			it.first->second = session;
 		}
 
 		auto buffer = std::make_shared<bytes>();
 		message->encode(*buffer);
 
-		LOG(DEBUG) << "打包消息到其他node:" << buffer->size();
+		LOG(DEBUG) << "encode message to endpoint:" << buffer->size();
 
 		_host.lock()->sendCustomMessage(nodeID, buffer);
 	}
 	catch (exception &e) {
-		LOG(ERROR) << "链上链下消息发往对端节点错误，返回100:" << e.what();
+		LOG(ERROR) << "send channel message error，code 100:" << e.what();
 		result = REMOTE_PEER_UNAVAILIBLE;
 
-		//直接响应请求方
-		message->type = 0x21; //回包类型
+		message->type = 0x21;
 		message->result = result;
 		message->data->clear();
 
 		session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
 	}
 
-	LOG(DEBUG) << "发送结果:" << result;
+	LOG(DEBUG) << "send result:" << result;
 }
 
 void dev::ChannelRPCServer::onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
-	LOG(DEBUG) << "收到来自前置的区块链请求";
+	LOG(DEBUG) << "receive ethereum request from sdk";
 
-	//取出包体
 	std::string body(message->data->data(), message->data->data() + message->data->size());
 
-	LOG(DEBUG) << "seq:" << message->seq << "  区块链请求:" << std::string((char*)message->data->data(), message->data->size());
+	LOG(DEBUG) << "seq:" << message->seq << "  ethereum request:" << std::string((char*)message->data->data(), message->data->size());
 
 	{
 		std::lock_guard<std::mutex> lock(_seqMutex);
@@ -314,11 +283,11 @@ void dev::ChannelRPCServer::onClientEthereumRequest(dev::channel::ChannelSession
 }
 
 void dev::ChannelRPCServer::onClientTopicRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
-	LOG(DEBUG) << "收到来自SDK的topic请求";
+	LOG(DEBUG) << "receive SDK topic request";
 
 	std::string body(message->data->data(), message->data->data() + message->data->size());
 
-	LOG(DEBUG) << "seq:" << message->seq << "  topic请求:" << body;
+	LOG(DEBUG) << "seq:" << message->seq << "  topic request:" << body;
 
 	try {
 		std::stringstream ss;
@@ -344,33 +313,31 @@ void dev::ChannelRPCServer::onClientTopicRequest(dev::channel::ChannelSession::P
 		updateHostTopics();
 	}
 	catch (exception &e) {
-		LOG(ERROR) << "解析请求错误:" << e.what();
+		LOG(ERROR) << "parse request error:" << e.what();
 	}
 }
 
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session,
     dev::channel::Message::Ptr message) {
-	LOG(DEBUG) << "收到来自SDK的链上链下2请求";
+	LOG(DEBUG) << "receive SDK channel2 message";
 
-	//取出topic，string类型，32字节，常量
 	if (message->data->size() < 1) {
-		//长度不足
-		LOG(ERROR) << "非法链上链下2消息，长度过短:" << message->data->size();
+		LOG(ERROR) << "invalid channel2 message，too short:" << message->data->size();
 		return;
 	}
 
 	uint8_t topicLen = *((uint8_t*)message->data->data());
 	std::string topic((char*)message->data->data() + 1, topicLen - 1);
 
-	LOG(DEBUG) << "目的topic:" << topic;
+	LOG(DEBUG) << "target topic:" << topic;
 
 	std::lock_guard<std::mutex> lock(_seqMessageMutex);
 	auto it = _seq2MessageSession.find(message->seq);
 
 	if (message->type == 0x30) {
 		try {
-			LOG(DEBUG) << "链上链下2新请求:" << message->seq;
+			LOG(DEBUG) << "channel2 request:" << message->seq;
 
 			ChannelMessageSession messageSession;
 			messageSession.fromSession = session;
@@ -378,22 +345,21 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
 			auto newIt = _seq2MessageSession.insert(std::make_pair(message->seq, messageSession));
 			if (newIt.second == false) {
-				LOG(WARNING) << "seq:" << message->seq << " session重复，覆盖";
+				LOG(WARNING) << "seq:" << message->seq << " session repeat，override";
 
 				newIt.first->second.fromSession = session;
 			}
 			it = newIt.first;
 
-			LOG(DEBUG) << "发送消息到其他node:" << it->second.message->seq;
+			LOG(DEBUG) << "send message to endpoint:" << it->second.message->seq;
 			h512 nodeID = sendChannelMessageToNode(topic, it->second.message, it->second.failedNodeIDs);
 
 			it->second.toNodeID = nodeID;
 		}
 		catch (exception &e) {
-			LOG(ERROR) << "发送消息错误:" << e.what();
+			LOG(ERROR) << "send message error:" << e.what();
 
-			//直接响应请求方
-			message->type = 0x31;//回包类型
+			message->type = 0x31;
 			message->result = REMOTE_PEER_UNAVAILIBLE;
 			message->data->clear();
 
@@ -402,30 +368,27 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 	}
 	else if (message->type == 0x31) {
 		try {
-			//找出session中的nodeID，并使用这个nodeID发送
 			if (it == _seq2MessageSession.end()) {
-				LOG(WARNING) << "未找到回包对应seq，已超时？";
+				LOG(WARNING) << "not found response's seq，timeout？";
 
 				return;
 			}
 
 			if (message->result != 0) {
 				try {
-					LOG(DEBUG) << "消息" << message->seq << "push到 " << it->second.toSession->host() << ":" << it->second.toSession->port() << " 失败:" << message->result;
-					//尝试另一个session下发
+					LOG(DEBUG) << "message" << message->seq << "push to " << it->second.toSession->host() << ":" << it->second.toSession->port() << " failed:" << message->result;
 					it->second.failedSessions.insert(it->second.toSession);
 
 					auto session = sendChannelMessageToSession(topic, message, it->second.failedSessions);
 
-					LOG(DEBUG) << "尝试push到" << session->host() << ":" << session->port() << " 失败:" << message->result;
+					LOG(DEBUG) << "try push to" << session->host() << ":" << session->port() << " failed:" << message->result;
 					it->second.toSession = session;
 				}
 				catch (exception &e) {
-					LOG(ERROR) << "消息push完全失败:" << e.what();
+					LOG(ERROR) << "message push totally failed:" << e.what();
 
-					//消息下发失败，给node返回错误
 					message->result = REMOTE_CLIENT_PEER_UNAVAILBLE;
-					message->type = 0x31;//回包
+					message->type = 0x31;
 
 					auto buffer = make_shared<bytes>();
 					message->encode(*buffer);
@@ -434,25 +397,23 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 				}
 			}
 			else {
-				LOG(DEBUG) << "来自SDK的链上链下2回包:" << message->seq;
+				LOG(DEBUG) << "received SDK channel2 message response:" << message->seq;
 
 				auto buffer = std::make_shared<bytes>();
 				message->encode(*buffer);
 
-				LOG(DEBUG) << "打包消息到node:" << it->second.fromNodeID;
-				//_host.lock()->sendChannelReplyMessage(it->second, buffer);
+				LOG(DEBUG) << "encode message to enpoint:" << it->second.fromNodeID;
 				_host.lock()->sendCustomMessage(it->second.fromNodeID, buffer);
 
 				_seq2MessageSession.erase(it);
-				//_seq2NodeID.erase(it);
 			}
 		}
 		catch (exception &e) {
-			LOG(ERROR) << "发送回包错误:" << e.what();
+			LOG(ERROR) << "send response error:" << e.what();
 		}
 	}
 	else {
-		LOG(ERROR) << "未知的消息类型:" << message->type;
+		LOG(ERROR) << "unknow type:" << message->type;
 	}
 }
 
@@ -461,19 +422,19 @@ void dev::ChannelRPCServer::onNodeRequest(h512 nodeID, std::shared_ptr<dev::byte
 	ssize_t result = msg->decode(message->data(), message->size());
 
 	if (result <= 0) {
-		LOG(ERROR) << "解包错误:" << result << " 包大小:" << message->size();
+		LOG(ERROR) << "decode error:" << result << " package size:" << message->size();
 		return;
 	}
 
-	LOG(DEBUG) << "接收来自node消息 length:" << message->size() << " type:" << msg->type << " seq:" << msg->seq;
+	LOG(DEBUG) << "receive node message length:" << message->size() << " type:" << msg->type << " seq:" << msg->seq;
 
 	switch (msg->type) {
-	case 0x20: //链上链下请求
-	case 0x21: //链上链下响应
+	case 0x20:
+	case 0x21:
 		onNodeMessage(nodeID, msg);
 		break;
-	case 0x30: //链上链下二期请求
-	case 0x31: //链上链下二期响应
+	case 0x30:
+	case 0x31:
 		onNodeChannelRequest(nodeID, msg);
 		break;
 	default:
@@ -482,34 +443,31 @@ void dev::ChannelRPCServer::onNodeRequest(h512 nodeID, std::shared_ptr<dev::byte
 }
 
 void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::Message::Ptr message) {
-	LOG(DEBUG) << "收到来自其它节点的链上链下消息 长度:" << message->data->size() + 14;
+	LOG(DEBUG) << "received channel message from node:" << message->data->size() + 14;
 
-	//下发给前置
 	bool sended = false;
 
 	std::lock_guard<std::mutex> lock(_seqMutex);
 	auto it = _seq2session.find(message->seq);
 	if (it != _seq2session.end()) {
-		LOG(DEBUG) << "回包消息 seq:" << message->seq;
+		LOG(DEBUG) << "response message seq:" << message->seq;
 
-		//seq存在，给seq对应的session发消息（回包）
 		if (it->second->actived()) {
 			it->second->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
 
-			LOG(DEBUG) << "回包消息至seq[" << it->first << "] [" << it->second->host() << ":" << it->second->port() << "]成功";
+			LOG(DEBUG) << "response message to seq[" << it->first << "] [" << it->second->host() << ":" << it->second->port() << "]successed";
 			sended = true;
 		}
 	}
 
 	if (!sended) {
-		//seq不存在，随机下发
-		LOG(DEBUG) << "无seq，PUSH消息";
+		LOG(DEBUG) << "no found seq，PUSH";
 
 		for (auto it : _sessions) {
 			if (it.second->actived()) {
 				it.second->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
 
-				LOG(DEBUG) << "push消息至session[" << it.first << "] [" << it.second->host() << ":" << it.second->port() << "]成功";
+				LOG(DEBUG) << "push to session[" << it.first << "] [" << it.second->host() << ":" << it.second->port() << "]successed";
 				sended = true;
 				break;
 			}
@@ -517,12 +475,11 @@ void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::Message::Pt
 	}
 
 	if (!sended) {
-		LOG(ERROR) << "下发消息失败，无sdk连接，返回101";
+		LOG(ERROR) << "push message failed，sdk connection not found，code 101";
 
-		//如果是正常的请求包，将错误返回至来源节点
 		if (message->result == 0) {
 			message->result = REMOTE_CLIENT_PEER_UNAVAILBLE;
-			message->type = 0x21; //回包
+			message->type = 0x21;
 			message->data->clear();
 
 			auto buffer = make_shared<bytes>();
@@ -534,19 +491,17 @@ void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::Message::Pt
 }
 
 void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message) {
-	LOG(DEBUG) << "收到来自node:" << nodeID << " 的链上链下消息 长度:" << message->data->size() + 14;
+	LOG(DEBUG) << "receive from node:" << nodeID << " channel message, length:" << message->data->size() + 14;
 
-	//取出topic
 	if (message->data->size() < 1) {
-		//长度不足
-		LOG(ERROR) << "非法链上链下消息，长度过短:" << message->data->size();
+		LOG(ERROR) << "invaild channel message，too short:" << message->data->size();
 		return;
 	}
 
 	uint8_t topicLen = *((uint8_t*)message->data->data());
 	std::string topic((char*)message->data->data() + 1, topicLen - 1);
 
-	LOG(DEBUG) << "目的topic:" << topic;
+	LOG(DEBUG) << "target topic:" << topic;
 
 	std::lock_guard<std::mutex> lock(_seqMessageMutex);
 	auto it = _seq2MessageSession.find(message->seq);
@@ -554,7 +509,7 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 	if (message->type == 0x30) {
 		try {
 			if (it == _seq2MessageSession.end()) {
-				LOG(DEBUG) << "新链上链下消息";
+				LOG(DEBUG) << "new channel message";
 
 				ChannelMessageSession messageSession;
 				messageSession.fromNodeID = nodeID;
@@ -562,7 +517,7 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 
 				auto newIt = _seq2MessageSession.insert(std::make_pair(message->seq, messageSession));
 				if (newIt.second == false) {
-					LOG(WARNING) << "seq:" << message->seq << " session重复，覆盖";
+					LOG(WARNING) << "seq:" << message->seq << " session repeat，override";
 
 					newIt.first->second = messageSession;
 				}
@@ -575,11 +530,10 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 			it->second.toSession = session;
 		}
 		catch (exception &e) {
-			LOG(ERROR) << "下发消息完全失败:" << e.what();
+			LOG(ERROR) << "push message totally failed:" << e.what();
 
-			//消息下发失败，给node返回错误
 			message->result = REMOTE_CLIENT_PEER_UNAVAILBLE;
-			message->type = 0x31;//回包
+			message->type = 0x31;
 			message->data->clear();
 
 			auto buffer = make_shared<bytes>();
@@ -590,25 +544,24 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 	}
 	else if (message->type == 0x31) {
 		if (it == _seq2MessageSession.end()) {
-			LOG(ERROR) << "错误，未找到该session:" << message->seq;
+			LOG(ERROR) << "error，no found session:" << message->seq;
 			return;
 		}
 
 		if (message->result != 0) {
-			LOG(DEBUG) << "消息:" << message->seq << " 发送到node" << it->second.toNodeID << "失败:" << message->result;
+			LOG(DEBUG) << "message:" << message->seq << " send to node" << it->second.toNodeID << "failed:" << message->result;
 			try {
 				it->second.failedNodeIDs.insert(it->second.toNodeID);
 
 				h512 nodeID = sendChannelMessageToNode(topic, it->second.message, it->second.failedNodeIDs);
 
-				LOG(DEBUG) << "尝试发送至node:" << nodeID << " 成功";
+				LOG(DEBUG) << "try send to node:" << nodeID << " successed";
 				it->second.toNodeID = nodeID;
 			}
 			catch (exception &e) {
-				LOG(ERROR) << "处理其它节点错误回包失败:" << e.what();
+				LOG(ERROR) << "process response failed:" << e.what();
 
-				//直接响应请求方
-				message->type = 0x31;//回包类型
+				message->type = 0x31;
 				message->result = REMOTE_PEER_UNAVAILIBLE;
 				message->data->clear();
 
@@ -616,13 +569,13 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 			}
 		}
 		else {
-			LOG(DEBUG) << "回包消息 seq:" << message->seq;
+			LOG(DEBUG) << "response message seq:" << message->seq;
 
 			if (it->second.fromSession->actived()) {
 				it->second.fromSession->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
 
-				LOG(DEBUG) << "回包消息至seq[" << it->first << "] [" << it->second.fromSession->host()
-				           << ":" << it->second.fromSession->port() << "]成功";
+				LOG(DEBUG) << "response to seq[" << it->first << "] [" << it->second.fromSession->host()
+				           << ":" << it->second.fromSession->port() << "]successed";
 			}
 
 			_seq2MessageSession.erase(it);
@@ -665,10 +618,8 @@ void ChannelRPCServer::setHost(std::weak_ptr<EthereumHost> host) {
 }
 
 h512 ChannelRPCServer::sendChannelMessageToNode(std::string topic, dev::channel::Message::Ptr message, const std::set<h512> &exclude) {
-	//先获取topic列表
 	std::vector<p2p::NodeID> peers = _host.lock()->getPeersByTopic(topic);
 
-	//排除掉exclude
 	for (auto it = peers.begin(); it != peers.end();) {
 		if (exclude.find(*it) != exclude.end()) {
 			it = peers.erase(it);
@@ -679,16 +630,16 @@ h512 ChannelRPCServer::sendChannelMessageToNode(std::string topic, dev::channel:
 	}
 
 	if (peers.empty()) {
-		LOG(ERROR) << "发送失败，没有节点关注该topic:" << topic;
+		LOG(ERROR) << "send failed，nobody care topic:" << topic;
 
-		throw dev::channel::ChannelException(103, "发送失败，没有节点关注该topic:" + topic);
+		throw dev::channel::ChannelException(103, "send failed，nobody care topic:" + topic);
 	}
 
 	boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
 	boost::uniform_int<int> index(0, peers.size() - 1);
 
 	auto ri = index(rng);
-	LOG(DEBUG) << "随机数:" << ri;
+	LOG(DEBUG) << "random:" << ri;
 	p2p::NodeID targetNodeID = peers[ri];
 
 	auto buffer = std::make_shared<bytes>();
@@ -696,17 +647,15 @@ h512 ChannelRPCServer::sendChannelMessageToNode(std::string topic, dev::channel:
 
 	_host.lock()->sendCustomMessage(targetNodeID, buffer);
 
-	LOG(DEBUG) << "消息发送至" << targetNodeID;
+	LOG(DEBUG) << "message send to " << targetNodeID;
 
 	return targetNodeID;
 }
 
 dev::channel::ChannelSession::Ptr ChannelRPCServer::sendChannelMessageToSession(std::string topic, dev::channel::Message::Ptr message, const std::set<dev::channel::ChannelSession::Ptr> &exclude) {
-	//选取关注该topic的session
 	std::vector<dev::channel::ChannelSession::Ptr> activedSessions =
 	    getSessionByTopic(topic);
 
-	//清除已失败的session
 	for (auto sessionIt = activedSessions.begin();
 	        sessionIt != activedSessions.end();) {
 		if (exclude.find(*sessionIt)
@@ -718,23 +667,22 @@ dev::channel::ChannelSession::Ptr ChannelRPCServer::sendChannelMessageToSession(
 	}
 
 	if (activedSessions.empty()) {
-		LOG(ERROR) << "无session使用该topic:" << topic;
-		throw dev::channel::ChannelException(104, "无session使用该topic:" + topic);
+		LOG(ERROR) << "nobody care topic:" << topic;
+		throw dev::channel::ChannelException(104, "nobody care topic:" + topic);
 	}
 
-	//新的请求消息，随机下发
 	boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
 	boost::uniform_int<int> index(0, activedSessions.size() - 1);
 
 	auto ri = index(rng);
-	LOG(DEBUG) << "随机节点:" << ri;
+	LOG(DEBUG) << "random node:" << ri;
 
 	auto session = activedSessions[ri];
 
 	session->asyncSendMessage(message,
 	                          dev::channel::ChannelSession::CallbackType(), 0);
 
-	LOG(DEBUG) << "push消息至session: " << session->host() << ":" << session->port() << " 成功";
+	LOG(DEBUG) << "push to session: " << session->host() << ":" << session->port() << " successed";
 
 	return session;
 }
@@ -753,7 +701,6 @@ void ChannelRPCServer::updateHostTopics() {
 std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTopic(const std::string &topic) {
 	std::vector<dev::channel::ChannelSession::Ptr> activedSessions;
 
-	//找出该topic对应的session
 	for (auto it : _sessions) {
 		if (it.second->topics()->empty() || !it.second->actived()) {
 			continue;

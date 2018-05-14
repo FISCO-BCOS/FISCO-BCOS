@@ -95,7 +95,7 @@ void dev::eth::upgradeDatabase(std::string const& _basePath, h256 const& _genesi
 {
 	std::string path = _basePath.empty() ? Defaults::get()->dbPath() : _basePath;
 
-	//判断是否有该status和details和blocks文件  在path下有该对应文件 则复制拷贝到 对应的chainpath和extrasPath下面去
+	
 	if (fs::exists(path + "/state") && fs::exists(path + "/details") && fs::exists(path + "/blocks"))
 	{
 		// upgrade

@@ -52,7 +52,7 @@ enum class CheckTransaction
 class TransactionBase
 {
 public:
-	static u256  maxGas;	//默认交易最大gas
+	static u256  maxGas;	
 	/// Constructs a null transaction.
 	TransactionBase() {}
 
@@ -185,45 +185,44 @@ protected:
 	Address m_receiveAddress;			///< The receiving address of the transaction.
 	u256 m_gasPrice;					///< The base fee and thus the implied exchange rate of ETH to GAS.
 	u256 m_gas;							///< The total gas to convert, paid for from sender's account. Any unused gas gets refunded once the contract is ended.
-	u256 m_blockLimit;					//注意
+	u256 m_blockLimit;					
 	bytes m_data;						///< The data associated with the transaction, or the initialiser if it's a creation transaction.
 	SignatureStruct m_vrs;				///< The signature of the transaction. Encodes the sender.
 	int m_chainId = -4;					///< EIP155 value for calculating transaction hash https://github.com/ethereum/EIPs/issues/155
 
-	//下面是CNS改造需要添加的一些参数
-	//交易的协议的类型
+	
 	enum TransactionType
 	{
-		DefaultTransaction = 0,   //默认的调用
-		CNSOldTransaction = 1,    //cns方式的调用
-		CNSNewTransaction = 2     //cns二期改造后的调用
+		DefaultTransaction = 0,  
+		CNSOldTransaction = 1,    
+		CNSNewTransaction = 2     
 	};
-	//交易的协议类型
+	
 	int     m_transactionType { DefaultTransaction };
-	//是否已经获取了CNS调用方式的参数
+	
 	mutable bool    m_isGetCNSParams { false };
 	mutable Address m_addressGetByCNS;
 	mutable bytes   m_dataGetByCNS;
 	mutable std::string m_strCNSName;
 	mutable std::string m_strCNSVer;
 	mutable u256 m_cnsType;
-	//CNS方式的参数
+	
 	mutable CnsParams m_cnsParams;
 	
 	void doGetCNSparams() const;
 
 public:
-	//辅助函数,解析rlp
+	
 	void transactionRLPDecode(bytesConstRef _rlp);
 	void transactionRLPDecode10Ele(const RLP &rlp);
 	void transactionRLPDecode13Ele(const RLP &rlp);
 
-	//区分不同的协议类型
+	
 	bool isDefaultTransaction() const { return m_transactionType == DefaultTransaction; }
 	bool isCNSOldTransaction()  const { return m_transactionType == CNSOldTransaction; }
 	bool isCNSNewTransaction()  const { return m_transactionType == CNSNewTransaction; }
 
-	//区分不同的调用
+	
 	bool isDefault()  const { return isDefaultTransaction() || (isCNSNewTransaction() && m_strCNSName.empty()); }
 	bool isOldCNS()   const { return isCNSOldTransaction(); }
 	bool isNewCNS()   const { return isCNSNewTransaction() && !m_strCNSName.empty(); }
@@ -232,7 +231,7 @@ public:
 	const CnsParams &cnsParams() const;
 
 protected:
-	u256 m_importtime = 0;				//入队时间 用来排序
+	u256 m_importtime = 0;				
 	mutable h256 m_hashWith;			///< Cached hash of transaction with signature.
 	mutable Address m_sender;			///< Cached sender, determined from signature.
 	mutable bigint m_gasRequired = 0;	///< Memoised amount required for the transaction to run.

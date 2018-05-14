@@ -170,7 +170,7 @@ namespace libabi
 		m_uBlockNumber    = uBlockNumber;
 		m_uTimeStamp      = uTimeStamp;
 
-		LOG(INFO) << "[SolidityAbi::reset] name=" << strContractName
+		LOG(DEBUG) << "[SolidityAbi::reset] name=" << strContractName
 			<< " ,version" << strVer
 			<< " ,name=" << strContractName
 			<< " ,addr=" << strAddr

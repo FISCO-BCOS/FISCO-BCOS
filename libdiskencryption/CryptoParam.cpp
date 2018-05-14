@@ -22,7 +22,7 @@
  */
 
  #include "CryptoParam.h"
-#include <curl/curl.h> //引用curl库函数调用KC接口
+#include <curl/curl.h>
 #include <libdevcore/FileSystem.h>
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/CommonIO.h>
@@ -50,7 +50,7 @@ CryptoParam CryptoParam::loadDataCryptoConfig(std::string const& filePath) const
 	json_spirit::read_string(_json, val);
 	js::mObject obj = val.get_obj();
 
-	//数据加密模式以及keycenterUrl
+	//set cryptomod
 	cp.m_cryptoMod = obj.count("cryptomod") ? std::stoi(obj["cryptomod"].get_str()) : 0;
 	cp.m_kcUrl = obj.count("keycenterurl") ? obj["keycenterurl"].get_str() : "https://127.0.0.1";
 	cp.m_nodekeyPath = obj.count("rlpcreatepath") ? obj["rlpcreatepath"].get_str() : "./network.rlp";
@@ -68,7 +68,7 @@ CryptoParam CryptoParam::loadKeyCenterReq(std::string const& _json) const
 	json_spirit::read_string(_json, val);
 	js::mObject obj = val.get_obj();
 
-	//keycenter加密返回�?
+	//call keycenter result 
 	cp.m_ID = obj.count("id") ? obj["id"].get_int() : 0;
 	cp.m_errCode = obj.count("errcode") ? obj["errcode"].get_int() : 0;
 	cp.m_resData = obj.count("resdata") ? obj["resdata"].get_str() : "";

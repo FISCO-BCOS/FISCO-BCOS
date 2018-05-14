@@ -39,7 +39,7 @@ uint64_t LogFlowConstant::TxReportInterval(60); // imin
 uint64_t LogConstant::BroadcastTxInterval(60); // imin
 uint64_t LogConstant::BroadcastBlockInterval(60); // imin
 
-inline string millisecondsToString(uint64_t&& milliseconds,int offset = 8) // 北京时间
+inline string millisecondsToString(uint64_t&& milliseconds,int offset = 8) 
 {
     uint16_t tmp[4];
     stringstream ss;
@@ -104,7 +104,7 @@ void SealedState::handle(StatLogContext& context, const string& str, void* ext)
     // monitor
     statemonitor::recordStateByTimeEnd(dev::StatCode::BLOCK_SEAL, STAT_BLOCK_PBFT_SEAL, "", 1, context.getCode());
     bool is_empty_blk = *(bool*)ext;
-    // 空块就不进行 执行时间 的记时了，否影响其他判断
+    
     if (!is_empty_blk) {
         statemonitor::recordStateByTimeStart(dev::StatCode::BLOCK_EXEC, LogFlowConstant::PBFTReportInterval, context.getCode());
     }
@@ -198,7 +198,7 @@ void ViewChangedState::handle(StatLogContext& context, const string& str, void*)
 
 void DestoriedState::handle(StatLogContext& context, const string& str, void* ext) 
 {
-    bool err = *(bool*)ext; // code = 0 是正常流程 1是被缓存移除 2是viewchange进入销毁流程
+    bool err = *(bool*)ext; 
     if (err) 
     {
         context << " error, wait a long time!";
@@ -239,7 +239,7 @@ void TxToChainState::handle(StatLogContext& context, const string& str, void* ex
     statemonitor::recordStateByTimeEnd(dev::StatCode::TX_TRACE, STAT_TX_TRACE, "", 1, context.getCode());
 
     context.changeState(std::make_unique<TxDestoriedState>());
-    ((TxStatLog*)&context)->m_is_final = true; // 正常转换到了final状态
+    ((TxStatLog*)&context)->m_is_final = true; 
 }
 
 void TxDestoriedState::handle(StatLogContext& context, const string& str, void* ext) 

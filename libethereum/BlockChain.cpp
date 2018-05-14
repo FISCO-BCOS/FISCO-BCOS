@@ -181,7 +181,7 @@ bool BlockChain::isNonceOk(Transaction const&_ts, bool _needinsert) const
 	return true;
 }
 
-u256 BlockChain::filterCheck(const Transaction & _t/*这里可以补节点信息*/, FilterCheckScene _checkscene) const
+u256 BlockChain::filterCheck(const Transaction & _t, FilterCheckScene _checkscene) const
 {
 	LOG(TRACE) << "BlockChain::filterCheck Scene：" << (int)(_checkscene);
 	return m_interface->filterCheck(_t, _checkscene);
@@ -272,7 +272,6 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	if (m_blocksDB != nullptr)
 	{
 		LOG(INFO) << "block ethodbc is defined " << "\n";
-		//todo 增加错误日志 直接推出
 	}
 	else
 	{
@@ -423,7 +422,6 @@ void BlockChain::rebuild(std::string const& _path, std::function<void(unsigned, 
 	// Open a fresh state DB
 	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill));
 
-	//清掉所有的缓存数据，同时设置父块为创世块，父块号为0
 	// Clear all memos ready for replay.
 	m_details.clear();
 	m_logBlooms.clear();
@@ -561,7 +559,7 @@ tuple<ImportRoute, bool, unsigned> BlockChain::sync(BlockQueue& _bq, OverlayDB c
 			{
 				// Nonce & uncle nonces already verified in verification thread at this point.
 				ImportRoute r;
-				DEV_TIMED_ABOVE("BLOCKSTAT 超时500ms " + toString(block.verified.info.hash(WithoutSeal)) + toString(block.verified.info.number()), 500)
+				DEV_TIMED_ABOVE("BLOCKSTAT timeout 500ms " + toString(block.verified.info.hash(WithoutSeal)) + toString(block.verified.info.number()), 500)
 				//DEV_BLOCK_STAT_LOG(block.verified.info.hash(WithoutSeal), block.verified.info.number(), utcTime(), "BeforeImport");
 				startimport = utcTime();
 				r = import(block.verified, _stateDB, (ImportRequirements::Everything & ~ImportRequirements::ValidSeal & ~ImportRequirements::CheckUncles) != 0);
@@ -739,7 +737,6 @@ void BlockChain::insert(VerifiedBlockRef _block, bytesConstRef _receipts, bool _
 		BOOST_THROW_EXCEPTION(FutureTime());
 	}
 
-	// Verify parent-critical parts， 增加检查签名
 	verifyBlock(_block.block, m_onBad, ImportRequirements::InOrderChecks | ImportRequirements::CheckMinerSignatures);
 
 	// OK - we're happy. Insert into database.
@@ -825,7 +822,6 @@ void BlockChain::checkBlockValid(h256 const& _hash, bytes const& _block, Block &
 		BOOST_THROW_EXCEPTION(FutureTime());
 	}
 
-	// 要放到UnknownParent检测之后
 	std::map<std::string, NodeConnParams> all_node;
 	NodeConnManagerSingleton::GetInstance().getAllNodeConnInfo(static_cast<int>(block.info.number() - 1), all_node);
 	unsigned miner_num = 0;
@@ -866,13 +862,13 @@ void BlockChain::checkBlockValid(h256 const& _hash, bytes const& _block, Block &
 
 	//Block s(*this, _db);
 	//s.enactOn(block, *this);
-	// 跑一遍交易，但是不验证state_root, receipt_root, gas_used, log_bloom
+	
 	_outBlock.setEvmCoverLog(m_params.evmCoverLog);
 	_outBlock.setEvmEventLog(m_params.evmEventLog);
 	_outBlock.enactOn(block, *this, false);
 }
 
-//写入db
+
 ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& _db, bool _mustBeNew)
 {
 	//@tidy This is a behemoth of a method - could do to be split into a few smaller ones.
@@ -923,7 +919,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		BOOST_THROW_EXCEPTION(FutureTime());
 	}
 
-	// Verify parent-critical parts，增加检查签名
+	// Verify parent-critical parts
 	verifyBlock(_block.block, m_onBad, ImportRequirements::InOrderChecks | ImportRequirements::CheckMinerSignatures);
 
 	LOG(INFO) << "Attempting import of " << _block.info.hash() << "...";
@@ -952,23 +948,16 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	try
 #endif
 	{
-		// Check transactions are valid and that they result in a state equivalent to our state_root.
-		// Get total difficulty increase and update state, checking it.
-		/*Block s(*this, _db);
-		// 把参数设置进去
-		s.setEvmCoverLog(m_params.evmCoverLog);
-		s.setEvmEventLog(m_params.evmEventLog);
-		//Block::execute 里面 就用上了
-		*/
+		
 		u256  tdIncrease = 0;
 
 		auto pair = getBlockCache(_block.info.hash());
-		//LOG(TRACE)<<"查找cache"<<_block.info.hash()<<","<<_block.info.number()<<","<<pair.second;
+		
 		if (pair.second != 0) {
 			tdIncrease = pair.second;
 			*tempBlock = pair.first;
 
-			//LOG(TRACE)<<"命中cache"<<_block.info.hash()<<","<<_block.info.number()<<","<<s.info().stateRoot()<<","<<s.rootHash();
+			
 		}
 		else {
 			tempBlock->setEvmCoverLog(m_params.evmCoverLog);
@@ -977,31 +966,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 			addBlockCache(*tempBlock, tdIncrease);
 		}
 
-		//  通过链的最新块和 即将Import的块，上溯祖先块 判断是 递增的块，还是叔伯块
-		/*bool isuncleblock=false;
-		unsigned tempcommonIndex;
-		h256 tempcommon;
-		h256s temproute;
-		tie(temproute, tempcommon, tempcommonIndex) = treeRoute(currentHash(), _block.info.parentHash());//找到相同的祖先路径
-		if (tempcommon != currentHash())
-			isuncleblock=true;
-		*/
-		//LOG(TRACE)<<"stat "<<_block.info.number()<<"..."<<_block.block.size()<<"..."<< s.pending().size();
-
-		/*
-		for (unsigned i = 0; i < s.pending().size(); ++i)
-		{
-			blb.blooms.push_back(s.receipt(i).bloom());
-			br.receipts.push_back(s.receipt(i));
-			goodTransactions.push_back(s.pending()[i]);
-
-			LOG(INFO) << " Hash=" << (s.pending()[i].sha3()) << ",Randid=" << s.pending()[i].randomid() << ",上链=" << utcTime();
-
-		}
-
-
-		s.cleanup(true);
-		*/
+		
 		for (unsigned i = 0; i < tempBlock->pending().size(); ++i) {
 			blb.blooms.push_back(tempBlock->receipt(i).bloom());
 			br.receipts.push_back(tempBlock->receipt(i));
@@ -1041,7 +1006,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		t.restart();
 #endif // ETH_TIMED_IMPORTS
 
-		//这里只写块相关，交易相关只有在是最长链的时候写
+		
 		blocksBatch.Put(toSlice(_block.info.hash()), ldb::Slice(_block.block));//_block.block [0]=head [1]=transactionlist [2]=unclelist [3]=hash [4]=siglist
 		DEV_READ_GUARDED(x_details)
 		extrasBatch.Put(toSlice(_block.info.parentHash(), ExtraDetails), (ldb::Slice)dev::ref(m_details[_block.info.parentHash()].rlp()));
@@ -1059,7 +1024,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 #if ETH_CATCH
 	catch (BadRoot& ex)
 	{
-		m_pnoncecheck->delCache(goodTransactions);//任何异常导致不能import 删掉上面加进去的
+		m_pnoncecheck->delCache(goodTransactions);
 		LOG(WARNING) << "*** BadRoot error! Trying to import" << _block.info.hash() << "needed root" << ex.root;
 		LOG(WARNING) << _block.info;
 		// Attempt in import later.
@@ -1108,7 +1073,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	}
 	catch ( BcNonceCheckError & ex)
 	{
-		m_pnoncecheck->delCache(goodTransactions);//任何异常导致不能import 删掉上面加进去的
+		m_pnoncecheck->delCache(goodTransactions);
 
 		LOG(WARNING) << "*** Bad Nonce error! Trying to import" << _block.info.hash() ;
 		//if( goodTransactions.size() )
@@ -1124,7 +1089,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	{
 
 		LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
-		m_pnoncecheck->delCache(goodTransactions);//任何异常导致不能import 删掉上面加进去的
+		m_pnoncecheck->delCache(goodTransactions);
 		ex << errinfo_now(time(0));
 		ex << errinfo_block(_block.block.toBytes());
 		// only populate extraData if we actually managed to extract it. otherwise,
@@ -1135,7 +1100,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	}
 #endif // ETH_CATCH
 
-	bool isunclechain = false; //是否切链了
+	bool isunclechain = false; 
 
 	h256s route;
 	h256 common;
@@ -1196,7 +1161,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 				ta.blockHash = tbi.hash();
 				for (ta.index = 0; ta.index < blockRLP[1].itemCount(); ++ta.index)
 					extrasBatch.Put(toSlice(sha3(blockRLP[1][ta.index].data()), ExtraTransactionAddress), (ldb::Slice)dev::ref(ta.rlp()));
-				//覆盖写 如果同一个交易在不同的链上，一定是指向当前链
+				
 			}
 
 			// Update database with them.
@@ -1267,7 +1232,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	}
 #endif // ETH_PARANOIA
 
-	m_pnoncecheck->delCache(goodTransactions);//任何异常导致不能import 删掉上面加进去的
+	m_pnoncecheck->delCache(goodTransactions);
 
 	if (m_lastBlockHash != newLastBlockHash)
 
@@ -1276,7 +1241,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		{
 			m_lastBlockHash = newLastBlockHash;
 			m_lastBlockNumber = newLastBlockNumber;
-			//这里写的是最后的块hash，这样刚启动的时候就知道当前的高度了
+			
 			if (dev::getCryptoMod() != CRYPTO_DEFAULT)
 			{
 				bytes enData = encryptodata(ldb::Slice((char const *)m_lastBlockHash.data(), 32));
@@ -1296,8 +1261,8 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		}
 
 
-		m_pnoncecheck->updateCache(*this, isunclechain/*切链就要rebuild*/); // 重新更新进去
-		//更新filter 地址
+		m_pnoncecheck->updateCache(*this, isunclechain); 
+		
 		//this->updateSystemContract(goodTransactions);
 		this->updateSystemContract(tempBlock);
 		CallbackWorker::getInstance().addBlock(tempBlock);
@@ -1986,7 +1951,7 @@ VerifiedBlockRef BlockChain::verifyBlock(bytesConstRef _block, std::function<voi
 			++i;
 		}
 
-	// 验证签名
+	
 	if (_ir & ImportRequirements::CheckMinerSignatures) {
 		if (m_sign_checker && !m_sign_checker(h, r[4].toVector<std::pair<u256, Signature>>())) {
 			LOG(WARNING) << "Error - check sign failed:" << h.number();
