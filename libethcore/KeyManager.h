@@ -136,7 +136,7 @@ public:
 	static std::string defaultPath() { return KeyManager::defaultpath ; }
 
 
-	//ubuntu 恢复编过
+
 	static std::string defaultpath;
     //TODO: remove init_priority, use a better way.
 	//static std::string defaultpath __attribute__ ((init_priority (2000)));// centos

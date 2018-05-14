@@ -332,7 +332,7 @@ void VM::interpretCases()
 		{
 			ON_OP();
 
-			u256 ret = ethcallEntry(this, m_sp);
+			u256 ret = ethcallEntry(this, m_sp, m_ext);
 
 			m_sp -= 9;
 			*m_sp = ret;

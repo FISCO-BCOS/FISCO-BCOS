@@ -30,7 +30,7 @@ TransactionReceipt::TransactionReceipt(bytesConstRef _rlp)
 	RLP r(_rlp);
 	m_stateRoot = (h256)r[0];
 	m_gasUsed = (u256)r[1];
-	m_contractAddress=(Address)r[2];//新加的
+	m_contractAddress=(Address)r[2];
 	m_bloom = (LogBloom)r[3];
 	for (auto const& i: r[4])
 		m_log.emplace_back(i);

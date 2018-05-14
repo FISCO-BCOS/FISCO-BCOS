@@ -47,7 +47,7 @@ async function sleep(timeout) {
 
 
 while(1){
-  console.log("已连接节点数："+ await getPeerCount() );
+  console.log("number of connected nodes ："+ await getPeerCount() );
   var peers=await post.post("admin_peers",[]);
  
   try{
@@ -61,12 +61,12 @@ while(1){
       }
     }
    
-    console.log("当前块高"+await web3sync.getBlockNumber());
+    console.log("current blocknumber = "+await web3sync.getBlockNumber());
     console.log("--------------------------------------------------------------");
     await sleep(1500);
 
   }catch(e){
-    console.log("admin_peers 返回解析失败！"+peers);
+    console.log("admin_peers result parse failed "+peers);
   }
   
   

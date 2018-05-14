@@ -25,6 +25,9 @@ macro(configure_project)
 	eth_default_option(TESTS OFF)
 	eth_default_option(TOOLS OFF)
 	eth_default_option(EVMJIT OFF)
+	eth_default_option(GROUPSIG OFF)
+	eth_default_option(ZKG_VERIFY OFF)
+	
 
 	# Resolve any clashes between incompatible options.
 	if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
@@ -74,7 +77,14 @@ macro(configure_project)
 	if (VMTRACE)
 		add_definitions(-DETH_VMTRACE)
 	endif ()
-	
+
+	if (GROUPSIG)
+		add_definitions(-DETH_GROUPSIG)
+	endif()
+
+	if (ZKG_VERIFY)
+		add_definitions(-DETH_ZKG_VERIFY)
+	endif()
 	# CI Builds should provide (for user builds this is totally optional)
 	# -DBUILD_NUMBER - A number to identify the current build with. Becomes TWEAK component of project version.
 	# -DVERSION_SUFFIX - A string to append to the end of the version string where applicable.
@@ -89,7 +99,7 @@ macro(configure_project)
 	if (NOT DEFINED VERSION_SUFFIX)
 		set(VERSION_SUFFIX "")
 	endif()
-
+    
 	include(EthBuildInfo)
 	create_build_info()
 	print_config(${NAME})

@@ -47,30 +47,34 @@ async function sleep(timeout) {
 
 
 while(1){
-  console.log("--------------------------------------------------------------");
-  console.log("当前块高"+await web3sync.getBlockNumber());
-  console.log("已连接节点数："+ await getPeerCount() );
+    console.log("--------------------------------------------------------------");
+    console.log("current blocknumber "+await web3sync.getBlockNumber());
+    console.log("the number of connected nodes："+ await getPeerCount() );
 
-  try{
-    var peers=await post.post("admin_peers",[]);
-    if( peers == '' )
-    {
-      await sleep(2000);
-      continue;
-    }
-    peers=JSON.parse(peers);
-    if( peers.result )
-    {
-      for( var i=0;i<peers.result.length;i++){
-        console.log("...........Node "+i+".........");
-        console.log("NodeId:"+peers.result[i].id);
-        console.log("Host:"+peers.result[i].network.remoteAddress);
+    
+    
+    try{
+      var peers=await post.post("admin_peers",[]);
+      if( peers == '' )
+      {
+        await sleep(2000);
+        continue;
       }
+      peers=JSON.parse(peers);
+      if( peers.result )
+      {
+        for( var i=0;i<peers.result.length;i++){
+          console.log("...........Node "+i+".........");
+          console.log("NodeId:"+peers.result[i].id);
+          console.log("Host:"+peers.result[i].network.remoteAddress);
+        }
+      }
+      await sleep(2000);
+    }catch(e){
+      console.log("admin_peers result parse failed ！"+peers);
     }
-    await sleep(2000);
-  }catch(e){
-    console.log("admin_peers 返回解析失败！"+peers);
-  }
+  
+  
 }
 
 

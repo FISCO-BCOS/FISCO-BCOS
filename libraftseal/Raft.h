@@ -67,7 +67,7 @@ public:
 	// should be called before start
 	void initEnv(std::weak_ptr<RaftHost> _host, KeyPair const& _key_pair, unsigned _min_elect_time, unsigned _max_elect_time);
 
-	// 上报最新块
+	// report newest block 上报最新块
 	void reportBlock(BlockHeader const& _b);
 
 	void onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const& _r);
@@ -91,12 +91,12 @@ private:
 	bool wonElection(u256 const& _votes) {return _votes >= m_node_num - m_f;}
 	bool isMajorityVote(u256 const& _votes) {return _votes >= m_node_num - m_f;}
 
-	// 广播消息
+	// broadcast msg 广播消息
 	void broadcastVoteReq();
 	void broadcastHeartBeat();
 	void brocastMsg(unsigned _id, bytes const& _data);
 
-	// 处理响应消息
+	// handle response 处理响应消息
 	bool handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _req);
 	HandleVoteResult handleVoteResponse(u256 const & _from,  h512 const & _node, RaftVoteResp const & _req, VoteState &vote);
 	bool handleHeartBeat(u256 const& _from, h512 const& _node, RaftHeartBeat const& _hb);
@@ -178,7 +178,7 @@ private:
 	};
 	std::unordered_map<h512, BlockRef> m_member_block; // <node_id, BlockRef>
 
-	// 消息队列
+	// msg queue 消息队列
 	RaftMsgQueue m_msg_queue;
 
 	// not to const
