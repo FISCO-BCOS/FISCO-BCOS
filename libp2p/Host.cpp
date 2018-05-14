@@ -314,7 +314,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 
 	// WBCAData wbcaData;
 	// bool ok = NodeConnManagerSingleton::GetInstance().CheckAndSerialize(_rlp, rlpBaseData, wbcaData);
-	// 因为移除了 CA 检查，所以采用相应数据的hash作为判定条件
+	//replace CA check with hash check
 	auto nodeInfoHash = _rlp[5].toHash<h256>();
 	bool ok = NodeConnManagerSingleton::GetInstance().checkNodeInfo(pub.hex(), nodeInfoHash);
 	if (!ok)
@@ -337,6 +337,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 
 		if (!peerSlotsAvailable())
 		{
+			LOG(INFO) << "too many  peer ! " ;
 			ps->disconnect(TooManyPeers);
 			return;
 		}
@@ -356,13 +357,13 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 			else
 			{
 				pcap->newPeerCapability(ps, offset, i, 0);
-				//里面会调用ps的newPeerCapability
-				//也会调用EthereumPeer的init lim 里面会发个StatusPacket包
+				//will callback newPeerCapability && 
+				//callback 'init lim' of EthereumPeer to send StatusPacket package
 				offset += pcap->messageCount();
 			}
 		}
 
-		ps->start();//启动session 发个ping包
+		ps->start();//start session by sending ping package
 		m_sessions[_id] = ps;
 	}
 
@@ -469,7 +470,7 @@ void Host::sslHandshakeServer(const boost::system::error_code& error, std::share
 		// incoming connection; we don't yet know nodeid
 		auto handshake = make_shared<RLPXHandshake>(this, socket);
 		m_connecting.push_back(handshake);
-		handshake->start();//握手成功后startPeerSession
+		handshake->start();//startPeerSession after handshake successfully
 		success = true;
 	}
 	catch (Exception const& _e)
@@ -482,7 +483,7 @@ void Host::sslHandshakeServer(const boost::system::error_code& error, std::share
 	}
 	if (!success)
 		socket->ref().close();
-	runAcceptor(); //重复接客
+	runAcceptor(); //accept p2p connection
 }
 
 
@@ -490,17 +491,17 @@ bool Host::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
 {
 	ParseCert parseCert;
 	parseCert.ParseInfo(ctx);
-	string subjectName = parseCert.getSubjectName();//获取证书主题信息
-	int certType = parseCert.getCertType();//获取证书类型  0：CA 1：用户证书
-	bool isExpire = parseCert.getExpire();//判断证书是否过期
-	string serialNumber = parseCert.getSerialNumber();//获取证书序列号
+	string subjectName = parseCert.getSubjectName();//get subject information of the credential
+	int certType = parseCert.getCertType();//get type of the credential(CA: 0, user credential: 1)
+	bool isExpire = parseCert.getExpire();//certificate expired or not 
+	string serialNumber = parseCert.getSerialNumber();//get serial number of the certificate
 	LOG(DEBUG) << "subjectName:" << subjectName;
 	LOG(DEBUG) << "serialNumber:" << serialNumber;
 	LOG(DEBUG) << "preverified:" << preverified;
 	if (isExpire)
 	{
 		preverified = false;
-		cout << "Verify Certificate Expire Data Err Please Use The Right Certificate File Retry....................." << "\n";
+		LOG(FATAL) << "Verify Certificate Expire Data Err Please Use The Right Certificate File Retry.....................";
 	}
 
 	bool lresult = true;
@@ -510,12 +511,12 @@ bool Host::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
 		if (lresult == false)
 		{
 			preverified = false;
-			cout << "System Contract Verify Certificate Err Please Use The Right Certificate File Retry....................." << "\n";
+			LOG(FATAL) << "System Contract Verify Certificate Err Please Use The Right Certificate File Retry.....................";
 		}
 	}
 	if (preverified == false && lresult == true)
 	{
-		cout << "Verify Certificate Err Please Use The Right Certificate File Retry....................." << "\n";
+		LOG(FATAL) << "Verify Certificate Err Please Use The Right Certificate File Retry.....................";
 	}
 	return preverified;
 }
@@ -529,9 +530,9 @@ void Host::runAcceptor()
 		LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_tcpPublic << ")";
 		m_accepting = true;
 
-		LOG(INFO) << "P2P开始Accept";
+		LOG(INFO) << "begin accepting p2p connections";
 		auto socket = make_shared<RLPXSocket>(m_ioService);
-		//设置匿名函数给监听是进行socket连接
+		//ssl connection
 		if (socket->getSocketType() == SSL_SOCKET)
 		{
 			socket->sslref().set_verify_mode(ba::ssl::verify_peer);
@@ -541,7 +542,7 @@ void Host::runAcceptor()
 		m_tcp4Acceptor.async_accept(socket->ref(), [ = ](boost::system::error_code ec)
 		{
 			auto remoteEndpoint = socket->ref().remote_endpoint();
-			LOG(INFO) << "P2P收到新连接: " << remoteEndpoint.address().to_string() << ":" << remoteEndpoint.port();
+			LOG(INFO) << "Accept New P2P Connection: " << remoteEndpoint.address().to_string() << ":" << remoteEndpoint.port();
 
 			m_accepting = false;
 			if (ec || !m_run)
@@ -560,7 +561,7 @@ void Host::runAcceptor()
 
 			if (socket->getSocketType() == SSL_SOCKET)
 			{
-				m_tcpClient = socket->remoteEndpoint();//获取客户端连接的IP,Port用于黑白名单验证
+				m_tcpClient = socket->remoteEndpoint();//get (ip, port) of the connector, (ip, port) is used to verify white list
 				LOG(DEBUG) << "client port:" << socket->remoteEndpoint().port() << "|ip:" << socket->remoteEndpoint().address().to_string();
 				LOG(DEBUG) << "server port:" << m_listenPort << "|ip:" << m_tcpPublic.address().to_string();
 				socket->sslref().async_handshake(ba::ssl::stream_base::server, boost::bind(&Host::sslHandshakeServer, this, ba::placeholders::error, socket));
@@ -573,7 +574,7 @@ void Host::runAcceptor()
 					// incoming connection; we don't yet know nodeid
 					auto handshake = make_shared<RLPXHandshake>(this, socket);
 					m_connecting.push_back(handshake);
-					handshake->start();//握手成功后startPeerSession
+					handshake->start();//start peer session after handshake
 					success = true;
 				}
 				catch (Exception const& _e)
@@ -587,7 +588,7 @@ void Host::runAcceptor()
 
 				if (!success)
 					socket->ref().close();
-				runAcceptor(); //重复接客
+				runAcceptor(); 
 			}
 		});
 	}
@@ -659,7 +660,7 @@ void Host::requirePeer(NodeID const& _n, NodeIPEndpoint const& _endpoint)
 		}
 		// required for discovery
 		if (m_nodeTable)
-			m_nodeTable->addNode(*p, NodeTable::NodeRelation::Known);//不用discover
+			m_nodeTable->addNode(*p, NodeTable::NodeRelation::Known);
 	}
 	else if (m_nodeTable)
 	{
@@ -732,10 +733,10 @@ void Host::connect(std::shared_ptr<Peer> const& _p)
 	LOG(INFO) << "Attempting connection to node " << _p->id << "@" << ep << " from" << id();
 	auto socket = make_shared<RLPXSocket>(m_ioService);
 
-	//客户端验证证书有效性
+	// Verify certificate of the connected peer
 	if (socket->getSocketType() == SSL_SOCKET)
 	{
-		m_tcpClient = socket->remoteEndpoint();//获取客户端连接的IP,Port用于黑白名单验证
+		m_tcpClient = socket->remoteEndpoint();//get (IP, Port) of the connected peer to verify the white list
 		socket->sslref().set_verify_mode(ba::ssl::verify_peer);
 		socket->sslref().set_verify_callback(boost::bind(&Host::sslVerifyCert, this, _1, _2));
 	}
@@ -872,15 +873,15 @@ void Host::run(boost::system::error_code const&)
 	}
 	*/
 
-	//查看是否所有节点已经连接 如果断掉则进行连接
+	//reconnect disconnected peers
 	reconnectAllNodes();
 
 	auto runcb = [this](boost::system::error_code const & error) { run(error); };
 	m_timer->expires_from_now(boost::posix_time::milliseconds(c_timerInterval));
-	m_timer->async_wait(runcb);   //不断回调run()
+	m_timer->async_wait(runcb);   //callback run()
 }
 
-//work dowork循环之前，先执行这个
+// callback startedWorking firstly before callback dowork function of work class
 void Host::startedWorking()
 {
 	asserts(!m_timer);
@@ -894,25 +895,24 @@ void Host::startedWorking()
 		m_timer.reset(new boost::asio::deadline_timer(m_ioService));
 		m_run = true;
 	}
-	//在调这里之前Client初始化的时候已经将EthereumHost注册进来registerCapability
+
 	// start capability threads (ready for incoming connections)
-	//进行连接 根据已连接的状态值进行连接
 	for (auto const& h : m_capabilities)
-		h.second->onStarting();// 启动多个线程
+		h.second->onStarting();
 
 	// try to open acceptor (todo: ipv6)
-	//已经进行bind和listen
+	// accept connections of peers
 	int port = Network::tcp4Listen(m_tcp4Acceptor, m_netPrefs);
 	if (port > 0)
 	{
 		m_listenPort = port;
 		determinePublic();
-		runAcceptor(); //开始接客
+		runAcceptor(); 
 	}
 	else
 	{
 		LOG(INFO) << "p2p.start.notice id:" << id() << "TCP Listen port is invalid or unavailable.";
-		LOG(ERROR) << "P2pPort 绑定失败！" << "\n";
+		LOG(ERROR) << "P2pPort bind failed！" << "\n";
 		exit(-1);
 	}
 
@@ -924,13 +924,13 @@ void Host::startedWorking()
 	                     m_netPrefs.discovery
 	                 );
 	nodeTable->setEventHandler(new HostNodeTableHandler(*this));
-	//将配置文件中的连接节点传入nodeTable中去
+	//load endpoint information of peers into node table from configuration file(config.json)
 	m_nodeTable = nodeTable;
 	restoreNetwork(&m_restoreNetwork);
 
 	LOG(INFO) << "p2p.started id:" << id();
 
-	run(boost::system::error_code());//第一次执行
+	run(boost::system::error_code());
 }
 
 void Host::doWork()
@@ -973,12 +973,12 @@ void Host::reconnectAllNodes()
 	if (chrono::steady_clock::now() - c_reconnectNodesInterval < m_lastReconnect)
 		return;
 
-	//使用合约和配置文件的全部数据
+	// load endpoint information of peers from both system contract and configuration file (config.json)
 	std::map<std::string, eth::NodeConnParams> mNodeConnParams;
 	NodeConnManagerSingleton::GetInstance().getAllNodeConnInfoContractAndConf(mNodeConnParams);
 
 	RecursiveGuard l(x_sessions);
-	//检查配置中的节点，进行连接
+	// reconnect disconnected peers 
 	for (auto stNode : mNodeConnParams)
 	{
 		if (m_sessions.find(dev::jsToPublic(dev::toJS(stNode.first))) == m_sessions.end() && stNode.first != id().hex())
@@ -1125,11 +1125,11 @@ void Host::recheckAllCA()
 	}
 }
 
-//保存CA数据到session
+// save ca data into session
 void Host::saveCADataByNodeId(const std::string nodeId, CABaseData &baseData)
 {
 	RecursiveGuard l(x_sessions);
-	//startPeerSession 已经做了key的判断来insert
+	//set CA data into session related to nodeId
 	if (m_sessions.find(dev::jsToPublic(dev::toJS(nodeId))) != m_sessions.end())
 	{
 		auto pp = m_sessions[jsToPublic(toJS(nodeId))].lock();
@@ -1287,7 +1287,7 @@ void Host::restoreNetwork(bytesConstRef _b)
 		}
 	}
 
-	//增加节点读入
+	//add peers to node table from configuration
 	addConnParamsToNodeTable();
 }
 
@@ -1312,11 +1312,11 @@ KeyPair Host::networkAlias(bytesConstRef _b)
 void Host::addConnParamsToNodeTable()
 {
 	std::map<std::string, eth::NodeConnParams> mNodeConnParams;
-	//将合约和配置文件中的全部数据存入nodetable
+	// load endpoint information into node table from both system contract and configuration file
 	NodeConnManagerSingleton::GetInstance().getAllNodeConnInfoContractAndConf(mNodeConnParams);
 	for (auto param : mNodeConnParams)
 	{
-		//排除本身
+		//rule out itself
 		if (id().hex() == param.first)
 		{
 			continue;

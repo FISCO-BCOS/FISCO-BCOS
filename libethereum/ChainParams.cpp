@@ -89,10 +89,10 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	js::mObject obj = val.get_obj();
 
 	cp.sealEngineName = obj["sealEngine"].get_str();
-	//系统代理合约地址
+	
 	cp.sysytemProxyAddress = obj.count("systemproxyaddress") ? h160(obj["systemproxyaddress"].get_str()) : h160();
 	cp.listenIp = obj.count("listenip") ? obj["listenip"].get_str() : "0.0.0.0";
-	cp.cryptoMod = obj.count("cryptomod") ? std::stoi(obj["cryptomod"].get_str()) : 0;//获取加密模式
+	cp.cryptoMod = obj.count("cryptomod") ? std::stoi(obj["cryptomod"].get_str()) : 0;
 	cp.cryptoprivatekeyMod = obj.count("cryptoprivatekeymod") ? std::stoi(obj["cryptoprivatekeymod"].get_str()):0;
 	cp.ssl = obj.count("ssl") ? std::stoi(obj["ssl"].get_str()):0;
 	cp.rpcPort = obj.count("rpcport") ? std::stoi(obj["rpcport"].get_str()) : 6789;
@@ -126,21 +126,14 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	for (auto i : params)
 		if (i.first != "accountStartNonce" && i.first != "maximumExtraDataSize" && i.first != "blockReward" && i.first != "tieBreakingGas")
 			cp.otherParams[i.first] = i.second.get_str();
-	/*
-	// genesis
-	string genesisStr = json_spirit::write_string(obj["genesis"], false);
-	cp = cp.loadGenesis(genesisStr, _stateRoot);
-	// genesis state
-	string genesisStateStr = json_spirit::write_string(obj["accounts"], false);
-	cp = cp.loadGenesisState(genesisStateStr, _stateRoot);
-	*/
+	
 	return cp;
 }
 
 ChainParams ChainParams::loadGenesisState(string const& _json, h256 const& _stateRoot) const
 {
 	ChainParams cp(*this);
-	cp.genesisState = jsonToAccountMap(_json, cp.accountStartNonce, nullptr, &cp.precompiled);//创世块合约的account数据这里load
+	cp.genesisState = jsonToAccountMap(_json, cp.accountStartNonce, nullptr, &cp.precompiled);
 	cp.stateRoot = _stateRoot ? _stateRoot : cp.calculateStateRoot(true);
 	return cp;
 }
@@ -161,10 +154,10 @@ ChainParams ChainParams::loadGenesis(string const& _json, h256 const& _stateRoot
 	cp.timestamp = u256(fromBigEndian<u256>(fromHex(genesis["timestamp"].get_str())));
 	cp.extraData = bytes(fromHex(genesis["extraData"].get_str()));
 
-	//从创世块读取上帝帐号，按理说下面的genesisBlock 也要加上这个字段
+	
 	cp.god = genesis.count("god") ? h160(genesis["god"].get_str()) : h160();
 
-	cp.author = cp.god; //在计算创世块的genesisBlock时候有用
+	cp.author = cp.god; 
 
 	// magic code for handling ethash stuff:
 	if ((genesis.count("mixhash") || genesis.count("mixHash")) && genesis.count("nonce"))
@@ -175,9 +168,9 @@ ChainParams ChainParams::loadGenesis(string const& _json, h256 const& _stateRoot
 		cp.sealRLP = rlp(mixHash) + rlp(nonce);
 	}
 
-	cp.genesisState = jsonToAccountMap(_json, cp.accountStartNonce, nullptr, &cp.precompiled);//创世块合约的account数据这里load
+	cp.genesisState = jsonToAccountMap(_json, cp.accountStartNonce, nullptr, &cp.precompiled);
 
-	//读取initNodes
+	
 	if (genesis.count("initMinerNodes"))
 	{
 		for (auto initNode : genesis["initMinerNodes"].get_array())
@@ -258,7 +251,7 @@ bytes ChainParams::genesisBlock() const
 
 	calculateStateRoot();
 
-	std::vector<h512> node_list; // 此处去获取创世块的公钥列表
+	std::vector<h512> node_list; 
 	RLPStream node_rs;
 	for (size_t i = 0; i < node_list.size(); ++i) {
 		node_rs << node_list[i];

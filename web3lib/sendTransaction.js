@@ -29,13 +29,13 @@ function sendTransaction()
 	web3.eth.sendTransaction(postdata, function(err, address) {
 		if (!err)
 		{
-			logger.debug(tx_id + " | 发送交易成功！|",address);
+		    logger.debug(tx_id + " | send transaction success！|", address);
 			process.exit();
 			return;
 		}
 		else
 		{
-			logger.debug(tx_id + "|发送交易失败！",err);
+		    logger.debug(tx_id + "|send transaction failed！", err);
 			process.exit();
 			return;
 		}
@@ -61,7 +61,7 @@ function callContract()
 	console.log(typeof(args) + " | " + Object.prototype.toString.call(args));
 	if(typeof(abi_obj) !== 'object' || Object.prototype.toString.call(abi_obj) !== '[object Array]' || typeof(args) !== 'object' || Object.prototype.toString.call(args) !== '[object Array]')
 	{
-		console.log("参数格式不合法！ abi_obj : " + JSON.stringify(abi_obj) +" | args : " + JSON.stringify(args));
+		console.log("invalid format！ abi_obj : " + JSON.stringify(abi_obj) +" | args : " + JSON.stringify(args));
 		process.exit();
 		return;
 	}
@@ -83,7 +83,7 @@ function callContract()
 					// initiate contract for an address
 					if( conf.contract_addr === '' || conf.contract_addr === undefined)
 					{
-						console.log("未传入合约地址！");
+						console.log("invalid contract address！");
 						process.exit();
 						return;
 					}
@@ -107,7 +107,7 @@ function callContract()
 									}
 									else
 									{
-										console.log(" 调用合约失败");
+										console.log(" contract call failture!");
 										process.exit();
 										return;
 									}
@@ -125,7 +125,7 @@ function callContract()
 						}
 						else
 						{
-							console.log(f + " 不是合约函数！");
+							console.log(f + " is not function of contract！");
 							process.exit();
 							return;
 						}
@@ -155,7 +155,7 @@ function callContract()
 									}
 									else
 									{
-										console.log("调用合约失败！");
+										console.log("contract call failture！");
 										process.exit();
 										return;
 									}
@@ -166,14 +166,14 @@ function callContract()
 							}
 							catch(e)
 							{
-								console.log("调用合约失败！ | exception:",e);
+							    console.log("contract call failture！ | exception:", e);
 								process.exit();
 								return;
 							}					
 						}
 						else
 						{
-							console.log(f + " 不是合约函数！");
+						    console.log("the contract has no member of this function！" + fun);
 							process.exit();
 							return;
 						}
@@ -189,7 +189,7 @@ function callContract()
 			}
 			if( parseInt(abi_obj_size) === (parseInt(index)+1) && !breaked )
 			{
-				console.log("合约未包含该函数！" + fun);
+				console.log("the contract has no member of this function！" + fun);
 				process.exit();
 				return;
 			}		 

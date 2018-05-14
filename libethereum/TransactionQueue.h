@@ -175,7 +175,7 @@ private:
 		TransactionQueue& queue;
 		/// Compare transaction by nonce height and gas price.
 		bool operator()(VerifiedTransaction const& _first, VerifiedTransaction const& _second) const
-		{	//这个地方要改下 超载情况下不能用randomid来排序 ，poc没问题
+		{	
 			return _first.transaction.importTime() <= _second.transaction.importTime();
 			/*
 			u256 const& height1 = _first.transaction.randomid() - queue.m_currentByAddressAndNonce[_first.transaction.sender()].begin()->first;

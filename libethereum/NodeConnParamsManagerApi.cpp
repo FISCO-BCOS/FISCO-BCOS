@@ -44,7 +44,7 @@ bool NodeConnParamsManagerApi::getNodeConnInfo(std::string const& sNodeID, NodeC
 	return bFind;
 }
 
-//从内存中 和config数据中查找 更多的是用于自己的
+
 bool NodeConnParamsManagerApi::getNodeConnInfoBoth(std::string const& sNodeID, NodeConnParams &retNode) const
 {
 	bool bFind = getNodeConnInfo(sNodeID, retNode);
@@ -104,7 +104,7 @@ dev::eth::NodeConnParamsManagerApi& NodeConnManagerSingleton::GetInstance()
 		return nodeConnParamsManager;
 	}
 	else{
-		//钜真修改为他们的子类实现方式
+		
 		static dev::eth::NodeConnParamsManager nodeConnParamsManager(contentsString(getConfigPath()));
 
 		return nodeConnParamsManager;

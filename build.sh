@@ -21,7 +21,7 @@ echo '{ "presets": ["es2017"] }' > ~/.babelrc
 sudo npm install -g secp256k1
 else
 sudo yum -y install cmake3
-
+sudo yum -y install gcc-c++
 sudo yum -y install openssl openssl-devel
 sudo yum -y install nodejs
 sudo yum -y install npm
@@ -35,7 +35,11 @@ chmod +x scripts/install_deps.sh
 ./scripts/install_deps.sh
 
 #install fisco-solc
+if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
+sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc
+else
 sudo cp fisco-solc  /usr/bin/fisco-solc
+fi
 sudo chmod +x /usr/bin/fisco-solc
 
 #install console

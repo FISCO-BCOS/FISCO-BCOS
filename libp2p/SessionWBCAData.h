@@ -36,8 +36,8 @@ namespace dev {
 			Signature getNodeSign(); 
 			void setNodeSign(const Signature& _nodeSign); 
 		private:
-			std::string m_pub256;             //CA证书内容的sha256
-			Signature m_nodeSign;           //对节点信息的sign
+			std::string m_pub256;             //sha256 of the CA
+			Signature m_nodeSign;           // signed data related to the information of the node
 		};
 	}
 }

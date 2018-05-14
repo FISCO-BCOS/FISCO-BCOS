@@ -40,7 +40,7 @@ namespace dev
 namespace eth 
 {
 
-// guard 类
+
 class StatTxExecLogGuard : public TimeIntervalLogGuard 
 {
 public:
@@ -53,7 +53,6 @@ public:
 
 };
 
-// state 流程类
 class StatLogContext;
 class StatLogState
 {
@@ -268,7 +267,7 @@ private:
     void clearCache(const u256& hash) 
     {
         bool err = false;
-        if (m_map.size() > m_capacity) //若超出了容量就从前面开始删除
+        if (m_map.size() > m_capacity)
         {
             auto& front_hash = m_list.front(); 
             auto it = m_map.find(front_hash);
@@ -278,7 +277,7 @@ private:
                 if (!context->isFinalState()) 
                 {
                     context->changeToFinalState();
-                    err = true; // true 表示异常到达 final 状态
+                    err = true; 
                     context->request("error!", &err);  
                     m_map.erase(it);
                 }
@@ -289,19 +288,19 @@ private:
         auto& context = it->second;
         if (it != m_map.end())
         {
-            if (context->isFinalState()) // 已经到达最后状态
+            if (context->isFinalState()) 
             {
-                err = false; // false 表示正常到达final状态
+                err = false; 
                 context->request("success!", &err); 
                 m_map.erase(it);
-                // 从前向后清除，若不出现异常，前面的会更靠近final状态 
+                
                 auto list_it = m_list.begin();
                 for(;list_it != m_list.end(); list_it++)
                 {
                     if (*list_it == hash)
                     {
                         m_list.erase(list_it);
-                        break; /*这里需要尽早跳出循环*/
+                        break; 
                     }
                 }
             }           

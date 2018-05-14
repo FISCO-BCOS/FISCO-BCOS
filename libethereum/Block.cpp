@@ -48,7 +48,7 @@ namespace fs = boost::filesystem;
 
 #define ETH_TIMED_ENACTMENTS 0
 
-unsigned Block::c_maxSyncTransactions = 100; // 单次打包最多条数，控制这个数量不要过高，防止雪崩
+unsigned Block::c_maxSyncTransactions = 100; 
 
 
 Block::Block(BlockChain const& _bc, OverlayDB const& _db, BaseState _bs, Address const& _author):
@@ -243,13 +243,10 @@ bool Block::sync(BlockChain const& _bc, h256 const& _block, BlockHeader const& _
 #endif
     if (bi == m_currentBlock)
     {
-        //自己挖矿产生的
-        //当前块为我们的最新块，则将当前块赋值给上一块
-        //同时重置当前块
         // We mined the last block.
         // Our state is good - we just need to move on to next.
         m_previousBlock = m_currentBlock;
-        resetCurrent();                 //更新为空块
+        resetCurrent();                 
         ret = true;
     }
     else if (bi == m_previousBlock)
@@ -262,8 +259,7 @@ bool Block::sync(BlockChain const& _bc, h256 const& _block, BlockHeader const& _
         // New blocks available, or we've switched to a different branch. All change.
         // Find most recent state dump and replay what's left.
         // (Most recent state dump might end up being genesis.)
-        //非自己挖出的矿，从别人处导入的新块???
-        if (m_state.db().lookup(bi.stateRoot()).empty())    // TODO: API in State for this?
+        if (m_state.db().lookup(bi.stateRoot()).empty())    
         {
             LOG(WARNING) << "Unable to sync to" << bi.hash() << "; state root" << bi.stateRoot() << "not found in database.";
             LOG(WARNING) << "Database corrupt: contains block without stateRoot:" << bi;
@@ -334,13 +330,12 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
     } else {
         max_sync_txs = static_cast<unsigned>(_max_block_txs > m_transactions.size() ? _max_block_txs - m_transactions.size() : 0);
     }
-    //auto ts = _tq.topTransactions(max_sync_txs, m_transactionSet);
-    //ret.second = (ts.size() == max_sync_txs);  // say there's more to the caller if we hit the limit
+  
     auto ts = _tq.allTransactions();
 
     LastHashes lh;
     unsigned goodTxs = 0;
-    //for (int goodTxs = max(0, (int)ts.size() - 1); goodTxs < (int)ts.size(); )
+   
     {
         //goodTxs = 0;
         for (auto const& t : ts)
@@ -348,9 +343,8 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
             {
                 try
                 {
-                    LOG(INFO) << " Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",打包=" << utcTime();
+                    LOG(TRACE) << "PACK-TX: Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",time=" << utcTime();
 
-                    //交易打包前检查
                     u256 check = _bc.filterCheck(t, FilterCheckScene::PackTranscation);
                     if ( (u256)SystemContractCode::Ok != check  )
                     {
@@ -358,29 +352,18 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                         BOOST_THROW_EXCEPTION(FilterCheckFail());
                     }
 
-                    /*if ( t.isCreation()  ) //检查是否有部署权限
-                    {
-                        check = _bc.filterCheck(t, FilterCheckScene::CheckDeploy);
-                        if ( (u256)SystemContractCode::Ok != check  )
-                        {
-                            LOG(WARNING) << "Block::sync " << t.sha3() << " transition  NoDeployPermission";
-                            BOOST_THROW_EXCEPTION(NoDeployPermission());
-                        }
-                    }*/
-
-                    if ( ! _bc.isBlockLimitOk(t)  ) //blocklimit 检查
+                    if ( ! _bc.isBlockLimitOk(t)  ) 
                     {
                         LOG(WARNING) << "Block::sync " << t.sha3() << " transition blockLimit=" << t.blockLimit() << " chain number=" << _bc.number();
                         BOOST_THROW_EXCEPTION(BlockLimitCheckFail());
                     }
-                    //cout<<"Block::sync "<<_bc.nonceCheck()<<"\n";
 
-                    if ( !_bc.isNonceOk(t) ) //链上已经出现了
+                    if ( !_bc.isNonceOk(t) ) 
                     {
                         LOG(WARNING) << "Block::sync " << t.sha3() << " " << t.randomid();
                         BOOST_THROW_EXCEPTION(NonceCheckFail());
                     }
-                    for ( size_t pIndex = 0; pIndex < m_transactions.size(); pIndex++) //多做一步，当前块内也不能重复出现
+                    for ( size_t pIndex = 0; pIndex < m_transactions.size(); pIndex++) 
                     {
                         if ( (m_transactions[pIndex].from() == t.from() ) && (m_transactions[pIndex].randomid() == t.randomid()) )
                             BOOST_THROW_EXCEPTION(NonceCheckFail());
@@ -454,10 +437,6 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                     else
                     {
                         LOG(TRACE) << t.sha3() << "Temporarily no gas left in current block (txs gas > block's gas limit)";
-                        //_tq.drop(t.sha3());
-                        // Temporarily no gas left in current block.
-                        // OPTIMISE: could note this and then we don't evaluate until a block that does have the gas left.
-                        // for now, just leave alone.
                     }
                 }
                 catch (Exception const& _e)
@@ -510,7 +489,13 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
         catch (Exception& ex)
         {
             ex << errinfo_transactionIndex(i);
-            _tq.drop(tr.sha3());  // TODO: 是否需要分类处理？
+            _tq.drop(tr.sha3());  
+            throw;
+        }
+        catch (std::exception& ex)
+        {
+	    LOG(ERROR)<<"execute t="<<toString(tr.sha3())<<" failed, error message:"<<ex.what();
+            _tq.drop(tr.sha3());  
             throw;
         }
         LOG(TRACE) << "Block::exec: t=" << toString(tr.sha3());
@@ -556,8 +541,6 @@ u256 Block::enactOn(VerifiedBlockRef const& _block, BlockChain const& _bc, bool 
     t.restart();
 #endif
 
-    //内存中同步当前块 设置previousblock为当前block，并重置当前块
-    //？？这里设置m_previousBlock=currentblock  问题1 对应下面的问题2
     sync(_bc, _block.info.parentHash(), BlockHeader());
     resetCurrent();
 
@@ -566,9 +549,8 @@ u256 Block::enactOn(VerifiedBlockRef const& _block, BlockChain const& _bc, bool 
     t.restart();
 #endif
 
-    //??问题2 重新设置m_previousBlock为 之前的父block
     m_previousBlock = biParent;
-    auto ret = enact(_block, _bc, true, _statusCheck); //执行块里面所有的交易 要检查权限
+    auto ret = enact(_block, _bc, true, _statusCheck); 
 
 #if ETH_TIMED_ENACTMENTS
     enactment = t.elapsed();
@@ -598,9 +580,6 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
     m_currentBlock.noteDirty();
     m_currentBlock = _block.info;
 
-//  LOG(INFO) << "playback begins:" << m_currentBlock.hash() << "(without: " << m_currentBlock.hash(WithoutSeal) << ")";
-//  LOG(INFO) << m_state;
-
     LastHashes lh;
     DEV_TIMED_ABOVE("lastHashes", 500)
     lh = _bc.lastHashes(m_currentBlock.parentHash());
@@ -618,11 +597,8 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
         try
         {
             LOG(TRACE) << "Enacting transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
-            // 区分从enactOn和populateFromChain
             execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
 
-            //LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
-            //LOG(TRACE) << m_state;
         }
         catch (Exception& ex)
         {
@@ -759,13 +735,6 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
         }
     }
 
-    //不要奖励了
-    //DEV_TIMED_ABOVE("applyRewards", 500)
-    //applyRewards(rewarded, _bc.chainParams().blockReward);
-
-    // Commit all cached state changes to the state trie.
-    //bool removeEmptyAccounts = m_currentBlock.number() >= _bc.chainParams().u256Param("EIP158ForkBlock");
-
     DEV_TIMED_ABOVE("commit", 500)
     m_state.commit( State::CommitBehaviour::KeepEmptyAccounts);
 
@@ -810,89 +779,6 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
         }
     }
 
-    //双VM，线程不安全
-    if (VMFactory::getKind() == VMKind::Dual) {
-        //LOG(DEBUG) << "dual vm execute...";
-        VMFactory::setKind(VMKind::JIT);
-
-        Timer timer;
-        std::pair<ExecutionResult, TransactionReceipt> JITResultReceipt = m_state.execute(EnvInfo(info(), _lh, gasUsed()), *m_sealEngine, _t, Permanence::Dry, _onOp);
-        //LOG(DEBUG) << "jit elapsed:" << timer.elapsed();
-
-        std::unordered_map<Address, Account> JITCache = m_state.getCache();
-        m_state.clearCache();
-
-        VMFactory::setKind(VMKind::Interpreter);
-
-        timer.restart();
-        std::pair<ExecutionResult, TransactionReceipt> interpreterResultReceipt = m_state.execute(EnvInfo(info(), _lh, gasUsed()), *m_sealEngine, _t, _p, _onOp);
-        //LOG(DEBUG) << "interpreter elapsed:" << timer.elapsed();
-
-        std::unordered_map<Address, Account> interpreterCache = m_state.getCache();
-
-        //bool removeEmptyAccounts = info().number() >= m_sealEngine->chainParams().u256Param("EIP158ForkBlock");
-        //m_state.commit(removeEmptyAccounts ? State::CommitBehaviour::RemoveEmptyAccounts : State::CommitBehaviour::KeepEmptyAccounts);
-        m_state.commit(State::CommitBehaviour::KeepEmptyAccounts);
-
-        VMFactory::setKind(VMKind::Dual);
-
-        //比较差异
-        auto lhsResult = interpreterResultReceipt.first;
-        auto rhsResult = JITResultReceipt.first;
-
-        for (auto lhsAccountIt = interpreterCache.begin(); lhsAccountIt != interpreterCache.end(); ++lhsAccountIt) {
-            auto rhsAccountIt = JITCache.find(lhsAccountIt->first);
-
-            if (rhsAccountIt == JITCache.end()) {
-                LOG(WARNING) << "[Dual error]JIT执行缺少Account:" << lhsAccountIt->first;
-            }
-            else {
-                Account &lhs = lhsAccountIt->second;
-                Account &rhs = rhsAccountIt->second;
-
-                if (lhs.nonce() != rhs.nonce() || lhs.balance() != rhs.balance() || lhs.code() != rhs.code()) {
-                    LOG(WARNING) << "[Dual error]JIT Account与Interpreter Account差异:" << lhsAccountIt->first
-                                 << "nonce:" << lhs.nonce() << "," << rhs.nonce()
-                                 << "; balance:" << lhs.balance() << "," << rhs.balance()
-                                 << "; code:" << lhs.code() << "," << rhs.code();
-                }
-
-                auto lhsStorage = lhs.storageOverlay();
-                auto rhsStorage = rhs.storageOverlay();
-
-                for (auto lhsStorageIt = lhsStorage.begin(); lhsStorageIt != lhsStorage.end(); ++lhsStorageIt) {
-                    auto rhsStorageIt = rhsStorage.find(lhsStorageIt->first);
-
-                    if (rhsStorageIt == rhsStorage.end()) {
-                        LOG(WARNING) << "[Dual error]JIT缺少Storage key, Account:" << lhsStorageIt->first << "storage key:" << lhsStorageIt->first;
-                    }
-                    else if (lhsStorageIt->second != rhsStorageIt->second) {
-                        LOG(WARNING) << "[Dual error]JIT storage与Interpreter差异 Account:" << lhsStorageIt->first << "JIT:" << lhsStorageIt->second << "Interpreter:" << rhsStorageIt->second;
-                    }
-                }
-            }
-        }
-
-        if (_p == Permanence::Committed)
-        {
-            // Add to the user-originated transactions that we've executed.
-            m_transactions.push_back(_t);
-            m_receipts.push_back(interpreterResultReceipt.second);
-            m_transactionSet.insert(_t.sha3());
-
-
-            //更新系统缓存
-            if (_bcp) {
-                (_bcp->updateCache)(_t.to());
-            }
-
-        }
-
-        return interpreterResultReceipt.first;
-    }
-
-    //初始化环境EnvInfo 每次执行交易都会初始化环境，
-
     std::pair<ExecutionResult, TransactionReceipt> resultReceipt = m_state.execute(EnvInfo(info(), _lh, gasUsed(), m_evmCoverLog, m_evmEventLog), *m_sealEngine, _t, _p, _onOp);
 
     if (_p == Permanence::Committed)
@@ -910,7 +796,7 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
         }
 
     }
-    // 交易已经同步到m_transactions，这里只需要保存receipt
+   
     if (_p == Permanence::OnlyReceipt)
     {
         m_receipts.push_back(resultReceipt.second);
@@ -920,7 +806,7 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
     return resultReceipt.first;
 }
 
-// 不要奖励了
+
 void Block::applyRewards(vector<BlockHeader> const& _uncleBlockHeaders, u256 const& _blockReward)
 {
     return ;
@@ -965,7 +851,7 @@ void Block::commitToSeal(BlockChain const& _bc, bytes const& _extraData)
     if (m_previousBlock.number() != 0)
     {
         // Find great-uncles (or second-cousins or whatever they are) - children of great-grandparents, great-great-grandparents... that were not already uncles in previous generations.
-        LOG(INFO) << "Checking " << m_previousBlock.hash() << ", parent=" << m_previousBlock.parentHash();
+        LOG(TRACE) << "Checking " << m_previousBlock.hash() << ", parent=" << m_previousBlock.parentHash();
         h256Hash excluded = _bc.allKinFrom(m_currentBlock.parentHash(), 6);
         auto p = m_previousBlock.parentHash();
         for (unsigned gen = 0; gen < 6 && p != _bc.genesisHash() && unclesCount < 2; ++gen, p = _bc.details(p).parent)
@@ -996,8 +882,8 @@ void Block::commitToSeal(BlockChain const& _bc, bytes const& _extraData)
         RLPStream k;
         k << i;
 
-        if (m_receipts.size() > i) { // 并行PBFT第一次打包没有receipt
-            RLPStream receiptrlp;
+        if (m_receipts.size() > i) { // parallel Pbft first time pack transction has not receipt
+            RLPStream receiptrlp; 
             m_receipts[i].streamRLP(receiptrlp);
             receiptsMap.insert(std::make_pair(k.out(), receiptrlp.out()));
         }
@@ -1021,20 +907,8 @@ void Block::commitToSeal(BlockChain const& _bc, bytes const& _extraData)
     RLPStream(unclesCount).appendRaw(unclesData.out(), unclesCount).swapOut(m_currentUncles);
 
 
-
-    // Apply rewards last of all.  不要奖励了
-    //applyRewards(uncleBlockHeaders, _bc.chainParams().blockReward);
-
-    // Commit any and all changes to the trie that are in the cache, then update the state root accordingly.
-    //bool removeEmptyAccounts = m_currentBlock.number() >= _bc.chainParams().u256Param("EIP158ForkBlock");
-
-
     DEV_TIMED_ABOVE("commit", 500)
     m_state.commit(State::CommitBehaviour::KeepEmptyAccounts);// 不要RemoveEmptyAccounts了
-
-    //LOG(INFO) << "Post-reward stateRoot:" << m_state.rootHash();
-    //LOG(INFO) << m_state;
-    //LOG(INFO) << *this;
 
     m_currentBlock.setLogBloom(logBloom());
     m_currentBlock.setGasUsed(gasUsed());
@@ -1088,29 +962,7 @@ void Block::uncommitToSeal()
 
 bool Block::sealBlock(bytesConstRef _header)
 {
-    /*    if (!m_committedToSeal)
-            return false;
-
-        if (BlockHeader(_header, HeaderData).hash(WithoutSeal) != m_currentBlock.hash(WithoutSeal))
-            return false;
-
-        LOG(INFO) << "Sealing block!";
-
-        // Compile block:
-        RLPStream ret;
-        ret.appendList(5);
-        ret.appendRaw(_header);
-        ret.appendRaw(m_currentTxs);
-        ret.appendRaw(m_currentUncles);
-        /// 增加一条冗余信息，为了跟header建立联系，方便下载时处理
-        ret.append(m_currentBlock.hash(WithoutSeal));
-        /// 增加签名
-        std::vector<std::pair<u256, Signature>> sig_list;
-        ret.appendVector(sig_list);
-
-
-        ret.swapOut(m_currentBytes);
-    */
+    
     if (!sealBlock(_header, m_currentBytes)) {
         return false;
     }
@@ -1146,9 +998,9 @@ bool Block::sealBlock(bytesConstRef _header, bytes & _out)
     ret.appendRaw(_header);
     ret.appendRaw(m_currentTxs);
     ret.appendRaw(m_currentUncles);
-    /// 增加一条冗余信息，为了跟header建立联系，方便下载时处理
+    
     ret.append(m_currentBlock.hash(WithoutSeal));
-    /// 增加签名
+   
     std::vector<std::pair<u256, Signature>> sig_list;
     ret.appendVector(sig_list);
 

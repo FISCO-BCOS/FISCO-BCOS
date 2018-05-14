@@ -1,12 +1,18 @@
-pragma solidity ^0.4.4;
+pragma solidity ^0.4.11;
 
 import "Base.sol";
 import "StringTool.sol";
+import "SystemProxy.sol";
+import "ContractAbiMgr.sol";
+import "ConsensusControlMgr.sol";
+import "ConsensusControlInterface.sol";
+import "LibEthLog.sol";
 
-contract NodeAction is Base ,StringTool{
+
+contract NodeAction is Base, StringTool {
+    using LibEthLog for *;
     
-    
-    struct NodeInfo{
+    struct NodeInfo {
         string  id;       
         string    ip;            
         uint    port;
@@ -17,15 +23,18 @@ contract NodeAction is Base ,StringTool{
         uint    idx;
         uint    blocknumber;
     }
-  
-       
     
     mapping(string =>NodeInfo) m_nodedata;
     string[] m_nodeids;
+    address private systemAddr;
     
-    function NodeAction() {        
+    function NodeAction() {   
     }
-   
+
+    function setSystemAddr(address addr) {
+        systemAddr = addr;
+    }
+
     //变更之后 更新idx
     function updateIdx() internal {
         uint startCore=0;//核心节点开始
@@ -39,10 +48,33 @@ contract NodeAction is Base ,StringTool{
         }
                 
     }
+
+    function nodeCallback(NodeInfo nodeinfo, bool isRegister) internal returns (bool) {
+        if (0x0 != systemAddr) {
+            LibEthLog.INFO().append("[ConsensusControl] load systemAddr:").commit();
+            SystemProxy systemProxy = SystemProxy(systemAddr);
+            var (addr,,) = systemProxy.getRoute("ConsensusControlMgr");
+            if (0x0 != addr) {
+                LibEthLog.INFO().append("[ConsensusControl] load ConsensusControlMgr:").commit();
+                ConsensusControlMgr mgr = ConsensusControlMgr(addr);
+                address controlAddr = mgr.getAddr();
+                if (0x0 != controlAddr) {
+                    LibEthLog.INFO().append("[ConsensusControl] load controlAddr:").commit();
+                    ConsensusControlInterface consensusControl = ConsensusControlInterface(controlAddr);
+                    if (isRegister) {
+                        return consensusControl.addNode(stringToBytes32(nodeinfo.agencyinfo));
+                    } else {
+                        return consensusControl.delNode(stringToBytes32(nodeinfo.agencyinfo));
+                    }
+                }
+            }
+            // 添加其他的在节点注册退出阶段时候回调功能
+        }
+        return true;
+    }
+
     //登记节点信息
-    function registerNode (string _id,string _ip,uint _port,NodeType _category,string _desc,string _CAhash,string _agencyinfo,uint _idx)  returns(bool) {
-        
-        
+    function registerNode (string _id,string _ip,uint _port,NodeType _category,string _desc,string _CAhash,string _agencyinfo,uint _idx)  returns(bool) {     
         bool find=false;
         for( uint i=0;i<m_nodeids.length;i++){
             if( equal(_id , m_nodeids[i]) ){
@@ -52,9 +84,14 @@ contract NodeAction is Base ,StringTool{
         }
         if( find )
             return false;
-        
+
         m_nodeids.push(_id);
-        m_nodedata[_id]=NodeInfo(_id,_ip,_port,_category,_desc,_CAhash,_agencyinfo,_idx,block.number);
+        var info = NodeInfo(_id,_ip,_port,_category,_desc,_CAhash,_agencyinfo,_idx,block.number);
+
+        if (!nodeCallback(info, true))
+            return false;
+
+        m_nodedata[_id] = info;
 
         updateIdx();
 
@@ -70,14 +107,18 @@ contract NodeAction is Base ,StringTool{
         for( uint i=0;i<m_nodeids.length;i++){
         
             if( equal(_id , m_nodeids[i]) ){
+
+                if (!nodeCallback(m_nodedata[_id], false))
+                    return false;
             
                 if( m_nodeids.length > 0 ){
                     m_nodeids[i]=m_nodeids[m_nodeids.length-1];
                 }
 
                 m_nodeids.length--;
+  
                 delete m_nodedata[_id];
-                 
+                
                 updateIdx();
                 return true;
             }
@@ -93,6 +134,16 @@ contract NodeAction is Base ,StringTool{
     function getNode(string _id) public constant returns(string,uint,NodeType,string,string,string,uint){
             
         return (m_nodedata[_id].ip,m_nodedata[_id].port,m_nodedata[_id].category,m_nodedata[_id].desc,m_nodedata[_id].CAhash ,m_nodedata[_id].agencyinfo,m_nodedata[_id].blocknumber);
+    }
+
+    function getNodeByIdx(uint _index) public constant returns(string,uint,NodeType,string,string,string,uint) {
+        var id = getNodeId(_index);
+        return getNode(id);
+    }
+
+    function getNodeAgencyByIdx(uint _index) returns (bytes32) {
+        var (,,,,,agencyinfo,) = getNodeByIdx(_index);
+        return stringToBytes32(agencyinfo);
     }
 
     function getNodeIdx(string _id) public constant returns(uint){

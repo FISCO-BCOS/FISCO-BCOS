@@ -37,7 +37,7 @@ var instance = contract.at(address);
 
 
 
-console.log("合约address:"+address);
+console.log("contract address:"+address);
 
 
 
