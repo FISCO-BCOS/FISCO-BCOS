@@ -1,5 +1,7 @@
 # FISCO BCOS Docker节点部署
 
+[FISCO BCOS Docker Installation Manual](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20Docker%20Installation%20Manual)
+
 本文档能够让初学者快速体验FISCO BCOS平台。初学者无需部署FISCO BCOS平台，仅需在安装了Docker的机器上运行本文档中的命令，即可启动两个FISCO BCOS节点。
 
 推荐使用Docker 17.03以上版本，安装方法参照[官方文档][Docker-Install]或本文档附录。
@@ -17,16 +19,16 @@ chmod +x start_fisco_docker.sh
 > 执行后可看到提示
 
 ```log
---------------已尝试启动区块链docker节点--------------
-节点信息：
-  节点名 	IP		rpcport		p2pport		channelPort	日志目录
+--------------Nodes info in docker--------------
+Nodes info:
+  node name 	IP		rpcport		p2pport		channelPort	log dir
   node0		0.0.0.0		35500		53300		54300		/log-fisco-bcos/node0
   node1		0.0.0.0		35501		53301		54301		/log-fisco-bcos/node1
-验证区块链节点是否启动：
+To check whether the nodes are started:
 	# ps -ef |grep fisco-bcos
-验证一个区块链节点是否连接了另一个：
+To check whether the nodes are connected each other:
 	# cat /log-fisco-bcos/node0/* | grep peers
-验证区块链节点是否能够进行共识： 
+To check whether the nodes can seal: 
 	# tail -f /log-fisco-bcos/node0/* | grep ++++
 ```
 
