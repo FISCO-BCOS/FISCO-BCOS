@@ -1,6 +1,6 @@
 # FISCO BCOS Docker节点部署
 
-[FISCO BCOS Docker Installation Manual](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20Docker%20Installation%20Manual)
+[FISCO BCOS Docker Installation Manual](README_EN.md)
 
 本文档能够让初学者快速体验FISCO BCOS平台。初学者无需部署FISCO BCOS平台，仅需在安装了Docker的机器上运行本文档中的命令，即可启动两个FISCO BCOS节点。
 
