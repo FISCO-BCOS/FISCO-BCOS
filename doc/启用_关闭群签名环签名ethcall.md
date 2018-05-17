@@ -102,7 +102,7 @@ FISCO BCOS提供了群签名&&环签名链上验证功能，下表详细介绍�
 [centos]
 sudo yum -y install git
 sudo yum -y install dos2unix
-sudo yum -y intall lsof
+sudo yum -y install lsof
 
 [ubuntu]
 sudo apt install git
