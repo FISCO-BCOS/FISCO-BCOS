@@ -1706,7 +1706,10 @@ web3.eth.getCode('0x1d2047204130de907799adaea85c511c7ce85b6d',console.log)
 > Get the node's peer your console login
 
 ```js
+//Different commands between different versions of ethconsole
 web3.admin.getPeers(console.log)
+//Or
+web3.admin.peers(console.log)
 ```
 
 > If success
