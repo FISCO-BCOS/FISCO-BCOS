@@ -1705,7 +1705,10 @@ web3.eth.getCode('0x1d2047204130de907799adaea85c511c7ce85b6d',console.log)
 > 执行
 
 ```js
+//ethconsole版本不同命令稍有不同
 web3.admin.getPeers(console.log)
+//或
+web3.admin.peers(console.log)
 ```
 
 > 可看到连接了其它的节点
