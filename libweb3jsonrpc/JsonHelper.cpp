@@ -114,6 +114,15 @@ Json::Value toJson(dev::eth::BlockHeader const& _bi, SealEngineFace* _sealer)
 		res["timestamp"] = toJS(_bi.timestamp());
 		res["difficulty"] = toJS(_bi.difficulty());
 		res["genIndex"] = toJS(_bi.genIndex());
+
+		auto &nodeList = _bi.nodeList();
+		res["minerNodeId"] = Json::Value();
+		if(nodeList.size() > 0)
+			res["minerNodeId"] = nodeList[_bi.genIndex().convert_to<int>()].hex();
+
+		res["nodeList"] = Json::Value(Json::arrayValue);
+		for(unsigned int i = 0; i < nodeList.size(); i++)
+			res["nodeList"].append(nodeList[i].hex());
 		// TODO: remove once JSONRPC spec is updated to use "author" over "miner".
 		res["miner"] = toJS(_bi.author());
 		if (_sealer)
@@ -141,7 +150,7 @@ Json::Value toJson(dev::eth::Transaction const& _t, std::pair<h256, unsigned> _l
 		res["transactionIndex"] = toJS(_location.second);
 		res["blockNumber"] = toJS(_blockNumber);
 		res["randomId"] = toJS(_t.randomid());
-		//添加operation字段
+		//add operation field
 		res["operation"] = _t.isCreation() ? Json::Value(Json::nullValue) : _t.cnsParams().toJsonObject();
 	}
 	return res;
@@ -378,7 +387,7 @@ Json::Value toJsonByBlock(LocalisedLogEntries const& _entries)
 void fromJsonGetParams(Json::Value const& _json, CnsParams &params)
 {
 	/*
-	格式：
+     format：
 	{
 	"contract": "Hello",
 	"func": "get",
@@ -454,7 +463,7 @@ bool fromJsonGetParams(std::string const& _json, CnsParams &params)
 		throw e;
 	}
 	catch (...)
-	{//其他异常
+	{//other exception
 		LOG(INFO) << "#fromJsonGetParams# other exception , _json = " << _json;
 	}
 
@@ -494,23 +503,23 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
 	if (!_json["randomid"].empty())
 		ret.randomid = jsToU256(_json["randomid"].asString());
 
-	//增加blocklimit 参数
+	//add blocklimit params
 	if (!_json["blockLimit"].empty())
 		ret.blockLimit = jsToU256(_json["blockLimit"].asString());
 
-	//CNS服务中data字段是json对象
+	//in CNS, data is json object
 	if (!_json["data"].empty() && _json["data"].isObject())
 		ret.jData = _json["data"];
 
-	//添加协议版本号
+	//add version
 	if (!_json["version"].empty())
 		ret.strVersion = _json["version"].asString();
 
-	//添加CNS调用时的合约名称
+	//in CNS, add contract name
 	if (!_json["contractName"].empty())
 		ret.strContractName = _json["contractName"].asString();
 
-	//保留的类型字段
+	//keep type
 	if (!_json["type"].empty())
 		ret.type = jsToU256(_json["type"].asString());
 

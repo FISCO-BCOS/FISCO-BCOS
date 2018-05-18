@@ -73,6 +73,7 @@ void Raft::initEnv(std::weak_ptr<RaftHost> _host, KeyPair const& _key_pair, unsi
 	std::srand(static_cast<unsigned>(utcTime()));
 
 	// 一个超时周期 kHeartBeatIntervalRatio 次心跳
+	// kHeartBeatIntervalRatio times heartbeat within one timeout period
 	m_heartbeat_timeout = m_min_elect_timeout;
 	m_heartbeat_interval = m_heartbeat_timeout / Raft::kHeartBeatIntervalRatio;
 
@@ -155,13 +156,23 @@ void Raft::reportBlock(BlockHeader const & _b) {
 
 void Raft::onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
 	if (_id <= RaftHeartBeatRespPacket) {
-		u256 idx = u256(0);
-		if (! NodeConnManagerSingleton::GetInstance().getIdx(_peer->session()->id(), idx)) {
-			LOG(ERROR) << "Recv an raft msg from unknown peer id=" << _id;
-			return;
+		NodeID nodeid;
+		auto session = _peer->session();
+		if (session && (nodeid = session->id()))
+		{
+			u256 idx = u256(0);
+			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
+				LOG(ERROR) << "Recv an raft msg from unknown peer id=" << _id;
+				return;
+			}
+			LOG(INFO) << "onRaftMsg: id=" << _id << ",from=" << idx;
+			m_msg_queue.push(RaftMsgPacket(idx, nodeid, _id, _r[0].data()));
 		}
-		LOG(INFO) << "onRaftMsg: id=" << _id << ",from=" << idx;
-		m_msg_queue.push(RaftMsgPacket(idx, _peer->session()->id(), _id, _r[0].data()));
+		else
+		{
+			LOG(ERROR) << "onRaftMsg: session id error!";
+		}
+
 	} else {
 		LOG(ERROR) << "Recv an illegal msg, id=" << _id;
 	}
@@ -205,7 +216,7 @@ void Raft::runAsLeader() {
 			break;
 		}
 
-		// 心跳超时转 candidate
+		// heartbeat timeout, change role to candidate (心跳超时转 candidate)
 		if (checkHeartBeatTimeout()) {
 			LOG(INFO) << "HeartBeat Timeout!";
 			for (auto& i : member_hb_log) {
@@ -266,9 +277,9 @@ void Raft::runAsLeader() {
 				int count = count_if(member_hb_log.begin(), member_hb_log.end(), [](pair<const h512, unsigned>& item) {
 					if (item.second > 0) return true; else return false;
 				});
-				// 加上自己
-				if (count + 1 >= m_node_num - m_f) { // 收集到了超过半数的心跳
-					// 重置心跳超时时间
+				// add myself 加上自己
+				if (count + 1 >= m_node_num - m_f) { // collect heartbeat exceed half 收集到了超过半数的心跳
+					// reset heartbeat timeout 重置心跳超时时间
 					m_heartbeat_last_reset = std::chrono::system_clock::now();
 					for_each(member_hb_log.begin(), member_hb_log.end(), [](pair<const h512, unsigned>& item) {
 						if (item.second > 0) --item.second;
@@ -496,15 +507,26 @@ void Raft::brocastMsg(unsigned _id, bytes const & _data) {
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<RaftPeer> _p)
 		{
-			unsigned account_type = 0;
-			if (! NodeConnManagerSingleton::GetInstance().getAccountType(_p->session()->id(), account_type) || account_type != EN_ACCOUNT_TYPE_MINER) {
-				return true;
+			NodeID nodeid;
+			auto session = _p->session();
+			if (session && (nodeid = session->id()))
+			{
+				unsigned account_type = 0;
+				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type) || account_type != EN_ACCOUNT_TYPE_MINER ) {
+					return true;
+				}
+
+				RLPStream ts;
+				_p->prep(ts, _id, 1).append(_data);
+				_p->sealAndSend(ts);
+				LOG(INFO) << "Sent [" << _id << "] raftmsg to " << nodeid;
+				
+			}
+			else
+			{
+				LOG(ERROR) << "brocastMsg: session id error!";
 			}
 
-			RLPStream ts;
-			_p->prep(ts, _id, 1).append(_data);
-			_p->sealAndSend(ts);
-			LOG(INFO) << "Sent [" << _id << "] raftmsg to " << _p->session()->id();
 			return true;
 		});
 	}
@@ -518,14 +540,24 @@ bool Raft::sendResponse(u256 const & _to, h512 const & _node, unsigned _id, Raft
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<RaftPeer> _p)
 		{
-			if (_p->session()->id() != _node) {
-				return true;
+			NodeID nodeid;
+			auto session = _p->session();
+			if (session && (nodeid = session->id()))
+			{
+				if ( nodeid != _node) {
+					return true;
+				}
+
+				RLPStream ts;
+				_p->prep(ts, _id, 1).append(resp_ts.out());
+				_p->sealAndSend(ts);
+				LOG(INFO) << "Sent [" << _id << "] raftmsg to " <<nodeid;
+			}
+			else
+			{
+				LOG(ERROR) << "sendResponse: session id error!";
 			}
 
-			RLPStream ts;
-			_p->prep(ts, _id, 1).append(resp_ts.out());
-			_p->sealAndSend(ts);
-			LOG(INFO) << "Sent [" << _id << "] raftmsg to " << _p->session()->id();
 			return true;
 		});
 		return true;

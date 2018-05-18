@@ -67,7 +67,7 @@ public:
 	bool isLeader() {
 		auto ret = getLeader();
 		bool isLeader = false;
-		if (ret.first) // 出错的话isLeader就使用false
+		if (ret.first) // if errer, isLeader is False 出错的话isLeader就使用false
 			isLeader = ret.second == m_node_idx;
 		return isLeader;
 	}
@@ -87,7 +87,7 @@ public:
 	void initEnv(std::weak_ptr<PBFTHost> _host, BlockChain* _bc, OverlayDB* _db, BlockQueue *bq, KeyPair const& _key_pair, unsigned _view_timeout);
 	void setOmitEmptyBlock(bool _flag) {m_omit_empty_block = _flag;}
 
-	// 上报最新块
+	// report newest block 上报最新块
 	void reportBlock(BlockHeader const& _b, u256 const& td);
 
 	void onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const& _r);
@@ -102,9 +102,11 @@ private:
 	void initBackupDB();
 	void resetConfig();
 	// 线程：处理各种消息的响应，超时主动发送viewchange消息
+	// thread: handle msg response, broadcast viewchange when timeout
 	void workLoop() override;
 
 	//检测是否超时，超时切换视图
+	// check timeout, if timeout, change view
 	void checkTimeout();
 
 	void collectGarbage();
@@ -119,6 +121,7 @@ private:
 	bool checkSign(PBFTMsg const& _req) const;
 
 	// 广播消息
+	// broadcast msg
 	bool broadcastPrepareReq(BlockHeader const& _bi, bytes const& _block_data);
 	bool broadcastSignReq(PrepareReq const& _req);
 	bool broadcastCommitReq(PrepareReq const & _req);
@@ -129,6 +132,7 @@ private:
 	void clearMask();
 
 	// 处理响应消息
+	// handle msg
 	void handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r);
 	void handlePrepareMsg(u256 const& _from, PrepareReq const& _req, bool _self = false);
 	void handleSignMsg(u256 const& _from, SignReq const& _req);
@@ -138,6 +142,7 @@ private:
 	void reHandlePrepareReq(PrepareReq const& _req);
 
 	// cache访问（未加锁，外层要加锁保护）
+	// access cache (no thread safe )
 	bool addRawPrepare(PrepareReq const& _req);
 	bool addPrepareReq(PrepareReq const& _req);
 	void addSignReq(SignReq const& _req);
@@ -204,7 +209,7 @@ private:
 	std::chrono::system_clock::time_point m_last_collect_time;
 
 	BlockHeader m_highest_block;
-	u256 m_consensus_block_number; // 在等待共识的块
+	u256 m_consensus_block_number; // the block which is waiting consensus 在等待共识的块
 
 	h512s m_miner_list;
 
@@ -218,7 +223,7 @@ private:
 	std::condition_variable m_signalled;
 	Mutex x_signalled;
 
-	// 消息队列
+	// msg queue 消息队列
 	PBFTMsgQueue m_msg_queue;
 
 	static const unsigned kCollectInterval = 60; // second
@@ -228,6 +233,8 @@ private:
 	static const size_t kKnownViewChange = 1024;
 
 	static const unsigned kMaxChangeCycle = 20;
+	// log whether the commit is called before, use to trigger commit phase under consensus control
+	std::unordered_map<h256, bool> m_commitMap;
 };
 
 }

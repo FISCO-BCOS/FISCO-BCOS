@@ -23,17 +23,16 @@ function docompile(filename){
 	try{ 
         //用FISCO-BCOS的合约编译器fisco-solc进行编译
         execSync("fisco-solc --abi  --bin --overwrite -o " + config.Ouputpath + "  " + filename + ".sol" + " &>/dev/null");
-        console.log(filename+'编译成功!' );
-        //console.log('编译成功！');
+        console.log(filename+'compile success!' );
     } catch(e){
-        console.log(filename+'编译失败!' + e);
+        console.log(filename+'compile failed!' + e);
     }
 
 }
 
 (async function() {
    
-    console.log("输出路径："+config.Ouputpath);
+    console.log("output path ："+config.Ouputpath);
     await docompile("SystemProxy");
     await docompile("TransactionFilterChain");
     await docompile("AuthorityFilter");
@@ -44,5 +43,6 @@ function docompile(filename){
     await docompile("FileInfoManager");
     await docompile("FileServerManager");
     await docompile("ContractAbiMgr");
+    await docompile("ConsensusControlMgr");
 
 })();

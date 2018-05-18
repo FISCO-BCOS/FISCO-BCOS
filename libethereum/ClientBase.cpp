@@ -54,14 +54,14 @@ pair<h256, Address> ClientBase::submitTransaction(TransactionSkeleton const& _t,
 
 	Transaction t(ts, _secret);
 	LOG(INFO) << "ClientBase::submitTransaction " << t.sha3();
-	ImportResult ir = m_tq.import(t);	// m_tq里面的manageImport_WITH_LOCK 会对blocklimit和nonce做检查
+	ImportResult ir = m_tq.import(t);	
 	if ( ir == ImportResult::NonceCheckFail )
 	{
-		return make_pair(t.sha3(), Address(1) ); //Address() 代表是异常
+		return make_pair(t.sha3(), Address(1) ); 
 	}
 	else if ( ImportResult::BlockLimitCheckFail == ir )
 	{
-		return make_pair(t.sha3(), Address(2) ); //Address() 代表是异常
+		return make_pair(t.sha3(), Address(2) ); 
 	}
 	else if ( ImportResult::NoTxPermission == ir )
 	{
@@ -69,7 +69,7 @@ pair<h256, Address> ClientBase::submitTransaction(TransactionSkeleton const& _t,
 	}
 	else if ( ImportResult::NoDeployPermission == ir )
 	{
-		return make_pair(t.sha3(), Address(4) ); //Address() 代表是异常
+		return make_pair(t.sha3(), Address(4) ); 
 	}
 	return make_pair(t.sha3(), toAddress(ts.from, ts.randomid));
 }

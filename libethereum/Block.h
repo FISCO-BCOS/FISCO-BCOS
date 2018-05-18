@@ -342,8 +342,8 @@ private:
 
 	SealEngineFace* m_sealEngine = nullptr;		///< The chain's seal engine.
 
-	bool m_evmEventLog = false; //是否打印event log
-	bool m_evmCoverLog = false; //是否打印覆盖率统计日志
+	bool m_evmEventLog = false; 
+	bool m_evmCoverLog = false; 
 
 	friend std::ostream& operator<<(std::ostream& _out, Block const& _s);
 

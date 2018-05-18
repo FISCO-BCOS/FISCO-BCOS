@@ -36,7 +36,7 @@ private:
 	ldb::DB *m_db;
 	int m_cryptoMod;
 	string m_superKey;
-	int m_dbFlag;//是否在类内创建m_db对象
+	int m_dbFlag;
 	enum CRYPTOTYPE
 	{
 		CRYPTO_DEFAULT = 0,

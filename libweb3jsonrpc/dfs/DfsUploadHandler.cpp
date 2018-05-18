@@ -97,7 +97,7 @@ void DfsUploadHandler::handle_request_completed(void *cls,
     }
     else
     {
-      //检查文件是否存在
+      //check file if exists
       string strUpDir;
       createDirectoryByContainer(DfsFileServer::getInstance()->m_StoreRootPath, con_info->container, strUpDir);
 
@@ -295,7 +295,7 @@ iterate_post (void *coninfo_cls,
           return MHD_NO;
           
           /*
-          //当前文件存在则中断文件上传
+          //interrupt upload if file exists
           printf("**** file exist : %s\n", strFile.data());
           printf("== alter file or dup upload file id: %s, name: %s, but ok \n", \
                 con_info->file_id.data(), con_info->filename.data());
@@ -326,7 +326,7 @@ iterate_post (void *coninfo_cls,
           return MHD_NO;
         }
 
-        //记录文件开始上传时间
+        //record the begin time when upload
         string strUpDir;
         createDirectoryByContainer(DfsFileServer::getInstance()->m_StoreRootPath, con_info->container, strUpDir);
 

@@ -185,7 +185,7 @@ void Executive::initialize(Transaction const& _transaction)
 	// Avoid transactions that would take us beyond the block gas limit.
 	u256 startGasUsed = m_envInfo.gasUsed();
 
-	//判断交易使用的gas和初始gas是否大于环境设置的gaslimit
+	
 	if (startGasUsed + (bigint)m_t.gas() > m_envInfo.gasLimit())
 	{
 		LOG(INFO) << "Cannot fit tx in block" << m_envInfo.number() << ": Require <" << (m_envInfo.gasLimit() - startGasUsed) << " Got" << m_t.gas();
@@ -193,47 +193,14 @@ void Executive::initialize(Transaction const& _transaction)
 		BOOST_THROW_EXCEPTION(BlockGasLimitReached() << RequirementError((bigint)(m_envInfo.gasLimit() - startGasUsed), (bigint)m_t.gas()));
 	}
 
-	// Check gas cost is enough.
-
-	//判断最小需要的gas是否足够
+	
 	m_baseGasRequired = m_t.gasRequired(m_sealEngine.evmSchedule(m_envInfo));
-	/*if (m_baseGasRequired > m_t.gas())
-	{
-		LOG(INFO) << "Not enough gas to pay for the transaction: Require >" << m_baseGasRequired << " Got" << m_t.gas();
-		m_excepted = TransactionException::OutOfGasBase;
-		BOOST_THROW_EXCEPTION(OutOfGasBase() << RequirementError(m_baseGasRequired, (bigint)m_t.gas()));
-	}*/
-
-	// Avoid invalid transactions.
-	/*
-	u256 nonceReq;
-	try
-	{
-		nonceReq = m_s.getNonce(m_t.sender());//这里会校验签名  块签名那里会验证 rpc会验证 p2p会验证 所以这里不需要了
-	}
-	catch (...)
-	{
-		LOG(INFO) << "Invalid Signature";
-		m_excepted = TransactionException::InvalidSignature;
-		throw;
-	}
-	*/
-	/*if (m_t.nonce() != nonceReq)
-	{
-		LOG(INFO) << "Invalid Nonce: Require" << nonceReq << " Got" << m_t.nonce();
-		m_excepted = TransactionException::InvalidNonce;
-		BOOST_THROW_EXCEPTION(InvalidNonce() << RequirementError((bigint)nonceReq, (bigint)m_t.nonce()));
-	}*/
+	
 
 	// Avoid unaffordable transactions.
 	bigint gasCost = (bigint)m_t.gas() * m_t.gasPrice();
 	bigint totalCost = m_t.value() + gasCost;
-	/*if (m_s.balance(m_t.sender()) < totalCost)
-	{
-		LOG(INFO) << "Not enough cash: Require >" << totalCost << "=" << m_t.gas() << "*" << m_t.gasPrice() << "+" << m_t.value() << " Got" << m_s.balance(m_t.sender()) << "for sender: " << m_t.sender();
-		m_excepted = TransactionException::NotEnoughCash;
-		BOOST_THROW_EXCEPTION(NotEnoughCash() << RequirementError(totalCost, (bigint)m_s.balance(m_t.sender())) << errinfo_comment(m_t.sender().abridged()));
-	}*/
+
 	m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
 }
 
@@ -271,7 +238,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
 	m_savepoint = m_s.savepoint();
 
-	//对合约代码判断是否已经在启动参数中预编译过 m_params是否存在
+	
 	if (m_sealEngine.isPrecompiled(_p.codeAddress))
 	{
 		bigint g = m_sealEngine.costOfPrecompiled(_p.codeAddress, _p.data);
@@ -290,7 +257,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 	else
 	{
 		m_gas = _p.gas;
-		//判断该地址是否有可执行代码
+		
 		if (m_s.addressHasCode(_p.codeAddress))
 		{
 			m_outRef = _p.out; // Save ref to expected output buffer to be used in go()
@@ -324,7 +291,6 @@ bool Executive::create(Address _sender, u256 _endowment, u256 _gasPrice, u256 _g
 
 	// Transfer ether before deploying the code. This will also create new
 	// account if it does not exist yet.
-	//这里调用addBalance的时候会创建新合约账户，这样下面ExtVM的assert就不会失败
 	m_s.transferBalance(_sender, m_newAddress, _endowment);
 
 	if (m_envInfo.number() >= m_sealEngine.chainParams().u256Param("EIP158ForkBlock"))
@@ -422,6 +388,12 @@ bool Executive::go(OnOpFunc const& _onOp)
 				else
 					vm->exec(m_gas, *m_ext, m_outRef, _onOp); // take only expected output
 			}
+		}
+		catch (EthCallIdNotFound const& _e)
+		{
+			LOG(ERROR)<<"ethcall id not found "<< diagnostic_information(_e);
+			revert();
+			throw;
 		}
 		catch (VMException const& _e)
 		{
