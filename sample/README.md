@@ -30,7 +30,7 @@
    ```log
    fisco-bcos build succ! path: /usr/local/bin/fisco-bcos
    ```
-   
+
    说明：可执行文件安装路径：/usr/local/bin/fisco-bcos
 
 
