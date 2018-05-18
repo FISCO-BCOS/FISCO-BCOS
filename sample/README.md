@@ -22,7 +22,7 @@
 2. **执行build**
 
    ```shell
-   cd fisco-bcos
+   cd FISCO-BCOS
    chmod +x build.sh 
    ./build.sh
    ```
