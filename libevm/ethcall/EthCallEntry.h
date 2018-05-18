@@ -1,7 +1,23 @@
+/*
+	This file is part of FISCO BCOS.
+
+	FISCO BCOS is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	FISCO BCOS is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with FISCO BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 /**
  * @file: EthCallEntry.h
- * @author: fisco-dev
- * 
+ * @author: fisco-dev, jimmyshi
  * @date: 2017
  */
 
@@ -14,10 +30,12 @@
 #include <cstdlib>
 #include <unordered_map>
 #include <tuple>
-#include <libethcore/Common.h>
 #include <boost/multiprecision/cpp_int.hpp>
-#include "../VM.h"
-#include "index_sequence.h"
+
+#include <libethcore/Common.h>
+
+#include <libevm/VM.h>
+#include <libevm/ethcall/index_sequence.h>
 
 using namespace std;
 using namespace dev;
@@ -29,25 +47,34 @@ namespace eth
 {
 
 using callid_t = uint32_t;
-enum EthCallIdList:callid_t
+enum EthCallIdList : callid_t
 {
-    LOG         = 0x10,         ///< 打log
-    PAILLIER    = 0x20,         ///< 同态加密
-    DEMO        = 0x66666,      ///< demo
-    TEST        = 0x66667,       ///< test
-    TRIE_PROOF        = 0x66668,       ///< trie的交易证明
-    VERIFY_SIGN        = 0x66669       ///< block的验证签名
+    LOG = 0x10,           ///< Print solidity log in nodes log dir
+    PAILLIER = 0x20,      ///< Paillier computing
+    DEMO = 0x66666,       ///< demo
+    TEST = 0x66667,       ///< test
+    TRIE_PROOF = 0x66668, ///< trie transaction proof
+    VERIFY_SIGN = 0x66669 ///< verify block signature
+#ifdef ETH_GROUPSIG
+    ,
+    GROUP_SIG = 0x66670, //group sig s
+    RING_SIG = 0x66671   //ring sig
+#endif
+#ifdef ETH_ZKG_VERIFY
+    ,
+    VERIFY_ZKG = 0x5A4B47 ///< zero knowledge proof verify
+#endif
 };
 
 /*
- *  EthCall 参数翻译器
+ *  EthCall parameter parser
  */
 class EthCallParamParser
 {
     /*
-     *  将solidity的EthCall调用参数转换成c++参数类型（目前只支持memory类型）
-     *  基本类型:
-     *      sol类型   ->    c++
+     *  Parse solidity parameter of ethcall to c++ type(Support memory type only)
+     *  Normal types:
+     *      solidity  ->    c++
      *      bool            bool
      *      int             根据需要int8~64_t
      *      int8~64         int8~64_t
@@ -58,130 +85,149 @@ class EthCallParamParser
      *      //uint128~256
      *      //Fixed Point Numbers
      *
-     *  数组:（支持引用）
-     *      sol类型    ->     一般类型        引用类型
+     *  Array:(support reference type)
+     *      solidity    ->  normal type ->  reference type
      *      string          string          vector_ref<char>
      *      bytes           bytes           vector_ref<byte>
      *      //T[]             vector<T>       vector_ref<T>
      *
-     *  //TODO： 支持更多类型
+     *  //TODO： support more types
      *
     */
 
-private:
-    void parseArrayHeader(u256* sp, char* &data_addr, size_t &size);
+  private:
+    void parseArrayHeader(u256 *sp, char *&data_addr, size_t &size);
 
+  public:
+    inline void parse(u256 *sp);
+    template <typename T, typename... Ts>
+    void parse(u256 *sp, T &p, Ts &... ps);
 
-public:
-    inline void parse(u256* sp);
-    template<typename T, typename ... Ts>
-    void parse(u256* sp, T& p, Ts& ... ps);
+//Register normal types, only static_cast
+#define T_RegTypeNormal(_Type) \
+    void parseUnit(u256 *sp, _Type &p);
 
-
-    //基本类型注册，仅仅只是简单进行static_cast
-    #define T_RegTypeNormal(_Type)                              \
-    void parseUnit(u256* sp, _Type& p);
-
-
-    //---------注册基本类型------------
+    //---------register normal types------------
     T_RegTypeNormal(bool);
     T_RegTypeNormal(char);
 
     //uint
-    T_RegTypeNormal(uint8_t);       T_RegTypeNormal(uint16_t);
-    T_RegTypeNormal(uint32_t);      T_RegTypeNormal(uint64_t);
+    T_RegTypeNormal(uint8_t);
+    T_RegTypeNormal(uint16_t);
+    T_RegTypeNormal(uint32_t);
+    T_RegTypeNormal(uint64_t);
     //T_RegTypeNormal(uint128_t);     T_RegTypeNormal(uint256_t);
 
     //int
-    T_RegTypeNormal(int8_t);        T_RegTypeNormal(int16_t);
-    T_RegTypeNormal(int32_t);       T_RegTypeNormal(int64_t);
+    T_RegTypeNormal(int8_t);
+    T_RegTypeNormal(int16_t);
+    T_RegTypeNormal(int32_t);
+    T_RegTypeNormal(int64_t);
     //T_RegTypeNormal(int128_t);      T_RegTypeNormal(int256_t);
 
-    //---------string类型转换------------
-    //--换成一般类型std::string
-    void parseUnit(u256* sp, std::string& p);
+    //---------string type conversion------------
+    //--convert to std::string
+    void parseUnit(u256 *sp, std::string &p);
 
-    //--转换为引用类型:vector_ref<char>
-    void parseUnit(u256* sp, vector_ref<char>& p);
+    //--convert to reference type vector_ref<char>
+    void parseUnit(u256 *sp, vector_ref<char> &p);
 
-    //---------bytes类型转换------------
-    //--转换为一般类型:bytes
-    void parseUnit(u256* sp, bytes& p);
+    //---------bytes type conversion------------
+    //--convert to bytes
+    void parseUnit(u256 *sp, bytes &p);
 
-    //--转换为引用类型:vector_ref<byte>
-    void parseUnit(u256* sp, vector_ref<byte>& p);
+    //--convert to reference type vector_ref<byte>
+    void parseUnit(u256 *sp, vector_ref<byte> &p);
 
-    //--------------- parse 成 tuple 类型--------------------
-    template<typename ... Ts> //TpType: like tuple<int, string>
-    void parseToTuple(u256* sp, std::tuple<Ts...>& tp);
+    //--------------- parse to tuple--------------------
+    template <typename... Ts> //TpType: like tuple<int, string>
+    void parseToTuple(u256 *sp, std::tuple<Ts...> &tp);
 
-    template<typename TpType, std::size_t ... I>
-    void parseToTupleImpl(u256* sp, TpType& tp, index_sequence<I...>);
+    template <typename TpType, std::size_t... I>
+    void parseToTupleImpl(u256 *sp, TpType &tp, index_sequence<I...>);
 
     void setTargetVm(VM *vm);
 
-private:
+  private:
     VM *vm;
 };
 
-//ethcall总入口
-u256 ethcallEntry(VM *vm, u256* sp);
+//ethcall entry
+u256 ethcallEntry(VM *vm, u256 *sp, ExtVMFace *ext);
 
-//因为EthCallExecutor的T是不同的类型，所以写一个EthCallExecutor的父类，提供统一类型的run接口
+/*
+ * Because EthCallExecutor is a tempate of different types T, 
+ * we need an EthCallExecutorBase containing an uniform call function: run().
+ */
 class EthCallExecutorBase
 {
-public:
-    virtual u256 run(VM *vm, u256* sp) = 0;
+  public:
+    virtual u256 run(VM *vm, u256 *sp, ExtVMFace *ext = NULL) = 0;
     void updateCostGas(VM *vm, uint64_t gas);
-
 };
 
-//ethCallTable:各个EthCallExecutor的映射表
-using ethCallTable_t = unordered_map<callid_t, EthCallExecutorBase*>;
+//ethCallTable: The map of EthCallExecutor
+using ethCallTable_t = unordered_map<callid_t, EthCallExecutorBase *>;
 extern ethCallTable_t ethCallTable;
 
 /*
 *   EthCallExecutor
 */
-template<typename ... T>
-class EthCallExecutor : EthCallExecutorBase
+template <typename... T>
+class EthCallExecutor : public EthCallExecutorBase
 {
-public:
+  public:
     void registerEthcall(enum EthCallIdList callId)
     {
         assert(ethCallTable.end() == ethCallTable.find(callId));
 
-        ethCallTable[callId] = (EthCallExecutorBase*)this;
+        ethCallTable[callId] = (EthCallExecutorBase *)this;
     }
 
-    u256 run(VM *vm, u256* sp) override
+    u256 run(VM *vm, u256 *sp, ExtVMFace *ext = NULL) override
     {
         EthCallParamParser parser;
         parser.setTargetVm(vm);
-        std::tuple<T...> tp;//通过tuple的方式实现可变长的参数，能够对参数parse并向func传参
+        std::tuple<T...> tp; //Use tuple to parse variable number of parameters
         parser.parseToTuple(sp, tp);
-        return runImpl(vm, tp, make_index_sequence<sizeof...(T)>());
+        return runImpl(vm, ext, tp, make_index_sequence<sizeof...(T)>());
     }
 
-    template<typename TpType, std::size_t ... I>
-    u256 runImpl(VM *vm, TpType& tp, index_sequence<I...>)
+    template <typename TpType, std::size_t... I>
+    u256 runImpl(VM *vm, ExtVMFace *ext, TpType &tp, index_sequence<I...>)
     {
-        //自动把tuple中的参数展开，传入ethcall中
-        this->updateCostGas(vm, gasCost(std::get<I>(tp)...));
-        return ethcall(std::get<I>(tp)...);
+        //expand parameters of tuple and call ethcall()
+        this->updateCostGas(vm, gasCostEnv(ext, std::get<I>(tp)...));
+        return ethcallEnv(ext, std::get<I>(tp)...);
     }
 
     /*
-    *   编程接口：ethcall、 gasCost
-    *   注意：覆盖函数时，若编译报错，请加上override关键字
+    *   Funtion to overwrite：ethcall(), gasCost()
+    *   Notice: If compile error happens, add the keyword: override
     */
-    virtual u256 ethcall(T...args) = 0;
-    virtual uint64_t gasCost(T ...args) = 0;
+    virtual u256 ethcallEnv(ExtVMFace *env, T... args)
+    {
+        return ethcall(args...);
+    }
 
+    virtual u256 ethcall(T... args)
+    {
+        LOG(WARNING) << "Call a null ethcall";
+        return 0;
+    }
+
+    virtual uint64_t gasCostEnv(ExtVMFace *env, T... args)
+    {
+        return gasCost(args...);
+    }
+
+    virtual uint64_t gasCost(T... args)
+    {
+        LOG(WARNING) << "Call a null ethcall gasCost";
+        return 0;
+    }
 };
 
 DEV_SIMPLE_EXCEPTION(EthCallNotFound);
-
 }
 }
-

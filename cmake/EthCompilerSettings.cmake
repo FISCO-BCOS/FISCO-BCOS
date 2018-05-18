@@ -37,6 +37,8 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 	add_compile_options(-Wno-unused-parameter)
 	add_compile_options(-Wextra)
 	#add_compile_options(-Werror)
+	add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
+	add_compile_options(-DELPP_THREAD_SAFE)
 	
 	add_compile_options(-Wa,-march=generic64)
 	

@@ -48,8 +48,8 @@ namespace dev
 			virtual void setNodeSign(const Signature&);
 			virtual ~CABaseData(){};
 		private:
-			std::string m_seed;               //随机数
-			std::string m_sign;               //对CA随机数信息的sign
+			std::string m_seed;               //random data
+			std::string m_sign;               //signed data of the random nonce
 
 		};
 

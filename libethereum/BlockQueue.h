@@ -237,7 +237,7 @@ public:
 	/// Import a block into the queue.
 	ImportResult import(bytesConstRef _block, bool _isOurs = false);
 
-	/// for pbft��ֱ�Ӳ��뵽verified���У���client���߳��´��ܹ�����
+	
 	ImportResult importVerified(bytesConstRef _block);
 
 	/// Notes that time has moved on and some blocks that used to be "in the future" may no be valid.
@@ -285,7 +285,7 @@ public:
 	u256 difficulty() const;	// Total difficulty of queueud blocks
 	bool isActive() const;
 
-	///获取blockQueue长度
+	
 	std::size_t verifiedQueueSize(){return m_verified.count();}; 
 	std::size_t verifyingQueueSize(){return m_verifying.count();} 
 	std::size_t unverifiedQueueSize(){return m_unverified.count();};

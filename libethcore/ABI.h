@@ -35,15 +35,6 @@ namespace eth
 
 class ContractABI {
 public:
-	/*
-	template <unsigned N>
-	void serialise(FixedHash<N> const& _t) {
-		static_assert(N <= 32, "Cannot serialise hash > 32 bytes.");
-		static_assert(N > 0, "Cannot serialise zero-length hash.");
-
-		fixedItems.push_back(bytes(32 - N, 0) + _t.asBytes());
-	}
-	*/
 
 	void serialise(u256 const& _t) {
 		fixedItems.push_back(h256(_t).asBytes());
@@ -146,7 +137,6 @@ public:
 
 		out.assign((const char*)stringData.data(), stringData.size());
 
-		//LOG(TRACE) << "string" << decodeOffset << offset << data.cropped(getOffset()) << len << stringData;
 	}
 
 	inline void abiOutAux() {
