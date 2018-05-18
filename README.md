@@ -32,11 +32,11 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 ## 2.2 安装说明
 
-如果您想快速体验FISCO BCOS，我们提供了[一键快速安装部署](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/sample)工具。[(FISCO BCOS One-Click Installation Manual)](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20One-Click%20Installation%20Manual)
+如果您想快速体验FISCO BCOS，我们提供了[一键快速安装部署](sample/)工具。[(FISCO BCOS One-Click Installation Manual)](sample/README_EN.md)
 
-如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/docker)。[(FISCO BCOS Docker Installation Manual)](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20Docker%20Installation%20Manual)
+如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](docker/)。[(FISCO BCOS Docker Installation Manual)](docker/README_EN.md)
 
-如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书1.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/doc/manual)。[(FISCO-BCOS Manual)](https://github.com/FISCO-BCOS/Wiki/tree/master/en/FISCO%20BCOS%20manual)
+如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书1.0](doc/manual)。[(FISCO-BCOS Manual)](doc/manual/README_EN.md)
 
 如果你想快速搭建生产上的可用环境, 请参考[FISCO-BCOS物料包工具](https://github.com/FISCO-BCOS/fisco-package-build-tool)。
 
@@ -49,23 +49,38 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 # 3.特性介绍
 * [FISCO BCOS特性介绍](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E7%89%B9%E6%80%A7%E4%BB%8B%E7%BB%8D.pdf)
-* [并行计算介绍](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO-BCOS%E5%B9%B6%E8%A1%8C%E8%AE%A1%E7%AE%97%E4%BB%8B%E7%BB%8D)
+
+**基础功能**
+
 * [系统合约介绍](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO-BCOS%E7%B3%BB%E7%BB%9F%E5%90%88%E7%BA%A6%E4%BB%8B%E7%BB%8D)
-* [共识算法优化](https://github.com/FISCO-BCOS/Wiki/tree/master/%E5%BA%94%E7%94%A8%E4%BA%8E%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%A4%9A%E8%8A%82%E7%82%B9%E5%B9%B6%E8%A1%8C%E6%8B%9C%E5%8D%A0%E5%BA%AD%E5%AE%B9%E9%94%99%E5%85%B1%E8%AF%86%E7%AE%97%E6%B3%95)
+* [系统参数说明文档](https://github.com/FISCO-BCOS/Wiki/tree/master/%E7%B3%BB%E7%BB%9F%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E%E6%96%87%E6%A1%A3)
 * [CNS合约命名服务](https://github.com/FISCO-BCOS/Wiki/tree/master/Contract_Name%20Service%E6%9C%8D%E5%8A%A1)
-* [链上信使协议AMOP](https://github.com/FISCO-BCOS/Wiki/tree/master/AMOP%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)
+
+**性能**
+
+* [共识算法优化](https://github.com/FISCO-BCOS/Wiki/tree/master/%E5%BA%94%E7%94%A8%E4%BA%8E%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%A4%9A%E8%8A%82%E7%82%B9%E5%B9%B6%E8%A1%8C%E6%8B%9C%E5%8D%A0%E5%BA%AD%E5%AE%B9%E9%94%99%E5%85%B1%E8%AF%86%E7%AE%97%E6%B3%95)
+* [并行计算介绍](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO-BCOS%E5%B9%B6%E8%A1%8C%E8%AE%A1%E7%AE%97%E4%BB%8B%E7%BB%8D)
+
+**易用性**
+
 * [易用性提升](https://github.com/FISCO-BCOS/Wiki/tree/master/%E6%B5%85%E8%B0%88FISCO-BCOS%E7%9A%84%E6%98%93%E7%94%A8%E6%80%A7)
+* [链上信使协议AMOP](https://github.com/FISCO-BCOS/Wiki/tree/master/AMOP%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)
+* [弹性联盟链共识框架](doc/弹性联盟链共识框架说明文档.md)
+
+**安全**
+
 * [FISCO BCOS权限模型](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E6%9D%83%E9%99%90%E6%A8%A1%E5%9E%8B)
-* [系统参数说明文档](https://github.com/FISCO-BCOS/Wiki/tree/master/%E7%B3%BB%E7%BB%9F%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E%E6%96%87%E6%A1%A3)  
-* [FISCO BCOS上帝模式说明](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E4%B8%8A%E5%B8%9D%E6%A8%A1%E5%BC%8F%E8%AF%B4%E6%98%8E/README.md)  
-* [FISCO BCOS和以太坊差异综述](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E5%92%8C%E4%BB%A5%E5%A4%AA%E5%9D%8A%E5%B7%AE%E5%BC%82%E7%BB%BC%E8%BF%B0/README.md) 
+* [群签名和环签名链上验证](doc/启用_关闭群签名环签名ethcall.md)
+* [可监管的零知识证明说明](doc/可监管的零知识证明说明.md)
 
 # 4.应用案例
 * [FISCO BCOS应用实践](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5.pdf) 
 * [存证案例说明](https://github.com/FISCO-BCOS/Wiki/tree/master/%E5%AD%98%E8%AF%81sample%E8%AF%B4%E6%98%8E) [案例源码](https://github.com/FISCO-BCOS/evidenceSample)
 * [微粒贷备付金及对账平台](https://github.com/FISCO-BCOS/Wiki/blob/master/%E3%80%90FISCO%20BCOS%E5%BA%94%E7%94%A8%E6%A1%88%E4%BE%8B%E3%80%91%E5%BE%AE%E7%B2%92%E8%B4%B7%E6%9C%BA%E6%9E%84%E9%97%B4%E5%AF%B9%E8%B4%A6%E5%B9%B3%E5%8F%B0/README.md) 
 * [“仲裁链”：基于区块链的存证实践](https://github.com/FISCO-BCOS/Wiki/blob/master/%E3%80%90FISCO%20BCOS%E6%A1%88%E4%BE%8B%E4%BB%8B%E7%BB%8D%E3%80%91%E2%80%9C%E4%BB%B2%E8%A3%81%E9%93%BE%E2%80%9D%EF%BC%9A%E5%9F%BA%E4%BA%8E%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%AD%98%E8%AF%81%E5%AE%9E%E8%B7%B5/README.md) 
-
+* [群签名&&环签名客户端示例demo](https://github.com/FISCO-BCOS/sig-service-client)
+* [群签名&&环签名RPC服务](https://github.com/FISCO-BCOS/sig-service)
+* [一对一匿名可监管转账](https://github.com/FISCO-BCOS/zkg-tx1to1)
 
 # 5.其他
 
