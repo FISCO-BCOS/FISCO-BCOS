@@ -3,18 +3,19 @@ import "TransactionFilterBase.sol";
 import "AuthorityFilter.sol";
 
 contract TransactionFilterChain {
-    address[] private filters; //filters列表
+    address[] private filters;                  //filters list
     
-	function process(address origin, address from, address to, string func, string input) public constant returns(bool) {
-		for(uint256 i=0; i<filters.length; ++i) {
+    function process(address origin, address from, address to, string func, string input) public constant returns(bool) {
+        for(uint256 i=0; i<filters.length; ++i) {
             if(!TransactionFilterBase(filters[i]).process(origin, from, to, func, input)) {
                 return false;
             }
         }
         return true;
     }
-	function deploy(address origin) public constant returns(bool) {
-		for(uint256 i=0; i<filters.length; ++i) {
+
+    function deploy(address origin) public constant returns(bool) {
+        for(uint256 i=0; i<filters.length; ++i) {
             if(!TransactionFilterBase(filters[i]).deploy(origin)) {
                 return false;
             }
@@ -22,16 +23,16 @@ contract TransactionFilterChain {
         return true;
     }
     
-	function addFilter(address filter) public returns(uint256) {
-		filters.push(filter);
+    function addFilter(address filter) public returns(uint256) {
+        filters.push(filter);
         return filters.length - 1;
     }
 	
     function addFilterAndInfo(string name, string version ,string desc) public returns(uint256) {
-		address filter = new AuthorityFilter();
-		AuthorityFilter(filter).setName(name);
-		AuthorityFilter(filter).setVersion(version);
-		AuthorityFilter(filter).setDesc(desc);
+        address filter = new AuthorityFilter();
+        AuthorityFilter(filter).setName(name);
+        AuthorityFilter(filter).setVersion(version);
+        AuthorityFilter(filter).setDesc(desc);
         filters.push(filter);
         
         return filters.length - 1;

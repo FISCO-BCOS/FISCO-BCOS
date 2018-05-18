@@ -36,6 +36,7 @@
 #include "NodeConnParamsManager.h"
 #include "TransactionQueue.h"
 #include "SystemContractApi.h"
+#include "SystemContractApiFactory.h"
 
 using namespace std;
 using namespace dev;
@@ -78,16 +79,15 @@ Client::Client(
 
 	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
 
-	//创建系统合约api
 	m_systemcontractapi = SystemContractApiFactory::create(_params.sysytemProxyAddress, _params.god, this);
 
     libabi::ContractAbiMgr::getInstance()->setSystemContract();
-	//上帝模式
+	
 	if(_params.godMinerStart> 0  )
 	{
 		if ( _params.godMinerStart != bc().number() + 1 )
 		{
-			LOG(WARNING) << "当前区块链高度不符合上帝模式配置，请检查上帝模式配置！blockchain.number=" << bc().number() << ",godMinerStart=" << _params.godMinerStart;
+			LOG(WARNING) << "Current Height Don't Match Config. Please Check Config！blockchain.number=" << bc().number() << ",godMinerStart=" << _params.godMinerStart;
 			exit(-1);
 		}
 	}
@@ -96,13 +96,12 @@ Client::Client(
 	NodeConnManagerSingleton::GetInstance().SetHost(_host);
 
 	updateConfig();
-	//注册回调
+	
 	m_systemcontractapi->addCBOn("config", [ this ](string) {
-		//回调	 全网配置更新
+		
 		updateConfig();
 	});
 
-	//必须放在后面，里面用到的变量修改后才可见
 	NodeConnManagerSingleton::GetInstance().setSysContractApi(m_systemcontractapi);
 }
 
@@ -239,7 +238,6 @@ void Client::init(p2p::Host* _extNet, std::string const& _dbPath, WithExisting _
 
 	m_gp->update(bc());
 
-	//注册协议
 	auto host = _extNet->registerCapability(make_shared<EthereumHost>(bc(), m_stateDB, m_tq, m_bq, _networkId));
 	m_host = host;
 	_extNet->addCapability(host, EthereumHost::staticName(), EthereumHost::c_oldProtocolVersion); //TODO: remove this once v61+ protocol is common
@@ -1018,7 +1016,6 @@ int Client::getResultInt(ExecutionResult& result, int& value)
 		return -1;
 	}
 
-	//LOG(TRACE)  << "the result size:" << result.output.size() << ",data: " << result.output;
 	value = fromBigEndian<u256>(bytes(result.output.begin(), result.output.begin() + 32)).convert_to<size_t>();
 	return 0;
 }

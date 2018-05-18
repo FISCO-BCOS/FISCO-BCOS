@@ -76,7 +76,7 @@ u256 SinglePoint::calculateDifficulty(BlockHeader const& , BlockHeader const& ) 
 
 void SinglePoint::populateFromParent(BlockHeader& _bi, BlockHeader const& _parent) const
 {
-	SealEngineFace::populateFromParent(_bi, _parent);//自动调blockheader里面的
+	SealEngineFace::populateFromParent(_bi, _parent);// call parent function 自动调blockheader里面的
 
 }
 
@@ -103,7 +103,7 @@ void SinglePoint::generateSeal(BlockHeader const& bi, bytes const& _data)
 
 	if ( d.count() >= getIntervalBlockTime() )
 	{
-		SealEngineBase::generateSeal(bi, _data);//执行回调
+		SealEngineBase::generateSeal(bi, _data);// exec callback 执行回调
 		m_lasttimesubmit = chrono::high_resolution_clock::now();
 
 		LOG(INFO) << "SinglePoint::generateSeal Suc!!!!!!!" << bi.hash(WithoutSeal) << "#" << bi.number();

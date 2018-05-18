@@ -1,20 +1,51 @@
+/*
+	This file is part of FISCO BCOS.
+
+	FISCO BCOS is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	FISCO BCOS is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with FISCO BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 /**
  * @file: EthCallEntry.cpp
- * @author: fisco-dev
+ * @author: fisco-dev, jimmyshi
  * 
  * @date: 2017
  */
-
-#include "EthCallEntry.h"
-#include "EthLog.h"
-#include "EthCallDemo.h"
-#include "Paillier.h"
-#include "TrieProof.h"
-#include "VerifySign.h"
-#include <libdevcore/easylog.h>
-#include <libdevcore/Common.h>
 #include <string>
 #include <vector>
+
+#include <libdevcore/easylog.h>
+#include <libdevcore/Common.h>
+#include <libdevcore/Exceptions.h>
+
+//for compile control:
+//1. off: compile without group sig and ring sig
+//2. on: compile with group sig and ring sig
+#ifdef ETH_GROUPSIG
+#include <libevm/ethcall/EthcallGroupSig.h>
+#include <libevm/ethcall/EthcallRingSig.h>
+#endif
+
+#ifdef ETH_ZKG_VERIFY
+#include <libevm/ethcall/VerifyZkg.h>
+#endif
+
+#include <libevm/ethcall/EthCallEntry.h>
+#include <libevm/ethcall/EthCallDemo.h>
+#include <libevm/ethcall/EthLog.h>
+#include <libevm/ethcall/Paillier.h>
+#include <libevm/ethcall/TrieProof.h>
+#include <libevm/ethcall/VerifySign.h>
 
 using namespace std;
 using namespace dev;
@@ -28,12 +59,19 @@ namespace eth
 class EthCallContainer
 {
 public:
-    //在此处实例化EthCall的各种功能
     EthLog ethLog;
     Paillier ethPaillier;
     EthCallDemo ethCallDemo;
     TrieProof trieProof;
     VerifySign verifySign;
+#ifdef ETH_GROUPSIG
+    EthcallGroupSig group_sig_ethcall;
+    EthcallRingSig ring_sig_ethcall;
+#endif
+
+#ifdef ETH_ZKG_VERIFY
+    VerifyZkg verifyZkg;
+#endif
 };
 
 /*
@@ -42,11 +80,11 @@ public:
 void EthCallParamParser::parseArrayHeader(u256* sp, char* &data_addr, size_t &size)
 {
     /*
-     *      m_sp指向一个偏移量（offset), m_mem + offset为数组结构位置
-     *      数组地址： m_mem + *m_sp
+     *      m_sp points to an offset of the parameter, m_mem + offset locates the array's start address
+     *      Array start address： m_mem + *m_sp
      *                      |
-     *      数组结构：       [       size      ][元素0, 元素1, 元素2... ]
-     *          大小：       ( h256 = 32 bytes )(  T  )(  T  )(  T  )(  T  )(  T  )
+     *      Array memory    [       size      ][element0, element1, element2... ]
+     *          size:       ( h256 = 32 bytes )(  T  )(  T  )(  T  )(  T  )(  T  )
     */
 
     if(NULL == vm)
@@ -76,7 +114,7 @@ void EthCallParamParser::parse(u256* sp, T& p, Ts& ... ps)
 }
 
 
-//基本类型注册，仅仅只是简单进行static_cast
+//Register normal types, only static_cast
 #define RegTypeNormal(_Type)                                \
 void EthCallParamParser::parseUnit(u256* sp, _Type& p)      \
 {                                                           \
@@ -84,7 +122,7 @@ void EthCallParamParser::parseUnit(u256* sp, _Type& p)      \
 }                                                           \
 
 
-//---------注册基本类型------------
+//---------Register normal type------------
 RegTypeNormal(bool);
 RegTypeNormal(char);
 
@@ -99,8 +137,8 @@ RegTypeNormal(int32_t);     RegTypeNormal(int64_t);
 //RegTypeNormal(int128_t);    RegTypeNormal(int256_t);
 
 
-//---------string类型转换------------
-//--转换成一般类型std::string
+//---------string type conversion------------
+//--convert to std::string
 void EthCallParamParser::parseUnit(u256* sp, std::string& p)
 {
     char* data_addr;
@@ -110,7 +148,7 @@ void EthCallParamParser::parseUnit(u256* sp, std::string& p)
     p = string(data_addr, size);
 }
 
-//--转换为引用类型:vector_ref<char>
+//--convert to reference type vector_ref<char>
 void EthCallParamParser::parseUnit(u256* sp, vector_ref<char>& p)
 {
     char* data_addr;
@@ -120,8 +158,8 @@ void EthCallParamParser::parseUnit(u256* sp, vector_ref<char>& p)
     p.retarget((char*)data_addr, size);
 }
 
-//---------bytes类型转换------------
-//--转换为一般类型:bytes
+//---------bytes type conversion------------
+//--convert to bytes
 void EthCallParamParser::parseUnit(u256* sp, bytes& p)
 {
     char* data_addr;
@@ -131,7 +169,7 @@ void EthCallParamParser::parseUnit(u256* sp, bytes& p)
     p = bytes((byte*)data_addr, (byte*)(data_addr + size));
 }
 
-//--转换为引用类型:vector_ref<byte>
+//--convert to reference type vector_ref<byte>
 void EthCallParamParser::parseUnit(u256* sp, vector_ref<byte>& p)
 {
     char* data_addr;
@@ -141,7 +179,7 @@ void EthCallParamParser::parseUnit(u256* sp, vector_ref<byte>& p)
     p.retarget((byte*)data_addr, size);
 }
 
-//--------------- parse 成 tuple 类型--------------------
+//--------------- parse to tuple--------------------
 template<typename ... Ts> //TpType: like tuple<int, string>
 void EthCallParamParser::parseToTuple(u256* sp, std::tuple<Ts...>& tp) //parse param into tuple
 {
@@ -159,17 +197,14 @@ void EthCallParamParser::setTargetVm(VM *vm)
     this->vm = vm;
 }
 
-
-
-
 /*
- *   ethcall总入口
+ *   ethcall entry
  */
-//ethCallTable:各个EthCallExecutor的映射表
+//ethCallTable: the map of EthCallExecutor
 ethCallTable_t ethCallTable;
 EthCallContainer ethCallContainer = EthCallContainer();
 
-u256 ethcallEntry(VM *vm, u256* sp)
+u256 ethcallEntry(VM *vm, u256* sp, ExtVMFace* ext = NULL)
 {
     EthCallParamParser parser;
     parser.setTargetVm(vm);
@@ -182,10 +217,11 @@ u256 ethcallEntry(VM *vm, u256* sp)
     if(ethCallTable.end() == it)
     {
         LOG(ERROR) << "EthCall id " << callId << " not found";
-        BOOST_THROW_EXCEPTION(EthCallNotFound());//Throw exception if callId is not found
+        //BOOST_THROW_EXCEPTION(EthCallNotFound());//Throw exception if callId is not found
+	BOOST_THROW_EXCEPTION(EthCallIdNotFound());
     }
 
-    return it->second->run(vm, sp);
+    return it->second->run(vm, sp, ext);
 }
 
 
@@ -193,7 +229,5 @@ void EthCallExecutorBase::updateCostGas(VM *vm, uint64_t gas)
 {
     vm->updateCostGas(gas);
 }
-
-
 }
 }

@@ -396,33 +396,33 @@ public:
 			_web3Observer->onReceiveChannelMessage(peer->id(), data);
 		}
 		else {
-			LOG(ERROR) << "未设置web3Observer";
+			LOG(ERROR) << "Not Set web3Observer";
 		}
 	}
 
 	virtual void onTopicMessage(std::shared_ptr<EthereumPeer> peer, int type, int seq, std::shared_ptr<std::vector<std::string> > topics) {
-		LOG(DEBUG) << "收到topic消息 type:" << type << " seq:" << seq << " topics:" << topics->size();
+		LOG(DEBUG) <<" Recv topic type:" << type << " seq:" << seq << " topics:" << topics->size();
 
 		switch (type) {
-		case 0: //收到来自该节点的seq广播
+		case 0: 
 		{
 			if (peer->getTopicsSeq() != seq) {
-				//seq不等，向该peer请求最新的topics
-				LOG(DEBUG) << "peer seq:" << seq << " 与本地seq:" << peer->getTopicsSeq() << " 不等 请求最新topics";
+				
+				LOG(DEBUG) << "peer seq:" << seq << " local seq:" << peer->getTopicsSeq() << "request lastest topics";
 				_host->sendTopicsMessage(peer->id(), 1, 0, std::make_shared<std::set<std::string> >());
 			}
 			break;
 		}
-		case 1: //请求获取topics
+		case 1: 
 		{
-			LOG(DEBUG) << "收到topics请求，发送topics数据";
+			LOG(DEBUG) << "send topics data";
 			_host->sendTopicsMessage(peer->id(), 2, _host->getTopicsSeq(), _host->getTopics());
 
 			break;
 		}
-		case 2: //收到来自peer的topics
+		case 2: 
 		{
-			LOG(DEBUG) << "收到来自peer:" << peer->id() << " 的topics 共:" << topics->size();
+			LOG(DEBUG) << "Recv peer:" << peer->id() << "  topics sum:" << topics->size();
 			for (auto it : *topics) {
 				LOG(DEBUG) << "topic:" << it;
 			}
@@ -504,12 +504,12 @@ void EthereumHost::doWork()
 		if (m_newTransactions)
 		{
 			m_newTransactions = false;
-			maintainTransactions();//广播交易
+			maintainTransactions();
 		}
 		if (m_newBlocks)
 		{
 			m_newBlocks = false;
-			maintainBlocks(h);//广播块
+			maintainBlocks(h);
 		}
 	}
 
@@ -698,9 +698,9 @@ void EthereumHost::maintainBlocks(h256 const & _currentHash)
 				p->sealAndSend(ts);
 				//p->m_knownBlocks.clear();
 			}
-			//暂停一会儿收NewBlockHash包
+			
 			std::this_thread::sleep_for(chrono::milliseconds(100));
-			//重新选择随机选25个peers进行发送NewBlock
+			
 			auto s2 = randomSelection(25, [&](EthereumPeer * p) {
 				DEV_GUARDED(p->x_knownBlocks)
 				return !p->m_knownBlocks.count(_currentHash);
@@ -825,7 +825,6 @@ void EthereumHost::delNodeConnParam(std::string const & sParams)
 		return;
 	}
 
-	//todo 不给需要删除的节点发送
 	foreachPeer([&](std::shared_ptr<EthereumPeer> _p)
 	{
 		RLPStream ts;
@@ -842,13 +841,13 @@ void EthereumHost::setWeb3Observer(Web3Observer::Ptr _observer) {
 }
 
 void EthereumHost::sendCustomMessage(NodeID nodeID, std::shared_ptr<bytes> message) {
-	LOG(TRACE) << "查找节点:" << nodeID;
+	LOG(TRACE) << "Search Node:" << nodeID;
 	bool sended = false;
 
 	foreachPeer([&](std::shared_ptr<EthereumPeer> peer) {
-		//LOG(TRACE) << "遍历节点:" << peer->id();
+		
 		if (peer->id() == nodeID) {
-			LOG(DEBUG) << "消息发送至" << nodeID
+			LOG(TRACE) << "Send Message To " << nodeID
 			           << "@"
 			           << peer->session()->peer()->endpoint.address.to_string()
 			           << ":"
@@ -867,23 +866,23 @@ void EthereumHost::sendCustomMessage(NodeID nodeID, std::shared_ptr<bytes> messa
 	});
 
 	if (sended == false) {
-		LOG(ERROR) << "发送失败，无可达节点:" << nodeID;
-		throw Exception("无可达节点");
+		LOG(ERROR) << "Send Fail, no available node :" << nodeID;
+		throw Exception("No Reach Node");
 	}
 }
 
 std::vector<p2p::NodeID> EthereumHost::getPeersByTopic(std::string topic) {
-	//查找监听该topic的node
+	
 	std::vector<p2p::NodeID> availablePeers;
 
-	//筛选关注了该topic的节点
+	
 	foreachPeer([&](std::shared_ptr<EthereumPeer> peer) {
 		for (auto peerTopic : * (peer->getTopics())) {
 			if (peerTopic == topic) {
-				LOG(DEBUG) << "节点:" << peer->id() << "@"
+				LOG(DEBUG) << "Node:" << peer->id() << "@"
 				           << peer->session()->peer()->endpoint.address.to_string()
 				           << ":"
-				           << peer->session()->peer()->endpoint.tcpPort << " 关注该topic:" << topic;
+				           << peer->session()->peer()->endpoint.tcpPort << " Subscribe  topic:" << topic;
 
 				availablePeers.push_back(peer->id());
 				break;
@@ -897,13 +896,13 @@ std::vector<p2p::NodeID> EthereumHost::getPeersByTopic(std::string topic) {
 }
 
 void EthereumHost::sendTopicsMessage(p2p::NodeID nodeID, int type, int seq, std::shared_ptr<std::set<std::string> > topics) {
-	LOG(DEBUG) << "发送topic请求:" << seq << " type:" << type;
+	LOG(DEBUG) <<" Send topic Req:" << seq << " type:" << type;
 	int peerSended = 0;
 
-	//如果指定了nodeID，就给特定nodeID发送，否则就广播
+	
 	if (nodeID == p2p::NodeID()) {
 		foreachPeer([&](std::shared_ptr<EthereumPeer> peer) {
-			LOG(DEBUG) << "topics发送至" << peer->id()
+			LOG(DEBUG) << "topics Send to" << peer->id()
 			           << "@"
 			           << peer->session()->peer()->endpoint.address.to_string()
 			           << ":"
@@ -931,7 +930,7 @@ void EthereumHost::sendTopicsMessage(p2p::NodeID nodeID, int type, int seq, std:
 	else {
 		foreachPeer([&](std::shared_ptr<EthereumPeer> peer) {
 			if (peer->id() == nodeID) {
-				LOG(DEBUG) << "topics发送至" << peer->id()
+				LOG(DEBUG) << "topics Send to" << peer->id()
 				           << "@"
 				           << peer->session()->peer()->endpoint.address.to_string()
 				           << ":"
@@ -960,10 +959,10 @@ void EthereumHost::sendTopicsMessage(p2p::NodeID nodeID, int type, int seq, std:
 		});
 	}
 
-	LOG(DEBUG) << "topics发送到:" << peerSended << "个节点";
+	LOG(DEBUG) << "topics  Send to:" << peerSended << " nodes";
 	if (peerSended == 0) {
-		LOG(ERROR) << "发送失败，无可达节点:";;
-		//throw Exception("无可达节点");
+		LOG(ERROR) << "Send Fail, no available node";;
+		
 	}
 }
 
@@ -971,7 +970,7 @@ void EthereumHost::setTopics(std::shared_ptr<std::set<std::string> > topics) {
 	_topics = topics;
 	++_topicsSeq;
 
-	LOG(DEBUG) << "更新topic seq:" << _topicsSeq;
+	LOG(DEBUG) << "Update topic seq:" << _topicsSeq;
 }
 
 void EthereumHost::getPeersHeight(std::map<h512, u256>& mp)

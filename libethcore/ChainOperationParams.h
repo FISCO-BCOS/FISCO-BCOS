@@ -86,16 +86,16 @@ struct ChainOperationParams
 	u256 u256Param(std::string const& _name) const;
 	std::string param(std::string const& _name) const;
 
-	bool evmEventLog = false; //是否打印event log
-	bool evmCoverLog = false; //是否打印覆盖率统计日志
-	bool statLog = false; //是否打印统计日志
-	Address sysytemProxyAddress;//系统代理合约地址
-	Address god;//上帝帐号
+	bool evmEventLog = false; 
+	bool evmCoverLog = false; 
+	bool statLog = false; 
+	Address sysytemProxyAddress;
+	Address god;
 
 	std::string listenIp;
-	int cryptoMod = 0;	//数据落盘加密方式  0：不进行加密 1：使用简单加密 2：使用keycenter加密
-	int cryptoprivatekeyMod = 0;//0：私钥不使用keycenter加密 1：私钥使用keycenter加密
-	int ssl = 0;//0:不启用SSL 1:启用SSL进行通信
+	int cryptoMod = 0;	
+	int cryptoprivatekeyMod = 0;//0：no keycenter 1：keycenter
+	int ssl = 0;
 	int rpcPort = 6789;
 	int rpcSSLPort = 6790;
 	int p2pPort = 16789;
@@ -110,7 +110,7 @@ struct ChainOperationParams
 	std::string storagePath;
 	
 	std::string rateLimitConfig;
-	int statsInterval;//接口统计间隔 按秒计
+	int statsInterval;
 	int channelPort = 0;
 
 	std::string vmKind;
@@ -119,7 +119,7 @@ struct ChainOperationParams
 
 	u256 intervalBlockTime = 3000;
 
-	bool broadcastToNormalNode = false; // 是否在PBFT共识阶段广播信息给非记账者
+	bool broadcastToNormalNode = false; 
 
 
 	u256 godMinerStart = 0;

@@ -33,7 +33,6 @@ using namespace dev::channel;
 using namespace std;
 
 void dev::channel::ChannelServer::run() {
-	//是否监听
 	if (!_listenHost.empty() && _listenPort > 0) {
 		_acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(*_ioService, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(_listenHost), _listenPort));
 
@@ -43,7 +42,6 @@ void dev::channel::ChannelServer::run() {
 		startAccept();
 	}
 
-	//让server维护线程
 	for (int i = 0; i < 1; ++i) {
 		auto serverThreads = std::make_shared<std::thread>([ = ]() {
 			while (true) {
@@ -51,10 +49,10 @@ void dev::channel::ChannelServer::run() {
 					_ioService->run();
 				}
 				catch (std::exception &e) {
-					LOG(ERROR) << "IO线程错误:" << e.what();
+					LOG(ERROR) << "IO thread error:" << e.what();
 				}
 
-				LOG(ERROR) << "尝试重启 ";
+				LOG(ERROR) << "try restart ";
 
 				sleep(1);
 			}
@@ -72,13 +70,13 @@ void dev::channel::ChannelServer::run() {
 void dev::channel::ChannelServer::onAccept(const boost::system::error_code& error, ChannelSession::Ptr session) {
 	if (!error) {
 		auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint();
-		LOG(TRACE) << "收到新连接: " << remoteEndpoint.address().to_string() << ":" << remoteEndpoint.port();
+		LOG(TRACE) << "receive new connection: " << remoteEndpoint.address().to_string() << ":" << remoteEndpoint.port();
 
 		session->setHost(remoteEndpoint.address().to_string());
 		session->setPort(remoteEndpoint.port());
 
 		if (_enableSSL) {
-			LOG(TRACE) << "开始SSL握手";
+			LOG(TRACE) << "start SSL handshake";
 			session->sslSocket()->async_handshake(
 			    boost::asio::ssl::stream_base::server,
 			    boost::bind(&ChannelServer::onHandshake, shared_from_this(),
@@ -89,13 +87,13 @@ void dev::channel::ChannelServer::onAccept(const boost::system::error_code& erro
 		}
 	}
 	else {
-		LOG(ERROR) << "accept失败: " << error.message();
+		LOG(ERROR) << "accept failed: " << error.message();
 
 		try {
 			session->sslSocket()->lowest_layer().close();
 		}
 		catch (exception &e) {
-			LOG(ERROR) << "close失败" << e.what();
+			LOG(ERROR) << "close failed" << e.what();
 		}
 	}
 
@@ -116,7 +114,7 @@ void dev::channel::ChannelServer::startAccept() {
 		}
 	}
 	catch (exception &e) {
-		LOG(ERROR) << "错误:" << e.what();
+		LOG(ERROR) << "error:" << e.what();
 	}
 }
 
@@ -131,46 +129,46 @@ void dev::channel::ChannelServer::asyncConnect(std::string host, int port, std::
 
 void dev::channel::ChannelServer::stop() {
 	try {
-		LOG(DEBUG) << "关闭acceptor";
+		LOG(DEBUG) << "close acceptor";
 
 		_acceptor->close();
 	}
 	catch (exception &e) {
-		LOG(ERROR) << "错误:" << e.what();
+		LOG(ERROR) << "error:" << e.what();
 	}
 
 	try {
-		LOG(DEBUG) << "关闭ioService";
+		LOG(DEBUG) << "close ioService";
 		_ioService->stop();
 	}
 	catch (exception &e) {
-		LOG(ERROR) << "错误:" << e.what();
+		LOG(ERROR) << "error:" << e.what();
 	}
 }
 
 void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& error, ChannelSession::Ptr session) {
 	try {
 		if (!error) {
-			LOG(TRACE) << "SSL握手成功";
+			LOG(TRACE) << "SSL handshake successed";
 			if (_connectionHandler) {
 				_connectionHandler(ChannelException(), session);
 			}
 			else {
-				LOG(ERROR) << "connectionHandler为空";
+				LOG(ERROR) << "connectionHandler empty";
 			}
 		}
 		else {
-			LOG(ERROR) << "SSL handshake错误: " << error.message();
+			LOG(ERROR) << "SSL handshake error: " << error.message();
 
 			try {
 				session->sslSocket()->lowest_layer().close();
 			}
 			catch (exception &e) {
-				LOG(ERROR) << "shutdown错误:" << e.what();
+				LOG(ERROR) << "shutdown error:" << e.what();
 			}
 		}
 	}
 	catch (exception &e) {
-		LOG(ERROR) << "错误:" << e.what();
+		LOG(ERROR) << "error:" << e.what();
 	}
 }
