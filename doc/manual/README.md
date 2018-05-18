@@ -1,6 +1,6 @@
 # FISCO BCOS区块链操作手册
 
-[FISCO-BCOS Manual](doc/manual/README_EN.md)
+[FISCO-BCOS Manual](README_EN.md)
 
 ## 前言
 
