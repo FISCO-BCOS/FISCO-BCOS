@@ -85,6 +85,7 @@ target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
                                   ssl
                                   crypto
                                   krb5
+                                  uuid
                                   z
                                   dl
                                   )

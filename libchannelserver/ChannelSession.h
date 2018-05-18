@@ -33,8 +33,9 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/ssl.hpp>
-#include "ChannelMessage.h"
 #include "ChannelException.h"
+#include "ChannelMessage.h"
+#include "ThreadPool.h"
 
 namespace dev
 {
@@ -80,6 +81,7 @@ public:
 	std::shared_ptr<std::set<std::string> > topics() { return _topics; };
 	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
 
+	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
 private:
 	void onHandshake(const boost::system::error_code& error);
 
@@ -95,7 +97,7 @@ private:
 
 	void onIdle(const boost::system::error_code& error);
 
-	void disconnect();
+	void disconnect(dev::channel::ChannelException e);
 
 	void updateIdleTimer();
 
@@ -127,6 +129,7 @@ private:
 	std::map<std::string, ResponseCallback::Ptr> _responseCallbacks;
 
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
+	ThreadPool::Ptr _threadPool;
 
 	std::shared_ptr<boost::asio::deadline_timer> _idleTimer;
 	std::recursive_mutex _mutex;
