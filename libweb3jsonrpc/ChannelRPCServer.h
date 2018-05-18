@@ -30,15 +30,20 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <boost/asio.hpp>
 #include <libdevcore/FixedHash.h>
+#include <libchannelserver/ChannelException.h>
 #include <libchannelserver/ChannelSession.h>
 #include <libchannelserver/ChannelServer.h>
-#include <libethereum/Client.h>
 #include <libethereum/Web3Observer.h>
+#include <libchannelserver/ThreadPool.h>
 #include "IpcServerBase.h"
 
 namespace dev
 {
+namespace eth {
+class EthereumHost;
+}
 
 class ChannelRPCServer: public jsonrpc::AbstractServerConnector, public std::enable_shared_from_this<ChannelRPCServer> {
 public:
@@ -71,25 +76,34 @@ public:
 	virtual bool StopListening() override;
 	virtual bool SendResponse(std::string const& _response, void* _addInfo = nullptr) override;
 
-	void onConnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 
-	void onDisconnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
+	virtual void onConnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 
-	void onClientRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message);
 
-	void onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+	virtual void onDisconnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 
-	void onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	void onClientTopicRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+	virtual void onClientRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message);
 
-	void onClientChannelRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	void onNodeRequest(dev::h512 nodeID, std::shared_ptr<dev::bytes> message);
+	virtual void onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	void onNodeMessage(h512 nodeID, dev::channel::Message::Ptr message);
+	virtual void onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	void onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message);
+	//来自前置的topic请求
+	virtual void onClientTopicRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+	//来自前置的链上链下二期请求
+	virtual void onClientChannelRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+	//收到来自其他节点的请求
+	virtual void onNodeRequest(dev::h512 nodeID, std::shared_ptr<dev::bytes> message);
+
+	//(废弃)收到来自其他节点的链上链下请求
+	virtual void onNodeMessage(h512 nodeID, dev::channel::Message::Ptr message);
+
+	//收到来自其它节点的链上链下二期请求
+	virtual void onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message);
 
 	void setListenAddr(const std::string &listenAddr);
 
@@ -99,9 +113,15 @@ public:
 
 	void CloseConnection(int _socket);
 
-	Web3Observer::Ptr buildObserver();
+	dev::eth::Web3Observer::Ptr buildObserver();
 
-	void setHost(std::weak_ptr<EthereumHost> host);
+	void setHost(std::weak_ptr<dev::eth::EthereumHost> host);
+
+	void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,	std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
+
+	virtual dev::channel::TopicMessage::Ptr pushChannelMessage(dev::channel::TopicMessage::Ptr message);
+
+	virtual std::string newSeq();
 
 private:
 	h512 sendChannelMessageToNode(std::string topic, dev::channel::Message::Ptr message, const std::set<h512> &exclude);
@@ -111,8 +131,6 @@ private:
 	void updateHostTopics();
 
 	std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string &topic);
-
-	std::string topicStrip(std::string topic);
 
 	bool _running = false;
 
@@ -124,6 +142,7 @@ private:
 	std::shared_ptr<std::thread> _topicThread;
 
 	std::map<int, dev::channel::ChannelSession::Ptr> _sessions;
+	std::mutex _sessionMutex;
 
 	std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
 	std::mutex _seqMutex;
@@ -133,7 +152,7 @@ private:
 
 	int _sessionCount = 1;
 
-	std::weak_ptr<EthereumHost> _host;
+	std::weak_ptr<dev::eth::EthereumHost> _host;
 };
 
 }

@@ -201,14 +201,14 @@ void CallbackWorker::checkIf(shared_ptr<Block> _block) {
             SSPtr ssPtr = RPCallback::getInstance().getSessionInfoByHash(hash);
             if (ssPtr != NULL && ssPtr->session != NULL) {
                 dev::channel::Message::Ptr message = make_shared<dev::channel::Message>();
-                message->seq = ssPtr->seq;
-                message->result = 0;
-                message->type = 0x1000;//交易成功的type,跟java sdk保持一致
+                message->setSeq(ssPtr->seq);
+                message->setResult(0);
+                message->setType(0x1000);//交易成功的type,跟java sdk保持一致
                 TransactionReceipt tr = _block->receipt(index);
                 Json::Value jsonValue = toJson(LocalisedTransactionReceipt(tr, t.sha3(), blockHash, blockNumber, index));
                 Json::FastWriter fastWriter;
                 std::string jsonValueStr = fastWriter.write(jsonValue);
-                message->data->assign(jsonValueStr.begin(), jsonValueStr.end());
+                message->setData((const byte*)jsonValueStr.data(), jsonValueStr.size());
                 LOG(DEBUG) << "start to asyncSendMessage in CallbackWorker.hash:" << hash << ",receipt:" << jsonValueStr;
                 ssPtr->session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
             }
