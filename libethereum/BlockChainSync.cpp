@@ -273,7 +273,7 @@ void BlockChainSync::onBlockImported(BlockHeader const& _info)
 		m_highestBlock = max(m_lastImportedBlock, m_highestBlock);
 
 		auto head = findItem(m_headers, m_lastImportedBlock);
-		if (head && head->hash == m_lastImportedBlockHash) { // 在下载的块已经上链
+		if (head && head->hash == m_lastImportedBlockHash) { 
 			LOG(INFO) << "BlockChainSync::onBlockImported remove header&body blk=" << m_lastImportedBlock << ",hash=" << m_lastImportedBlockHash;
 			removeItem(m_headers, m_lastImportedBlock);
 			removeItem(m_bodies, m_lastImportedBlock);
@@ -320,7 +320,7 @@ void BlockChainSync::onPeerStatus(std::shared_ptr<EthereumPeer> _peer)
 		_peer->disable("Blacklisted client version.");
 	else if (host().isBanned(session->id()))
 		_peer->disable("Peer banned for previous bad behaviour.");
-	else if (_peer->m_asking != Asking::State && _peer->m_asking != Asking::Nothing)// friend 类，所以可以直接访问
+	else if (_peer->m_asking != Asking::State && _peer->m_asking != Asking::Nothing)
 		_peer->disable("Peer banned for unexpected status message.");
 	else {
 		LOG(INFO) << "onPeerStatus call syncPeer";
@@ -340,7 +340,7 @@ bool BlockChainSync::syncPeer(std::shared_ptr<EthereumPeer> _peer, bool _force)
 		return false;
 	}
 
-	if (m_state == SyncState::Waiting) { // 等待bq队列空出之后回调onRoomAvaliable重置状态
+	if (m_state == SyncState::Waiting) { 
 		LOG(INFO) << "Can't sync with this peer - waiting.";
 		return false;
 	}
@@ -385,7 +385,7 @@ bool BlockChainSync::continueSync()
 	bool ret = false;
 	host().foreachPeer([&](std::shared_ptr<EthereumPeer> _p)
 	{
-		ret = this->syncPeer(_p, false) || ret; // syncPeer的调用必须放在前面确保一定会被调用
+		ret = this->syncPeer(_p, false) || ret; 
 		return true;
 	});
 	return ret;
@@ -396,7 +396,7 @@ bool BlockChainSync::requestBlocks(std::shared_ptr<EthereumPeer> _peer)
 	printInfo();
 	//LOG(TRACE)<<"BlockChainSync::requestBlocks m_haveCommonHeader="<<m_haveCommonHeader<<",peer=" << _peer->id();
 
-	clearPeerDownload(_peer); // 此处会导致更多重复请求造成网络堵塞?
+	clearPeerDownload(_peer); 
 	if (host().bq().knownFull())
 	{
 		LOG(INFO) << "Waiting for block queue before downloading blocks";
@@ -438,7 +438,7 @@ bool BlockChainSync::requestBlocks(std::shared_ptr<EthereumPeer> _peer)
 		// check if need to download headers
 		unsigned start = 0;
 		if (!m_haveCommonHeader)
-		{	//往回走，每次-1
+		{	
 			// download backwards until common block is found 1 header at a time
 			start = m_lastImportedBlock;
 			if (!m_headers.empty())
@@ -475,10 +475,10 @@ bool BlockChainSync::requestBlocks(std::shared_ptr<EthereumPeer> _peer)
 				std::vector<unsigned> headers;
 				for (unsigned block = start; block < start + count; block++) {
 					//if (m_downloadingHeaders.count(block) == 0)
-					//{ //一定会成立
+					
 					headers.push_back(block);
 					m_downloadingHeaders.insert(block);
-					//}
+					
 				}
 				count = headers.size();
 
@@ -661,7 +661,7 @@ void BlockChainSync::onPeerBlockHeaders(std::shared_ptr<EthereumPeer> _peer, RLP
 			//HeaderId headerId { info.transactionsRoot(), info.sha3Uncles() };
 			if (m_haveCommonHeader)
 			{
-				// 在已下载的块头中，看是否存在自己的父块
+				
 				Header const* prevBlock = findItem(m_headers, blockNumber - 1);
 
 
@@ -674,7 +674,7 @@ void BlockChainSync::onPeerBlockHeaders(std::shared_ptr<EthereumPeer> _peer, RLP
 					// mismatching parent id, delete the previous block and don't add this one
 					LOG(INFO) << "Unknown block header " << blockNumber << " " << info.hash() << " (Restart syncing)";
 					_peer->addRating(-1);
-					restartSync(); // 分叉重启
+					restartSync(); 
 					return ;
 				}
 
@@ -703,23 +703,9 @@ void BlockChainSync::onPeerBlockHeaders(std::shared_ptr<EthereumPeer> _peer, RLP
 			//LOG(TRACE)<<"BlockChainSync::handlePeerBlockHeaders "<<m_haveCommonHeader;
 			//printInfo();
 			mergeInto(m_headers, blockNumber, std::move(hdr));
-			//printInfo();
-			/*
-			if (headerId.transactionsRoot == EmptyTrie && headerId.uncles == EmptyListSHA3)
-			{
-				//LOG(TRACE)<<"BlockChainSync::handlePeerBlockHeaders "<<m_haveCommonHeader;
-
-				//empty body, just mark as downloaded
-				RLPStream r(2);
-				r.appendRaw(RLPEmptyList);
-				r.appendRaw(RLPEmptyList);
-				bytes body;
-				r.swapOut(body);
-				mergeInto(m_bodies, blockNumber, std::move(body));
-			}
-			else {*/// 这段不能直接认为body为空就不下载body，因为需要拿回签名数据
+			
 			m_headerIdToNumber[info.hash()] = blockNumber;
-			///}
+			
 		}
 	}
 	collectBlocks();
@@ -795,8 +781,7 @@ void BlockChainSync::onPeerBlockBodies(std::shared_ptr<EthereumPeer> _peer, RLP 
 void BlockChainSync::collectBlocks()
 {
 	printInfo();
-	//LOG(TRACE)<<"BlockChainSync::collectBlocks m_haveCommonHeader="<<m_haveCommonHeader;
-	// 如果已经发现是在同一条链，而且没有需要请求的块，就结束同步（可能已经在共识的地方落地了该块）
+	
 	if (m_haveCommonHeader && m_headers.empty() && m_downloadingHeaders.empty() && m_downloadingBodies.empty()) {
 		if (!m_bodies.empty())
 		{

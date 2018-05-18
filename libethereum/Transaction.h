@@ -54,7 +54,8 @@ enum class TransactionException
 	FilterCheckFail,
 	NoDeployPermission,
 	NoCallPermission,
-	NoTxPermission
+	NoTxPermission,
+	EthCallIdNotFound 
 
 };
 

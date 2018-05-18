@@ -38,14 +38,14 @@ function getAbi0(file){
     var SystemProxy=web3.eth.contract(getAbi("SystemProxy")).at(SystemProxyReicpt.contractAddress);
 
     // 权限控制
-	  //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" AuthorityFilter.sol");
-	  var AuthorityFilterReicpt= await web3sync.rawDeploy(config.account, config.privKey, "AuthorityFilter");
+    //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" AuthorityFilter.sol");
+    var AuthorityFilterReicpt= await web3sync.rawDeploy(config.account, config.privKey, "AuthorityFilter");
     var AuthorityFilter=web3.eth.contract(getAbi("AuthorityFilter")).at(AuthorityFilterReicpt.contractAddress);
     //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" Group.sol");
-	  var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey, "Group");
+    var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey, "Group");
     var Group=web3.eth.contract(getAbi("Group")).at(GroupReicpt.contractAddress);
-	  //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" TransactionFilterChain.sol");
-	  var TransactionFilterChainReicpt= await web3sync.rawDeploy(config.account, config.privKey, "TransactionFilterChain");
+    //execSync("fisco-solc --abi --bin --overwrite -o "+config.Ouputpath+" TransactionFilterChain.sol");
+    var TransactionFilterChainReicpt= await web3sync.rawDeploy(config.account, config.privKey, "TransactionFilterChain");
     var TransactionFilterChain=web3.eth.contract(getAbi("TransactionFilterChain")).at(TransactionFilterChainReicpt.contractAddress);
     
     var CAActionReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "CAAction");
@@ -54,6 +54,10 @@ function getAbi0(file){
     var NodeActionReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "NodeAction");
     var NodeAction=web3.eth.contract(getAbi("NodeAction")).at(NodeActionReicpt.contractAddress);
     
+    func = "setSystemAddr(address)";
+	params = [SystemProxy.address];
+	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, NodeAction.address, func, params);
+
     var ConfigActionReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "ConfigAction");
     var ConfigAction=web3.eth.contract(getAbi("ConfigAction")).at(ConfigActionReicpt.contractAddress);
 
@@ -63,11 +67,15 @@ function getAbi0(file){
     var FileServerReicept= await web3sync.rawDeploy(config.account, config.privKey,  "FileServerManager");
     var FileServerManager=web3.eth.contract(getAbi("FileServerManager")).at(FileServerReicept.contractAddress);
 
+    // add consensuscontrol
+    var ConsensusControlMgrReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "ConsensusControlMgr");
+    var ConsensusControlMgr=web3.eth.contract(getAbi("ConsensusControlMgr")).at(ConsensusControlMgrReicpt.contractAddress);
+
     //--添加abi管理合约
     var ContractAbiMgrReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "ContractAbiMgr");
     var ContractAbiMgr=web3.eth.contract(getAbi("ContractAbiMgr")).at(ContractAbiMgrReicpt.contractAddress);
 
-    console.log("注册系统合约中部署的合约的信息到CNS管理合约");
+    console.log("register system contract to CNS");
 
     var func = "addAbi(string,string,string,string,address)";
     //ContractAbiMgr
@@ -111,44 +119,56 @@ function getAbi0(file){
     params  = ["NodeAction","NodeAction","",abi,NodeActionReicpt.contractAddress];
     receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
 
-    console.log("注册TransactionFilterChain.....");
+    // ConsensusControlMgr
+    abi = getAbi0("ConsensusControlMgr");
+    params  = ["ConsensusControlMgr","ConsensusControlMgr","",abi,ConsensusControlMgr.contractAddress];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddress, func, params);
+
+//==================setRoute to systemProxy====================================
+
+    console.log("register TransactionFilterChain.....");
 	func = "setRoute(string,address,bool)";
 	params = ["TransactionFilterChain", TransactionFilterChain.address, false];
 	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
 
-    console.log("注册ConfigAction.....");
+    console.log("register ConfigAction.....");
 	func = "setRoute(string,address,bool)";
 	params = ["ConfigAction", ConfigAction.address, false];
 	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
 
-    console.log("注册NodeAction.....");
+    console.log("register NodeAction.....");
 	func = "setRoute(string,address,bool)";
 	params = ["NodeAction", NodeAction.address, false];
 	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
 
-    console.log("注册CAAction.....");
+    console.log("register CAAction.....");
 	func = "setRoute(string,address,bool)";
 	params = ["CAAction", CAAction.address, false];
-        receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
-    
-    console.log("注册ContractAbiMgr.....");
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
+
+    console.log("register ContractAbiMgr.....");
 	func = "setRoute(string,address,bool)";
 	params = ["ContractAbiMgr", ContractAbiMgr.address, false];
     receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
-    
-    console.log("注册FileInfoManager.....");
+
+    console.log("register ConsensusControlMgr.....");
+    func = "setRoute(string,address,bool)";
+    params = ["ConsensusControlMgr", ConsensusControlMgr.address, false];
+    receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
+
+    console.log("register FileInfoManager.....");
     func = "setRoute(string,address,bool)";
 	params = ["FileInfoManager", FileInfoManager.address, false];
 	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
 
-    console.log("注册FileServerManager.....");
+	console.log("register FileServerManager.....");
     func = "setRoute(string,address,bool)";
 	params = ["FileServerManager", FileServerManager.address, false];
 	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
 
-	console.log("合约部署完成 系统代理合约:" + SystemProxy.address);
+	console.log("SystemProxy address :" + SystemProxy.address);
     //console.log(SystemProxy);
-    console.log("-----------------系统路由表----------------------");
+	console.log("-----------------SystemProxy route ----------------------");
     var routelength=SystemProxy.getRouteSize();
     for( var i=0;i<routelength;i++){
         var key=SystemProxy.getRouteNameByIndex(i).toString();

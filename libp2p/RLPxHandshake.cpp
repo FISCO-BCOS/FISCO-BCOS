@@ -44,10 +44,10 @@ void RLPXHandshake::writeAuth()
 
 	// E(remote-pubk, S(ecdhe-random, ecdh-shared-secret^nonce) || H(ecdhe-random-pubk) || pubk || nonce || 0x0)
 	Secret staticShared;
-	crypto::ecdh::agree(m_host->m_alias.sec(), m_remote, staticShared);//m_remote:nodeid   使用对方节点nodeid加密对称密钥
+	crypto::ecdh::agree(m_host->m_alias.sec(), m_remote, staticShared); //encrypt the symmetric key with nodeid of the connecting peer(m_remote namely nodeid)
 	sign(m_ecdhe.seckey(), staticShared.makeInsecure() ^ m_nonce).ref().copyTo(sig);
-	sha3(m_ecdhe.pubkey().ref(), hepubk);//公钥数据做sha3处理
-	m_host->m_alias.pub().ref().copyTo(pubk);//公钥数据
+	sha3(m_ecdhe.pubkey().ref(), hepubk);//calculate sha3 of the public key
+	m_host->m_alias.pub().ref().copyTo(pubk);//public key
 	m_nonce.ref().copyTo(nonce);
 	m_auth[m_auth.size() - 1] = 0x0;
 	encryptECIES(m_remote, &m_auth, m_authCipher);
@@ -74,8 +74,8 @@ void RLPXHandshake::writeAck()
 	m_ack.resize(Public::size + h256::size + 1);
 	bytesRef epubk(&m_ack[0], Public::size);
 	bytesRef nonce(&m_ack[Public::size], h256::size);
-	m_ecdhe.pubkey().ref().copyTo(epubk);//公钥数据
-	m_nonce.ref().copyTo(nonce);//nonce值
+	m_ecdhe.pubkey().ref().copyTo(epubk);//public key
+	m_nonce.ref().copyTo(nonce);//nonce
 	m_ack[m_ack.size() - 1] = 0x0;
 	encryptECIES(m_remote, &m_ack, m_ackCipher);
 
@@ -377,7 +377,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 		}
 	});
 
-	if (m_nextState == New)//传输对称密钥
+	if (m_nextState == New)//transfer public key(node id) and nonce
 	{
 		m_nextState = AckAuth;
 		if (m_originated)
@@ -385,7 +385,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 		else
 			readAuth();
 	}
-	else if (m_nextState == AckAuth)//发送公钥信息及nonce值
+	else if (m_nextState == AckAuth)// reply with public key and nonce
 	{
 		m_nextState = WriteHello;
 		if (m_originated)
@@ -393,7 +393,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 		else
 			writeAck();
 	}
-	else if (m_nextState == AckAuthEIP8)//发送公钥信息及nonce值
+	else if (m_nextState == AckAuthEIP8)//transfer public key(node id) and nonce
 	{
 		m_nextState = WriteHello;
 		if (m_originated)
@@ -401,13 +401,13 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 		else
 			writeAckEIP8();
 	}
-	else if (m_nextState == StartCA)//发送随机数签名
+	else if (m_nextState == StartCA)//send signed nonce
 	{
 		m_nextState = WriteHello;
-		writeCASeed();//发送随机数
-		readCASeed();//读取对方随机数
+		writeCASeed();//send signed nonce
+		readCASeed();//receive and read signed nonce
 	}
-	else if (m_nextState == WriteHello)//验证发送协议数据
+	else if (m_nextState == WriteHello)//verify signed data
 	{
 		m_nextState = ReadHello;
 		LOG(INFO) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress") << "sending capabilities handshake";
@@ -416,7 +416,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 		/// it will be passed to Host which will take ownership.
 		m_io.reset(new RLPXFrameCoder(*this));
 
-		//协议进行修改,按需扩展字段
+		//modify RLP package, can extend on demand
 		RLPStream s;
 		// NodeConnManagerSingleton::GetInstance().ConstructHandShakeRLP(s, m_readBaseData);
 		h256 hash;

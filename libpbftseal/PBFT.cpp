@@ -33,6 +33,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcore/LogGuard.h>
 #include <libethereum/StatLog.h>
+#include <libethereum/ConsensusControl.h>
 using namespace std;
 using namespace dev;
 using namespace eth;
@@ -145,6 +146,9 @@ void PBFT::resetConfig() {
 		m_prepare_cache.clear();
 		m_sign_cache.clear();
 		m_recv_view_change_req.clear();
+		
+		ConsensusControl::instance().clearAllCache();
+		m_commitMap.clear();
 
 		if (!getMinerList(-1, m_miner_list)) {
 			LOG(ERROR) << "resetConfig: getMinerList return false";
@@ -159,7 +163,8 @@ void PBFT::resetConfig() {
 		}
 		LOG(INFO) << "resetConfig: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
 	}
-
+	// consensuscontrol init cache
+	ConsensusControl::instance().resetNodeCache();
 	m_cfg_err = false;
 }
 
@@ -203,7 +208,7 @@ bool PBFT::generateCommit(BlockHeader const& _bi, bytes const& _block_data, u256
 	req.block = _block_data;
 
 	if (addPrepareReq(req) && broadcastSignReq(req)) {
-		checkAndCommit(); // 支持单节点可出块
+		checkAndCommit(); // support for issuing block in single node mode (支持单节点可出块)
 	}
 
 	return true;
@@ -213,7 +218,7 @@ bool PBFT::shouldSeal(Interface*)
 {
 	Guard l(m_mutex);
 
-	if (m_cfg_err || m_account_type != EN_ACCOUNT_TYPE_MINER) { // 配置中找不到自己或非记账节点就不出块,
+	if (m_cfg_err || m_account_type != EN_ACCOUNT_TYPE_MINER) { // do not issue the block if not find myself in systemcontract config or this node is no a miner (配置中找不到自己或非记账节点就不出块)
 		return false;
 	}
 
@@ -229,14 +234,14 @@ bool PBFT::shouldSeal(Interface*)
 			if (NodeConnManagerSingleton::GetInstance().getPublicKey(ret.second, node_id) && !h->isConnected(node_id)) {
 				LOG(ERROR) << "getLeader ret:<" << ret.first << "," << ret.second << ">" << ", need viewchange for disconnected";
 				m_last_consensus_time = 0;
-				m_last_sign_time = 0;  // 两个都设置为0，才能保证快速切换
+				m_last_sign_time = 0;  // set m_last_consensus_time and m_last_sign_time to zero can guarantee "fastviewchange" to work (两个都设置为0，才能保证快速切换)
 				m_signalled.notify_all();
 			}
 		}
 		return false;
 	}
 
-	// 判断是否要把committed_prepare拿出来重放
+	// deside whether to replay the committed_prepare package, would usually happen when the 3rd phases(commit phases) not finish (判断是否要把committed_prepare拿出来重放)
 	if (m_consensus_block_number == m_committed_prepare_cache.height) {
 		if (m_consensus_block_number != m_raw_prepare_cache.height) {
 			reHandlePrepareReq(m_committed_prepare_cache);
@@ -292,7 +297,7 @@ void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
 		m_last_consensus_time = utcTime();
 		m_consensus_block_number = m_highest_block.number() + 1;
 		//m_recv_view_change_req.clear();
-		delViewChange(); // 如果是最新块的viewchange，不能丢弃
+		delViewChange(); // if is's the newest block's viewchange, we can't discard it (如果是最新块的viewchange，不能丢弃)
 	}
 
 	resetConfig();
@@ -310,14 +315,19 @@ void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
 
 void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
 	if (_id <= ViewChangeReqPacket) {
-		//LOG(INFO) << "onPBFTMsg: id=" << _id;
-		u256 idx = u256(0);
-		if (!NodeConnManagerSingleton::GetInstance().getIdx(_peer->session()->id(), idx)) {
-			LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << _id;
-			return;
+		NodeID nodeid;
+		auto session = _peer->session();
+		if (session && (nodeid = session->id()))
+		{
+			u256 idx = u256(0);
+			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
+				LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << _id;
+				return;
+			}
+			//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
+			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data()));
 		}
-		//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
-		m_msg_queue.push(PBFTMsgPacket(idx, _peer->session()->id(), _id, _r[0].data()));
+
 	} else {
 		LOG(ERROR) << "Recv an illegal msg, id=" << _id;
 	}
@@ -419,7 +429,7 @@ void PBFT::changeViewForEmptyBlockWithLock() {
 	m_last_sign_time = 0;
 	m_change_cycle = 0;
 	m_empty_block_flag = true;
-	m_leader_failed = true; // 在checkTimeout的时候会设置，但是这里加上的目的是为了让出空块者不会立即再出空块
+	m_leader_failed = true; // m_leader_failed would set in checkTimeout, however we set in this place is aim to let the empty block leader not issue a empty block at once (在checkTimeout的时候会设置，但是这里加上的目的是为了让出空块者不会立即再出空块)
 	m_signalled.notify_all();
 }
 
@@ -435,14 +445,14 @@ void PBFT::checkTimeout() {
 		if (now_time - last_time >= interval) {
 			m_leader_failed = true;
 			m_to_view += 1;
-			m_change_cycle = std::min(m_change_cycle + 1, (unsigned)kMaxChangeCycle); // 防止溢出
+			m_change_cycle = std::min(m_change_cycle + 1, (unsigned)kMaxChangeCycle); // prevent overflow (防止溢出)
 			m_last_consensus_time = now_time;
 			flag = true;
-			// 曾经收到的viewchange消息中跟我当前要的不一致就清空
+			// remove not used viewchange(not match block number and hash) info in cache (曾经收到的viewchange消息中跟我当前要的不一致就清空)
 			for (auto iter = m_recv_view_change_req[m_to_view].begin(); iter != m_recv_view_change_req[m_to_view].end();) {
 				if (iter->second.height < m_highest_block.number()) {
 					iter = m_recv_view_change_req[m_to_view].erase(iter);
-				} else if (iter->second.height == m_highest_block.number() && iter->second.block_hash !=  m_highest_block.hash(WithoutSeal)) {  // 防作恶
+				} else if (iter->second.height == m_highest_block.number() && iter->second.block_hash !=  m_highest_block.hash(WithoutSeal)) {  // prevent evil info (防作恶)
 					iter = m_recv_view_change_req[m_to_view].erase(iter);
 				} else {
 					++iter;
@@ -603,27 +613,31 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<PBFTPeer> _p)
 		{
-			unsigned account_type = 0;
-			if (!NodeConnManagerSingleton::GetInstance().getAccountType(_p->session()->id(), account_type)) {
-				LOG(ERROR) << "Cannot get account type for peer" << _p->session()->id();
-				return true;
-			}
-			if (_id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
-				return true;
-			}
+			NodeID nodeid;
+			auto session = _p->session();
+			if (session && (nodeid = session->id()))
+			{
+				unsigned account_type = 0;
+				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
+					LOG(ERROR) << "Cannot get account type for peer" << nodeid;
+					return true;
+				}
+				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
+					return true;
+				}
+				if (_filter.count(nodeid)) {  // forward the broadcast to other node (转发广播)
+					this->broadcastMark(_key, _id, _p);
+					return true;
+				}
+				if (this->broadcastFilter(_key, _id, _p)) {
+					return true;
+				}
 
-			if (_filter.count(_p->session()->id())) {  // 转发广播
+				RLPStream ts;
+				_p->prep(ts, _id, 1).append(_data);
+				_p->sealAndSend(ts);
 				this->broadcastMark(_key, _id, _p);
-				return true;
 			}
-			if (this->broadcastFilter(_key, _id, _p)) {
-				return true;
-			}
-
-			RLPStream ts;
-			_p->prep(ts, _id, 1).append(_data);
-			_p->sealAndSend(ts);
-			this->broadcastMark(_key, _id, _p);
 			return true;
 		});
 		return true;
@@ -760,7 +774,7 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		return;
 	}
 
-	addRawPrepare(_req); // 必须在recvFutureBlock之后
+	addRawPrepare(_req); // must after recvFutureBlock (必须在recvFutureBlock之后)
 
 	auto leader = getLeader();
 	if (!leader.first || _req.idx != leader.second) {
@@ -782,18 +796,18 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 	Block outBlock(*m_bc, *m_stateDB);
 	try {
 		m_bc->checkBlockValid(_req.block_hash, _req.block, outBlock);
-		if (outBlock.info().hash(WithoutSeal) != _req.block_hash) {  // 检验块数据是否被更改
+		if (outBlock.info().hash(WithoutSeal) != _req.block_hash) {  // check whether the block data has been changed (检验块数据是否被更改)
 			LOG(ERROR) << oss.str() << ", block_hash is not equal to block";
 			return;
 		}
 		m_last_exec_finish_time = utcTime();
 	}
-	catch (Exception &ex) {
+	catch (std::exception &ex) {
 		LOG(ERROR) << oss.str()  << "CheckBlockValid failed" << ex.what();
 		return;
 	}
 
-	// 空块切换
+	// change leader for empty block (空块切换)
 	if (outBlock.pending().size() == 0 && m_omit_empty_block) {
 		changeViewForEmptyBlockWithoutLock(_from);
 		// for empty block
@@ -803,7 +817,7 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		return;
 	}
 
-	// 重新生成block数据
+	// regenerate block data (重新生成block数据)
 	outBlock.commitToSeal(*m_bc, outBlock.info().extraData());
 	m_bc->addBlockCache(outBlock, outBlock.info().difficulty());
 
@@ -824,7 +838,7 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		<< " height:" << _req.height << " txnum:" << outBlock.pending().size();
 	PBFTFlowLog(m_highest_block.number() + m_view, ss.str());
 
-	// 重新生成Prepare
+	// regenerate Prepare package (重新生成Prepare)
 	PrepareReq req;
 	req.height = _req.height;
 	req.view = _req.view;
@@ -962,6 +976,9 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	}
 
 	// +1 是为了防止触碰到刚好view正在切换的边界条件。因为view落后的节点的view必定是低于(>2)其他整成节点的view
+	// this is for motivating viewchange, for the envs that if one node crash and other node's view has increased to a large number, than the node restart, it should broadcast a viewchange to other node
+	// other node receive the low view viewchange, would trigger follow code to motivate the node. +1 is to prevent the case that the view just change, for the reason
+	// which the new started node' view must fall behind(>2) the excited node
 	if (_req.view + 1 < m_to_view) {
 		LOG(INFO) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
 		broadcastViewChangeReq();
@@ -1025,6 +1042,9 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 
 		// 当前正在共识的块，如果还未落盘。在下一个出块节点确定宕机，其他节点先发现然后发出视图切换，此时本节点暂不立即切换
 		// 待落地块后发现下一个共识节点宕机，自动发出切换。——目的为了避免过早发出切换视图包被其他节点丢弃的现象（其他节点块高比本节点高）
+		// for this node , if the block has not been saved to the chain in consensus phases, and then the next leader crash, other node timeout and broadcast viewchange
+		// in this case, this node should not change view at once. When the block is saved on the chain, and find next node has crashed, broadcast viewchange
+		// this is to prevent the broadcast viewchange too early and discard by other node(other node's view is higher then this node)
 		bool flag = (min_height == m_consensus_block_number && min_height == m_committed_prepare_cache.height);
 		if (count > m_f && !flag) {
 			LOG(INFO) << "Fast start viewchange, m_to_view=" << m_to_view << ",req.view=" << _req.view << ",min_view=" << min_view;
@@ -1042,7 +1062,17 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 void PBFT::checkAndSave() {
 	u256 have_sign = m_sign_cache[m_prepare_cache.block_hash].size();
 	u256 have_commit = m_commit_cache[m_prepare_cache.block_hash].size();
-	if (have_sign >= quorum() && have_commit == quorum()) {
+	bool committed = false;
+	auto it = m_commitMap.find(m_prepare_cache.block_hash);
+	if (it != m_commitMap.end())
+		committed = it->second;
+
+	if (have_sign >= quorum() 
+		&& have_commit >= quorum() /* match for the requirement for pbft 满足pbft要求*/
+		&& !committed /* match pbft and trigger once 满足pbft和联盟控制的条件下保证只触发一次*/
+		&& ConsensusControl::instance().callConsensus(m_bc->getClient(), m_prepare_cache.block_hash) /* match consensus contrl 满足联盟控制要求*/
+		) {  // only trigger once 只发一次
+		m_commitMap[m_prepare_cache.block_hash] = true;
 		LOG(INFO) << "######### Reach enough commit for block="  << m_prepare_cache.height << ",hash=" << m_prepare_cache.block_hash.abridged() << ",have_sign=" << have_sign << ",have_commit=" << have_commit << ",quorum=" << quorum();
 
 		if (m_prepare_cache.view != m_view) {
@@ -1051,9 +1081,11 @@ void PBFT::checkAndSave() {
 		}
 
 		if (m_prepare_cache.height > m_highest_block.number()) {
-			// 把签名加上
+			// add signature 把签名加上
 			std::vector<std::pair<u256, Signature>> sig_list;
-			sig_list.reserve(static_cast<unsigned>(quorum()));
+			// sig_list.reserve(static_cast<unsigned>(quorum()));
+			// in the consensus control, the sig list must be all related sign, not just for pbft request
+			sig_list.reserve(static_cast<unsigned>(have_commit));
 			for (auto item : m_commit_cache[m_prepare_cache.block_hash]) {
 				sig_list.push_back(std::make_pair(item.second.idx, Signature(item.first.c_str())));
 			}
@@ -1078,7 +1110,7 @@ void PBFT::checkAndSave() {
 
 void PBFT::checkAndCommit() {
 	u256 have_sign = m_sign_cache[m_prepare_cache.block_hash].size();
-	if (have_sign == quorum()) { // 只发一次
+	if (have_sign == quorum()) { // only trigger once 只发一次
 		LOG(INFO) << "######### Reach enough sign for block=" << m_prepare_cache.height << ",hash=" << m_prepare_cache.block_hash.abridged() << ",have_sign=" << have_sign << ",need_sign=" << quorum();
 
 		if (m_prepare_cache.view != m_view) {
@@ -1093,7 +1125,7 @@ void PBFT::checkAndCommit() {
 			LOG(ERROR) << "broadcastCommitReq failed";
 		}
 
-		// 重置倒计时，给出足够的时间收集签名
+		// reset time, let enough time to collect signatures 重置倒计时，给出足够的时间收集签名
 		m_last_sign_time = utcTime();
 
 		// reach sign log
@@ -1116,6 +1148,9 @@ void PBFT::checkAndChangeView() {
 		m_prepare_cache.clear();
 		m_sign_cache.clear();
 		m_commit_cache.clear();
+
+		ConsensusControl::instance().clearAllCache();
+		m_commitMap.clear();
 
 		for (auto iter = m_recv_view_change_req.begin(); iter != m_recv_view_change_req.end();) {
 			if (iter->first <= m_view) {
@@ -1171,6 +1206,13 @@ void PBFT::addSignReq(SignReq const & _req) {
 
 void PBFT::addCommitReq(CommitReq const & _req) {
 	m_commit_cache[_req.block_hash][_req.sig.hex()] = _req;
+	// consensuscontrol
+	Public pub_id;
+	if (!NodeConnManagerSingleton::GetInstance().getPublicKey(_req.idx, pub_id)) {
+		LOG(ERROR) << "Can't find node in addPrepareReq(), idx=" << _req.idx;
+		return ;
+	}
+	ConsensusControl::instance().addAgencyCount(_req.block_hash, pub_id);
 }
 
 void PBFT::delCache(h256 const& _hash) {
@@ -1193,6 +1235,11 @@ void PBFT::delCache(h256 const& _hash) {
 	if (_hash == m_prepare_cache.block_hash) {
 		m_prepare_cache.clear();
 	}
+	// 删除对应hash的所有cache 
+	ConsensusControl::instance().clearBlockCache(_hash);
+	auto it = m_commitMap.find(_hash);
+	if (it != m_commitMap.end())
+		m_commitMap.erase(it);
 }
 
 void PBFT::delViewChange() {
@@ -1225,12 +1272,23 @@ void PBFT::collectGarbage() {
 		for (auto iter = m_sign_cache.begin(); iter != m_sign_cache.end();) {
 			for (auto iter2 = iter->second.begin(); iter2 != iter->second.end();) {
 				if (iter2->second.height < m_highest_block.number()) {
+					// must before erase() 必须放在erase之前
+					Public pub_id;
+					if (NodeConnManagerSingleton::GetInstance().getPublicKey(iter2->second.idx, pub_id)) {
+						ConsensusControl::instance().clearBlockCache(iter->first, pub_id);
+					}
 					iter2 = iter->second.erase(iter2);
 				} else {
 					++iter2;
 				}
 			}
 			if (iter->second.size() == 0) {
+				// must before erase() 必须放在erase之前
+				ConsensusControl::instance().clearBlockCache(iter->first);
+				auto it = m_commitMap.find(iter->first);
+				if (it != m_commitMap.end())
+					m_commitMap.erase(it);
+
 				iter = m_sign_cache.erase(iter);
 			} else {
 				++iter;
@@ -1299,7 +1357,7 @@ bool PBFT::checkBlockSign(BlockHeader const& _header, std::vector<std::pair<u256
 
 	LOG(DEBUG) << "checkBlockSign call getAllNodeConnInfo: blk=" << _header.number() - 1 << ", miner_num=" << miner_list.size();
 
-	// 检查公钥列表
+	// check public key list 检查公钥列表
 	if (_header.nodeList() != miner_list) {
 		ostringstream oss;
 		for (size_t i = 0; i < miner_list.size(); ++i) {
@@ -1314,13 +1372,15 @@ bool PBFT::checkBlockSign(BlockHeader const& _header, std::vector<std::pair<u256
 		return false;
 	}
 
-	// 检查签名数量
+	// check signatures count 检查签名数量
 	if (_sign_list.size() < (miner_list.size() - (miner_list.size() - 1) / 3)) {
 		LOG(ERROR) << "checkBlockSign failed, blk=" << _header.number() << " not enough sign, sign_num=" << _sign_list.size() << ",miner_num" << miner_list.size();
 		return false;
 	}
 
-	// 检查签名是否有效
+	h512s publicid_list;
+
+	// check signatures valid 检查签名是否有效
 	for (auto item : _sign_list) {
 		if (item.first >= miner_list.size()) {
 			LOG(ERROR) << "checkBlockSign failed, block=" << _header.number() << "sig idx=" << item.first << ", out of bound, miner_list size=" << miner_list.size();
@@ -1331,6 +1391,12 @@ bool PBFT::checkBlockSign(BlockHeader const& _header, std::vector<std::pair<u256
 			LOG(ERROR) << "checkBlockSign failed, verify false, blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal);
 			return false;
 		}
+		publicid_list.push_back(miner_list[static_cast<int>(item.first)]);
+	}
+
+	if (!ConsensusControl::instance().callConsensusInCheck(m_bc->getClient(), publicid_list, static_cast<dev::eth::BlockNumber>(_header.number() - 1))) {
+		LOG(ERROR) << "[ConsensusControl]checkBlockSign failed, not match current consensus control rule! blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal);
+		return false;
 	}
 
 	LOG(DEBUG) << "checkBlockSign success, blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal) << ",timecost=" << t.elapsed() / 1000 << "ms";

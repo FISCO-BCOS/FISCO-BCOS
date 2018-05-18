@@ -45,7 +45,7 @@ InterfaceStatistics::InterfaceStatistics(const std::string &_moduleName, const i
     }
     else
     {
-        LOG(INFO) << moduleName << " 's statistics is off" << endl;
+        LOG(DEBUG) << moduleName << " 's statistics is off";
     }
 }
 
@@ -61,7 +61,7 @@ void InterfaceStatistics::checkShm()
     }
     catch (interprocess_exception &e)
     {
-        std::cout << e.what() << std::endl;
+        LOG(ERROR) << e.what();
     }
     if (freeSize < IS_SHM_GROW_SIZE)
     {
@@ -77,14 +77,14 @@ void InterfaceStatistics::init()
     }
     catch (interprocess_exception &e)
     {
-        std::cout << e.what() << std::endl;
+        LOG(ERROR) << e.what();
     }
     shmHashMapArray = mappedFile->find_or_construct<ShmHashMap>(IS_SHM_HASH_MAP_ARRAY)[IS_SHM_VARS] //object name
                       (100, boost::hash<KeyType>(), std::equal_to<KeyType>()                        //
                        ,
                        mappedFile->get_allocator<ValueType>()); //allocator instance
     timeArray = mappedFile->find_or_construct<time_point>(IS_SHM_TIME_POINT_ARRAY)[IS_SHM_VARS](chrono::system_clock::now());
-    // 重启后处理
+    // deal after restart
     for (int i = 0; i < IS_SHM_VARS; ++i)
         writeLog(i);
 
@@ -96,7 +96,7 @@ void InterfaceStatistics::init()
             {
                 lock_guard<std::mutex> l(mt);
                 turn = !turn;
-                //更新时间点
+                //update time
                 if (!shutdownThread)
                     timeArray[turn] = chrono::system_clock::now();
             }
@@ -130,7 +130,7 @@ void InterfaceStatistics::interfaceCalled(const std::string &key, const int &tim
 
 void InterfaceStatistics::writeLog(int i)
 {
-    //写日志，清空hashmap
+    //write log and truncate hashmap
     if (!shmHashMapArray[i].empty())
     {
         auto t = chrono::system_clock::to_time_t(timeArray[i]);

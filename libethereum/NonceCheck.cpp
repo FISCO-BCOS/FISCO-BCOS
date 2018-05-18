@@ -43,14 +43,14 @@ void NonceCheck::init(BlockChain const& _bc)
 
 }//fun 
 
-//这个地方的生成算法 是可变的，但感觉不用加上blocklimit? blocklimit 在交易进块之前做就可以了，和nonce校验分开
+
 std::string NonceCheck::generateKey(Transaction const & _t)
 {   
     Address account=_t.from();
     std::string key=toHex(account.ref());
     key += "_"+toString(_t.randomid());
 
-    return key; //可读性好些，计算sha256也可以 
+    return key; 
 }
 
 bool NonceCheck::ok(Transaction const & _transaction,bool _needinsert)
@@ -91,7 +91,7 @@ void NonceCheck::delCache( Transactions const & _transcations)
 
 
 
-void NonceCheck::updateCache(BlockChain const& _bc,bool _rebuild/*是否强制rebuild */)
+void NonceCheck::updateCache(BlockChain const& _bc,bool _rebuild)
 { 
   
     DEV_WRITE_GUARDED(m_lock)
@@ -99,9 +99,9 @@ void NonceCheck::updateCache(BlockChain const& _bc,bool _rebuild/*是否强制re
         try
         {
             Timer timer;
-            unsigned lastnumber=_bc.number();//最新的块号
+            unsigned lastnumber=_bc.number();
 
-             //第一步，先保存上一次的
+             
             unsigned prestartblk=m_startblk;
             unsigned preendblk=m_endblk;
 
@@ -112,17 +112,17 @@ void NonceCheck::updateCache(BlockChain const& _bc,bool _rebuild/*是否强制re
                 m_startblk=0;
            
             LOG(TRACE)<<"NonceCheck::updateCache m_startblk="<<m_startblk<<",m_endblk="<<m_endblk<<",prestartblk="<<prestartblk<<",preendblk="<<preendblk<<",_rebuild="<<_rebuild;
-            if( _rebuild ) // 如果是直接重建
+            if( _rebuild ) 
             {
-                m_cache.clear();//直接清空，重建，避免在切链的时候或者启动的时候工作量太大
-                preendblk=0;//让下面的for循环取到m_startblk开始
+                m_cache.clear();
+                preendblk=0;
             }
             else
             {
-                //第二步 淘汰掉 窗口外的
+                
                  for( unsigned  i=prestartblk;i<m_startblk;i++)
                 {
-                    h256 blockhash=_bc.numberHash(i);//先拿到块hash
+                    h256 blockhash=_bc.numberHash(i);
 
                     std::vector<bytes> bytestrans=_bc.transactions(blockhash);
                     for( unsigned j=0;j<bytestrans.size();j++)
@@ -136,10 +136,10 @@ void NonceCheck::updateCache(BlockChain const& _bc,bool _rebuild/*是否强制re
                 }//for
             }
            
-            //第三步 新增  注意这里的条件 避免重复执行插入
+            
             for( unsigned  i=std::max(preendblk+1,m_startblk);i<=m_endblk;i++)
             {
-                h256 blockhash=_bc.numberHash(i);//先拿到块hash
+                h256 blockhash=_bc.numberHash(i);
 
                 std::vector<bytes> bytestrans=_bc.transactions(blockhash);
                 for( unsigned j=0;j<bytestrans.size();j++)

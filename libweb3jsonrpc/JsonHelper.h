@@ -73,7 +73,7 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
 LogFilter toLogFilter(Json::Value const& _json);
 LogFilter toLogFilter(Json::Value const& _json, Interface const& _client);	// commented to avoid warning. Uncomment once in use @ PoC-7.
 
-//以name方式调用的参数信息
+//for name call
 struct CnsParams
 {
 	CnsParams():jParams(Json::nullValue)

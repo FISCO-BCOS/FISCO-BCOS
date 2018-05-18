@@ -364,8 +364,7 @@ void NodeTable::noteActiveNode(Public const& _pubk, bi::udp::endpoint const& _en
 				}
 			}
 			
-			//if (removed)
-			//		LOG(WARNING) << "DANGER: Bucket overflow when swapping node position.";
+			
 
 			if (s.nodes.size() >= s_bucketSize)
 			{
