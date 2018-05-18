@@ -16,21 +16,21 @@
 1. **下载代码**
 
    ```shell
-   git clone https://github.com/fisco-bcos/fisco-bcos
+   https://github.com/FISCO-BCOS/FISCO-BCOS.git
    ```
 
 2. **执行build**
 
    ```shell
-   $ cd fisco-bcos
-   $ chmod +x build.sh 
-   $ ./build.sh
+   cd FISCO-BCOS
+   chmod +x build.sh 
+   ./build.sh
    ```
-   如看到如下的提示说明：FISCO BCOS安装完毕
-   ```
+      如看到如下的提示说明：FISCO BCOS安装完毕
+   ```log
    fisco-bcos build succ! path: /usr/local/bin/fisco-bcos
    ```
-   
+
    说明：可执行文件安装路径：/usr/local/bin/fisco-bcos
 
 
