@@ -16,7 +16,7 @@ This manual helps FISCO BCOS beginners get started quickly.  FISCO BCOS provides
 1. **Download source code**
 
    ```shell
-   https://github.com/FISCO-BCOS/FISCO-BCOS.git
+   git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git
    ```
 
 2. **Run *build.sh***
