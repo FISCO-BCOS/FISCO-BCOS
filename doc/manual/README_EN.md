@@ -264,7 +264,7 @@ vim /mydata/nodedata-1/config.json
 		"Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
 		"Nodedesc": "node1",
 		"Agencyinfo": "node1",
-		"Peerip": "0.0.0.0",
+		"Peerip": "127.0.0.1",
 		"Identitytype": 1,
 		"Port":30303,
 		"Idx":0
@@ -405,7 +405,7 @@ vim /mydata/nodedata-1/config.json
                 "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
                 "Nodedesc": "node1",
                 "Agencyinfo": "node1",
-                "Peerip": "0.0.0.0",
+                "Peerip": "127.0.0.1",
                 "Identitytype": 1,
                 "Port":30303,
                 "Idx":0
@@ -900,7 +900,7 @@ vim /mydata/nodedata-2/config.json
 	    "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
 	    "Nodedesc": "node1",
 	    "Agencyinfo": "node1",
-	    "Peerip": "0.0.0.0",
+	    "Peerip": "127.0.0.1",
 	    "Identitytype": 1,
 	    "Port":30303,
 	    "Idx":0
@@ -909,7 +909,7 @@ vim /mydata/nodedata-2/config.json
 	    "Nodeid":"838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c",
 	    "Nodedesc": "node2",
 	    "Agencyinfo": "node2",
-	    "Peerip": "0.0.0.0",
+	    "Peerip": "127.0.0.1",
 	    "Identitytype": 1,
 	    "Port":30403,
 	    "Idx":1
@@ -1011,7 +1011,7 @@ vim /mydata/nodedata-2/config.json
                 "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
                 "Nodedesc": "node1",
                 "Agencyinfo": "node1",
-                "Peerip": "0.0.0.0",
+                "Peerip": "127.0.0.1",
                 "Identitytype": 1,
                 "Port":30303,
                 "Idx":0
@@ -1020,7 +1020,7 @@ vim /mydata/nodedata-2/config.json
                 "Nodeid":"838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c",
                 "Nodedesc": "node2",
                 "Agencyinfo": "node2",
-                "Peerip": "0.0.0.0",
+                "Peerip": "127.0.0.1",
                 "Identitytype": 1,
                 "Port":30403,
                 "Idx":1
