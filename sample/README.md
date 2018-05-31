@@ -16,7 +16,7 @@
 1. **下载代码**
 
    ```shell
-   https://github.com/FISCO-BCOS/FISCO-BCOS.git
+   git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git
    ```
 
 2. **执行build**
