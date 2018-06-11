@@ -20,7 +20,8 @@
  * @author Tasha Carl <tasha@carl.pro> - I here by place all my contributions in this file under MIT licence, as specified by http://opensource.org/licenses/MIT.
  * @date 2014
  * Ethereum client.
-
+ * @author toxotguo
+ * @date 2018
  */
 
 #include <thread>
@@ -37,7 +38,6 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
 
-//#include <libethashseal/EthashAux.h>
 #include <libevm/VM.h>
 #include <libevm/VMFactory.h>
 #include <libethcore/KeyManager.h>
@@ -45,12 +45,10 @@
 #include <libethereum/All.h>
 #include <libethereum/BlockChainSync.h>
 #include <libethereum/NodeConnParamsManagerApi.h>
-//#include <libethashseal/EthashClient.h>
 #include <libpbftseal/PBFT.h>
 #include <libsinglepoint/SinglePointClient.h>
 #include <libsinglepoint/SinglePoint.h>
 #include <libraftseal/Raft.h>
-//#include <libethashseal/GenesisInfo.h>
 #include <libwebthree/WebThree.h>
 
 #include <libweb3jsonrpc/AccountHolder.h>
@@ -76,10 +74,13 @@
 #include "AccountManager.h"
 #include <libdevcore/easylog.h>
 
-#include <libdiskencryption/CryptoParam.h>//读取加密方式配置文件
-#include <libdiskencryption/GenKey.h>//生成nodekey及datakey文件
+#include <libdiskencryption/CryptoParam.h>
+#include <libdiskencryption/GenKey.h>
+#include <libdiskencryption/EncryptFile.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
 #include <libweb3jsonrpc/RPCallback.h>
+#include <libdevcrypto/sm2/sm2.h>
+#include <libdevcrypto/Common.h>
 
 INITIALIZE_EASYLOGGINGPP
 
@@ -221,23 +222,6 @@ void version()
 	cout << "FISCO-BCOS network protocol version: " << dev::eth::c_protocolVersion << "\n";
 	cout << "Client database version: " << dev::eth::c_databaseVersion << "\n";
 	cout << "Build: " << DEV_QUOTED(ETH_BUILD_PLATFORM) << "/" << DEV_QUOTED(ETH_BUILD_TYPE) << "\n";
-	exit(0);
-}
-
-void generateNetworkRlp(string sFilePath)
-{
-	KeyPair kp = KeyPair::create();
-	RLPStream netData(3);
-	netData << dev::p2p::c_protocolVersion << kp.secret().ref();
-	int count = 0;
-	netData.appendList(count);
-
-	writeFile(sFilePath, netData.out());
-	writeFile(sFilePath + ".pub", kp.pub().hex());
-
-	cout << "eth generate network.rlp. " << "\n";
-	cout << "eth public id is :[" << kp.pub().hex() << "]" << "\n";
-	cout << "write into file [" << sFilePath << "]" << "\n";
 	exit(0);
 }
 
@@ -556,7 +540,7 @@ int main(int argc, char** argv)
 	/// Mining params
 	unsigned mining = ~(unsigned)0;
 	Address author;
-	LOG(TRACE) << " Main:: author: " << author;
+	//cout << " Main:: author: " << author;
 	strings presaleImports;
 	bytes extraData;
 
@@ -1024,72 +1008,107 @@ int main(int argc, char** argv)
 		{
 			setCaInitType(argv[++i]);
 		}
-		else if (arg == "--gennetworkrlp")
+		else if (arg == "--newaccount")//
 		{
-			//string sFilePath = argv[++i];
-			//generateNetworkRlp(sFilePath);
+#if ETH_ENCRYPTTYPE
+			SM2::getInstance().genKey();
+			string privateKey = SM2::getInstance().getPrivateKey();
+			string publicKey = SM2::getInstance().getPublicKey();
+			Address _address = dev::toAddress(Public{fromHex(publicKey)});
+			string _str = "\naddress:0x" + _address.hex() + "\npublicKey:" + publicKey + "\nprivateKey:" + privateKey;
+			LOG(DEBUG)<<_str;
+			if (argc <= 2)
+			{
+				writeFile("./godInfo.txt",_str);
+			}
+			else
+			{
+				writeFile(argv[++i],_str);
+			}
+#else
+			KeyPair kp = KeyPair::create();
+			string privateKey = toHex(kp.secret().ref());
+			string publicKey = kp.pub().hex();
+			Address _address = dev::toAddress(Public{fromHex(publicKey)});
+			string _str = "\naddress:0x" + _address.hex() + "\npublicKey:" + publicKey + "\nprivateKey:" + privateKey;
+			LOG(DEBUG)<<_str;
+			if (argc <= 2)
+			{
+				writeFile("./godInfo.txt",_str);
+			}
+			else
+			{
+				writeFile(argv[++i],_str);
+			}
+#endif
+			exit(0);
+		}
+		else if (arg == "--cryptokey")
+		{
+			/* 对data目录下的node.key node.private 用data目录下的cryptomod.json中配置的superkey加密
+			*  在data目录下生成node.ckey和node.cpivate
+			*  同时也生成data.ckey
+			*/
 			string sFilePath = argv[++i];
-			cout << "sFilePath:" << sFilePath << "\n"; //获取文件路径
 			LOG(DEBUG) << "sFilePath:" << sFilePath;
 			if (!sFilePath.empty())
 			{
 				CryptoParam cryptoParam;
 				cryptoParam = cryptoParam.loadDataCryptoConfig(sFilePath);
-
-				cout << "cryptoMod:" << cryptoParam.m_cryptoMod << "\n"; //加密模式
-				cout << "kcUrl:" << cryptoParam.m_kcUrl << "\n"; //keycenter加密时访问地址
-				cout << "nodekeyPath:" << cryptoParam.m_nodekeyPath << "\n"; //nodekey生成路径
-				cout << "datakeyPath:" << cryptoParam.m_datakeyPath << "\n"; //datakey生成路径
-
-				LOG(DEBUG) << "cryptoMod:" << cryptoParam.m_cryptoMod;
-				LOG(DEBUG) << "kcUrl:" << cryptoParam.m_kcUrl;
-				LOG(DEBUG) << "nodekeyPath:" << cryptoParam.m_nodekeyPath;
-				LOG(DEBUG) << "datakeyPath:" << cryptoParam.m_datakeyPath;
-
-				//根据加密模式  可选配
+				boost::filesystem::path _file(sFilePath);
+				boost::filesystem::path _path = boost::filesystem::system_complete(_file);
+				setDataDir(_path.parent_path().string());
+				int cryptoMod = cryptoParam.m_cryptoMod;
+				string superKey = cryptoParam.m_superKey;
+				string kcUrl = cryptoParam.m_kcUrl;
+				LOG(DEBUG)<<"cryptmod.json Path:"<<_path.parent_path()<<" cryptoMod:"<<cryptoMod<<" kcUrl:"<<kcUrl;
+				if (cryptoMod != 0)
+				{
+					EncryptFile _encryptFile(cryptoMod,superKey,kcUrl);
+					_encryptFile.encryptFile(EncryptFile::FILE_NODECERTKEY);
+					_encryptFile.encryptFile(EncryptFile::FILE_NODEPRIVATE);
+					_encryptFile.encryptFile(EncryptFile::FILE_DATAKEY);
+#if ETH_ENCRYPTTYPE
+					_encryptFile.encryptFile(EncryptFile::FILE_ENNODECERTKEY);
+#endif
+				}
+				exit(0);
+			}
+			else
+			{
+				LOG(ERROR)<< "--cryptokey parameter err";
+				exit(-1);
+			}
+		}
+		else if (arg == "--gennetworkrlp")
+		{
+			string sFilePath = argv[++i];
+			LOG(DEBUG) << "sFilePath:" << sFilePath;
+			if (!sFilePath.empty())
+			{
+				CryptoParam cryptoParam;
+				cryptoParam = cryptoParam.loadDataCryptoConfig(sFilePath);
+				LOG(DEBUG) << "cryptoMod:"<<cryptoParam.m_cryptoMod <<" kcUrl:"<<cryptoParam.m_kcUrl<< " nodekeyPath:"<<cryptoParam.m_nodekeyPath<<" datakeyPath:"<<cryptoParam.m_datakeyPath;
+				if (cryptoParam.m_nodekeyPath == "" || cryptoParam.m_datakeyPath == "")
+				{
+					LOG(ERROR)<<"nodeKeyPath or dataKeyPath is null";
+					exit(-1);
+				}
 				GenKey genKey;
 				genKey.setCryptoMod(cryptoParam.m_cryptoMod);
 				genKey.setKcUrl(cryptoParam.m_kcUrl);
 				genKey.setSuperKey(cryptoParam.m_superKey);
 				genKey.setNodeKeyPath(cryptoParam.m_nodekeyPath);
 				genKey.setDataKeyPath(cryptoParam.m_datakeyPath);
-				genKey.setKeyData();//生成datakey及nodekey文件
+				genKey.setKeyData();//gen datakey and nodekey file
 				exit(0);
 			}
 			else
 			{
-				cout << "--gennetworkrlp parameter err" << "\n";
+				LOG(ERROR)<< "--gennetworkrlp parameter err";
 				exit(-1);
 			}
-		}
-		else if (arg == "--enprivatekey")
-		{
-			string sFilePath = argv[++i];
-			cout << "sFilePath:" << sFilePath << "\n"; //获取文件路径
-			LOG(DEBUG) << "sFilePath:" << sFilePath;
-
-			if (!sFilePath.empty())
-			{
-				CryptoParam cryptoParam;
-				cryptoParam = cryptoParam.loadDataCryptoConfig(sFilePath);
-				cout << "privatekeyPath:" << cryptoParam.m_privatekeyPath << "\n"; //私钥文件路径
-				cout << "kcUrl:" << cryptoParam.m_kcUrl << "\n"; //keycenter加密时访问地址
-				cout << "enprivatekeyPath:" << cryptoParam.m_enprivatekeyPath << "\n";
-				//根据加密模式  可选配
-				GenKey genKey;
-				genKey.setPrivateKeyPath(cryptoParam.m_privatekeyPath);
-				genKey.setEnPrivateKeyPath(cryptoParam.m_enprivatekeyPath);
-				genKey.setKcUrl(cryptoParam.m_kcUrl);
-				genKey.setPrivateKey();
-				exit(0);
-			}
-			else
-			{
-				cout << "--enprivatekey parameter err" << "\n";
-				exit(-1);
-			}
-		}
-		else if (arg == "--test")
+		}else if (arg == "--test")
 		{
 			testingMode = true;
 			enableDiscovery = false;
@@ -1160,7 +1179,8 @@ int main(int argc, char** argv)
 			}
 			if ( chainParams.godMinerEnd <= chainParams.godMinerStart  )
 			{
-				LOG(ERROR) << "god mode config invalid godMinerEnd<=godMinerStart " << "\n";
+
+				LOG(ERROR) << "god mode config invalid godMinerEnd<=godMinerStart!!! " << "\n";
 				exit(-1);
 			}
 			if (  chainParams.godMinerList.size() < 1 )
@@ -1206,12 +1226,8 @@ int main(int argc, char** argv)
 		chainParams.difficulty = chainParams.u256Param("minimumDifficulty");
 		chainParams.gasLimit = u256(1) << 32;
 	}
-	// TODO: Open some other API path
-//	if (gasFloor != Invalid256)
-//		c_gasFloorTarget = gasFloor;
 
-
-	cout << EthGrayBold "---------------cpp-ethereum, a C++ Ethereum client--------------" EthReset << "\n";
+	cout << EthGrayBold "---------------FISCO BCOS--------------" EthReset << "\n";
 
 	chainParams.otherParams["allowFutureBlocks"] = "1";//默认打开
 	if (testingMode)
@@ -1230,13 +1246,12 @@ int main(int argc, char** argv)
 		bootstrap = false;
 	}
 
-	//以配置文件中为准
-
 	cout << "RPCPORT:" << chainParams.rpcPort << "\n";
-	cout << "SSLRPCPORT" << chainParams.rpcSSLPort << "\n";
+	cout << "SSLRPCPORT:" << chainParams.rpcSSLPort << "\n";
 	cout << "CHANNELPORT:" << chainParams.channelPort << "\n";
 	cout << "LISTENIP:" << chainParams.listenIp << "\n";
 	cout << "P2PPORT:" << chainParams.p2pPort << "\n";
+	cout << "SSL:" << chainParams.ssl << "\n";
 	cout << "WALLET:" << chainParams.wallet << "\n";
 	cout << "KEYSTOREDIR:" << chainParams.keystoreDir << "\n";
 	cout << "DATADIR:" << chainParams.dataDir << "\n";
@@ -1284,9 +1299,6 @@ int main(int argc, char** argv)
 
 	cout << EthGrayBold "---------------------------------------------------------------" EthReset << "\n";
 
-
-	//m.execute();
-
 	std::string secretsPath;
 	if (testingMode)
 		secretsPath = chainParams.keystoreDir; // (boost::filesystem::path(getDataDir()) / "keystore").string();
@@ -1297,8 +1309,7 @@ int main(int argc, char** argv)
 	for (auto const& s : passwordsToNote)
 		keyManager.notePassword(s);
 
-	// the first value is deprecated (never used)
-	//writeFile(configFile, rlpList(author, author));
+
 
 	if (!clientName.empty())
 		clientName += "/";
@@ -1315,54 +1326,19 @@ int main(int argc, char** argv)
 		g_silence = s;
 		return ret;
 	};
-	/*auto getResponse = [&](string const& prompt, unordered_set<string> const& acceptable) {
-		bool s = g_silence;
-		g_silence = true;
-		cout << "\n";
-		string ret;
-		while (true)
-		{
-			cout << prompt;
-			getline(cin, ret);
-			if (acceptable.count(ret))
-				break;
-			cout << "Invalid response: " << ret << "\n";
-		}
-		g_silence = s;
-		return ret;
-	};*/
+	
 	auto getAccountPassword = [&](Address const & ) {
 
 		cout << "！！！！！！please unlock account by web3！！！！！" << "\n";
 		return string();
-
-		//return getPassword("Enter password for address " + keyManager.accountName(a) + " (" + a.abridged() + "; hint:" + keyManager.passwordHint(a) + "): ");
 	};
 
 	auto netPrefs = publicIP.empty() ? NetworkPreferences(listenIP, listenPort, upnp) : NetworkPreferences(publicIP, listenIP , listenPort, upnp);
 	netPrefs.discovery = (privateChain.empty() && !disableDiscovery) || enableDiscovery;
 	netPrefs.pin = (pinning || !privateChain.empty()) && !noPinning;
 
-	//底层SSL连接
-	dev::setSSL(chainParams.ssl);//设置是否启用SSL功能
-	dev::setCryptoPrivateKeyMod(chainParams.cryptoprivatekeyMod);//设置私钥加密方式
-
-	GenKey genKey;
-	CryptoParam cryptoParam;
-	if (chainParams.cryptoprivatekeyMod != 0)//私钥是否使用keycenter加密
-	{
-		cryptoParam = cryptoParam.loadDataCryptoConfig(getDataDir() + "/cryptomod.json");//获取加密配置文件
-		genKey.setKcUrl(cryptoParam.m_kcUrl);//keycenter连接地址
-	}
-	if (chainParams.ssl != 0)
-	{
-		string privateKey = genKey.getPrivateKey();//获取证书私钥文件
-		if (privateKey.empty())
-		{
-			cout << "server.key file err......................" << "\n";
-			exit(-1);
-		}
-	}
+	dev::setSSL(chainParams.ssl);//ssl mod
+	dev::setCryptoMod(chainParams.cryptoMod);//diskcrypt
 
 	//auto nodesState = contents(getDataDir() + "/network.rlp");
 	//添加落盘加密代码
@@ -1371,15 +1347,42 @@ int main(int argc, char** argv)
 	{
 		GenKey genKey;
 		CryptoParam cryptoParam;
-		cryptoParam = cryptoParam.loadDataCryptoConfig(getDataDir() + "/cryptomod.json");//获取加密配置文件
-
-		genKey.setCryptoMod(cryptoParam.m_cryptoMod);
-		genKey.setKcUrl(cryptoParam.m_kcUrl);
-		genKey.setSuperKey(cryptoParam.m_superKey);
-		genKey.setNodeKeyPath(cryptoParam.m_nodekeyPath);
-		genKey.setDataKeyPath(cryptoParam.m_datakeyPath);
-		nodesState = genKey.getKeyData();//获取明文nodekey数据并把datakey数据存放在内存中
-		LOG(DEBUG) << "Begin Crypto Data With Mode:" << chainParams.cryptoMod;
+		string _filePath = getDataDir() + "/cryptomod.json";
+		if(boost::filesystem::exists(_filePath) && boost::filesystem::is_regular_file(_filePath))
+		{
+			cryptoParam = cryptoParam.loadDataCryptoConfig(_filePath);
+			int cryptoMod = cryptoParam.m_cryptoMod;
+			string superKey = cryptoParam.m_superKey;
+			string kcUrl = cryptoParam.m_kcUrl;
+			LOG(DEBUG) << "cryptoMod:" << cryptoMod<<" kcUrl:"<<kcUrl;
+			if(chainParams.ssl == SSL_SOCKET_V2) //new diskencrypt
+			{
+				EncryptFile _encryptFile(cryptoMod,superKey,kcUrl);
+				string dataKey = _encryptFile.getDataKey();
+				if (dataKey == "")
+				{
+					LOG(ERROR)<<"datakey.encrypt data is null";
+					exit(-1);
+				}
+				dev::setDataKey(dataKey.substr(0,8),dataKey.substr(8,8),dataKey.substr(16,8),dataKey.substr(24,8));
+				dev::setCryptoMod(cryptoMod);
+			}
+			else//old diskencrypt
+			{
+				GenKey genKey;
+				genKey.setCryptoMod(cryptoParam.m_cryptoMod);
+				genKey.setKcUrl(cryptoParam.m_kcUrl);
+				genKey.setSuperKey(cryptoParam.m_superKey);
+				genKey.setNodeKeyPath(cryptoParam.m_nodekeyPath);
+				genKey.setDataKeyPath(cryptoParam.m_datakeyPath);
+				nodesState = genKey.getKeyData();//get nodekey and datakey decrypt after data
+			}
+		}
+		else
+		{
+			LOG(ERROR)<<_filePath + " is not exist";
+			exit(-1);
+		}
 	}
 	else
 	{
@@ -1406,8 +1409,6 @@ int main(int argc, char** argv)
 
 	channelServer->setHost(web3.ethereum()->host());
 	web3.ethereum()->host().lock()->setWeb3Observer(channelServer->buildObserver());
-
-	cout << "NodeID=" << toString(web3.id()) << "\n";
 
 	if (!extraData.empty())
 		web3.ethereum()->setExtraData(extraData);
@@ -1629,9 +1630,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	for (auto const& presale : presaleImports)
-		importPresale(keyManager, presale, [&]() { return getPassword("Enter your wallet password for " + presale + ": "); });
-
+	
 	for (auto const& s : toImport)
 	{
 		keyManager.import(s, "Imported key (UNSAFE)");
@@ -1762,43 +1761,6 @@ int main(int argc, char** argv)
 			// 这个地方要判断rpc启动的返回
 		}
 
-		if (jsonRPCSSLURL >= 0)
-		{
-			rpc::AdminEth* adminEth = nullptr;
-			rpc::PersonalFace* personal = nullptr;
-			rpc::AdminNet* adminNet = nullptr;
-			rpc::AdminUtils* adminUtils = nullptr;
-			if (adminViaHttp)
-			{
-				personal = new rpc::Personal(keyManager, *accountHolder, *web3.ethereum());
-				adminEth = new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get());
-				adminNet = new rpc::AdminNet(web3, *sessionManager.get());
-				adminUtils = new rpc::AdminUtils(*sessionManager.get());
-			}
-
-			jsonrpcHttpsServer.reset(new FullServer(
-			                             ethFace, new rpc::LevelDB(), new rpc::Whisper(web3, {}),
-			                             new rpc::Net(web3), new rpc::Web3(web3.clientVersion()), personal,
-			                             adminEth, adminNet, adminUtils,
-			                             new rpc::Debug(*web3.ethereum()),
-			                             testEth
-			                         ));
-			auto httpConnector = new SafeHttpServer(jsonRPCSSLURL, getDataDir() + "/server.crt", getDataDir() + "/server.key", SensibleHttpThreads, limitConfigJSON);
-			httpConnector->setNode(strNodeId);
-			httpConnector->setGroup(strGroupId);
-			httpConnector->setStoragePath(strStoragePath);
-			httpConnector->setEth(web3.ethereum());
-			httpConnector->setAllowedOrigin(rpcCorsDomain);
-			jsonrpcHttpsServer->addConnector(httpConnector);
-			jsonrpcHttpsServer->setStatistics(new InterfaceStatistics(getDataDir() + "RPCSSL", chainParams.statsInterval));
-			if ( false == jsonrpcHttpsServer->StartListening() )
-			{
-				cout << "RPC SSL StartListening Fail!!!!" << "\n";
-				//exit(0);
-			}
-
-			// 这个地方要判断rpc ssl启动的返回
-		}
 
 		if (ipc)
 		{
@@ -1860,9 +1822,7 @@ int main(int argc, char** argv)
 		else
 			web3.addNode(p.first, p.second.first);
 
-	if (bootstrap && privateChain.empty())
-		for (auto const& i : Host::pocHosts())
-			web3.requirePeer(i.first, i.second);
+
 	if (!remoteHost.empty())
 		web3.addNode(p2p::NodeID(), remoteHost + ":" + toString(remotePort));
 

@@ -401,13 +401,12 @@ public:
 	}
 
 	virtual void onTopicMessage(std::shared_ptr<EthereumPeer> peer, int type, int seq, std::shared_ptr<std::vector<std::string> > topics) {
-		LOG(DEBUG) <<" Recv topic type:" << type << " seq:" << seq << " topics:" << topics->size();
 
+		LOG(DEBUG) <<" Recv topic type:" << type << " seq:" << seq << " topics:" << topics->size();
 		switch (type) {
 		case 0: 
 		{
 			if (peer->getTopicsSeq() != seq) {
-				
 				LOG(DEBUG) << "peer seq:" << seq << " local seq:" << peer->getTopicsSeq() << "request lastest topics";
 				_host->sendTopicsMessage(peer->id(), 1, 0, std::make_shared<std::set<std::string> >());
 			}
@@ -422,9 +421,9 @@ public:
 		}
 		case 2: 
 		{
-			LOG(DEBUG) << "Recv peer:" << peer->id() << "  topics sum:" << topics->size();
+			LOG(TRACE) << "Recv peer:" << peer->id() << "  topics sum:" << topics->size();
 			for (auto it : *topics) {
-				LOG(DEBUG) << "topic:" << it;
+				LOG(TRACE) << "topic:" << it;
 			}
 
 			peer->setTopicsSeq(seq);
@@ -959,7 +958,7 @@ void EthereumHost::sendTopicsMessage(p2p::NodeID nodeID, int type, int seq, std:
 		});
 	}
 
-	LOG(DEBUG) << "topics  Send to:" << peerSended << " nodes";
+	LOG(DEBUG) << "topics Send to:" << peerSended << " nodes";
 	if (peerSended == 0) {
 		LOG(ERROR) << "Send Fail, no available node";;
 		

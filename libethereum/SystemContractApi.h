@@ -1,24 +1,23 @@
 /*
-	This file is part of cpp-ethereum.
+	This file is part of FISCO-BCOS.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
+	FISCO-BCOS is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
+	FISCO-BCOS is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+	along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: SystemContractApi.h
- * @author: fisco-dev
- * 
- * @date: 2017
+ * @author: toxotguo
+ * @date: 2018
  */
 
 #pragma once
@@ -37,6 +36,32 @@ namespace dev
 {
 namespace eth
 {
+
+class Client;
+
+enum class FilterType {
+    Account,
+    Node
+};
+
+enum class SystemContractCode;
+
+using Address = h160;
+
+
+/**
+ * @brief Main API hub for System Contract
+ */
+//过滤器
+struct SystemFilter {
+    Address filter;
+    string  name;
+};
+//行为合约
+struct SystemAction {
+    Address action;
+    string  name;
+};
 
 enum class SystemContractCode
 {
@@ -57,7 +82,7 @@ enum class SystemContractCode
     Other
 };
 
-using Address = h160;
+
 
 /**
  * @brief Main API hub for System Contract
@@ -98,9 +123,15 @@ class SystemContractApi
 	virtual void updateCache(Address) {};
     virtual void startStatTranscation(h256){}
 	
-    virtual void getAllNode(int  ,std::vector< NodeConnParams> & )
-    {        
-    }
+    /*
+    *   从系统合约中拉取所有的节点信息，提供接口给NodeConnParamsManager
+    *   NodeConnParamsManager封装接口将核心节点列表出来给到共识
+    *   SystemContract 负责缓存及处理回调更新 NodeConnParamsManager只处理逻辑即可，逻辑需要拉取列表的时候到SystemContract实时拉取
+    */
+    virtual void getAllNode(int  /*<0  代表最新块*/ ,std::vector< NodeConnParams> & ){}
+    //for ssl 
+    virtual void getAllNode(int  /*<0  代表最新块*/ ,std::vector< NodeParams> & ){}
+
     virtual u256 getBlockChainNumber()
     {
         return 0;

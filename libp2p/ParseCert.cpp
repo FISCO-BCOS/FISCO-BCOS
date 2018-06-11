@@ -78,15 +78,15 @@ void ParseCert::ParseInfo(ba::ssl::verify_context& ctx)
 	BASIC_CONSTRAINTS *bcons = NULL;
 	int crit = 0;
 	bcons = (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
-	if (bcons->ca)
-	{  
-		m_certType = 0;
-	}
-	else
+	m_certType = 0;
+	if (bcons != NULL)
 	{
-		m_certType = 1;
+		if (bcons->ca == false)
+		{  
+			m_certType = 1;
+		}
+		BASIC_CONSTRAINTS_free(bcons);
 	}
-	BASIC_CONSTRAINTS_free(bcons);
 }
 
 int ParseCert::mypint( const char ** s,int n,int min,int max,int * e)

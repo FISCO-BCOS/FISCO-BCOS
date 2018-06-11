@@ -32,6 +32,7 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/Exceptions.h>
 #include <libp2p/Host.h>
+#include <libp2p/HostSSL.h>
 #include <libwhisper/WhisperHost.h>
 #include <libethereum/Client.h>
 #include <libethereum/ChainParams.h>
@@ -191,7 +192,7 @@ public:
 	/// Experimental. Sets ceiling for incoming connections to multiple of ideal peer count.
 	void setPeerStretch(size_t _n);
 
-	bool haveNetwork() const override { return m_net.haveNetwork(); }
+	bool haveNetwork() const override { return m_net->haveNetwork(); }
 
 	p2p::NetworkPreferences const& networkPreferences() const override;
 
@@ -199,37 +200,37 @@ public:
 
 	ba::io_service* ioService();
 
-	p2p::NodeInfo nodeInfo() const override { return m_net.nodeInfo(); }
+	p2p::NodeInfo nodeInfo() const override { return m_net->nodeInfo(); }
 
-	p2p::NodeID id() const override { return m_net.id(); }
+	p2p::NodeID id() const override { return m_net->id(); }
 
 	u256 networkId() const override { return m_ethereum.get()->networkId(); }
 
-	std::string enode() const override { return m_net.enode(); }
+	std::string enode() const override { return m_net->enode(); }
 
-	bool getSelfSignData(Signature &_sign) const { return m_net.getSelfSignData(_sign); }
+	//bool getSelfSignData(Signature &_sign) const { return m_net->getSelfSignData(_sign); }
 
-	void disconnectByNodeId(const std::string &sNodeId) { return m_net.disconnectByNodeId(sNodeId); }
+	void disconnectByNodeId(const std::string &sNodeId) { return m_net->disconnectByNodeId(sNodeId); }
 
 	/// Gets the nodes.
-	p2p::Peers nodes() const override { return m_net.getPeers(); }
+	p2p::Peers nodes() const override { return m_net->getPeers(); }
 
 	/// Start the network subsystem.
-	void startNetwork() override { m_net.start(); }
+	void startNetwork() override { m_net->start(); }
 
 	/// Stop the network subsystem.
-	void stopNetwork() override { m_net.stop(); }
+	void stopNetwork() override { m_net->stop(); }
 
 	/// Is network working? there may not be any peers yet.
-	bool isNetworkStarted() const override { return m_net.isStarted(); }
+	bool isNetworkStarted() const override { return m_net->isStarted(); }
 
-	p2p::Host const& net() {return m_net;}
+	p2p::HostApi const& net() {return *m_net;}
 
 private:
 	std::string m_clientVersion;					///< Our end-application client's name/version.
 
-	p2p::Host m_net;								///< Should run in background and send us events when blocks found and allow us to send blocks as required.
-
+	//p2p::HostApi m_net;								///< Should run in background and send us events when blocks found and allow us to send blocks as required.
+	HostApi*	m_net;
 	std::unique_ptr<eth::Client> m_ethereum;		///< Client for Ethereum ("eth") protocol.
 	std::weak_ptr<shh::WhisperHost> m_whisper;		///< Client for Whisper ("shh") protocol.
 	std::shared_ptr<bzz::Client> m_swarm;			///< Client for Swarm ("bzz") protocol.

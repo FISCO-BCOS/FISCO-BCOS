@@ -1,24 +1,25 @@
 /*
-	This file is part of cpp-ethereum.
+	This file is part of FISCO-BCOS.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
+	FISCO-BCOS is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
+	FISCO-BCOS is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+	along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: ChannelRPCServer.cpp
  * @author: fisco-dev
- * 
  * @date: 2017
+ * @author: toxotguo
+ * @date: 2018
  */
 
 #include "ChannelRPCServer.h"
@@ -50,22 +51,19 @@ bool ChannelRPCServer::StartListening() {
 	{
 		LOG(INFO) << "start listen: " << _listenAddr << ":" << _listenPort;
 
-		_ioService = std::make_shared<boost::asio::io_service>();
-		std::shared_ptr<boost::asio::ssl::context> sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
-
-		sslContext->load_verify_file(getDataDir() + "ca.crt");
-		sslContext->use_certificate_chain_file(getDataDir() + "server.crt");
-		sslContext->use_private_key_file(getDataDir() + "server.key", boost::asio::ssl::context_base::pem);
-
-		_server = make_shared<dev::channel::ChannelServer>();
-		_server->setIOService(_ioService);
-		_server->setSSLContext(sslContext);
-
-		_server->setEnableSSL(true);
-		_server->setBind(_listenAddr, _listenPort);
-
-		std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
-		_server->setConnectionHandler(fp);
+		_ioService = std::make_shared<boost::asio::io_service>(1);
+		
+		if (dev::getSSL() == SSL_SOCKET_V2)
+		{
+#if ETH_ENCRYPTTYPE
+			initContext();
+#else
+			initSSLContext();
+#endif
+		}
+		else{
+			initContext();
+		}
 
 		_server->run();
 
@@ -91,6 +89,70 @@ bool ChannelRPCServer::StartListening() {
 	}
 
 	return true;
+}
+
+void ChannelRPCServer::initContext()
+{
+	string certData = asString( contents( getDataDir() + "/ca.crt") );
+	if (certData == "")
+	{
+		LOG(ERROR)<<"Get ca.crt File Err......................";
+		exit(-1);
+	}
+	certData = asString( contents( getDataDir() + "/server.crt") );
+	if (certData == "")
+	{
+		LOG(ERROR)<<"Get server.crt File Err......................";
+		exit(-1);
+	}
+	certData = asString( contents( getDataDir() + "/server.key") );
+	if (certData == "")
+	{
+		LOG(ERROR)<<"Get server.key File Err......................";
+		exit(-1);
+	}
+	m_sslcontext->load_verify_file(getDataDir() + "ca.crt");
+	m_sslcontext->use_certificate_chain_file(getDataDir() + "server.crt");
+	m_sslcontext->use_private_key_file(getDataDir() + "server.key", boost::asio::ssl::context_base::pem);
+
+	_server = make_shared<dev::channel::ChannelServer>();
+	_server->setIOService(_ioService);
+	_server->setSSLContext(m_sslcontext);
+
+	_server->setEnableSSL(true);
+	_server->setBind(_listenAddr, _listenPort);
+
+	std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
+	_server->setConnectionHandler(fp);
+}
+void ChannelRPCServer::initSSLContext()
+{
+	vector< pair<string,Public> >  certificates;
+	string nodepri;
+	CertificateServer::GetInstance().getCertificateList(certificates,nodepri);
+
+	EC_KEY * ecdh=EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+	SSL_CTX_set_tmp_ecdh(m_sslcontext->native_handle(),ecdh);
+	EC_KEY_free(ecdh);
+
+	m_sslcontext->set_verify_depth(3);
+	m_sslcontext->add_certificate_authority(boost::asio::const_buffer(certificates[0].first.c_str(), certificates[0].first.size()));
+	
+	string chain=certificates[0].first+certificates[1].first;
+	m_sslcontext->use_certificate_chain(boost::asio::const_buffer(chain.c_str(), chain.size()));
+	m_sslcontext->use_certificate(boost::asio::const_buffer(certificates[2].first.c_str(), certificates[2].first.size()),ba::ssl::context::file_format::pem);
+	
+	m_sslcontext->use_private_key(boost::asio::const_buffer(nodepri.c_str(), nodepri.size()),ba::ssl::context_base::pem);
+	
+	_server = make_shared<dev::channel::ChannelServer>();
+	_server->setIOService(_ioService);
+	_server->setSSLContext(m_sslcontext);
+
+	_server->setEnableSSL(true);
+	_server->setBind(_listenAddr, _listenPort);
+
+	std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
+	_server->setConnectionHandler(fp);
 }
 
 bool ChannelRPCServer::StopListening()

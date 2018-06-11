@@ -1,12 +1,10 @@
 {
 	"sealEngine": "PBFT",
 	"systemproxyaddress":"0x0",
-	"systemproxyaddressDfsFile":"",
-	"systemproxyaddressDfsServer":"",
+  	"cryptomod":"0",
 	"listenip":"{ip}",
 	"rpcport":"{rpcport}",
 	"p2pport":"{p2pport}",
-	"rpcsslport":"-1",
 	"channelPort":"{channelPort}",
 	"wallet":"{nodedir}keys.info",
 	"keystoredir":"{nodedir}keystore/",
@@ -16,16 +14,5 @@
 	"logverbosity":"4",
 	"coverlog":"OFF",
 	"eventlog":"ON",
-	"logconf":"{nodedir}log.conf",
-	"dfsNode":"",
-	"dfsGroup":"group1",
-	"dfsStorage":"filestorage",
-	"params": {
-		"accountStartNonce": "0x0",
-		"maximumExtraDataSize": "0x0",
-		"tieBreakingGas": false,
-		"blockReward": "0x0",
-		"networkID" : "0x0"
-	},
-	"NodeextraInfo":{nodeextrainfo}
+	"logconf":"{nodedir}log.conf"
 }

@@ -17,17 +17,17 @@
 /** @file RLPXSocket.h
  * @author Alex Leverington <nessence@gmail.com>
  * @date 2015
+ * @author toxotguo
+ * @date 2018
  */
 
 #pragma once
-
+#include<iostream>
+using namespace std;
 #include "Common.h"
 #include <libdevcore/easylog.h>
 #include <libdevcore/FileSystem.h>
 #include <boost/filesystem.hpp>
-#include <libdiskencryption/GenKey.h>
-#define SSL_SOCKET 1
-#define BASE_SOCKET 0
 
 namespace dev
 {
@@ -42,44 +42,53 @@ namespace p2p
  * Shared objects: Unsafe.
  * * an instance method must not be called concurrently
  */
+class RLPXSocketApi
+{
+	public:
+		virtual bool isConnected() const = 0;
+		virtual void close() = 0;
+		virtual bi::tcp::endpoint remoteEndpoint()  = 0;
+		virtual int getSocketType() = 0;
+		virtual bi::tcp::socket& ref() = 0;
+		virtual ba::ssl::stream<bi::tcp::socket>& sslref() = 0;
+};
 
-class RLPXSocket: public std::enable_shared_from_this<RLPXSocket>
+class RLPXSocket: public RLPXSocketApi,public std::enable_shared_from_this<RLPXSocket>
 {
 public:
 	RLPXSocket(ba::io_service& _ioService)
 	{
-		if (dev::getSSL() == SSL_SOCKET)
+		if (dev::getSSL() == SSL_SOCKET_V1)
 		{
 			LOG(DEBUG)<<"RLPXSocket::m_socketType:1";
-			m_socketType = SSL_SOCKET;
-			ba::ssl::context sslContext(ba::ssl::context::sslv23);
-			GenKey genKey;
-			string certData = genKey.getCaPublicKey();
+			m_socketType = SSL_SOCKET_V1;
+			ba::ssl::context sslContext(ba::ssl::context::tlsv12);
+			string certData = asString( contents( getDataDir() + "/ca.crt") );
 			if (certData != "")
 			{
 				sslContext.add_certificate_authority(boost::asio::const_buffer(certData.c_str(), certData.size()));
 			}
 			else
 			{
-				cout<<"Get CaPublicKey File Err......................"<<"\n";
+				LOG(ERROR)<<"Get ca.crt File Err......................";
 			}
-			certData = genKey.getPublicKey();
+			certData = asString( contents( getDataDir() + "/server.crt") );
 			if (certData != "")
 			{
 				sslContext.use_certificate_chain(boost::asio::const_buffer(certData.c_str(), certData.size()));
 			}
 			else
 			{
-				cout<<"Get PublicKey File Err......................"<<"\n";
+				LOG(ERROR)<<"Get server.crt File Err......................";
 			}
-			certData = dev::getPrivateKey();
+			certData = asString( contents( getDataDir() + "/server.key") );
 			if (certData != "")
 			{
 				sslContext.use_private_key(boost::asio::const_buffer(certData.c_str(), certData.size()),ba::ssl::context_base::pem);
 			}
 			else
 			{
-				cout<<"Get PrivateKey File Err......................"<<"\n";
+				LOG(ERROR)<<"Get server.key File Err......................";
 			}
 			m_sslsocket = std::make_shared<ba::ssl::stream<bi::tcp::socket> >(_ioService,sslContext);
 		}
@@ -97,7 +106,7 @@ public:
 	
 	bool isConnected() const 
 	{ 
-		if (m_socketType == SSL_SOCKET)
+		if (m_socketType == SSL_SOCKET_V1)
 		{
 			return m_sslsocket->lowest_layer().is_open();
 		}
@@ -108,7 +117,7 @@ public:
 		try 
 		{ 
 			boost::system::error_code ec;
-			if (m_socketType == SSL_SOCKET)
+			if (m_socketType == SSL_SOCKET_V1)
 			{
 				m_sslsocket->lowest_layer().shutdown(bi::tcp::socket::shutdown_both, ec);
 				if (m_sslsocket->lowest_layer().is_open())
@@ -126,7 +135,7 @@ public:
 	bi::tcp::endpoint remoteEndpoint() 
 	{ 
 		boost::system::error_code ec; 
-		if (m_socketType == SSL_SOCKET)
+		if (m_socketType == SSL_SOCKET_V1)
 		{
 			return m_sslsocket->lowest_layer().remote_endpoint(ec);
 		}
@@ -140,7 +149,7 @@ public:
 
 	bi::tcp::socket& ref() 
 	{ 
-		if (m_socketType == SSL_SOCKET)
+		if (m_socketType == SSL_SOCKET_V1)
 		{
 			return m_sslsocket->next_layer();
 		}
