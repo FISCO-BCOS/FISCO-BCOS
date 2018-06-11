@@ -32,12 +32,12 @@ RateLimiter::RateLimiter(const std::string &configJson) : enable(true), callCost
     if (configJson.empty() || !phraseConfig(configJson))
     {
         enable = false;
-        cout << "rate limiter is off." << endl;
+        LOG(INFO) << "rate limiter is off.";
     }
 
     if (enable)
     {
-        cout << "rate limiter started." << endl;
+        LOG(INFO) << "rate limiter started.";
         LOG(INFO) << "RateLimiter Config" << configJson << endl;
         asioThread = make_shared<thread>(thread([&]() {
             while (!shutdownThread)
@@ -56,38 +56,38 @@ bool RateLimiter::validateConfigJson(const Json::Value &config)
         return false;
     if (!(config.isMember(RL_GLOBAL_LIMIT) && config[RL_GLOBAL_LIMIT].isObject()))
     {
-        LOG(INFO) << "Rate Limit config file error. Missing " << RL_GLOBAL_LIMIT << " or type isn't json Object" << endl;
+        LOG(ERROR) << "Rate Limit config file error. Missing " << RL_GLOBAL_LIMIT << " or type isn't json Object";
         return false;
     }
 
     if (!(config[RL_GLOBAL_LIMIT].isMember(RL_ENABLE) && config[RL_GLOBAL_LIMIT][RL_ENABLE].isBool()))
     {
-        LOG(INFO) << "Rate Limit config file error. " << RL_GLOBAL_LIMIT << " missing " << RL_ENABLE << " or type isn't bool" << endl;
+        LOG(ERROR) << "Rate Limit config file error. " << RL_GLOBAL_LIMIT << " missing " << RL_ENABLE << " or type isn't bool";
         return false;
     }
     if (!(config[RL_GLOBAL_LIMIT].isMember(RL_DEFAULT_LIMIT) && config[RL_GLOBAL_LIMIT][RL_DEFAULT_LIMIT].isUInt()))
     {
-        LOG(INFO) << "Rate Limit config file error. " << RL_GLOBAL_LIMIT << " missing " << RL_DEFAULT_LIMIT << " or type isn't uint" << endl;
+        LOG(ERROR) << "Rate Limit config file error. " << RL_GLOBAL_LIMIT << " missing " << RL_DEFAULT_LIMIT << " or type isn't uint";
         return false;
     }
     if (!(config.isMember(RL_INTERFACE_LIMIT) && config[RL_INTERFACE_LIMIT].isObject()))
     {
-        LOG(INFO) << "Rate Limit config file error. Missing " << RL_INTERFACE_LIMIT << " or type isn't json Object" << endl;
+        LOG(ERROR) << "Rate Limit config file error. Missing " << RL_INTERFACE_LIMIT << " or type isn't json Object";
         return false;
     }
     if (!(config[RL_INTERFACE_LIMIT].isMember(RL_ENABLE) && config[RL_INTERFACE_LIMIT][RL_ENABLE].isBool()))
     {
-        LOG(INFO) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " missing " << RL_ENABLE << " or type isn't bool" << endl;
+        LOG(ERROR) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " missing " << RL_ENABLE << " or type isn't bool";
         return false;
     }
     if (!(config[RL_INTERFACE_LIMIT].isMember(RL_DEFAULT_LIMIT) && config[RL_INTERFACE_LIMIT][RL_DEFAULT_LIMIT].isUInt()))
     {
-        LOG(INFO) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " missing " << RL_DEFAULT_LIMIT << " or type isn't uint" << endl;
+        LOG(ERROR) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " missing " << RL_DEFAULT_LIMIT << " or type isn't uint";
         return false;
     }
     if (!(config[RL_INTERFACE_LIMIT].isMember(RL_CUSTOM) && config[RL_INTERFACE_LIMIT][RL_CUSTOM].isObject()))
     {
-        LOG(INFO) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " missing " << RL_CUSTOM << " or type isn't json Object" << endl;
+        LOG(ERROR) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " missing " << RL_CUSTOM << " or type isn't json Object";
         return false;
     }
     Json::Value::Members mem = config[RL_INTERFACE_LIMIT][RL_CUSTOM].getMemberNames();
@@ -95,7 +95,7 @@ bool RateLimiter::validateConfigJson(const Json::Value &config)
     {
         if (!config[RL_INTERFACE_LIMIT][RL_CUSTOM][name].isUInt())
         {
-            LOG(INFO) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " " << RL_CUSTOM << " " << name << "'s value isn't json Object" << endl;
+            LOG(ERROR) << "Rate Limit config file error. " << RL_INTERFACE_LIMIT << " " << RL_CUSTOM << " " << name << "'s value isn't json Object";
             return false;
         }
     }
@@ -107,7 +107,7 @@ bool RateLimiter::phraseConfig(const std::string &configJson)
     Json::Reader reader;
     if (!reader.parse(configJson, config, false))
     {
-        LOG(INFO) << "Rate Limit config file syntax error." << endl;
+        LOG(ERROR) << "Rate Limit config file syntax error.";
         return false;
     }
 
@@ -186,7 +186,7 @@ bool RateLimiter::isPermitted(const std::string &ip, const std::string &interfac
     if (interfaceLimitEnable)
     {
         if (interfacelLimit == 0)
-        { //是否单独配置
+        { //check if has own config
             auto it = m_interfaceLimit.find(interface);
             if (it != m_interfaceLimit.end())
             {
@@ -203,7 +203,7 @@ bool RateLimiter::isPermitted(const std::string &ip, const std::string &interfac
         }
         else
         {
-            //如果有配置则按配置，否则按default
+            //if no own config then config by default
             auto it = m_interfaceLimit.find(interface);
             if (it != m_interfaceLimit.end())
             {

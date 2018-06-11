@@ -132,15 +132,14 @@ TransactionNotification SimpleAccountHolder::authenticate(dev::eth::TransactionS
 		if (Secret s = m_keyManager.secret(_t.from, [&]() { return m_getPassword(_t.from); }))
 		{
 
-			//tie  解开tuple
 			tie(ret.hash, ret.created) = m_client()->submitTransaction(_t, s);
 
-			//这里也返回，加个nonce异常的返回错误
+			//here add nonce check
 			if ( ret.created == Address(1) ) //nonceCheck
 				ret.r = TransactionRepercussion::NonceError;
-			else if ( ret.created == Address(2) ) //blocklimit 检查失败
+			else if ( ret.created == Address(2) ) //blocklimit check failed
 				ret.r = TransactionRepercussion::BlockLimitError;
-			else if ( ret.created == Address(3) ) //blocklimit 检查失败
+			else if ( ret.created == Address(3) ) //blocklimit check failed
 				ret.r = TransactionRepercussion::TxPermissionError;
 			else
 				ret.r = TransactionRepercussion::Success;
@@ -194,9 +193,9 @@ TransactionNotification FixedAccountHolder::authenticate(dev::eth::TransactionSk
 
 			if ( ret.created == Address(1) ) //nonceCheck
 				ret.r = TransactionRepercussion::NonceError;
-			else if ( ret.created == Address(2) ) //blocklimit 检查失败
+			else if ( ret.created == Address(2) ) //blocklimit check failed
 				ret.r = TransactionRepercussion::BlockLimitError;
-			else if ( ret.created == Address(3) ) //blocklimit 检查失败
+			else if ( ret.created == Address(3) ) //blocklimit check failed
 				ret.r = TransactionRepercussion::TxPermissionError;
 			else if ( ret.created == Address(4))
 				ret.r = TransactionRepercussion::DeployPermissionError;
