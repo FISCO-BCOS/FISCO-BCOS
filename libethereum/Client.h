@@ -202,7 +202,8 @@ public:
 	using ClientBase::block;
 
 	u256 filterCheck(const Transaction & _t, FilterCheckScene _checkscene = FilterCheckScene::None) const override;
-	void    updateSystemContract(std::shared_ptr<Block> block) override;
+	void updateSystemContract(std::shared_ptr<Block> block) override;
+	virtual std::shared_ptr<SystemContractApi> getSystemContract() const override { return m_systemcontractapi; }
 	void updateCache(Address address) override;
 
 	void startStatTranscation(h256)override;
@@ -356,7 +357,7 @@ protected:
 
 	bytes m_extraData;
 
-	u256 m_maxBlockTranscations = 1000; //块最大交易数  初始化的时候，从Chainparams传进来
+	u256 m_maxBlockTranscations = 1000; 
 	std::shared_ptr<SystemContractApi> m_systemcontractapi;
 
 	bool m_omit_empty_block = true;

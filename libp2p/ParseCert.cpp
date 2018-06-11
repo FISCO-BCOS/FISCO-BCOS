@@ -37,13 +37,13 @@ ParseCert::~ParseCert(void)
 
 void ParseCert::ParseInfo(ba::ssl::verify_context& ctx)
 {
-	//获取证书主题信息
+	//subject name of the certificate
 	char subject_name[256];
 	X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
 	X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
 	m_subjectName.insert(0,subject_name);
-	//获取证书有效期
 	int err = 0;
+	//lifetime of the certificate
 	ASN1_TIME *start = NULL;  
 	ASN1_TIME *end = NULL;
 	time_t ttStart = {0};  
@@ -63,7 +63,7 @@ void ParseCert::ParseInfo(ba::ssl::verify_context& ctx)
 	{
 		m_isExpire = false;
 	}
-	//获取证书序列号
+	//serial number of the certificate
 	ASN1_INTEGER *asn1_i = NULL;
 	char* serial = NULL;
 	BIGNUM *bignum = NULL; 
@@ -74,7 +74,7 @@ void ParseCert::ParseInfo(ba::ssl::verify_context& ctx)
 	BN_free(bignum);
 	OPENSSL_free(serial);
 
-	//获取证书类型
+	//type of the certificate
 	BASIC_CONSTRAINTS *bcons = NULL;
 	int crit = 0;
 	bcons = (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);

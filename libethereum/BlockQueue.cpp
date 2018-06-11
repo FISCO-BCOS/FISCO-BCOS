@@ -173,7 +173,6 @@ void BlockQueue::drainVerified_WITH_BOTH_LOCKS()
 	}
 }
 
-// 到这里之前已经经过共识（块、交易都被验证过一次），这里只要验证queue层面的合法性就够了，后续上链还会有再一次验证
 ImportResult BlockQueue::importVerified(bytesConstRef _block) {
 	LOG(TRACE) << std::this_thread::get_id();
 	// Check if we already know this block.
@@ -192,10 +191,10 @@ ImportResult BlockQueue::importVerified(bytesConstRef _block) {
 	VerifiedBlock res;
 	BlockHeader bi;
 	try	{
-		// 通过verifyBody把交易
+		
 		res.verified = m_bc->verifyBlock(_block, m_onBad, ImportRequirements::OutOfOrderChecks);
 		bi = res.verified.info;
-		res.blockData = _block.toVector(); // 存放真实的块数据
+		res.blockData = _block.toVector(); 
 		res.verified.block = &res.blockData;
 	}	catch (Exception const& _e)	{
 		LOG(WARNING) << "Ignoring malformed block: " << diagnostic_information(_e);
@@ -213,20 +212,19 @@ ImportResult BlockQueue::importVerified(bytesConstRef _block) {
 	UpgradeGuard ul(l);
 	DEV_INVARIANT_CHECK;
 
-	// 检查parent
-	if (m_knownBad.count(bi.parentHash()))	{ // bad block处理
+	
+	if (m_knownBad.count(bi.parentHash()))	{ 
 		m_knownBad.insert(bi.hash());
 		updateBad_WITH_LOCK(bi.hash());
 		LOG(WARNING) << "knowBad. hash=" << h;
 		return ImportResult::BadChain;
-	} else if (!m_bc->isKnown(bi.parentHash()))	{  // 父块必须在链上了，联盟链场景不存在叔块
+	} else if (!m_bc->isKnown(bi.parentHash()))	{  
 		LOG(WARNING) << "unknown parent:" << bi.parentHash() << ",hash=" << h;
 		m_unknown.insert(bi.parentHash(), h, _block.toBytes());
 		m_unknownSet.insert(h);
 		return ImportResult::UnknownParent;
 	} else {
-		// 本应该在check一遍 OutOfOrder，但是在blockchain.sync的时候会进行这一步，所以这里就不做了，只要不冲突就塞进去
-		// 如果要做，上面的verifyBlock调用，改成OutOfOrder
+		
 		DEV_GUARDED(m_verification) {
 			if (m_verified.exist(bi.hash())) {
 				LOG(WARNING) << "in verified. hash=" << h;

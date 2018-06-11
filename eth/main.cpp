@@ -589,7 +589,7 @@ int main(int argc, char** argv)
 		else
 		{
 			string ret;
-			cout << "请输入keystore 保存路径：";
+			cout << "please input keystore store path：";
 			getline(cin, ret);
 			SecretStore::defaultpath = ret;
 			cout << "keystoredir:" << SecretStore::defaultPath() << "\n";
@@ -1113,7 +1113,7 @@ int main(int argc, char** argv)
 			}
 			catch (...)
 			{
-				LOG(ERROR) << "上帝模式参数文件异常！ " << arg << "  option: " << argv[i] << "\n";
+				LOG(ERROR) << "invalid god file " << arg << "  option: " << argv[i] << "\n";
 				exit(-1);
 			}
 
@@ -1142,7 +1142,7 @@ int main(int argc, char** argv)
 	}
 	else
 	{
-		LOG(ERROR) << "请指定配置文件 --config xxx" << "\n";
+		LOG(ERROR) << "please set config file by --config xxx" << "\n";
 		LOG(ERROR) << "sample: " << "\n" << c_configJsonForWe << "\n";
 		exit(-1);
 	}
@@ -1155,26 +1155,26 @@ int main(int argc, char** argv)
 
 			if ( chainParams.godMinerStart < 1 )
 			{
-				LOG(ERROR) << "上帝模式配置异常 godMinerStart不能小于0 " << "\n";
+				LOG(ERROR) << "god mode config invalid godMinerStart cannot less than 0 " << "\n";
 				exit(-1);
 			}
 			if ( chainParams.godMinerEnd <= chainParams.godMinerStart  )
 			{
-				LOG(ERROR) << "上帝模式配置异常 godMinerEnd<=godMinerStart " << "\n";
+				LOG(ERROR) << "god mode config invalid godMinerEnd<=godMinerStart " << "\n";
 				exit(-1);
 			}
 			if (  chainParams.godMinerList.size() < 1 )
 			{
-				LOG(ERROR) << "上帝模式配置异常 godMinerList不能为空 " << "\n";
+				LOG(ERROR) << "god mode config invalid godMinerList cannot be null " << "\n";
 				exit(-1);
 			}
 
-			cout << "开启上帝模式！！！！！ " << "godMinerStart=" << chainParams.godMinerStart << ",godMinerEnd=" << chainParams.godMinerEnd << ",godMinerList.size()=" << chainParams.godMinerList.size() << "\n";
+			cout << "start god mode ！！！！！ " << "godMinerStart=" << chainParams.godMinerStart << ",godMinerEnd=" << chainParams.godMinerEnd << ",godMinerList.size()=" << chainParams.godMinerList.size() << "\n";
 
 		}
 		catch (std::exception &e)
 		{
-			LOG(ERROR) << "上帝模式配置格式错误" << e.what() << "\n";
+			LOG(ERROR) << "god mode config invalid format " << e.what() << "\n";
 			exit(-1);
 		}
 	}
@@ -1194,7 +1194,7 @@ int main(int argc, char** argv)
 	}
 	else
 	{
-		LOG(ERROR) << "请指定创世块文件 --genesis xxx" << "\n";
+		LOG(ERROR) << "please set genesis config by --genesis xxx" << "\n";
 		LOG(ERROR) << "sample: " << "\n" << c_genesisJsonForWe << "\n";
 		return 0;
 	}
@@ -1333,7 +1333,7 @@ int main(int argc, char** argv)
 	};*/
 	auto getAccountPassword = [&](Address const & ) {
 
-		cout << "！！！！！！请通过web3解锁帐号！！！！！" << "\n";
+		cout << "！！！！！！please unlock account by web3！！！！！" << "\n";
 		return string();
 
 		//return getPassword("Enter password for address " + keyManager.accountName(a) + " (" + a.abridged() + "; hint:" + keyManager.passwordHint(a) + "): ");
@@ -1429,7 +1429,7 @@ int main(int argc, char** argv)
 
 	//生成创世块
 	if (mode == OperationMode::ExportGenesis) {
-		LOG(INFO) << "生成创世块到:" << filename;
+		LOG(INFO) << "export genesis file to :" << filename;
 
 		ofstream fout(filename, std::ofstream::binary);
 		ostream& out = (filename.empty() || filename == "--") ? cout : fout;
@@ -1452,7 +1452,7 @@ int main(int argc, char** argv)
 		}
 
 		if (contractList.empty()) {
-			LOG(INFO) << "未指定合约地址列表，导出所有合约";
+			LOG(INFO) << "all contract will be export";
 			unordered_map<Address, u256> contractMap = state.addresses();
 
 			for (auto it = contractMap.begin(); it != contractMap.end(); ++it) {
@@ -1482,7 +1482,7 @@ int main(int argc, char** argv)
 		Json::Value alloc;
 		auto allocFlag = false;
 		for (auto it = contractList.begin(); it != contractList.end(); ++it) {
-			LOG(INFO) << "导出合约:" << *it;
+			LOG(INFO) << "export contract address :" << *it;
 
 			u256 balance = state.balance(*it);
 			bytes code = state.code(*it);

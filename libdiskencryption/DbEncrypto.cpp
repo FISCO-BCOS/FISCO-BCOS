@@ -22,7 +22,7 @@
  */
 
 #include "DbEncrypto.h"
-#include <libdevcrypto/AES.h>//添加AES加密
+#include <libdevcrypto/AES.h>
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
 //#include "LRUCache.h"
@@ -50,7 +50,7 @@ char*  DbEncrypto::ascii2hex(const char* chs,int len)
 		ascii[i*2+1] = hex[b%16] ;
 		++i;
 	}
-	return ascii;                    // ascii 返回之前未释放
+	return ascii;                    // ascii not free
 }
 
 DbEncrypto::DbEncrypto(ldb::DB* _db)
@@ -101,14 +101,13 @@ ldb::Status DbEncrypto::Put(const ldb::WriteOptions& options, const ldb::Slice& 
 	{
 		try
 		{
-			//明文存入LRU缓存?
 			/*LOG(DEBUG)<<"DbEncrypto::PutKeyData:"<<key.ToString();
 			char* wdata = new char[value.size()];
 			memcpy(wdata,value.data(),value.size());
 			s_newlrucache->Insert(key,reinterpret_cast<void*>(wdata),value.size(),&DeleteLRU);
 			LOG(DEBUG)<<"DbEncrypto::InsertDataToCache";*/
 
-			//数据加密
+			//data encrypt
 			bytes enData = enCryptoData(value.ToString());
 			//LOG(DEBUG)<<"DbEncrypto::enCryptoData:"<<asString(enData);
 			_status = m_db->Put(options,key,(ldb::Slice)dev::ref(enData));
@@ -136,7 +135,6 @@ ldb::Status DbEncrypto::Get(const ldb::ReadOptions& options,const ldb::Slice& ke
 	}
 	else
 	{
-		//读取LRU缓存中数据?
 		/*LOG(DEBUG)<<"DbEncrypto::GetKeyData:"<<key.ToString();
 		leveldb::Cache::Handle* handle = s_newlrucache->Lookup(key);
 		if (handle != NULL) 
@@ -160,7 +158,7 @@ ldb::Status DbEncrypto::Get(const ldb::ReadOptions& options,const ldb::Slice& ke
 			LOG(DEBUG)<<"LRU lookup is null";
 		}*/
 		
-		//读取DB中数据?
+		//get db Data and decrypt
 		_status = m_db->Get(options,key,value);
 		if(!value->empty())
 		{

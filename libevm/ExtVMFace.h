@@ -236,8 +236,8 @@ private:
 	LastHashes m_lastHashes;
 	u256 m_gasUsed;
 
-	bool m_coverlog;//是否打印覆盖率日志
-	bool m_eventlog;//是否打印event log
+	bool m_coverlog;//the flag of print coverlog
+	bool m_eventlog;//the flag of print event log
 };
 
 /**

@@ -102,7 +102,7 @@ Json::Value AdminNet::admin_peers()
 {
 	Json::Value ret;
 
-	//获取nodeId和相应块高的映射关系
+	//get nodeId->blockNumber mapping
 	std::map<h512, u256> nodeId_to_height;
 	m_network.ethereum()->sharedHost()->getPeersHeight(nodeId_to_height);
 
@@ -121,7 +121,7 @@ bool AdminNet::admin_addPeer(string const& _node)
 	return true;
 }
 
-//增加新的节点信息
+//add new peer info
 bool AdminNet::admin_addNodePubKeyInfo(string const& _node)
 {
 	bool bRet = false;
@@ -138,37 +138,27 @@ bool AdminNet::admin_addNodePubKeyInfo(string const& _node)
 		LOG(ERROR) << "admin_addNodePubKeyInfo node existed." << "\n";
 	}
 
-	//发起广播  增加新的协议
+	//broadcast to add new protocal
 	vector<NodeConnParams> vParams;
 	vParams.push_back(nodeParam);
 	NodeConnManagerSingleton::GetInstance().sendNodeInfoSync(vParams);
 
 	LOG(INFO) << "admin_addNodePubKeyInfo sendNodeInfoSync.node id is " << nodeParam._sNodeId  << "\n";
-
-	//不进行连接，连接以合约中的为主
-	//进行连接 需要序列化出他的enode信息
-//	NodeConnManagerSingleton::GetInstance().connNode(nodeParam);
 	return true;
 }
 
-//删除配置中的节点信息
-//_node则为nodeid即可
+//delete peer info in config
 bool AdminNet::admin_delNodePubKeyInfo(string const& _node)
 {
 	bool bExisted = false;
-	LOG(INFO) << "AdminNet::admin_addNodePubKeyInfo |" << _node << "\n";
+	LOG(INFO) << "AdminNet::admin_delNodePubKeyInfo |" << _node << "\n";
 
 
 	NodeConnManagerSingleton::GetInstance().delNodeConnInfo(_node, bExisted);
 	if (bExisted)
 	{
-		//发起广播  增加新的协议
+		//broadcast to add new protocol
 		NodeConnManagerSingleton::GetInstance().sendDelNodeInfoSync(_node);
-
-		//断掉连接以合约为主，这里主要做配置的同步落地
-		////需要断掉连接
-		//NodeConnManagerSingleton::GetInstance().disconnNode(_node);
-		//LOG(INFO) << "delNodeconninfo node exiteds. node id is : " << _node << "\n";
 	}
 	else
 	{
@@ -179,7 +169,7 @@ bool AdminNet::admin_delNodePubKeyInfo(string const& _node)
 	return true;
 }
 
-//展示所有的节点信息
+//show all public keys info
 Json::Value AdminNet::admin_NodePubKeyInfos()
 {
 	Json::Value ret;
@@ -194,7 +184,6 @@ Json::Value AdminNet::admin_NodePubKeyInfos()
 	return ret;
 }
 
-//展示所有的节点信息
 Json::Value AdminNet::admin_ConfNodePubKeyInfos()
 {
 	Json::Value ret;

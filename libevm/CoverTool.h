@@ -48,7 +48,7 @@ struct OpcodeInfo
 {
     OpcodeInfo(size_t i,Instruction o=Instruction::STOP,std::string n="INVALID_INSTRUCTION"):index(i),op(o),opname(n),hint(0){}
 
-    size_t index;          //下标
+    size_t index;          
     Instruction op;     //opcode   
     std::string opname; 
     u64 hint;
@@ -61,7 +61,7 @@ struct StatItem
         codespace=cspace;
         code=codespace.data();
 
-        //初始化       
+        //Initralize       
         size_t codesize=codespace.size();
 
         for (size_t i = 0; i < codesize; ++i)
@@ -69,7 +69,7 @@ struct StatItem
             Instruction op = Instruction(code[i]);
             OpcodeInfo opcodeinfo(i,op,instructionInfo(op).name);
 
-            //下面修正
+            //Correct
             if (op == Instruction::PUSHC ||
 		        op == Instruction::JUMPC ||
 		        op == Instruction::JUMPCI)
@@ -81,9 +81,9 @@ struct StatItem
             if ((byte)Instruction::PUSH1 <= (byte)op &&
                     (byte)op <= (byte)Instruction::PUSH32)
             {
-                vectorinfo.push_back (opcodeinfo);//先将当前的插入
+                vectorinfo.push_back (opcodeinfo);//push back current opcode
 
-                size_t len=(byte)op - (byte)Instruction::PUSH1 + 1;//中间都是 字节value
+                size_t len=(byte)op - (byte)Instruction::PUSH1 + 1;//words value in the middle
 
                 for( size_t j=i+1;j<(i+len+1);j++)
                 {
@@ -95,7 +95,7 @@ struct StatItem
             }
             else
             {
-                vectorinfo.push_back (opcodeinfo);//先将当前的插入
+                vectorinfo.push_back (opcodeinfo);//push back current opcode
             }
             
 
@@ -103,21 +103,21 @@ struct StatItem
 
         }
 
-        lasttime=utcTime();//utcTime的实现 已经改成毫秒了
+        lasttime=utcTime();//utcTime, has changed to ms
     }
 
 	byte* code;
     bytes codespace;
 
 
-    uint64_t    lasttime;  //最后更新时间    
+    uint64_t    lasttime;     
     std::vector<OpcodeInfo> vectorinfo;
 
     void hint(size_t index,size_t codespacesize)
     {
         if(  codespace.size() > codespacesize  )
         {
-            //说明进来的是普通交易，不是部署合约，所以要加上偏移量
+            //Contract deployment, add offset
             index=index+(codespace.size()-codespacesize);
         }
         if( index < vectorinfo.size() )
@@ -137,18 +137,18 @@ class CoverTool
 {
 private:   
     std::vector<std::thread> m_checks;
-    std::map<Address, StatItem> m_statitems;    //合约地址为key
+    std::map<Address, StatItem> m_statitems;    //Contract address key
 
-    mutable SharedMutex  m_lock;	//虽然没啥必要 
+    mutable SharedMutex  m_lock;	//It is not necessary :)
     bool m_aborting = false;
-    std::string m_outputpath;//输出路径
+    std::string m_outputpath;
 
 public:
 
 	CoverTool() ;
 	 ~CoverTool() ;
 
-    void outputpath(std::string path)//这么做，是因为covertool在vm中是静态类成员，初始化时datadir并没有更新
+    void outputpath(std::string path)//datadir won't update because covertool is a static member in vm.
     {
         m_outputpath=path;
     }

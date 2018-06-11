@@ -1,6 +1,9 @@
 # 一键安装FISCO BCOS脚本使用说明
 
+[FISCO BCOS One-Click Installation Manual](README_EN.md)
+
 本文档能够让初学者快速体验FISCO BCOS平台。提供了FISCO BCOS的快速安装和FISCO BCOS节点的快速部署步骤。
+
 ## 注意事项：
 1. 安装环境需满足FISCO BCOS运行的配置要求[（操作手册1.1节）](../doc/manual/README.md)；
 2. build.sh在centos和Ubuntu版本测试成功；
@@ -13,21 +16,21 @@
 1. **下载代码**
 
    ```shell
-   git clone https://github.com/fisco-bcos/fisco-bcos
+   git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git
    ```
 
 2. **执行build**
 
    ```shell
-   $ cd fisco-bcos
-   $ chmod +x build.sh 
-   $ ./build.sh
+   cd FISCO-BCOS
+   chmod +x build.sh 
+   ./build.sh
    ```
-   如看到如下的提示说明：FISCO BCOS安装完毕
-   ```
+      如看到如下的提示说明：FISCO BCOS安装完毕
+   ```log
    fisco-bcos build succ! path: /usr/local/bin/fisco-bcos
    ```
-   
+
    说明：可执行文件安装路径：/usr/local/bin/fisco-bcos
 
 
