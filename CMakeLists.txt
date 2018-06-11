@@ -34,7 +34,7 @@ include(EthPolicy)
 eth_policy()
 
 # project name and version should be set after cmake_policy CMP0048
-project(FISCO-BCOS VERSION "1.2.0")
+project(FISCO-BCOS VERSION "1.3.0")
 
 if (NOT EXISTS ${CMAKE_SOURCE_DIR}/evmjit/)
     message(FATAL_ERROR "Git submodules not initialized, execute:\n  git submodule update --init")
@@ -48,6 +48,7 @@ include(EthExecutableHelper)
 include(EthDependencies)
 include(EthUtils)
 
+include(ProjectOpenSSL)
 include(ProjectBoost)
 include(ProjectCryptopp)
 include(ProjectJsonCpp)
@@ -88,7 +89,7 @@ add_subdirectory(libweb3jsonrpc)
 add_subdirectory(libwebthree)
 add_subdirectory(libwhisper)
 add_subdirectory(abi)
-
+add_subdirectory(UTXO)
 add_subdirectory(utils)
 
 if (EVMJIT)

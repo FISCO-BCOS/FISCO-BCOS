@@ -76,14 +76,17 @@ include_directories(../libodbc/include
 					../libodbc/include/sybase)
 
 target_include_directories(web3jsonrpc PRIVATE ..)
+
+eth_use(web3jsonrpc OPTIONAL OpenSSL)
+
 target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
                                   ${Web3_WHISPER_LIBRARIES}
                                   JsonRpcCpp::Server
 				                  statistics
                                   contract
                                   curl
-                                  ssl
-                                  crypto
+                                  ${OPENSSL_SSL_LIBRARIE}
+                                  ${OPENSSL_CRYPTO_LIBRARIE}
                                   krb5
                                   z
                                   dl

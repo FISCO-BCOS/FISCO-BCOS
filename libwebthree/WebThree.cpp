@@ -40,6 +40,7 @@
 #include <libraftseal/RaftClient.h>
 #include "Swarm.h"
 #include "Support.h"
+#include <libdevcore/FileSystem.h>
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
@@ -56,9 +57,16 @@ WebThreeDirect::WebThreeDirect(
     bytesConstRef _network,
     bool _testing
 ):
-	m_clientVersion(_clientVersion),
-	m_net(_clientVersion, _n, _network, _params.statsInterval)
+	m_clientVersion(_clientVersion)
 {
+	if (dev::getSSL() == SSL_SOCKET_V2)
+	{
+		m_net = new  HostSSL(_clientVersion,CertificateServer::GetInstance().keypair(),_n);
+	}
+	else
+	{
+		m_net = new Host(_clientVersion,_n,_network,_params.statsInterval);
+	}
 	LOG(INFO) << "My enode:" << enode();
 	//set NodeConnParamsManager's NetworkFace pointer
 	NodeConnManagerSingleton::GetInstance().setNetworkFace(this);
@@ -66,7 +74,6 @@ WebThreeDirect::WebThreeDirect(
 		Defaults::setDBPath(_dbPath);
 	if (_interfaces.count("eth"))
 	{
-		//Ethash::init();
 		PBFT::init();
 		Raft::init();
 		NoProof::init();
@@ -74,25 +81,27 @@ WebThreeDirect::WebThreeDirect(
 
 		if (_params.sealEngineName == "SinglePoint")
 		{
-			m_ethereum.reset(new eth::SinglePointClient(_params, (int)_params.u256Param("networkID"), &m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+			m_ethereum.reset(new eth::SinglePointClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we));
 		}
 		else if (_params.sealEngineName == "PBFT") {
-			m_ethereum.reset(new eth::PBFTClient(_params, (int)_params.u256Param("networkID"), &m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+			m_ethereum.reset(new eth::PBFTClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we));
 		}
 		else if (_params.sealEngineName == "Raft") {
-			m_ethereum.reset(new eth::RaftClient(_params, (int)_params.u256Param("networkID"), &m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+			m_ethereum.reset(new eth::RaftClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we));
 		}
-		else if (_params.sealEngineName == "NoProof" && _testing)
-		{
-#if 0
-			LOG(TRACE) << "WebThreeDirect::WebThreeDirect NoProof";
-			m_ethereum.reset(new eth::ClientTest(_params, (int)_params.u256Param("networkID"), &m_net, shared_ptr<GasPricer>(), _dbPath, _we, _channel));
-#endif
-		}
+		// else if (_params.sealEngineName == "NoProof" && _testing)
+		// {
+
+		// }
 		else
 		{
-			LOG(DEBUG) << "WebThreeDirect::WebThreeDirect Default ";
-			m_ethereum.reset(new eth::Client(_params, (int)_params.u256Param("networkID"), &m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+			std::stringstream ss;
+			ss << "[ERROR!]the sealEngine must be [SinglePoint|PBFT|Raft] in config.json, please check it, current config is:[" << _params.sealEngineName << "]"; 
+			std::cout << ss.str() << std::endl;
+			LOG(ERROR) << ss.str();
+			exit(-1);
+			// LOG(DEBUG) << "WebThreeDirect::WebThreeDirect Default ";
+			// m_ethereum.reset(new eth::Client(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we));
 		}
 		string bp = DEV_QUOTED(ETH_BUILD_PLATFORM);
 		vector<string> bps;
@@ -104,7 +113,7 @@ WebThreeDirect::WebThreeDirect(
 	}
 
 	if (_interfaces.count("shh"))
-		m_whisper = m_net.registerCapability(make_shared<WhisperHost>());
+		m_whisper = m_net->registerCapability(make_shared<WhisperHost>());
 
 	if (_interfaces.count("bzz"))
 	{
@@ -126,7 +135,7 @@ WebThreeDirect::~WebThreeDirect()
 	// still referencing Sessions getting deleted *after* m_ethereum is reset, causing bad things to happen, since
 	// the guarantee is that m_ethereum is only reset *after* all sessions have ended (sessions are allowed to
 	// use bits of data owned by m_ethereum).
-	m_net.stop();
+	m_net->stop();
 	m_ethereum.reset();
 }
 
@@ -151,7 +160,7 @@ std::string WebThreeDirect::composeClientVersion(std::string const& _client)
 
 p2p::NetworkPreferences const& WebThreeDirect::networkPreferences() const
 {
-	return m_net.networkPreferences();
+	return m_net->networkPreferences();
 }
 
 void WebThreeDirect::setNetworkPreferences(p2p::NetworkPreferences const& _n, bool _dropPeers)
@@ -159,53 +168,53 @@ void WebThreeDirect::setNetworkPreferences(p2p::NetworkPreferences const& _n, bo
 	auto had = isNetworkStarted();
 	if (had)
 		stopNetwork();
-	m_net.setNetworkPreferences(_n, _dropPeers);
+	m_net->setNetworkPreferences(_n, _dropPeers);
 	if (had)
 		startNetwork();
 }
 
 ba::io_service* WebThreeDirect::ioService() {
-	return m_net.getIOService();
+	return m_net->getIOService();
 }
 
 std::vector<PeerSessionInfo> WebThreeDirect::peers()
 {
-	return m_net.peerSessionInfo();
+	return m_net->peerSessionInfo();
 }
 
 size_t WebThreeDirect::peerCount() const
 {
-	return m_net.peerCount();
+	return m_net->peerCount();
 }
 
 void WebThreeDirect::setIdealPeerCount(size_t _n)
 {
-	return m_net.setIdealPeerCount(_n);
+	return m_net->setIdealPeerCount(_n);
 }
 
 void WebThreeDirect::setPeerStretch(size_t _n)
 {
-	return m_net.setPeerStretch(_n);
+	return m_net->setPeerStretch(_n);
 }
 
 bytes WebThreeDirect::saveNetwork()
 {
-	return m_net.saveNetwork();
+	return m_net->saveNetwork();
 }
 
 void WebThreeDirect::addNode(NodeID const& _node, bi::tcp::endpoint const& _host)
 {
-	m_net.addNode(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
+	m_net->addNode(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
 }
 
 void WebThreeDirect::requirePeer(NodeID const& _node, bi::tcp::endpoint const& _host)
 {
-	m_net.requirePeer(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
+	m_net->requirePeer(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
 }
 
 void WebThreeDirect::addPeer(NodeSpec const& _s, PeerType _t)
 {
 	LOG(DEBUG) << "WebThreeDirect::addPeer ";
-	m_net.addPeer(_s, _t);
+	m_net->addPeer(_s, _t);
 }
 
