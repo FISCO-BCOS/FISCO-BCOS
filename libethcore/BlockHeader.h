@@ -50,18 +50,7 @@ enum Strictness
 	CheckNothingNew
 };
 
-// TODO: for implementing soon.
-/*enum Check
-{
-	CheckBasic,
-	CheckExtended,
-	CheckBlock,
-	CheckParent,
-	CheckSeal,
-	CheckSealQuickly,
-	CheckAll = CheckBasic | CheckExtended | CheckBlock | CheckParent | CheckSeal,
-};
-using Checks = FlagSet<Check>;*/
+
 
 enum BlockDataType
 {
@@ -97,7 +86,7 @@ class BlockHeader
 	friend class BlockChain;
 public:
 	static const unsigned BasicFields = 15;
-	static u256 maxBlockHeadGas;//块最大gas
+	static u256 maxBlockHeadGas;
 
 	BlockHeader();
 	explicit BlockHeader(bytesConstRef _data, BlockDataType _bdt = BlockData, h256 const& _hashWith = h256());
@@ -192,8 +181,8 @@ private:
 	Address m_author;
 	u256 m_difficulty;
 
-	u256 m_gen_idx; 		/// 挖矿者的索引
-	h512s m_node_list;		/// 参与共识的公钥列表
+	u256 m_gen_idx; 		
+	h512s m_node_list;		
 
 	std::vector<bytes> m_seal;		///< Additional (RLP-encoded) header fields.
 

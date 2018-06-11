@@ -34,7 +34,7 @@ public:
 	Web3Observer() {};
 	virtual ~Web3Observer() {};
 
-	virtual void onReceiveChannelMessage(const h512, std::shared_ptr<bytes>) = 0; //收到链上链下消息
+	virtual void onReceiveChannelMessage(const h512, std::shared_ptr<bytes>) = 0; 
 };
 
 }

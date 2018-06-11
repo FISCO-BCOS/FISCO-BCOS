@@ -3,8 +3,8 @@ import "TransactionFilterBase.sol";
 import "Group.sol";
 
 contract AuthorityFilter is TransactionFilterBase {
-	bool private _enabled = false; 					// 是否启用权限控制
-	mapping (address => address) private _groups; 	// 用户对应的角色
+    bool private _enabled = false;                           // Whether a filter can check the permissions
+    mapping (address => address) private _groups;            // Account map to group
 	
     function AuthorityFilter() public {
     }
@@ -12,53 +12,51 @@ contract AuthorityFilter is TransactionFilterBase {
         return (_name,_version,_desc);
     }
 	
-    //设置用户的角色
+    // set user to a new group, with a group being built
     function setUserToNewGroup(address user) public {
-		_groups[user] = new Group();
+        _groups[user] = new Group();
     }
-	function setUserToGroup(address user, address group) public {
-		_groups[user] = group;
+    // set user to a existing group
+    function setUserToGroup(address user, address group) public {
+        _groups[user] = group;
     }
-    //获取用户的角色
     function getUserGroup(address user) public constant returns(address) {
         return _groups[user];
     }
-    
-	//设置启用权限控制状态
+
     function setEnable(bool enable) public {
         _enabled = enable;
     }
-	//获取是否启用权限控制状态
-	function getEnable() public constant returns(bool) {
-		return _enabled;
-	}
+    function getEnable() public constant returns(bool) {
+        return _enabled;
+    }
 
-    //检查用户某个操作的权限
+    // Check whether the user has the permissions to call a function
     function process(address origin, address from, address to, string func, string input) public constant returns(bool) {
-		if (!_enabled) {
+        if (!_enabled) {
             return true;
         }
         address group = Group(_groups[origin]);
         if (0x0000000000000000000000000000000000000000 == group) {
-			return false;
+            return false;
         }
-		return Group(group).getPermission(to, func);
+        return Group(group).getPermission(to, func);
     }
-	function deploy(address origin) public constant returns(bool) {
-		if (!_enabled) {
+    // Check whether the user has the permissions to deploy a contract
+    function deploy(address origin) public constant returns(bool) {
+        if (!_enabled) {
             return true;
         }
-		address group = Group(_groups[origin]);
+        address group = Group(_groups[origin]);
         if (0x0000000000000000000000000000000000000000 == group) {
-			return false;
+            return false;
         }
-		return Group(group).getCreate();
-	}	
+        return Group(group).getCreate();
+    }	
 	
-	//新建一个角色
     function newGroup(string desc) public returns(address) {
         address group = new Group();
-		Group(group).setDesc(desc);
-		return group;
+        Group(group).setDesc(desc);
+        return group;
     }
 }

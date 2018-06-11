@@ -32,9 +32,7 @@
 #include <netdb.h>
 using namespace dev::eth;
 
-/*
-* 对block中所有的交易的遍历，命中address+method hash 才更新
-*/
+
 void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
 {
 
@@ -42,14 +40,13 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
     Timer t;
 
     LOG(TRACE) << "SystemContract::updateSystemContract m_systemproxyaddress=" << toString(m_systemproxyaddress) << ",number=" << m_client->blockChain().number() << "," << m_client->blockChain().info();
-    //每次有新块import 就构建一次就好了，提高性能
+   
     DEV_WRITE_GUARDED(m_blocklock)
     {
 
-        //m_tempblock = m_client->block(m_client->blockChain().number()); // 这里会调用Block的populateFromChain->enact->execute
         m_tempblock = block;
         m_tempblock->clearCurrentBytes();
-        m_tempblock->setEvmEventLog(true);//方便看log
+        m_tempblock->setEvmEventLog(true);
         LOG(TRACE) << "SystemContract::updateSystemContract blocknumber=" << m_tempblock->info().number();
     }
 
@@ -59,7 +56,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
     configChangeArg.push_back("");
     std::vector<string> nodeChangeArg;
     nodeChangeArg.push_back("");
-    std::vector<string> caChangeArg;// 下面push
+    std::vector<string> caChangeArg;
     std::vector<string> routeChangeArg;
     routeChangeArg.push_back("");
 
@@ -86,7 +83,6 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
     }
 
 
-    //下面除了CAAction NodeAction其他都粗暴的做
     for (auto it = m_tempblock->pending().begin(); it != m_tempblock->pending().end(); ++it)
     {
         LOG(INFO) << "SystemContract::updateSystemContract ==> abi address => " << contractAbiMgr.hex() << " ,to= > " << (it->to().hex());
@@ -123,7 +119,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
             bytes calldata = fundata.cropped(4, fundata.size() - 4).toBytes();
             bytesConstRef o(&(calldata));
 
-            //把变更的ca hash塞进来
+           
             if ( funhash == cahash2 )
             {
                 string pubkey;
@@ -157,7 +153,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
     DEV_WRITE_GUARDED(m_lockfilter)
     {
 
-        m_filterchecktranscache.clear();//清除缓存
+        m_filterchecktranscache.clear();
         m_transcount = 0;
         m_transcachehit = 0;
 
@@ -167,38 +163,37 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
 
     if ( routeChange || (m_routes.size() < 1) )
     {
-        //更新route缓存列表
+       
         routeChange = true;
         updateRoute();
     }
     if ( configChange )
     {
-        //没有config缓存，全部通知即可
+        
         configChange = true;
         updateConfig();
     }
 
     if ( nodeChange || (m_nodelist.size() < 1) )
     {
-        //更新节点缓存列表
+        
         nodeChange = true;
         updateNode();
     }//
     if ( caChange || (m_calist.size() < 1) )
     {
-        //上面应该已经更新 caChangeArg
-        //更新CA缓存列表
+      
         caChange = true;
         updateCa();
     }//
 
-    //abi信息是否已经初始化，用于初次初始化使用。
+    
     if (coChange || (0 == libabi::ContractAbiMgr::getInstance()->getContractC()))
     {
         updateContractAbiInfo();
     }
 
-    //通知回调池
+    
 
     DEV_READ_GUARDED(m_lockcbs)
     {
@@ -249,9 +244,6 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
 
 void SystemContract::updateRoute()
 {
-    //从路由表中读取所有action  做缓存，避免每次都call
-
-    /*********************构建actionlist***********************/
     DEV_WRITE_GUARDED(m_lockroute)
     {
         bytes inputdata5 = abiIn("getRouteSize()");
@@ -262,11 +254,11 @@ void SystemContract::updateRoute()
         m_routes.clear();
         for ( size_t i = 0; i < (size_t)routesize; i++)
         {
-            //第一步，先拿到route name
+        
             bytes inputdata6 = abiIn("getRouteNameByIndex(uint256)", (u256)i);
             ExecutionResult ret6 = call(m_systemproxyaddress, inputdata6);
             string routename = abiOut<string>(ret6.output);
-            //第二步，拿到 route
+            
             bytes inputdata7 = abiIn("getRoute(string)", routename);
             ExecutionResult ret7 = call(m_systemproxyaddress, inputdata7);
             Address route = abiOut<Address>(ret7.output);
@@ -280,7 +272,7 @@ void SystemContract::updateRoute()
         m_transactionfilter.filter = getRoute("TransactionFilterChain");
         m_transactionfilter.name = "TransactionFilterChain";
 
-        m_filterchecktranscache.clear();//清除缓存
+        m_filterchecktranscache.clear();
         m_transcount = 0;
         m_transcachehit = 0;
     }
@@ -309,7 +301,7 @@ void SystemContract::updateNode( )
 }
 void SystemContract::updateConfig()
 {
-    //没有缓存
+   
 }
 void SystemContract::updateCa( )
 {
@@ -333,15 +325,15 @@ void SystemContract::updateCa( )
             m_calist.clear();
             for ( size_t i = 0; i < (size_t)hashslen; i++)
             {
-                //第一步，先拿到hash
+               
                 bytes inputdata2 = abiIn("getHash(uint256)", (u256)i);
                 ExecutionResult ret2 = call(caAction, inputdata2);
                 string hashkey = abiOut<string>(ret2.output);
 
-                //第二步，拿到ca 信息
-                std::string  hash;  // 节点机构证书哈希
-                std::string pubkey;// 公钥
-                std::string orgname;  // 机构名称
+                
+                std::string  hash; 
+                std::string pubkey;
+                std::string orgname;  
                 u256 notbefore;
                 u256 notafter;
                 byte status;
@@ -470,20 +462,20 @@ void SystemContract::getNodeFromContract(std::function<ExecutionResult(Address c
         _nodelist.clear();
         for ( size_t i = 0; i < (size_t)nodeidslen; i++)
         {
-            //第一步，先拿到nodeid
+            
             bytes inputdata2 = abiIn("getNodeId(uint256)", (u256)i);
             ExecutionResult ret2 = _call(nodeAction, inputdata2, false);
             string nodeid = abiOut<string>(ret2.output);
 
-            //第二步，拿到node 信息
+           
 
-            string ip = "";     //节点ip
-            u256 port = 0;              //节点端口
-            u256 category = 0;  //NodeConnParams应该定义枚举
-            string desc;    //节点描述
-            string cahash = ""; //节点的机构信息
+            string ip = "";    
+            u256 port = 0;              
+            u256 category = 0;  
+            string desc;    
+            string cahash = ""; 
             string agencyinfo = "";
-            u256 idx;                   //节点索引
+            u256 idx;                   
             u256 blocknumber;
 
             bytes inputdata4 = abiIn("getNode(string)", nodeid);
@@ -514,7 +506,7 @@ void SystemContract::getNodeFromContract(std::function<ExecutionResult(Address c
 
         }//for
 
-        //排序连续
+        
         sort(_nodelist.begin(), _nodelist.end(), [&](const NodeConnParams & a, const NodeConnParams &  b) {
             return a._iIdx < b._iIdx;
         });
@@ -534,17 +526,14 @@ void SystemContract::tempGetAllNode(int _blocknumber, std::vector< NodeConnParam
         _blocknumber = m_client->blockChain().number();
     LOG(TRACE) << "SystemContract::tempGetAllNode blocknumber=" << _blocknumber;
 
-    //临时建block call结果回来
-
     Block tempblock = m_client->block(_blocknumber );
-    tempblock.setEvmEventLog(true);//方便看log
+    tempblock.setEvmEventLog(true);
 
-    // 临时的call
     auto tempCall = [&](Address const & _to, bytes const & _inputdata, bool ) {
         ExecutionResult ret;
         try
         {
-            //取个随机值
+           
             srand((unsigned)utcTime());
             struct timeval tv;
             gettimeofday(&tv, NULL);
@@ -570,7 +559,7 @@ void SystemContract::tempGetAllNode(int _blocknumber, std::vector< NodeConnParam
     LOG(TRACE) << "SystemContract::tempGetAllNode  _nodelist.size=" << _nodelist.size();
 
 }
-void SystemContract::getAllNode(int _blocknumber/*-1 代表最新块*/ , std::vector< NodeConnParams> & _nodevector )
+void SystemContract::getAllNode(int _blocknumber , std::vector< NodeConnParams> & _nodevector )
 {
     DEV_READ_GUARDED(m_locknode)
     {
@@ -589,7 +578,7 @@ void SystemContract::getAllNode(int _blocknumber/*-1 代表最新块*/ , std::ve
                 return;
             }
         }
-        //下面指定块号获取节点列表
+        
         tempGetAllNode(_blocknumber, _nodevector);
     }
 }//function
@@ -619,7 +608,7 @@ void SystemContract::getCaInfo(string _hash, CaInfo & _cainfo)
 Address SystemContract::getRoute(const string & _route) const
 {
 
-    //非线程安全
+   
     for ( size_t i = 0; i < m_routes.size(); i++)
     {
         if ( m_routes[i].name == _route )
@@ -664,7 +653,7 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
         ExecutionResult res = call(m_transactionfilter.filter, inputBytes);
 
         if (res.output.empty()) {
-            //未部署系统合约或权限合约
+            
             LOG(TRACE) << "SystemContract::transactionFilterCheck res.output.empty()";
             checkresult = (u256)SystemContractCode::Ok;
         }
@@ -706,7 +695,7 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
         ExecutionResult res = call(m_transactionfilter.filter, inputBytes);
 
         if (res.output.empty()) {
-            //未部署系统合约或权限合约
+            
 			LOG(TRACE) << "SystemContract::transactionFilterCheck res.output.empty()";
             checkresult = (u256)SystemContractCode::Ok;
         }
@@ -740,12 +729,7 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
 
 void SystemContract::updateCache(Address ) {
 
-    //如果被写的合约已有缓存，清空之
-    /*
-    auto it = _callCaches.find(address);
-    if(it != _callCaches.end()) {
-        it->second.res.clear();
-    }*/
+ 
 }
 
 void SystemContract::startStatTranscation(h256 t) {
@@ -761,13 +745,12 @@ void SystemContract::startStatTranscation(h256 t) {
 }
 
 
-//是否是链的管理员  没有放到filtercheck里面是因为这个有可能是外在的
 bool SystemContract::isAdmin(const Address &)
 {
     return false;
 }
 
-//获取全网配置项  注意这个地方 不要搞成死锁
+
 bool SystemContract::getValue(const string _key, string & _value)
 {
     DEV_READ_GUARDED(m_lockroute)
@@ -775,12 +758,11 @@ bool SystemContract::getValue(const string _key, string & _value)
         Address action = getRoute("ConfigAction");
         if ( Address() != action )
         {
-            //硬构造 一个 调试
+           
             bytes inputdata = abiIn("get(string)", _key);
 
             ExecutionResult ret = call(action, inputdata);
-            //cout<<" SystemContract::getValue"<<toString(ret.output)<<",size="<<ret.output.size()<<"\n";
-            _value = abiOut<string>(ret.output); // 只解一个
+            _value = abiOut<string>(ret.output); 
 
         }
         else
@@ -799,7 +781,7 @@ ExecutionResult SystemContract::call(Address const& _to, bytes const& _inputdata
     ExecutionResult ret;
     try
     {
-        //取个随机值
+        
         srand((unsigned)utcTime());
         struct timeval tv;
         gettimeofday(&tv, NULL);

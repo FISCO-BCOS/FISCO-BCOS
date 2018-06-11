@@ -50,16 +50,16 @@ namespace dev {
         
         class RPCallback {
         public:
-            //实例
+            //instance
             static RPCallback& getInstance();
             
-            //保存hash和session的映射
+            //keep hash->session mapping
             bool parseAndSaveSession(const string& jsonReqStr, const string& seq, ChannelSession::Ptr session);
             
-            //查找session
+            //get session
             SSPtr getSessionInfoByHash(std::string hash);
             
-            //设置accountHolder,用到里面的密钥签名
+            //set accountHolder for sign
             void setAccountHolder(AccountHolder* _ethAccounts) { m_ethAccounts = _ethAccounts;}
         private:
             RPCallback();

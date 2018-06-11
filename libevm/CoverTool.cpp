@@ -29,7 +29,7 @@ CoverTool::CoverTool()
    // cout<<"CoverTool init"<<"\n";
    //LOG(TRACE)<<"CoverTool init";
 
-    size_t threads=1;//一个就好了
+    size_t threads=1;// 1 is enough
     for (unsigned i = 0; i < threads; ++i)
     m_checks.emplace_back([=](){
        
@@ -104,7 +104,7 @@ void CoverTool::output()
                 std::map<Address, StatItem>::iterator iter=m_statitems.begin();
                 for(; iter != m_statitems.end();iter++)
                 {
-                    if( now - iter->second.lasttime > 600 )//超时就输出
+                    if( now - iter->second.lasttime > 600 )//exit when timeout
                     {
                         std::string  message="";//toString(iter->first)+"\n";
                         //message +="lasttime:"+toString(iter->second.lasttime)+"\n";
@@ -116,12 +116,12 @@ void CoverTool::output()
                             message +=toString(iter->second.vectorinfo.at(i).hint)+"\n";
                         }//for 
 
-                        //写文件
+                        //write to file
                         if( !m_outputpath.empty() )
                             writeFile(m_outputpath+toString(iter->first), message, true);
                         
                         
-                        //一天没更新就删除 
+                        //delete per day
                         if( now - iter->second.lasttime > 24*3600*1000 )
                             m_statitems.erase(iter);
                     }//if

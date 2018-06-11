@@ -1,6 +1,6 @@
 # FISCO BCOS区块链操作手册
 
-[TOC]
+[FISCO-BCOS Manual](README_EN.md)
 
 ## 前言
 
@@ -39,7 +39,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ```shell
 #安装依赖包
-sudo yum install -y git openssl openssl-devel deltarpm cmake3
+sudo yum install -y git openssl openssl-devel deltarpm cmake3 gcc-c++
 #安装nodejs
 sudo yum install -y nodejs
 sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
@@ -99,7 +99,7 @@ cd FISCO-BCOS
 
 #### 1.3.2 安装编译依赖
 
-> 根目录下执行：
+> 根目录下执行（若执行出错，请参考常见问题1）：
 
 ```shell
 chmod +x scripts/install_deps.sh
@@ -240,7 +240,7 @@ cat /mydata/nodedata-1/data/network.rlp.pub
 > 得到如下类似的NodeId
 
 ```log
-24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56
+2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878
 ```
 
 （2）修改genesis.json
@@ -254,7 +254,7 @@ vim /mydata/nodedata-1/genesis.json
 > 修改后，genesis.json中的initMinerNodes字段如下：
 
 ```log
-"initMinerNodes":["24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56"]
+"initMinerNodes":["2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878"]
 ```
 
 （3）修改config.json
@@ -270,10 +270,10 @@ vim /mydata/nodedata-1/config.json
 ```log
 "NodeextraInfo":[
 	{
-		"Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
+		"Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
 		"Nodedesc": "node1",
 		"Agencyinfo": "node1",
-		"Peerip": "0.0.0.0",
+		"Peerip": "127.0.0.1",
 		"Identitytype": 1,
 		"Port":30303,
 		"Idx":0
@@ -353,7 +353,7 @@ vim /mydata/nodedata-1/genesis.json
      "gasLimit": "0x13880000000000",
      "god":"0x27214e01c118576dd5f481648f83bb909619a324",
      "alloc": {},
-     "initMinerNodes":["24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56"]
+     "initMinerNodes":["2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878"]
 }
 ```
 
@@ -407,10 +407,10 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
         },
         "NodeextraInfo":[
                 {
-                "Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
+                "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
                 "Nodedesc": "node1",
                 "Agencyinfo": "node1",
-                "Peerip": "0.0.0.0",
+                "Peerip": "127.0.0.1",
                 "Identitytype": 1,
                 "Port":30303,
                 "Idx":0
@@ -619,13 +619,12 @@ babel-node deploy.js HelloWorld #注意后面HelloWorld后面没有".sol"
 > 输出，可看到合约地址，部署成功：
 
 ```log
-RPC=http://127.0.0.1:8545
-Ouputpath=./output/
 deploy.js  ........................Start........................
 Soc File :HelloWorld
-HelloWorld编译成功！
-HelloWorld合约地址 0x1d2047204130de907799adaea85c511c7ce85b6d
-HelloWorld部署成功！
+HelloWorldcomplie success！
+send transaction success: 0xa8c1aeed8e85cc0308341081925d3dab80da394f6b22c76dc0e855c8735da481
+HelloWorldcontract address 0xa807685dd3cf6374ee56963d3d95065f6f056372
+HelloWorld deploy success!
 ```
 
 ### 3.3 调用合约
@@ -649,16 +648,15 @@ babel-node demoHelloWorld.js
 > 可看到合约调用成功
 
 ```log
-RPC=http://127.0.0.1:8545
-Ouputpath=./output/
 { HttpProvider: 'http://127.0.0.1:8545',
   Ouputpath: './output/',
-  privKey: 'ccec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
+  privKey: 'bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
   account: '0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3' }
-HelloWorld合约address:0x1d2047204130de907799adaea85c511c7ce85b6d
-接口调用前读取接口返回:Hi,Welcome!
-调用更新接口设置name="HelloWorld"(交易哈希：0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee55dabd9c1013634e355)
-接口调用后读取接口返回:HelloWorld!
+HelloWorldcontract address:0xa807685dd3cf6374ee56963d3d95065f6f056372
+HelloWorld contract get function call first :Hi,Welcome!
+send transaction success: 0x6463e0ea9db6c4aff1e3fc14d9bdb86b29306def73e6d951913a522347526435
+HelloWorld contract set function call , (transaction hash ：0x6463e0ea9db6c4aff1e3fc14d9bdb86b29306def73e6d951913a522347526435)
+HelloWorld contract get function call again :HelloWorld!
 ```
 
 
@@ -704,41 +702,85 @@ babel-node deploy.js
 > 部署成功，输出合约路由表。
 
 ```log
-RPC=http://127.0.0.1:8545
-Ouputpath=./output/
-SystemProxy合约地址 0x919868496524eedc26dbb81915fa1547a20f8998  # <-------------很重要
-TransactionFilterChain合约地址 0x23df89a2893120f686a4aa03b41acf6836d11e5d
-AuthorityFilter合约地址 0x4437f8c9cd1e6a3e8ec9c3460c4bc209acdca052
-发送交易成功: 0xc173c4e910e1a38d2debbb7e29bd3962e8806e5855baf6104bd20c5ab826c98d
-发送交易成功: 0xdcc57fc04867cef0f9499c1f03d22884a4a5e292296f98e3367b9307767feefa
-AuthorityFilter版本号1.0
-Group合约地址 0x61dba250334e0fd5804c71e7cbe79eabecef8abe
-CAAction合约地址 0x60d4ee5c461677840ab3552a6845fdf7db4a5317
-NodeAction合约地址 0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2
-ConfigAction合约地址 0xfcd14ed03e6d94ca127d557a1883dd042a81ea11
-FileInfoManager合约地址 0x73479ed8162e198b9627b962eb4aae7098bdc770
-FileServerManager合约地址 0x1406a0c559995562fc77bf2a214a2dcfab4f6b2b
-ContractAbiMgr合约地址 0x9216757a91607668cf8a7a38f8ae56206a6e9f6b
+#.....省略很多编译warn信息.....
+SystemProxycomplie success！
+send transaction success: 0x56c9e34cf559b3a9aead8694a7bda7e6b5ea4af855d5ec6ef08fadf494accf08
+SystemProxycontract address 0x210a7d467c3c43307f11eda35f387be456334fed
+AuthorityFiltercomplie success！
+send transaction success: 0x112b6ac9a61197920b6cbe1a71d8f8d4a6c0c11cd0ae3c1107d1626691bf1c35
+AuthorityFiltercontract address 0x297e397a7534464a4e7448c224aae52f9614af77
+Groupcomplie success！
+send transaction success: 0x1be1fb1393e3a3f37f197188ea99de0a5dd1828cc9fc24638f678528f0e30c23
+Groupcontract address 0xed0a1b82649bd22d947e5c3ca0b779aac8ee5edc
+TransactionFilterChaincomplie success！
+send transaction success: 0x704a614b10c5682c44a11e48305bad40a0809d1fc9e178ddec1218c52e7bc9d0
+TransactionFilterChaincontract address 0x60d34569bc861b40a7552f89a198a89d8c99075e
+CAActioncomplie success！
+send transaction success: 0x75f890777b586060c3f94dc3396f5ad86c3e10f2eb9b8350bbc838beecf50ece
+CAActioncontract address 0x6fbf3bef2f757c01e0c43fc1364207c1e8a19d08
+NodeActioncomplie success！
+send transaction success: 0x9d26304258608de5bf1c47ecb9b2ac79f5323e6b74cef7eddef1fb9893d5e98e
+NodeActioncontract address 0xb5e0d2c6f1b9f40ea21fa8698a28d1662e8afa3e
+send transaction success: 0x03c86b3dcd3d564a00a709b7cd6f1902cd4111cc30c71c62728deadc6e8d7511
+ConfigActioncomplie success！
+send transaction success: 0xa49205ff3ad697fda75019cb2bbf541a120c146b973f8c5d50b761fd5024b795
+ConfigActioncontract address 0xb1e6d5f95c9cb39a9e4e3071b3765e08c30ea281
+FileInfoManagercomplie success！
+send transaction success: 0x10f8b3fa9efb129bb321cba26019f363aad1b1a162b9347f6638bf6d94de7c32
+FileInfoManagercontract address 0x0c2422186429e81911b729fd25e3afa76231f9c7
+FileServerManagercomplie success！
+send transaction success: 0xd156ccb19fa9dc5313c124933a458b141a20cc2ce01334ce030940e9f907cb84
+FileServerManagercontract address 0xb33485375d208a23e897144b6244e20d9c1e83d9
+ConsensusControlMgrcomplie success！
+send transaction success: 0xcfe0a0fc77910c127d31470e38707dfe70a7fb699abce3e9261ef55a4e50997c
+ConsensusControlMgrcontract address 0x3414ef5c15848a07538a2fac57c09a549036b5e3
+ContractAbiMgrcomplie success！
+send transaction success: 0xc1e2c4e837edda0e215ca06aaa02eecb3a954acfafd498a049b7cf6cee410f5c
+ContractAbiMgrcontract address 0xac919b98301804575bd2dc676330aa8f2637f7d5
 #......省略若干行...........
-注册FileServerManager.....
-发送交易成功: 0xe6b7971a727248ed7f120edcc7314129ced70c9ab546038feff6c372c68a9cc3
-合约部署完成 系统代理合约:0x919868496524eedc26dbb81915fa1547a20f8998
------------------系统路由表----------------------
-0 )TransactionFilterChain=>0x23df89a2893120f686a4aa03b41acf6836d11e5d,false,18
-       AuthorityFilter=>1.0,0x4437f8c9cd1e6a3e8ec9c3460c4bc209acdca052
-1 )ConfigAction=>0xfcd14ed03e6d94ca127d557a1883dd042a81ea11,false,19
-2 )NodeAction=>0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2,false,20
-3 )CAAction=>0x60d4ee5c461677840ab3552a6845fdf7db4a5317,false,21
-4 )ContractAbiMgr=>0x9216757a91607668cf8a7a38f8ae56206a6e9f6b,false,22
-5 )FileInfoManager=>0x73479ed8162e198b9627b962eb4aae7098bdc770,false,23
-6 )FileServerManager=>0x1406a0c559995562fc77bf2a214a2dcfab4f6b2b,false,24
-
+send transaction success: 0x2a0f5f9eeb069fe61289e8c95cb4b6cf026859cd20e38e8e47c0788609d8aad1
+send transaction success: 0xcd51375a90056e92a52869c63ec153f05722ab8ee56b5ae242b9114c4838e32b
+send transaction success: 0x250c0fc5f34bfb73a6bc2a858b64287aa859f12651a3798d46d7269e7305bf6f
+send transaction success: 0xff3aeddb55c9ac6868df0cde04466431c7286d93baa80e3826522a2a8ad9681a
+send transaction success: 0x71d484aa4a90068e409a11800e9ae5df6143dd59e0cc21a06c1a0bbba4617307
+send transaction success: 0x8bd093d44c99817685d21053ed468afa8f216bc12a1c3f5fe33e5cd2bfd045c0
+send transaction success: 0x5b9acaab5252bf43b111d24c7ff3adac0121c58e59636f26dbe2ca71dd4af47d
+send transaction success: 0x34fb9226604143bec959d65edb0fc4a4c5b1fe5ef6eead679648c7295099ac8b
+send transaction success: 0xe9cac7507d94e8759fcc945e6225c873a422a78674a79b24712ad76757472018
+register TransactionFilterChain.....
+send transaction success: 0x814ef74b4123f416a0b602f25cc4d49e038826cf50a6c4fbc6a402b9a363a8d9
+register ConfigAction.....
+send transaction success: 0xdb4aaa57b01ca7b1547324bcbeeaaeaa591bf9962ea921d5ce8845b566460776
+register NodeAction.....
+send transaction success: 0x2c7f43c84e52e99178a92e6a63fb69b5dedf4993f7cbb62608c74b6256241b39
+register CAAction.....
+send transaction success: 0xcb792f508ca890296055a53c360d68c3c46f8bf801ce73818557e406cbd0618c
+register ContractAbiMgr.....
+send transaction success: 0xfdc0dd551eada0648919a4c9c5ffa182d042099d73fa802cf803bebf5068aec1
+register ConsensusControlMgr.....
+send transaction success: 0x7f6d95e6a49a1c1de257415545afb0ec7fdd5607c427006fe14a7750246b9d75
+register FileInfoManager.....
+send transaction success: 0xc5e16814085000043d28a6d814d6fa351db1cd34f7d950e5e794d28e4ff0da49
+register FileServerManager.....
+send transaction success: 0xbbbf66ab4acd7b5484dce365d927293b43b3904cd14063a7f60839941a0479a0
+SystemProxy address :0x9fe9648f723bff29f940b8c18fedcc9c7ed2b91f
+-----------------SystemProxy route ----------------------
+get 0xb33485375d208a23e897144b6244e20d9c1e83d9
+0 )TransactionFilterChain=>0x60d34569bc861b40a7552f89a198a89d8c99075e,false,250
+1 )ConfigAction=>0xb1e6d5f95c9cb39a9e4e3071b3765e08c30ea281,false,251
+2 )NodeAction=>0xb5e0d2c6f1b9f40ea21fa8698a28d1662e8afa3e,false,252
+3 )CAAction=>0x6fbf3bef2f757c01e0c43fc1364207c1e8a19d08,false,253
+4 )ContractAbiMgr=>0xac919b98301804575bd2dc676330aa8f2637f7d5,false,254
+5 )ConsensusControlMgr=>0x3414ef5c15848a07538a2fac57c09a549036b5e3,false,255
+6 )FileInfoManager=>0x0c2422186429e81911b729fd25e3afa76231f9c7,false,256
+7 )FileServerManager=>0xb33485375d208a23e897144b6244e20d9c1e83d9,false,257
+-----------------SystemProxy route ----------------------
 ```
 
 > 上述输出内容中，重要的是系统代理合约地址，即SystemProxy合约地址。如：
 
 ```log
-SystemProxy合约地址 0x919868496524eedc26dbb81915fa1547a20f8998
+SystemProxycontract address 0x210a7d467c3c43307f11eda35f387be456334fed
 ```
 
 ### 4.3 配置系统代理合约地址
@@ -754,7 +796,7 @@ vim /mydata/nodedata-1/config.json
 > 配置后，config.json中的systemproxyaddress字段如下：
 
 ```log
-"systemproxyaddress":"0x919868496524eedc26dbb81915fa1547a20f8998",
+"systemproxyaddress":"0x210a7d467c3c43307f11eda35f387be456334fed",
 ```
 
 > 重启被配置的节点：
@@ -850,7 +892,7 @@ cat network.rlp.pub
 > 得到如下类似的NodeId
 
 ```log
-b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8
+838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
 ```
 
 （2）修改config.json
@@ -866,19 +908,19 @@ vim /mydata/nodedata-2/config.json
 ```log
 "NodeextraInfo":[
     {
-	    "Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
+	    "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
 	    "Nodedesc": "node1",
 	    "Agencyinfo": "node1",
-	    "Peerip": "0.0.0.0",
+	    "Peerip": "127.0.0.1",
 	    "Identitytype": 1,
 	    "Port":30303,
 	    "Idx":0
     },
     {
-	    "Nodeid":"b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8",
+	    "Nodeid":"838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c",
 	    "Nodedesc": "node2",
 	    "Agencyinfo": "node2",
-	    "Peerip": "0.0.0.0",
+	    "Peerip": "127.0.0.1",
 	    "Identitytype": 1,
 	    "Port":30403,
 	    "Idx":1
@@ -951,7 +993,7 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 ```log
 {
         "sealEngine": "PBFT",
-        "systemproxyaddress":"0x919868496524eedc26dbb81915fa1547a20f8998",
+        "systemproxyaddress":"0x210a7d467c3c43307f11eda35f387be456334fed",
         "listenip":"0.0.0.0",
         "cryptomod":"0",
         "ssl":"0",
@@ -977,19 +1019,19 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
         },
         "NodeextraInfo":[
                 {
-                "Nodeid":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
+                "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
                 "Nodedesc": "node1",
                 "Agencyinfo": "node1",
-                "Peerip": "0.0.0.0",
+                "Peerip": "127.0.0.1",
                 "Identitytype": 1,
                 "Port":30303,
                 "Idx":0
                 },
                 {
-                "Nodeid":"b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8",
+                "Nodeid":"838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c",
                 "Nodedesc": "node2",
                 "Agencyinfo": "node2",
-                "Peerip": "0.0.0.0",
+                "Peerip": "127.0.0.1",
                 "Identitytype": 1,
                 "Port":30403,
                 "Idx":1
@@ -1112,7 +1154,7 @@ vim node1.json
 > 内容需要与节点config.json中NodeextraInfo字段的内容对应。若在不同机器上组网时，ip填写的是外网ip。编写好的注册配置文件如下：
 
 ```json
-{    "id":"24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56",
+{    "id":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
     "ip":"127.0.0.1",
     "port":30303,
     "category":1,
@@ -1136,18 +1178,16 @@ babel-node tool.js NodeAction registerNode node1.json
 > 可看到注册信息
 
 ```log
-RPC=http://127.0.0.1:8545
-Ouputpath=./output/
 { HttpProvider: 'http://127.0.0.1:8545',
   Ouputpath: './output/',
   privKey: 'bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
   account: '0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3' }
 Soc File :NodeAction
 Func :registerNode
-系统合约地址0x919868496524eedc26dbb81915fa1547a20f8998
+SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 node.json=node1.json
-NodeAction合约地址0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2
-发送交易成功: 0xd70d129a60f9ff355acb13acd7769e99442cc72fe0e1e8f2b49b64a96072b3d7
+NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
+send transaction success: 0x9665417c16b636a2a83e13e82d1674e4db72943bae2095cb030773f0a0ba1eef
 ```
 
 #### 6.1.3 查看入网情况
@@ -1161,18 +1201,24 @@ babel-node tool.js NodeAction all
 > 可看到被注册的节点信息，节点已经加入了网络
 
 ```log
-系统合约地址0x919868496524eedc26dbb81915fa1547a20f8998
-NodeAction合约地址0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2
+{ HttpProvider: 'http://127.0.0.1:8545',
+  Ouputpath: './output/',
+  privKey: 'bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
+  account: '0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3' }
+Soc File :NodeAction
+Func :all
+SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
+NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
 NodeIdsLength= 1
 ----------node 0---------
-id=24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56
+id=2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878
 ip=127.0.0.1
-port=30303
+port=30501
 category=1
 desc=node1
 CAhash=
 agencyinfo=node1
-blocknumber=25
+blocknumber=427
 Idx=0
 ```
 
@@ -1199,28 +1245,34 @@ babel-node tool.js NodeAction all
 > 可看到输出了节点信息（node1），节点加入网络
 
 ```log
-系统合约地址0x919868496524eedc26dbb81915fa1547a20f8998
-NodeAction合约地址0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2
+{ HttpProvider: 'http://127.0.0.1:8545',
+  Ouputpath: './output/',
+  privKey: 'bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
+  account: '0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3' }
+Soc File :NodeAction
+Func :all
+SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
+NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
 NodeIdsLength= 2
 ----------node 0---------
-id=24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56
+id=2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878
 ip=127.0.0.1
-port=30303
+port=30501
 category=1
 desc=node1
 CAhash=
 agencyinfo=node1
-blocknumber=25
+blocknumber=427
 Idx=0
 ----------node 1---------
-id=b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8
+id=838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
 ip=127.0.0.1
-port=30403
+port=30502
 category=1
 desc=node2
 CAhash=
 agencyinfo=node2
-blocknumber=26
+blocknumber=429
 Idx=1
 ```
 
@@ -1236,12 +1288,12 @@ babel-node monitor.js
 > 可看到不断刷出连接信息和块高。已连接节点数表示的是被查询的节点与其它节点连接的个数，即被注册的节点总数减1。此例子中，网络中有2个节点。被查询的节点是创世节点，与创世节点连接的节点只有一个，所以已连接节点数为1。
 
 ```log
-已连接节点数：1
+--------------------------------------------------------------
+current blocknumber 429
+the number of connected nodes：0
 ...........Node 0.........
-NodeId:b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8
+NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
 Host:127.0.0.1:30403
-
-当前块高26
 --------------------------------------------------------------
 ```
 
@@ -1256,26 +1308,43 @@ babel-node tool.js NodeAction cancelNode node2.json
 > 执行后有如下输出：
 
 ```log
-RPC=http://127.0.0.1:8545
-Ouputpath=./output/
 { HttpProvider: 'http://127.0.0.1:8545',
   Ouputpath: './output/',
   privKey: 'bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
   account: '0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3' }
 Soc File :NodeAction
 Func :cancelNode
-系统合约地址0x919868496524eedc26dbb81915fa1547a20f8998
+SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 node.json=node2.json
-NodeAction合约地址0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2
-发送交易成功: 0xe3544a63bbcbd1234e48dfa8f228684617a993addfadefd0aeefe39b517354ab
+NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
+send transaction success: 0x031f29f9fe3b607277d96bcbe6613dd4d2781772ebd0c810a31a8d680c0c49c3
 ```
 
 >查看节点连接，看不到相应节点的信息，表示节点已经退出了网络。
 
 ```log
 babel-node tool.js NodeAction all
+#......节点输出信息......
+{ HttpProvider: 'http://127.0.0.1:8545',
+  Ouputpath: './output/',
+  privKey: 'bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
+  account: '0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3' }
+Soc File :NodeAction
+Func :all
+SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
+NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
+NodeIdsLength= 1
+----------node 0---------
+id=2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878
+ip=127.0.0.1
+port=30501
+category=1
+desc=node1
+CAhash=
+agencyinfo=node1
+blocknumber=427
+Idx=0
 ```
-
 
 
 ## 第七章 机构证书准入
@@ -1636,7 +1705,10 @@ web3.eth.getCode('0x1d2047204130de907799adaea85c511c7ce85b6d',console.log)
 > 执行
 
 ```js
+//ethconsole版本不同命令稍有不同
 web3.admin.getPeers(console.log)
+//或
+web3.admin.peers(console.log)
 ```
 
 > 可看到连接了其它的节点
@@ -1689,7 +1761,7 @@ monitor.js脚本监控节点的连接情况和块高。在运行前，请确认�
 > 配置config，并执行monitor.js
 
 ```shell
-cd /mydata/FISCO-BCOS/systemcontractv2/
+cd /mydata/FISCO-BCOS/tool/
 vim ../web3lib/config.js
 babel-node monitor.js
 ```
@@ -1697,24 +1769,18 @@ babel-node monitor.js
 > 不断刷出节点连接情况和块高
 
 ```log
-已连接节点数：1
+current blocknumber 429
+the number of connected nodes：0
 ...........Node 0.........
-NodeId:b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8
+NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
 Host:127.0.0.1:30403
-当前块高37
 --------------------------------------------------------------
-已连接节点数：1
+current blocknumber 429
+the number of connected nodes：0
 ...........Node 0.........
-NodeId:b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8
+NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
 Host:127.0.0.1:30403
-当前块高37
---------------------------------------------------------------
-已连接节点数：1
-...........Node 0.........
-NodeId:b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8
-Host:127.0.0.1:30403
-当前块高37
---------------------------------------------------------------
+
 ```
 
 
@@ -1732,6 +1798,9 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 7. [监控统计日志](../监控统计日志说明文档.md)
 8. [同态加密](../同态加密说明文档.md)
 9. [机构证书准入](../CA机构身份认证说明文档.md)
+10. [可监管的零知识证明](../可监管的零知识证明说明.md)
+11. [群签名环签名](../启用_关闭群签名环签名ethcall.md)
+12. [弹性联盟链共识框架](../弹性联盟链共识框架说明文档.md)
 
 
 
@@ -1792,7 +1861,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | ------------------ | ---------------------------------------- |
 | sealEngine         | 共识算法（可选PBFT、RAFT、SinglePoint）            |
 | systemproxyaddress | 系统路由合约地址（生成方法可参看部署系统合约）                  |
-| listenip           | 节点监听IP                             |
+| listenip           | 节点监听IP                                   |
 | cryptomod          | 加密模式默认为0（与cryptomod.json文件中cryptomod字段保持一致） |
 | ssl                | 是否启用SSL证书通信（0：非SSL通信 1：SSL通信 需在datadir目录下放置证书文件） |
 | rpcport            | RPC监听端口）（若在同台机器上部署多个节点时，端口不能重复）          |
@@ -1808,7 +1877,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | eventlog           | 合约日志开关（ON或OFF）                           |
 | statlog            | 统计日志开关（ON或OFF）                           |
 | logconf            | 日志配置文件路径（日志配置文件可参看日志配置文件说明）              |
-| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId。此处必须配置节点自身的信息。在配置其它节点信息时，确保节点间能够构成一个连通图。为了稳定性，推荐配置多个除自身以外的其它节点信息。 |
+| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId。此处必须配置节点自身的信息。在配置其它节点信息时，确保节点间能够构成一个连通图。为了稳定性，推荐配置多个除自身以外的其它节点信息。 |
 | dfsNode            | 分布式文件服务节点ID ，与节点身份NodeID一致 （可选功能配置参数）    |
 | dfsGroup           | 分布式文件服务组ID （10 - 32个字符）（可选功能配置参数）        |
 | dfsStorage         | 指定分布式文件系统所使用文件存储目录（可选功能配置参数）             |
@@ -1869,10 +1938,10 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 
 web3调用示例如下（可参看systemcontractv2/deploy.js）：
 ```js
-console.log("注册NodeAction.....");
-func = "setRoute(string,address,bool)";
-params = ["NodeAction", NodeAction.address, false];
-receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
+ console.log("register NodeAction.....");
+ func = "setRoute(string,address,bool)";
+ params = ["NodeAction", NodeAction.address, false];
+ receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
 ```
 
 **（2）工具使用方法**
@@ -1887,18 +1956,22 @@ babel-node tool.js SystemProxy
 示例输出如下：
 
 ```log
+{ HttpProvider: 'http://127.0.0.1:8701',
+  Ouputpath: './output/',
+  privKey: 'bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd',
+  account: '0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3' }
 Soc File :SystemProxy
 Func :undefined
-系统合约地址0x919868496524eedc26dbb81915fa1547a20f8998
------------------系统路由表----------------------
-0 )TransactionFilterChain=>0x23df89a2893120f686a4aa03b41acf6836d11e5d,false,18
-       AuthorityFilter=>1.0,0x4437f8c9cd1e6a3e8ec9c3460c4bc209acdca052
-1 )ConfigAction=>0xfcd14ed03e6d94ca127d557a1883dd042a81ea11,false,19
-2 )NodeAction=>0xa40c864c28ee8b07dc2eeab4711e3161fc87e1e2,false,20
-3 )CAAction=>0x60d4ee5c461677840ab3552a6845fdf7db4a5317,false,21
-4 )ContractAbiMgr=>0x9216757a91607668cf8a7a38f8ae56206a6e9f6b,false,22
-5 )FileInfoManager=>0x73479ed8162e198b9627b962eb4aae7098bdc770,false,23
-6 )FileServerManager=>0x1406a0c559995562fc77bf2a214a2dcfab4f6b2b,false,24
+SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
+-----------------SystemProxy route----------------------
+0 )TransactionFilterChain=>0xea8425697a093606309eb85e4447d6f333cff2fe,false,395
+1 )ConfigAction=>0x09e4f1b4fa1713339f5aa17b40fa6f9920c7b278,false,396
+2 )NodeAction=>0xcc46c245e6cca918d43bf939bbb10a8c0988548f,false,397
+3 )CAAction=>0x8ab1175c6e7edb40dd0ed2a52ceaa94afb135a64,false,398
+4 )ContractAbiMgr=>0x707024221d2433067b768c4be3a005c5ece8df40,false,399
+5 )ConsensusControlMgr=>0x007f2c2751bbcd6c9a630945a87a3bc2af38788c,false,400
+6 )FileInfoManager=>0xe0caa8103ea05b5ce585c05d8112051a0b213acf,false,401
+7 )FileServerManager=>0xe585cc5b8ca7fb174a0560bf79eea7398efaf014,false,402
 ```
 
 输出中即是当前系统路由表的所有路由信息。
@@ -1921,7 +1994,7 @@ web3调用示例如下（可参看systemcontractv2/tool.js）：
 ```js
 var instance=getAction("NodeAction");
 var func = "registerNode(string,string,uint256,uint8,string,string,string,uint256)";
-var params = [node.id,node.ip,node.port,node.category,node.desc,node.CAhash,node.agencyinfo,node.idx]; 
+var params = [node.id,node.ip,node.port,node.category,node.desc,node.CAhash,node.agencyinfo,node.idx];
 var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
 ```
 
@@ -1946,12 +2019,11 @@ var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instan
 
 web3调用示例如下（可参看systemcontractv2/tool.js）：
 ```js
-var instance=getAction("CAAction");
-var func = "update(string,string,string,uint256,uint256,uint8,string,string)";
-var params = 
-[ca.hash,ca.pubkey,ca.orgname,ca.notbefore,ca.notafter,ca.status,ca.whitelist,ca.blacklist]; 
-var receipt = 
-web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
+ var instance=getAction("CAAction");
+ var func = "update(string,string,string,uint256,uint256,uint8,string,string)";
+ var params = [ca.hash,ca.pubkey,ca.orgname,ca.notbefore,ca.notafter,ca.status,ca.whitelist,ca.blacklist];
+ var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
+
 ```
 
 **（2）工具使用方法**
@@ -1997,10 +2069,13 @@ babel-node tool.js CAAction updateStatus
 
 web3调用示例如下（可参看systemcontractv2/deploy.js）：
 ```js
-func = "setUserGroup(address,address)";
-params = [config.account, Group.address];
-receipt = await web3sync.sendRawTransaction(config.account, config.privKey, AuthorityFilter.address, func, params);
-console.log("授予"+config.account+"角色"+Group.address);
+var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey, "Group");
+var Group=web3.eth.contract(getAbi("Group")).at(GroupReicpt.contractAddress);
+#......省略若干行......
+abi = getAbi0("Group");
+params  = ["Group","Group","",abi,GroupReicpt.contractAddress];
+receipt = await web3sync.sendRawTransaction(config.account, config.privKey, ContractAbiMgrReicpt.contractAddre
+ss, func, params);
 ```
 
 **（2）工具使用方法**
@@ -2047,7 +2122,7 @@ web3调用示例如下（可参看systemcontractv2/tool.js）：
 var func = "set(string,string)";
 var params = [key,value];
 var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
-console.log("配置项:"+key+","+value);
+console.log("config :"+key+","+value);
 ```
 
 **（3）使用方法**
@@ -2063,3 +2138,36 @@ babel-node tool.js ConfigAction get 配置项
 ```shell
 babel-node tool.js ConfigAction set 配置项 配置值
 ```
+
+
+
+## 常见问题
+
+### 1 脚本执行时，格式错误
+
+**现象**
+
+执行脚本（如install_deps.sh，build.sh等）时，报如下格式错误。是windows格式和linux格式不一致导致。
+
+``` log
+xxxxx.sh: 行x： $'\r':未找到命令
+xxxxx.sh: 行x： $'\r':未找到命令
+xxxxx.sh: 行x： $'\r':未找到命令
+xxxxx.sh: 行x： $'\r':未找到命令
+```
+
+**解决方法**
+
+用dos2unix工具转换一下格式
+
+``` shell
+sudo yum -y install dos2unix
+dos2unix xxxxx.sh
+```
+
+
+
+
+
+
+
