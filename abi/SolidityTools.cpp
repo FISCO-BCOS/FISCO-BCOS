@@ -140,7 +140,7 @@ namespace libabi
 			for (const auto &t : types)
 			{
 				std::size_t i = SolidityTools::getStaticArraySize(t);
-				if (i <= 0)
+				if (i == 0)
 				{
 					ABI_EXCEPTION_THROW("static array type get size failed => type is " + strType, EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeInvalidAbiType);
 				}

@@ -1,24 +1,23 @@
 /*
-	This file is part of cpp-ethereum.
+	This file is part of FISCO-BCOS.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
+	FISCO-BCOS is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
+	FISCO-BCOS is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+	along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: NodeConnParamsManager.cpp
- * @author: fisco-dev
- * 
- * @date: 2017
+ * @author: toxotguo
+ * @date: 2018
  */
 
 #include <json_spirit/JsonSpiritHeaders.h>
@@ -97,8 +96,7 @@ NodeConnParamsManager::NodeConnParamsManager(std::string const& _json)
 
     LOG(INFO) << "loadNodeConnParams _mConfNodeConnParams size is : " << _mConfNodeConnParams.size() ;
 
-    
-    if (_pSysContractApi != nullptr) {
+    if (m_pContractApi != nullptr) {
         callSysContractData(-1);
     }
 
@@ -111,19 +109,14 @@ bool NodeConnParamsManager::CAVerify = false;
 
 void NodeConnParamsManager::setSysContractApi(std::shared_ptr<SystemContractApi> sysContractApi)
 {
-   
-    if (_pSysContractApi == nullptr)
+    if (m_pContractApi == nullptr)
     {
-        _pSysContractApi = sysContractApi;
-
-       
-        _pSysContractApi->addCBOn("node", [ = ](string) {
-            LOG(TRACE) << "receive systemcontract node call";
+        m_pContractApi = sysContractApi;
+        m_pContractApi->addCBOn("node", [ = ](string) {
+            LOG(INFO) << "receive systemcontract node call";
             //LOG(INFO) << "receive systemcontract node call" ;
             callSysContractData(-1);
         });
-
-        
         callSysContractData(-1);
     }
 }
@@ -131,8 +124,8 @@ void NodeConnParamsManager::setSysContractApi(std::shared_ptr<SystemContractApi>
 void NodeConnParamsManager::callSysContractData(int const& blockNum)
 {
     std::vector< NodeConnParams> vNodeParams;
-   
-    _pSysContractApi->getAllNode(blockNum, vNodeParams);
+    m_pContractApi->getAllNode(blockNum, vNodeParams);
+
     LOG(INFO) << "call systemcontract get all Nodes  size is " << vNodeParams.size() << ".block is " << blockNum;
    
     if (vNodeParams.size() > 0 && checkNodesValid(vNodeParams))
@@ -162,7 +155,7 @@ void NodeConnParamsManager::callSysContractData(int const& blockNum)
         {
            
             std::map<std::string, NodeConnParams> mNodeConnParams;
-            NodeConnParamsManagerApi::getAllConfNodeConnInfo(mNodeConnParams);
+            getAllConfNodeConnInfo(mNodeConnParams);
             for (auto stDelNode : vDelNodes)
             {
                 if (mNodeConnParams.find(stDelNode._sNodeId) == mNodeConnParams.end())
@@ -264,19 +257,19 @@ std::pair<bool, std::map<std::string, NodeConnParams> > NodeConnParamsManager::g
 {
     std::map<std::string, NodeConnParams> temp;
 
-    if ( _chainParams.godMinerStart > 0 ) 
+    if ( m_chainParams.godMinerStart > 0 )
     {
         u256 lastBlockNumber = blockNum;
         if (blockNum < 0)
         {
-            lastBlockNumber = _pSysContractApi->getBlockChainNumber();
+            lastBlockNumber = m_pContractApi->getBlockChainNumber();
         }
 
-        if ( ( lastBlockNumber >= (_chainParams.godMinerStart - 1)  ) && ( lastBlockNumber < _chainParams.godMinerEnd) )
+        if ( ( lastBlockNumber >= (m_chainParams.godMinerStart - 1)  ) && ( lastBlockNumber < m_chainParams.godMinerEnd) )
         {
             LOG(INFO) << " getAllNodeConnInfo lastBlockNumber=" << lastBlockNumber << ",blockNum=" << blockNum << " Hit GodMiner ";
 
-            temp = _chainParams.godMinerList;
+            temp = m_chainParams.godMinerList;
             return std::make_pair(true, temp);
         }
         else
@@ -290,7 +283,7 @@ std::pair<bool, std::map<std::string, NodeConnParams> > NodeConnParamsManager::g
 
 void NodeConnParamsManager::getAllNodeConnInfo(int blockNum, std::map<std::string, NodeConnParams> & mNodeConnParams) const
 {
-    LOG(TRACE) << "NodeConnParamsManager::getAllNodeConnInfo=" << blockNum;
+    LOG(TRACE) << "NodeConnParamsManager::getAllNodeConnInfo blockNum=" << blockNum;
 
     std::pair<bool, std::map<std::string, NodeConnParams> > checkGodMiner = getGodMiner(blockNum);
     if ( checkGodMiner.first == true )
@@ -300,13 +293,12 @@ void NodeConnParamsManager::getAllNodeConnInfo(int blockNum, std::map<std::strin
     }
 
     if (blockNum < 0) {
-        NodeConnParamsManagerApi::getAllNodeConnInfoContract(mNodeConnParams);
+        getAllNodeConnInfoContract(mNodeConnParams);
     }
     else {
         std::vector<NodeConnParams> vNodeParams;
-        
-        _pSysContractApi->getAllNode(blockNum, vNodeParams);
-        LOG(TRACE) << "_pSysContractApi->getAllNode= " << vNodeParams.size();
+        m_pContractApi->getAllNode(blockNum, vNodeParams);
+        LOG(TRACE) << "m_pContractApi->getAllNode= " << vNodeParams.size();
 
         if (vNodeParams.size() > 0)
         {
@@ -318,7 +310,7 @@ void NodeConnParamsManager::getAllNodeConnInfo(int blockNum, std::map<std::strin
         else
         {
             int idx = 0;
-            for (auto nodeid : _vInitIdentityNodes)
+            for (auto nodeid : m_initnodes)
             {
                 NodeConnParams node;
                 node._sNodeId = nodeid;
@@ -385,19 +377,19 @@ bool NodeConnParamsManager::addNewNodeConnInfo(const NodeConnParams &nodeParam)
 
 void NodeConnParamsManager::sendNodeInfoSync(const std::vector<NodeConnParams> &vParams)
 {
-    if (vParams.size() == 0 || _pHost == nullptr)
+    if (vParams.size() == 0 || m_phost == nullptr)
     {
         return;
     }
     LOG(INFO) << "sendNodeInfoSync  " << vParams.size() ;
-    _pHost->addNodeConnParam(vParams);
+    m_phost->addNodeConnParam(vParams);
 }
 
 void NodeConnParamsManager::connNode(const NodeConnParams &param)
 {
     LOG(TRACE) << "NodeConnParamsManager::connNode" << param.toEnodeInfo() << " Valid=" << param.Valid();
 
-    if (_pNetwork == nullptr || !param.Valid())
+    if (m_pnetwork == nullptr || !param.Valid())
     {
         LOG(TRACE) << "NodeConnParamsManager::connNode Not Valid!";
         return;
@@ -405,7 +397,7 @@ void NodeConnParamsManager::connNode(const NodeConnParams &param)
 
     try {
         LOG(TRACE) << "NodeConnParamsManager::connNode start" << param.toEnodeInfo() << " Valid=" << param.Valid();
-        _pNetwork->addPeer(p2p::NodeSpec(param.toEnodeInfo()), p2p::PeerType::Required);
+        m_pnetwork->addPeer(p2p::NodeSpec(param.toEnodeInfo()), p2p::PeerType::Required);
     }
     catch (...)
     {
@@ -415,12 +407,12 @@ void NodeConnParamsManager::connNode(const NodeConnParams &param)
 
 void NodeConnParamsManager::sendDelNodeInfoSync(const std::string &sNodeId)
 {
-    if (sNodeId == "" || _pHost == nullptr)
+    if (sNodeId == "" || m_phost == nullptr)
     {
         return;
     }
 
-    _pHost->delNodeConnParam(sNodeId);
+    m_phost->delNodeConnParam(sNodeId);
 }
 
 void NodeConnParamsManager::delNodeConnInfo(const std::string &sNodeId, bool &bExisted)
@@ -473,14 +465,14 @@ void NodeConnParamsManager::writeNodeFile()
 
 void NodeConnParamsManager::disconnNode(const std::string & sNodeId)
 {
-    if (_pNetwork == nullptr || sNodeId == "")
+    if (m_pnetwork == nullptr || sNodeId == "")
     {
         return;
     }
 
     LOG(INFO) << "disconnNode node id is " << sNodeId ;
     try {
-        _pNetwork->disconnectByNodeId(sNodeId);
+        m_pnetwork->disconnectByNodeId(sNodeId);
     }
     catch (...)
     {
@@ -869,24 +861,7 @@ bool NodeConnParamsManager::checkCA(std::string remoteNodeID, CABaseData & caBas
     LOG(INFO) << "verify ok!!!" ;
     return true;
 }
-// DEPRECATED
-bool NodeConnParamsManager::CheckAndSerialize(const RLP &_rlp, RLPBaseData &_rbd, CABaseData &caBaseData)
-{
-    Public pub = _rlp[4].toHash<Public>();
-    Signature signature = _rlp[5].toHash<Signature>();       
-    std::string caSign = _rlp[6].toString();
-    std::string caPub256 = _rlp[7].toString();
-    LOG(INFO) << "SerializeHandShakeRLP,pub:" << pub << ",signature:" << signature << ",caPub256:" << caPub256 ;
 
-    std::string seed(_rbd.getSeed().begin(), _rbd.getSeed().end());
-    caBaseData.setSeed(seed);
-    caBaseData.setNodeSign(signature);
-    caBaseData.setSign(caSign);
-    caBaseData.setPub256(caPub256);
-
-    return CheckAll(pub.hex(), caBaseData);
-    //checkNodeInfo(pub.hex(), wbCAData) && checkCA(pub.hex(), seedStr, wbCAData);
-}
 // DEPRECATED
 bool NodeConnParamsManager::CheckAll(const std::string& sNodeId, CABaseData &caBaseData) {
     return checkNodeInfo(sNodeId, caBaseData) && checkCA(sNodeId, caBaseData);
@@ -975,8 +950,74 @@ void NodeConnParamsManager::CAVerifyModifyCallback()
     m_host->recheckAllCA();
 };
 
-void NodeConnParamsManager::SetHost(Host *host)
+void NodeConnParamsManager::SetHost(HostApi *host)
 {
     m_host = host;
 };
+
+
+
+
+bool NodeConnParamsManager::getNodeConnInfo(std::string const& sNodeID, NodeConnParams &retNode) const
+{
+	bool bFind = false;
+	Guard l(_xNodeConnParam);
+	if (_mNodeConnParams.find(sNodeID) != _mNodeConnParams.end())
+	{
+		bFind = true;
+		retNode = _mNodeConnParams[sNodeID];
+	}
+	return bFind;
+}
+
+//从内存中 和config数据中查找 更多的是用于自己的
+bool NodeConnParamsManager::getNodeConnInfoBoth(std::string const& sNodeID, NodeConnParams &retNode) const
+{
+	bool bFind = getNodeConnInfo(sNodeID, retNode);
+	if (!bFind)
+	{
+		Guard l(_xConfigNodeConnParam);
+		if (_mConfNodeConnParams.find(sNodeID) != _mConfNodeConnParams.end())
+		{
+			bFind = true;
+			retNode = _mConfNodeConnParams[sNodeID];
+		}
+	}
+	return bFind;
+}
+
+
+void NodeConnParamsManager::getAllNodeConnInfoContract(std::map<std::string, NodeConnParams> & mNodeConnParams) const
+{
+	Guard l(_xNodeConnParam);
+	mNodeConnParams = _mNodeConnParams;
+}
+
+
+void NodeConnParamsManager::getAllConfNodeConnInfo(std::map<std::string, NodeConnParams> & mNodeConnParams) const
+{
+	Guard l(_xConfigNodeConnParam);
+	mNodeConnParams = _mConfNodeConnParams;
+}
+
+void NodeConnParamsManager::getAllNodeConnInfoContractAndConf(std::map<std::string, NodeConnParams> & mNodeConnParams) const
+{
+	mNodeConnParams.clear();
+	{
+		Guard l(_xNodeConnParam); 
+		mNodeConnParams = _mNodeConnParams;
+	}
+
+	{
+		Guard l(_xConfigNodeConnParam);
+		for (auto node : _mConfNodeConnParams)
+		{
+			if (mNodeConnParams.find(node.first) == mNodeConnParams.end())
+			{
+				mNodeConnParams[node.first] = node.second;
+			}
+		}
+	}
+
+}
 

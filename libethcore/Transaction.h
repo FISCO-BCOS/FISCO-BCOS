@@ -26,6 +26,7 @@
 #include <libdevcore/Guards.h>
 #include <libethcore/Common.h>
 #include <libweb3jsonrpc/JsonHelper.h>
+#include <UTXO/UTXOMgr.h>
 
 namespace dev
 {
@@ -46,6 +47,20 @@ enum class CheckTransaction
 	None,
 	Cheap,
 	Everything
+};
+
+enum UTXOType {
+	InValid = 0,				// Invalid
+	InitTokens,					// Coinage
+	SendSelectedTokens,			// Deal
+	RegisterAccount,			// Register account
+	GetToken,					// Get token details
+	GetTx,						// Get UTXOTx details
+	GetVault,					// Get vault details
+	SelectTokens,				// Get the token for payment
+	TokenTracking,				// Token Tracking
+	GetBalance,					// Get the balance
+	ShowAll						// Used for test				
 };
 
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
@@ -230,6 +245,16 @@ public:
 
 	const CnsParams &cnsParams() const;
 
+	UTXOType getUTXOType() const { return m_utxoType; }
+	std::vector<UTXOModel::UTXOTxIn> getUTXOTxIn() const { return m_utxoTxIn; }
+	std::vector<UTXOModel::UTXOTxOut> getUTXOTxOut() const { return m_utxoTxOut; }
+	// Determine if it is a UTXO transaction
+	bool isUTXOTx(const std::string& strJson, Json::Value& _json);
+	// Check UTXO transaction
+	void checkUTXOTransaction(UTXOModel::UTXOMgr* _pUTXOMgr) const;
+	// Determine if it is a UTXO transaction with contract
+	bool isUTXOEvmTx() const;
+	void parseUTXOJson(const Json::Value& _json);
 protected:
 	u256 m_importtime = 0;				
 	mutable h256 m_hashWith;			///< Cached hash of transaction with signature.
@@ -237,6 +262,11 @@ protected:
 	mutable bigint m_gasRequired = 0;	///< Memoised amount required for the transaction to run.
 
 	int m_importType = 0; // default: 0 is from client,  1: from p2p
+
+	UTXOType m_utxoType = InValid;						// UTXO type
+	std::vector<UTXOModel::UTXOTxIn> m_utxoTxIn;		// UTXO Tx inpart
+	std::vector<UTXOModel::UTXOTxOut> m_utxoTxOut;		// UTXO Tx outpart
+	bool m_utxoEvmTx = false;							// UTXO Tx with contract
 };
 
 /// Nice name for vector of Transaction.

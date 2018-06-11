@@ -24,6 +24,7 @@
 #include <ctime>
 #include <boost/filesystem.hpp>
 #include <boost/timer.hpp>
+
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/TrieHash.h>
@@ -31,6 +32,9 @@
 #include <libethcore/Exceptions.h>
 #include <libethcore/SealEngine.h>
 #include <libevm/VMFactory.h>
+#include <UTXO/UTXOSharedData.h>
+#include <UTXO/UTXOTxQueue.h>
+
 #include "BlockChain.h"
 #include "Defaults.h"
 #include "ExtVM.h"
@@ -84,7 +88,8 @@ Block::Block(Block const& _s):
     m_currentBlock(_s.m_currentBlock),
     m_currentBytes(_s.m_currentBytes),
     m_author(_s.m_author),
-    m_sealEngine(_s.m_sealEngine)
+    m_sealEngine(_s.m_sealEngine),
+    m_utxoMgr(_s.m_utxoMgr)
 {
     m_committedToSeal = false;
 }
@@ -106,6 +111,9 @@ Block& Block::operator=(Block const& _s)
 
     m_precommit = m_state;
     m_committedToSeal = false;
+
+    m_utxoMgr = _s.m_utxoMgr;
+
     return *this;
 }
 
@@ -119,7 +127,7 @@ void Block::resetCurrent(u256 const& _timestamp)
     m_currentBlock.setTimestamp(max(m_previousBlock.timestamp() + 1, _timestamp));
     m_currentBytes.clear();
 
-
+    m_utxoMgr.clearDBRecord();
 
     sealEngine()->populateFromParent(m_currentBlock, m_previousBlock);
 
@@ -335,7 +343,24 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
 
     LastHashes lh;
     unsigned goodTxs = 0;
-   
+    std::map<h256, bool> parallelUTXOTx;
+    size_t parallelUTXOTxCnt = 0;
+
+    if (lh.empty()) { lh = _bc.lastHashes(); }
+    m_utxoMgr.setCurBlockInfo(this, lh);
+    if (_exec)
+    {
+        getParallelUTXOTx(ts, parallelUTXOTx, parallelUTXOTxCnt);
+        m_state.setParallelUTXOTx(parallelUTXOTx);
+        LOG(TRACE) << "Block::sync parallelUTXOTxCnt:" << parallelUTXOTxCnt;
+    }
+    UTXOModel::UTXOTxQueue utxoTxQueue(parallelUTXOTxCnt, &m_utxoMgr);
+    m_onParallelTxQueueReady = false;
+    if (_exec && parallelUTXOTxCnt > 0)
+    {
+        m_parallelEnd = utxoTxQueue.onReady([ = ]() { this->onUTXOTxQueueReady(); });
+    }
+    //for (int goodTxs = max(0, (int)ts.size() - 1); goodTxs < (int)ts.size(); )
     {
         //goodTxs = 0;
         for (auto const& t : ts)
@@ -344,30 +369,15 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                 try
                 {
                     LOG(TRACE) << "PACK-TX: Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",time=" << utcTime();
-
-                    u256 check = _bc.filterCheck(t, FilterCheckScene::PackTranscation);
-                    if ( (u256)SystemContractCode::Ok != check  )
-                    {
-                        LOG(WARNING) << "Block::sync " << t.sha3() << " transition filterCheck PackTranscation Fail" << check;
-                        BOOST_THROW_EXCEPTION(FilterCheckFail());
-                    }
-
-                    if ( ! _bc.isBlockLimitOk(t)  ) 
-                    {
-                        LOG(WARNING) << "Block::sync " << t.sha3() << " transition blockLimit=" << t.blockLimit() << " chain number=" << _bc.number();
-                        BOOST_THROW_EXCEPTION(BlockLimitCheckFail());
-                    }
-
-                    if ( !_bc.isNonceOk(t) ) 
-                    {
-                        LOG(WARNING) << "Block::sync " << t.sha3() << " " << t.randomid();
-                        BOOST_THROW_EXCEPTION(NonceCheckFail());
-                    }
-                    for ( size_t pIndex = 0; pIndex < m_transactions.size(); pIndex++) 
+                    //交易打包前检查
+                    for ( size_t pIndex = 0; pIndex < m_transactions.size(); pIndex++) //多做一步，当前块内也不能重复出现
                     {
                         if ( (m_transactions[pIndex].from() == t.from() ) && (m_transactions[pIndex].randomid() == t.randomid()) )
                             BOOST_THROW_EXCEPTION(NonceCheckFail());
                     }//for
+
+                    UTXOType utxoType = t.getUTXOType();
+	        		LOG(TRACE) << "Block::sync utxoType:" << utxoType;
 
                     if (_exec) {
                         u256 _t = _gp.ask(*this);
@@ -377,6 +387,10 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                         //Timer t;
                         if (lh.empty())
                             lh = _bc.lastHashes();
+                        if (parallelUTXOTx[t.sha3()])
+                        {
+                            utxoTxQueue.enqueue(t);
+                        }
                         execute(lh, t, Permanence::Committed, OnOpFunc(), &_bc);
                         ret.first.push_back(m_receipts.back());
                     } else {
@@ -458,6 +472,26 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
             }
         ret.second = (goodTxs >= max_sync_txs);
     }
+    if (_exec && parallelUTXOTxCnt > 0)
+    {
+        StartWaitingForResult(parallelUTXOTxCnt);
+        LOG(TRACE) << "Block::sync parallelTx end";
+        map<h256, UTXOModel::UTXOExecuteState> mapTxResult = utxoTxQueue.getTxResult(); 
+        for (auto const& t : ts)
+        {
+            h256 hash = t.sha3();
+            if (parallelUTXOTx[hash])
+            {
+                if (!mapTxResult.count(hash) || 
+                    UTXOModel::UTXOExecuteState::Success != mapTxResult[hash])
+                {
+                    LOG(TRACE) << hash << " Transaction Error, drop";
+                    _tq.drop(hash);
+                    BOOST_THROW_EXCEPTION(UTXOTxError());
+                }
+            }
+        }
+    }
     return ret;
 }
 
@@ -477,8 +511,17 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
     DEV_TIMED_ABOVE("lastHashes", 500)
     lh = _bc.lastHashes();
 
+    std::map<h256, bool> parallelUTXOTx;
+    size_t parallelUTXOTxCnt = 0;
+    getParallelUTXOTx(m_transactions, parallelUTXOTx, parallelUTXOTxCnt);
+
+    if (parallelUTXOTxCnt > 0)
+    {
+        return execUTXOInBlock(_bc, _tq, lh, parallelUTXOTx, parallelUTXOTxCnt);
+    }
+
     unsigned i = 0;
-    DEV_TIMED_ABOVE("txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()), 500)
+    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()), 500)
     for (Transaction const& tr : m_transactions)
     {
         try
@@ -507,6 +550,82 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
         ++i;
     }
 
+    return ret;
+}
+
+void Block::onUTXOTxQueueReady() 
+{
+    m_onParallelTxQueueReady = true; 
+    m_signalled.notify_all(); 
+    LOG(TRACE) << "Block::onUTXOTxQueueReady";
+}
+
+void Block::StartWaitingForResult(size_t parallelUTXOTxCnt)
+{
+    if (parallelUTXOTxCnt > 0 && 
+        !m_onParallelTxQueueReady) 
+    { 
+        unique_lock<Mutex> l(x_queue);
+		m_signalled.wait(l);
+    }
+}
+
+TransactionReceipts Block::execUTXOInBlock(BlockChain const& _bc, TransactionQueue& _tq, const LastHashes& lh, std::map<h256, bool>& parallelUTXOTx, size_t parallelUTXOTxCnt)
+{
+    // TRANSACTIONS
+    TransactionReceipts ret;
+    
+    unsigned i = 0;                                                         // 传入的交易队列中的计数索引
+    UTXOModel::UTXOTxQueue utxoTxQueue(parallelUTXOTxCnt, &m_utxoMgr);
+    m_onParallelTxQueueReady = false;
+    m_parallelEnd = utxoTxQueue.onReady([ = ]() { this->onUTXOTxQueueReady(); });
+    m_utxoMgr.setCurBlockInfo(this, lh);
+    m_state.setParallelUTXOTx(parallelUTXOTx);
+    LOG(TRACE) << "Block::exec parallelUTXOTxCnt:" << parallelUTXOTxCnt;
+    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()) + " ", 1)
+    for (Transaction const& tr : m_transactions)
+    {
+        try
+        {
+            LOG(TRACE) << "Block::exec transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
+            if (parallelUTXOTx[tr.sha3()])
+            {
+                utxoTxQueue.enqueue(tr);
+            }
+            execute(lh, tr, Permanence::OnlyReceipt, OnOpFunc(), &_bc);
+        }
+        catch (Exception& ex)
+        {
+            ex << errinfo_transactionIndex(i);
+            _tq.drop(tr.sha3());  // TODO: 是否需要分类处理？
+            throw;
+        }
+        LOG(TRACE) << "Block::exec: t=" << toString(tr.sha3());
+        LOG(TRACE) << "Block::exec: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+
+        RLPStream receiptRLP;
+        m_receipts.back().streamRLP(receiptRLP);
+        ret.push_back(m_receipts.back());
+        ++i;
+    }
+    LOG(TRACE) << "Block::exec ParallelTxQueueReady:" << m_onParallelTxQueueReady;
+    StartWaitingForResult(parallelUTXOTxCnt);
+    LOG(TRACE) << "Block::exec parallelTx end";
+    map<h256, UTXOModel::UTXOExecuteState> mapTxResult = utxoTxQueue.getTxResult();
+    for (auto const& t : m_transactions)
+    {
+        h256 hash = t.sha3();
+        if (parallelUTXOTx[hash])
+        {
+            if (!mapTxResult.count(hash) || 
+                UTXOModel::UTXOExecuteState::Success != mapTxResult[hash])
+            {
+                LOG(TRACE) << hash << " Transaction Error, drop";
+                _tq.drop(hash);
+                BOOST_THROW_EXCEPTION(UTXOTxError());
+            }
+        }
+    }
     return ret;
 }
 
@@ -542,6 +661,7 @@ u256 Block::enactOn(VerifiedBlockRef const& _block, BlockChain const& _bc, bool 
 #endif
 
     sync(_bc, _block.info.parentHash(), BlockHeader());
+    LOG(TRACE) << "Block::resetCurrent() number:" << biParent.number();
     resetCurrent();
 
 #if ETH_TIMED_ENACTMENTS
@@ -590,30 +710,95 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
 
     LOG(TRACE) << "Block:enact tx_num=" << _block.transactions.size();
     // All ok with the block generally. Play back the transactions now...
-    unsigned i = 0;
-    DEV_TIMED_ABOVE("txExec,blk=" + toString(_block.info.number()) + ",txs=" + toString(_block.transactions.size()), 500)
-    for (Transaction const& tr : _block.transactions)
+    m_utxoMgr.setCurBlockInfo(this, lh);
+    
+    std::map<h256, bool> parallelUTXOTx;
+    size_t parallelUTXOTxCnt = 0;
+    getParallelUTXOTx(_block.transactions, parallelUTXOTx, parallelUTXOTxCnt);
+    if (parallelUTXOTxCnt > 0)
     {
-        try
+        m_state.setParallelUTXOTx(parallelUTXOTx);
+        LOG(TRACE) << "Block::enact parallelUTXOTxCnt:" << parallelUTXOTxCnt;
+        unsigned i = 0;
+        UTXOModel::UTXOTxQueue utxoTxQueue(parallelUTXOTxCnt, &m_utxoMgr);
+        m_onParallelTxQueueReady = false;
+        m_parallelEnd = utxoTxQueue.onReady([ = ]() { this->onUTXOTxQueueReady(); });
+        DEV_TIMED_ABOVE("Block::enact txExec,blk=" + toString(_block.info.number()) + ",txs=" + toString(_block.transactions.size()) + " ", 1)
+        for (Transaction const& tr : _block.transactions)
         {
-            LOG(TRACE) << "Enacting transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
-            execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
+            try
+            {
+                LOG(TRACE) << "Enacting transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
+                if (parallelUTXOTx[tr.sha3()])
+                {
+                    utxoTxQueue.enqueue(tr);
+                }
+                // 区分从enactOn和populateFromChain
+                execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
 
+                //LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
+                //LOG(TRACE) << m_state;
+            }
+            catch (Exception& ex)
+            {
+                ex << errinfo_transactionIndex(i);
+                throw;
+            }
+
+            LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
+            LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+
+            RLPStream receiptRLP;
+            m_receipts.back().streamRLP(receiptRLP);
+            receipts.push_back(receiptRLP.out());
+            ++i;
         }
-        catch (Exception& ex)
+        StartWaitingForResult(parallelUTXOTxCnt);
+        map<h256, UTXOModel::UTXOExecuteState> mapTxResult = utxoTxQueue.getTxResult();
+        LOG(TRACE) << "Block::enact parallelTx end";
+        for (auto const& t : _block.transactions)
         {
-
-            ex << errinfo_transactionIndex(i);
-            throw;
+            h256 hash = t.sha3();
+            if (parallelUTXOTx[hash])
+            {
+                if (!mapTxResult.count(hash) || 
+                    UTXOModel::UTXOExecuteState::Success != mapTxResult[hash])
+                {
+                    LOG(TRACE) << hash << " Transaction Error";
+                    BOOST_THROW_EXCEPTION(UTXOTxError());
+                }
+            }
         }
+    }
+    else
+    {
+        unsigned i = 0;
+        DEV_TIMED_ABOVE("Block::enact txExec,blk=" + toString(_block.info.number()) + ",txs=" + toString(_block.transactions.size()) + " ", 1)
+        for (Transaction const& tr : _block.transactions)
+        {
+            try
+            {
+                LOG(TRACE) << "Enacting transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
+                // 区分从enactOn和populateFromChain
+                execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
 
-        LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
-        LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+                //LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
+                //LOG(TRACE) << m_state;
+            }
+            catch (Exception& ex)
+            {
+                ex << errinfo_transactionIndex(i);
+                throw;
+            }
 
-        RLPStream receiptRLP;
-        m_receipts.back().streamRLP(receiptRLP);
-        receipts.push_back(receiptRLP.out());
-        ++i;
+            LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
+            LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+
+            RLPStream receiptRLP;
+            m_receipts.back().streamRLP(receiptRLP);
+            receipts.push_back(receiptRLP.out());
+            ++i;
+        }
     }
 
     h256 receiptsRoot;
@@ -761,7 +946,7 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
 // will throw exception
 ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Permanence _p, OnOpFunc const& _onOp, BlockChain const *_bcp)
 {
-    LOG(TRACE) << "Block::execute " << _t.sha3();
+    LOG(TRACE) << "Block::execute " << _t.sha3() << ",to=" << _t.to() << "permanence=" << (int)_p << "_bcp=" << (_bcp!=nullptr ? "not null" : "is null");
     if (isSealed())
         BOOST_THROW_EXCEPTION(InvalidOperationOnSealedBlock());
 
@@ -779,7 +964,7 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
         }
     }
 
-    std::pair<ExecutionResult, TransactionReceipt> resultReceipt = m_state.execute(EnvInfo(info(), _lh, gasUsed(), m_evmCoverLog, m_evmEventLog), *m_sealEngine, _t, _p, _onOp);
+    std::pair<ExecutionResult, TransactionReceipt> resultReceipt = m_state.execute(EnvInfo(info(), _lh, gasUsed(), m_evmCoverLog, m_evmEventLog), *m_sealEngine, _t, _p, _onOp, &m_utxoMgr);
 
     if (_p == Permanence::Committed)
     {
@@ -806,6 +991,21 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
     return resultReceipt.first;
 }
 
+ExecutionResult Block::executeByUTXO(LastHashes const& _lh, Transaction const& _t, Permanence _p, OnOpFunc const& _onOp)
+{
+    LOG(TRACE) << "Block::executeByUTXO " << _t.sha3();
+    if (isSealed())
+        BOOST_THROW_EXCEPTION(InvalidOperationOnSealedBlock());
+
+    // Uncommitting is a non-trivial operation - only do it once we've verified as much of the
+    // transaction as possible.
+    uncommitToSeal();
+
+    //初始化环境EnvInfo 每次执行交易都会初始化环境，
+    std::pair<ExecutionResult, TransactionReceipt> resultReceipt = m_state.execute(EnvInfo(info(), _lh, gasUsed(), m_evmCoverLog, m_evmEventLog), *m_sealEngine, _t, _p, _onOp, &m_utxoMgr);
+
+    return resultReceipt.first;
+}
 
 void Block::applyRewards(vector<BlockHeader> const& _uncleBlockHeaders, u256 const& _blockReward)
 {
@@ -913,6 +1113,18 @@ void Block::commitToSeal(BlockChain const& _bc, bytes const& _extraData)
     m_currentBlock.setLogBloom(logBloom());
     m_currentBlock.setGasUsed(gasUsed());
     m_currentBlock.setRoots(hash256(transactionsMap), hash256(receiptsMap), sha3(m_currentUncles), m_state.rootHash());
+    LOG(TRACE) << "Block::commitToSeal() number:" << m_currentBlock.number();
+    h256 UTXOHash = m_utxoMgr.getHash();
+    h256s hashList = m_currentBlock.hashList();
+    if (hashList.size() == 0)
+    {
+        hashList.push_back(UTXOHash);
+    }
+    else if (hashList.size() >= 1)
+    {
+        hashList[0] = UTXOHash;
+    }
+    m_currentBlock.setHashList(hashList);
 
     m_currentBlock.setParentHash(m_previousBlock.hash());
     m_currentBlock.setExtraData(_extraData);
@@ -947,6 +1159,18 @@ void Block::commitToSealAfterExecTx(BlockChain const&) {
     m_currentBlock.setLogBloom(logBloom());
     m_currentBlock.setGasUsed(gasUsed());
     m_currentBlock.setRoots(m_currentBlock.transactionsRoot(), hash256(receiptsMap), m_currentBlock.sha3Uncles(), m_state.rootHash());
+    LOG(TRACE) << "Block::commitToSealAfterExecTx() number:" << m_currentBlock.number();
+    h256 UTXOHash = m_utxoMgr.getHash();
+    h256s hashList = m_currentBlock.hashList();
+    if (hashList.size() == 0)
+    {
+        hashList.push_back(UTXOHash);
+    }
+    else if (hashList.size() >= 1)
+    {
+        hashList[0] = UTXOHash;
+    }
+    m_currentBlock.setHashList(hashList);
 
     m_committedToSeal = true;
 }
@@ -1069,6 +1293,8 @@ void Block::cleanup(bool _fullCommit)
 void Block::commitAll() {
     // Commit the new trie to disk.
     LOG(TRACE) << "Committing to disk: stateRoot" << m_currentBlock.stateRoot() << "=" << rootHash() << "=" << toHex(asBytes(db().lookup(rootHash())));
+    LOG(TRACE) << "Block::commitAll() number:" << m_currentBlock.number();
+    m_utxoMgr.commitDB();
 
     try
     {
@@ -1121,6 +1347,40 @@ string Block::vmTrace(bytesConstRef _block, BlockChain const& _bc, ImportRequire
         ++i;
     }
     return ret.empty() ? "[]" : (ret + "]");
+}
+
+void Block::getParallelUTXOTx(const Transactions& transactions, std::map<h256, bool>& ret, size_t& cnt)
+{
+    std::vector<bool> artificialTx;
+    isArtificialTx(transactions, artificialTx);
+    for (size_t i = 0; i < transactions.size(); i++)
+    {
+        const Transaction& tr = transactions[i];
+        bool temp = (tr.getUTXOType() != UTXOType::InValid && !tr.isUTXOEvmTx() && !artificialTx[i]);
+        ret[tr.sha3()] = temp;
+        if (temp) { cnt++; }
+    }
+}
+
+void Block::isArtificialTx(const Transactions& txList, std::vector<bool>& flag)
+{
+    std::vector<bool> tmp(txList.size(), false);
+    flag = tmp;
+
+    std::map<string, size_t> tokenKeyMap;
+    for (size_t txIdx = 0; txIdx < txList.size(); txIdx++)
+    {
+        std::vector<UTXOModel::UTXOTxIn> inList = txList[txIdx].getUTXOTxIn();
+        for(const UTXOModel::UTXOTxIn& in : inList)
+        {
+            if (tokenKeyMap.count(in.tokenKey))
+            {
+                flag[txIdx] = true;
+                flag[tokenKeyMap[in.tokenKey]] = true;
+            }
+            tokenKeyMap[in.tokenKey] = txIdx;
+        }
+    }
 }
 
 std::ostream& dev::eth::operator<<(std::ostream& _out, Block const& _s)

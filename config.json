@@ -1,38 +1,19 @@
 {
 	"sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"127.0.0.1",
+        "listenip":"0.0.0.0",
   	"cryptomod":"0",
-	"ssl":"0",
         "rpcport": "8545",
         "p2pport": "30303",
         "channelPort": "30304",
-        "wallet":"/mydata/nodedata-1/keys.info",
-        "keystoredir":"/mydata/nodedata-1/keystore/",
-        "datadir":"/mydata/nodedata-1/data/",
+        "wallet":"./data/keys.info",
+        "keystoredir":"./data/keystore/",
+        "datadir":"./data/",
         "vm":"interpreter",
         "networkid":"12345",
         "logverbosity":"4",
         "coverlog":"OFF",
         "eventlog":"ON",
   	"statlog":"OFF",
-        "logconf":"/mydata/nodedata-1/log.conf",
-        "params": {
-                "accountStartNonce": "0x0",
-        	"maximumExtraDataSize": "0x0",
-        	"tieBreakingGas": false,
-                "blockReward": "0x0",
-                "networkID" : "0x0"
-        },
-        "NodeextraInfo":[
-                {
-                "Nodeid":"33715c8fbc9cfa417c7d2f9f7b9bf79a23cdcc0e4e2517ea4856537d9616e1718a6ee6cb9ef927ee294ae20d9839f2b102f46bdc47fca0fd24df7797312a4817", 
-                "Nodedesc": "node1",
-                "Agencyinfo": "node1",
-                "Peerip": "127.0.0.1",
-                "Identitytype": 1,
-                "Port":30303,
-                "Idx":0
-                }
-        ]
+        "logconf":"./log.conf"
 }

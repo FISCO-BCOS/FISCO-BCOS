@@ -20,14 +20,16 @@
  * 
  * @date: 2017
  */
-
-#include "GenKey.h"
 #include <curl/curl.h>
 #include <libdevcore/FileSystem.h>
 #include <libdevcrypto/AES.h>
 #include <libdevcore/RLP.h>
-#include "CryptoParam.h"
 #include <libdevcore/easylog.h>
+#if ETH_ENCRYPTTYPE
+#include <libdevcrypto/sm2/sm2.h>
+#endif
+#include "CryptoParam.h"
+#include "GenKey.h"
 GenKey::GenKey(void)
 {
 	m_cryptoMod = 0;
@@ -83,16 +85,6 @@ void GenKey::setNodeKeyPath(string nodekeyPath)
 	m_nodekeyPath = nodekeyPath;
 }
 
-void GenKey::setPrivateKeyPath(string privatekeyPath)
-{
-	m_privatekeyPath = privatekeyPath;
-}
-
-void GenKey::setEnPrivateKeyPath(string enprivatekeyPath)
-{
-	m_enprivatekeyPath = enprivatekeyPath;
-}
-
 
 void GenKey::setDataKeyPath(string datakeyPath)
 {
@@ -137,7 +129,8 @@ string GenKey::getKeycenterData(string const& b64data,string const& kcUrl,int ke
 	return reqData;
 }
 
-void GenKey::generateNetworkRlp(string const& sFilePath,int cryptoType,string const& keyData,string const& ivData,string const& kcUrl,int keyType)//1:nodekey 3:datakey
+
+void GenKey::genEcdsaKey(string const& sFilePath,int cryptoType,string const& keyData,string const& ivData,string const& kcUrl,int keyType)
 {
 	KeyPair kp = KeyPair::create();
 	RLPStream netData(3);
@@ -148,6 +141,7 @@ void GenKey::generateNetworkRlp(string const& sFilePath,int cryptoType,string co
 	{
 	case CRYPTO_DEFAULT:
 		writeFile(sFilePath, netData.out());
+		cout << "write into file [" << sFilePath << "]" << "\n";
 		break;
 	case CRYPTO_LOCAL:
 		{
@@ -157,6 +151,7 @@ void GenKey::generateNetworkRlp(string const& sFilePath,int cryptoType,string co
 			cout<<"b64Data:"<<b64Data<<"\n";
 			LOG(DEBUG)<<"CRYPTO_LOCAL::b64Data:"<<b64Data<<"\n";
 			writeFile(sFilePath,b64Data);
+			cout << "write into file [" << sFilePath << "]" << "\n";
 		}
 		break;
 	case CRYPTO_KEYCENTER:
@@ -186,6 +181,7 @@ void GenKey::generateNetworkRlp(string const& sFilePath,int cryptoType,string co
 			LOG(DEBUG)<<"cryptoParam.resData:"<<cryptoParam.m_resData;
 			LOG(DEBUG)<<"cryptoParam.ID:"<<cryptoParam.m_ID;
 			LOG(DEBUG)<<"cryptoParam.errCode:"<<cryptoParam.m_errCode;
+
 			if (cryptoParam.m_errCode != 0)//keycenter response
 			{
 				cout<<"keycenter response err"<<"\n";
@@ -195,16 +191,22 @@ void GenKey::generateNetworkRlp(string const& sFilePath,int cryptoType,string co
 			auto deb64Data = fromBase64(cryptoParam.m_resData);
 			auto deData = aesCBCDecrypt(bytesConstRef{deb64Data.data(), deb64Data.size()},keyData,keyData.length(),bytesConstRef{(const unsigned char*)ivData.c_str(), ivData.length()});//keycenter channel encrypt
 			writeFile(sFilePath,deData);
+			cout << "write into file [" << sFilePath << "]" << "\n";
 		}
 		break;
 	}
-	if (keyType != KEY_DATA)//create datakey file 
+	if (keyType != KEY_DATA)
 	{
 		writeFile(sFilePath+".pub", kp.pub().hex());
 		cout << "eth generate network.rlp. " << "\n";
 		cout << "eth public id is :[" << kp.pub().hex() << "]" << "\n";
-		cout << "write into file [" << sFilePath << "]" << "\n";
+		cout << "write into file [" << sFilePath + ".pub" << "]" << "\n";
 	}
+}
+
+void GenKey::generateNetworkRlp(string const& sFilePath,int cryptoType,string const& keyData,string const& ivData,string const& kcUrl,int keyType)//1:nodekey 3:datakey
+{
+	genEcdsaKey(sFilePath,cryptoType,keyData,ivData,kcUrl,keyType);
 }
 
 string GenKey::getSuperKey()
@@ -258,97 +260,7 @@ void GenKey::setKeyData()
 	}
 }
 
-void GenKey::setPrivateKey()
-{
-	auto nodeState = contents(m_privatekeyPath);
-	string changeKey = m_changeKey1 + m_changeKey2 + m_changeKey3 + m_changeKey4;
-	string ivData = changeKey.substr(0,16);
-
-	auto enData = aesCBCEncrypt(bytesConstRef(&nodeState),changeKey,changeKey.length(),bytesConstRef{(const unsigned char*)ivData.c_str(), ivData.length()});//channel encrypt 
-	string b64Data = toBase64(bytesConstRef{enData.data(), enData.size()});							
-	LOG(DEBUG)<<"CRYPTO_KEYCENTER::Encryptob64Data:"<<b64Data;
-
-	string reqData = getKeycenterData(b64Data,m_kcUrl + "/uploadkey",KEY_DATA);//keycenter decrypt
-	if (reqData == "")
-	{
-		cout<<"Connect KeyCenter Error"<<"\n";
-		LOG(DEBUG)<<"Connect KeyCenter Error";
-		return;
-	}
-	LOG(DEBUG)<<"CRYPTO_KEYCENTER::KeyCenterResqData:"<<reqData;
-
-	CryptoParam cryptoParam;
-	cryptoParam = cryptoParam.loadKeyCenterReq(reqData);//keycenter response
-
-	LOG(DEBUG)<<"cryptoParam.resData:"<<cryptoParam.m_resData;
-	LOG(DEBUG)<<"cryptoParam.ID:"<<cryptoParam.m_ID;
-	LOG(DEBUG)<<"cryptoParam.errCode:"<<cryptoParam.m_errCode;
-	if (cryptoParam.m_errCode != 0)
-	{
-		cout<<"keycenter response err errcode:"<<cryptoParam.m_errCode<<"\n";
-		LOG(DEBUG)<<"CRYPTO_KEYCENTER::KeyCenterResqData Error";
-		exit(-1);
-	}
-	auto deb64Data = fromBase64(cryptoParam.m_resData);//decrypt base64 data
-	auto deData = aesCBCDecrypt(bytesConstRef{deb64Data.data(), deb64Data.size()},changeKey,changeKey.length(),bytesConstRef{(const unsigned char*)ivData.c_str(), ivData.length()});//decrypt channel encrypt
-	writeFile(m_enprivatekeyPath,deData);
-}
-
-string GenKey::getPrivateKey()
-{
-	auto privateData = contents(getDataDir() + "/server.key");
-	if (dev::getCryptoPrivateKeyMod() == 0)
-	{
-		dev::setPrivateKey(asString(privateData));
-		return asString(privateData);
-	}
-	//nodekey
-	string changeKey = m_changeKey1 + m_changeKey2 + m_changeKey3 + m_changeKey4;
-	string ivData = changeKey.substr(0,16);
-	auto enData = aesCBCEncrypt(bytesConstRef(&privateData),changeKey,changeKey.length(),bytesConstRef{(const unsigned char*)ivData.c_str(),ivData.length()});
-	string  b64Data = toBase64(bytesConstRef(&enData));
-	string reqData =getKeycenterData(b64Data,m_kcUrl + "/getkey",KEY_DATA);
-	if (reqData == "")
-	{
-		cout<<"Connect KeyCenter Error"<<"\n";
-		exit(0);
-	}
-	LOG(DEBUG)<<"kcreqdata:"<<reqData;
-	CryptoParam cryptoParam;
-	cryptoParam = cryptoParam.loadKeyCenterReq(reqData);
-	LOG(DEBUG)<<"cryptoParam.resData:"<<cryptoParam.m_resData;
-	LOG(DEBUG)<<"cryptoParam.ID:"<<cryptoParam.m_ID;
-	LOG(DEBUG)<<"cryptoParam.errCode:"<<cryptoParam.m_errCode;
-
-	auto deb64Data = fromBase64(cryptoParam.m_resData);
-	try
-	{
-		auto deData = aesCBCDecrypt(bytesConstRef(&deb64Data),changeKey,changeKey.length(),bytesConstRef{(const unsigned char*)ivData.c_str(), ivData.length()});//decrypt channel encrypt
-		dev::setPrivateKey(asString(deData));
-		return asString(deData);
-	}
-	catch(...)
-	{
-		LOG(ERROR)<<"keycenter decrypto server.key err..........";
-	}
-	return "";
-}
-
-
-string GenKey::getPublicKey()
-{
-	auto publicData = contents(getDataDir() + "/server.crt");
-	return asString(publicData);
-}
-
-string GenKey::getCaPublicKey()
-{
-	auto publicData = contents(getDataDir() + "/ca.crt");
-	return asString(publicData);
-}
-
-
-bytes GenKey::getKeyData()
+bytes GenKey::getEcdsaKey()
 {
 	auto nodesState = contents(getDataDir() + "/network.rlp");
 	switch(m_cryptoMod)
@@ -398,7 +310,7 @@ bytes GenKey::getKeyData()
 				exit(0);
 			}
 			cout<<"kcreqdata:"<<reqData<<"\n";
-			
+
 			CryptoParam cryptoParam;
 			cryptoParam = cryptoParam.loadKeyCenterReq(reqData);
 			cout<<"cryptoParam.resData:"<<cryptoParam.m_resData<<"\n";
@@ -424,7 +336,7 @@ bytes GenKey::getKeyData()
 				exit(0);
 			}
 			cout<<"kcreqdata:"<<reqData<<"\n";
-			
+
 			cryptoParam = cryptoParam.loadKeyCenterReq(reqData);
 			cout<<"cryptoParam.resData:"<<cryptoParam.m_resData<<"\n";
 			cout<<"cryptoParam.ID:"<<cryptoParam.m_ID<<"\n";
@@ -440,4 +352,9 @@ bytes GenKey::getKeyData()
 		break;
 	}
 	return nodesState;
+}
+
+bytes GenKey::getKeyData()
+{
+	return getEcdsaKey();
 }
