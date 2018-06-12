@@ -1,0 +1,9 @@
+{
+	"cryptomod":"0",
+	"rlpcreatepath":"./network.rlp",
+	"datakeycreatepath":"./datakey",
+	"privatekeypath":"./private.key",
+	"enprivatekeypath":"./server.key",
+	"keycenterurl":"https://127.0.0.1",
+	"superkey":""
+}
