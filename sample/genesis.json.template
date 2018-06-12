@@ -1,0 +1,13 @@
+{
+	"nonce": "0x0",
+	"difficulty": "0x0",
+	"mixhash": "0x0",
+	"coinbase": "0x0",
+	"timestamp": "0x0",
+	"parentHash": "0x0",
+	"extraData": "0x0",
+	"gasLimit": "0x13880000000000",
+	"god":"{admin}",
+	"alloc": {}, 	
+	"initMinerNodes":{initMinerNodes}
+}
