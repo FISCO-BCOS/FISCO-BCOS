@@ -1144,7 +1144,7 @@ Idx=0
 
 #### 8.1 登记注销证书
 
-每个节点data目录先都node.ca文件，里面保存了证书相关信息，通过执行以下命令，可以将节点证书加入系统合约注销证书列表，以下以创世节点证书注销为例。
+每个节点data目录都包含node.ca文件，里面保存了证书相关信息，通过执行以下命令，可以将节点证书加入系统合约注销证书列表，以下以创世节点证书注销为例。
 
 ```shell
 cd /mydata/FISCO-BCOS/systemcontract/
@@ -1548,7 +1548,7 @@ SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 
 输出中即是当前系统路由表的所有路由信息。
 
-#### 12.7.2 节点管理合约
+#### 12.6.2 节点管理合约
 
 节点管理合约主要功能是维护网络中节点列表。
 网络中节点加入或退出都需要与节点管理合约进行交互。
@@ -1574,7 +1574,7 @@ var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instan
 
 请参看 注册记账节点、退出记账节点。
 
-#### 12.7.3 注销证书合约
+#### 12.6.3 注销证书合约
 
 注销证书合约主要功能是维护注销证书信息列表。
 
@@ -1617,7 +1617,7 @@ babel-node tool.js CAAction add
 babel-node tool.js CAAction remove
 ```
 
-#### 12.7.4 权限管理合约
+#### 12.6.4 权限管理合约
 
 权限管理合约是对区块链权限模型的实现。
 
@@ -1661,7 +1661,7 @@ babel-node tool.js AuthorityFilter 用户外部账户、合约地址、合约接
 
 继承TransactionFilterBase实现新的交易Filter合约。并通过addFilter接口将新Filter注册入TransactionFilterChain即可。
 
-#### 12.7.5 全网配置合约
+#### 12.6.5 全网配置合约
 
 全网配置合约维护了区块链中部分全网运行配置信息。
 

@@ -88,7 +88,6 @@ function ca_exists()
     fi
 }
 
-rm -rf agency_all
 ca_exists
 
 ###install pre-packages
