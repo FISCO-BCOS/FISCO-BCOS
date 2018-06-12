@@ -311,20 +311,20 @@ Signature dev::gmSign(Secret const& _k, h256 const& _hash)
 		return Signature{};
 	}
 	string pub = SM2::getInstance().priToPub(pri);
-	LOG(DEBUG) <<"_hash:"<<toHex(_hash.asBytes())<<"gmSign:"<< r + s + pub;
+	//LOG(DEBUG) <<"_hash:"<<toHex(_hash.asBytes())<<"gmSign:"<< r + s + pub;
 	bytes byteSign = fromHex(r + s + pub);
-	LOG(DEBUG)<<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
+	//LOG(DEBUG)<<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
 	return Signature{byteSign};
 }
 
 bool dev::gmVerify(Public const& _p, Signature const& _s, h256 const& _hash)
 {
 	string signData = toHex(_s.asBytes());
-	LOG(DEBUG)<<"verify signData:"<<signData;
-	LOG(DEBUG)<<"_hash:"<<toHex(_hash.asBytes());
+	//LOG(DEBUG)<<"verify signData:"<<signData;
+	//LOG(DEBUG)<<"_hash:"<<toHex(_hash.asBytes());
 	string pub = toHex(_p.asBytes());
 	pub = "04" + pub;
-	LOG(DEBUG)<<"verify pub:"<<pub;
+	//LOG(DEBUG)<<"verify pub:"<<pub;
 	bool lresult = SM2::getInstance().verify(signData,signData.length(),(const char*)_hash.data(),h256::size,pub);
 	//LOG(DEBUG)<<"verify lresult:"<<lresult;
 	//assert(lresult);

@@ -204,7 +204,7 @@ public:
 
 			//==== load all agency certificates==========    
 			//LoadCert(getDataDir()  + "ca");
-			LoadCert(getDataDir() + "agency_all");
+			//LoadCert(getDataDir() + "agency_all");
 			if (certificates[1].first == "")
 			{
 				LOG(ERROR) << "Ssl Socket Init Fail! Please check gmagency.crt!";
@@ -259,6 +259,7 @@ public:
 	 * @ params: 
 	 *			cert_dir: directory used to store all certificates
 	 */
+	 /* commented for bugs of tassl are fixed
 	static void LoadCert(const string&  cert_dir)
 	{
 		try
@@ -278,7 +279,7 @@ public:
 						<< "! Once We support Multiple level certificate chain acquisition, you can ignore this warning";
 			return;
 		}
-	}
+	}*/
 #endif
 
 	const NodeIPEndpoint& nodeIPEndpoint()const

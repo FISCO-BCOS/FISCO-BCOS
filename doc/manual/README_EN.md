@@ -1214,15 +1214,17 @@ blocknumber=427
 Idx=0
 ```
 
-#### 6.1.4 Register more nodes
+<br>
+
+#### 7.1.3 Register more nodes
 
 Make sure the genesis node is the first registered node before you register more nodes, and all registered nodes are started.
 
 > Repeat the previous steps to register more.
 
 ```shell
-vim node2.json #correspond with config.json
-babel-node tool.js NodeAction registerNode node2.json
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js NodeAction register /mydata/nodedata-2/data/node.json
 cd /mydata/nodedata-2/
 ./start.sh #Start the registered node, if success, get sealing info.
 ```
@@ -1268,33 +1270,17 @@ blocknumber=429
 Idx=1
 ```
 
-### 6.2 check Node Connection
+<br>
 
->run
+### 7.2  Unregister Nodes
 
-```shell
-cd /mydata/FISCO-BCOS/systemcontractv2/
-babel-node monitor.js
-```
+> Use *cancel* option of tool.js to unregister a node, taking unregister node2 from block generator nodes as a example:
 
-> Get connection number constantly. Connection number is 1 means that the the node you set in config.js has connected to 1 other node. So, there are 2 active members connect each other on FISCO-BCOS blockchain.
-
-```log
---------------------------------------------------------------
-current blocknumber 429
-the number of connected nodes：0
-...........Node 0.........
-NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
-Host:127.0.0.1:30403
---------------------------------------------------------------
-```
-
-### 6.3  Unregister Nodes
-
-> To unregister a node, use *cancelNode* command like
+> attention: /mydata/nodedata-2/data/node.json is the configuration path of node2 used to both register and unregister from block generators.
 
 ```shell
-babel-node tool.js NodeAction cancelNode node2.json
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js NodeAction cancel /mydata/nodedata-2/data/node.json
 ```
 
 > If success
@@ -1312,7 +1298,7 @@ NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
 send transaction success: 0x031f29f9fe3b607277d96bcbe6613dd4d2781772ebd0c810a31a8d680c0c49c3
 ```
 
->Check node registration, there is no info of the canceled node. The node has quited the network.
+> Check node registration, there is no info of the canceled node. The node has quited the network.
 
 ```log
 babel-node tool.js NodeAction all
@@ -1338,13 +1324,18 @@ blocknumber=427
 Idx=0
 ```
 
+<br>
+
+<br>
 
 
-## Chapter 7 Institution Certificate Access Control
+## Chapter 8 Withdraw Certificates
 
-FISCO-BCOS support institution certificate access control(ICAC). After nodes registration, the connection between nodes can be controlled through ICAC. In FISCO-BCOS blockchain, the members who have the same institution certificate belong to an institution. Blockchain members can control an institution's connection through ICAC.
+FISCO-BCOS controls the access mechanism of nodes by certificates. Only authorized nodes with valid certificates can communicate with other nodes. 
 
-> ICAC access relies on system contract. Before you try ICAC, please confirm:
+FISCO-BCOS provides a tool for administrators of the FISCO-BCOS block chain, they can either register specified certificates to the **revocation list of certificates** by using **add** option of **CAAction** to prevent specified nodes from accessing the network of blockchain, or remove specified certificates from the **revocation list of certificates** by using **remove** option of **CAAction** to recover the authority of specified nodes to access the network of FISCO-BCOS block chain.
+
+> Before withdrawing or recovering specified certificates from **revocation list of certificates**, please ensure:
 >
 > (1) The system contract has been deployed correctly;
 >
@@ -1352,242 +1343,61 @@ FISCO-BCOS support institution certificate access control(ICAC). After nodes reg
 >
 > (3) Node has been restarted to enable system contract after (2);
 >
-> (4) config.js* in */mydata/FISCO-BCOS/systemcontractv2/* has point to an active node's RPC port.
-
-### 7.1 Configure Institution Certificate Files
-
-Nodes of an institution shared the same institution certificate key. If we enable institution certificate access control, only the node who has an registered institution certificate key can connect to blockchain. Configuring institution certificate key of a node is to configure the certificate files in node's *data* directory, include :
-
-- *ca.crt*: Root certificate public key of the blockchain. 
-- *ca.key*: Root certificate private key of the blockchain.  Keep it secret and use it only when creating a node's certificate file.
-- *server.crt*: Public key for an institution shared by every members in this institution.
-- *server.key*: Private key for an institution shared by every members in this institution. Keep it secret.
-
-The certificate key files should be named strictly the same as above.
-
-The blockchain controls the nodes of an institution connect to blockchain by registering/unregistering the institution public key *server.crt*.
-
-For more detail, please refer to <u>2.4: Configure Certificates</u>
-
-### 7.2 Enable SSL Validation to All Nodes
-
-Enable every node's SSL validation before using institution certificate access control.
-
-> Example of node1
-
-```shell
-cd /mydata/nodedata-1/
-vim config.json
-```
-
-> Set the field *ssl* to 1, like:
-
-```json
-"ssl":"1",
-```
-
-> Restart the node to enabled
-
-```shell
-./stop.sh
-./start.sh
-```
-
-> Same for the other nodes.
-
-**Note: Make sure that ALL nodes' SSL validation is enabled.**
-
-### 7.3 Register Institution Certificate Key
-
-If we enable ICAC, only the nodes who have registered institution certificate key can connect to FISCO-BCOS blockchain.  Before enabling ICAC, we need to register the institution certificate key on chain.
-
-#### 7.3.1 Get the serial number of the institution certificate public key
-
-> Get the serial number of *server.crt*
-
-```shell
-cd /mydata/nodedata-2/data
-openssl x509 -noout -in server.crt -serial
-```
-
-> We get the number like:
-
-```log
-serial=8A4B2CDE94348D22
-```
-
-#### 7.3.2 Write institution certificate registration file
-
-> Modify the example
-
-```shell
-cd /mydata/FISCO-BCOS/systemcontractv2
-vim ca.json
-```
-
-> Write the serial number into the field *hash*. Then configure the file *status*, 0 means unregistering and 1 means registering. And other fields, leave default. As the followings, set status to 1 to enable the certificate of node2. 
-
-```json
-{
-        "hash" : "8A4B2CDE94348D22",
-        "status" : 1,
-        "pubkey":"",
-        "orgname":"",
-        "notbefore":20170223,
-        "notafter":20180223,
-        "whitelist":"",
-        "blacklist":""
-}
-```
-
-For more information to the certificate access status file, please refer to:<u>11.6 Certificate access status file instructions</u>
-
-#### 7.3.3 Update certificate access status into system contracts
-
-> Run the command, using *ca.json* we write. And update the status into the system contract.
-
-```shell
-babel-node tool.js CAAction update ca.json
-```
-
-### 7.4 Turn the ICAC switch On/Off
-
-The ICAC switch can control ICAC enabled or disabled. If turned on, the communication between the nodes will be controlled according to the *status*(certificate access status) we have configured in the system contract. If a institution certificate status is not configured in the system contract, it will not be allowed to communicate with others.
-
-> Before you turn on the switch, please make sure:
+> (4) config.js* in */mydata/FISCO-BCOS/systemcontractv2/* has point to an active node's RPC port;
 >
-> (1) Every node has configured its certificate correctly (*server.key, server.crt*).
->
-> (2) Every node has enabled the SSL validation( Set the flag and restart).
->
-> (3) All the institutions' certificates have been configured into the system contract.
->
-> If you make some mistake in configuring ICAC, please disable all nodes' SSL validation, reconfigure ICAC and enable SSL validation again.
+> (5) **Node of which certificate to be withdrawed has already been withdrawed from the list of block generators by referring to [section 7.2](#72-unregister-nodes)**
 
-#### 7.4.1 Turn on ICAC switch
 
-> Run
+### 8.1 Add Specified Certificate to **Revocation List of Certificates**
+
+The data path of every node contains the **node.ca** file, node.ca saves certificate related information, you can add specified certificate to the **revocation list of certificates** using commands below (here takes adding the certificates of genesis nodes into revocation list of certificates as a example):
 
 ```shell
-babel-node tool.js ConfigAction set CAVerify true
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js  CAAction add /mydata/nodedata-1/data/node.ca
 ```
 
-> Check
+<br>
+
+### 8.2 Checking Revocation List of Certificates
+
+> Use commands below to check revocation list of certificates:
 
 ```shell
-babel-node tool.js ConfigAction get CAVerify
-```
-
-> If the output is *true*, the switch has been turned on.
-
-```log
-CAVerify=true,29
-```
-
-#### 7.4.2 Turn off ICAC switch
-
-When you turn off the switch, communication between the nodes will not require certificates. But this operation need enough number of nodes to reach consensus. If there is not enough nodes, this operation will be blocked. At this condition, disable SSL validation of all nodes, and turn off again.
-
-> To turn off ICAC, run
-
-```shell
-babel-node tool.js ConfigAction set CAVerify false
-```
-
-### 7.5 Update Institution Certificate Access Status
-
-You can update the institution certificate access status in system contract.
-
-#### 7.5.1 Modify institution certificate registration file
-
-> Modify the file *ca.json*
-
-```shell
-/mydata/FISCO-BCOS/systemcontractv2
-vim ca.json
-```
-
-> Set the field *status*, 0 for unregistering and 1 for registering. And other fields, leave default. Like
-
-```json
-{
-        "hash" : "8A4B2CDE94348D22",
-        "status" : 0,
-        "pubkey":"",
-        "orgname":"",
-        "notbefore":20170223,
-        "notafter":20180223,
-        "whitelist":"",
-        "blacklist":""
-}
-```
-
-For more introduction to the institution certificate registration file, please refer to:<u>11.6 Certificate access status file instructions</u>
-
-#### 7.5.2 Update certificate access status
-
-> Run, use the file we modify before
-
-```shell
-babel-node tool.js CAAction updateStatus ca.json
-```
-
-> Check
-
-```shell
+cd /mydata/FISCO-BCOS/systemcontract/
 babel-node tool.js CAAction all
 ```
 
->You will find:
+> The revocation list of certificates is shown as below:
 
 ```log
 ----------CA 0---------
-hash=8A4B2CDE94348D22
-pubkey=
-orgname=
-notbefore=20170223
-notafter=20180223
-status=0
+serial=8A4B2CDE94348D22
+pubkey=24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56
+name=A
 blocknumber=36
-whitelist=
-blacklist=
-
 ```
 
-### 7.6 Frequently Asked Questions about certificates
+<br>
 
-**Q: What's the relation of server.crt and ca.crt?**  
-**A:** Suppose that nodeA request a connection to nodeB. NodeA sends its certificate file *server.crt* to nodeB, then nodeB validates *server.crt* using its root certificate file *ca.crt*. If the validation succeed, the connection is established, otherwise disconnected. So you have to make sure that every nodes' *server.crt*  are generated from the same root certificat file( ca.crt, ca.key).
 
-**Q. What's happened when we use institution certificate access control?**  
-**A:** First, turn on the CAVerify switch. NodeA will check whether its certificate exists in the list of institution certificate system contract(CAAction contract) when it connects to other nodes. If the certificate exists, the connection is established and otherwise disconnected. When you turn on the CAVerify switch, make sure the institution certificate system contract contains all the certificates of all nodes.
+### 8.3 Remove Specified Certificate from **Revocation List of Certificates**
 
-**Q: Why connection cannot establish when SSL validation enabled?**
-**A:** 1. Make sure the field *ssl* has been set to 1 in the file *config.json* in all nodes'  *data* directory.  
+You can recover the network access authority of specified nodes whose certificates is among **Revocation List of Certificates** by remove their certificates from the **Revocation List of Certificates** (here takes removing certificate of the genesis node from the **revocation list of certificates** as a example):
 
-2. Make sure the certificate info of every node has been registered into the institution certificate system contract(CAAction contract) before you turn on the CAVerify switch.
-
-**Q: I don't register enough number of the nodes' certificate(server.crt), but turn on CAVerify. Now I can't send transactions. What can I do?**
-**A:** First set the field *ssl* to 0 in the file *config.json* in all nodes' *data* directory and restart the nodes. The nodes will return connected and then set CAVerify to false. Second, set the field *ssl* to 1 in the file *config.json* in all nodes' *data* directory, write the certificate info into the CAAction contract and turn on the CAVerify switch.
-
-**Q: How can I set certificate validity period when generation certificate files?**
-*A:* In the certificate-generating script(*genkey.sh*), the root certificate validity period default to 10 years and user certificate validity period default to 1 year. You can change it in *genkey.sh*. 
-
-**Q: How to generate Java client certificate files?**  
-
-**A:** Java client required the same *ca.crt* certificate with the node. If the certificate of the node  is generated, then use the following commands to generate a certificate for the Java client:
-
-``` shell
-openssl pkcs12 -export -name client -in server.crt -inkey server.key -out keystore.p12
-keytool -importkeystore -destkeystore client.keystore -srckeystore keystore.p12 -srcstoretype pkcs12 -alias client #this command is a little long
-#Attention！ Password must be "123456"
+```shell
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js  CAAction remove /mydata/nodedata-1/data/node.ca
 ```
 
-## Chapter 8 Console
+<br>
+<br>
+
+## Chapter 9 Console
 
 The console can connect to the node process directly.  When you login the console, you can get many information of the blockchain.
 
-### 8.1 Login
+### 9.1 Login
 
 > Connect *geth.ipc* file
 
@@ -1605,9 +1415,11 @@ Entering interactive mode.
 > 
 ```
 
-### 8.2 Use the Console
+<br>
 
-#### 8.2.1 Get block information
+### 9.2 Use the Console
+
+#### 9.2.1 Get block information
 
 > For example, you can view the info of the block whose block height is 2.
 >
@@ -1642,7 +1454,9 @@ web3.eth.getBlock(2,console.log)
   uncles: [] }
 ```
 
-#### 8.2.2 Get transaction information
+<br>
+
+#### 9.2.2 Get transaction information
 
 > Get transaction information using transaction hash. Eg: get the *HelloWorld* contract we deployed before.
 
@@ -1666,7 +1480,9 @@ web3.eth.getTransaction('0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee55dabd9c
   value: { [String: '0'] s: 1, e: 0, c: [ 0 ] } }
 ```
 
-#### 8.2.3 Get transaction receipt
+<br>
+
+#### 9.2.3 Get transaction receipt
 
 > Get transaction receipt using transaction hash. Eg: get the receipt of *HelloWorld* contract we deployed before.
 
@@ -1687,7 +1503,9 @@ web3.eth.getTransactionReceipt('0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee5
   transactionIndex: 0 }
 ```
 
-#### 8.2.4 Get contract code
+<br>
+
+#### 9.2.4 Get contract code
 
 > Get transaction code using transaction hash. Eg: get the code of *HelloWorld* contract we deployed before.
 
@@ -1701,7 +1519,9 @@ web3.eth.getCode('0x1d2047204130de907799adaea85c511c7ce85b6d',console.log)
 > null '0x60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634ed3885e146100485780636d4ce63c146100a557600080fd5b341561005357600080fd5b6100a3600480803590602001908201803590602001908080601f01602080910402602001604051908101604052809392919081815260200183838082843782019150505050505091905050610133565b005b34156100b057600080fd5b6100b861014d565b6040518080602001828103825283818151815260200191508051906020019080838360005b838110156100f85780820151818401526020810190506100dd565b50505050905090810190601f1680156101255780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b80600090805190602001906101499291906101f5565b5050565b610155610275565b60008054600181600116156101000203166002900480601f0160208091040260200160405190810160405280929190818152602001828054600181600116156101000203166002900480156101eb5780601f106101c0576101008083540402835291602001916101eb565b820191906000526020600020905b8154815290600101906020018083116101ce57829003601f168201915b5050505050905090565b828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f1061023657805160ff1916838001178555610264565b82800160010185558215610264579182015b82811115610263578251825591602001919060010190610248565b5b5090506102719190610289565b5090565b602060405190810160405280600081525090565b6102ab91905b808211156102a757600081600090555060010161028f565b5090565b905600a165627a7a7230582021681cb0ea5b1c4364a4f5e37f12e84241310a74ee462b1a19658b3acc26c6cb0029'
 ```
 
-#### 8.2.5 Get node's peer
+<br>
+
+#### 9.2.5 Get node's peer
 
 > Get the node's peer your console login
 
@@ -1724,22 +1544,28 @@ web3.admin.peers(console.log)
     notes: { ask: 'Nothing', manners: 'nice', sync: 'holding & needed' } } ]
 ```
 
+<br>
+<br>
 
 
-## Chapter 9  Some Tools
+## Chapter 10  Some Tools
 
-### 9.1 Export the Genesis Block
+### 10.1 Export the Genesis Block
 
 FISCO-BCOS supports exporting all contracts into a genesis block file. So a new blockchain can use the file as the genesis block to createa new blockchain. The new blockchain inherit all the contracts from the old blockchain.
+
+#### 10.1.1 Stop Specified node
 
 > Stop the node you will export
 
 ```shell
-cd /mydata/nodedata-1
+cd /mydata/nodedata-1  #stop nodedata-1
 ./stop.sh
 ```
 
-#### 9.1.2 Export the genesis block
+<br>
+
+#### 10.1.2 Export the genesis block
 
 > Use *--export-genesis* to assign exported genesis file name. 
 
@@ -1749,7 +1575,9 @@ fisco-bcos --genesis ./genesis.json --config ./config.json 	--export-genesis ./n
 
 > After a while, *new_genesis.json* will be generated. You can use it as the genesis block file of a new chain.
 
-### 9.2 Peers and Block Height Monitoring
+<br>
+
+### 10.2 Peers and Block Height Monitoring
 
 *monitor.js* can monitor peers and block height of a node. Before you run the script, confirm: 
 
@@ -1781,9 +1609,11 @@ NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a65681709
 Host:127.0.0.1:30403
 ```
 
+<br>
+<br>
 
 
-## Chapter 10 FISOC BCOS Features
+## Chapter 11 FISOC BCOS Features
 
 Please refer to these documentations:
 
@@ -1796,12 +1626,17 @@ Please refer to these documentations:
 7. [Monitoring logs](../监控统计日志说明文档.md)
 8. [Homomorphic encryption;](../同态加密说明文档.md)
 9. [Certificate Authority](../CA机构身份认证说明文档.md)
+10. [Regulatory Zero-Knowledge Proof](../可监管的零知识证明说明.md)
+11. [Group Signature and Ring Signature Support](../启用_关闭群签名环签名ethcall.md)
+12. [Architecture of Elastic Aliance Consensus](../弹性联盟链共识框架说明文档.md)
+
+<br>
+<br>
 
 
+## Chapter 12 Appendix
 
-## Chapter 11 Appendix
-
-### 11.1 Sourece Code Structure
+### 12.1 Sourece Code Structure
 
 | Source Code Directories | Illustration                             |
 | ----------------------- | ---------------------------------------- |
@@ -1822,9 +1657,13 @@ Please refer to these documentations:
 | libweb3jsonrpc          | Web3 RPC                                 |
 | sample                  | One-button installation and deployment.  |
 | scripts                 | Scripts for installation and deployment. |
-| systemproxyv2           | System contract                          |
+| systemproxy           | System contract                          |
 
-### 11.2 cryptomod.json
+
+<br>
+
+
+### 12.2 cryptomod.json
 
 FISCO BCOS supports encrypted communications. We can configure the way of encrypted communications in *cryptomod.json*.
 
@@ -1836,7 +1675,10 @@ FISCO BCOS supports encrypted communications. We can configure the way of encryp
 | keycenterurl      | Remote encryption service, keep it empty. |
 | superkey          | Key for the local encryption service, keep it empty |
 
-### 11.3 genesis.json Instructions
+<br>
+
+
+### 12.3 genesis.json Instructions
 
 Instructions for genesis block file *genesis.json*:
 
@@ -1847,7 +1689,10 @@ Instructions for genesis block file *genesis.json*:
 | alloc          | Built-in contract data                   |
 | initMinerNodes | The node ID of the genesis node(input the nodeid you get from <u>2.3 Generate Genesis Node ID</u>) |
 
-### 11.4 config.json Instructions
+<br>
+
+
+### 12.4 config.json Instructions
 
 Instructions for node configurations fiile *config.json*:
 
@@ -1857,7 +1702,6 @@ Instructions for node configurations fiile *config.json*:
 | systemproxyaddress | Address of the system proxy contract address(refer to <u>Chapter 4 Deploy System Contracts</u>) |
 | listenip           | Node listen IP                           |
 | cryptomod          | Encrypt mode, default is 0.( keep it in accordance with the field *cryptomod* in *cryptomod.json*) |
-| ssl                | Use SSL or not(0:non-SSL 1:SSL. A certificate file is required in *datadir* directory.) |
 | rpcport            | RPC listening port(Ports shall not be the same when you have more than 1 nodes in a single server) |
 | p2pport            | P2P network listening port(Ports shall not be the same when you have more than 1 nodes in a single server) |
 | channelPort        | AMOP listening port(Ports shall not be the same when you have more than 1 nodes in a single server) |
@@ -1871,12 +1715,14 @@ Instructions for node configurations fiile *config.json*:
 | eventlog           | Switch for the Eventlog (ON or OFF)      |
 | statlog            | Switch for the Statlog (ON or OFF)       |
 | logconf            | path of the log configuration file(refer to the instructions for *log.conf* ) |
-| NodeextraInfo      | Configuration list for nodes[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}](NodeID,outernet IP,P2P port,node descriptions,node info,node type). Input the NodeId you get from <u>2.3 Set up NodeId</u>. Here must configure the owner of this configration file. And configure some other nodes to make the nodes connect as an connected graph. The more others nodes you configured, the more fault-tolerance you have. |
 | dfsNode            | Distributed file service node ID, keep it in accordance with node ID(optional) |
 | dfsGroup           | Distributed file service group ID (10 - 32 characters)(optional) |
 | dfsStorage         | Storage directory for the distributed file system(optional) |
 
-### 11.5 log.conf Instructions
+<br>
+
+
+### 12.5 log.conf Instructions
 
 Instructions for log configurations file *log.conf*:
 
@@ -1887,22 +1733,10 @@ Instructions for log configurations file *log.conf*:
 | MAX_LOG_FILE_SIZE   | Max size of the log file                 |
 | LOG_FLUSH_THRESHOLD | Threshold for log flushed into disk storage |
 
-### 11.6 Institution Certificate Registration File Instructions
+<br>
 
-Instructions for the institution certificate registration file
 
-| **Field** | **Illstration**                          |
-| --------- | ---------------------------------------- |
-| hash      | Serial number of institution certificate public key |
-| pubkey    | Institution certificate public key, you can keep it empty |
-| orgname   | Organization name, you can keep it empty |
-| notbefore | Start time of the certificate            |
-| notafter  | End time of the certificate              |
-| status    | Certificate status  0:unregister 1:register |
-| whitelist | IP white list, you can keep it empty     |
-| blacklist | IP black list, you can keep it empty     |
-
-### 11.7 System Contract Instructions
+### 12.6 System Contract
 
 System contract is the main feature of FISCO-BCOS. It is a group of built-in smart contracts. System contracts reach consensus by all members to control the running strategy of the chain.
 
@@ -1916,7 +1750,7 @@ In principle, system contracts can only be called by the administrator account.
 
 Here are some instructions for system contracts' source code path, API, samples and tools.
 
-#### 11.7.1 System proxy contract
+#### 12.6.1 System proxy contract
 
 System proxy contract is the router for system contracts. 
 
@@ -1971,7 +1805,10 @@ SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 
 Now you can get all the route info in the system route list.
 
-#### 11.7.2 Node management Contract
+<br>
+
+
+#### 12.6.2 Node management Contract
 
 Node  management contract maintains the node list on blockchain. 
 
@@ -1996,9 +1833,13 @@ var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instan
 
 **(2)Tools**
 
-Please refer to *6.1 Node Registration*
+Please refer to *6.1 Node Registration[61-node-registration]*
 
-#### 11.7.3 Institution certificate contract (CAAction contract)
+
+<br>
+
+
+#### 12.6.3 Institution certificate contract (CAAction contract)
 
 Institution certificate contract maintains the institution certificate information.
 
@@ -2041,7 +1882,11 @@ Update certificate status
 babel-node tool.js CAAction updateStatus
 ```
 
-#### 11.7.4 Authorization management contract
+
+<br>
+
+
+#### 12.6.4 Authorization management contract
 
 The authorization management contract fulfills FISCO-BCOS blockchain authority model.
 
@@ -2085,7 +1930,9 @@ babel-node tool.js AuthorityFilter outer-account,contract address, contract inte
 
 You can inherit *TransactionFilterBase* to write a new transaction filter contract, and register the new filter into *TransactionFilterChain* via the *addFilter* interface.
 
-#### 11.7.5 Network configuration contract
+<br>
+
+#### 12.6.5 Network configuration contract
 
 Network configuration contract maintains some configuration of the running network.
 
@@ -2133,3 +1980,28 @@ Set the config
 ```shell
 babel-node tool.js ConfigAction set config config value
 ```
+
+<br>
+<br>
+
+## Chapter 13 Frequently Asked Questions
+
+### 1. Invalid Format of Shell Scripts
+
+**Format differences of shell scripts between windows platform and linux platform will lead to belowing error when executing shell scripts such as install_deps.sh, build.sh, etc. :**
+
+``` log
+xxxxx.sh: line x： $'\r':command not found
+xxxxx.sh: line x： $'\r':command not found
+xxxxx.sh: line x： $'\r':command not found
+xxxxx.sh: line x： $'\r':command not found
+```
+
+**Dos2unix tool of linux can solve this format error by converting format of shell script from windows to linux:**
+
+``` shell
+sudo yum -y install dos2unix
+dos2unix xxxxx.sh
+```
+
+
