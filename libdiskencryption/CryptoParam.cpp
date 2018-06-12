@@ -53,11 +53,9 @@ CryptoParam CryptoParam::loadDataCryptoConfig(std::string const& filePath) const
 	//set cryptomod
 	cp.m_cryptoMod = obj.count("cryptomod") ? std::stoi(obj["cryptomod"].get_str()) : 0;
 	cp.m_kcUrl = obj.count("keycenterurl") ? obj["keycenterurl"].get_str() : "https://127.0.0.1";
-	cp.m_nodekeyPath = obj.count("rlpcreatepath") ? obj["rlpcreatepath"].get_str() : "./network.rlp";
+	cp.m_nodekeyPath = obj.count("rlpcreatepath") ? obj["rlpcreatepath"].get_str() : "None";
 	cp.m_superKey = obj.count("superkey") ? obj["superkey"].get_str() : "";
-	cp.m_datakeyPath = obj.count("datakeycreatepath") ? obj["datakeycreatepath"].get_str() : "./datakey";
-	cp.m_privatekeyPath = obj.count("privatekeypath") ? obj["privatekeypath"].get_str() : "./private.key";
-	cp.m_enprivatekeyPath = obj.count("enprivatekeypath") ? obj["enprivatekeypath"].get_str() : "./server.key";
+	cp.m_datakeyPath = obj.count("datakeycreatepath") ? obj["datakeycreatepath"].get_str() : "None";
 	return cp;
 }
 

@@ -1,112 +1,45 @@
 /*
-	This file is part of cpp-ethereum.
+	This file is part of FISCO-BCOS.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
+	FISCO-BCOS is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
+	FISCO-BCOS is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+	along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: NodeConnParamsManagerApi.cpp
- * @author: fisco-dev
+ * @author: toxotguo
  * 
- * @date: 2017
+ * @date: 2018
  */
 
 #include "NodeConnParamsManagerApi.h"
 #include "NodeConnParamsManager.h"
+#include "NodeConnParamsManagerSSL.h"
 #include <libdevcore/FileSystem.h>
 
 using namespace std;
 using namespace dev;
 using namespace eth;
 
-Mutex NodeConnParamsManagerApi::_xNodeConnParam;
-Mutex NodeConnParamsManagerApi::_xConfigNodeConnParam;
-
-bool NodeConnParamsManagerApi::getNodeConnInfo(std::string const& sNodeID, NodeConnParams &retNode) const
-{
-	bool bFind = false;
-	Guard l(_xNodeConnParam);
-	if (_mNodeConnParams.find(sNodeID) != _mNodeConnParams.end())
-	{
-		bFind = true;
-		retNode = _mNodeConnParams[sNodeID];
-	}
-	return bFind;
-}
-
-
-bool NodeConnParamsManagerApi::getNodeConnInfoBoth(std::string const& sNodeID, NodeConnParams &retNode) const
-{
-	bool bFind = getNodeConnInfo(sNodeID, retNode);
-	if (!bFind)
-	{
-		Guard l(_xConfigNodeConnParam);
-		if (_mConfNodeConnParams.find(sNodeID) != _mConfNodeConnParams.end())
-		{
-			bFind = true;
-			retNode = _mConfNodeConnParams[sNodeID];
-		}
-	}
-	return bFind;
-}
-
-
-void NodeConnParamsManagerApi::getAllNodeConnInfoContract(std::map<std::string, NodeConnParams> & mNodeConnParams) const
-{
-	Guard l(_xNodeConnParam);
-	mNodeConnParams = _mNodeConnParams;
-}
-
-
-void NodeConnParamsManagerApi::getAllConfNodeConnInfo(std::map<std::string, NodeConnParams> & mNodeConnParams) const
-{
-	Guard l(_xConfigNodeConnParam);
-	mNodeConnParams = _mConfNodeConnParams;
-}
-
-void NodeConnParamsManagerApi::getAllNodeConnInfoContractAndConf(std::map<std::string, NodeConnParams> & mNodeConnParams) const
-{
-	mNodeConnParams.clear();
-	{
-		Guard l(_xNodeConnParam); 
-		mNodeConnParams = _mNodeConnParams;
-	}
-
-	{
-		Guard l(_xConfigNodeConnParam);
-		for (auto node : _mConfNodeConnParams)
-		{
-			if (mNodeConnParams.find(node.first) == mNodeConnParams.end())
-			{
-				mNodeConnParams[node.first] = node.second;
-			}
-		}
-	}
-
-}
-
 dev::eth::NodeConnParamsManagerApi& NodeConnManagerSingleton::GetInstance()
 {
-	if (getCaInitType() == "webank")
+	if (dev::getSSL() == SSL_SOCKET_V2)
 	{
-		static dev::eth::NodeConnParamsManager nodeConnParamsManager(contentsString(getConfigPath()));
-
-		return nodeConnParamsManager;
+		static dev::eth::NodeConnParamsManagerSSL nodeConnParamsManagerSSL;
+		return nodeConnParamsManagerSSL;
 	}
 	else{
 		
 		static dev::eth::NodeConnParamsManager nodeConnParamsManager(contentsString(getConfigPath()));
-
 		return nodeConnParamsManager;
 	}
 }

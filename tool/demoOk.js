@@ -22,7 +22,13 @@ if (typeof web3 !== 'undefined') {
 
 console.log(config);
 
-
+async function sleep(timeout) {  
+  return new Promise((resolve, reject) => {
+        setTimeout(function() {
+              resolve();
+              }, timeout);
+        });
+}
 
 
 var filename="Ok";
@@ -42,6 +48,10 @@ console.log("contract address:"+address);
 
 
 (async function(){
+while(1){
+
+  await sleep(1000);
+
 
   var func = "trans(uint256)";
   var params = [15];
@@ -51,6 +61,6 @@ console.log("contract address:"+address);
   var num=instance.get();
   console.log("num="+num.toString());
 
- 
+}
 
 })()

@@ -118,14 +118,14 @@ void PBFT::initBackupDB() {
 
 void PBFT::resetConfig() {
 	if (!NodeConnManagerSingleton::GetInstance().getAccountType(m_key_pair.pub(), m_account_type)) {
-		LOG(ERROR) << "resetConfig: can't find myself id, stop sealing";
+		LOG(ERROR) << "resetConfig Fail: can't find myself id, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
 
 	auto node_num = NodeConnManagerSingleton::GetInstance().getMinerNum();
 	if (node_num == 0) {
-		LOG(ERROR) << "resetConfig: miner_num = 0, stop sealing";
+		LOG(ERROR) << "resetConfig Fail: miner_num = 0, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
@@ -133,11 +133,10 @@ void PBFT::resetConfig() {
 	u256 node_idx;
 	if (!NodeConnManagerSingleton::GetInstance().getIdx(m_key_pair.pub(), node_idx)) {
 		//BOOST_THROW_EXCEPTION(PbftInitFailed() << errinfo_comment("NodeID not in cfg"));
-		LOG(ERROR) << "resetConfig: can't find myself id, stop sealing";
+		LOG(INFO) << "resetConfig Fail: can't find myself id, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
-
 	if (node_num != m_node_num || node_idx != m_node_idx) {
 		m_node_num = node_num;
 		m_node_idx = node_idx;
@@ -151,17 +150,17 @@ void PBFT::resetConfig() {
 		m_commitMap.clear();
 
 		if (!getMinerList(-1, m_miner_list)) {
-			LOG(ERROR) << "resetConfig: getMinerList return false";
+			LOG(ERROR) << "resetConfig Fail: getMinerList return false";
 			m_cfg_err = true;
 			return;
 		}
 
 		if (m_miner_list.size() != m_node_num) {
-			LOG(ERROR) << "resetConfig: m_miner_list.size=" << m_miner_list.size() << ",m_node_num=" << m_node_num;
+			LOG(ERROR) << "resetConfig Fail: m_miner_list.size=" << m_miner_list.size() << ",m_node_num=" << m_node_num;
 			m_cfg_err = true;
 			return;
 		}
-		LOG(INFO) << "resetConfig: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
+		LOG(INFO) << "resetConfig Sucess: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
 	}
 	// consensuscontrol init cache
 	ConsensusControl::instance().resetNodeCache();
@@ -559,7 +558,6 @@ bool PBFT::broadcastSignReq(PrepareReq const & _req) {
 	sign_req.block_hash = _req.block_hash;
 	sign_req.sig = signHash(sign_req.block_hash);
 	sign_req.sig2 = signHash(sign_req.fieldsWithoutBlock());
-
 	RLPStream ts;
 	sign_req.streamRLPFields(ts);
 	if (broadcastMsg(sign_req.sig.hex(), SignReqPacket, ts.out())) {
@@ -619,7 +617,7 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 			{
 				unsigned account_type = 0;
 				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
-					LOG(ERROR) << "Cannot get account type for peer" << nodeid;
+					LOG(INFO) << "Cannot get account type for peer" << nodeid;
 					return true;
 				}
 				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {

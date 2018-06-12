@@ -28,7 +28,6 @@
 #include <libp2p/Common.h>
 using namespace std;
 using namespace dev;
-using namespace dev::p2p;
 class GenKey
 {
 private:
@@ -67,20 +66,20 @@ private:
 	string getKeycenterData(string const& b64data,string const& kcUrl,int keyType);//keycenter response
 	string getSuperKey();
 	static int writer(char* data, size_t size, size_t nmemb, std::string* writer_data);
+
+	void genEcdsaKey(string const& sFilePath,int cryptoType,string const& keyData,string const& ivData,string const& kcUrl,int keyType);
+	void genGmKey(string const& sFilePath,int cryptoType,string const& keyData,string const& ivData,string const& kcUrl,int keyType);
+
+	bytes getEcdsaKey();
+	bytes getGmKey();
 public:
 	GenKey(void);
 	~GenKey(void);
 	void setKeyData();//create nodekey   datakey file
 	bytes getKeyData();//get nodekey datakey plaintext
-	void setPrivateKey();//privatekey encrypt
-	string getPrivateKey();//privatekey decrypt
-	string getPublicKey();
-	string getCaPublicKey();
 	void setCryptoMod(int cryptoMod);
 	void setKcUrl(string kcUrl);
 	void setSuperKey(string superKey);
 	void setNodeKeyPath(string nodekeyPath);
 	void setDataKeyPath(string datakeyPath);
-	void setPrivateKeyPath(string privatekeyPath);
-	void setEnPrivateKeyPath(string enprivatekeyPath);
 };

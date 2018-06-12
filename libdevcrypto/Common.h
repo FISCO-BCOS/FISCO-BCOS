@@ -40,14 +40,23 @@ using Public = h512;
 
 /// A signature: 65 bytes: r: [0, 32), s: [32, 64), v: 64.
 /// @NOTE This is not endian-specific; it's just a bunch of bytes.
+#if ETH_ENCRYPTTYPE
+using Signature = h1024;
+#else
 using Signature = h520;
+#endif
+
 
 struct SignatureStruct
 {
 	SignatureStruct() = default;
-	SignatureStruct(Signature const& _s) { *(h520*)this = _s; }
+	SignatureStruct(Signature const& _s) { *(Signature*)this = _s; }
+#if ETH_ENCRYPTTYPE
+	SignatureStruct(h256 const& _r, h256 const& _s, h512 _pub): r(_r), s(_s), pub(_pub) {}
+#else
 	SignatureStruct(h256 const& _r, h256 const& _s, byte _v): r(_r), s(_s), v(_v) {}
-	operator Signature() const { return *(h520 const*)this; }
+#endif
+	operator Signature() const { return *(Signature const*)this; }
 
 	/// @returns true if r,s,v values are valid, otherwise false
 	bool isValid() const noexcept;
@@ -57,7 +66,11 @@ struct SignatureStruct
 
 	h256 r;
 	h256 s;
+#if ETH_ENCRYPTTYPE
+	h512 pub;
+#else
 	byte v = 0;
+#endif
 };
 
 /// An Ethereum address: 20 bytes.
@@ -88,6 +101,23 @@ Address toAddress(Secret const& _secret);
 
 // Convert transaction from and nonce to address.
 Address toAddress(Address const& _from, u256 const& _nonce);
+
+Public gmRecover(Signature const& _sig, h256 const& _message);
+
+Public ecdsaRecover(Signature const& _sig, h256 const& _message);
+
+Signature gmSign(Secret const& _k, h256 const& _hash);
+
+Signature ecdsaSign(Secret const& _k, h256 const& _hash);
+
+bool gmVerify(Public const& _p, Signature const& _s, h256 const& _hash);
+
+bool ecdsaVerify(Public const& _p, Signature const& _s, h256 const& _hash);
+//get gm publickey
+Public gmPub(Secret const& _secret);
+
+//get ecdsa publickey
+Public ecdsaPub(Secret const& _secret);
 
 /// Encrypts plain text using Public key.
 void encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher);
