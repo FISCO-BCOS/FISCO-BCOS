@@ -449,7 +449,7 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 			
 			unsigned itemCount = _r.itemCount();
 			LOG(INFO) << "NodeInfoSync itemCount is : " << itemCount << "\n";
-			if (itemCount <= 0)
+			if (itemCount == 0)
 			{
 				break;
 			}

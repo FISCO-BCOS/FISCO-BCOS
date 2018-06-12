@@ -16,9 +16,8 @@
 */
 /**
  * @file: AdminNet.cpp
- * @author: fisco-dev
- * 
- * @date: 2017
+ * @author toxotguo
+ * @date 2018
  */
 
 #include <jsonrpccpp/common/exception.h>
