@@ -83,10 +83,6 @@ function usage()
         LOG_ERROR "Usage: bash gmagency.sh agency_name whether_add_to_agency_list(1: add to agency list; 0: doesn't add to agency list; defaut is 1)"
         exit 1
     fi
-    if [ "${1}" == "agency_all" ];then
-        LOG_ERROR "agency_name can't be agency_all"
-        exit 1
-    fi
 }
 
 function openssl_check()
@@ -119,23 +115,14 @@ function gen_agency()
 {
     local agency_name="${1}"
     local add_to_agency="1"
-    if [ $# -gt 1 ];then
-        add_to_agency="${2}"
-    fi
     execute_cmd "mkdir -p ${agency_name}" 
 	execute_cmd "$OPENSSL_CMD genpkey -paramfile gmsm2.param -out gmagency.key"
     execute_cmd "$OPENSSL_CMD req -new -key gmagency.key -config cert.cnf -out gmagency.csr"
     execute_cmd "$OPENSSL_CMD x509 -req -CA gmca.crt -CAkey gmca.key -days 3650 -CAcreateserial -in gmagency.csr -out gmagency.crt -extfile cert.cnf -extensions v3_agency_root"
     execute_cmd "cp gmca.crt ${agency_name} && rm -rf gmagency.csr gmca.srl && mv gmagency.key gmagency.crt ${agency_name}"
     LOG_INFO "GEN AGENCY CERT FOR CERT SUCC!"
-    if [ "${add_to_agency}" == "1" ];then
-        LOG_INFO "add cert to agency_all dir"
-        execute_cmd "cp ${agency_name}/gmagency.crt agency_all/gm${agency_name}.crt"
-    fi
 }
 
-
-mkdir -p agency_all
 usage "$@"
 ca_exist "$@"
 agency_exist "$@"
