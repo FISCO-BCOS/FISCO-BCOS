@@ -1,9 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 sudo mkdir -p /bcos-data/
 sudo chmod 777 /bcos-data
 node init.js node0.sample node1.sample
 chmod +x /bcos-data/node0/start0.sh
+dos2unix /bcos-data/node0/start0.sh
 chmod +x /bcos-data/node1/start1.sh
+dos2unix /bcos-data/node1/start1.sh
 echo "尝试启动节点..."
 sh /bcos-data/node0/start0.sh &
 sh /bcos-data/node1/start1.sh &

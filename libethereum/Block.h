@@ -212,6 +212,9 @@ public:
 	/// This will append @a _t to the transaction list and change the state accordingly.
 	ExecutionResult execute(LastHashes const& _lh, Transaction const& _t, Permanence _p = Permanence::Committed, OnOpFunc const& _onOp = OnOpFunc(), BlockChain const *_bc = nullptr);
 
+	// Execute a given transaction created by UTXO Tx, only change the state accordingly
+	ExecutionResult executeByUTXO(LastHashes const& _lh, Transaction const& _t, Permanence _p, OnOpFunc const& _onOp = OnOpFunc());
+
 	/// Sync our transactions, killing those from the queue that we have and assimilating those that we don't.
 	/// @returns a list of receipts one for each transaction placed from the queue into the state and bool, true iff there are more transactions to be processed.
 	std::pair<TransactionReceipts, bool> sync(BlockChain const& _bc, TransactionQueue& _tq, GasPricer const& _gp, bool _exec = true, u256 const& _max_block_txs = Invalid256);
@@ -324,6 +327,22 @@ private:
 	/// Provide a standard VM trace for debugging purposes.
 	std::string vmTrace(bytesConstRef _block, BlockChain const& _bc, ImportRequirements::value _ir);
 
+	// Obtaining UTXO transactions that can be processed parallelly.
+	void getParallelUTXOTx(const Transactions& transactions, std::map<h256, bool>& ret, size_t &cnt);
+	// Determines whether a transaction uses a token that has already been used.
+	void isArtificialTx(const Transactions& txList, std::vector<bool>& flag);
+	// The logic of parallel transactions
+	TransactionReceipts execUTXOInBlock(BlockChain const& _bc, TransactionQueue& _tq, const LastHashes& lh, std::map<h256, bool>& parallelUTXOTx, size_t parallelUTXOTxCnt);
+
+	// Operations for parallel transactions-begin
+	void onUTXOTxQueueReady();									// Notification of completion of parallel transactions.
+	void StartWaitingForResult(size_t parallelUTXOTxCnt);		// Start waiting for parallel transactions to complete.
+	std::atomic<bool> m_onParallelTxQueueReady = {false};
+	std::condition_variable m_signalled;
+	Mutex x_queue;
+	Handler<> m_parallelEnd;
+	// Operations for parallel transactions-end
+
 	State m_state;								///< Our state tree, as an OverlayDB DB.
 	Transactions m_transactions;				///< The current list of transactions that we've included in the state.
 	TransactionReceipts m_receipts;				///< The corresponding list of transaction receipts.
@@ -344,6 +363,8 @@ private:
 
 	bool m_evmEventLog = false; 
 	bool m_evmCoverLog = false; 
+
+	UTXOModel::UTXOMgr m_utxoMgr;
 
 	friend std::ostream& operator<<(std::ostream& _out, Block const& _s);
 

@@ -50,30 +50,8 @@ static string s_caInitType;
 static int	s_cryptoMod;//加密方式
 static map<int,string> s_dataKey;//datakey数据
 
-static int s_cryptoprivatekeyMod;//私钥是否使用keycenter加密
-static string s_privateKey;//证书私钥数据
 static int s_ssl;//是否使用ssl证书进行数据传输
 
-
-void dev::setCryptoPrivateKeyMod(int cryptoprivatekeyMod)
-{
-	s_cryptoprivatekeyMod = cryptoprivatekeyMod;
-}
-
-int dev::getCryptoPrivateKeyMod()
-{
-	return s_cryptoprivatekeyMod;
-}
-
-void dev::setPrivateKey(string const& privateKey)
-{
-	s_privateKey = privateKey;
-}
-
-string dev::getPrivateKey()
-{
-	return s_privateKey;
-}
 
 void dev::setCryptoMod(int cryptoMod)
 {

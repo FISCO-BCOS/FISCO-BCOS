@@ -203,7 +203,12 @@ public:
 
 	/// Execute a given transaction.
 	/// This will change the state accordingly.
-	std::pair<ExecutionResult, TransactionReceipt> execute(EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Transaction const& _t, Permanence _p = Permanence::Committed, OnOpFunc const& _onOp = OnOpFunc());
+	std::pair<ExecutionResult, TransactionReceipt> execute(EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Transaction const& _t, Permanence _p = Permanence::Committed, OnOpFunc const& _onOp = OnOpFunc(), UTXOModel::UTXOMgr* _pUTXOMgr = nullptr);
+
+	// Set flags for parallel transactions.
+	void setParallelUTXOTx(const std::map<h256, bool>& parallelUTXOTx);
+	// Execute transactions that cannot be done in parallel.
+	void executeUTXO(const Transaction& _t, UTXOModel::UTXOMgr* _pUTXOMgr);
 
 	/// Check if the address is in use.
 	bool addressInUse(Address const& _address) const;
@@ -335,6 +340,8 @@ private:
 
 	friend std::ostream& operator<<(std::ostream& _out, State const& _s);
 	std::vector<detail::Change> m_changeLog;
+
+	std::map<h256, bool> m_parallelUTXOTx;					// Marks for parallel transactions
 };
 
 std::ostream& operator<<(std::ostream& _out, State const& _s);

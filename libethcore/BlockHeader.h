@@ -86,7 +86,9 @@ class BlockHeader
 	friend class BlockChain;
 public:
 	static const unsigned BasicFields = 15;
+	static const unsigned BasicFieldsUpdate = 17;
 	static u256 maxBlockHeadGas;
+	static u256 updateHeight;
 
 	BlockHeader();
 	explicit BlockHeader(bytesConstRef _data, BlockDataType _bdt = BlockData, h256 const& _hashWith = h256());
@@ -114,7 +116,9 @@ public:
 		       m_timestamp == _cmp.timestamp() &&
 		       m_extraData == _cmp.extraData() &&
 		       m_gen_idx == _cmp.genIndex() &&
-		       m_node_list == _cmp.nodeList();
+		       m_node_list == _cmp.nodeList() && 
+		       m_hash_list == _cmp.hashList() && 
+		       m_str_list == _cmp.strList();
 	}
 	bool operator!=(BlockHeader const& _cmp) const { return !operator==(_cmp); }
 
@@ -144,6 +148,8 @@ public:
 	template <class T> void setSeal(T const& _value) { setSeal(0, _value); }
 	void setIndex(u256 const& _idx) { m_gen_idx = _idx; noteDirty(); }
 	void setNodeList(h512s const& _list) { m_node_list = _list; noteDirty(); }
+	void setHashList(h256s const& _list) { m_hash_list = _list; noteDirty(); }
+	void setStrList(std::vector<std::string> const& _list) { m_str_list = _list; noteDirty(); }
 
 	h256 const& parentHash() const { return m_parentHash; }
 	h256 const& sha3Uncles() const { return m_sha3Uncles; }
@@ -161,7 +167,10 @@ public:
 	template <class T> T seal(unsigned _offset = 0) const { T ret; if (_offset < m_seal.size()) ret = RLP(m_seal[_offset]).convert<T>(RLP::VeryStrict); return ret; }
 	u256 const& genIndex() const { return m_gen_idx; }
 	h512s const& nodeList() const { return m_node_list; }
+	h256s const& hashList() const { return m_hash_list; }
+	std::vector<std::string> const& strList() const { return m_str_list; }
 
+	bool IsBlockAfterUpdate() const;
 private:
 	void populate(RLP const& _header);
 	void streamRLPFields(RLPStream& _s) const;
@@ -181,8 +190,10 @@ private:
 	Address m_author;
 	u256 m_difficulty;
 
-	u256 m_gen_idx; 		
+	u256 m_gen_idx; 		/// 挖矿者的索引
 	h512s m_node_list;		
+	h256s m_hash_list;	
+	std::vector<std::string> m_str_list;		// 预留字段
 
 	std::vector<bytes> m_seal;		///< Additional (RLP-encoded) header fields.
 

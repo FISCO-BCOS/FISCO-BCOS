@@ -171,6 +171,8 @@ public:
 	virtual bool isBlockLimitOk(Transaction const&_ts) const override;
 
 	TransactionQueue& transactionQueue(){return m_tq;}
+
+	virtual UTXOModel::UTXOMgr* getUTXOMgr() override;
 protected:
 	/// The interface that must be implemented in any class deriving this.
 	/// {

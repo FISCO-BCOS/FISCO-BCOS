@@ -26,9 +26,13 @@ using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace p2p;
+#include <libp2p/Host.h>
+using namespace dev::p2p;
+class HostApi;
 
 void PBFTHost::foreachPeer(std::function<bool(std::shared_ptr<PBFTPeer>)> const& _f) const
 {
+	/*
 	//order peers by protocol, rating, connection age
 	auto sessions = peerSessions();
 	auto sessionLess = [](std::pair<std::shared_ptr<SessionFace>, std::shared_ptr<Peer>> const & _left, std::pair<std::shared_ptr<SessionFace>, std::shared_ptr<Peer>> const & _right)
@@ -45,6 +49,14 @@ void PBFTHost::foreachPeer(std::function<bool(std::shared_ptr<PBFTPeer>)> const&
 	for (auto s : sessions)
 		if (!_f(capabilityFromSession<PBFTPeer>(*s.first, c_oldProtocolVersion)))
 			return;
+	*/
+	RecursiveGuard l(host()->xSessions());
+		
+		for (auto const& i : host()->mSessions())
+			if (std::shared_ptr<SessionFace> s = i.second.lock())
+				if (s->capabilities().count(std::make_pair(name(), version())))
+					if (!_f(capabilityFromSession<PBFTPeer>(*s)))
+						return;
 }
 
 

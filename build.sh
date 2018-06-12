@@ -8,6 +8,7 @@
 #!/bin/sh
 set -e
 
+
 #install package
 if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
 sudo apt-get -y install cmake
@@ -66,8 +67,10 @@ cd ..
 cd ./tool
 cnpm install
 
+
+
 cd ..
-cd ./systemcontractv2
+cd ./systemcontract
 cnpm install
 
 if [ ! -f "/usr/local/bin/fisco-bcos" ]; then
@@ -79,3 +82,9 @@ if [ ! -f "/usr/local/bin/fisco-bcos" ]; then
 #nodejs 版本检查
 node=$(node -v)
 echo | awk  '{if(node < "v6") print "WARNING : fisco need nodejs verion newer than v6 , current version is '$node'"}' node="$node"
+
+if [ "" = "`openssl ecparam -list_curves | grep secp256k1`" ];
+then
+    echo "Current Openssl Don't Support secp256k1 ! Please Upgrade Openssl To  OpenSSL 1.0.2k-fips"
+    exit;
+fi
