@@ -97,7 +97,7 @@ function getPermissionList(group) {
   desc = "Set Access Permissions to SystemProxy for Group1, Function:";
   await addPermission(Group1, SystemProxy, "getRoute(string)", desc);
   await addPermission(Group1, SystemProxy, "setRoute(string,address,bool)", desc);
-  await addPermission(Group1, SystemProxy, "getRouteNameByIndex(uint)", desc);
+  await addPermission(Group1, SystemProxy, "getRouteNameByIndex(uint256)", desc);
   await addPermission(Group1, SystemProxy, "getRouteSize()", desc);
   // add access permissions to update, updateStatus, get, getIp,  getHashsLength, getHash of CAAction to Group1
   var CAAction = getAction("CAAction");
@@ -107,7 +107,7 @@ function getPermissionList(group) {
   await addPermission(Group1, CAAction, "get(string)", desc);
   await addPermission(Group1, CAAction, "getIp(string)", desc);
   await addPermission(Group1, CAAction, "getHashsLength()", desc);
-  await addPermission(Group1, CAAction, "getHash(uint)", desc);
+  await addPermission(Group1, CAAction, "getHash(uint256)", desc);
   //add access authorities to registerNode, cancelNode, getNode, getNodeIdx, getNodeIdsLength, getNodeId of NodeAction for Group1
   var NodeAction = getAction("NodeAction");
   desc = "Set Access permissions to NodeAction for Group1, Function:";
@@ -116,7 +116,7 @@ function getPermissionList(group) {
   await addPermission(Group1, NodeAction, "getNode(string)", desc);
   await addPermission(Group1, NodeAction, "getNodeIdx(string)", desc);
   await addPermission(Group1, NodeAction, "getNodeIdsLength()", desc);
-  await addPermission(Group1, NodeAction, "getNodeId(uint)", desc);
+  await addPermission(Group1, NodeAction, "getNodeId(uint256)", desc);
   // add access permissions to addAbi and updateAbi of ContractAbiMgr to Group1
   var ContractAbiMgr = getAction("ContractAbiMgr");
   desc = "Set Access permissions to ContractAbiMgr for Group1, Function:";
@@ -150,7 +150,7 @@ function getPermissionList(group) {
   desc = "Set Access Permissions to SystemProxy for Group2, Function:";
   await addPermission(Group2, SystemProxy, "getRoute(string)", desc);
   await addPermission(Group2, SystemProxy, "setRoute(string,address,bool)", desc);
-  await addPermission(Group2, SystemProxy, "getRouteNameByIndex(uint)", desc);
+  await addPermission(Group2, SystemProxy, "getRouteNameByIndex(uint256)", desc);
   await addPermission(Group2, SystemProxy, "getRouteSize()", desc);
   // add access permissions to set, get of ConfigAction for Group2
   var ConfigAction = getAction("ConfigAction");
