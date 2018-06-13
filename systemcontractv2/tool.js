@@ -13,6 +13,7 @@ if (typeof web3 !== 'undefined') {
 
 console.log(config);
 
+web3.eth.defaultAccount = config.account;
 
 function getAbi(file){
 	var abi=JSON.parse(fs.readFileSync(config.Ouputpath+"./"/*+file+".sol:"*/+file+".abi",'utf-8'));
