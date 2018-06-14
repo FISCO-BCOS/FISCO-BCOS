@@ -77,7 +77,7 @@
    > 可以看到如下日志，表示日志对应的节点已经与另一个节点连接（Connected to 1 peers），连接正常：
 
    ```shell
-   DEBUG|2018-05-08 01:43:14|topics Send to:1 nodes
+   DEBUG|2018-05-25 21:14:39|topics Send to6a9b9d071fa1e52a12c215ec0f469668f177af4817823e71277f36cbe3e020ff8cbe953c967fbc4d7467cd0eadd7443212d87c99ad38976b2150eccbc1aaa739@127.0.0.1:30304
    ```
 
    **（3）验证可共识**
@@ -108,8 +108,8 @@
    > 在另一台未安装FISCO BCOS的机器上，安装依赖环境
 
    ```shell
-   yum -y -q install epel-release
-   yum install -y leveldb-devel libmicrohttpd-devel
+   sudo yum -y -q install epel-release
+   sudo yum install -y leveldb-devel libmicrohttpd-devel
    ```
 
 2. **生成节点**
@@ -118,6 +118,7 @@
 
    ```sh
    cd sample
+   chmod +x init_four.sh
    ./init_four.sh  192.168.1.101 192.168.1.102 #本机IP在前，另一台机器IP在后
    #此时会生成本地的两个节点，以及另一台机器的节点安装包：192.168.1.102_install.tar.gz 
    scp 192.168.1.102_install.tar.gz app@192.168.1.102:/home/app/ #将安装包拷贝到另一台机器的任意目录
