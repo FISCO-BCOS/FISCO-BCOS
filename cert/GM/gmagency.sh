@@ -54,7 +54,7 @@ function download_and_install()
         #cd ${PKG_PATH}
         execute_cmd "${install_cmd}"
 
-        #execute_cmd "rm -rf ${PKG_PATH}"
+        execute_cmd "rm -rf ${PKG_PATH}"
         cd "${CUR_DIR}"
     fi
 }
