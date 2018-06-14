@@ -76,7 +76,7 @@ This part will help deploy a two-node blockchain network. The two nodes are in t
    > The following message indicates the two nodes are connected with each other successfully. 
 
    ```shell
-   DEBUG|2018-05-08 01:43:14|topics Send to:1 nodes
+    DEBUG|2018-05-25 21:14:39|topics Send to6a9b9d071fa1e52a12c215ec0f469668f177af4817823e71277f36cbe3e020ff8cbe953c967fbc4d7467cd0eadd7443212d87c99ad38976b2150eccbc1aaa739@127.0.0.1:30304
    ```
 
    **(3) Check the Consensus Mechanism**

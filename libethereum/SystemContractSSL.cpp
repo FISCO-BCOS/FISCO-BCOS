@@ -581,59 +581,91 @@ h256 SystemContractSSL::filterCheckTransCacheKey(const Transaction & _t) const
 }
 
 u256 SystemContractSSL::transactionFilterCheck(const Transaction & transaction) {
-
-    LOG(TRACE) << "SystemContractSSL::transactionFilterCheck " <<  toJS(transaction.sha3());
-
-    if ( isGod(transaction.safeSender()))
+    if ((int)transaction.getUTXOType() != UTXOType::InValid)
     {
+        LOG(TRACE) << "SystemContractSSL::transactionFilterCheck UTXO";
         return (u256)SystemContractCode::Ok;
     }
+
+    if (isGod(transaction.safeSender()))
+    {
+        LOG(TRACE) << "SystemContractSSL::transactionFilterCheck God sender";
+        return (u256)SystemContractCode::Ok;
+    }
+
+    LOG(TRACE) << "SystemContractSSL::transactionFilterCheck sender:" << transaction.safeSender();
 
     m_transcount++;
 
 
     u256 checkresult = -1;
-    h256 key = filterCheckTransCacheKey(transaction);
-
-    DEV_READ_GUARDED(m_lockfilter)
-    {
-        std::map<h256, u256>::iterator iter = m_filterchecktranscache.find(key);
-
-        if (iter != m_filterchecktranscache.end()) {
-            checkresult = iter->second;
-        }
-    }
-
-    if (checkresult != -1) {
-        //if ( iter != m_filterchecktranscache.end() ) //命中cache
-        //{
-        //checkresult = iter->second;
-        m_transcachehit++;
-    }
-    else {
-        string input = toHex(transaction.data());
-        string func = input.substr(0, 8);
-
+    LOG(TRACE) << "SystemContractSSL::transactionFilterCheck filter:" << m_transactionfilter.filter;
+    if (transaction.isCreation()) {
+        Address sender = transaction.safeSender();
+        LOG(TRACE) << "SystemContractSSL::transactionFilterCheck sender:" << sender;
         bytes inputBytes = dev::eth::ContractABI().abiIn(
-                               "process(address,address,address,string,string)",
-                               transaction.safeSender(), transaction.from(), transaction.to(), func,
-                               input);
+                               "deploy(address)",
+                               transaction.safeSender());
 
-		LOG(TRACE) << "SystemContractSSL::transactionFilterCheck: call"  << toJS(transaction.sha3());
         ExecutionResult res = call(m_transactionfilter.filter, inputBytes);
 
         if (res.output.empty()) {
-            //未部署系统合约或权限合约
+            
+            LOG(TRACE) << "SystemContractSSL::transactionFilterCheck res.output.empty()";
             checkresult = (u256)SystemContractCode::Ok;
         }
         else {
             bool result = false;
             dev::eth::ContractABI().abiOut(bytesConstRef(&res.output), result);
+            LOG(TRACE) << "SystemContractSSL::transactionFilterCheck result:" << result;
             checkresult = result ? ((u256)SystemContractCode::Ok) : (u256)SystemContractCode::Other;
         }
-        DEV_WRITE_GUARDED(m_lockfilter)
+    }
+    else {
+        h256 key = filterCheckTransCacheKey(transaction);
+
+        DEV_READ_GUARDED(m_lockfilter)
         {
-            m_filterchecktranscache.insert(pair<h256, u256>(key, checkresult)); //更新cache
+            std::map<h256, u256>::iterator iter = m_filterchecktranscache.find(key);
+
+            if (iter != m_filterchecktranscache.end()) {
+                checkresult = iter->second;
+            }
+        }
+
+        if (checkresult != -1) {
+            //if ( iter != m_filterchecktranscache.end() ) //命中cache
+            //{
+            //checkresult = iter->second;
+            m_transcachehit++;
+            LOG(TRACE) << "SystemContractSSL::transactionFilterCheck hit cache";
+        }
+        else {
+            string input = toHex(transaction.data());
+            string func = input.substr(0, 8);
+            LOG(TRACE) << "SystemContractSSL::transactionFilterCheck input:" << input << ",func:" << func;
+            bytes inputBytes = dev::eth::ContractABI().abiIn(
+                               "process(address,address,address,string,string)",
+                               transaction.safeSender(), transaction.from(), transaction.to(), func,
+                               input);
+
+		    LOG(TRACE) << "SystemContractSSL::transactionFilterCheck: call"  << toJS(transaction.sha3());
+            ExecutionResult res = call(m_transactionfilter.filter, inputBytes);
+
+            if (res.output.empty()) {
+                LOG(TRACE) << "SystemContractSSL::transactionFilterCheck res.output.empty()";
+                checkresult = (u256)SystemContractCode::Ok;
+            }
+            else {
+                bool result = false;
+                dev::eth::ContractABI().abiOut(bytesConstRef(&res.output), result);
+                LOG(TRACE) << "SystemContractSSL::transactionFilterCheck result:" << result;
+                checkresult = result ? ((u256)SystemContractCode::Ok) : (u256)SystemContractCode::Other;
+            }
+            DEV_WRITE_GUARDED(m_lockfilter)
+            {
+                m_filterchecktranscache.insert(pair<h256, u256>(key, checkresult)); //更新cache
+            }
         }
     }
     if ( (u256)SystemContractCode::Ok != checkresult )
