@@ -170,6 +170,8 @@ public:
 	/// @returns gas remaining after the transaction/operation. Valid after the transaction has been executed.
 	u256 gas() const { return m_gas; }
 
+	void setGas(u256 gas) { m_gas = gas; }	
+
 	/// @returns the new address for the created contract in the CREATE operation.
 	Address newAddress() const { return m_newAddress; }
 	/// @returns true iff the operation ended with a VM exception.

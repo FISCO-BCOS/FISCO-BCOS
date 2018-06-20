@@ -17,6 +17,8 @@
 /** @file Common.cpp
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
+ * @author: toxotguo
+ * @date: 2018
  */
 
 #include "Common.h"
@@ -97,6 +99,17 @@ vector<pair<u256, string>> const& units()
 	};
 
 	return s_units;
+}
+
+NodeConnParams& NodeConnParams::operator=(const NodeParams& nodeParams)
+{
+	_sNodeId = nodeParams.nodeid;
+	_sAgencyDesc = nodeParams.name;
+	_sAgencyInfo = nodeParams.agency;
+	_sCAhash = nodeParams.cahash;
+	_iIdx = nodeParams.idx;
+	_iIdentityType = 1;
+	return *this;
 }
 
 std::string formatBalance(bigint const& _b)

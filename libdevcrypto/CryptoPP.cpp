@@ -37,7 +37,11 @@ using namespace CryptoPP;
 
 static_assert(dev::Secret::size == 32, "Secret key must be 32 bytes.");
 static_assert(dev::Public::size == 64, "Public key must be 64 bytes.");
+#if ETH_ENCRYPTTYPE
+static_assert(dev::Signature::size == 128, "Signature must be 128 bytes.");
+#else
 static_assert(dev::Signature::size == 65, "Signature must be 65 bytes.");
+#endif
 
 namespace
 {

@@ -32,8 +32,6 @@ public:
 	string m_superKey;//local encrypt superkey
 	string m_nodekeyPath;//nodekey create path
 	string m_datakeyPath;//datakey create path
-	string m_privatekeyPath;//certificate private path
-	string m_enprivatekeyPath;//certificate private encrypt path
 
 	//keycenter result 
 	int m_ID; //ID

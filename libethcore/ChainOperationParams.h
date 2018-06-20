@@ -57,8 +57,8 @@ struct ChainOperationParams
 
 	explicit operator bool() const { return accountStartNonce != Invalid256; }
 
-	/// The chain sealer name: e.g. Ethash, NoProof, BasicAuthority
-	std::string sealEngineName = "NoProof";
+	/// The chain sealer name: e.g. PBFT, Raft, SinglePoint
+	std::string sealEngineName = "PBFT";
 
 	/// General chain params.
 	u256 blockReward = 0;
@@ -125,6 +125,8 @@ struct ChainOperationParams
 	u256 godMinerStart = 0;
 	u256 godMinerEnd = 0;
 	std::map<std::string, NodeConnParams> godMinerList;
+	//for ssl 
+	std::map<std::string, NodeParams> godMinerListSSL;
 };
 
 }

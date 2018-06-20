@@ -16,9 +16,8 @@
 */
 /**
  * @file: genesisInfoForWe.h
- * @author: fisco-dev
- * 
- * @date: 2017
+*  @author toxotguo
+ * @date 2018
  */
 
 #pragma once
@@ -48,37 +47,22 @@ static std::string const c_genesisJsonForWe = std::string() +
 static std::string const c_configJsonForWe = std::string() +
 R"E(
 {
-        "sealEngine": "PBFT",
+       "sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"127.0.0.1",
-        "rpcport":      "8545",
-        "p2pport":      "30303",
-        "wallet":"/mydata/nodedata-1/keys.info",
-        "keystoredir":"/mydata/nodedata-1/keystore/",
-        "datadir":"/mydata/nodedata-1/",
+        "listenip":"0.0.0.0",
+  	"cryptomod":"0",
+        "rpcport": "8545",
+        "p2pport": "30303",
+        "channelPort": "30304",
+        "wallet":"./data/keys.info",
+        "keystoredir":"./data/keystore/",
+        "datadir":"./data/",
         "vm":"interpreter",
         "networkid":"12345",
         "logverbosity":"4",
         "coverlog":"OFF",
         "eventlog":"ON",
-        "logconf":"/mydata/nodedata-1/log.conf",
-        "params": {
-                "accountStartNonce": "0x0",
-        	  "maximumExtraDataSize": "0x0",
-        	 "tieBreakingGas": false,
-                "blockReward": "0x0",
-                "networkID" : "0x0"
-        },
-        "NodeextraInfo":[
-        {
-         					"Nodeid":"de0fa385816b505799433e54b88788e21cb42092a6ff5bcaa2285d7ace906e5e6ce8ef2b30134ff276a5834d58721291acc5864e07e6d52469b79b28e699dfde",
-            "Nodedesc": "node1",
-            "Agencyinfo": "node1",
-            "Peerip": "127.0.0.1",
-            "Identitytype": 1,
-            "Port":30303,
-            "Idx":0
-        }
-        ]
+  	"statlog":"OFF",
+        "logconf":"./log.conf"
 }
 )E";

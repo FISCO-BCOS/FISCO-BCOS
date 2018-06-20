@@ -1,24 +1,25 @@
 /*
-	This file is part of cpp-ethereum.
+	This file is part of FISCO-BCOS.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
+	FISCO-BCOS is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
+	FISCO-BCOS is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+	along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: ChannelRPCServer.h
  * @author: fisco-dev
- * 
  * @date: 2017
+ * @author: toxotguo
+ * @date: 2018
  */
 
 #pragma once
@@ -65,7 +66,10 @@ public:
 
 	typedef std::shared_ptr<ChannelRPCServer> Ptr;
 
-	ChannelRPCServer(std::string listenAddr = "", int listenPort = 0): jsonrpc::AbstractServerConnector(), _listenAddr(listenAddr), _listenPort(listenPort) {};
+	ChannelRPCServer(std::string listenAddr = "", int listenPort = 0): jsonrpc::AbstractServerConnector(), _listenAddr(listenAddr), _listenPort(listenPort) 
+	{
+		m_sslcontext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+	};
 	virtual ~ChannelRPCServer();
 	virtual bool StartListening() override;
 	virtual bool StopListening() override;
@@ -104,6 +108,9 @@ public:
 	void setHost(std::weak_ptr<EthereumHost> host);
 
 private:
+	void initContext();
+	void initSSLContext();
+	
 	h512 sendChannelMessageToNode(std::string topic, dev::channel::Message::Ptr message, const std::set<h512> &exclude);
 
 	dev::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic, dev::channel::Message::Ptr message, const std::set<dev::channel::ChannelSession::Ptr> &exclude);
@@ -119,6 +126,7 @@ private:
 	std::string _listenAddr;
 	int _listenPort;
 	std::shared_ptr<boost::asio::io_service> _ioService;
+	std::shared_ptr<ba::ssl::context> m_sslcontext;
 
 	std::shared_ptr<dev::channel::ChannelServer> _server;
 	std::shared_ptr<std::thread> _topicThread;

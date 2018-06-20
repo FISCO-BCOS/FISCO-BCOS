@@ -43,7 +43,7 @@ class ECDHE
 public:
 	/// Constructor (pass public key for ingress exchange).
 	ECDHE(): m_ephemeral(KeyPair::create()) {};
-
+	ECDHE(KeyPair k):m_ephemeral(k){};
 	/// Public key sent to remote.
 	Public pubkey() { return m_ephemeral.pub(); }
 	

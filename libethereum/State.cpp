@@ -18,27 +18,27 @@
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
  */
-#include "State.h"
-#include <libdiskencryption/DbEncrypto.h>
 
-#include <ctime>
 #include <boost/filesystem.hpp>
 #include <boost/timer.hpp>
+#include <ctime>
+
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/easylog.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/TrieHash.h>
+#include <libdiskencryption/DbEncrypto.h>
 #include <libevmcore/Instruction.h>
 #include <libethcore/Exceptions.h>
 #include <libevm/VMFactory.h>
+
 #include "BlockChain.h"
 #include "CodeSizeCache.h"
 #include "Defaults.h"
-#include "ExtVM.h"
 #include "Executive.h"
-#include "BlockChain.h"
+#include "ExtVM.h"
 #include "TransactionQueue.h"
-
+#include "State.h"
 #include "StatLog.h"
 
 using namespace std;
@@ -557,7 +557,7 @@ void State::rollback(size_t _savepoint)
 	}
 }
 
-std::pair<ExecutionResult, TransactionReceipt> State::execute(EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Transaction const& _t, Permanence _p, OnOpFunc const& _onOp)
+std::pair<ExecutionResult, TransactionReceipt> State::execute(EnvInfo const& _envInfo, SealEngineFace const& _sealEngine, Transaction const& _t, Permanence _p, OnOpFunc const& _onOp, UTXOModel::UTXOMgr* _pUTXOMgr)
 {
 	StatTxExecLogGuard guard;  
 	guard << "State::execute";
@@ -581,21 +581,82 @@ std::pair<ExecutionResult, TransactionReceipt> State::execute(EnvInfo const& _en
 
 	// OK - transaction looks valid - execute.
 	u256 startGasUsed = _envInfo.gasUsed();
-	if (!e.execute())
-		e.go(onOp);
-	e.finalize();
 
-	if (_p == Permanence::Dry) {
+	UTXOType utxoType = _t.getUTXOType();
+	if (utxoType != UTXOType::InValid) {
 		
+		if (false == m_parallelUTXOTx[_t.sha3()])
+		{
+			// Limited to non-parallel transactions
+			executeUTXO(_t, _pUTXOMgr);
+		}
+		// Sets the consumption of Gas for all UTXO transactions, whether parallel or serial
+		e.setGas(TransactionBase::maxGas - 30000);
 	}
-	else if (_p == Permanence::Reverted)
-		m_cache.clear();
-	else
-	{
-		
+	else {
+		if (!e.execute())
+			e.go(onOp);
+		e.finalize();
+
+		if (_p == Permanence::Dry) {
+			//什么也不做
+		}
+		else if (_p == Permanence::Reverted)
+			m_cache.clear();
+		else
+		{
+			//commit(State::CommitBehaviour::KeepEmptyAccounts); // 一个块所有交易执行完再提交
+		}
 	}
 
 	return make_pair(res, TransactionReceipt(rootHash(), startGasUsed + e.gasUsed(), e.logs(), e.newAddress()));
+}
+
+void State::setParallelUTXOTx(const std::map<h256, bool>& parallelUTXOTx)
+{
+	m_parallelUTXOTx = parallelUTXOTx;
+}
+
+void State::executeUTXO(const Transaction& _t, UTXOModel::UTXOMgr* _pUTXOMgr)
+{
+	if (nullptr == _pUTXOMgr)
+	{
+		return;
+	}
+
+	UTXOType utxoType = _t.getUTXOType();
+	switch (utxoType) {
+		case UTXOType::InitTokens:
+		{
+			try 
+			{
+				_pUTXOMgr->initTokens(_t.sha3(), _t.sender(), _t.getUTXOTxOut());
+			}
+			catch (UTXOModel::UTXOException& e)
+			{
+				LOG(ERROR) << "State::executeUTXO() InitTokens Error:" << e.what();
+				BOOST_THROW_EXCEPTION(UTXOTxError());
+			}
+			break;
+		}
+		case UTXOType::SendSelectedTokens:
+		{
+			try
+			{
+				_pUTXOMgr->sendSelectedTokens(_t.sha3(), _t.sender(), _t.getUTXOTxIn(), _t.getUTXOTxOut());
+			}
+			catch (UTXOModel::UTXOException& e)
+			{
+				LOG(ERROR) << "State::executeUTXO() SendSelectedTokens Error:" << e.what();
+				BOOST_THROW_EXCEPTION(UTXOTxError());
+			}
+			break;
+		}
+		default: {
+			LOG(TRACE) << "State::executeUTXO() Invalid utxo type";
+			break;
+		}
+	}
 }
 
 void dev::eth::State::clearCache() {
@@ -675,8 +736,13 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, State const& _s)
 						contout << "\n" << "XXX    " << std::hex << nouppercase << std::setw(64) << j.first << "";
 			}
 			else
+			{
 				contout << " [SIMPLE]";
-			_out << lead << i << ": " << std::dec << (cache ? cache->nonce() : r[0].toInt<u256>()) << " #:" << (cache ? cache->balance() : r[1].toInt<u256>()) << contout.str() << "\n";
+				if (r)
+				{
+					_out << lead << i << ": " << std::dec << (cache ? cache->nonce() : r[0].toInt<u256>()) << " #:" << (cache ? cache->balance() : r[1].toInt<u256>()) << contout.str() << "\n";
+				}
+			}
 		}
 	}
 	return _out;
