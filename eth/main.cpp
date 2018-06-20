@@ -79,7 +79,9 @@
 #include <libdiskencryption/EncryptFile.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
 #include <libweb3jsonrpc/RPCallback.h>
+#if ETH_ENCRYPTTYPE
 #include <libdevcrypto/sm2/sm2.h>
+#endif
 #include <libdevcrypto/Common.h>
 
 INITIALIZE_EASYLOGGINGPP
