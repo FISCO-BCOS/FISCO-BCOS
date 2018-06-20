@@ -19,12 +19,15 @@
  * @date 2014
  */
 
-#include "TransactionQueue.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/Exceptions.h>
+#include <UTXO/UTXOSharedData.h>
+
 #include "Transaction.h"
+#include "TransactionQueue.h"
 #include "StatLog.h"
 #include "SystemContractApi.h"
+
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
@@ -205,6 +208,77 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 			{
 				LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK hasTxPermission fail! "<<_transaction.sha3();
 				return ImportResult::NoTxPermission;
+			}
+		}
+
+		// check before import
+		{
+			try
+			{
+				UTXOType utxoType = _transaction.getUTXOType();
+				u256 curBlockNum = UTXOModel::UTXOSharedData::getInstance()->getBlockNum();
+				LOG(TRACE) << "TransactionQueue::manageImport_WITH_LOCK utxoType:" << utxoType << ",curBlock:" << curBlockNum << ",updateHeight:" << BlockHeader::updateHeight;
+				if (UTXOType::InitTokens == utxoType || 
+					UTXOType::SendSelectedTokens == utxoType) 
+				{
+					if (0 == BlockHeader::updateHeight || 
+						curBlockNum <= BlockHeader::updateHeight)
+					{
+						UTXO_EXCEPTION_THROW("TransactionQueue::manageImport_WITH_LOCK Error:LowEthVersion", UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrLowEthVersion);
+						LOG(ERROR) << "TransactionQueue::manageImport_WITH_LOCK Error:" << UTXOModel::UTXOExecuteState::LowEthVersion;
+					}
+					_transaction.checkUTXOTransaction(m_interface->getUTXOMgr());
+				}
+				else if (utxoType != UTXOType::InValid)
+				{
+					UTXO_EXCEPTION_THROW("TransactionQueue::manageImport_WITH_LOCK Error:UTXOTypeInvalid", UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeUTXOTypeInvalid);
+					LOG(ERROR) << "TransactionQueue::manageImport_WITH_LOCK Error:" << UTXOModel::UTXOExecuteState::UTXOTypeInvalid;
+				}
+			}
+			catch (UTXOModel::UTXOException& e)
+			{
+				UTXOModel::EnumUTXOExceptionErrCode code = e.error_code();
+				LOG(ERROR) << "TransactionQueue::manageImport_WITH_LOCK ErrorCode:" << (int)code;
+				if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeUTXOTypeInvalid == code)
+				{
+					return ImportResult::UTXOInvalidType;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeJsonParamError == code)
+				{
+					return ImportResult::UTXOJsonParamError;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeTokenIDInvalid == code)
+				{
+					return ImportResult::UTXOTokenIDInvalid;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeTokenUsed == code)
+				{
+					return ImportResult::UTXOTokenUsed;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeTokenOwnerShipCheckFail == code)
+				{
+					return ImportResult::UTXOTokenOwnerShipCheckFail;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeTokenLogicCheckFail == code)
+				{
+					return ImportResult::UTXOTokenLogicCheckFail;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeTokenAccountingBalanceFail == code)
+				{
+					return ImportResult::UTXOTokenAccountingBalanceFail;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrTokenCntOutofRange == code)
+				{
+					return ImportResult::UTXOTokenCntOutofRange;
+				}
+				else if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrLowEthVersion == code)
+				{
+					return ImportResult::UTXOLowEthVersion;
+				}
+				else 
+				{
+					return ImportResult::UTXOTxError;
+				}
 			}
 		}
 

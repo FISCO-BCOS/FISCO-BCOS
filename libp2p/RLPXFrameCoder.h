@@ -58,6 +58,7 @@ struct RLPXFrameInfo
 };
 
 class RLPXHandshake;
+class RLPXHandshakeSSL;
 
 /**
  * @brief Encoder/decoder transport for RLPx connection established by RLPXHandshake.
@@ -77,6 +78,7 @@ class RLPXFrameCoder
 public:
 	/// Construct; requires instance of RLPXHandshake which has encrypted ECDH key exchange (first two phases of handshake).
 	RLPXFrameCoder(RLPXHandshake const& _init);
+	RLPXFrameCoder(RLPXHandshakeSSL const& _init);
 	
 	/// Construct with external key material.
 	RLPXFrameCoder(bool _originated, h512 const& _remoteEphemeral, h256 const& _remoteNonce, crypto::ECDHE const& _ephemeral, h256 const& _nonce, bytesConstRef _ackCipher, bytesConstRef _authCipher);

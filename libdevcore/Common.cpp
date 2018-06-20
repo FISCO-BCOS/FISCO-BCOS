@@ -30,7 +30,7 @@ namespace dev
 {
 
 char const* Version = ETH_PROJECT_VERSION;
-char const* Copyright="by FISCO, (c)2016-2017.";
+char const* Copyright="by FISCO, (c)2016-2018.";
 
 const u256 Invalid256 = ~(u256)0;
 

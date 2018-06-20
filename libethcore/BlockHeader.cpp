@@ -42,7 +42,8 @@ BlockHeader::BlockHeader(bytesConstRef _block, BlockDataType _bdt, h256 const& _
 	populate(header);
 }
 
-u256 BlockHeader::maxBlockHeadGas = 2000000000; 
+u256 BlockHeader::maxBlockHeadGas = 2000000000;
+u256 BlockHeader::updateHeight = 0;				// 字段升级所在块高
 
 void BlockHeader::clear()
 {
@@ -62,6 +63,8 @@ void BlockHeader::clear()
 	m_seal.clear();
 	m_gen_idx = Invalid256;
 	m_node_list.clear();
+	m_hash_list.clear();
+	m_str_list.clear();
 	noteDirty();
 }
 
@@ -78,19 +81,38 @@ h256 BlockHeader::hash(IncludeSeal _i) const
 	return memo;
 }
 
+bool BlockHeader::IsBlockAfterUpdate() const
+{
+	return (0 != BlockHeader::updateHeight && 
+			m_number > BlockHeader::updateHeight);
+}
+
 void BlockHeader::streamRLPFields(RLPStream& _s) const
 {
 	_s	<< m_parentHash << m_sha3Uncles << m_author << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_logBloom
 	    << m_difficulty << m_number << m_gasLimit << m_gasUsed << m_timestamp << m_extraData << m_gen_idx;
 	
 	_s.appendVector(m_node_list);
+	//LOG(TRACE) << "Write-blockNum:" << m_number << ",updateHeight:" << BlockHeader::updateHeight;
+	if (IsBlockAfterUpdate())
+	{
+		// 一致性校验数据hash
+		_s.appendVector(m_hash_list);
+		// 预留字段
+		_s.appendVector(m_str_list);
+	}
 }
 
 void BlockHeader::streamRLP(RLPStream& _s, IncludeSeal _i) const
 {
 	if (_i != OnlySeal)
 	{
-		_s.appendList(BlockHeader::BasicFields + (_i == WithoutSeal ? 0 : m_seal.size()));
+		unsigned basicFieldsCnt = BlockHeader::BasicFields;
+		if (IsBlockAfterUpdate())
+		{
+			basicFieldsCnt = BlockHeader::BasicFieldsUpdate;
+		}
+		_s.appendList(basicFieldsCnt + (_i == WithoutSeal ? 0 : m_seal.size()));
 		BlockHeader::streamRLPFields(_s);
 	}
 	if (_i != WithoutSeal)
@@ -132,6 +154,7 @@ void BlockHeader::populate(RLP const& _header)
 		m_logBloom = _header[field = 6].toHash<LogBloom>(RLP::VeryStrict);
 		m_difficulty = _header[field = 7].toInt<u256>();
 		m_number = _header[field = 8].toInt<u256>();
+		//LOG(TRACE) << "Read-blockNum:" << m_number << ",updateHeight:" << BlockHeader::updateHeight;
 		m_gasLimit = _header[field = 9].toInt<u256>();
 		m_gasUsed = _header[field = 10].toInt<u256>();
 		m_timestamp = _header[field = 11].toInt<u256>();
@@ -140,8 +163,16 @@ void BlockHeader::populate(RLP const& _header)
 		m_gen_idx = _header[field = 13].toInt<u256>();
 		m_node_list = _header[field = 14].toVector<h512>();
 
+		unsigned basicFieldsCnt = BasicFields;
+		if (IsBlockAfterUpdate())
+		{
+			m_hash_list = _header[field = 15].toVector<h256>();
+			m_str_list = _header[field = 16].toVector<std::string>();
+			basicFieldsCnt = BasicFieldsUpdate;
+		}
+
 		m_seal.clear();
-		for (unsigned i = 15; i < _header.itemCount(); ++i)
+		for (unsigned i = basicFieldsCnt; i < _header.itemCount(); ++i)
 			m_seal.push_back(_header[i].data().toBytes());
 	}
 	catch (Exception const& _e)

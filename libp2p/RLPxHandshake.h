@@ -17,6 +17,8 @@
 /** @file RLPXHandshake.h
  * @author Alex Leverington <nessence@gmail.com>
  * @date 2015
+ * @author toxotguo
+ * @date 2018
  */
 
 
@@ -28,7 +30,7 @@
 #include "RLPXSocket.h"
 #include "RLPXFrameCoder.h"
 #include "Common.h"
-
+#include "Host.h"
 #include "HandshakeCAData.h"
 
 namespace ba = boost::asio;
@@ -38,6 +40,7 @@ namespace dev
 {
 namespace p2p
 {
+
 
 static const unsigned c_rlpxVersion = 4;
 /**
@@ -56,10 +59,10 @@ class RLPXHandshake: public std::enable_shared_from_this<RLPXHandshake>
 
 public:
 	/// Setup incoming connection.
-	RLPXHandshake(Host* _host, std::shared_ptr<RLPXSocket> const& _socket): m_host(_host), m_originated(false), m_socket(_socket), m_idleTimer(m_socket->ref().get_io_service()) { crypto::Nonce::get().ref().copyTo(m_nonce.ref()); }
+	RLPXHandshake(HostApi* _host, std::shared_ptr<RLPXSocket> const& _socket): m_host(_host), m_originated(false), m_socket(_socket), m_idleTimer(m_socket->ref().get_io_service()) { crypto::Nonce::get().ref().copyTo(m_nonce.ref()); }
 	
 	/// Setup outbound connection.
-	RLPXHandshake(Host* _host, std::shared_ptr<RLPXSocket> const& _socket, NodeID _remote): m_host(_host), m_remote(_remote), m_originated(true), m_socket(_socket), m_idleTimer(m_socket->ref().get_io_service()) { crypto::Nonce::get().ref().copyTo(m_nonce.ref()); }
+	RLPXHandshake(HostApi* _host, std::shared_ptr<RLPXSocket> const& _socket, NodeID _remote): m_host(_host), m_remote(_remote), m_originated(true), m_socket(_socket), m_idleTimer(m_socket->ref().get_io_service()) { crypto::Nonce::get().ref().copyTo(m_nonce.ref()); }
 
 	~RLPXHandshake() {}
 
@@ -125,7 +128,7 @@ protected:
 	State m_nextState = New;			///< Current or expected state of transition.
 	bool m_cancel = false;			///< Will be set to true if connection was canceled.
 	
-	Host* m_host;					///< Host which provides m_alias, protocolVersion(), m_clientVersion, caps(), and TCP listenPort().
+	HostApi* m_host;					///< Host which provides m_alias, protocolVersion(), m_clientVersion, caps(), and TCP listenPort().
 	
 	/// Node id of remote host for socket.
 	NodeID m_remote;					///< Public address of remote host.

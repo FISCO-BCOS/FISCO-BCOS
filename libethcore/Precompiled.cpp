@@ -40,38 +40,81 @@ PrecompiledExecutor const& PrecompiledRegistrar::executor(std::string const& _na
 
 namespace
 {
-
-ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in, bytesRef _out)
-{
-	struct inType
+#if ETH_ENCRYPTTYPE
+	void gmRecover(bytesConstRef _in, bytesRef _out)
 	{
-		h256 hash;
-		h256 v;
-		h256 r;
-		h256 s;
-	} in;
+		struct inType
+		{
+			h256 hash;
+			h512 pub;
+			h256 r;
+			h256 s;
+		} in;
+		memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
 
-	memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-
-	h256 ret;
-	u256 v = (u256)in.v;
-	if (v >= 27 && v <= 28)
-	{
-		SignatureStruct sig(in.r, in.s, (byte)((int)v - 27));
+		SignatureStruct sig(in.r, in.s, in.pub);
 		if (sig.isValid())
 		{
 			try
 			{
 				if (Public rec = recover(sig, in.hash))
 				{
-					ret = dev::sha3(rec);
+					h256 ret = dev::sha3(rec);
 					memset(ret.data(), 0, 12);
 					ret.ref().copyTo(_out);
 				}
 			}
-			catch (...) {}
+			catch (...) 
+			{
+				LOG(ERROR)<<"Verify GM SignatureStruct Error";
+			}
 		}
 	}
+#else
+	void ecdsaRecover(bytesConstRef _in, bytesRef _out)
+	{
+		struct inType
+		{
+			h256 hash;
+			h256 v;
+			h256 r;
+			h256 s;
+		} in;
+
+		memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+
+		h256 ret;
+		u256 v = (u256)in.v;
+		if (v >= 27 && v <= 28)
+		{
+			SignatureStruct sig(in.r, in.s, (byte)((int)v - 27));
+			if (sig.isValid())
+			{
+				try
+				{
+					if (Public rec = recover(sig, in.hash))
+					{
+						ret = dev::sha3(rec);
+						memset(ret.data(), 0, 12);
+						ret.ref().copyTo(_out);
+					}
+				}
+				catch (...) 
+				{
+					LOG(ERROR)<<"Verify ECDSA SignatureStruct Error";
+				}
+			}
+		}
+	}
+#endif
+
+ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in, bytesRef _out)
+{
+#if ETH_ENCRYPTTYPE
+	gmRecover(_in,_out);
+#else
+	ecdsaRecover(_in,_out);
+#endif
 }
 
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in, bytesRef _out)
