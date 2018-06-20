@@ -1446,6 +1446,7 @@ Please refer to these documentations:
 10. [Regulatory Zero-Knowledge Proof](../可监管的零知识证明说明.md)
 11. [Group Signature and Ring Signature Support](../启用_关闭群签名环签名ethcall.md)
 12. [Architecture of Elastic Aliance Consensus](../弹性联盟链共识框架说明文档.md)
+13. [FISCO BCOS Turn On Guomi Feature](../国密操作文档.md)
 
 <br>
 <br>
