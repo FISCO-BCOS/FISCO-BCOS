@@ -72,7 +72,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 * [FISCO BCOS权限模型](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E6%9D%83%E9%99%90%E6%A8%A1%E5%9E%8B)
 * [群签名和环签名链上验证](doc/启用_关闭群签名环签名ethcall.md)
 * [可监管的零知识证明说明](doc/可监管的零知识证明说明.md)
-* [FISCO-BCOS开启国密特性](doc/https://github.com/FISCO-BCOS/FISCO-BCOS/blob/dev/doc/%E5%9B%BD%E5%AF%86%E6%93%8D%E4%BD%9C%E6%96%87%E6%A1%A3.md)
+* [FISCO-BCOS开启国密特性](doc/%E5%9B%BD%E5%AF%86%E6%93%8D%E4%BD%9C%E6%96%87%E6%A1%A3.md)
 
 # 4.应用案例
 * [FISCO BCOS应用实践](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5.pdf) 
