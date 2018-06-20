@@ -52,7 +52,7 @@ PBFTClient* dev::eth::asPBFTClient(Interface* _c)
 PBFTClient::PBFTClient(
     ChainParams const& _params,
     int _networkID,
-    p2p::Host* _host,
+    p2p::HostApi* _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -75,7 +75,7 @@ PBFTClient::~PBFTClient() {
 	stopWorking();
 }
 
-void PBFTClient::init(ChainParams const& _params, p2p::Host *_host) {
+void PBFTClient::init(ChainParams const& _params, p2p::HostApi *_host) {
 	m_params = _params;
 	m_working.setEvmCoverLog(m_params.evmCoverLog);
 	m_working.setEvmEventLog(m_params.evmEventLog);
@@ -378,6 +378,8 @@ void PBFTClient::rejigSealing() {
 				} catch (Exception &e) {
 					LOG(ERROR) << "executeTransaction exception " << e.what();
 					m_working.resetCurrent();
+					// 多条交易中有一条问题交易，其他交易会一直挂着不处理，除非有新交易过来重置标志位，现在主动重置
+					m_syncTransactionQueue = true;
 					return;
 				}
 

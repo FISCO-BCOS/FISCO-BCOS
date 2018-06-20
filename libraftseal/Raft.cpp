@@ -217,8 +217,9 @@ void Raft::runAsLeader() {
 		}
 
 		// heartbeat timeout, change role to candidate (心跳超时转 candidate)
-		if (checkHeartBeatTimeout()) {
-			LOG(INFO) << "HeartBeat Timeout!";
+		// m_node_num > 1 is for single node 
+		if (m_node_num > 1 && checkHeartBeatTimeout()) {
+			LOG(INFO) << "HeartBeat Timeout! current node_num:" << m_node_num;
 			for (auto& i : member_hb_log) {
 				LOG(INFO) << "======= node:" << i.first.hex().substr(0, 5) << " , hb log:" << i.second;
 			}

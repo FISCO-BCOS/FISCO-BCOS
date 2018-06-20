@@ -26,7 +26,9 @@
 #include <libdevcore/Assertions.h>
 #include <libdevcore/SHA3.h>
 #include "RLPxHandshake.h"
+#include "RLPxHandshakeSSL.h"
 #include "RLPXPacket.h"
+#include <libdevcore/FileSystem.h>
 
 static_assert(CRYPTOPP_VERSION == 570, "Wrong Crypto++ version");
 
@@ -81,6 +83,17 @@ RLPXFrameCoder::RLPXFrameCoder(RLPXHandshake const& _init):
 	m_impl(new RLPXFrameCoderImpl)
 {
 	setup(_init.m_originated, _init.m_remoteEphemeral, _init.m_remoteNonce, _init.m_ecdhe, _init.m_nonce, &_init.m_ackCipher, &_init.m_authCipher);
+	
+}
+RLPXFrameCoder::RLPXFrameCoder(RLPXHandshakeSSL const& _init):
+	m_impl(new RLPXFrameCoderImpl)
+{
+	KeyPair k(Secret(""));
+	crypto::ECDHE ecdhe(k);
+	Public p(0);
+	h256 h(0);
+	bytes b(0);
+	setup(_init.m_originated, p, h,ecdhe,h, &b, &b);
 }
 
 RLPXFrameCoder::RLPXFrameCoder(bool _originated, h512 const& _remoteEphemeral, h256 const& _remoteNonce, crypto::ECDHE const& _ecdhe, h256 const& _nonce, bytesConstRef _ackCipher, bytesConstRef _authCipher):

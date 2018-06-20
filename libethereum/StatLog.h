@@ -285,9 +285,9 @@ private:
             m_list.pop_front();
         }
         auto it = m_map.find(hash);
-        auto& context = it->second;
         if (it != m_map.end())
         {
+        	auto& context = it->second;
             if (context->isFinalState()) 
             {
                 err = false; 

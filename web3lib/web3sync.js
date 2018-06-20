@@ -821,6 +821,46 @@ async function sendRawTransaction(account, privateKey, to, func, params) {
 	});
 }
 
+async function sendUTXOTransaction(account, privateKey, params) {
+	var postdata = {
+		data: params[0],
+		from: account,
+		gas: 30000,
+		randomid:Math.ceil(Math.random()*100000000),
+		blockLimit:await getBlockNumber() + 1000,
+	}
+
+	var signTX = signTransaction(postdata, privateKey, null);
+
+	return new Promise((resolve, reject) => {
+		web3.eth.sendRawTransaction(signTX, function(err, address) {
+			if (!err) {
+				console.log("发送交易成功: " + address);
+
+				checkForTransactionResult(address, (err, receipt) => {
+					resolve(receipt);
+				});
+
+				//resolve(address);
+			}
+			else {
+				console.log("发送交易失败！",err);
+
+				return;
+			}
+		});
+	});
+}
+
+function callUTXO(params) {
+	var postdata = {
+		data: params[0],
+		to: ""
+	};
+
+	return web3.eth.call(postdata);
+}
+
 exports.getBlockNumber = getBlockNumber;
 exports.callByNameService = callByNameService;
 exports.sendRawTransactionByNameService = sendRawTransactionByNameService;
@@ -828,4 +868,6 @@ exports.sendRawTransaction = sendRawTransaction;
 exports.unlockAccount = unlockAccount;
 exports.rawDeploy = rawDeploy;
 exports.signTransaction=signTransaction;
+exports.sendUTXOTransaction = sendUTXOTransaction;
+exports.callUTXO = callUTXO;
 //exports.deploy=deploy;

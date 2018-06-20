@@ -17,8 +17,8 @@
 /** @file Common.h
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
- *
- * Ethereum-specific data structures & algorithms.
+ * @author: toxotguo
+ * @date: 2018
  */
 
 #pragma once
@@ -123,7 +123,19 @@ enum class ImportResult
 	BlockLimitCheckFail,
 	NoDeployPermission,
 	NoTxPermission,
-	NoCallPermission
+	NoCallPermission,
+	UTXOInvalidType,
+	UTXOJsonParamError,
+	UTXOTokenIDInvalid,
+	UTXOTokenUsed,
+	UTXOTokenOwnerShipCheckFail,
+	UTXOTokenLogicCheckFail,
+	UTXOTokenAccountingBalanceFail,
+	UTXOTokenCntOutofRange,
+	UTXOTokenKeyRepeat,
+	UTXOLowEthVersion,
+	UTXOTxError,
+	UTXODBError
 };
 
 struct ImportRequirements
@@ -220,7 +232,10 @@ struct TransactionSkeleton
 	std::string userReadable(bool _toProxy, std::function<std::pair<bool, std::string>(TransactionSkeleton const&)> const& _getNatSpec, std::function<std::string(Address const&)> const& _formatAddress) const;
 };
 
-
+class NodeParams;
+/**
+* 节点配置信息的结构
+*/
 class NodeConnParams {
 public:
 	std::string _sNodeId = "";	
@@ -256,6 +271,97 @@ public:
 		        && _iPort == p1._iPort
 		        && _iIdentityType == p1._iIdentityType
 		        && _sAgencyDesc == p1._sAgencyDesc);
+	}
+	NodeConnParams& operator=(const NodeParams& nodeParams);
+};
+
+
+
+/**
+ * Connect Node Struct match bootstrap.json 
+ **/
+class ConnectParams{
+public:
+	std::string host="";
+	u256		port=0;
+	std::string toString()const {
+		std::ostringstream os;
+		os << host << ":"  << port ;
+		return os.str();
+	}
+	bool Valid() const {
+		return host != "" && port != 0 ;
+	} 
+	ConnectParams() {};
+	ConnectParams(const std::string & json);
+	//转换为enode 信息 enode://${nodeid}@${ip}:${port}
+	std::string endPoint()const {
+		std::ostringstream os;
+		os << host << ":" << port;
+		return os.str();
+	}
+	bool operator==(const ConnectParams &p1)const {
+		return (host == p1.host
+		        && port == p1.port);
+	}
+};
+
+
+/**
+* Miner Node Struct
+*/
+class NodeParams {
+public:
+	std::string nodeid = "";
+	std::string name = "";	
+	std::string agency ="";	
+	std::string cahash ="";	
+	u256 idx =0;					
+	u256 blocknumber =0;
+
+	NodeParams(const NodeConnParams& nodeConnParams)
+	{
+		nodeid = nodeConnParams._sNodeId;
+		name = nodeConnParams._sAgencyDesc;
+		agency = nodeConnParams._sAgencyInfo;
+		cahash = nodeConnParams._sCAhash;
+		idx = nodeConnParams._iIdx;
+	}
+	std::string toString()const
+	{
+		std::ostringstream os;
+		os << nodeid << "|"  << name << "|" << agency << "|" << cahash << "|" << idx<< "|" << blocknumber;
+		return os.str();
+	}
+	bool Valid() const {
+		return nodeid != "" && blocknumber !=0 ;
+	} 
+	NodeParams() {};
+	NodeParams(const std::string & json);
+	//转换为enode 信息 enode://${nodeid}@${ip}:${port}
+	std::string toEnodeInfo()const {
+		std::ostringstream os;
+		os << "enode://" << nodeid << "@" << name <<"@" << agency << ":" << cahash<<":"<<idx<<":"<<blocknumber;
+		LOG(INFO) << "WitnessParams toEnodeInfo is: " << os.str() << "\n";
+		return os.str();
+	}
+	bool operator==(const NodeParams &p1)const {
+		return (nodeid == p1.nodeid
+				&& name == p1.name
+		        && agency == p1.agency
+				&& cahash == p1.cahash
+				&& idx == p1.idx
+				&& blocknumber == p1.blocknumber);
+	}
+	NodeParams& operator=(const NodeConnParams& nodeConnParams)
+	{
+		nodeid = nodeConnParams._sNodeId;
+		name = nodeConnParams._sAgencyDesc;
+		agency = nodeConnParams._sAgencyInfo;
+		cahash = nodeConnParams._sCAhash;
+		idx = nodeConnParams._iIdx;
+
+		return *this;
 	}
 };
 

@@ -25,13 +25,15 @@
 
 #include <memory>
 #include <iostream>
+
 #include <jsonrpccpp/server.h>
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcrypto/Common.h>
 #include <libethereum/Client.h>
-#include "SessionManager.h"
-#include "EthFace.h"
+#include <UTXO/UTXOData.h>
 
+#include "EthFace.h"
+#include "SessionManager.h"
 
 namespace dev
 {
@@ -168,6 +170,18 @@ protected:
 	eth::Interface& m_eth;
 	eth::AccountHolder& m_ethAccounts;
 
+	bool isUTXOTx(Json::Value const& _json);
+	string utxoCall(Json::Value const& _json);
+	bool getAccount(Json::Value const& utxoData, dev::Address& account, std::string& ret);
+	bool getValue(Json::Value const& utxoData, dev::u256& value, std::string& ret);
+	UTXOModel::QueryUTXOParam getQueryParam(Json::Value const& utxoData);
+	string utxo_call_registerAccount(Json::Value const& utxoData);
+	string utxo_call_getToken(Json::Value const& utxoData);
+	string utxo_call_getTx(Json::Value const& utxoData);
+	string utxo_call_getVault(Json::Value const& utxoData);
+	string utxo_call_tokenTracking(Json::Value const& utxoData);
+	string utxo_call_selectTokens(Json::Value const& utxoData);
+	string utxo_call_getBalance(Json::Value const& utxoData);
 };
 
 }

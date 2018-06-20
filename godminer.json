@@ -1,14 +1,14 @@
 {
-	"godMinerStart": "0x25f4d",//16进制 起始开始值必须是当前BlockChain的块高+1
- 	"godMinerEnd":"0x25fb1", // 结束上帝模式的块高
+	"godMinerStart": "0x25f4d",
+ 	"godMinerEnd":"0x25fb1", 
 	"miners":[
 	 {
-         "Nodeid": "23cf670f2321902088fa783260694e942083988d1a2a82adb64b6a63c3f174bde9791d8ae94f81e29dfe917ed01b899affc69e9d164f9d47007f7480e8ec3cda", // <公钥 和 config.json 中类似>
-        "Nodedesc": "node0", // <节点描述信息 和 config.json 中填写类似>
-        "Agencyinfo": "node0", //<info 和 config.json 中填写类似>
-        "Peerip": "127.0.0.1", // <填写god ip>
+         "Nodeid": "23cf670f2321902088fa783260694e942083988d1a2a82adb64b6a63c3f174bde9791d8ae94f81e29dfe917ed01b899affc69e9d164f9d47007f7480e8ec3cda", 
+        "Nodedesc": "node0",
+        "Agencyinfo": "node0", 
+        "Peerip": "127.0.0.1", 
         "Identitytype": 1,
-        "Port":31304, // 填写端口
+        "Port":31304, 
         "Idx":0
       }
 	]

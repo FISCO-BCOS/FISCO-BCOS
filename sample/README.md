@@ -21,10 +21,13 @@
 
 2. **执行build**
 
-   ```shell
-   cd FISCO-BCOS
-   chmod +x build.sh 
-   ./build.sh
+```
+   $ cd fisco-bcos
+   $ chmod +x build.sh 
+   $ ./build.sh
+```
+
+   如看到如下的提示说明：FISCO BCOS安装完毕
    ```
       如看到如下的提示说明：FISCO BCOS安装完毕
    ```log
@@ -68,13 +71,13 @@
    > 执行命令
 
    ```shell
-   cat /bcos-data/node0/log/* | grep peers
+   cat /bcos-data/node0/log/* | grep "topics Send to"
    ```
 
    > 可以看到如下日志，表示日志对应的节点已经与另一个节点连接（Connected to 1 peers），连接正常：
 
    ```shell
-   INFO|2017-11-22 17:22:06|Connected to 1 peers
+   DEBUG|2018-05-25 21:14:39|topics Send to6a9b9d071fa1e52a12c215ec0f469668f177af4817823e71277f36cbe3e020ff8cbe953c967fbc4d7467cd0eadd7443212d87c99ad38976b2150eccbc1aaa739@127.0.0.1:30304
    ```
 
    **（3）验证可共识**
@@ -105,8 +108,8 @@
    > 在另一台未安装FISCO BCOS的机器上，安装依赖环境
 
    ```shell
-   yum -y -q install epel-release
-   yum install -y leveldb-devel libmicrohttpd-devel
+   sudo yum -y -q install epel-release
+   sudo yum install -y leveldb-devel libmicrohttpd-devel
    ```
 
 2. **生成节点**
@@ -115,10 +118,13 @@
 
    ```sh
    cd sample
+   chmod +x init_four.sh
    ./init_four.sh  192.168.1.101 192.168.1.102 #本机IP在前，另一台机器IP在后
    #此时会生成本地的两个节点，以及另一台机器的节点安装包：192.168.1.102_install.tar.gz 
    scp 192.168.1.102_install.tar.gz app@192.168.1.102:/home/app/ #将安装包拷贝到另一台机器的任意目录
    ```
+
+  *若执行过程出现 “没有那个文件或目录”类似提示信息可忽略。*
 
 3. **启动节点**
 
@@ -128,6 +134,8 @@
    cd sample
    ./start_two.sh
    ```
+
+  *若出现 “文本文件忙” 类似提示信息可忽略。*
 
    **（2）另一台机器**
 
@@ -139,6 +147,8 @@
    ./start_two.sh
    ```
 
+  *若出现 “文本文件忙” 类似提示信息可忽略。*
+  
 4. **验证节点正常运行**
 
    **（1）验证进程**
@@ -161,14 +171,15 @@
    > 在后启动节点的机器上，执行命令。（如本例先启动了：192.168.1.101，再启动了192.168.1.102，则在192.168.1.102上执行命令）
 
    ```sh
-   cat /bcos-data/node4_*/log/* | grep peers
+   cat /bcos-data/node4_*/log/* | grep "topics Send to"
+   
    ```
 
-   > 可看到如下日志，则表示每个区块链节点都连接了除自己以外的3个节点，连接正常：
-
+   > 可看到以下信息，则表示每个区块链节点都连接了除自己以外的3个节点，连接正常。
    ```
-   INFO|2017-11-22 17:16:32|Connected to 3 peers
+   DEBUG|2018-05-08 01:43:14|topics Send to:3 nodes
    ```
+ 
 
    **（3）验证可共识**
 

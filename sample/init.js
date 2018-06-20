@@ -7,7 +7,11 @@ if( options.length < 3 )
   console.log('Usage: node init.js node0.sample node1.sample node2.sample... ');
   process.exit(0);
 }
-
+if( options.length > 6 )
+{
+  console.log('Max Four Node! ');
+  process.exit(0);
+}
 var nodeconfiglength=0;
 var nodeconfig=[];
 while(nodeconfig.length<options.length-2 ){
@@ -64,11 +68,11 @@ for( var i=0;i<nodeconfig.length;i++){
     execSync("mkdir -p "+nodeconfig[i].nodedir);
     execSync("mkdir -p "+nodeconfig[i].nodedir+"log/");
     execSync("mkdir -p "+nodeconfig[i].nodedir+"data/");
-    execSync("mkdir -p "+nodeconfig[i].nodedir+"keystore/");
-    execSync("fisco-bcos --gennetworkrlp  cryptomod.json");
-    execSync("mv network.rlp*  "+nodeconfig[i].nodedir+"data/");
-    execSync("cp ca.crt server.crt server.key  "+nodeconfig[i].nodedir+"data/");
-    nodeid.push(fs.readFileSync(nodeconfig[i].nodedir+"data/network.rlp.pub", 'utf-8'));
+   
+    execSync("cp "+"./cert/webank/"+i+"/*   "+nodeconfig[i].nodedir+"data/");
+    var id = fs.readFileSync(nodeconfig[i].nodedir+"data/node.nodeid", 'utf-8');
+    id = id.replace(/\n/g ,"");
+    nodeid.push(id);
 
     var logconfig=fs.readFileSync("log.conf.template", 'utf-8');
     fs.writeFileSync(nodeconfig[i].nodedir+'log.conf',logconfig.replace(/{nodedir}/g,nodeconfig[i].nodedir));
@@ -94,25 +98,12 @@ genesis=genesis.replace(/{initMinerNodes}/g,JSON.stringify(nodeid));
 genesis=genesis.replace(/{admin}/g,admin);
 console.log('创世文件生成成功!!!');
 
-var nodeextrainfo=[];
-for( var i=0;i<nodeconfig.length;i++){
-  nodeextrainfo.push({
-	    "Nodeid":nodeid[i], 
-	    "Nodedesc": "node"+i,
-	    "Agencyinfo": "node"+i,
-	    "Peerip": nodeconfig[i].ip,
-	    "Identitytype": 1,
-	    "Port":nodeconfig[i].p2pport,
-	    "Idx":i
-  });
-}
-console.log('记账节点列表生成成功!!!');
+
 
 for( var i=0;i<nodeconfig.length;i++){
   try{ 
     fs.writeFileSync(nodeconfig[i].nodedir+'genesis.json',genesis);
     console.log('节点'+i+' genesis.json生成成功!!!');
-
 
     var config=fs.readFileSync("config.json.template", 'utf-8');
     config=config.replace(/{nodedir}/g,nodeconfig[i].nodedir);
@@ -121,11 +112,15 @@ for( var i=0;i<nodeconfig.length;i++){
     config=config.replace(/{rpcport}/g,nodeconfig[i].rpcport);
     config=config.replace(/{p2pport}/g,nodeconfig[i].p2pport);
     config=config.replace(/{channelPort}/g,nodeconfig[i].channelPort);
-    config=config.replace(/{nodeextrainfo}/g,JSON.stringify(nodeextrainfo));
-
     fs.writeFileSync(nodeconfig[i].nodedir+'config.json',config);
-    
     console.log('节点'+i+' config.json生成成功!!!');
+
+    var booststrap=fs.readFileSync("bootstrapnodes.json.sample", 'utf-8');
+    booststrap=booststrap.replace(/{host}/g,nodeconfig[0].ip);
+    booststrap=booststrap.replace(/{p2pport}/g,nodeconfig[0].p2pport);
+    fs.writeFileSync(nodeconfig[i].nodedir+'data/bootstrapnodes.json',booststrap);
+    console.log('节点'+i+' bootstrapnodes.json生成成功!!!');
+
   }catch(e){
     console.log('节点'+i+' 配置生成失败!'+e);
   }

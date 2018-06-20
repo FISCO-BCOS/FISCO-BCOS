@@ -19,20 +19,20 @@
  * @date 2014
  */
 
+#include <abi/ContractAbiMgr.h>
+#include <abi/SolidityTools.h>
+#include <abi/SolidityCoder.h>
 #include <libdevcore/vector_ref.h>
 #include <libdevcore/easylog.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcrypto/Common.h>
 #include <libevmcore/EVMSchedule.h>
 #include <libethcore/Exceptions.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <libweb3jsonrpc/JsonHelper.h>
-#include <abi/ContractAbiMgr.h>
-#include <abi/SolidityTools.h>
-#include <abi/SolidityCoder.h>
+
 #include "Transaction.h"
-#include <libdevcore/easylog.h>
+
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
@@ -61,9 +61,8 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
 	try
 	{
 		transactionRLPDecode(_rlpData);
-		
-		if (_checkSig >= CheckTransaction::Cheap && !m_vrs.isValid()) {
-
+		if (_checkSig >= CheckTransaction::Cheap && !m_vrs.isValid()) 
+		{
 			BOOST_THROW_EXCEPTION(InvalidSignature());
 		}
 
@@ -110,8 +109,14 @@ void TransactionBase::transactionRLPDecode10Ele(const RLP &rlp)
 	index++;  
 	m_value          = rlp[index++].toInt<u256>(); // 5
 	auto dataRLP     = rlp[index++];               // 6
-	m_data           = dataRLP.toBytes();          
+	m_data           = dataRLP.toBytes();    
 
+#if ETH_ENCRYPTTYPE
+	h512 pub         = rlp[index++].toInt<u512>(); // 7
+	h256 r           = rlp[index++].toInt<u256>(); // 8
+	h256 s           = rlp[index++].toInt<u256>(); // 9
+	m_vrs = SignatureStruct{ r, s, pub };
+#else
 	byte v           = rlp[index++].toInt<byte>(); // 7
 	h256 r           = rlp[index++].toInt<u256>(); // 8
 	h256 s           = rlp[index++].toInt<u256>(); // 9
@@ -125,27 +130,57 @@ void TransactionBase::transactionRLPDecode10Ele(const RLP &rlp)
 
 	v = v - (m_chainId * 2 + 35);
 	m_vrs = SignatureStruct{ r, s, v };
-
-	
-	auto isOldCNS = fromJsonGetParams(dataRLP.toString(), m_cnsParams);
-	if (isOldCNS)
+#endif
+	Json::Value _json;
+	if (isUTXOTx(dataRLP.toString(), _json))
 	{
-		m_type            = MessageCall;
-		m_transactionType = CNSOldTransaction;
-
-		LOG(DEBUG) << "[CNSOldTransaction] cncName|method|cnsVer|params=" 
-			<< m_cnsParams.strContractName << "|"
-			<< m_cnsParams.strFunc << "|"
-			<< m_cnsParams.strVersion << "|"
-			<< m_cnsParams.jParams.toStyledString();
+		// is UTXO transcation or not
+		parseUTXOJson(_json);
+		m_type = (m_receiveAddress == Address() ? ContractCreation : MessageCall);
 	}
-	else
+	else 
 	{
-		m_type            = (m_receiveAddress == Address() ? ContractCreation : MessageCall);
-		m_transactionType = DefaultTransaction;
+		//判断是否是CNS调用
+		auto isOldCNS = fromJsonGetParams(dataRLP.toString(), m_cnsParams);
+		if (isOldCNS)
+		{
+			m_type            = MessageCall;
+			m_transactionType = CNSOldTransaction;
 
-		LOG(DEBUG) << "[CNSDefaultTransaction] to address = " << m_receiveAddress;
+			LOG(DEBUG) << "[CNSOldTransaction] cncName|method|cnsVer|params=" 
+				<< m_cnsParams.strContractName << "|"
+				<< m_cnsParams.strFunc << "|"
+				<< m_cnsParams.strVersion << "|"
+				<< m_cnsParams.jParams.toStyledString();
+		}
+		else
+		{
+			m_type            = (m_receiveAddress == Address() ? ContractCreation : MessageCall);
+			m_transactionType = DefaultTransaction;
+
+			LOG(DEBUG) << "[CNSDefaultTransaction] to address = " << m_receiveAddress;
+		}
 	}
+}
+
+bool TransactionBase::isUTXOTx(const std::string& strJson, Json::Value& _json)
+{
+	try 
+	{
+		Json::Reader reader;
+		if (reader.parse(strJson, _json, false) && 
+			_json.isMember("utxotype") && _json["utxotype"].isInt())
+		{
+			LOG(TRACE) << "TransactionBase::TransactionBase UTXO data:" << strJson;
+			return true;
+		}
+	}
+	catch (...)
+	{
+		LOG(TRACE) << "TransactionBase::isUTXOTx exception , data = " << strJson;
+	}
+
+	return false;
 }
 
 void TransactionBase::transactionRLPDecode13Ele(const RLP &rlp)
@@ -166,6 +201,12 @@ void TransactionBase::transactionRLPDecode13Ele(const RLP &rlp)
 	m_strCNSVer       = rlp[index++].toString();    // 8
 	m_cnsType         = rlp[index++].toInt<u256>(); // 9
 
+#if ETH_ENCRYPTTYPE
+	h512 pub          = rlp[index++].toInt<u512>(); // 10
+	h256 r            = rlp[index++].toInt<u256>(); // 11
+	h256 s            = rlp[index++].toInt<u256>(); // 12
+	m_vrs             = SignatureStruct{ r, s, pub };
+#else
 	byte v            = rlp[index++].toInt<byte>(); // 10
 	h256 r            = rlp[index++].toInt<u256>(); // 11
 	h256 s            = rlp[index++].toInt<u256>(); // 12
@@ -178,8 +219,8 @@ void TransactionBase::transactionRLPDecode13Ele(const RLP &rlp)
 		BOOST_THROW_EXCEPTION(InvalidSignature());
 
 	v = v - (m_chainId * 2 + 35);
-
 	m_vrs             = SignatureStruct{ r, s, v };
+#endif
 	m_transactionType = CNSNewTransaction;
 	m_type            = (m_receiveAddress == Address() && m_strCNSName.empty()) ? ContractCreation : MessageCall;
 
@@ -332,6 +373,14 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forE
 		_s << m_cnsType;
 	}
 
+#if ETH_ENCRYPTTYPE
+	if (_sig)
+	{
+		_s << (u512)m_vrs.pub << (u256)m_vrs.r << (u256)m_vrs.s;
+	}
+	else if (_forEip155hash)
+		_s << m_chainId << 0 << 0;
+#else
 	if (_sig)
 	{
 		int vOffset = m_chainId * 2 + 35;
@@ -339,6 +388,7 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forE
 	}
 	else if (_forEip155hash)
 		_s << m_chainId << 0 << 0;
+#endif
 }
 
 void TransactionBase::streamRLP(std::stringstream& _s, IncludeSignature _sig, bool _forEip155hash) const {
@@ -364,7 +414,14 @@ void TransactionBase::streamRLP(std::stringstream& _s, IncludeSignature _sig, bo
 		_s << m_strCNSVer;
 		_s << m_cnsType;
 	}
-
+#if ETH_ENCRYPTTYPE
+	if (_sig)
+	{
+		_s << (u512)m_vrs.pub << (u256)m_vrs.r << (u256)m_vrs.s;
+	}
+	else if (_forEip155hash)
+		_s << m_chainId << 0 << 0;
+#else
 	if (_sig)
 	{
 		int vOffset = m_chainId * 2 + 35;
@@ -372,14 +429,17 @@ void TransactionBase::streamRLP(std::stringstream& _s, IncludeSignature _sig, bo
 	}
 	else if (_forEip155hash)
 		_s << m_chainId << 0 << 0;
+#endif
 }
 
 static const u256 c_secp256k1n("115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
 void TransactionBase::checkLowS() const
 {
+#ifndef ETH_ENCRYPTTYPE
 	if (m_vrs.s > c_secp256k1n / 2)
 		BOOST_THROW_EXCEPTION(InvalidSignature());
+#endif
 }
 
 void TransactionBase::checkChainId(int chainId) const
@@ -411,6 +471,70 @@ h256 TransactionBase::sha3(IncludeSignature _sig) const
 		m_hashWith = ret;
 	return ret;
 }
+
+void TransactionBase::checkUTXOTransaction(UTXOModel::UTXOMgr* _pUTXOMgr) const
+{
+	if (UTXOType::InitTokens == m_utxoType)
+	{
+		_pUTXOMgr->checkInitTokens(m_utxoTxOut);
+	}
+	else if (UTXOType::SendSelectedTokens == m_utxoType)
+	{
+		_pUTXOMgr->checkSendTokens(m_sender, m_utxoTxIn, m_utxoTxOut);
+	}
+}
+
+bool TransactionBase::isUTXOEvmTx() const
+{
+	return m_utxoEvmTx;
+}
+
+void TransactionBase::parseUTXOJson(const Json::Value& _json)
+{
+	m_utxoType = UTXOType(_json["utxotype"].asInt());
+	if (_json.isMember("txin") && _json["txin"].isArray())
+	{
+		Json::Value tx_in_json = _json["txin"];
+		for (uint index = 0; index < tx_in_json.size(); index++)
+		{
+			Json::Value per = tx_in_json[index];
+			UTXOModel::UTXOTxIn in;
+			in.tokenKey = per["tokenkey"].asString();
+			in.callFuncAndParams = per["callfuncandparams"].asString();
+			in.exeFuncAndParams = per["exefuncandparams"].asString();
+			in.detail = per["desdetail"].asString();
+			m_utxoTxIn.push_back(in);
+			if (in.callFuncAndParams.length() > 0)
+			{
+				m_utxoEvmTx = true;
+			}
+		}
+	}
+	if (_json.isMember("txout") && _json["txout"].isArray())
+	{
+		Json::Value tx_out_json = _json["txout"];
+		for (uint index = 0; index < tx_out_json.size(); index++)
+		{
+			Json::Value per = tx_out_json[index];
+			UTXOModel::UTXOTxOut out;
+			out.to = per["to"].asString();
+			out.value = jsToU256(per["value"].asString());
+			out.checkType = per["checktype"].asString();
+			out.initContract = (per["initcontract"].empty()) ? Address(0) : jsToAddress(per["initcontract"].asString());
+			out.initFuncAndParams = per["initfuncandparams"].asString();
+			out.validationContract = (per["validationcontract"].empty()) ? Address(0) : jsToAddress(per["validationcontract"].asString());
+			out.detail = per["oridetail"].asString();
+			m_utxoTxOut.push_back(out);
+			if (out.validationContract != Address(0) || 
+				out.initContract != Address(0))
+			{
+				m_utxoEvmTx = true;
+			}
+		}
+	}
+	// "m_value" can be obtained from the contract's "msg.value()".
+}
+
 /*
 h256 TransactionBase::sha32(IncludeSignature _sig) const
 {
