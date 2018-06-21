@@ -6,9 +6,13 @@
 <!-- TOC -->
 
 - [1 基本介绍](#1-基本介绍)
-    - [1.1 交易原则](#11-交易原则)
-    - [1.2 数据类型](#12-数据类型)
+    - [1.1 方案背景](#11-方案背景)
+        - [1.1.1 原有以太坊转账方案的不足之处](#111-原有以太坊转账方案的不足之处)
+        - [1.1.2 本方案解决上述问题的思路](#112-本方案解决上述问题的思路)
+    - [1.2 交易原则](#12-交易原则)
+    - [1.3 数据类型](#13-数据类型)
 - [2 使用说明](#2-使用说明)
+    - [2.0 前期准备：启用UTXO交易](#20-前期准备：启用UTXO交易)
     - [2.1 铸币交易及转账交易](#21-铸币交易及转账交易)
         - [2.1.1 铸币交易及转账交易相关的脚本命令](#211-铸币交易及转账交易相关的脚本命令)
         - [2.1.2 交易命令相关字段说明](#212-交易命令相关字段说明)
@@ -17,6 +21,7 @@
         - [2.1.5 可扩展转账限制逻辑例子二：限制某一账号的日转账限额](#215-可扩展转账限制逻辑例子二：限制某一账号的日转账限额)
         - [2.1.6 并行交易](#216-并行交易)
     - [2.2 查询功能](#22-查询功能)
+        - [2.2.0 前期准备：账号注册](#220-前期准备：账号注册)
         - [2.2.1 回溯](#221-回溯)
         - [2.2.2 查询账号余额](#222-查询账号余额)
         - [2.2.3 获取一账号下能满足支付数额的Token列表](#223-获取一账号下能满足支付数额的Token列表)
@@ -24,19 +29,38 @@
         - [2.2.5 分页查询](#225-分页查询)
     - [2.3 脚本命令返回的“执行结果说明”](#23-脚本命令返回的“执行结果说明”)    
 - [3 注意事项](#3-注意事项)
-  - [3.1 账号注册](#31-账号注册)
-  - [3.2 启用UTXO交易方式](#32-启用UTXO交易方式)
-  - [3.3 业务校验逻辑及验证逻辑的传入说明](#33-业务校验逻辑及验证逻辑的传入说明)
-  - [3.4 兼容性说明](#34-兼容性说明)
-    ​    
-    <!-- /TOC -->
-
+	- [3.1 业务校验逻辑及验证逻辑的传入说明](#31-业务校验逻辑及验证逻辑的传入说明)
+	- [3.2 兼容性说明](#32-兼容性说明)
+	- [3.3 工具提供](#33-工具提供)
+        
+<!-- /TOC -->
+ 
 =============
 
 
 ## 1 基本介绍
 
-### 1.1 交易原则
+### 1.1 方案背景
+
+**1.1.1 原有以太坊转账方案的不足之处**
+
+- 对于以太坊的账户模型，来源账户在给去向账户进行转账时，直接从本账户的余额中扣减转账数额，但无法确定所扣减的数额全部/部分来源于先前哪一笔交易，有哪些前置的消费条件，从而无法进行转账前的业务逻辑校验。
+
+- 当同一来源账户在给多个去向账户进行转账时，存在多个交易共同操作来源账户余额的情况，基于以太坊数据一致性方案中交易列表及交易回执的有序性要求，区块链网络无法对转账交易进行并行处理。
+
+[返回目录](#目录)
+
+**1.1.2 本方案解决上述问题的思路**
+
+- 本方案通过引入具有特定数额、有明确所有权标识的Token为转账的操作对象，而包含有Token的交易为UTXO交易。采用Token的拆分逻辑后，Token能够明确记录其来源及其交易限制条件，并在下一次转账交易中该Token被消费使用时也能根据交易限制条件进行包括业务逻辑校验在内的多种校验形式，从而提升了区块链网络中**转账交易的可扩展性**。
+
+- 在本方案中，UTXO交易过程跟踪的是每个Token的所有权的转移，而不是账户的状态变化，因而各UTXO交易之间不共享任何状态、不会相互干扰，进而UTXO交易可以并发执行。在交易共识阶段，对满足并行执行条件的交易并发执行，而其他交易串行执行，进而可在一定程度上提升**以太坊网络中交易的转账效率**。
+
+[返回目录](#目录)
+ 
+<br> 
+
+### 1.2 交易原则
 
 本文档描述一种以太坊上基于UTXO模型的转账交易方案。与UTXO模型类似，本方案中的转账交易有以下三个原则：
 
@@ -44,15 +68,13 @@
 
 - 除了铸币交易之外，所有的交易输入都必须来自于前面一个或者几个交易的输出；
 
-- 每一笔的交易支出总额等于交易收入总额。
-
-本方案除提供可追溯Token来源的功能外，还提供**可扩展转账限制逻辑**及**并行交易**的实现。
+- 每一笔的交易支出总额等于交易输入总额。
 
 [返回目录](#目录)
-
+ 
 <br> 
 
-### 1.2 数据类型
+### 1.3 数据类型
 
 本方案的基础数据对象为Token、UTXOTx、Vault。Token为转账操作的基本单位，有特定的价值标记及所有权描述。UTXOTx描述一转账交易中来源Token与去向Token的对应关系，Vault记录一账号名下所有已花费及尚未花费的Token。三者关系如下图：
 
@@ -61,10 +83,19 @@
 上述三类数据基于原以太坊交易生成，独立于以太坊数据，采用LevelDB进行持久化存储。同时，本方案重点关注Token信息而非Token之间转换信息，为数据记录及使用方便，因此将Token数据记录与UTXOTx数据记录分离。
 
 [返回目录](#目录)
-
+ 
 <br> 
 
 ## 2 使用说明
+
+### 2.0 前期准备：启用UTXO交易
+
+在发送UTXO相关交易（铸币交易及转账交易）前，需发送以下交易来启用UTXO交易。启用后，区块链支持原以太坊交易和UTXO交易的发送，因此后续发送原以太坊交易时不需另行关闭UTXO交易。
+
+	// 启用UTXO交易，Height为区块链当前块高+1，为十六进制格式（含0x前缀）
+	babel-node tool.js ConfigAction set updateHeight ${Height}
+
+[返回目录](#目录)
 
 ### 2.1 铸币交易及转账交易
 
@@ -79,33 +110,46 @@
 
 **2.1.2 交易命令相关json字段说明**
 
-铸币交易脚本中的json字段记录了本次铸币操作所需生成的Token个数、所有权校验类型、所有者信息（转账对象）、数额大小等内容。除上述必须字段外，Token的业务校验逻辑字段及备注字段为可选字段。铸币交易的json字段如下：
+铸币交易脚本中的json字段记录了本次铸币操作所需生成的Token个数、单个Token所有权校验类型、单个Token所有者信息（即转账对象）、单个Token数额大小等内容。除上述必须字段外，Token的业务校验逻辑字段及备注字段为可选字段。铸币交易的json字段如下：
 
 	txtype:1（交易类型为铸币操作）
 	txout:交易输出列表，铸币操作生成的Token数组（数组最大限制为1000）
 		checktype:所有权校验类型，string，必须字段（可选P2PK和P2PKH）
 		to:转账对象，string，必须字段（如果checktype为P2PK，本字段为账号地址；如果checktype为P2PKH，本字段为账号地址的哈希值）
-		value:数额大小，string，必须字段（限制数额为正整数）
+		value:数额大小，string，必须字段（限制数额为正整数格式）
 		initcontract:模板合约地址，string，可选字段（与initfuncandparams配对使用）
 		initfuncandparams:调用模板合约所需传入的函数及参数，string，可选字段（ABI序列化之后结果，与initcontract配对使用）
-		validationcontract:校验合约地址，string，可选字段（本字段如输入为空，使用initcontract和initfuncandparams生成）
+		validationcontract:校验合约地址，string，可选字段
 		oridetail:新创建Token的备注，string，可选字段
 
-转账交易将脚本中json字段的交易输入Token列表进行消费。交易输入列表中除必须的Token key字段外，为实现业务逻辑校验所传入的字段需要与Token所设置的校验逻辑匹配。转账交易的json字段如下：
+转账交易将脚本中json字段的交易输入Token列表进行消费。交易输入列表中除必须的Token key字段外，为实现业务逻辑校验功能所传入的字段需要与该Token生成时所设置的校验逻辑匹配。转账交易的json字段如下：
 
 	txtype:2（交易类型为转账操作）
 	txin:交易输入列表，本次转账消费的Token数组（数组最大限制为1000）
 		tokenkey:转账使用的Token，string，必须字段（Token地址）
-		callfuncandparams:业务校验逻辑所需传入的函数及参数，string，可选字段（ABI序列化之后结果，所消费的Token中存在校验合约地址时使用，通用合约及实例合约均需）
-		exefuncandparams:执行业务校验逻辑（更新数据）所需传入的函数及参数，string，可选字段（ABI序列化之后结果，所消费的Token中存在校验合约地址时使用，只限通用合约需要）
+		callfuncandparams:业务校验逻辑所需传入的函数及参数，string，可选字段（ABI序列化之后结果，当所消费的Token中存在校验合约地址时使用，通用合约及实例合约均需）
+		exefuncandparams:执行业务校验逻辑（更新链上数据）所需传入的函数及参数，string，可选字段（ABI序列化之后结果，当所消费的Token中存在校验合约地址时使用，只限通用合约需要）
 		desdetail:Token的转账备注，string，可选字段
 	txout:交易输出列表，转账操作生成的Token数组，内容同铸币交易的txout
+
+
+**说明：**
+
+- 本方案通过在Token生成阶段挂载智能合约和Token使用阶段执行智能合约的方式来实现对一Token使用过程中的业务逻辑限制。用户可通过部署自定义的智能合约而不修改FISCO BCOS程序来实现不同的业务逻辑限制。
+
+- 在挂载智能合约阶段，涉及三个字段，分别为initcontract、initfuncandparams和validationcontract。所涉及的智能合约有三种分类，分别为模板合约、实例合约和模板合约。
+
+- 对于validationcontract字段（业务校验合约地址），用户可指直接传入已部署到链上的智能合约的地址（此时使用的智能合约我们称之为通用合约，该通用合约与特定Token无关）。如validationcontract字段的输入为空，且initcontract和initfuncandparams两字段有值时，将尝试通过initcontract和initfuncandparams生成validationcontract字段。其中initcontract的字段值也需为已部署到链上的智能合约的地址（此时使用的智能合约我们称之为模板合约，该模板合约被执行后生成的实例合约与特定Token相关，每个Token都有独立对应的实例合约）。
+
+- 对于callfuncandparams和exefuncandparams两字段的使用，前者用于链上数据的只读判断，后者用于链上数据的可写更新，两字段中所调用的智能合约的函数接口是不一致的，但所传入参数是一致的。
+
+- 本方案后续使用**锁定参数、解锁参数、验证过程**来描述一业务校验的实现逻辑。
 
 [返回目录](#目录)
 
 **2.1.3 基础交易例子**
 
-铸币交易：铸币给账号0x3ca576d469d7aa0244071d27eb33c5629753593e，价值为100单位，所有权校验类型为P2PK，json描述为：
+铸币交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e铸币，生成的Token价值为100单位，所有权校验类型为P2PK，json描述为：
 
 	var param = "{\"utxotype\":1,\"txout\":[{\"to\":\"0x3ca576d469d7aa0244071d27eb33c5629753593e\",\"value\":\"100\",\"checktype\":\"P2PK\"}]}";
 	await web3sync.sendUTXOTransaction(config.account, config.privKey, [param]);
@@ -163,13 +207,13 @@
 
 [返回目录](#目录)
 
-**2.1.4 可扩展转账限制逻辑例子一：限制Token的使用账号为特定账号**
+**2.1.4 可扩展转账限制逻辑例子一（通过模板合约生成实例合约）：限制Token的使用账号为特定账号**
 
-铸币及转账交易前需先部署tool目录下的UserCheckTemplate.sol合约。铸币交易时，需添加限制条件，传入合约地址、调用接口及特定账号名单，传入的接口及人员名单使用ABI编码。转账交易时，需传入验证接口及相应账号的ABI编码结果。
+铸币及转账交易前需先部署tool目录下的UserCheckTemplate.sol合约。铸币交易时，需添加限制条件，传入所部属的合约地址、调用接口及特定账号白名单，传入的接口及账号白名单使用ABI编码。转账交易时，需传入验证接口及相应交易来源账号的ABI编码结果。
 
 对于有不同特定账号的限制条件的Token，上述合约只需部署一次，记合约部署后的地址为0x7dc38c5e144cbbb4cd6e8a65091da52a78d584f5。ABI编码详细信息可参考[https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI)。
 
-铸币交易：铸币给账号0x3ca576d469d7aa0244071d27eb33c5629753593e，价值为100单位，所有权校验类型为P2PK，生成的Token只允许config.account使用（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此铸币交易的发起方），json描述为：
+铸币交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e铸币，生成的Token价值为100单位，所有权校验类型为P2PK，生成的Token只允许config.account使用（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此铸币交易的发起方），json描述为：
 
 	var initContractAddr = "0x7dc38c5e144cbbb4cd6e8a65091da52a78d584f5";                    // 模板合约地址，用于创建实例合约，创建Token传入
 	// tx_data为调用模板合约的函数说明及参数，创建Token传入
@@ -179,7 +223,7 @@
 	var param = "{\"utxotype\":1,\"txout\":[{\"to\":\"0x3ca576d469d7aa0244071d27eb33c5629753593e\",\"value\":\"100\",\"checktype\":\"P2PK\",\"initcontract\":\""+initContractAddr+"\",\"initfuncandparams\":\""+init_tx_data+"\",\"oridetail\":\"Only userd by config.account\"}]}";
 	await web3sync.sendUTXOTransaction(config.account, config.privKey, [param]);
 
-其中detail字段可以用来描述只归某些人所使用的信息。相关执行例子如下：
+其中detail字段可以用来描述只归某些特定账号所使用的信息。**需确认铸币交易生成的Token中validationContract字段非0，才表示该Token附带了验证逻辑。**相关执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js InitTokens
 	Param:
@@ -238,21 +282,31 @@
 	  transactionHash: '0xe351f004f9bf163f5f8905d1addd79e6aa46d0295fabae2433bf055f38e299d9',
 	  transactionIndex: 0 }
 
+上述例子描述了一种**通过智能合约实现所有权简易验证**方式。在本例子中，虽然要求传入checkParams参数（解锁参数），但在验证过程中，验证合约通过tx.origin获取转账交易发送方地址，判断其是否为该Token生成时设定的特定账号之一（解锁参数）。
+
+更一般化的所有权验证方式为**通过ecrecover()校验数字签名的合法性来进行所有权验证**。在Token生成时传入的锁定参数为一随机数的哈希值，转账该Token过程中解锁参数为该Token所有者在合约外部对锁定参数签名后生成的rsv三个数值，验证过程为使用Solidity的ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s) returns (address)函数，判断函数的返回结果是否与tx.origin一致，其中的hash参数为随机数的哈希值，rsv为解锁参数。
+
+同时，**MS（多重签名）**是上述基于ecrecover()进行所有权验证功能的进一步扩展。
+
+另一方面，对于**对Token进行一段时间的冻结**的业务限制逻辑，锁定参数为使用Solidity自身携带的函数now (uint)来获取一Token生成时当前区块的timestamp A和冻结Token的时间限制，解锁参数缺省，验证过程为判断转账该Token过程中当前区块的timestamp B与锁定参数timestamp A的差值是否满足冻结条件。
+
+通过对上述不同业务限制场景实现方法的描述，可发现**Token所有者可通过对锁定参数、解锁参数和验证过程的设定，来实现对使用某一特定Token的业务逻辑限制**。
+
 [返回目录](#目录)
 
-**2.1.5 可扩展转账限制逻辑例子二：限制某一账号的日转账限额**
+**2.1.5 可扩展转账限制逻辑例子二（使用通用合约）：限制某一账号的日转账限额**
 
-铸币及转账交易前需先部署tool目录下的Limitation.sol合约。此合约可用于记录不同用户的日转账限额及当日已转账数额，并提供设置日转账限额的接口。铸币交易时，需传入部署的Limitation.sol合约地址作为验证逻辑入口。转账交易时，需传入相关的调用接口及数据（使用ABI编码，含验证数据及更新数据）。
+铸币及转账交易前需先部署tool目录下的Limitation.sol合约。此合约可用于记录不同用户的日转账限额及当日已转账数额，并提供设置日转账限额、重置当日已转账数额的接口。铸币交易时，需传入部署的Limitation.sol合约地址作为验证逻辑入口。转账交易时，需传入相关的调用接口及数据（使用ABI编码，含验证数据及更新数据）。
 
 记合约部署后的地址为0x3dbac83f7050e377a9205fed1301ae4239fa48e1。在UTXO交易前设置账号的日转账限额，设置日转账限额的相关脚本为demoLimitation.js。不失一般性记账号为0x3ca576d469d7aa0244071d27eb33c5629753593e。
 
-铸币交易：铸币给账号0x3ca576d469d7aa0244071d27eb33c5629753593e，价值为100单位，所有权校验类型为P2PK，生成的Token只允许config.account使用（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此铸币交易的发起方），json描述为：
+铸币交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e铸币，生成的Token价值为100单位，所有权校验类型为P2PK，限制config.account日转账限额为500（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此铸币交易的发起方），json描述为：
 
 	var validationContractAddr = "0x3dbac83f7050e377a9205fed1301ae4239fa48e1";              // 通用合约地址，创建Token传入
 	var param = "{\"utxotype\":1,\"txout\":[{\"to\":\"0x3ca576d469d7aa0244071d27eb33c5629753593e\",\"value\":\"100\",\"checktype\":\"P2PK\",\"validationcontract\":\""+validationContractAddr+"\",\"oridetail\":\"Account with Limitation per day\"}]}";
 	await web3sync.sendUTXOTransaction(config.account, config.privKey, [param]);
 
-相关执行例子如下：
+相关执行例子如下，**需确认铸币交易生成的Token中validationContract字段非0，才表示该Token附带了验证逻辑。**
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js InitTokens
 	Param:
@@ -278,10 +332,10 @@
 
 	var Token1 = "0xd77d4b655c6f3a7870ef66676b1375249f1e5ff34045374a1fc244f2fdf09be6_0";
 	var checkFunc = "checkSpent(address,uint256)";
-	var checkParams = [config.account,100];
+	var checkParams = [config.account,60];
 	var check_tx_data = getTxData(checkFunc, checkParams);
 	var updateFunc = "addSpent(address,uint256)";
-	var updateParams = [config.account,100];
+	var updateParams = [config.account,60];
 	var update_tx_data = getTxData(updateFunc, updateParams);
 	var shaSendTo = "0x"+sha3("0x3ca576d469d7aa0244071d27eb33c5629753593e").toString();
 	var param = "{\"utxotype\":2,\"txin\":[{\"tokenkey\":\""+Token1+"\",\"callfuncandparams\":\""+check_tx_data+"\",\"exefuncandparams\":\""+update_tx_data+"\"}],\"txout\":[{\"to\":\"0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3\",\"value\":\"60\",\"checktype\":\"P2PK\"},{\"to\":\""+shaSendTo+"\",\"value\":\"40\",\"checktype\":\"P2PKH\"}]}";
@@ -313,7 +367,7 @@
 	  logs: [],
 	  transactionHash: '0x278d3b3ffa7380baba00e8029aa1e8fd2455ceb82562b82cbce41c344e4b1584',
 	  transactionIndex: 0 }
-
+	
 [返回目录](#目录)
 
 **2.1.6 并行交易**
@@ -324,13 +378,22 @@
 
 - 同一块中已打包的交易不涉及对同一个Token的使用；
 
-- 交易没有设置需通过合约实现的验证逻辑。
+- 交易没有设置对链上数据进行写操作的逻辑。
 
 [返回目录](#目录)
-
+ 
 <br> 
 
 ### 2.2 查询功能
+
+**2.2.0 前期准备：账号注册**
+
+账号只有注册后才能进行GetVault、SelectTokens、GetBalance操作。账号在区块链中注册一次即可，后续链启动后会获取之前已经注册过的账号。
+
+	// 账号注册	
+	babel-node demoUTXO.js RegisterAccount ${Account}
+
+[返回目录](#目录)
 
 **2.2.1 回溯**
 
@@ -376,7 +439,7 @@ Result中json字段说明如下：
 [返回目录](#目录)
 
 **2.2.2 查询账号余额**
-​	
+	
 	babel-node demoUTXO.js GetBalance ${Account}
 
 相关执行例子如下：
@@ -511,7 +574,7 @@ Vault查询执行例子如下：
 	  total: 9 }
 
 **2.2.5 分页查询**
-​	
+	
 本方案对GetVault、SelectTokens和TokenTracking接口，提供分页查询功能。相关执行例子及字段说明见上。
 
 
@@ -543,41 +606,27 @@ Vault查询执行例子如下：
 
 ## 3 注意事项
 
-### 3.1 账号注册
+### 3.1 业务校验逻辑及验证逻辑的传入说明
 
-账号只有注册后才能进行GetVault、SelectTokens、GetBalance操作。账号在区块链中注册一次即可，后续链启动后会获取之前已经注册过的账号。
-
-	// 账号注册	
-	babel-node demoUTXO.js RegisterAccount ${Account}
+用户进行转账交易时，为保证交易转账的相关信息（如发送账号、转账数额）和验证逻辑所传入的数据一致，建议系统管理者封装一层接口用于发送交易（含交易中需传入的验证信息），供外部用户调用。
 
 [返回目录](#目录)
 
 <br>
 
-### 3.2 启用UTXO交易方式
-
-在发送UTXO相关交易前，需发送交易来启用UTXO交易。启用后，区块链支持原以太坊交易和UTXO交易的发送，因此为发送原以太坊交易不需另行关闭UTXO交易。
-
-	// 启用UTXO交易，Height为区块链当前块高+1
-	babel-node tool.js ConfigAction set updateHeight ${Height}
-
-[返回目录](#目录)
-
-<br>
-
-### 3.3 业务校验逻辑及验证逻辑的传入说明
-
-用户进行转账交易时，为了保证交易转账的相关信息（如发送账号、转账数额）和验证逻辑所传入的数据一致，建议系统管理者封装一层接口用于发送交易（含交易中需传入的验证信息），供外部用户调用。
-
-[返回目录](#目录)
-
-<br>
-
-### 3.4 兼容性说明
+### 3.2 兼容性说明
 
 - 本UTXO交易方案可实现对链原有数据的兼容；
 
 - 本UTXO交易的启用及后续交易的发送需在关闭国密功能的情况下进行。
+
+[返回目录](#目录)
+
+<br>
+
+### 3.3 工具提供
+
+- 目前提供nodejs脚本，web3SDK后续提供。
 
 [返回目录](#目录)
 
