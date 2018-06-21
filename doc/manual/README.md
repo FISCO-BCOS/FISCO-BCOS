@@ -446,7 +446,7 @@ log.conf其它字段说明请参看<u>附录：12.5 log.conf说明</u>
 
 - 节点证书身份文件（/mydata/nodedata-1/data）：ca.crt、agency.crt、node.crt、node.key、node.private 
 - 配置文件（/mydata/nodedata-1/）：genesis.json、config.json、log.conf
-- 连接文件（/mydaata/nodedata-1/data/）：bootstrapnodes.json
+- 连接文件（/mydata/nodedata-1/data/）：bootstrapnodes.json
 
 > 启动节点
 
@@ -926,7 +926,7 @@ log.conf其它字段说明请参看<u>附录：12.5 log.conf说明</u>
 
 - 节点证书身份文件（/mydata/nodedata-1/data）：ca.crt、agency.crt、node.crt、node.key、node.private 
 - 配置文件（/mydata/nodedata-1/）：genesis.json、config.json、log.conf
-- 连接文件（/mydaata/nodedata-1/data/）：bootstrapnodes.json
+- 连接文件（/mydata/nodedata-1/data/）：bootstrapnodes.json
 
 > 启动节点，此时节点未被注册到区块链中，启动时只能看到进程，不能刷出打包信息。要让此节点正确的运行，请进入<u>第七章 多节点组网</u> 。
 
