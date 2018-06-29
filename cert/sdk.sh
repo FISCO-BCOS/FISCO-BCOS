@@ -52,7 +52,7 @@ else
     
     openssl pkcs12 -export -name client -in sdk.crt -inkey sdk.key -out keystore.p12
     keytool -importkeystore -destkeystore client.keystore -srckeystore keystore.p12 -srcstoretype pkcs12 -alias client
-
+    keytool -import -noprompt -trustcacerts -alias ca -file ca.crt -keystore client.keystore 
 
     echo "Build  $sdk Crt suc!!!"
 fi
