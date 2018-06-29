@@ -31,10 +31,12 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <boost/asio/ssl.hpp>
 #include <libdevcore/FixedHash.h>
 
 #include "ChannelException.h"
 #include "ChannelSession.h"
+#include "ThreadPool.h"
 
 namespace dev
 {
@@ -69,9 +71,10 @@ private:
 	std::shared_ptr<boost::asio::io_service> _ioService;
 	std::shared_ptr<boost::asio::ssl::context> _sslContext;
 
-	std::vector<std::shared_ptr<std::thread> > _serverThreads;
+	std::shared_ptr<std::thread> _serverThread;
 
 	std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor;
+	ThreadPool::Ptr _threadPool;
 
 	std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> _connectionHandler;
 
