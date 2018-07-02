@@ -205,8 +205,6 @@ public:
 	virtual std::shared_ptr<SystemContractApi> getSystemContract() const override { return m_systemcontractapi; }
 	void updateCache(Address address) override;
 
-	void startStatTranscation(h256)override;
-
 	virtual bool isMining() const { return m_wouldSeal; }
 	bool checkWorking() {return isWorking();};
 	std::weak_ptr<EthereumHost> host();

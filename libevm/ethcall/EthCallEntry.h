@@ -96,55 +96,69 @@ class EthCallParamParser
     */
 
   private:
-    void parseArrayHeader(u256 *sp, char *&data_addr, size_t &size);
-
+    void parseArrayHeader(u256* sp, char* &data_addr, size_t &size);
   public:
-    inline void parse(u256 *sp);
-    template <typename T, typename... Ts>
-    void parse(u256 *sp, T &p, Ts &... ps);
+    inline void parse(u256* sp)
+    {
+        sp++;//Just to avoid: Unused variable warning
+        //LOG(TRACE) << "ethcall parse end(sp: " << sp << ")";
+        return;
+    }
 
-//Register normal types, only static_cast
-#define T_RegTypeNormal(_Type) \
-    void parseUnit(u256 *sp, _Type &p);
+    template<typename T, typename ... Ts>
+    void parse(u256* sp, T& p, Ts& ... ps)
+    {
+        parseUnit(sp, p);
+        parse(--sp, ps...);
+    }
 
-    //---------register normal types------------
-    T_RegTypeNormal(bool);
-    T_RegTypeNormal(char);
+
+    #define RegTypeNormal(_Type)                                \
+    void parseUnit(u256* sp, _Type& p)                          \
+    {                                                           \
+        p =  static_cast<_Type>(*sp);                           \
+    }     
+
+    //---------Register normal type------------
+    RegTypeNormal(bool);
+    RegTypeNormal(char);
 
     //uint
-    T_RegTypeNormal(uint8_t);
-    T_RegTypeNormal(uint16_t);
-    T_RegTypeNormal(uint32_t);
-    T_RegTypeNormal(uint64_t);
-    //T_RegTypeNormal(uint128_t);     T_RegTypeNormal(uint256_t);
+    RegTypeNormal(uint8_t);     RegTypeNormal(uint16_t);
+    RegTypeNormal(uint32_t);    RegTypeNormal(uint64_t);
+    //RegTypeNormal(uint128_t);   RegTypeNormal(uint256_t);
 
     //int
-    T_RegTypeNormal(int8_t);
-    T_RegTypeNormal(int16_t);
-    T_RegTypeNormal(int32_t);
-    T_RegTypeNormal(int64_t);
-    //T_RegTypeNormal(int128_t);      T_RegTypeNormal(int256_t);
+    RegTypeNormal(int8_t);      RegTypeNormal(int16_t);
+    RegTypeNormal(int32_t);     RegTypeNormal(int64_t);
+    //RegTypeNormal(int128_t);    RegTypeNormal(int256_t);
 
     //---------string type conversion------------
     //--convert to std::string
-    void parseUnit(u256 *sp, std::string &p);
+    void parseUnit(u256* sp, std::string& p);
 
     //--convert to reference type vector_ref<char>
-    void parseUnit(u256 *sp, vector_ref<char> &p);
+    void parseUnit(u256* sp, vector_ref<char>& p);
 
     //---------bytes type conversion------------
     //--convert to bytes
-    void parseUnit(u256 *sp, bytes &p);
+    void parseUnit(u256* sp, bytes& p);
 
     //--convert to reference type vector_ref<byte>
-    void parseUnit(u256 *sp, vector_ref<byte> &p);
+    void parseUnit(u256* sp, vector_ref<byte>& p);
 
     //--------------- parse to tuple--------------------
-    template <typename... Ts> //TpType: like tuple<int, string>
-    void parseToTuple(u256 *sp, std::tuple<Ts...> &tp);
+    template<typename ... Ts> //TpType: like tuple<int, string>
+    void parseToTuple(u256* sp, std::tuple<Ts...>& tp) //parse param into tuple
+    {
+        parseToTupleImpl(sp, tp, make_index_sequence<sizeof...(Ts)>());
+    }
 
-    template <typename TpType, std::size_t... I>
-    void parseToTupleImpl(u256 *sp, TpType &tp, index_sequence<I...>);
+    template<typename TpType, std::size_t ... I>
+    void parseToTupleImpl(u256* sp, TpType& tp, index_sequence<I...>)
+    {
+        parse(sp, std::get<I>(tp)...);
+    }
 
     void setTargetVm(VM *vm);
 

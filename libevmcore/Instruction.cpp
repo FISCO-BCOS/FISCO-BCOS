@@ -90,7 +90,11 @@ const std::map<std::string,  Instruction> dev::eth::c_instructions =
 	{ "JUMP", Instruction::JUMP },
 	{ "JUMPI", Instruction::JUMPI },
 	{ "PC", Instruction::PC },
-	{ "MSIZE", Instruction::MSIZE },
+	#ifdef __APPLE__
+	    { "MSIZE", Instruction::MSIZE1 },
+	#else
+	    { "MSIZE", Instruction::MSIZE },
+	#endif	
 	{ "GAS", Instruction::GAS },
 	{ "BEGIN", Instruction::JUMPDEST },
 	{ "JUMPDEST", Instruction::JUMPDEST },
@@ -239,7 +243,11 @@ static const std::map<Instruction,  InstructionInfo> c_instructionInfo =
 	{ Instruction::JUMP,         { "JUMP",           0,     1,    0,  true,        Tier::Mid } },
 	{ Instruction::JUMPI,        { "JUMPI",          0,     2,    0,  true,        Tier::High } },
 	{ Instruction::PC,           { "PC",             0,     0,    1,  false,       Tier::Base } },
-	{ Instruction::MSIZE,        { "MSIZE",          0,     0,    1,  false,       Tier::Base } },
+	#ifdef __APPLE__
+	    { Instruction::MSIZE1,        { "MSIZE",          0,     0,    1,  false,       Tier::Base } },
+	#else
+	    { Instruction::MSIZE,        { "MSIZE",          0,     0,    1,  false,       Tier::Base } },
+	#endif	
 	{ Instruction::GAS,          { "GAS",            0,     0,    1,  false,       Tier::Base } },
 	{ Instruction::JUMPDEST,     { "JUMPDEST",       0,     0,    0,  true,        Tier::Special } },
 	{ Instruction::BEGINDATA,    { "BEGINDATA",      0,     0,    0,  true,        Tier::Special } },
