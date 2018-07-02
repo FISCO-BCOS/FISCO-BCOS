@@ -42,7 +42,11 @@ ExternalProject_Add(boost
     LOG_BUILD 1
     INSTALL_COMMAND ""
 )
-add_dependencies(boost tassl)
+
+if (ENCRYPTTYPE)
+	add_dependencies(boost tassl)
+endif()
+
 ExternalProject_Get_Property(boost SOURCE_DIR)
 set(BOOST_INCLUDE_DIR ${SOURCE_DIR})
 set(BOOST_LIB_DIR ${SOURCE_DIR}/stage/lib)

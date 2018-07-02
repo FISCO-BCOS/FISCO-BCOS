@@ -99,44 +99,6 @@ void EthCallParamParser::parseArrayHeader(u256* sp, char* &data_addr, size_t &si
 }
 
 
-inline void EthCallParamParser::parse(u256* sp)
-{
-    sp++;//Just to avoid: Unused variable warning
-    //LOG(TRACE) << "ethcall parse end(sp: " << sp << ")";
-    return;
-}
-
-template<typename T, typename ... Ts>
-void EthCallParamParser::parse(u256* sp, T& p, Ts& ... ps)
-{
-    parseUnit(sp, p);
-    parse(--sp, ps...);
-}
-
-
-//Register normal types, only static_cast
-#define RegTypeNormal(_Type)                                \
-void EthCallParamParser::parseUnit(u256* sp, _Type& p)      \
-{                                                           \
-    p =  static_cast<_Type>(*sp);                           \
-}                                                           \
-
-
-//---------Register normal type------------
-RegTypeNormal(bool);
-RegTypeNormal(char);
-
-//uint
-RegTypeNormal(uint8_t);     RegTypeNormal(uint16_t);
-RegTypeNormal(uint32_t);    RegTypeNormal(uint64_t);
-//RegTypeNormal(uint128_t);   RegTypeNormal(uint256_t);
-
-//int
-RegTypeNormal(int8_t);      RegTypeNormal(int16_t);
-RegTypeNormal(int32_t);     RegTypeNormal(int64_t);
-//RegTypeNormal(int128_t);    RegTypeNormal(int256_t);
-
-
 //---------string type conversion------------
 //--convert to std::string
 void EthCallParamParser::parseUnit(u256* sp, std::string& p)
@@ -179,18 +141,6 @@ void EthCallParamParser::parseUnit(u256* sp, vector_ref<byte>& p)
     p.retarget((byte*)data_addr, size);
 }
 
-//--------------- parse to tuple--------------------
-template<typename ... Ts> //TpType: like tuple<int, string>
-void EthCallParamParser::parseToTuple(u256* sp, std::tuple<Ts...>& tp) //parse param into tuple
-{
-    parseToTupleImpl(sp, tp, make_index_sequence<sizeof...(Ts)>());
-}
-
-template<typename TpType, std::size_t ... I>
-void EthCallParamParser::parseToTupleImpl(u256* sp, TpType& tp, index_sequence<I...>)
-{
-    parse(sp, std::get<I>(tp)...);
-}
 
 void EthCallParamParser::setTargetVm(VM *vm)
 {

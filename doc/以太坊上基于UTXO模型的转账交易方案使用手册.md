@@ -13,8 +13,8 @@
     - [1.3 数据类型](#13-数据类型)
 - [2 使用说明](#2-使用说明)
     - [2.0 前期准备：启用UTXO交易](#20-前期准备：启用UTXO交易)
-    - [2.1 铸币交易及转账交易](#21-铸币交易及转账交易)
-        - [2.1.1 铸币交易及转账交易相关的脚本命令](#211-铸币交易及转账交易相关的脚本命令)
+    - [2.1 资产登记交易及转账交易](#21-资产登记交易及转账交易)
+        - [2.1.1 资产登记交易及转账交易相关的命令](#211-资产登记交易及转账交易相关的命令)
         - [2.1.2 交易命令相关字段说明](#212-交易命令相关字段说明)
         - [2.1.3 基础交易例子](#213-基础交易例子)
         - [2.1.4 可扩展转账限制逻辑例子一：限制Token的使用账号为特定账号](#214-可扩展转账限制逻辑例子一：限制Token的使用账号为特定账号)
@@ -64,9 +64,9 @@
 
 本文档描述一种以太坊上基于UTXO模型的转账交易方案。与UTXO模型类似，本方案中的转账交易有以下三个原则：
 
-- 所有交易起于铸币交易；
+- 所有交易起于资产登记交易；
 
-- 除了铸币交易之外，所有的交易输入都必须来自于前面一个或者几个交易的输出；
+- 除了资产登记交易之外，所有的交易输入都必须来自于前面一个或者几个交易的输出；
 
 - 每一笔的交易支出总额等于交易输入总额。
 
@@ -88,32 +88,40 @@
 
 ## 2 使用说明
 
+本文档分别提供UTXO交易在web3sdk(以下简称sdk)及nodejs中的使用说明。其中sdk的一般性使用说明请参考[web3sdk使用说明文档](https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master/doc/web3sdk%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E%E6%96%87%E6%A1%A3.md)，其中nodejs的一般性使用说明请参考[FISCO BCOS区块链操作手册](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/doc/manual)。如无特定说明，sdk执行UTXO交易命令的位置位于web3sdk工程根目录执行gradle build生成的dist/bin目录下，nodejs执行UTXO交易命令的位置位于FISCO-BCOS/tool目录下。
+
 ### 2.0 前期准备：启用UTXO交易
 
-在发送UTXO相关交易（铸币交易及转账交易）前，需发送以下交易来启用UTXO交易。启用后，区块链支持原以太坊交易和UTXO交易的发送，因此后续发送原以太坊交易时不需另行关闭UTXO交易。
+在发送UTXO相关交易（资产登记交易及转账交易）前，需发送以下交易来启用UTXO交易。启用后，区块链支持原以太坊交易和UTXO交易的发送，因此后续发送原以太坊交易时不需另行关闭UTXO交易。
 
 	// 启用UTXO交易，Height为区块链当前块高+1，为十六进制格式（含0x前缀）
-	babel-node tool.js ConfigAction set updateHeight ${Height}
+	./web3sdk ConfigAction set updateHeight ${Height}               // sdk命令
+	babel-node tool.js ConfigAction set updateHeight ${Height}      // nodejs命令，该命令在systemcontract目录下执行
 
 [返回目录](#目录)
 
-### 2.1 铸币交易及转账交易
+### 2.1 资产登记交易及转账交易
 
-**2.1.1 铸币交易及转账交易相关的脚本命令**
+**2.1.1 资产登记交易及转账交易相关的命令**
 
-	babel-node demoUTXO.js InitTokens				// 铸币交易
-	babel-node demoUTXO.js SendSelectedTokens		// 转账交易
+	// sdk命令，其中Type参数取值范围为{1,2,3}，分别代表基础交易例子、限制Token的使用账号为特定账号例子和限制某一账号的日转账限额例子
+	./web3sdk InitTokens $(Type)                    // 资产登记交易
+	./web3sdk SendSelectedTokens $(Type)            // 转账交易
 
-如无特别说明，本文档中提及的相关文件均位于tool目录下。
+	// nodejs命令
+	babel-node demoUTXO.js InitTokens               // 资产登记交易
+	babel-node demoUTXO.js SendSelectedTokens       // 转账交易
+
+在后续给出的资产登记交易及转账交易的三种使用例子中，使用nodejs的执行例子进行说明，sdk的执行例子类似，不再赘述。
 
 [返回目录](#目录)
 
 **2.1.2 交易命令相关json字段说明**
 
-铸币交易脚本中的json字段记录了本次铸币操作所需生成的Token个数、单个Token所有权校验类型、单个Token所有者信息（即转账对象）、单个Token数额大小等内容。除上述必须字段外，Token的业务校验逻辑字段及备注字段为可选字段。铸币交易的json字段如下：
+资产登记交易脚本中的json字段记录了本次资产登记操作所需生成的Token个数、单个Token所有权校验类型、单个Token所有者信息（即转账对象）、单个Token数额大小等内容。除上述必须字段外，Token的业务校验逻辑字段及备注字段为可选字段。资产登记交易的json字段如下：
 
-	txtype:1（交易类型为铸币操作）
-	txout:交易输出列表，铸币操作生成的Token数组（数组最大限制为1000）
+	txtype:1（交易类型为资产登记操作）
+	txout:交易输出列表，资产登记操作生成的Token数组（数组最大限制为1000）
 		checktype:所有权校验类型，string，必须字段（可选P2PK和P2PKH）
 		to:转账对象，string，必须字段（如果checktype为P2PK，本字段为账号地址；如果checktype为P2PKH，本字段为账号地址的哈希值）
 		value:数额大小，string，必须字段（限制数额为正整数格式）
@@ -130,7 +138,7 @@
 		callfuncandparams:业务校验逻辑所需传入的函数及参数，string，可选字段（ABI序列化之后结果，当所消费的Token中存在校验合约地址时使用，通用合约及实例合约均需）
 		exefuncandparams:执行业务校验逻辑（更新链上数据）所需传入的函数及参数，string，可选字段（ABI序列化之后结果，当所消费的Token中存在校验合约地址时使用，只限通用合约需要）
 		desdetail:Token的转账备注，string，可选字段
-	txout:交易输出列表，转账操作生成的Token数组，内容同铸币交易的txout
+	txout:交易输出列表，转账操作生成的Token数组，内容同资产登记交易的txout
 
 
 **说明：**
@@ -149,7 +157,7 @@
 
 **2.1.3 基础交易例子**
 
-铸币交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e铸币，生成的Token价值为100单位，所有权校验类型为P2PK，json描述为：
+资产登记交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e登记资产，生成的Token价值为100单位，所有权校验类型为P2PK，json描述为：
 
 	var param = "{\"utxotype\":1,\"txout\":[{\"to\":\"0x3ca576d469d7aa0244071d27eb33c5629753593e\",\"value\":\"100\",\"checktype\":\"P2PK\"}]}";
 	await web3sync.sendUTXOTransaction(config.account, config.privKey, [param]);
@@ -209,11 +217,11 @@
 
 **2.1.4 可扩展转账限制逻辑例子一（通过模板合约生成实例合约）：限制Token的使用账号为特定账号**
 
-铸币及转账交易前需先部署tool目录下的UserCheckTemplate.sol合约。铸币交易时，需添加限制条件，传入所部属的合约地址、调用接口及特定账号白名单，传入的接口及账号白名单使用ABI编码。转账交易时，需传入验证接口及相应交易来源账号的ABI编码结果。
+资产登记及转账交易前需先部署tool目录下的UserCheckTemplate.sol合约。资产登记交易时，需添加限制条件，传入所部属的合约地址、调用接口及特定账号白名单，传入的接口及账号白名单使用ABI编码。转账交易时，需传入验证接口及相应交易来源账号的ABI编码结果。
 
 对于有不同特定账号的限制条件的Token，上述合约只需部署一次，记合约部署后的地址为0x7dc38c5e144cbbb4cd6e8a65091da52a78d584f5。ABI编码详细信息可参考[https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI)。
 
-铸币交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e铸币，生成的Token价值为100单位，所有权校验类型为P2PK，生成的Token只允许config.account使用（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此铸币交易的发起方），json描述为：
+资产登记交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e登记资产，生成的Token价值为100单位，所有权校验类型为P2PK，生成的Token只允许config.account使用（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此资产登记交易的发起方），json描述为：
 
 	var initContractAddr = "0x7dc38c5e144cbbb4cd6e8a65091da52a78d584f5";                    // 模板合约地址，用于创建实例合约，创建Token传入
 	// tx_data为调用模板合约的函数说明及参数，创建Token传入
@@ -223,7 +231,7 @@
 	var param = "{\"utxotype\":1,\"txout\":[{\"to\":\"0x3ca576d469d7aa0244071d27eb33c5629753593e\",\"value\":\"100\",\"checktype\":\"P2PK\",\"initcontract\":\""+initContractAddr+"\",\"initfuncandparams\":\""+init_tx_data+"\",\"oridetail\":\"Only userd by config.account\"}]}";
 	await web3sync.sendUTXOTransaction(config.account, config.privKey, [param]);
 
-其中detail字段可以用来描述只归某些特定账号所使用的信息。**需确认铸币交易生成的Token中validationContract字段非0，才表示该Token附带了验证逻辑。**相关执行例子如下：
+其中detail字段可以用来描述只归某些特定账号所使用的信息。**需确认资产登记交易生成的Token中validationContract字段非0，才表示该Token附带了验证逻辑。**相关执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js InitTokens
 	Param:
@@ -296,17 +304,17 @@
 
 **2.1.5 可扩展转账限制逻辑例子二（使用通用合约）：限制某一账号的日转账限额**
 
-铸币及转账交易前需先部署tool目录下的Limitation.sol合约。此合约可用于记录不同用户的日转账限额及当日已转账数额，并提供设置日转账限额、重置当日已转账数额的接口。铸币交易时，需传入部署的Limitation.sol合约地址作为验证逻辑入口。转账交易时，需传入相关的调用接口及数据（使用ABI编码，含验证数据及更新数据）。
+资产登记及转账交易前需先部署tool目录下的Limitation.sol合约。此合约可用于记录不同用户的日转账限额及当日已转账数额，并提供设置日转账限额、重置当日已转账数额的接口。资产登记交易时，需传入部署的Limitation.sol合约地址作为验证逻辑入口。转账交易时，需传入相关的调用接口及数据（使用ABI编码，含验证数据及更新数据）。
 
 记合约部署后的地址为0x3dbac83f7050e377a9205fed1301ae4239fa48e1。在UTXO交易前设置账号的日转账限额，设置日转账限额的相关脚本为demoLimitation.js。不失一般性记账号为0x3ca576d469d7aa0244071d27eb33c5629753593e。
 
-铸币交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e铸币，生成的Token价值为100单位，所有权校验类型为P2PK，限制config.account日转账限额为500（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此铸币交易的发起方），json描述为：
+资产登记交易：给账号0x3ca576d469d7aa0244071d27eb33c5629753593e登记资产，生成的Token价值为100单位，所有权校验类型为P2PK，限制config.account日转账限额为500（不失一般性可描述config.account为0x3ca576d469d7aa0244071d27eb33c5629753593e，即此资产登记交易的发起方），json描述为：
 
 	var validationContractAddr = "0x3dbac83f7050e377a9205fed1301ae4239fa48e1";              // 通用合约地址，创建Token传入
 	var param = "{\"utxotype\":1,\"txout\":[{\"to\":\"0x3ca576d469d7aa0244071d27eb33c5629753593e\",\"value\":\"100\",\"checktype\":\"P2PK\",\"validationcontract\":\""+validationContractAddr+"\",\"oridetail\":\"Account with Limitation per day\"}]}";
 	await web3sync.sendUTXOTransaction(config.account, config.privKey, [param]);
 
-相关执行例子如下，**需确认铸币交易生成的Token中validationContract字段非0，才表示该Token附带了验证逻辑。**
+相关执行例子如下，**需确认资产登记交易生成的Token中validationContract字段非0，才表示该Token附带了验证逻辑。**
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js InitTokens
 	Param:
@@ -372,7 +380,7 @@
 
 **2.1.6 并行交易**
 
-本方案对满足以下条件的铸币/转账交易将进行并行处理。并行处理的线程数与机器配置相关，但用户对交易并行无感知。
+本方案对满足以下条件的资产登记/转账交易将进行并行处理。并行处理的线程数与机器配置相关，但用户对交易并行无感知。
 
 - 为UTXO类型的交易；
 
@@ -390,16 +398,18 @@
 
 账号只有注册后才能进行GetVault、SelectTokens、GetBalance操作。账号在区块链中注册一次即可，后续链启动后会获取之前已经注册过的账号。
 
-	// 账号注册	
-	babel-node demoUTXO.js RegisterAccount ${Account}
+	// 账号注册
+	./web3sdk RegisterAccount $(Account)                    // sdk命令
+	babel-node demoUTXO.js RegisterAccount ${Account}       // nodejs命令
 
 [返回目录](#目录)
 
 **2.2.1 回溯**
 
-	babel-node demoUTXO.js TokenTracking ${TokenKey}
+	./web3sdk TokenTracking $(TokenKey)                     // sdk命令
+	babel-node demoUTXO.js TokenTracking ${TokenKey}        // nodejs命令
 
-相关执行例子如下：
+相关的nodejs执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js TokenTracking 0x278d3b3ffa7380baba00e8029aa1e8fd2455ceb82562b82cbce41c344e4b1584_1
 	Param[0]:
@@ -431,7 +441,7 @@ Result中json字段说明如下：
 	begin:该页查询的数据在查询结果核心数据中的起始位置（Param传入）
 	cnt:该页查询的查询个数（Param传入）
 	code:执行结果代码
-	data:查询结果核心数据（这里为该Token从铸币开始到目前转账交易的倒序列表）
+	data:查询结果核心数据（这里为该Token从该资产登记开始到目前转账交易的倒序列表）
 	end:该页查询的数据在查询结果核心数据中的结束位置
 	msg:执行结果说明（与执行结果代码配对，结果说明详见2.3）
 	total:查询结果核心数据列表的长度
@@ -440,9 +450,10 @@ Result中json字段说明如下：
 
 **2.2.2 查询账号余额**
 	
-	babel-node demoUTXO.js GetBalance ${Account}
+	./web3sdk GetBalance $(Account)                         // sdk命令
+	babel-node demoUTXO.js GetBalance ${Account}            // nodejs命令
 
-相关执行例子如下：
+相关的nodejs执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js GetBalance 0x3ca576d469d7aa0244071d27eb33c5629753593e 
 	Param:
@@ -455,9 +466,10 @@ Result中json字段说明如下：
 
 **2.2.3 获取一账号下能满足支付数额的Token列表**
 
-	babel-node demoUTXO.js SelectTokens ${Account} ${Value}
+	./web3sdk SelectTokens $(Account) $(Value)              // sdk命令
+	babel-node demoUTXO.js SelectTokens ${Account} ${Value} // nodejs命令
 
-相关执行例子如下：
+相关的nodejs执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js SelectTokens 0x3ca576d469d7aa0244071d27eb33c5629753593e 245 
 	Param[0]:
@@ -485,9 +497,10 @@ Result中json字段说明如下：
 
 查询Token信息
 
-	babel-node demoUTXO.js GetToken ${TokenKey}
+	./web3sdk GetToken $(TokenKey)                          // sdk命令
+	babel-node demoUTXO.js GetToken ${TokenKey}             // nodejs命令
 
-Token查询执行例子如下：
+Token查询的nodejs执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js GetToken 0x278d3b3ffa7380baba00e8029aa1e8fd2455ceb82562b82cbce41c344e4b1584_1
 	Param:
@@ -509,9 +522,10 @@ Token查询执行例子如下：
 
 查询UTXOTx信息
 
-	babel-node demoUTXO.js GetTx ${TxKey}
+	./web3sdk GetTx $(TxKey)                                // sdk命令
+	babel-node demoUTXO.js GetTx ${TxKey}                   // nodejs命令
 
-UTXOTx查询执行例子如下：
+UTXOTx查询的nodejs执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js GetTx 0x278d3b3ffa7380baba00e8029aa1e8fd2455ceb82562b82cbce41c344e4b1584
 	Param:
@@ -529,9 +543,10 @@ UTXOTx查询执行例子如下：
 查询Vault信息
 
 	// 查询一账号下的Vault，传入需查询的账号及查询Token类型（0为全查询，1为查询尚未花费的Token，2为查询已经花费的Token）
-	babel-node demoUTXO.js GetVault ${Account} ${TokenType}
+	./web3sdk GetVault $(Account) $(TokenType)              // sdk命令
+	babel-node demoUTXO.js GetVault ${Account} ${TokenType} // nodejs命令
 
-Vault查询执行例子如下：
+Vault查询的nodejs执行例子如下：
 
 	[fisco-bcos@VM_centos tool]$ babel-node demoUTXO.js GetVault 0x3ca576d469d7aa0244071d27eb33c5629753593e 0
 	Param[0]:
@@ -575,7 +590,7 @@ Vault查询执行例子如下：
 
 **2.2.5 分页查询**
 	
-本方案对GetVault、SelectTokens和TokenTracking接口，提供分页查询功能。相关执行例子及字段说明见上。
+本方案对GetVault、SelectTokens和TokenTracking接口，提供分页查询功能。相关执行例子及字段说明见上。sdk及nodejs对上述三个接口均采用了分页查询的方案，其中sdk返回的查询结果中已汇总不同页的查询内容，因此查询结果中不再存在begin、cnt和end等json字段。
 
 
 [返回目录](#目录)
@@ -584,21 +599,21 @@ Vault查询执行例子如下：
 
 ### 2.3 脚本命令返回的“执行结果说明”
 
-	"Success",						// "执行成功",
-	"TokenIDInvalid",				// "Token ID不存在",
-	"TxIDInvalid",					// "Tx ID不存在",
-	"AccountInvalid",				// "账号不存在",
-	"TokenUsed",					// "该Token已经使用",
-	"TokenOwnerShipCheckFail",		// "该Token所有权验证失败",
-	"TokenLogicCheckFail",			// "该Token逻辑验证失败",
-	"TokenAccountingBalanceFail",	// "该交易会计等式验证失败",
-	"AccountBalanceInsufficient",	// "该账号余额不足",
-	"JsonParamError",				// "输入Json参数错误",
-	"UTXOTypeInvalid",				// "UTXO交易类型错误",
-	"AccountRegistered",			// "账号已经存在",
-	"TokenCntOutofRange",			// "交易用的Token参数超限（TokenMaxCnt）",
-	"LowEthVersion",				// "Eth的版本过低，无法处理UTXO交易",
-	"OtherFail"						// "其余失败情况"
+	"Success",                      // "Success./执行成功",
+	"TokenIDInvalid",               // "Token ID is invalid./Token ID不存在",
+	"TxIDInvalid",                  // "Tx ID is invalid./Tx ID不存在",
+	"AccountInvalid",               // "Account is invalid./账号不存在",
+	"TokenUsed",                    // "Token has been used./该Token已经使用",
+	"TokenOwnerShipCheckFail",      // "The ownership validation of token does not pass through./该Token所有权验证失败",
+	"TokenLogicCheckFail",          // "The logical validation of token does not pass through./该Token逻辑验证失败",
+	"TokenAccountingBalanceFail",   // "The accounting equation verification of transaction does not pass through./该交易会计等式验证失败",
+	"AccountBalanceInsufficient",   // "The balance of the account is insufficient./该账号余额不足",
+	"JsonParamError",               // "Json parameter formatting error./输入Json参数错误",
+	"UTXOTypeInvalid",              // "UTXO transaction type error./UTXO交易类型错误",
+	"AccountRegistered",            // "Account has been registered./账号已经存在",
+	"TokenCntOutofRange",           // "The number of Token numbers used in the transaction is beyond the limit(max=1000)./交易用的Token参数超限（TokenMaxCnt=1000）",
+	"LowEthVersion",                // "Please upgrade the environment for UTXO transaction./Eth的版本过低，无法处理UTXO交易",
+	"OtherFail"                     // "Other Fail./其余失败情况"
 
 [返回目录](#目录)
 
@@ -618,7 +633,7 @@ Vault查询执行例子如下：
 
 - 本UTXO交易方案可实现对链原有数据的兼容；
 
-- 本UTXO交易的启用及后续交易的发送需在关闭国密功能的情况下进行。
+- 本UTXO交易的启用及后续交易的发送可在关闭/启用国密功能的情况下进行。
 
 [返回目录](#目录)
 
@@ -626,7 +641,7 @@ Vault查询执行例子如下：
 
 ### 3.3 工具提供
 
-- 目前提供nodejs脚本，web3SDK后续提供。
+- 目前提供支持UTXO交易的sdk及nodejs工具。
 
 [返回目录](#目录)
 
