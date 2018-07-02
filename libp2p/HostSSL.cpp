@@ -437,6 +437,24 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 {
 	if (!m_run)
 		return;
+
+	if (((!m_netPrefs.listenIPAddress.empty()
+			&& _nodeIPEndpoint.address
+					== boost::asio::ip::address::from_string(
+							m_netPrefs.listenIPAddress))
+			|| (!m_netPrefs.publicIPAddress.empty()
+					&& _nodeIPEndpoint.address
+							== boost::asio::ip::address::from_string(
+									m_netPrefs.publicIPAddress))
+			|| m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end()
+			|| _nodeIPEndpoint.address == m_tcpPublic.address()
+			|| _nodeIPEndpoint.address == m_tcpClient.address())
+			&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
+		LOG(TRACE)<< "Ignore connect self" << _nodeIPEndpoint;
+
+		return;
+	}
+
 	if( m_tcpPublic == _nodeIPEndpoint)
 	{
 		LOG(INFO) <<"Abort Connect Self("<<_nodeIPEndpoint<<")";
