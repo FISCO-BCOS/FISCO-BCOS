@@ -226,7 +226,7 @@ private:
 	// msg queue 消息队列
 	PBFTMsgQueue m_msg_queue;
 
-	static const unsigned kCollectInterval = 60; // second
+	static const unsigned kCollectInterval; // second
 	static const size_t kKnownPrepare = 1024;
 	static const size_t kKnownSign = 1024;
 	static const size_t kKnownCommit = 1024;

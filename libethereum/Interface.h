@@ -256,8 +256,6 @@ public:
 	virtual void updateCache(Address ) {}
 
 	virtual void sendCustomMessage(const h512, std::shared_ptr<dev::bytes>) {};
-	virtual void startStatTranscation(h256) {}
-
 	virtual UTXOModel::UTXOMgr* getUTXOMgr() = 0;
 
 protected:
