@@ -10,11 +10,19 @@ const createKeccakHash = require('keccak')
 const assert = require('assert')
 const rlp = require('rlp')
 const BN = require('bn.js')
+var config=require('./config');
+var gm = require('./GM/SM2Sign');
 
 function privateToPublic(privateKey) {
-  privateKey = toBuffer(privateKey)
   // skip the type flag and use the X, Y points
-  return secp256k1.publicKeyCreate(privateKey, false).slice(1)
+  if(config.EncryptType == 1){
+    privateKey = privateKey.toString('hex');
+    return gm.priToPub(privateKey);
+  }else{
+    privateKey = toBuffer(privateKey)
+    var privateToPub = secp256k1.publicKeyCreate(privateKey, false).slice(1);
+    return privateToPub;
+  }
 }
 
 function privateToAddress(privateKey) {
@@ -22,11 +30,12 @@ function privateToAddress(privateKey) {
 }
 
 function publicToAddress(pubKey, sanitize) {
-  pubKey = toBuffer(pubKey)
-  if (sanitize && (pubKey.length !== 64)) {
-    pubKey = secp256k1.publicKeyConvert(pubKey, false).slice(1)
+  if(config.EncryptType == 0){
+    if (sanitize && (pubKey.length !== 64)) {
+      pubKey = secp256k1.publicKeyConvert(pubKey, false).slice(1)
+    }
+    assert(pubKey.length === 64)
   }
-  assert(pubKey.length === 64)
   // Only take the lower 160bits of the hash
   return sha3(pubKey).slice(-20)
 }
@@ -106,9 +115,22 @@ function setLength(msg, length, right) {
 }
 
 function sha3(a, bits) {
-  a = toBuffer(a)
-  if (!bits) bits = 256
-  return createKeccakHash('keccak' + bits).update(a).digest()
+
+  if(config.EncryptType == 1){
+    //console.log("SM3OrgData:",a.toString('hex'));
+    a = new Buffer(a);
+    var _digstData = gm.sm3Digest(a);
+    var digstData = new Buffer(_digstData, 'hex');
+    //console.log("SM3digstData:",_digstData);
+    return digstData;
+  }else{
+    //console.log("SHA3OrgData:",a.toString('hex'));
+    a = toBuffer(a);
+    if (!bits) bits = 256;
+    var digstData = createKeccakHash('keccak' + bits).update(a).digest();
+    //console.log("SHA3digstData:",digstData.toString('hex'));
+    return digstData;
+  }
 }
 
 function baToJSON(ba) {
@@ -251,12 +273,20 @@ function ecrecover(msgHash, v, r, s) {
 }
 
 function ecsign(msgHash, privateKey) {
-  var sig = secp256k1.sign(msgHash, privateKey)
-
   var ret = {}
-  ret.r = sig.signature.slice(0, 32)
-  ret.s = sig.signature.slice(32, 64)
-  ret.v = sig.recovery + 27
+  if(config.EncryptType == 1){
+    var _privateKey = privateKey.toString('hex');
+    //console.log("SM2SignOrgData:",msgHash.toString("hex"));
+    var _sign = gm.signRS(_privateKey,msgHash);
+    ret.r = _sign.r;
+    ret.s = _sign.s;
+    ret.pub = _sign.pub;
+  }else{
+    var sig = secp256k1.sign(msgHash, privateKey)
+    ret.r = sig.signature.slice(0, 32)
+    ret.s = sig.signature.slice(32, 64)
+    ret.v = sig.recovery + 27
+  }
   return ret
 }
 
@@ -268,6 +298,7 @@ exports.bufferToInt=bufferToInt
 exports.rlphash=rlphash
 exports.ecrecover=ecrecover
 exports.ecsign=ecsign
+exports.sha3=sha3
 
 exports.BN = BN
 exports.rlp = rlp
