@@ -30,6 +30,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 | 核心   | 2核     | 4核                                   |
 | 带宽   | 1Mb    | 5Mb                                  |
 | 操作系统 |        | CentOS （7.2  64位）或Ubuntu（16.04  64位） |
+| JAVA     |        | Java(TM) 1.8 && JDK 1.8 |
 
 ### 1.2 部署软件环境
 
@@ -446,7 +447,7 @@ log.conf其它字段说明请参看<u>附录：12.5 log.conf说明</u>
 
 - 节点证书身份文件（/mydata/nodedata-1/data）：ca.crt、agency.crt、node.crt、node.key、node.private 
 - 配置文件（/mydata/nodedata-1/）：genesis.json、config.json、log.conf
-- 连接文件（/mydata/nodedata-1/data/）：bootstrapnodes.json
+- 连接文件（/mydaata/nodedata-1/data/）：bootstrapnodes.json
 
 > 启动节点
 
@@ -816,11 +817,11 @@ cp /mydata/FISCO-BCOS/cert/WB/nodedata-2/*  /mydata/nodedata-2/data/
 ### 6.3 配置连接文件bootstrapnodes.json
 从创世节点data目录拷贝bootstrapnodes.json文件到当前节点data目录下。
 ```shell
-cp /mydata//nodedata-1/data/bootstrapnodes.json /mydata/nodedata-2/data/
+cp /mydata/nodedata-1/data/bootstrapnodes.json /mydata/nodedata-2/data/
 ```
 并对bootstrapnodes.json进行编辑，填入创世节点的ip和p2pport
 ```shell
-vim /mydata//nodedata-2/data/bootstrapnodes.json
+vim /mydata/nodedata-2/data/bootstrapnodes.json
 ```
 > 编辑后，bootstrapnodes.json内容为
 ```log
@@ -924,9 +925,9 @@ log.conf其它字段说明请参看<u>附录：12.5 log.conf说明</u>
 
 节点的启动依赖下列文件，在启动前，请确认文件已经正确的配置：
 
-- 节点证书身份文件（/mydata/nodedata-2/data）：ca.crt、agency.crt、node.crt、node.key、node.private 
-- 配置文件（/mydata/nodedata-2/）：genesis.json、config.json、log.conf
-- 连接文件（/mydata/nodedata-2/data/）：bootstrapnodes.json
+- 节点证书身份文件（/mydata/nodedata-1/data）：ca.crt、agency.crt、node.crt、node.key、node.private 
+- 配置文件（/mydata/nodedata-1/）：genesis.json、config.json、log.conf
+- 连接文件（/mydaata/nodedata-1/data/）：bootstrapnodes.json
 
 > 启动节点，此时节点未被注册到区块链中，启动时只能看到进程，不能刷出打包信息。要让此节点正确的运行，请进入<u>第七章 多节点组网</u> 。
 
@@ -1390,7 +1391,7 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 10. [可监管的零知识证明](../可监管的零知识证明说明.md)
 11. [群签名环签名](../启用_关闭群签名环签名ethcall.md)
 12. [弹性联盟链共识框架](../弹性联盟链共识框架说明文档.md)
-13. [国密版FISCO-BCOS](../国密操作文档.md) 
+
 
 
 ## 第十二章 附录

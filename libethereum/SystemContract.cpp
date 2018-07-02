@@ -144,7 +144,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
         else if ((it->to() == contractAbiMgr) && (dev::ZeroAddress != contractAbiMgr) && (cohash1 == funhash || funhash == cohash2))
         {
             coChange = true;
-            LOG(TRACE) << "SystemContract::updateSystemContract ContractAbiMgr addAbi ! hash=" << funhash << ", to=" << it->to() << ",sha3=" << toString(it->sha3());
+            //LOG(TRACE) << "SystemContract::updateSystemContract ContractAbiMgr addAbi ! hash=" << funhash << ", to=" << it->to() << ",sha3=" << toString(it->sha3());
         }
 
     }//for
@@ -735,19 +735,6 @@ void SystemContract::updateCache(Address ) {
 
  
 }
-
-void SystemContract::startStatTranscation(h256 t) {
-    if ( m_stattransation.end() == m_stattransation.find(t) )
-    {
-        m_stattransation[t] = make_pair(utcTime(), 0);
-    }
-    else
-    {
-        m_stattransation[t].first = utcTime();
-    }
-
-}
-
 
 bool SystemContract::isAdmin(const Address &)
 {

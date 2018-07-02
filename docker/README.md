@@ -2,9 +2,9 @@
 
 [FISCO BCOS Docker Installation Manual](README_EN.md)
 
-本文档能够让初学者快速体验FISCO BCOS平台。初学者无需部署FISCO BCOS平台，仅需在安装了Docker的机器上运行本文档中的命令，即可启动两个FISCO BCOS节点。
+本文档能够让初学者快速体验FISCO BCOS平台。初学者无需部署FISCO BCOS平台，仅需在安装了Docker的机器上clone了FISCO-BCOS后运行本文档中的命令，即可启动两个FISCO BCOS节点。
 
-推荐使用Docker 17.03以上版本，安装方法参照[官方文档][Docker-Install]或本文档附录。
+推荐使用Docker 17.03以上版本，安装方法参照[官方文档][https://docs.docker.com/]或本文档附录。
 
 ## 启动节点
 
@@ -61,7 +61,7 @@ root      9510  9508 10 15:26 ?        00:00:02 fisco-bcos --genesis /fisco-bcos
 tail -f /data/fisco-bcos/docker/node1/log/* | grep topics
 ```
 
-> 可以看到如下日志，表示日志对应的节点已经与另一个节点连接（Connected to 1 peers），连接正常：
+> 可以看到如下日志，表示日志对应的节点已经与另一个节点连接，连接正常：
 
 ```
 topics Send to:1 nodes
