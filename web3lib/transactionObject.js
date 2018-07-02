@@ -7,14 +7,69 @@
 
 const ethUtil = require('./utils.js')
 const BN = ethUtil.BN
+var config=require('./config.js')
 
 // secp256k1n/2
 const N_DIV_2 = new BN('7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0', 16)
-
 function Transaction(data) {
-    data = data || {}
+  data = data || {};
+  var fields;
+  if(config.EncryptType == 1){
     // Define Properties
-    const fields = [{
+    fields = [{
+      name: 'randomid',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'gasPrice',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'gasLimit',
+      alias: 'gas',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'blockLimit',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    },{
+      name: 'to',
+      allowZero: true,
+      length: 20,
+      default: new Buffer([])
+    }, {
+      name: 'value',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'data',
+      alias: 'input',
+      allowZero: true,
+      default: new Buffer([])
+    }, {
+      name: 'pub',
+      length: 64,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'r',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 's',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }]} else{
+    // Define Properties
+    fields = [{
       name: 'randomid',
       length: 32,
       allowLess: true,
@@ -64,7 +119,7 @@ function Transaction(data) {
       length: 32,
       allowLess: true,
       default: new Buffer([])
-    }]
+    }]}
 
     /**
      * Returns the rlp encoding of the transaction
