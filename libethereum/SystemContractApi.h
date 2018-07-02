@@ -121,7 +121,6 @@ class SystemContractApi
 	virtual u256 transactionFilterCheck(const Transaction &) { return (u256)SystemContractCode::Ok; };
 
 	virtual void updateCache(Address) {};
-    virtual void startStatTranscation(h256){}
 	
     /*
     *   从系统合约中拉取所有的节点信息，提供接口给NodeConnParamsManager

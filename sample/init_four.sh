@@ -49,7 +49,7 @@ function generateRemoteRunScript()
     echo '#! /bin/sh
 sudo cp fisco-bcos /usr/local/bin/fisco-bcos
 sudo mkdir -p '$nodes_dir'
-sudo chmod 777 '$nodes_dir'
+sudo chmod -R 777 '$nodes_dir'
 ln -s $(pwd)/'$node_a' '$nodes_dir'/'$node_a'
 ln -s $(pwd)/'$node_b' '$nodes_dir'/'$node_b'
 chmod +x '$node_a'/start2.sh
@@ -71,7 +71,7 @@ remote_ip=$2
 #nodes_dir=~/bcos-data/
 nodes_dir=/bcos-data/
 sudo mkdir -p $nodes_dir
-sudo chmod 777 $nodes_dir
+sudo chmod -R 777 $nodes_dir
 
 rpcport1=8847
 rpcport2=8848
