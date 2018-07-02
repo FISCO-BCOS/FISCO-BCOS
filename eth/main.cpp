@@ -220,7 +220,11 @@ string ethCredits(bool _interactive = false)
 
 void version()
 {
-	cout << "FISCO-BCOS version " << dev::Version << "\n";
+#if ETH_ENCRYPTTYPE
+        cout << "FISCO-BCOS version " << dev::Version <<"-gm" << "\n";
+#else
+        cout << "FISCO-BCOS version " << dev::Version << "\n";
+#endif
 	cout << "FISCO-BCOS network protocol version: " << dev::eth::c_protocolVersion << "\n";
 	cout << "Client database version: " << dev::eth::c_databaseVersion << "\n";
 	cout << "Build: " << DEV_QUOTED(ETH_BUILD_PLATFORM) << "/" << DEV_QUOTED(ETH_BUILD_TYPE) << "\n";

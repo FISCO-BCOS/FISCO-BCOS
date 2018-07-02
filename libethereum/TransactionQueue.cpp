@@ -81,7 +81,6 @@ std::pair<ImportResult, h256> TransactionQueue::import(bytesConstRef _transactio
 			// If it doesn't work, the signature is bad.
 			// The transaction's nonce may yet be invalid (or, it could be "valid" but we may be missing a marginally older transaction).
 			//LOG(TRACE)<<"TransactionQueue::import befor check ";
-			m_interface->startStatTranscation(h);
 
 			t = Transaction(_transactionRLP, CheckTransaction::Everything);
 			if (t.isCNS())
@@ -130,7 +129,6 @@ ImportResult TransactionQueue::import(Transaction const& _transaction, IfDropped
 
 		{
 			_transaction.safeSender(); // Perform EC recovery outside of the write lock
-			m_interface->startStatTranscation(h);
 			UpgradeGuard ul(l);
 			ret = manageImport_WITH_LOCK(h, _transaction);
 		}

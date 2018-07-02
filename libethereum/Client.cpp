@@ -211,9 +211,6 @@ void Client::updateCache(Address address) {
 	m_systemcontractapi->updateCache(address);
 }
 
-void Client::startStatTranscation(h256 t) {
-	m_systemcontractapi->startStatTranscation(t);
-}
 
 Client::~Client()
 {

@@ -156,7 +156,13 @@ private:
 
 inline int getChildCodeFromThreadId()
 {
+#ifdef __APPLE__
+    uint64_t tid;
+    pthread_threadid_np(NULL, &tid);
+    return tid & 0xfffff;
+#else
     return pthread_self() & 0xfffff;
+#endif
 }
 
 void recordStateByTimeStart(int code, uint64_t interval,
