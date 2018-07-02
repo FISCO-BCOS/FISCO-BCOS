@@ -37,7 +37,7 @@
 using namespace std;
 using namespace dev;
 using namespace eth;
-
+const unsigned PBFT::kCollectInterval = 60;
 void PBFT::init()
 {
 	ETH_REGISTER_SEAL_ENGINE(PBFT);
@@ -772,8 +772,6 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		return;
 	}
 
-	addRawPrepare(_req); // must after recvFutureBlock (必须在recvFutureBlock之后)
-
 	auto leader = getLeader();
 	if (!leader.first || _req.idx != leader.second) {
 		LOG(ERROR) << oss.str()  << "Recv an illegal prepare, err leader";
@@ -789,6 +787,12 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		LOG(ERROR) << oss.str()  << "CheckSign failed";
 		return;
 	}
+	// addRawPrepare 需要放在 _req.block_hash != m_committed_prepare_cache.block_hash 之后，因为 addRawPrepare 会重置 prepare 的信息
+	// 若节点已到 commit 阶段，那么在上面就会退出，如果在 sign 阶段，则相当于使用这个新的prepare重新开始sign流程
+	// addRawPrepare shoud put after '_req.block_hash != m_committed_prepare_cache.block_hash', for the reason that the addRawPrepare would reset the prepare cache
+	// if this node is execting to commit phase, then when receive a new prepare package, it would exit at '_req.block_hash != m_committed_prepare_cache.block_hash',
+	// while this node is execting sign phase, it equals to use this new prepare package to restart a new PBFT flow
+	addRawPrepare(_req); // must after recvFutureBlock (必须在recvFutureBlock之后)
 
 	LOG(TRACE) << "start exec tx, blk=" << _req.height << ",hash=" << _req.block_hash << ",idx=" << _req.idx << ", time=" << utcTime();
 	Block outBlock(*m_bc, *m_stateDB);
@@ -1167,6 +1171,10 @@ void PBFT::checkAndChangeView() {
 
 bool PBFT::addRawPrepare(PrepareReq const& _req) {
 	m_raw_prepare_cache = _req;
+	// 若同一个节点因意外出了同一个高度的两个以上的不同块，收到一个新的块的时候就清空自己已有prepare的cache
+	// if a node issue more than one block due to other exception, this node clear the prepare cache which has received before
+	LOG(DEBUG) << "addRawPrepare: current raw_prepare:" << _req.block_hash.abridged() << "| reset prepare cache"; 
+	m_prepare_cache = PrepareReq();
 	return true;
 }
 
@@ -1266,7 +1274,7 @@ void PBFT::collectGarbage() {
 	if (!m_highest_block) return;
 
 	std::chrono::system_clock::time_point now_time = std::chrono::system_clock::now();
-	if (now_time - m_last_collect_time >= std::chrono::seconds(kCollectInterval)) {
+	if (now_time - m_last_collect_time >= std::chrono::seconds(PBFT::kCollectInterval)) {
 		for (auto iter = m_sign_cache.begin(); iter != m_sign_cache.end();) {
 			for (auto iter2 = iter->second.begin(); iter2 != iter->second.end();) {
 				if (iter2->second.height < m_highest_block.number()) {
