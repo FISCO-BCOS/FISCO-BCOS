@@ -370,9 +370,8 @@ vim /mydata/nodedata-1/config.json
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8545",
         "p2pport": "30303",
         "channelPort": "30304",
