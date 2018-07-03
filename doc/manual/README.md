@@ -1674,13 +1674,13 @@ babel-node tool.js AuthorityFilter 用户外部账户、合约地址、合约接
 
 | 配置项                  | 说明                           | 默认值       | 推荐值         |
 | -------------------- | ---------------------------- | --------- | ----------- |
-| maxBlockHeadGas      | 块最大GAS （16进制）                | 200000000 | 20000000000 |
-| intervalBlockTime    | 块间隔(ms) （16进制）               | 1000      | 1000        |
-| maxBlockTranscations | 块最大交易数（16进制）                 | 1000      | 1000        |
-| maxNonceCheckBlock   | 交易nonce检查最大块范围（16进制）         | 1000      | 1000        |
-| maxBlockLimit        | blockLimit超过当前块号的偏移最大值（16进制） | 1000      | 1000        |
-| maxTranscationGas    | 交易的最大gas（16进制）               | 20000000  | 20000000    |
-| CAVerify             | CA验证开关                       | FALSE     | FALSE       |
+| maxBlockHeadGas      | 块最大GAS                 | 2,000,000,000 | 2,000,000,000 |
+| intervalBlockTime    | 块间隔(ms)                | 1000      | 1000        |
+| maxBlockTranscations | 块最大交易数                 | 1000      | 1000        |
+| maxNonceCheckBlock   | 交易nonce检查最大块范围         | 1000      | 1000        |
+| maxBlockLimit        | blockLimit超过当前块号的偏移最大值 | 1000      | 1000        |
+| maxTranscationGas    | 交易的最大gas               | 30,000,000  | 30,000,000    |
+| CAVerify             | CA验证开关                       | false     | false       |
 
 **（2）接口说明**
 
