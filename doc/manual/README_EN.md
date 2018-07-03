@@ -1761,13 +1761,13 @@ Path of the source code: systemcontractv2/ConfigAction.sol
 
 | items                | illustration                             | default   | recommended |
 | -------------------- | ---------------------------------------- | --------- | ----------- |
-| maxBlockHeadGas      | Max block gas (Hex)                      | 200000000 | 20000000000 |
-| intervalBlockTime    | Block interval (ms) (Hex)                | 1000      | 1000        |
-| maxBlockTransactions | Max block transactions(Hex)              | 1000      | 1000        |
-| maxNonceCheckBlock   | Range of the max block when nonce checking(Hex) | 1000      | 1000        |
-| maxBlockLimit        | Allowed blockLimit that exceeds the block number right now (Hex) | 1000      | 1000        |
-| maxTransactionGas    | Max transaction gas(Hex)                 | 20000000  | 20000000    |
-| CAVerify             | Institution certificate authority verify switch | FALSE     | FALSE       |
+| maxBlockHeadGas      | Max block gas                       | 2,000,000,000 | 2,000,000,000 |
+| intervalBlockTime    | Block interval (ms)                 | 1000      | 1000        |
+| maxBlockTransactions | Max block transactions              | 1000      | 1000        |
+| maxNonceCheckBlock   | Range of the max block when nonce checking | 1000      | 1000        |
+| maxBlockLimit        | Allowed blockLimit that exceeds the block number right now  | 1000      | 1000        |
+| maxTransactionGas    | Max transaction gas                 | 30,000,000  | 30,000,000    |
+| CAVerify             | Institution certificate authority verify switch | false     | false       |
 
 **(2) APIs**
 
