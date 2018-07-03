@@ -370,7 +370,7 @@ config.json其它字段说明请参看<u>附录：12.4 config.json说明</u>
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
         "rpcport": "8545",
         "p2pport": "30303",
@@ -849,9 +849,8 @@ config.json其它字段说明请参看<u>附录：12.4 config.json说明</u>
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x210a7d467c3c43307f11eda35f387be456334fed",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8546",
         "p2pport": "30403",
         "channelPort": "30404",
