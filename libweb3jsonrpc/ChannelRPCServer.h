@@ -71,7 +71,9 @@ public:
 
 	typedef std::shared_ptr<ChannelRPCServer> Ptr;
 
-	ChannelRPCServer(std::string listenAddr = "", int listenPort = 0): jsonrpc::AbstractServerConnector(), _listenAddr(listenAddr), _listenPort(listenPort) {};
+	ChannelRPCServer(std::string listenAddr = "", int listenPort = 0): jsonrpc::AbstractServerConnector(), _listenAddr(listenAddr), _listenPort(listenPort) {
+		_sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+	};
 	virtual ~ChannelRPCServer();
 	virtual bool StartListening() override;
 	virtual bool StopListening() override;
