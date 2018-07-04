@@ -356,8 +356,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 
 		DEV_GUARDED(x_framing)
 		{
-			//m_writeQueue.pop_front();
-			//m_writeTimeQueue.pop_front();
+			m_writeQueue.pop_front();
+			m_writeTimeQueue.pop_front();
 			if (m_writeQueue.empty())
 				return;
 		}
@@ -385,7 +385,7 @@ void Session::write()
 			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
 			out = &m_writeQueue[0];
 			enter_time = m_writeTimeQueue[0];
-		//}
+		}
 		
 		m_start_t = utcTime();
 		unsigned queue_elapsed = (unsigned)(m_start_t - enter_time);
