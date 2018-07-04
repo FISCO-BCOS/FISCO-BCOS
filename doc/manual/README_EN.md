@@ -370,9 +370,8 @@ vim /mydata/nodedata-1/config.json
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8545",
         "p2pport": "30303",
         "channelPort": "30304",
@@ -850,9 +849,8 @@ vim /mydata/nodedata-2/config.json
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x210a7d467c3c43307f11eda35f387be456334fed",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8546",
         "p2pport": "30403",
         "channelPort": "30404",
@@ -1761,13 +1759,13 @@ Path of the source code: systemcontractv2/ConfigAction.sol
 
 | items                | illustration                             | default   | recommended |
 | -------------------- | ---------------------------------------- | --------- | ----------- |
-| maxBlockHeadGas      | Max block gas (Hex)                      | 200000000 | 20000000000 |
-| intervalBlockTime    | Block interval (ms) (Hex)                | 1000      | 1000        |
-| maxBlockTransactions | Max block transactions(Hex)              | 1000      | 1000        |
-| maxNonceCheckBlock   | Range of the max block when nonce checking(Hex) | 1000      | 1000        |
-| maxBlockLimit        | Allowed blockLimit that exceeds the block number right now (Hex) | 1000      | 1000        |
-| maxTransactionGas    | Max transaction gas(Hex)                 | 20000000  | 20000000    |
-| CAVerify             | Institution certificate authority verify switch | FALSE     | FALSE       |
+| maxBlockHeadGas      | Max block gas                       | 2,000,000,000 | 2,000,000,000 |
+| intervalBlockTime    | Block interval (ms)                 | 1000      | 1000        |
+| maxBlockTransactions | Max block transactions              | 1000      | 1000        |
+| maxNonceCheckBlock   | Range of the max block when nonce checking | 1000      | 1000        |
+| maxBlockLimit        | Allowed blockLimit that exceeds the block number right now  | 1000      | 1000        |
+| maxTransactionGas    | Max transaction gas                 | 30,000,000  | 30,000,000    |
+| CAVerify             | Institution certificate authority verify switch | false     | false       |
 
 **(2) APIs**
 
