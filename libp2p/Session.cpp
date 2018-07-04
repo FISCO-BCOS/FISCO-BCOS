@@ -405,8 +405,6 @@ void Session::write()
 						boost::asio::buffer(*out),
 						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 					});
-				m_writeQueue.pop_front();
-				m_writeTimeQueue.pop_front();
 			}
 			else
 			{
@@ -418,11 +416,8 @@ void Session::write()
 		else
 		{
 			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-			m_writeQueue.pop_front();
-			m_writeTimeQueue.pop_front();
 		}
 		
-		}
 	}
 	catch (exception &e) 
 	{
