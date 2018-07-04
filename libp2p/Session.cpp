@@ -422,8 +422,6 @@ void Session::write()
 			m_writeQueue.pop_front();
 			m_writeTimeQueue.pop_front();
 		}
-		
-		}
 	}
 	catch (exception &e) 
 	{
