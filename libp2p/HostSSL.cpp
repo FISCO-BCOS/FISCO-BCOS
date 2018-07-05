@@ -498,7 +498,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 	{
 		if (ec)
 		{
-			LOG(ERROR) << "Connection refused to node" <<  "@" << _nodeIPEndpoint << "(" << ec.message() << ")";
+			LOG(ERROR) << "Connection refused to node" <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
 			
 			Guard l(x_pendingNodeConns);
 			m_pendingPeerConns.erase(_nodeIPEndpoint.name());
