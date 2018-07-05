@@ -30,7 +30,7 @@ This chapter mainly introduce how to install all the prerequisites and compile t
 | Core Number      | 2       | 4                                       |
 | Bandwidth        | 1Mb     | 5Mb                                     |
 | Operation System |         | CentOS (7.2  64x) or Ubuntu(16.04  64x) |
-
+| JAVA             |         | Java(TM) 1.8 && JDK 1.8                 |
 ### 1.2 Install Environments
 
 #### 1.2.1 Install dependencies
@@ -370,9 +370,8 @@ vim /mydata/nodedata-1/config.json
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8545",
         "p2pport": "30303",
         "channelPort": "30304",
@@ -850,9 +849,8 @@ vim /mydata/nodedata-2/config.json
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x210a7d467c3c43307f11eda35f387be456334fed",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8546",
         "p2pport": "30403",
         "channelPort": "30404",
@@ -1446,7 +1444,6 @@ Please refer to these documentations:
 10. [Regulatory Zero-Knowledge Proof](../可监管的零知识证明说明.md)
 11. [Group Signature and Ring Signature Support](../启用_关闭群签名环签名ethcall.md)
 12. [Architecture of Elastic Aliance Consensus](../弹性联盟链共识框架说明文档.md)
-13. [FISCO BCOS Turn On Guomi Feature](../国密操作文档.md)
 
 <br>
 <br>
@@ -1762,13 +1759,13 @@ Path of the source code: systemcontractv2/ConfigAction.sol
 
 | items                | illustration                             | default   | recommended |
 | -------------------- | ---------------------------------------- | --------- | ----------- |
-| maxBlockHeadGas      | Max block gas (Hex)                      | 200000000 | 20000000000 |
-| intervalBlockTime    | Block interval (ms) (Hex)                | 1000      | 1000        |
-| maxBlockTransactions | Max block transactions(Hex)              | 1000      | 1000        |
-| maxNonceCheckBlock   | Range of the max block when nonce checking(Hex) | 1000      | 1000        |
-| maxBlockLimit        | Allowed blockLimit that exceeds the block number right now (Hex) | 1000      | 1000        |
-| maxTransactionGas    | Max transaction gas(Hex)                 | 20000000  | 20000000    |
-| CAVerify             | Institution certificate authority verify switch | FALSE     | FALSE       |
+| maxBlockHeadGas      | Max block gas                       | 2,000,000,000 | 2,000,000,000 |
+| intervalBlockTime    | Block interval (ms)                 | 1000      | 1000        |
+| maxBlockTransactions | Max block transactions              | 1000      | 1000        |
+| maxNonceCheckBlock   | Range of the max block when nonce checking | 1000      | 1000        |
+| maxBlockLimit        | Allowed blockLimit that exceeds the block number right now  | 1000      | 1000        |
+| maxTransactionGas    | Max transaction gas                 | 30,000,000  | 30,000,000    |
+| CAVerify             | Institution certificate authority verify switch | false     | false       |
 
 **(2) APIs**
 
