@@ -88,7 +88,7 @@ char* ascii2hex(const char* chs,int len)
 #if ETH_ENCRYPTTYPE
 bytes dev::gmCBCEncrypt(bytesConstRef plainData,string const& keyData,int keyLen,bytesConstRef ivData)
 {
-	LOG(DEBUG)<<"GUOMI SM4 EN TYPE......................";
+	//LOG(DEBUG)<<"GUOMI SM4 EN TYPE......................";
 	//pkcs5模式数据填充
 	int padding = plainData.size() % 16;
 	int nSize = 16 - padding;
@@ -107,7 +107,7 @@ bytes dev::gmCBCEncrypt(bytesConstRef plainData,string const& keyData,int keyLen
 
 bytes dev::gmCBCDecrypt(bytesConstRef cipherData,string const& keyData,int keyLen,bytesConstRef ivData)
 {
-	LOG(DEBUG)<<"GM SM4 DE TYPE....................";
+	//LOG(DEBUG)<<"GM SM4 DE TYPE....................";
 	bytes deData(cipherData.size());
 	SM4::getInstance().setKey((unsigned char*)keyData.data(),keyData.size());
 	SM4::getInstance().cbcEncrypt((unsigned char*)cipherData.data(), deData.data(), cipherData.size(), (unsigned char*)ivData.data(), 0);
@@ -120,7 +120,7 @@ bytes dev::gmCBCDecrypt(bytesConstRef cipherData,string const& keyData,int keyLe
 
 bytes dev::origAesCBCEncrypt(bytesConstRef plainData,string const& keyData,int keyLen,bytesConstRef ivData)
 {
-	LOG(DEBUG)<<"AES EN TYPE......................";
+	//LOG(DEBUG)<<"AES EN TYPE......................";
 	string cipherData;
 	CryptoPP::AES::Encryption aesEncryption((const byte*)keyData.c_str(), keyLen);
 	CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption( aesEncryption, ivData.data());
@@ -132,7 +132,7 @@ bytes dev::origAesCBCEncrypt(bytesConstRef plainData,string const& keyData,int k
 
 bytes dev::origAesCBCDecrypt(bytesConstRef cipherData,string const& keyData,int keyLen,bytesConstRef ivData)
 {
-	LOG(DEBUG)<<"AES DE TYPE....................";
+	//LOG(DEBUG)<<"AES DE TYPE....................";
 	string decryptedData;
 	CryptoPP::AES::Decryption aesDecryption((const byte*)keyData.c_str(), keyLen); 
 	CryptoPP::CBC_Mode_ExternalCipher::Decryption cbcDecryption( aesDecryption,ivData.data());  

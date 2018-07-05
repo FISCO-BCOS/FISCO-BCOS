@@ -64,8 +64,6 @@ public:
     //所有的filter检查
     virtual u256 transactionFilterCheck(const Transaction & transaction) override;
 
-   virtual void startStatTranscation(h256)override;
-
     virtual void updateCache(Address address) override;
 
     //是否是链的管理员
@@ -84,9 +82,6 @@ public:
     virtual void updateSystemContract(std::shared_ptr<Block> block) override;
 
 private:
-
-    //交易统计数据
-    std::map<h256, pair<u256,u256> > m_stattransation;
 
     Client* m_client;
 
