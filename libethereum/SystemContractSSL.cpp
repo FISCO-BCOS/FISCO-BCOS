@@ -125,7 +125,7 @@ void SystemContractSSL::updateSystemContract(std::shared_ptr<Block> block)
         else if ((it->to() == contractAbiMgr) && (dev::ZeroAddress != contractAbiMgr) && (cohash1 == funhash || funhash == cohash2))
         {
             coChange = true;
-            LOG(TRACE) << "SystemContractSSL::updateSystemContract ContractAbiMgr addAbi ! hash=" << funhash << ", to=" << it->to() << ",sha3=" << toString(it->sha3());
+            //LOG(TRACE) << "SystemContractSSL::updateSystemContract ContractAbiMgr addAbi ! hash=" << funhash << ", to=" << it->to() << ",sha3=" << toString(it->sha3());
         }
 
     }//for
@@ -693,19 +693,6 @@ void SystemContractSSL::updateCache(Address ) {
         it->second.res.clear();
     }*/
 }
-
-void SystemContractSSL::startStatTranscation(h256 t) {
-    if ( m_stattransation.end() == m_stattransation.find(t) )
-    {
-        m_stattransation[t] = make_pair(utcTime(), 0);
-    }
-    else
-    {
-        m_stattransation[t].first = utcTime();
-    }
-
-}
-
 
 //是否是链的管理员  没有放到filtercheck里面是因为这个有可能是外在的
 bool SystemContractSSL::isAdmin(const Address &)
