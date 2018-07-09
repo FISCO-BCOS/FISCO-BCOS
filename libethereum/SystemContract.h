@@ -61,29 +61,22 @@ public:
    
     virtual u256 transactionFilterCheck(const Transaction & transaction) override;
 
-   virtual void startStatTranscation(h256)override;
-
     virtual void updateCache(Address address) override;
-
    
     virtual bool isAdmin(const Address & _address) override;
     
     virtual bool getValue(const string _key, string & _value) override;
-
     
     virtual void getAllNode(int _blocknumber ,std::vector< NodeConnParams> & _nodelist )override;
     virtual u256 getBlockChainNumber()override;
 
     virtual void getCaInfo(string _hash,CaInfo & _cainfo) override;
-
   
     virtual void updateSystemContract(std::shared_ptr<Block> block) override;
 
     Address getRoute(const string & _route) const override;
 
 private:
-
-    std::map<h256, pair<u256,u256> > m_stattransation;
 
     Client* m_client;
 
@@ -108,7 +101,6 @@ private:
     std::map<string,CaInfo> m_calist;
 
 	mutable Address m_abiMgrAddr;
-
 
     ExecutionResult call(Address const& _to, bytes const& _inputdata, bool cache = false) ;
 
