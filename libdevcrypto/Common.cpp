@@ -281,6 +281,10 @@ Public dev::ecdsaRecover(Signature const& _sig, h256 const& _message)
 Public dev::gmRecover(Signature const& _sig, h256 const& _message)
 {
 	SignatureStruct sign(_sig);
+	if (!sign.isValid())
+	{
+		return Public{};
+	}
 	if (gmVerify(sign.pub,_sig,_message))
 	{
 		return sign.pub;

@@ -39,7 +39,7 @@ else
     openssl genpkey -paramfile sdk.param -out sdk.key
     openssl pkey -in sdk.key -pubout -out sdk.pubkey
     openssl req -new -key sdk.key -config cert.cnf  -out sdk.csr
-    openssl x509 -req -in sdk.csr -CAkey agency.key -CA agency.crt -force_pubkey sdk.pubkey -out sdk.crt -CAcreateserial -extensions v3_req -extfile cert.cnf
+    openssl x509 -req -days 3650 -in sdk.csr -CAkey agency.key -CA agency.crt -force_pubkey sdk.pubkey -out sdk.crt -CAcreateserial -extensions v3_req -extfile cert.cnf
     openssl ec -in sdk.key -outform DER |tail -c +8 | head -c 32 | xxd -p -c 32 | cat >sdk.private
    
     cp ca.crt ca-agency.crt

@@ -180,7 +180,7 @@ private:
 
 	/// Chosen constants
 
-	static unsigned const s_bucketSize = 128;			///< Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
+	static unsigned const s_bucketSize;			///< Denoted by k in [Kademlia]. Number of nodes stored in each bucket.
 	static unsigned const s_alpha = 3;				///< Denoted by \alpha in [Kademlia]. Number of concurrent FindNode requests.
 
 	/// Intervals

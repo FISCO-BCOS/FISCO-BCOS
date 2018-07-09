@@ -192,6 +192,10 @@ void HostApi::doWork()
 		LOG(WARNING) << "Exception in Network Thread:" << _e.what();
 		LOG(WARNING) << "Network Restart is Recommended.";
 	}
+
+	if(m_ioService.stopped()) {
+		m_ioService.reset();
+	}
 }
 
 PeerSessionInfos HostApi::peerSessionInfo() const
