@@ -1021,4 +1021,3 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
 
 	return activedSessions;
 }
-
