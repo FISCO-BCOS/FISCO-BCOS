@@ -11,7 +11,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 - 对银行机构，可以降低清结算成本、提高中后台运营效率、提升流程自动化程度；  
 - 对非银金融机构，可以提升权益登记、信息存证的权威性、削减交易对手方风险、解决数据追踪与信息防伪问题、降低审核审计的操作成本等；
 - 对金融监管机构，为监管机构提供了一致且易于审计的数据，通过对机构间区块链的数据分析，能够比传统审计流程更快更精确地监管金融业务，并极大加强反洗钱力度；
-- 在跨境金融场景中，有助于实现跨境金融机构间的账本共享，降低合作银行见对账与清结算成本及争议摩擦成本，从而提高跨境业务处理速度及效率。
+- 在跨境金融场景中，有助于实现跨境金融机构间的账本共享，降低合作银行间对账与清结算成本及争议摩擦成本，从而提高跨境业务处理速度及效率。
 
 FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master/LICENSE)。  
 
@@ -36,7 +36,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](docker/)。[(FISCO BCOS Docker Installation Manual)](docker/README_EN.md)
 
-如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书1.0](doc/manual)。[(FISCO-BCOS Manual)](doc/manual/README_EN.md)
+如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书](doc/manual)。[(FISCO-BCOS Manual)](doc/manual/README_EN.md)
 
 如果你想快速搭建生产上的可用环境, 请参考[FISCO-BCOS物料包工具](https://github.com/FISCO-BCOS/fisco-package-build-tool)。
 
@@ -72,6 +72,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 * [FISCO BCOS权限模型](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E6%9D%83%E9%99%90%E6%A8%A1%E5%9E%8B)
 * [群签名和环签名链上验证](doc/启用_关闭群签名环签名ethcall.md)
 * [可监管的零知识证明说明](doc/可监管的零知识证明说明.md)
+* [FISCO-BCOS开启国密特性](doc/%E5%9B%BD%E5%AF%86%E6%93%8D%E4%BD%9C%E6%96%87%E6%A1%A3.md)
 
 # 4.应用案例
 * [FISCO BCOS应用实践](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5.pdf) 
@@ -102,7 +103,7 @@ FISCO BCOS常见问题，可参见[常见问题](https://github.com/FISCO-BCOS/W
 
 ![](./doc/FISCO-BCOS.jpeg)
 
-
+诚邀广大安全专家共同关注区块链安全。如果有安全风险，欢迎各位踊跃提交漏洞至[微众SRC](https://security.webank.com)。
 
 
 

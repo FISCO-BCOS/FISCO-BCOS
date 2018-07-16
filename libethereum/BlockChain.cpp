@@ -28,6 +28,7 @@
 #include <boost/timer.hpp>
 #include <boost/filesystem.hpp>
 #include <json_spirit/JsonSpiritHeaders.h>
+
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcore/Assertions.h>
@@ -37,15 +38,17 @@
 #include <libethcore/Exceptions.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/CommonJS.h>
-#include "GenesisInfo.h"
-#include "State.h"
-#include "Block.h"
-#include "Utility.h"
-#include "Defaults.h"
-#include "NodeConnParamsManagerApi.h"
 #include <libdevcore/easylog.h>
 #include <libdiskencryption/BatchEncrypto.h>
 #include <libweb3jsonrpc/RPCallback.h>
+#include <UTXO/UTXOSharedData.h>
+
+#include "Block.h"
+#include "Defaults.h"
+#include "GenesisInfo.h"
+#include "NodeConnParamsManagerApi.h"
+#include "State.h"
+#include "Utility.h"
 
 using namespace std;
 using namespace dev;
@@ -293,6 +296,9 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	LOG(WARNING) << "open m_blocksDB result:" << dbstatus.ToString();
 	dbstatus = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
 	LOG(WARNING) << "open m_extrasDB result:" << dbstatus.ToString();
+
+#endif
+//	m_writeOptions.sync = true;
 	if (!m_blocksDB || !m_extrasDB)
 	{
 		if (boost::filesystem::space(chainPath + "/blocks").available < 1024)
@@ -303,17 +309,14 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 		else
 		{
 			LOG(WARNING) <<
-			      "Database " <<
-			      (chainPath + "/blocks") <<
-			      "or " <<
-			      (extrasPath + "/extras") <<
-			      "already open. You appear to have another instance of ethereum running. Bailing.";
+				  "Database " <<
+				  (chainPath + "/blocks") <<
+				  "or " <<
+				  (extrasPath + "/extras") <<
+				  "already open. You appear to have another instance of ethereum running. Bailing.";
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
 		}
 	}
-#endif
-//	m_writeOptions.sync = true;
-
 	if (_we != WithExisting::Verify && !details(m_genesisHash))
 	{
 		BlockHeader gb(m_params.genesisBlock());
@@ -513,11 +516,20 @@ LastHashes BlockChain::lastHashes(h256 const& _parent) const
 void BlockChain::addBlockCache(Block block, u256 td) const {
 	DEV_WRITE_GUARDED(x_blockcache)
 	{
-		if ( m_blockCache.size() > 10 )
-			m_blockCache.clear();
+		if ( m_blockCache.size() > kBlockCacheSize ) {
+			// m_blockCache.clear();
+			auto first_hash = m_blockCacheFIFO.front();
+			m_blockCacheFIFO.pop_front();
+			m_blockCache.erase(first_hash);
+			// in case something unexcept error
+			if (m_blockCache.size() > kBlockCacheSize) {  // meet error, cache and cacheFIFO not sync, clear the cache
+				m_blockCache.clear();
+				m_blockCacheFIFO.clear();
+			}
+		}
 
 		m_blockCache.insert(std::make_pair(block.info().hash(), std::make_pair(block, td)));
-
+		m_blockCacheFIFO.push_back(block.info().hash());  // add hashindex to the blockCache queue, use to remove first element when the cache is full
 	}
 
 }
@@ -525,7 +537,6 @@ void BlockChain::addBlockCache(Block block, u256 td) const {
 std::pair<Block, u256> BlockChain::getBlockCache(h256 const& hash) const {
 	DEV_READ_GUARDED(x_blockcache)
 	{
-
 		auto it = m_blockCache.find(hash);
 		if (it == m_blockCache.end()) {
 			return std::make_pair(Block(0), 0);
@@ -846,7 +857,7 @@ void BlockChain::checkBlockValid(h256 const& _hash, bytes const& _block, Block &
 		}
 	}
 	if (miner_list != block.info.nodeList()) {
-		LOG(WARNING) << "miner list error, " << _hash;
+		LOG(ERROR) << "miner list error, " << _hash;
 		ostringstream oss;
 		for (size_t i = 0; i < miner_list.size(); ++i) {
 			oss << miner_list[i] << ",";
@@ -1265,6 +1276,8 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		
 		//this->updateSystemContract(goodTransactions);
 		this->updateSystemContract(tempBlock);
+		LOG(TRACE) << "BlockChain setBlockInfo";
+		UTXOModel::UTXOSharedData::getInstance()->setPreBlockInfo(tempBlock, lastHashes());
 		CallbackWorker::getInstance().addBlock(tempBlock);
 	}
 

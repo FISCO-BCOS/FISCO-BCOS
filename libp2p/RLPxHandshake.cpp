@@ -17,6 +17,8 @@
 /** @file RLPXHandshake.cpp
  * @author Alex Leverington <nessence@gmail.com>
  * @date 2015
+* @author toxotguo
+ * @date 2018
  */
 
 #include "Host.h"
@@ -58,7 +60,7 @@ void RLPXHandshake::writeAuth()
 		transition(ec);
 	};
 
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_write(m_socket->sslref(), ba::buffer(m_authCipher), asyncWrite);
 	}
@@ -85,7 +87,7 @@ void RLPXHandshake::writeAck()
 		transition(ec);
 	};
 
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_write(m_socket->sslref(), ba::buffer(m_ackCipher), asyncWrite);
 	}
@@ -118,7 +120,7 @@ void RLPXHandshake::writeAckEIP8()
 	{
 		transition(ec);
 	};
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_write(m_socket->sslref(), ba::buffer(m_ackCipher), asyncWrite);
 	}
@@ -160,7 +162,7 @@ void RLPXHandshake::readAuth()
 			readAuthEIP8();
 	};
 
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_read(m_socket->sslref(), ba::buffer(m_authCipher, 307), asyncRead);
 	}
@@ -203,7 +205,7 @@ void RLPXHandshake::readAuthEIP8()
 		}
 	};
 
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_read(m_socket->sslref(), rest, asyncRead);
 	}
@@ -233,7 +235,7 @@ void RLPXHandshake::readAck()
 			readAckEIP8();
 	};
 
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_read(m_socket->sslref(), ba::buffer(m_ackCipher, 210), asyncRead);
 	}
@@ -271,7 +273,7 @@ void RLPXHandshake::readAckEIP8()
 			transition();
 		}
 	};
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_read(m_socket->sslref(), rest, asyncRead);
 	}
@@ -303,7 +305,7 @@ void RLPXHandshake::writeCASeed()
 
 	};
 
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_write(m_socket->sslref(), ba::buffer(bytesSeed), asyncWrite);
 	}
@@ -323,7 +325,7 @@ void RLPXHandshake::readCASeed()
 		transition(ec);
 	};
 
-	if (m_socket->getSocketType() == SSL_SOCKET)
+	if (m_socket->getSocketType() == SSL_SOCKET_V1)
 	{
 		ba::async_read(m_socket->sslref(), ba::buffer(m_readBaseData.getSeed()), asyncRead);
 	}
@@ -437,7 +439,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 		{
 			transition(ec);
 		};
-		if (m_socket->getSocketType() == SSL_SOCKET)
+		if (m_socket->getSocketType() == SSL_SOCKET_V1)
 		{
 			ba::async_write(m_socket->sslref(), ba::buffer(m_handshakeOutBuffer), asyncWrite);
 		}
@@ -546,7 +548,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 						}
 					}
 				};
-				if (m_socket->getSocketType() == SSL_SOCKET)
+				if (m_socket->getSocketType() == SSL_SOCKET_V1)
 				{
 					ba::async_read(m_socket->sslref(), boost::asio::buffer(m_handshakeInBuffer, m_handshakeInBuffer.size()), _asyncRead);
 				}
@@ -557,7 +559,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 			}
 		};
 
-		if (m_socket->getSocketType() == SSL_SOCKET)
+		if (m_socket->getSocketType() == SSL_SOCKET_V1)
 		{
 			ba::async_read(m_socket->sslref(), boost::asio::buffer(m_handshakeInBuffer, handshakeSize), asyncRead);
 		}

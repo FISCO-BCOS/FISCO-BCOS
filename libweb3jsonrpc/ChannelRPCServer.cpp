@@ -1,18 +1,18 @@
 /*
-	This file is part of cpp-ethereum.
+	This file is part of FISCO-BCOS.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
+	FISCO-BCOS is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
+	FISCO-BCOS is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+	along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: ChannelRPCServer.cpp
@@ -54,21 +54,18 @@ bool ChannelRPCServer::StartListening() {
 		LOG(INFO) << "启动ChannelRPCServer: " << _listenAddr << ":" << _listenPort;
 
 		_ioService = std::make_shared<boost::asio::io_service>();
-		std::shared_ptr<boost::asio::ssl::context> sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
-
-		sslContext->load_verify_file(getDataDir() + "ca.crt");
-		sslContext->use_certificate_chain_file(getDataDir() + "server.crt");
-		sslContext->use_private_key_file(getDataDir() + "server.key", boost::asio::ssl::context_base::pem);
-
-		_server = make_shared<dev::channel::ChannelServer>();
-		_server->setIOService(_ioService);
-		_server->setSSLContext(sslContext);
-
-		_server->setEnableSSL(true);
-		_server->setBind(_listenAddr, _listenPort);
-
-		std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
-		_server->setConnectionHandler(fp);
+		
+		if (dev::getSSL() == SSL_SOCKET_V2)
+		{
+#if ETH_ENCRYPTTYPE
+			initContext();
+#else
+			initSSLContext();
+#endif
+		}
+		else{
+			initContext();
+		}
 
 		_server->run();
 
@@ -80,11 +77,16 @@ bool ChannelRPCServer::StartListening() {
 
 			while (_running) {
 				sleep(1);
+				if(_running) {
 				try {
+						auto host = _host.lock();
+						if(host) {
 					_host.lock()->sendTopicsMessage(p2p::NodeID(), 0, _host.lock()->getTopicsSeq(), std::make_shared<std::set<std::string> >());
 				}
+					}
 				catch (std::exception &e) {
-					LOG(ERROR) << "发送topics错误:" << e.what();
+						LOG(ERROR) << "发送topics错误:" << e.what();
+					}
 				}
 			}
 		});
@@ -94,6 +96,70 @@ bool ChannelRPCServer::StartListening() {
 	}
 
 	return true;
+}
+
+void ChannelRPCServer::initContext()
+{
+	string certData = asString( contents( getDataDir() + "/ca.crt") );
+	if (certData == "")
+	{
+		LOG(ERROR)<<"Get ca.crt File Err......................";
+		exit(-1);
+	}
+	certData = asString( contents( getDataDir() + "/server.crt") );
+	if (certData == "")
+	{
+		LOG(ERROR)<<"Get server.crt File Err......................";
+		exit(-1);
+	}
+	certData = asString( contents( getDataDir() + "/server.key") );
+	if (certData == "")
+	{
+		LOG(ERROR)<<"Get server.key File Err......................";
+		exit(-1);
+	}
+	_sslContext->load_verify_file(getDataDir() + "ca.crt");
+	_sslContext->use_certificate_chain_file(getDataDir() + "server.crt");
+	_sslContext->use_private_key_file(getDataDir() + "server.key", boost::asio::ssl::context_base::pem);
+
+	_server = make_shared<dev::channel::ChannelServer>();
+	_server->setIOService(_ioService);
+	_server->setSSLContext(_sslContext);
+
+	_server->setEnableSSL(true);
+	_server->setBind(_listenAddr, _listenPort);
+
+	std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
+	_server->setConnectionHandler(fp);
+}
+void ChannelRPCServer::initSSLContext()
+{
+	vector< pair<string,Public> >  certificates;
+	string nodepri;
+	CertificateServer::GetInstance().getCertificateList(certificates,nodepri);
+
+	EC_KEY * ecdh=EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+	SSL_CTX_set_tmp_ecdh(_sslContext->native_handle(),ecdh);
+	EC_KEY_free(ecdh);
+
+	_sslContext->set_verify_depth(3);
+	_sslContext->add_certificate_authority(boost::asio::const_buffer(certificates[0].first.c_str(), certificates[0].first.size()));
+	
+	string chain=certificates[0].first+certificates[1].first;
+	_sslContext->use_certificate_chain(boost::asio::const_buffer(chain.c_str(), chain.size()));
+	_sslContext->use_certificate(boost::asio::const_buffer(certificates[2].first.c_str(), certificates[2].first.size()),ba::ssl::context::file_format::pem);
+	
+	_sslContext->use_private_key(boost::asio::const_buffer(nodepri.c_str(), nodepri.size()),ba::ssl::context_base::pem);
+	
+	_server = make_shared<dev::channel::ChannelServer>();
+	_server->setIOService(_ioService);
+	_server->setSSLContext(_sslContext);
+
+	_server->setEnableSSL(true);
+	_server->setBind(_listenAddr, _listenPort);
+
+	std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
+	_server->setConnectionHandler(fp);
 }
 
 bool ChannelRPCServer::StopListening()
@@ -156,10 +222,10 @@ void ChannelRPCServer::onConnect(dev::channel::ChannelException e, dev::channel:
 		_sessions.insert(std::make_pair(sessionID, session));
 		}
 
-		std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> fp =
+		std::function<void(dev::channel::ChannelSession::Ptr, dev::channel::ChannelException, dev::channel::Message::Ptr)> fp =
 		    std::bind(&dev::ChannelRPCServer::onClientRequest,
-		              shared_from_this(), session, std::placeholders::_1,
-		              std::placeholders::_2);
+		              this, std::placeholders::_1,
+		              std::placeholders::_2, std::placeholders::_3);
 		session->setMessageHandler(fp);
 
 		session->run();
@@ -174,13 +240,33 @@ void ChannelRPCServer::onDisconnect(dev::channel::ChannelException e, dev::chann
 	LOG(ERROR) << "移除该session: " << session->host() << ":" << session->port() << " 成功";
 
 	{
-		std::lock_guard<std::mutex> lock(_sessionMutex);
+		std::lock_guard<std::mutex> lockSession(_sessionMutex);
+		std::lock_guard<std::mutex> lockSeqMutex(_seqMutex);
+		std::lock_guard<std::mutex> lockSeqMessageMutex(_seqMessageMutex);
+
 	for (auto it : _sessions) {
 		if (it.second == session) {
-			_sessions.erase(it.first);
+				auto c = _sessions.erase(it.first);
+				LOG(DEBUG) << "已移除sessions: " << c;
 			break;
+			}
 		}
-	}
+
+		for(auto it: _seq2session) {
+			if (it.second == session) {
+				auto c = _seq2session.erase(it.first);
+				LOG(DEBUG) << "已移除seq2session: " << c;
+				break;
+			}
+		}
+
+		for(auto it: _seq2MessageSession) {
+			if(it.second.fromSession == session || it.second.toSession == session) {
+				auto c = _seq2MessageSession.erase(it.first);
+				LOG(DEBUG) << "已移除seq2MessageSession: " << c;
+				break;
+			}
+		}
 	}
 
 	updateHostTopics();
@@ -275,6 +361,8 @@ void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr se
 
 void dev::ChannelRPCServer::onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
 	LOG(DEBUG) << "收到来自前置的区块链请求";
+
+	
 
 	std::string body(message->data(), message->data() + message->dataSize());
 
@@ -473,6 +561,7 @@ void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::Message::Pt
 	}
 
 	if (!sended) {
+
 			LOG(DEBUG) << "无seq，PUSH消息";
 
 			std::lock_guard<std::mutex> lock(_sessionMutex);
@@ -638,6 +727,10 @@ dev::eth::Web3Observer::Ptr ChannelRPCServer::buildObserver() {
 
 void ChannelRPCServer::setHost(std::weak_ptr<dev::eth::EthereumHost> host) {
 	_host = host;
+}
+
+void ChannelRPCServer::setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext) {
+	_sslContext = sslContext;
 }
 
 void ChannelRPCServer::asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,

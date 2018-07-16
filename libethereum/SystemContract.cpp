@@ -1,24 +1,23 @@
 /*
-	This file is part of cpp-ethereum.
+	This file is part of FISCO-BCOS.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
+	FISCO-BCOS is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
+	FISCO-BCOS is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+	along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: SystemContract.cpp
- * @author: fisco-dev
- * 
- * @date: 2017
+ * @author: toxotguo
+ * @date: 2018
  */
 
 #include <libdevcore/CommonJS.h>
@@ -145,7 +144,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
         else if ((it->to() == contractAbiMgr) && (dev::ZeroAddress != contractAbiMgr) && (cohash1 == funhash || funhash == cohash2))
         {
             coChange = true;
-            LOG(TRACE) << "SystemContract::updateSystemContract ContractAbiMgr addAbi ! hash=" << funhash << ", to=" << it->to() << ",sha3=" << toString(it->sha3());
+            //LOG(TRACE) << "SystemContract::updateSystemContract ContractAbiMgr addAbi ! hash=" << funhash << ", to=" << it->to() << ",sha3=" << toString(it->sha3());
         }
 
     }//for
@@ -629,8 +628,11 @@ h256 SystemContract::filterCheckTransCacheKey(const Transaction & _t) const
 }
 
 u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
-
-    LOG(TRACE) << "SystemContract::transactionFilterCheck sender:" << transaction.safeSender();
+    if ((int)transaction.getUTXOType() != UTXOType::InValid)
+    {
+        LOG(TRACE) << "SystemContract::transactionFilterCheck UTXO";
+        return (u256)SystemContractCode::Ok;
+    }
 
     if ( isGod(transaction.safeSender()))
     {
@@ -638,6 +640,8 @@ u256 SystemContract::transactionFilterCheck(const Transaction & transaction) {
         return (u256)SystemContractCode::Ok;
     }
 
+    LOG(TRACE) << "SystemContract::transactionFilterCheck sender:" << transaction.safeSender();
+    
     m_transcount++;
 
 
@@ -731,19 +735,6 @@ void SystemContract::updateCache(Address ) {
 
  
 }
-
-void SystemContract::startStatTranscation(h256 t) {
-    if ( m_stattransation.end() == m_stattransation.find(t) )
-    {
-        m_stattransation[t] = make_pair(utcTime(), 0);
-    }
-    else
-    {
-        m_stattransation[t].first = utcTime();
-    }
-
-}
-
 
 bool SystemContract::isAdmin(const Address &)
 {

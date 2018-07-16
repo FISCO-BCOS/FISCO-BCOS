@@ -28,19 +28,18 @@
 
 namespace dev
 {
-void setCryptoMod(int _datacryptoMod);//加密模式全局变量
+
+#define BASE_SOCKET 0
+#define SSL_SOCKET_V1 1
+#define SSL_SOCKET_V2 2
+
+void setCryptoMod(int _datacryptoMod);//鍔犲瘑妯″紡鍏ㄥ眬鍙橀噺
 int getCryptoMod();
 
-void setCryptoPrivateKeyMod(int cryptoprivatekeyMod);
-int getCryptoPrivateKeyMod();
-
-void setPrivateKey(std::string const& privateKey);//证书私钥明文数据
-std::string	getPrivateKey();
-
-void setSSL(int ssl);//是否使用SSL证书进行数据传输
+void setSSL(int ssl);//鏄惁浣跨敤SSL璇佷功杩涜鏁版嵁浼犺緭
 int getSSL();
 
-std::map<int,std::string> getDataKey();//datakey数据
+std::map<int,std::string> getDataKey();//datakey鏁版嵁
 void setDataKey(std::string const& _dataKey1,std::string const& _dataKey2,std::string const& _dataKey3,std::string const& _dataKey4);
 /// Sets the data dir for the default ("ethereum") prefix.
 void setDataDir(std::string const& _dir);
