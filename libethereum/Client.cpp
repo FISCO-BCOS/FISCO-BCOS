@@ -17,26 +17,30 @@
 /** @file Client.cpp
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
+ * @author: toxotguo
+ * @date: 2018
  */
 
-#include "Client.h"
+#include <boost/filesystem.hpp>
 #include <chrono>
 #include <memory>
 #include <thread>
-#include <boost/filesystem.hpp>
-#include <libdevcore/easylog.h>
-#include <libp2p/Host.h>
+
 #include <abi/ContractAbiMgr.h>
 #include <libdevcore/easylog.h>
+#include <libp2p/Host.h>
+#include <UTXO/UTXOSharedData.h>
+
+#include "Block.h"
+#include "Client.h"
 #include "Defaults.h"
 #include "Executive.h"
 #include "EthereumHost.h"
-#include "Utility.h"
-#include "Block.h"
 #include "NodeConnParamsManager.h"
-#include "TransactionQueue.h"
 #include "SystemContractApi.h"
 #include "SystemContractApiFactory.h"
+#include "TransactionQueue.h"
+#include "Utility.h"
 
 using namespace std;
 using namespace dev;
@@ -55,7 +59,7 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, ActivityReport const& _r)
 Client::Client(
     ChainParams const& _params,
     int _networkID,
-    p2p::Host* _host,
+    p2p::HostApi* _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -79,6 +83,10 @@ Client::Client(
 
 	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
 
+	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir());
+	LOG(INFO) << "UTXOSharedData->initialize() End";
+
+	//创建系统合约api
 	m_systemcontractapi = SystemContractApiFactory::create(_params.sysytemProxyAddress, _params.god, this);
 
     libabi::ContractAbiMgr::getInstance()->setSystemContract();
@@ -91,8 +99,8 @@ Client::Client(
 			exit(-1);
 		}
 	}
-	NodeConnManagerSingleton::GetInstance().setChainParams(_params);
-	NodeConnManagerSingleton::GetInstance().setInitIdentityNodes(_params);
+	
+	NodeConnManagerSingleton::GetInstance().setInitInfo(_params);
 	NodeConnManagerSingleton::GetInstance().SetHost(_host);
 
 	updateConfig();
@@ -130,6 +138,11 @@ void Client::updateConfig() {
 	if ( uvalue < 2000000000 )
 		uvalue = 2000000000;
 	BlockHeader::maxBlockHeadGas = uvalue;
+
+	value = "";
+	m_systemcontractapi->getValue("updateHeight", value);
+	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
+	BlockHeader::updateHeight = uvalue;
 
 	value = "";
 	m_systemcontractapi->getValue("maxTranscationGas", value);
@@ -198,16 +211,13 @@ void Client::updateCache(Address address) {
 	m_systemcontractapi->updateCache(address);
 }
 
-void Client::startStatTranscation(h256 t) {
-	m_systemcontractapi->startStatTranscation(t);
-}
 
 Client::~Client()
 {
 	stopWorking();
 }
 
-void Client::init(p2p::Host* _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
+void Client::init(p2p::HostApi* _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
 {
 	DEV_TIMED_FUNCTION_ABOVE(500);
 
@@ -1024,4 +1034,10 @@ int Client::getResultInt(ExecutionResult& result, int& value)
 Address Client::findContract(const string& contract)
 {
 	return m_systemcontractapi->getRoute(contract);
+}
+
+UTXOModel::UTXOMgr* Client::getUTXOMgr() 
+{
+	LOG(TRACE) << "Client::getUTXOMgr()";
+	return &m_utxoMgr; 
 }

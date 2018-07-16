@@ -76,6 +76,7 @@ ChainParams ChainParams::loadGodMiner(std::string const& _json) const
 			nodeConnParam._iIdx = u256(node.get_obj()["Idx"].get_int());
 
 			cp.godMinerList[nodeConnParam._sNodeId] = nodeConnParam;
+			cp.godMinerListSSL[nodeConnParam._sNodeId] = nodeConnParam;
 		}
 	}
 
@@ -94,7 +95,7 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	cp.listenIp = obj.count("listenip") ? obj["listenip"].get_str() : "0.0.0.0";
 	cp.cryptoMod = obj.count("cryptomod") ? std::stoi(obj["cryptomod"].get_str()) : 0;
 	cp.cryptoprivatekeyMod = obj.count("cryptoprivatekeymod") ? std::stoi(obj["cryptoprivatekeymod"].get_str()):0;
-	cp.ssl = obj.count("ssl") ? std::stoi(obj["ssl"].get_str()):0;
+	cp.ssl = obj.count("ssl") ? std::stoi(obj["ssl"].get_str()):2;
 	cp.rpcPort = obj.count("rpcport") ? std::stoi(obj["rpcport"].get_str()) : 6789;
 	cp.rpcSSLPort = obj.count("rpcsslport") ? std::stoi(obj["rpcsslport"].get_str()) : 6790;
 	cp.channelPort = obj.count("channelPort") ? std::stoi(obj["channelPort"].get_str()) : 0;
@@ -104,7 +105,7 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	cp.dataDir = obj.count("datadir") ? obj["datadir"].get_str() : "/tmp/ethereum/data/";
 	cp.logFileConf = obj.count("logconf") ? obj["logconf"].get_str() : "/tmp/ethereum/data/";
 	cp.rateLimitConfig = obj.count("limitconf") ? obj["limitconf"].get_str() : "";
-	cp.statsInterval = obj.count("statsInterval") ? std::stoi(obj["statsInterval"].get_str()) : 0;
+	cp.statsInterval = obj.count("statsInterval") ? std::stoi(obj["statsInterval"].get_str()) : 10;
 	
 	cp.vmKind = obj.count("vm") ? obj["vm"].get_str() : "interpreter";
 	cp.networkId = obj.count("networkid") ? std::stoi(obj["networkid"].get_str()) : (unsigned) - 1;
@@ -118,15 +119,26 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	cp.statLog = obj.count("statlog") ? ( (obj["statlog"].get_str() == "ON") ? true : false) : false;
 	cp.broadcastToNormalNode = obj.count("broadcastToNormalNode") ? ( (obj["broadcastToNormalNode"].get_str() == "ON") ? true : false) : false;
 	// params
-	js::mObject params = obj["params"].get_obj();
-	cp.accountStartNonce = u256(fromBigEndian<u256>(fromHex(params["accountStartNonce"].get_str())));
-	cp.maximumExtraDataSize = u256(fromBigEndian<u256>(fromHex(params["maximumExtraDataSize"].get_str())));
-	cp.tieBreakingGas = params.count("tieBreakingGas") ? params["tieBreakingGas"].get_bool() : true;
-	cp.blockReward = u256(fromBigEndian<u256>(fromHex(params["blockReward"].get_str())));
-	for (auto i : params)
-		if (i.first != "accountStartNonce" && i.first != "maximumExtraDataSize" && i.first != "blockReward" && i.first != "tieBreakingGas")
-			cp.otherParams[i.first] = i.second.get_str();
+	if( obj.count("params") )
+	{
+		js::mObject params = obj["params"].get_obj();
+		cp.accountStartNonce = u256(fromBigEndian<u256>(fromHex(params["accountStartNonce"].get_str())));
+		cp.maximumExtraDataSize = u256(fromBigEndian<u256>(fromHex(params["maximumExtraDataSize"].get_str())));
+		cp.tieBreakingGas = params.count("tieBreakingGas") ? params["tieBreakingGas"].get_bool() : true;
+		cp.blockReward = u256(fromBigEndian<u256>(fromHex(params["blockReward"].get_str())));
+		for (auto i : params)
+			if (i.first != "accountStartNonce" && i.first != "maximumExtraDataSize" && i.first != "blockReward" && i.first != "tieBreakingGas")
+				cp.otherParams[i.first] = i.second.get_str();
+	}
 	
+	/*
+	// genesis
+	string genesisStr = json_spirit::write_string(obj["genesis"], false);
+	cp = cp.loadGenesis(genesisStr, _stateRoot);
+	// genesis state
+	string genesisStateStr = json_spirit::write_string(obj["accounts"], false);
+	cp = cp.loadGenesisState(genesisStateStr, _stateRoot);
+	*/
 	return cp;
 }
 
@@ -181,7 +193,7 @@ ChainParams ChainParams::loadGenesis(string const& _json, h256 const& _stateRoot
 	}
 
 	cp.stateRoot = _stateRoot ? _stateRoot : cp.calculateStateRoot();
-	cout << "loadGenesis: stateRoot=" << cp.stateRoot;
+	//cout << "loadGenesis: stateRoot=" << cp.stateRoot;
 	return cp;
 }
 
@@ -212,9 +224,14 @@ void ChainParams::populateFromGenesis(bytes const& _genesisRLP, AccountMap const
 	extraData = bi.extraData();
 	genesisState = _state;
 	RLP r(_genesisRLP);
-	sealFields = r[0].itemCount() - BlockHeader::BasicFields;
+	unsigned basicFieldsCnt = BlockHeader::BasicFields;
+	if (bi.IsBlockAfterUpdate())
+	{
+		basicFieldsCnt = BlockHeader::BasicFieldsUpdate;
+	}
+	sealFields = r[0].itemCount() - basicFieldsCnt;
 	sealRLP.clear();
-	for (unsigned i = BlockHeader::BasicFields; i < r[0].itemCount(); ++i)
+	for (unsigned i = basicFieldsCnt; i < r[0].itemCount(); ++i)
 		sealRLP += r[0][i].data();
 
 	calculateStateRoot(true);

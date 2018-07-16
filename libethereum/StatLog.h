@@ -278,16 +278,16 @@ private:
                 {
                     context->changeToFinalState();
                     err = true; 
-                    context->request("error!", &err);  
+                    context->request("over capacity", &err);  
                     m_map.erase(it);
                 }
             }
             m_list.pop_front();
         }
         auto it = m_map.find(hash);
-        auto& context = it->second;
         if (it != m_map.end())
         {
+        	auto& context = it->second;
             if (context->isFinalState()) 
             {
                 err = false; 
@@ -323,7 +323,7 @@ public:
 };
 
 using DefaultPBFTStatLog = StatLogContainer<PBFTStatLog, 5>;
-using DefaultTxtatLog = StatLogContainer<TxStatLog, 1000>;
+using DefaultTxtatLog = StatLogContainer<TxStatLog, 1024>;  // same to transaction queue cap
 // todo for test
 // using DefaultTxtatLog = StatLogContainer<TxStatLog, 20>;
 

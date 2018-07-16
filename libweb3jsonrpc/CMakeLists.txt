@@ -63,27 +63,17 @@ jsonrpcstub_create(web3jsonrpc test.json
 
 find_package(Web3)
 
-include_directories(../libodbc/include
-					../libodbc/include/db2_linux
-					../libodbc/include/ibase
-					../libodbc/include/infomix
-					../libodbc/include/mysql
-					../libodbc/include/odbc_linux
-					../libodbc/include/pgsql
-					../libodbc/include/sqlbase
-					../libodbc/include/sqllite
-					../libodbc/include/ss_linux
-					../libodbc/include/sybase)
 
 target_include_directories(web3jsonrpc PRIVATE ..)
+
 target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
                                   ${Web3_WHISPER_LIBRARIES}
                                   JsonRpcCpp::Server
 				                  statistics
                                   contract
                                   curl
-                                  ssl
-                                  crypto
+                                  ${OPENSSL_SSL_LIBRARIE}
+                                  ${OPENSSL_CRYPTO_LIBRARIE}
                                   krb5
                                   uuid
                                   z

@@ -1073,7 +1073,11 @@ void VM::interpretCases()
 			++m_pc;
 		CASE_END
 
-		CASE_BEGIN(MSIZE)
+	#ifdef __APPLE__
+	    CASE_BEGIN(MSIZE1)
+	#else
+	    CASE_BEGIN(MSIZE)
+	#endif		
 			ON_OP();
 			updateIOGas();
 

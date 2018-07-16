@@ -446,7 +446,7 @@ bool BlockChainSync::requestBlocks(std::shared_ptr<EthereumPeer> _peer)
 			m_lastImportedBlock = start;
 			m_lastImportedBlockHash = host().chain().numberHash(start);
 
-			if (start <= 0){
+			if (start == 0){
 				m_haveCommonHeader = ( true); //reached genesis
 				return requestBlocks(_peer);
 			}

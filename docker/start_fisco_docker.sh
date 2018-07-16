@@ -1,30 +1,46 @@
 #! /bin/sh
 set -e
-log_dir="/log-fisco-bcos"
-mkdir -p $log_dir
-mkdir -p $log_dir/node0
-mkdir -p $log_dir/node1
+docker pull docker.io/fiscoorg/fiscobcos:latest
 
-rpcport1=35500
-rpcport2=35501
-p2pport1=53300
-p2pport2=53301
-channelPort1=54300
-channelPort2=54301
-local_ip="0.0.0.0"
+chmod +x `pwd`/node0/start.sh
+chmod +x `pwd`/node1/start.sh
 
-echo -e "--------------Nodes info in docker--------------"
-echo -e "Nodes info:"
-echo -e "  node name \tIP\t\trpcport\t\tp2pport\t\tchannelPort\tlog dir"
-echo -e "  node0\t\t"$local_ip"\t\t"$rpcport1"\t\t"$p2pport1"\t\t"$channelPort1"\t\t"$log_dir/node0
-echo -e "  node1\t\t"$local_ip"\t\t"$rpcport2"\t\t"$p2pport2"\t\t"$channelPort2"\t\t"$log_dir/node1
-echo -e "To check whether the nodes are started:"
+rpcport1=8301
+rpcport2=8302
+p2pport1=30901
+p2pport2=30902
+channelPort1=40001
+channelPort2=40002
+local_ip=`ifconfig | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p' | awk 'END{print}' `
+local_dir=`pwd`
+
+if [ "" = "`grep 0.0.0.0 -rl $local_dir/node1/data/bootstrapnodes.json`" ];
+then
+    echo "Please Confirm Host Is Right Which In $local_dir/node1/data/bootstrapnodes.json !"
+else
+    sed -i "s/0.0.0.0/$local_ip/g" `grep 0.0.0.0 -rl $local_dir/node1/data/bootstrapnodes.json `
+fi
+
+echo -e "--------------FISCO-BCOS Docker Node Info--------------"
+echo -e "Local Ip:"$local_ip
+echo -e "Local Dir:"$local_dir
+echo -e "Info："
+echo -e "  Name \tIP\t\trpcport\t\tp2pport\t\tchannelPort\tLogDir"
+echo -e "  node0\t\t"$local_ip"\t\t"$rpcport1"\t\t"$p2pport1"\t\t"$channelPort1"\t\t"$local_dir/node0/log/
+echo -e "  node1\t\t"$local_ip"\t\t"$rpcport2"\t\t"$p2pport2"\t\t"$channelPort2"\t\t"$local_dir/node1/log/
+
+echo -e "try to start docker node0..."
+
+docker run  -v `pwd`/node0:/fisco-bcos/node -p 8301:8301 -p 30901:30901 -p 40001:40001 -i docker.io/fiscoorg/fiscobcos:latest /fisco-bcos/start_node.sh &
+sleep 10
+echo -e "try to start docker node1..."
+docker run  -v `pwd`/node1:/fisco-bcos/node -p 8302:8302 -p 30902:30902 -p 40002:40002 -i docker.io/fiscoorg/fiscobcos:latest /fisco-bcos/start_node.sh &
+sleep 5
+
+echo -e "Check Node Is Running："
 echo -e "	# ps -ef |grep fisco-bcos"
-echo -e "To check whether the nodes are connected each other:"
-echo -e "	# cat "$log_dir"/node0/* | grep peers"
-echo -e "To check whether the nodes can seal: "
-echo -e "	# tail -f "$log_dir"/node0/* | grep ++++"
+echo -e "Check Node Has Connect Other Node："
+echo -e "	# tail -f `pwd`/node1/log/* | grep topics"
+echo -e "Check Node Is Working： "
+echo -e "	# tail -f `pwd`/node0/log/* | grep ++++"
 echo -e ""
-echo -e "Trying to start nodes in docker..."
-docker run -v $log_dir:/bcos-data/log -p 35500:35500 -p 35501:35501 -p 53300:53300 -p 53301:53301 -p 54300:54300 -p 54301:54301 -i docker.io/fiscoorg/fiscobcos:latest /bcos-data/start_node.sh &
-

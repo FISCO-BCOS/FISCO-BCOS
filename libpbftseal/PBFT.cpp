@@ -37,7 +37,7 @@
 using namespace std;
 using namespace dev;
 using namespace eth;
-
+const unsigned PBFT::kCollectInterval = 60;
 void PBFT::init()
 {
 	ETH_REGISTER_SEAL_ENGINE(PBFT);
@@ -118,14 +118,14 @@ void PBFT::initBackupDB() {
 
 void PBFT::resetConfig() {
 	if (!NodeConnManagerSingleton::GetInstance().getAccountType(m_key_pair.pub(), m_account_type)) {
-		LOG(ERROR) << "resetConfig: can't find myself id, stop sealing";
+		LOG(ERROR) << "resetConfig Fail: can't find myself id, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
 
 	auto node_num = NodeConnManagerSingleton::GetInstance().getMinerNum();
 	if (node_num == 0) {
-		LOG(ERROR) << "resetConfig: miner_num = 0, stop sealing";
+		LOG(ERROR) << "resetConfig Fail: miner_num = 0, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
@@ -133,11 +133,10 @@ void PBFT::resetConfig() {
 	u256 node_idx;
 	if (!NodeConnManagerSingleton::GetInstance().getIdx(m_key_pair.pub(), node_idx)) {
 		//BOOST_THROW_EXCEPTION(PbftInitFailed() << errinfo_comment("NodeID not in cfg"));
-		LOG(ERROR) << "resetConfig: can't find myself id, stop sealing";
+		LOG(INFO) << "resetConfig Fail: can't find myself id, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
-
 	if (node_num != m_node_num || node_idx != m_node_idx) {
 		m_node_num = node_num;
 		m_node_idx = node_idx;
@@ -151,17 +150,17 @@ void PBFT::resetConfig() {
 		m_commitMap.clear();
 
 		if (!getMinerList(-1, m_miner_list)) {
-			LOG(ERROR) << "resetConfig: getMinerList return false";
+			LOG(ERROR) << "resetConfig Fail: getMinerList return false";
 			m_cfg_err = true;
 			return;
 		}
 
 		if (m_miner_list.size() != m_node_num) {
-			LOG(ERROR) << "resetConfig: m_miner_list.size=" << m_miner_list.size() << ",m_node_num=" << m_node_num;
+			LOG(ERROR) << "resetConfig Fail: m_miner_list.size=" << m_miner_list.size() << ",m_node_num=" << m_node_num;
 			m_cfg_err = true;
 			return;
 		}
-		LOG(INFO) << "resetConfig: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
+		LOG(INFO) << "resetConfig Sucess: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
 	}
 	// consensuscontrol init cache
 	ConsensusControl::instance().resetNodeCache();
@@ -559,7 +558,6 @@ bool PBFT::broadcastSignReq(PrepareReq const & _req) {
 	sign_req.block_hash = _req.block_hash;
 	sign_req.sig = signHash(sign_req.block_hash);
 	sign_req.sig2 = signHash(sign_req.fieldsWithoutBlock());
-
 	RLPStream ts;
 	sign_req.streamRLPFields(ts);
 	if (broadcastMsg(sign_req.sig.hex(), SignReqPacket, ts.out())) {
@@ -619,7 +617,7 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 			{
 				unsigned account_type = 0;
 				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
-					LOG(ERROR) << "Cannot get account type for peer" << nodeid;
+					LOG(INFO) << "Cannot get account type for peer" << nodeid;
 					return true;
 				}
 				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
@@ -774,8 +772,6 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		return;
 	}
 
-	addRawPrepare(_req); // must after recvFutureBlock (必须在recvFutureBlock之后)
-
 	auto leader = getLeader();
 	if (!leader.first || _req.idx != leader.second) {
 		LOG(ERROR) << oss.str()  << "Recv an illegal prepare, err leader";
@@ -791,6 +787,12 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		LOG(ERROR) << oss.str()  << "CheckSign failed";
 		return;
 	}
+	// addRawPrepare 需要放在 _req.block_hash != m_committed_prepare_cache.block_hash 之后，因为 addRawPrepare 会重置 prepare 的信息
+	// 若节点已到 commit 阶段，那么在上面就会退出，如果在 sign 阶段，则相当于使用这个新的prepare重新开始sign流程
+	// addRawPrepare shoud put after '_req.block_hash != m_committed_prepare_cache.block_hash', for the reason that the addRawPrepare would reset the prepare cache
+	// if this node is execting to commit phase, then when receive a new prepare package, it would exit at '_req.block_hash != m_committed_prepare_cache.block_hash',
+	// while this node is execting sign phase, it equals to use this new prepare package to restart a new PBFT flow
+	addRawPrepare(_req); // must after recvFutureBlock (必须在recvFutureBlock之后)
 
 	LOG(TRACE) << "start exec tx, blk=" << _req.height << ",hash=" << _req.block_hash << ",idx=" << _req.idx << ", time=" << utcTime();
 	Block outBlock(*m_bc, *m_stateDB);
@@ -1169,6 +1171,10 @@ void PBFT::checkAndChangeView() {
 
 bool PBFT::addRawPrepare(PrepareReq const& _req) {
 	m_raw_prepare_cache = _req;
+	// 若同一个节点因意外出了同一个高度的两个以上的不同块，收到一个新的块的时候就清空自己已有prepare的cache
+	// if a node issue more than one block due to other exception, this node clear the prepare cache which has received before
+	LOG(DEBUG) << "addRawPrepare: current raw_prepare:" << _req.block_hash.abridged() << "| reset prepare cache"; 
+	m_prepare_cache = PrepareReq();
 	return true;
 }
 
@@ -1268,7 +1274,7 @@ void PBFT::collectGarbage() {
 	if (!m_highest_block) return;
 
 	std::chrono::system_clock::time_point now_time = std::chrono::system_clock::now();
-	if (now_time - m_last_collect_time >= std::chrono::seconds(kCollectInterval)) {
+	if (now_time - m_last_collect_time >= std::chrono::seconds(PBFT::kCollectInterval)) {
 		for (auto iter = m_sign_cache.begin(); iter != m_sign_cache.end();) {
 			for (auto iter2 = iter->second.begin(); iter2 != iter->second.end();) {
 				if (iter2->second.height < m_highest_block.number()) {
