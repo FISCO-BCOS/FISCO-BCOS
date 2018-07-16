@@ -30,6 +30,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 | 核心   | 2核     | 4核                                   |
 | 带宽   | 1Mb    | 5Mb                                  |
 | 操作系统 |        | CentOS （7.2  64位）或Ubuntu（16.04  64位） |
+| JAVA     |        | Java(TM) 1.8 && JDK 1.8 |
 
 ### 1.2 部署软件环境
 
@@ -95,7 +96,7 @@ git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git
 cd FISCO-BCOS 
 ```
 
-源码目录说明请参考<u>附录：11.1 源码目录结构说明</u>
+源码目录说明请参考<u>附录：12.1 源码目录结构说明</u>
 
 #### 1.3.2 安装编译依赖
 
@@ -128,13 +129,81 @@ make
 sudo make install
 ```
 
+## 第二章 准备链环境
+FISCO-BCOS网络采用面向CA的准入机制，保障信息保密性、认证性、完整性、不可抵赖性。
+
+一条链拥有一个链证书及对应的链私钥，链私钥由链管理员拥有。并对每个参与该链的机构签发机构证书，机构证书私钥由机构管理员持有，并对机构下属节点签发节点证书。节点证书是节点身份的凭证，并使用该证书与其他节点间建立SSL连接进行加密通讯。
+
+因此，需要生成链证书、机构证书、节点证书。生成方法如下：
+
+### 2.1 生成链证书
+```shell
+cd /mydata/FISCO-BCOS/cert/
+chmod +x *.sh
+./chain.sh  #会提示输入相关证书信息，默认可以直接回车
+```
+/mydata/FISCO-BCOS/cert/ 目录下将生成链证书相关文件。
+
+**注意：ca.key 链私钥文件请妥善保存**
+
+### 2.2 生成机构证书
+假设机构名为WB
+```shell
+cd /mydata/FISCO-BCOS/cert/
+./agency.sh WB #会提示输入相关证书信息，默认可以直接回车
+#如需要生成多个机构，则重复执行 ./agency.sh 机构名称  即可
+```
+/mydata/FISCO-BCOS/cert/ 目录下将生成机构目录WB。WB目录下将有机构证书相关文件。
+
+**注意：agency.key 机构私钥文件请妥善保存**
+
+### 2.3 生成节点证书
+假设为机构WB下的节点nodedata-1生成节点证书，则：
+```shell
+cd /mydata/FISCO-BCOS/cert/
+./node.sh WB nodedata-1 #会提示输入相关证书信息，默认可以直接回车
+#如需要生成多个节点，则重复执行 ./node.sh 机构名称 节点名称 即可
+```
+/mydata/FISCO-BCOS/cert/WB/ 目录下将生成节点目录nodedata-1。nodedata-1目录下将有该节点所属的机构相关证书和链相关证书。
+
+**注意：node.key 机构私钥文件请妥善保存**
+
+### 2.4 生成SDK证书
+```
+shell
+cd /mydata/FISCO-BCOS/cert/
+./sdk.sh WB sdk
+```
+
+/mydata/FISCO-BCOS/cert/WB/ 目录下将生成sdk目录，并将所生成的sdk目录下所有文件拷贝到SDK端的证书目录下。
+
+**注意：sdk.key SDK私钥文件请妥善保存**
+
+### 2.5 证书说明
+/mydata/FISCO-BCOS/cert/WB/nodedata-1目录下文件是节点nodedata-1运行时必备文件。其中：
+
+ca.crt: 链证书
+
+agency.crt: 机构证书
+
+node.crt:节点证书
+
+node.key: 节点私钥
+
+node.nodeid: 节点身份NodeId
+
+node.serial: 节点证书序列号
+
+node.json: 节点注册文件，应用于系统合约
+
+node.ca: 节点证书相关信息，应用于系统合约
 
 
-## 第二章 创建创世节点
+## 第三章 创建创世节点
 
 创世节点是区块链中的第一个节点，搭建区块链，从创建创世节点开始。
 
-### 2.1 创建节点环境
+### 3.1 创建节点环境
 
 > 假定创世节点目录为/mydata/nodedata-1/，创建节点环境如下：
 
@@ -150,11 +219,11 @@ cd /mydata/FISCO-BCOS/
 cp genesis.json config.json log.conf start.sh stop.sh /mydata/nodedata-1/
 ```
 
-### 2.2 配置god账号
+### 3.2 配置god账号
 
 god账号是区块链的最高权限，在启动区块链前必须配置。
 
-#### 2.2.1 生成god账号
+#### 3.2.1 生成god账号
 
 ```shell
 cd /mydata/FISCO-BCOS/web3lib
@@ -171,7 +240,7 @@ cat godInfo.txt |grep address
 address : 0x27214e01c118576dd5f481648f83bb909619a324
 ```
 
-#### 2.2.2 配置god账号
+#### 3.2.2 配置god账号
 
 > 将上述步骤生成的god的address配置入genesis.json的god字段：
 
@@ -185,56 +254,25 @@ vim /mydata/nodedata-1/genesis.json
 "god":"0x27214e01c118576dd5f481648f83bb909619a324",
 ```
 
-### 2.3  配置节点身份NodeId
+### 3.3  配置节点身份
 
 NodeId唯一标识了区块链中的某个节点，在节点启动前必须进行配置。
 
-#### 2.3.1 配置cryptomod.json文件
 
-> 在cryptomod.json文件中配置NodeId生成路径：
+#### 3.3.1 生成节点身份文件
 
-```shell
-vim /mydata/FISCO-BCOS/cryptomod.json
-```
-
-> 通常情况下，只需将rlpcreatepath配置为/mydata/nodedata-1/data/network.rlp即可。配置后的cryptomod.json如下：
-
-```log
-{
-	"cryptomod":"0",
-	"rlpcreatepath":"/mydata/nodedata-1/data/network.rlp",
-	"datakeycreatepath":"",
-	"keycenterurl":"",
-	"superkey":""
-}
-```
-
-cryptomod.json其它字段说明请参看<u>附录：11.2 cryptomod.json说明</u>
-
-#### 2.3.2 生成节点身份文件
-
-> 用上述修改好的cryptomod.json文件生成节点身份文件，生成路径为cryptomod.json中配置的路径。
+使用<u>2.3 节点证书</u> 生成对应节点证书。并将其拷贝到节点数据目录下。
 
 ```shell
-cd /mydata/FISCO-BCOS/ 
-fisco-bcos --gennetworkrlp  cryptomod.json #需要一段时间
-ls /mydata/nodedata-1/data/
+cp /mydata/FISCO-BCOS/cert/WB/nodedata-1/*  /mydata/nodedata-1/data/
 ```
 
-> 可看到节点身份文件（network.rlp和network.rlp.pub）生成到了/mydata/nodedata-1/data/下。
->
-> 其中network.rlp是节点身份的私钥二进制文件。network.rlp.pub是节点身份的NodeId文件。
-
-```shell
-network.rlp  network.rlp.pub
-```
-
-#### 2.3.3 配置创世节点NodeId
+#### 3.3.2 配置创世节点NodeId
 
 （1）查看NodeId
 
 ```shell
-cat /mydata/nodedata-1/data/network.rlp.pub
+cat /mydata/nodedata-1/data/node.nodeid
 ```
 
 > 得到如下类似的NodeId
@@ -256,82 +294,32 @@ vim /mydata/nodedata-1/genesis.json
 ```log
 "initMinerNodes":["2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878"]
 ```
-
-（3）修改config.json
-
-> 将NodeId配置入config.json中的NodeextraInfo的Nodeid字段。
-
+### 3.4  配置连接列表文件
+节点启动时需要发起对网络中其他节点的连接请求，因此需要配置其他节点的连接信息，因为此时网络并无其他节点，因此配置为节点自身即可，可以拷贝默认bootstrapnodes.json文件即可。
+建议此处的IP配置为节点所在的真实IP。
 ```shell
-vim /mydata/nodedata-1/config.json
+cp /mydata/FISCO-BCOS/bootstrapnodes.json /mydata/nodedata-1/data
 ```
 
-> 修改后，config.json中的NodeextraInfo字段如下：
-
+格式如下：
 ```log
-"NodeextraInfo":[
-	{
-		"Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
-		"Nodedesc": "node1",
-		"Agencyinfo": "node1",
-		"Peerip": "0.0.0.0",
-		"Identitytype": 1,
-		"Port":30303,
-		"Idx":0
-	}
-]
+{"nodes":[{"host":"127.0.0.1","p2pport":"30303"}]}
+
 ```
+其中host为节点IP或者域名，p2pport为节点p2p端口。
 
-### 2.4 配置证书
 
-区块链节点间的通信需要证书的认证。在节点运行前，需要为节点配置证书。证书包括：
+### 3.5 配置相关配置文件
 
-- ca.crt：根证书公钥，整条区块链共用。
-- ca.key：根证书私钥，私钥应保密，仅在生成节点证书公私钥时使用。
-- server.crt：节点证书的公钥。
-- server.key：节点证书的私钥，私钥应保密。
-
-#### 2.4.1 生成根证书
-
-> 将公私钥生成脚本拷贝到data目录，并执行命令生成根证书公私钥ca.key，ca.crt。
-
-```shell
-cp /mydata/FISCO-BCOS/genkey.sh /mydata/nodedata-1/data/ 
-cd /mydata/nodedata-1/data/
-chmod +x genkey.sh
-./genkey.sh ca 365 #生成ca根证书有效期为365天
-```
-
-> 在data目录下生成了证书公私钥ca.key，ca.crt。ca.key应保密，并妥善保存，以便后续生成更多节点的公私钥。
-
-#### 2.4.2 生成节点证书
-
-> 用生成的根证书公私钥ca.crt和ca.key，生成节点自己的证书。
-
-```shell
-./genkey.sh server ./ca.key ./ca.crt 365 #注意key和crt前后顺序不能错；此步骤需按照提示输入一些信息；生成server证书有效期为365天
-```
-
-> 生成的server.key、server.crt即为节点证书文件
-
-```shell
-ls /mydata/nodedata-1/data/
-```
-
-> 此时目录下应存在有下述文件：
-
-```log
-ca.crt  network.rlp  network.rlp.pub  server.crt  server.key
-```
-
-### 2.5 配置相关配置文件
-
-节点的启动依赖三个配置文件：
+节点的启动依赖以下配置文件：
 
 - 创世块文件：genesis.json
 - 节点配置文件：config.json
 - 日志配置文件：log.conf
+- 连接节点文件：bootstrapnodes.json
+- 节点身份证书文件：<u>2.5 证书说明</u>所列文件
 
-#### 2.5.1 配置genesis.json（创世块文件）
+#### 3.5.1 配置genesis.json（创世块文件）
 
 genesis.json中配置创世块的信息，是节点启动必备的信息。
 
@@ -357,9 +345,9 @@ vim /mydata/nodedata-1/genesis.json
 }
 ```
 
-genesis.json其它字段说明请参看<u>附录：11.3 genesis.json说明</u>
+genesis.json其它字段说明请参看<u>附录：12.3 genesis.json说明</u>
 
-#### 2.5.2 配置config.json（节点配置文件）
+#### 3.5.2 配置config.json（节点配置文件）
 
 config.json中配置节点的各种信息，包括网络地址，文件目录，节点身份等。
 
@@ -369,11 +357,12 @@ vim /mydata/nodedata-1/config.json
 
 > 配置节点的信息，主要修改字段：
 >
-> - 网络连接相关：listenip、rpcport、p2pport、channelPort
-> - 目录相关：wallet、keystoredir、datadir、logconf
-> - 节点身份相关：NodeextraInfo中的Nodeid、Nodedesc、Agencyinfo、Peerip、Identitytype、Port、Idx（与网络连接相关对应上）
+> - 网络连接相关：listenip、rpcport、p2pport、channelPort #需要注意端口不被占用，建议此处的listenip配置为节点所在的真实IP
+> - 目录相关：wallet、keystoredir、datadir、logconf #默认节点当前目录即可
 
-config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
+
+
+config.json其它字段说明请参看<u>附录：12.4 config.json说明</u>
 
 > 配置好的config.json如下：
 
@@ -381,47 +370,27 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x0",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8545",
         "p2pport": "30303",
         "channelPort": "30304",
-        "rpcsslport":"-1",
-        "wallet":"/mydata/nodedata-1/keys.info",
-        "keystoredir":"/mydata/nodedata-1/keystore/",
-        "datadir":"/mydata/nodedata-1/data/",
+        "wallet":"./data/keys.info",
+        "keystoredir":"./data/keystore/",
+        "datadir":"./data/",
         "vm":"interpreter",
         "networkid":"12345",
         "logverbosity":"4",
         "coverlog":"OFF",
         "eventlog":"ON",
         "statlog":"OFF",
-        "logconf":"/mydata/nodedata-1/log.conf",
-        "params": {
-                "accountStartNonce": "0x0",
-                "maximumExtraDataSize": "0x0",
-                "tieBreakingGas": false,
-                "blockReward": "0x0",
-                "networkID" : "0x0"
-        },
-        "NodeextraInfo":[
-                {
-                "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
-                "Nodedesc": "node1",
-                "Agencyinfo": "node1",
-                "Peerip": "0.0.0.0",
-                "Identitytype": 1,
-                "Port":30303,
-                "Idx":0
-                }
-        ]
+        "logconf":"./log.conf"
 }
 ```
 
-#### 2.5.3 配置log.conf（日志配置文件）
+#### 3.5.3 配置log.conf（日志配置文件）
 
-log.conf中配置节点日志生成的格式和路径。
+log.conf中配置节点日志生成的格式和路径。一般使用默认即可。
 
 ```shell
 vim /mydata/nodedata-1/log.conf 
@@ -430,55 +399,55 @@ vim /mydata/nodedata-1/log.conf
 > 主要配置日志文件的生成路径，配置好的log.conf 如下：
 
 ```log
-* GLOBAL:
-    ENABLED                 =   true
-    TO_FILE                 =   true
-    TO_STANDARD_OUTPUT      =   false
-    FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"
-    FILENAME                =   "/mydata/nodedata-1/log/log_%datetime{%Y%M%d%H}.log"
-    MILLISECONDS_WIDTH      =   3
-    PERFORMANCE_TRACKING    =   false
+* GLOBAL:  
+    ENABLED                 =   true  
+    TO_FILE                 =   true  
+    TO_STANDARD_OUTPUT      =   false  
+    FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"   
+    FILENAME                =   "./log/log_%datetime{%Y%M%d%H}.log"  
+    MILLISECONDS_WIDTH      =   3  
+    PERFORMANCE_TRACKING    =   false  
     MAX_LOG_FILE_SIZE       =   209715200 ## 200MB - Comment starts with two hashes (##)
     LOG_FLUSH_THRESHOLD     =   100  ## Flush after every 100 logs
-
-* TRACE:
+      
+* TRACE:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-1/log/trace_log_%datetime{%Y%M%d%H}.log"
-
-* DEBUG:
+    FILENAME                =   "./log/trace_log_%datetime{%Y%M%d%H}.log"  
+      
+* DEBUG:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-1/log/debug_log_%datetime{%Y%M%d%H}.log"
+    FILENAME                =   "./log/debug_log_%datetime{%Y%M%d%H}.log"  
 
-* FATAL:
+* FATAL:  
+    ENABLED                 =   true  
+    FILENAME                =   "./log/fatal_log_%datetime{%Y%M%d%H}.log"
+      
+* ERROR:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-1/log/fatal_log_%datetime{%Y%M%d%H}.log"
-
-* ERROR:
-    ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-1/log/error_log_%datetime{%Y%M%d%H}.log"
-
-* WARNING:
+    FILENAME                =   "./log/error_log_%datetime{%Y%M%d%H}.log"  
+      
+* WARNING: 
      ENABLED                 =   true
-     FILENAME                =   "/mydata/nodedata-1/log/warn_log_%datetime{%Y%M%d%H}.log"
-
-* INFO:
+     FILENAME                =   "./log/warn_log_%datetime{%Y%M%d%H}.log"
+ 
+* INFO: 
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-1/log/info_log_%datetime{%Y%M%d%H}.log"
-
-* VERBOSE:
+    FILENAME                =   "./log/info_log_%datetime{%Y%M%d%H}.log"  
+      
+* VERBOSE:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-1/log/verbose_log_%datetime{%Y%M%d%H}.log"
+    FILENAME                =   "./log/verbose_log_%datetime{%Y%M%d%H}.log"
 ```
 
-log.conf其它字段说明请参看<u>附录：11.5 log.conf说明</u>
+log.conf其它字段说明请参看<u>附录：12.5 log.conf说明</u>
 
-### 2.6 启动创世节点
+### 3.6 启动创世节点
 
 节点的启动依赖下列文件，在启动前，请确认文件已经正确的配置：
 
-- 证书文件（/mydata/nodedata-1/data）：ca.crt、server.crt、server.key
-- 节点身份文件（/mydata/nodedata-1/data）：network.rlp、network.rlp.pub
+- 节点证书身份文件（/mydata/nodedata-1/data）：ca.crt、agency.crt、node.crt、node.key、node.private 
 - 配置文件（/mydata/nodedata-1/）：genesis.json、config.json、log.conf
+- 连接文件（/mydaata/nodedata-1/data/）：bootstrapnodes.json
 
 > 启动节点
 
@@ -510,9 +479,9 @@ INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38
 INFO|2017-12-12 17:52:19:907|+++++++++++++++++++++++++++ Generating seal on3530ff04adddd30508a4cb7421c8f3ad6421ca6ac3bb5f81fb4880fd72c57a8c#1tx:0,maxtx:1000,tq.num=0time:1513072339907
 ```
 
-### 2.7 验证节点启动
+### 3.7 验证节点启动
 
-#### 2.7.1 验证进程
+#### 3.7.1 验证进程
 
 ```shell
 ps -ef |grep fisco-bcos
@@ -524,7 +493,7 @@ ps -ef |grep fisco-bcos
 app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --genesis /mydata/nodedata-1/genesis.json --config /mydata/nodedata-1/config.json
 ```
 
-#### 2.7.2 查看日志输出
+#### 3.7.2 查看日志输出
 
 > 执行命令，查看打包信息。
 
@@ -545,13 +514,13 @@ INFO|2017-12-12 17:52:19:907|+++++++++++++++++++++++++++ Generating seal on3530f
 
 
 
-## 第三章 部署合约、调用合约
+## 第四章 部署合约、调用合约
 
 智能合约是部署在区块链上的应用。开发者可根据自身需求在区块链上部署各种智能合约。
 
 智能合约通过solidity语言实现，用fisco-solc进行编译。本章以HelloWorld.sol智能合约为例介绍智能合约的部署和调用。
 
-### 3.1 配置
+### 4.1 配置
 
 > 安装依赖环境
 
@@ -579,9 +548,9 @@ vim ../web3lib/config.js
 var proxy="http://127.0.0.1:8545";
 ```
 
-### 3.2 部署合约
+### 4.2 部署合约
 
-#### 3.2.1 实现合约
+#### 4.2.1 实现合约
 
 ```shell
 cd /mydata/FISCO-BCOS/tool
@@ -606,7 +575,7 @@ contract HelloWorld{
 }
 ```
 
-#### 3.2.2 编译+部署合约
+#### 4.2.2 编译+部署合约
 
 请先确认config.js已经正确指向区块链节点的RPC端口，且相应的区块链节点已经启动。
 
@@ -627,9 +596,9 @@ HelloWorldcontract address 0xa807685dd3cf6374ee56963d3d95065f6f056372
 HelloWorld deploy success!
 ```
 
-### 3.3 调用合约
+### 4.3 调用合约
 
-#### 3.3.1 编写合约调用程序
+#### 4.3.1 编写合约调用程序
 
 > 用nodejs实现，具体实现方法请直接看demoHelloWorld.js源码
 
@@ -637,7 +606,7 @@ HelloWorld deploy success!
 vim demoHelloWorld.js
 ```
 
-#### 3.3.2 调用合约 
+#### 4.3.2 调用合约 
 
 > 执行合约调用程序
 
@@ -661,16 +630,16 @@ HelloWorld contract get function call again :HelloWorld!
 
 
 
-## 第四章 部署系统合约
+## 第五章 部署系统合约
 
-系统合约是 FISCO BCOS 区块链的重要设计思路之一，也是控制网络节点加入和退出的重要方式，每条区块链仅需部署一次系统合约。系统合约的详细介绍，请参看<u>附录：11.7 系统合约介绍</u>
+系统合约是 FISCO BCOS 区块链的重要设计思路之一，也是控制网络节点加入和退出的重要方式，每条区块链仅需部署一次系统合约。系统合约的详细介绍，请参看<u>附录：12.7 系统合约介绍</u>
 
-### 4.1 配置
+### 5.1 配置
 
 > 切换到部署系统合约的目录下
 
 ```shell
-cd /mydata/FISCO-BCOS/systemcontractv2
+cd /mydata/FISCO-BCOS/systemcontract
 ```
 
 > 安装依赖环境
@@ -691,7 +660,7 @@ vim ../web3lib/config.js
 var proxy="http://127.0.0.1:8545";
 ```
 
-### 4.2 部署系统合约
+### 5.2 部署系统合约
 
 > 直接运行deploy.js部署系统合约。注意，此deploy.js与tool目录的是不同的两个文件。
 
@@ -783,7 +752,7 @@ get 0xb33485375d208a23e897144b6244e20d9c1e83d9
 SystemProxycontract address 0x210a7d467c3c43307f11eda35f387be456334fed
 ```
 
-### 4.3 配置系统代理合约地址
+### 5.3 配置系统代理合约地址
 
 系统代理合约，是所有系统合约的路由，通过配置系统代理合约地址（SystemProxy），才能正确调用系统合约。给个区块链节点都应配置系统代理合约地址，才能正确调用系统合约。
 
@@ -808,19 +777,19 @@ chmod +x *.sh
 ./start.sh #执行此步骤后不断刷出打包信息，表明重启成功
 ```
 
-自此，系统合约生效，为配置多个节点的区块链做好了准备。系统合约的详细介绍，请参看<u>附录：11.7 系统合约介绍</u>
+自此，系统合约生效，为配置多个节点的区块链做好了准备。系统合约的详细介绍，请参看<u>附录：12.7 系统合约介绍</u>
 
 
 
-## 第五章 创建普通节点
+## 第六章 创建普通节点
 
 普通节点是区块链中除创世节点外的其它节点。
 
-同一条链中的所有节点共用相同的genesis.json和相同的根证书ca.crt。
+同一条链中的所有节点共用相同的genesis.json，并且节点所属机构必须都是由同一个链证书所签发。
 
-创建普通节点的步骤与创建创世节点的步骤类似。普通节点不需要再修改genesis.json和ca.crt，直接复制创世节点的genesis.json和ca.crt到节点的相应路径下即可。
+创建普通节点的步骤与创建创世节点的步骤类似。普通节点不需要再修改genesis.json，直接复制创世节点的genesis.json节点的相应路径下即可。
 
-### 5.1 创建节点环境
+### 6.1 创建节点环境
 
 > 假定节点目录为/mydata/nodedata-2/，创建节点环境如下：
 
@@ -836,157 +805,43 @@ cd /mydata/nodedata-1/
 cp genesis.json config.json log.conf start.sh stop.sh /mydata/nodedata-2/
 ```
 
-### 5.2  配置节点身份NodeId
+### 6.2  生成节点证书文件
 
-同样需要为普通节点分配NodeId。NodeId唯一标识了区块链中的某个节点，在节点启动前必须进行配置。
+> 同样需要为普通节点生成节点证书相关文件。
 
-#### 5.2.1 配置cryptomod.json文件
-
-> 在cryptomod.json文件中配置NodeId生成路径：
+参考<u>2.3 节点证书</u> 生成对应节点证书。并将其拷贝到节点数据目录下。
 
 ```shell
-cd /mydata/FISCO-BCOS/ 
-vim cryptomod.json
+cp /mydata/FISCO-BCOS/cert/WB/nodedata-2/*  /mydata/nodedata-2/data/
 ```
-
-> 此处将rlpcreatepath配置为/mydata/nodedata-2/data/network.rlp。配置后的cryptomod.json如下：
-
+### 6.3 配置连接文件bootstrapnodes.json
+从创世节点data目录拷贝bootstrapnodes.json文件到当前节点data目录下。
+```shell
+cp /mydata/nodedata-1/data/bootstrapnodes.json /mydata/nodedata-2/data/
+```
+并对bootstrapnodes.json进行编辑，填入创世节点的ip和p2pport
+```shell
+vim /mydata/nodedata-2/data/bootstrapnodes.json
+```
+> 编辑后，bootstrapnodes.json内容为
 ```log
-{
-	"cryptomod":"0",
-	"rlpcreatepath":"/mydata/nodedata-2/data/network.rlp",
-	"datakeycreatepath":"",
-	"keycenterurl":"",
-	"superkey":""
-}
+{"nodes":[{"host":"创世节点IP,如127.0.0.1","p2pport":"30303"}]}
 ```
 
-cryptomod.json其它字段说明请参看<u>附录：11.2 cryptomod.json说明</u>
+### 6.4  配置节点配置文件config.json
 
-#### 5.2.2 生成节点身份文件
-
-> 用上述修改好的cryptomod.json文件生成节点身份文件，生成路径为cryptomod.json中配置的路径。
-
-```shell
-fisco-bcos --gennetworkrlp  cryptomod.json #需要一段时间
-ls /mydata/nodedata-2/data/
-```
-
-> 可看到节点身份文件（network.rlp和network.rlp.pub）生成到了/mydata/nodedata-2/data/下。
->
-> 其中network.rlp是节点身份的私钥二进制文件。network.rlp.pub是节点身份的NodeId文件。
-
-```shell
-network.rlp  network.rlp.pub
-```
-
-#### 5.2.3 配置节点NodeId
-
-（1）查看NodeId
-
-```shell
-cd /mydata/nodedata-2/data/
-cat network.rlp.pub
-```
-
-> 得到如下类似的NodeId
-
-```log
-838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
-```
-
-（2）修改config.json
-
-> 在NodeextraInfo字段中追加新的节点信息。
+config.json中可配置节点的各种信息，包括网络地址，数据目录等。
 
 ```shell
 vim /mydata/nodedata-2/config.json
 ```
 
-> 追加后，config.json中的NodeextraInfo字段如下。新追加的内容要与现有的内容有区别，Nodeid为刚生成的NodeId，Port是p2pport端口，Idx为上一条记录加1。注意，若新部署的节点在另外一台机器上，则需要将NodeextraInfo中其它节点的Peerip改成其它节点对应的机器IP，让新部署的节点能够找到其它机器上的节点。
-
-```log
-"NodeextraInfo":[
-    {
-	    "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
-	    "Nodedesc": "node1",
-	    "Agencyinfo": "node1",
-	    "Peerip": "0.0.0.0",
-	    "Identitytype": 1,
-	    "Port":30303,
-	    "Idx":0
-    },
-    {
-	    "Nodeid":"838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c",
-	    "Nodedesc": "node2",
-	    "Agencyinfo": "node2",
-	    "Peerip": "0.0.0.0",
-	    "Identitytype": 1,
-	    "Port":30403,
-	    "Idx":1
-    }
-]
-```
-
-### 5.3 配置证书
-
-区块链节点间的通信需要证书的认证。在节点运行前，需要为节点配置证书。其中ca.crt是整个区块链的根证书公钥，所有节点共用。
-
-#### 5.3.1 配置根证书
-
-> 一条链上的所有区块链节点都共用一个根证书ca.crt。直接从创世节点目录拷贝。
-
-```shell
-cp /mydata/nodedata-1/data/ca.crt /mydata/nodedata-2/data/
-```
-
-#### 5.3.2 生成节点证书
-
-> 生成普通节点证书（server.key、server.crt）的步骤与创世节点相同。在生成前，需要把生成脚本和根证书私钥（ca.key）配置到data目录下。
-
-```shell
-cd /mydata/nodedata-2/data/
-cp /mydata/nodedata-1/data/ca.key . #假设根证书私钥放在node1的data目录下
-cp /mydata/nodedata-1/data/genkey.sh .
-```
-
-> 用根证书公私钥生成节点证书公私钥（server.key、server.crt）
-
-```shell
-./genkey.sh server ./ca.key ./ca.crt 365 #生成server证书有效期为365天
-```
-
->  生成后，此时目录下应存在下述文件：
-
-```log
-ca.crt  network.rlp  network.rlp.pub  server.crt  server.key
-```
-
-> 注意，ca.key在生成了节点证书后，应立即删除。
-
-### 5.4 配置相关配置文件
-
-普通节点的启动依赖三个配置文件：
-
-- 创世块文件：genesis.json（与创世节点相同，直接复制，无需修改）
-- 节点配置文件：config.json
-- 日志配置文件：log.conf
-
-#### 5.4.1 配置config.json（节点配置文件）
-
-config.json中可配置节点的各种信息，包括网络地址，文件目录，节点身份等。
-
-```shell
-vim /mydata/nodedata-2/config.json
-```
-
-> 配置本节点的信息，主要修改字段，注意与NodeextraInfo中的内容对应：
+> 配置本节点的信息，根据需要主要以下修改字段
 >
-> - 网络连接相关：listenip、rpcport、p2pport、channelPort
-> - 目录相关：wallet、keystoredir、datadir、logconf
-> - 节点身份相关：NodeextraInfo中的Nodeid、Nodedesc、Agencyinfo、Peerip、Identitytype、Port、Idx（与网络连接相关对应上）
+> - 网络连接相关：listenip、rpcport、p2pport、channelPort #需要注意端口不被占用，建议此处的listenip配置为节点所在的真实IP
+> - 目录相关：wallet、keystoredir、datadir、logconf #一般使用默认当前目录即可
 
-config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
+config.json其它字段说明请参看<u>附录：12.4 config.json说明</u>
 
 > 配置好的config.json如下：
 
@@ -994,55 +849,27 @@ config.json其它字段说明请参看<u>附录：11.4 config.json说明</u>
 {
         "sealEngine": "PBFT",
         "systemproxyaddress":"0x210a7d467c3c43307f11eda35f387be456334fed",
-        "listenip":"0.0.0.0",
+        "listenip":"127.0.0.1",
         "cryptomod":"0",
-        "ssl":"0",
         "rpcport": "8546",
         "p2pport": "30403",
         "channelPort": "30404",
-        "wallet":"/mydata/nodedata-2/keys.info",
-        "keystoredir":"/mydata/nodedata-2/keystore/",
-        "datadir":"/mydata/nodedata-2/data/",
+        "wallet":"./data/keys.info",
+        "keystoredir":"./data/keystore/",
+        "datadir":"./data/",
         "vm":"interpreter",
         "networkid":"12345",
         "logverbosity":"4",
         "coverlog":"OFF",
         "eventlog":"ON",
         "statlog":"OFF",
-        "logconf":"/mydata/nodedata-2/log.conf",
-        "params": {
-                "accountStartNonce": "0x0",
-                "maximumExtraDataSize": "0x0",
-                "tieBreakingGas": false,
-                "blockReward": "0x0",
-                "networkID" : "0x0"
-        },
-        "NodeextraInfo":[
-                {
-                "Nodeid":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
-                "Nodedesc": "node1",
-                "Agencyinfo": "node1",
-                "Peerip": "0.0.0.0",
-                "Identitytype": 1,
-                "Port":30303,
-                "Idx":0
-                },
-                {
-                "Nodeid":"838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c",
-                "Nodedesc": "node2",
-                "Agencyinfo": "node2",
-                "Peerip": "0.0.0.0",
-                "Identitytype": 1,
-                "Port":30403,
-                "Idx":1
-                }
-        ]
+        "logconf":"./log.conf"
 }
 ```
 
-#### 5.4.2 配置log.conf（日志配置文件）
+#### 6.5 配置日志文件log.conf
 
-log.conf中配置节点日志生成的格式和路径。
+log.conf中配置节点日志生成的格式和路径。一般使用默认配置文件即可。
 
 ```shell
 vim /mydata/nodedata-2/log.conf 
@@ -1051,56 +878,57 @@ vim /mydata/nodedata-2/log.conf
 > 主要配置日志文件的生成路径，配置好的log.conf 如下：
 
 ```log
-* GLOBAL:
-    ENABLED                 =   true
-    TO_FILE                 =   true
-    TO_STANDARD_OUTPUT      =   false
-    FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"
-    FILENAME                =   "/mydata/nodedata-2/log/log_%datetime{%Y%M%d%H}.log"
-    MILLISECONDS_WIDTH      =   3
-    PERFORMANCE_TRACKING    =   false
+* GLOBAL:  
+    ENABLED                 =   true  
+    TO_FILE                 =   true  
+    TO_STANDARD_OUTPUT      =   false  
+    FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"   
+    FILENAME                =   "./log/log_%datetime{%Y%M%d%H}.log"  
+    MILLISECONDS_WIDTH      =   3  
+    PERFORMANCE_TRACKING    =   false  
     MAX_LOG_FILE_SIZE       =   209715200 ## 200MB - Comment starts with two hashes (##)
     LOG_FLUSH_THRESHOLD     =   100  ## Flush after every 100 logs
-
-* TRACE:
+      
+* TRACE:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-2/log/trace_log_%datetime{%Y%M%d%H}.log"
-
-* DEBUG:
+    FILENAME                =   "./log/trace_log_%datetime{%Y%M%d%H}.log"  
+      
+* DEBUG:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-2/log/debug_log_%datetime{%Y%M%d%H}.log"
+    FILENAME                =   "./log/debug_log_%datetime{%Y%M%d%H}.log"  
 
-* FATAL:
+* FATAL:  
+    ENABLED                 =   true  
+    FILENAME                =   "./log/fatal_log_%datetime{%Y%M%d%H}.log"
+      
+* ERROR:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-2/log/fatal_log_%datetime{%Y%M%d%H}.log"
-
-* ERROR:
-    ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-2/log/error_log_%datetime{%Y%M%d%H}.log"
-
-* WARNING:
+    FILENAME                =   "./log/error_log_%datetime{%Y%M%d%H}.log"  
+      
+* WARNING: 
      ENABLED                 =   true
-     FILENAME                =   "/mydata/nodedata-2/log/warn_log_%datetime{%Y%M%d%H}.log"
-
-* INFO:
+     FILENAME                =   "./log/warn_log_%datetime{%Y%M%d%H}.log"
+ 
+* INFO: 
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-2/log/info_log_%datetime{%Y%M%d%H}.log"
-
-* VERBOSE:
+    FILENAME                =   "./log/info_log_%datetime{%Y%M%d%H}.log"  
+      
+* VERBOSE:  
     ENABLED                 =   true
-    FILENAME                =   "/mydata/nodedata-2/log/verbose_log_%datetime{%Y%M%d%H}.log"
+    FILENAME                =   "./log/verbose_log_%datetime{%Y%M%d%H}.log"
 ```
 
-log.conf其它字段说明请参看<u>附录：11.5 log.conf说明</u>
+log.conf其它字段说明请参看<u>附录：12.5 log.conf说明</u>
 
-### 5.5 启动节点
+### 6.6 启动节点
 
 节点的启动依赖下列文件，在启动前，请确认文件已经正确的配置：
 
-- 证书文件（/mydata/nodedata-2/data）：ca.crt、network.rlp、network.rlp.pub、server.crt、server.key
-- 配置文件（/mydata/nodedata-2/）：genesis.json、config.json、log.conf
+- 节点证书身份文件（/mydata/nodedata-1/data）：ca.crt、agency.crt、node.crt、node.key、node.private 
+- 配置文件（/mydata/nodedata-1/）：genesis.json、config.json、log.conf
+- 连接文件（/mydaata/nodedata-1/data/）：bootstrapnodes.json
 
-> 启动节点，此时节点未被注册到区块链中，启动时只能看到进程，不能刷出打包信息。要让此节点正确的运行，请进入<u>第六章 多节点组网</u> 。
+> 启动节点，此时节点未被注册到区块链中，启动时只能看到进程，不能刷出打包信息。要让此节点正确的运行，请进入<u>第七章 多节点组网</u> 。
 
 ```shell
 cd /mydata/nodedata-2/
@@ -1124,11 +952,11 @@ app  9656     1  4 16:10 ?        00:00:01 fisco-bcos --genesis /mydata/nodedata
 
 
 
-## 第六章 多节点组网
+## 第七章 多记账节点组网
 
-FISCO BCOS区块链中的节点，只有被注册过，表示加入了网络，才能正常的运行。
+FISCO BCOS区块链中的节点，只有被注册到系统合约记账节点列表中，才能参与记账。
 
-> 多节点组网依赖系统合约，在进行多节点组网前，请确认：
+> 多节点记账组网依赖系统合约，在进行多节点记账组网前，请确认：
 >
 > （1）系统合约已经被正确的部署。
 >
@@ -1136,43 +964,21 @@ FISCO BCOS区块链中的节点，只有被注册过，表示加入了网络，�
 >
 > （3）节点在配置了systemproxyaddress字段后，已经重启使得系统合约生效。
 >
-> （4）/mydata/FISCO-BCOS/systemcontractv2/下的config.js已经正确的配置了节点的RPC端口。
+> （4）/mydata/FISCO-BCOS/web3lib/下的config.js已经正确的配置了节点的RPC端口。
 
-### 6.1 注册节点
+### 7.1 注册记账节点
 
-所有的节点注册流程都相同。在注册节点时，**需先注册创世节点，再注册普通节点**。
+所有的节点注册流程都相同。在注册节点时，**被注册节点必须处于运行状态**。
 
-#### 6.1.1 编写注册配置文件
-
-> 以注册创世节点为例。
-
-```shell
-cd /mydata/FISCO-BCOS/systemcontractv2/
-vim node1.json
-```
-
-> 内容需要与节点config.json中NodeextraInfo字段的内容对应。若在不同机器上组网时，ip填写的是外网ip。编写好的注册配置文件如下：
-
-```json
-{    "id":"2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878",
-    "ip":"127.0.0.1",
-    "port":30303,
-    "category":1,
-    "desc":"node1",
-    "CAhash":"",
-    "agencyinfo":"node1",
-    "idx":0
-}
-```
-
-#### 6.1.2 注册
+#### 7.1.1  注册
 
 在注册前，请确认已注册的所有节点，都已经启动。
-
-> 用编写好的注册配置文件（node1.json）注册节点。（创世节点在被注册时，应启动起来）
+> 每个节点的data目录下都有一个node.json注册文件,里面包含了节点相关信息。
+> 以注册创世节点为例
 
 ```shell
-babel-node tool.js NodeAction registerNode node1.json
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js NodeAction register /mydata/nodedata-1/data/node.json
 ```
 
 > 可看到注册信息
@@ -1190,15 +996,16 @@ NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
 send transaction success: 0x9665417c16b636a2a83e13e82d1674e4db72943bae2095cb030773f0a0ba1eef
 ```
 
-#### 6.1.3 查看入网情况
+#### 7.1.2 查看记账列表
 
-> 查看节点是否已经在节点列表中
+> 查看节点是否已经在记账节点列表中
 
 ```shell
+cd /mydata/FISCO-BCOS/systemcontract/
 babel-node tool.js NodeAction all
 ```
 
-> 可看到被注册的节点信息，节点已经加入了网络
+> 可看到被注册的节点信息，节点已经加入记账列表
 
 ```log
 { HttpProvider: 'http://127.0.0.1:8545',
@@ -1211,38 +1018,33 @@ SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
 NodeIdsLength= 1
 ----------node 0---------
-id=2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878
-ip=127.0.0.1
-port=30501
-category=1
-desc=node1
-CAhash=
-agencyinfo=node1
-blocknumber=427
+id=24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56
+name=A
+agency=WB
+caHash=A6A0371C855C5BE0
 Idx=0
+blocknumber=58
 ```
 
-#### 6.1.4 注册更多的节点
+#### 7.1.3 注册更多的节点
 
-在注册更多的节点前，**请确认创世节点是第一个被注册的**，并且网络中所有被注册过的节点都已经启动。
-
-> 重复上述过程，注册更多节点。
+在注册更多的节点前，请确认节点都已经启动。本过程可以重复执行，注册更多节点。
 
 ```shell
-vim node2.json #修改内容与config.json内容对应
-babel-node tool.js NodeAction registerNode node2.json
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js NodeAction register /mydata/nodedata-2/data/node.json
 cd /mydata/nodedata-2/
 ./start.sh #将被注册的节点启动起来，此时节点已经被注册，可刷出打包信息
 ```
 
->再次查看入网情况：
+>再次查看记账列表：
 
 ```log
-cd /mydata/FISCO-BCOS/systemcontractv2/
+cd /mydata/FISCO-BCOS/systemcontract/
 babel-node tool.js NodeAction all
 ```
 
-> 可看到输出了节点信息（node1），节点加入网络
+> 可看到输出了节点信息（node1），节点加入了记账列表
 
 ```log
 { HttpProvider: 'http://127.0.0.1:8545',
@@ -1255,54 +1057,28 @@ SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
 NodeIdsLength= 2
 ----------node 0---------
-id=2cd7a7cadf8533e5859e1de0e2ae830017a25c3295fb09bad3fae4cdf2edacc9324a4fd89cfee174b21546f93397e5ee0fb4969ec5eba654dcc9e4b8ae39a878
-ip=127.0.0.1
-port=30501
-category=1
-desc=node1
-CAhash=
-agencyinfo=node1
-blocknumber=427
+id=24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56
+name=node1
+agency=WB
+caHash=A6A0371C855C5BE0
 Idx=0
+blocknumber=58
 ----------node 1---------
-id=838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
-ip=127.0.0.1
-port=30502
-category=1
-desc=node2
-CAhash=
-agencyinfo=node2
-blocknumber=429
+id=b5adf6440bb0fe7c337eccfda9259985ee42c1c94e0d357e813f905b6c0fa2049d45170b78367649dd0b8b5954ee919bf50c1398a373ca777e6329bd0c4b82e8
+name=node2
+agency=WB
+caHash=A6A0371C855C5BE1
 Idx=1
+blocknumber=392
 ```
 
-### 6.2 查看节点连接
+### 7.2 节点退出记账列表
 
->执行脚本
+> 要让某节点退出记账列表，需执行以下脚本。执行时，指定相应节点的注册文件。此处让node2退出为例。
 
 ```shell
-cd /mydata/FISCO-BCOS/systemcontractv2/
-babel-node monitor.js
-```
-
-> 可看到不断刷出连接信息和块高。已连接节点数表示的是被查询的节点与其它节点连接的个数，即被注册的节点总数减1。此例子中，网络中有2个节点。被查询的节点是创世节点，与创世节点连接的节点只有一个，所以已连接节点数为1。
-
-```log
---------------------------------------------------------------
-current blocknumber 429
-the number of connected nodes：0
-...........Node 0.........
-NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
-Host:127.0.0.1:30403
---------------------------------------------------------------
-```
-
-### 6.3 节点退出网络
-
-> 要让某节点退出网络，需执行以下脚本。执行时，指定相应节点的注册配置文件。此处让node2退出为例。
-
-```shell
-babel-node tool.js NodeAction cancelNode node2.json
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js NodeAction cancel /mydata/nodedata-2/data/node.json
 ```
 
 > 执行后有如下输出：
@@ -1320,9 +1096,10 @@ NodeAction address 0xcc46c245e6cca918d43bf939bbb10a8c0988548f
 send transaction success: 0x031f29f9fe3b607277d96bcbe6613dd4d2781772ebd0c810a31a8d680c0c49c3
 ```
 
->查看节点连接，看不到相应节点的信息，表示节点已经退出了网络。
+>查看记账列表，看不到相应节点的信息，表示节点已经退出了记账列表。
 
 ```log
+cd /mydata/FISCO-BCOS/systemcontract/
 babel-node tool.js NodeAction all
 #......节点输出信息......
 { HttpProvider: 'http://127.0.0.1:8545',
@@ -1347,11 +1124,12 @@ Idx=0
 ```
 
 
-## 第七章 机构证书准入
 
-FISCO BCOS提供了证书准入的功能。在节点加入网络后，节点间是否能够通信，还可通过证书进行控制。在FISCO BCOS中，节点的证书代表了此节点属于某个机构。FISCO BCOS区块链中的管理者，可以通过配置机构的证书，控制相应证书的节点是否能够与其它节点通信。
+## 第八章 证书注销
 
-> 机构证书的准入依赖系统合约，在进行机构证书准入操作前，再次请确认：
+在节点加入网络后，节点间通过证书进行通信。FISCO BCOS区块链中的管理者，可以通过登记证书到注销证书列表，来禁止使用该证书的节点接入网络。
+
+> 在进行注销证书登记操作前，再次请确认：
 >
 > （1）系统合约已经被正确的部署。
 >
@@ -1359,236 +1137,53 @@ FISCO BCOS提供了证书准入的功能。在节点加入网络后，节点间�
 >
 > （3）节点在配置了systemproxyaddress字段后，已经重启使得系统合约生效。
 >
-> （4）/mydata/FISCO-BCOS/systemcontractv2/下的config.js已经正确的配置了节点的RPC端口。
-
-### 7.1 配置节点证书
-
-节点的证书存放目录在节点文件目录的data文件夹下。包括：
-
-- ca.crt：根证书公钥，整条区块链共用。
-- ca.key：根证书私钥，私钥应保密，仅在生成节点证书公私钥时使用。
-- server.crt：节点证书的公钥。
-- server.key：节点证书的私钥，私钥应保密。
-
-证书文件应严格按照上述命名方法命名。
-
-FISCO BCOS通过授权某节点对应的公钥server.crt，控制此节点是否能够与其它节点正常通信。
-
-具体配置过程请参考<u>2.4 配置证书</u> 。在配置节点的步骤中已涵盖相关证书的配置方法，若按照步骤部署了节点，则可直接进入下一步骤。
-
-### 7.2 开启所有节点的SSL验证功能
-
-在进行节点证书授权管理前，需开启区块链上**每个节点**的SSL验证功能。
-
-> 此处以创世节点为例，其它节点也应采用相同的操作。
-
-```shell
-cd /mydata/nodedata-1/
-vim config.json
-```
-
-> 将ssl字段置为1，效果如下。
-
-```json
-"ssl":"1",
-```
-
-> 修改完成后重启节点，使其生效。
-
-```shell
-./stop.sh
-./start.sh
-```
-
-> 其它节点也采用相同的操作，开启SSL验证功能。
-
-**注意：必须所有的节点都开启ssl功能，才能继续下一步骤。**
-
-### 7.3 配置机构证书信息
-
-将节点的证书写入系统合约，为接下来的证书准入做准备。每张证书都应该写入系统合约中。节点的证书若不写入系统合约，相应的节点将不允许通信。
-
-#### 7.3.1 获取证书序列号
-
-> 获取server.crt的序列号
-
-```shell
-cd /mydata/nodedata-2/data
-openssl x509 -noout -in server.crt -serial
-```
-
-> 可得到证书序列号
-
-```log
-serial=8A4B2CDE94348D22
-```
-
-#### 7.3.2 编写证书准入状态文件
-
-> 在systemcontractv2目录下编写。
-
-```shell
-cd /mydata/FISCO-BCOS/systemcontractv2
-vim ca.json
-```
-
-> 将序列号填入hash字段。配置status，0表示不可用，1表示可用。其它字段默认即可。如下，让node2的证书可用。即status置1。
-
-```json
-{
-        "hash" : "8A4B2CDE94348D22",
-        "status" : 1,
-        "pubkey":"",
-        "orgname":"",
-        "notbefore":20170223,
-        "notafter":20180223,
-        "whitelist":"",
-        "blacklist":""
-}
-```
-
-证书准入状态文件其它字段说明请参考<u>11.6 证书准入状态文件说明</u>
-
-#### 7.3.3 将证书准入状态写入系统合约
-
-> 执行以下命令，指定证书准入状态文件ca.json，将证书状态写入系统合约。
-
-```shell
-babel-node tool.js CAAction update ca.json
-```
-
-### 7.4 设置证书验证开关
-
-证书验证开关能够控制是否采用证书准入机制。开启后，将根据系统合约里的证书状态（status）控制节点间是否能够通信。不在系统合约中的证书对应的节点，将不允许通信。
-
-> 在打开此开关前，请确认：
+> （4）/mydata/FISCO-BCOS/web3lib/下的config.js已经正确的配置了节点的RPC端口。
 >
-> （1）所有的节点都正确的配置了相应机构的证书（即server.key、server.crt）。
->
-> （2）所有节点的SSL验证已经打开。（标志位已经设置，设置后节点已经重启）。
->
-> （3）所有机构的证书信息都已经配置入系统合约。
->
-> 上述条件未达到，会出现节点无法连接，节点无法共识，合约操作无法进行的情况。若出现上述情况，请先关闭所有节点的SSL验证功能，做了正确的配置后，再打开SSL功能。
+>  (5)  **该节点已通过（<u>7.3 节点退出网络</u>）操作方法退出网络。**
 
-#### 7.4.1 开启全局开关
 
-> 执行命令，CAVerify设置为true
+#### 8.1 登记注销证书
+
+每个节点data目录都包含node.ca文件，里面保存了证书相关信息，通过执行以下命令，可以将节点证书加入系统合约注销证书列表，以下以创世节点证书注销为例。
 
 ```shell
-babel-node tool.js ConfigAction set CAVerify true
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js  CAAction add /mydata/nodedata-1/data/node.ca
 ```
 
-> 查看开关是否生效
+
+### 8.2 查看注销证书列表
 
 ```shell
-babel-node tool.js ConfigAction get CAVerify
-```
-
-> 输出true，表示开关已打开
-
-```log
-CAVerify=true,29
-```
-
-#### 7.4.2 关闭全局开关
-
-开关关闭后，节点间的通信不再验证证书。
-
-> 执行命令，CAVerify设置为false
-
-```shell
-babel-node tool.js ConfigAction set CAVerify false
-```
-
-### 7.5 修改节点证书准入状态
-
-已经写入系统合约的证书状态，允许修改（可用/不可用）
-
-#### 7.5.1 修改证书准入状态文件
-
-> 修改相应证书对应的证书准入状态文件ca.json
-
-```shell
-/mydata/FISCO-BCOS/systemcontractv2
-vim ca.json
-```
-
-> 配置status，0表示不可用，1表示可用。其它字段默认即可。如下，让node2的证书不可用。即status置0。
-
-```json
-{
-        "hash" : "8A4B2CDE94348D22",
-        "status" : 0,
-        "pubkey":"",
-        "orgname":"",
-        "notbefore":20170223,
-        "notafter":20180223,
-        "whitelist":"",
-        "blacklist":""
-}
-```
-
-证书准入状态文件其它字段说明请参考<u>11.6 证书准入状态文件说明</u>
-
-#### 7.5.2 更新证书准入状态
-
-> 执行以下命令，指定证书准入状态文件ca.json，更新证书准入状态。
-
-```shell
-babel-node tool.js CAAction updateStatus ca.json
-```
-
-> 查看证书状态
-
-```shell
+cd /mydata/FISCO-BCOS/systemcontract/
 babel-node tool.js CAAction all
 ```
 
->可看到证书状态
+>可看到证书列表
 
 ```log
 ----------CA 0---------
-hash=8A4B2CDE94348D22
-pubkey=
-orgname=
-notbefore=20170223
-notafter=20180223
-status=0
+serial=8A4B2CDE94348D22
+pubkey=24b98c6532ff05c2e9e637b3362ee4328c228fb4f6262c1c751f51952012cd68da2cbd8655de5072e49b950a503326942297cfaa9ca919b369be4359b4dccd56
+name=A
 blocknumber=36
-whitelist=
-blacklist=
-
 ```
-### 7.6 证书常见问题FAQ  
 
-**Q:证书验证的原理？**    
-A:假设A节点与B节点连接，相互连接的节点把本地的server.crt文件发送到对方节点，对方节点使用本地的ca.crt文件验证server.crt证书文件有效性，验证成功建立连接否则断连。所以要想成功建立连接确保节点的server.crt由同一ca颁发。
+### 8.3 移除注销证书
 
-**Q.CAAction合约验证的原理？**  
-A:打开CAVerify开关,节点连接时在CAAction合约中查找节点证书是否在合约中，如果存在节点正常连接否则连接失败。打开CAVerify开关时确保CAAction合约中已经写入区块链上所有节点的证书信息，否则未写入合约的节点无法正常连接。
+已在系统合约注销证书列表中的证书可以通过以下方法移除，恢复节点与网络中其他节点的连接，以下以移除创世节点证书为例。
 
-**Q:打开ssl节点无法连接**  
-A:1.确保所有节点的data目录下config.json配置文件中的ssl已配置为1。
-  2.打开CAVerify开关前确保所有节点的证书信息是否已写到CAACtion合约中。
+```shell
+cd /mydata/FISCO-BCOS/systemcontract/
+babel-node tool.js  CAAction remove /mydata/nodedata-1/data/node.ca
+```
 
-**Q:已打开CAVerify开关未写入节点证书信息到CAACtion合约中导致节点无法连接**  
-A:在所有节点的data目录下config.json配置文件中ssl设置为0并重启节点，节点正常连接后把CAVerify设置为false，再重新把所有节点的config.json配置文件中的ssl设置为1。再重新把节点证书写入CAACtion合约中再打开CAVerify开关即可。
 
-**Q:证书有效期无法设置**  
-A:生成证书脚本中ca根证书固定为10年，用户证书固定为1年，如有修改证书有效期需求可修改genkey.sh脚本中的日期即可。
-
-**Q:java客户端无法与节点通信问题**  
-A:java客户端需使用与节点相同的ca.crt证书。如节点证书自生成则使用以下指令生成java客户端证书：  
-1、openssl pkcs12 -export -name client -in server.crt -inkey server.key -out keystore.p12  
-2、keytool -importkeystore -destkeystore client.keystore -srckeystore keystore.p12 -srcstoretype pkcs12 -alias client  
-3、Attention！ Password must be ”123456”  
-
-## 第八章 使用控制台
+## 第九章 使用控制台
 
 控制台能够以IPC的方式直接连接区块链节点进程。登录控制台后，能够直接查看区块链的各种信息。
 
-### 8.1 登录控制台
+### 9.1 登录控制台
 
 > 连接节点的data目录下的geth.ipc文件。
 
@@ -1606,9 +1201,9 @@ Entering interactive mode.
 > 
 ```
 
-### 8.2 控制台操作
+### 9.2 控制台操作
 
-#### 8.2.1 查看区块
+#### 9.2.1 查看区块
 
 > 如查看块高为2的区块
 
@@ -1641,7 +1236,7 @@ web3.eth.getBlock(2,console.log)
   uncles: [] }
 ```
 
-#### 8.2.2 查看交易
+#### 9.2.2 查看交易
 
 > 根据交易哈希查看交易。如，使用之前调用HelloWord的合约的交易哈希。
 
@@ -1665,7 +1260,7 @@ web3.eth.getTransaction('0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee55dabd9c
   value: { [String: '0'] s: 1, e: 0, c: [ 0 ] } }
 ```
 
-#### 8.2.3 查看交易回执
+#### 9.2.3 查看交易回执
 
 > 根据交易哈希查看交易回执。如，使用之前调用HelloWord的合约的交易哈希。
 
@@ -1686,7 +1281,7 @@ web3.eth.getTransactionReceipt('0x63749a62851b52f9263e3c9a791369c7380acc5a9b6ee5
   transactionIndex: 0 }
 ```
 
-#### 8.2.4 查看合约代码
+#### 9.2.4 查看合约代码
 
 > 根据交易合约地址查看合约。如，用之前部署的HelloWorld合约地址。
 
@@ -1700,7 +1295,7 @@ web3.eth.getCode('0x1d2047204130de907799adaea85c511c7ce85b6d',console.log)
 > null '0x60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634ed3885e146100485780636d4ce63c146100a557600080fd5b341561005357600080fd5b6100a3600480803590602001908201803590602001908080601f01602080910402602001604051908101604052809392919081815260200183838082843782019150505050505091905050610133565b005b34156100b057600080fd5b6100b861014d565b6040518080602001828103825283818151815260200191508051906020019080838360005b838110156100f85780820151818401526020810190506100dd565b50505050905090810190601f1680156101255780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b80600090805190602001906101499291906101f5565b5050565b610155610275565b60008054600181600116156101000203166002900480601f0160208091040260200160405190810160405280929190818152602001828054600181600116156101000203166002900480156101eb5780601f106101c0576101008083540402835291602001916101eb565b820191906000526020600020905b8154815290600101906020018083116101ce57829003601f168201915b5050505050905090565b828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f1061023657805160ff1916838001178555610264565b82800160010185558215610264579182015b82811115610263578251825591602001919060010190610248565b5b5090506102719190610289565b5090565b602060405190810160405280600081525090565b6102ab91905b808211156102a757600081600090555060010161028f565b5090565b905600a165627a7a7230582021681cb0ea5b1c4364a4f5e37f12e84241310a74ee462b1a19658b3acc26c6cb0029'
 ```
 
-#### 8.2.5 查看节点连接
+#### 9.2.5 查看节点连接
 
 > 执行
 
@@ -1725,13 +1320,13 @@ web3.admin.peers(console.log)
 
 
 
-## 第九章 其它可选工具
+## 第十章 其它可选工具
 
-### 9.1 导出创世块工具
+### 10.1 导出创世块工具
 
 FISCO BCOS支持把现有区块链中所有的合约全部导出到一个文件中。新的区块链可使用此文件作为创世块文件启动，进而继承原来区块链中所有的合约。
 
-#### 9.1.1 停止当前区块链节点
+#### 10.1.1 停止当前区块链节点
 
 > 在导出前，要将当前操作目录对应的区块链节点停掉
 
@@ -1740,7 +1335,7 @@ cd /mydata/nodedata-1
 ./stop.sh
 ```
 
-#### 9.1.2 导出创世块
+#### 10.1.2 导出创世块
 
 > 用--export-genesis字段指定导出的创世块文件名。
 
@@ -1750,7 +1345,7 @@ fisco-bcos --genesis ./genesis.json --config ./config.json 	--export-genesis ./n
 
 > 一段时间后，生成new_genesis.json。此文件即是导出的创世块，可作为新的区块链的创世块使用。
 
-### 9.2 监控连接和块高
+### 10.2 监控连接和块高
 
 monitor.js脚本监控节点的连接情况和块高。在运行前，请确认：
 
@@ -1761,31 +1356,25 @@ monitor.js脚本监控节点的连接情况和块高。在运行前，请确认�
 > 配置config，并执行monitor.js
 
 ```shell
-cd /mydata/FISCO-BCOS/tool/
+cd /mydata/FISCO-BCOS/systemcontract/
 vim ../web3lib/config.js
 babel-node monitor.js
 ```
 
-> 不断刷出节点连接情况和块高
+> 可看到不断刷出连接信息和块高。已连接节点数表示的是被查询的节点与其它节点连接的个数。此例子中，网络中有2个节点。被查询的节点是创世节点，与创世节点连接的节点只有一个，所以已连接节点数为1。
 
 ```log
-current blocknumber 429
-the number of connected nodes：0
+current blocknumber 29691
+the number of connected nodes：1
 ...........Node 0.........
 NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
 Host:127.0.0.1:30403
 --------------------------------------------------------------
-current blocknumber 429
-the number of connected nodes：0
-...........Node 0.........
-NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a6568170955802db2bf1ee84271bc9cba64fba87fba84e0dba03e5a05de88a2c
-Host:127.0.0.1:30403
-
 ```
 
 
 
-## 第十章 FISCO BCOS 特性
+## 第十一章 FISCO BCOS 特性
 
 FISCO BCOS的特性，请直接参看相关特性说明文档：
 
@@ -1804,9 +1393,9 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 
 
 
-## 第十一章 附录
+## 第十二章 附录
 
-### 11.1 源码目录结构说明
+### 12.1 源码目录结构说明
 
 
 | 目录                | 说明                                       |
@@ -1828,9 +1417,9 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 | libweb3jsonrpc    | web3 RPC实现目录                             |
 | sample            | 一键安装与部署                                  |
 | scripts           | 与安装相关的脚本                                 |
-| systemproxyv2     | 系统合约实现目录                                 |
+| systemproxy    | 系统合约实现目录                                 |
 
-### 11.2 cryptomod.json说明
+### 12.2 cryptomod.json说明
 
 FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.json）中配置区块链节点间的加密通信方式。
 
@@ -1842,7 +1431,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | keycenterurl      | 远程加密服务 填空                                |
 | superkey          | 本地加密服务密码 填空                              |
 
-### 11.3 genesis.json说明
+### 12.3 genesis.json说明
 
 创世块文件genesis.json关键字段说明如下：
 
@@ -1853,7 +1442,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | alloc          | 内置合约数据                                   |
 | initMinerNodes | 创世块节点NodeId（填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId） |
 
-### 11.4 config.json说明
+### 12.4 config.json说明
 
 节点配置文件config.json关键字段说明如下：
 
@@ -1863,7 +1452,6 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | systemproxyaddress | 系统路由合约地址（生成方法可参看部署系统合约）                  |
 | listenip           | 节点监听IP                                   |
 | cryptomod          | 加密模式默认为0（与cryptomod.json文件中cryptomod字段保持一致） |
-| ssl                | 是否启用SSL证书通信（0：非SSL通信 1：SSL通信 需在datadir目录下放置证书文件） |
 | rpcport            | RPC监听端口）（若在同台机器上部署多个节点时，端口不能重复）          |
 | p2pport            | P2P网络监听端口（若在同台机器上部署多个节点时，端口不能重复）         |
 | channelPort        | 链上链下监听端口（若在同台机器上部署多个节点时，端口不能重复）          |
@@ -1877,12 +1465,11 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | eventlog           | 合约日志开关（ON或OFF）                           |
 | statlog            | 统计日志开关（ON或OFF）                           |
 | logconf            | 日志配置文件路径（日志配置文件可参看日志配置文件说明）              |
-| NodeextraInfo      | 节点连接配置列表[{NodeId,Ip,port,nodedesc,agencyinfo,identitytype}]（节点身份NodeID、外网IP、P2P网络端口、节点描述、节点信息、节点类型），其中NodeId填入<u>2.3 生成节点身份NodeId</u>小节中生成的NodeId。此处必须配置节点自身的信息。在配置其它节点信息时，确保节点间能够构成一个连通图。为了稳定性，推荐配置多个除自身以外的其它节点信息。 |
 | dfsNode            | 分布式文件服务节点ID ，与节点身份NodeID一致 （可选功能配置参数）    |
 | dfsGroup           | 分布式文件服务组ID （10 - 32个字符）（可选功能配置参数）        |
 | dfsStorage         | 指定分布式文件系统所使用文件存储目录（可选功能配置参数）             |
 
-### 11.5 log.conf说明
+### 12.5 log.conf说明
 
 日志配置文件log.conf关键字段说明如下：
 
@@ -1893,26 +1480,11 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | MAX_LOG_FILE_SIZE   | 最大日志文件大小                                 |
 | LOG_FLUSH_THRESHOLD | 超过多少条日志即可落盘                              |
 
-### 11.6 证书准入状态文件说明
-
-证书授权配置文件关键字段说明如下：
-
-| **字段**    | **说明**          |
-| --------- | --------------- |
-| hash      | 公钥证书序列号         |
-| pubkey    | 公钥证书，填空即可       |
-| orgname   | 机构名称，填空即可       |
-| notbefore | 证书生效时间          |
-| notafter  | 证书过期时间          |
-| status    | 证书状态 0：不可用 1：可用 |
-| whitelist | ip白名单，填空即可      |
-| blacklist | ip黑名单，填空即可      |
-
-### 11.7 系统合约介绍
+### 12.6 系统合约介绍
 
 系统合约是FISCO BCOS区块链的内置智能合约。
 
-主要分为以下几种：系统代理合约、节点管理合约、机构证书合约、权限管理合约、全网配置合约。
+主要分为以下几种：系统代理合约、节点管理合约、注销证书合约、权限管理合约、全网配置合约。
 
 系统合约一经部署，全网生效后，一般不轻易变更。
 
@@ -1921,13 +1493,13 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 
 以下依次介绍各个系统合约的源码路径、已实现接口说明、调用例子、工具使用方法。
 
-#### 11.7.1 系统代理合约
+#### 12.6.1 系统代理合约
 
 系统代理合约是系统合约的统一入口。
 
 它提供了路由名称到合约地址的映射关系。
 
-源码路径：systemcontractv2/SystemProxy.sol
+源码路径：systemcontract/SystemProxy.sol
 
 **（1）接口说明**
 
@@ -1936,7 +1508,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | 获取路由信息 getRoute | 路由名称            | 路由地址、缓存标志位、生效块号 | 无             |
 | 注册路由信息setRoute  | 路由名称、路由地址、缓存标志位 | 无               | 若该路由名称已存在，则覆盖 |
 
-web3调用示例如下（可参看systemcontractv2/deploy.js）：
+web3调用示例如下（可参看systemcontract/deploy.js）：
 ```js
  console.log("register NodeAction.....");
  func = "setRoute(string,address,bool)";
@@ -1976,77 +1548,76 @@ SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 
 输出中即是当前系统路由表的所有路由信息。
 
-#### 11.7.2 节点管理合约
+#### 12.6.2 节点管理合约
 
 节点管理合约主要功能是维护网络中节点列表。
 网络中节点加入或退出都需要与节点管理合约进行交互。
 
-源码路径：systemcontractv2/NodeAction.sol
+源码路径：systemcontract/NodeAction.sol
 
 **（1）接口说明**
 
 | 接口名               | 输入                                       | 输出   | 备注            |
 | ----------------- | ---------------------------------------- | ---- | ------------- |
-| 节点入网 registerNode | 节点ID、IP、端口、节点类型、节点描述、节点CA哈希、节点agency、节点序号 | 布尔结果 | 若该节点ID已存在，则忽略 |
+| 节点入网 registerNode | 节点ID、、节点名称、机构、节点证书序列号 | 布尔结果 | 若该节点ID已存在，则忽略 |
 | 节点出网 cancelNode   | 节点ID                                     | 布尔结果 | 若该路由名称不存在，则忽略 |
 
-web3调用示例如下（可参看systemcontractv2/tool.js）：
+web3调用示例如下（可参看systemcontract/tool.js）：
 ```js
 var instance=getAction("NodeAction");
-var func = "registerNode(string,string,uint256,uint8,string,string,string,uint256)";
-var params = [node.id,node.ip,node.port,node.category,node.desc,node.CAhash,node.agencyinfo,node.idx];
+var func = "registerNode(string,string,string,string)";
+var params = [node.id,node.name,node.agency,node.caHash];
 var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
 ```
 
 **（2）工具使用方法**
 
-请参看 添加非创世节点入网、节点出网
+请参看 注册记账节点、退出记账节点。
 
-#### 11.7.3 机构证书合约
+#### 12.6.3 注销证书合约
 
-机构证书合约主要功能是维护机构证书信息。
+注销证书合约主要功能是维护注销证书信息列表。
 
-源码路径：systemcontractv2/CAAction.sol
+源码路径：systemcontract/CAAction.sol
 
 **（1）接口说明**
 
 | 接口名                 | 输入                                       | 输出                                   | 备注            |
 | ------------------- | ---------------------------------------- | ------------------------------------ | ------------- |
-| 更新证书信息 update       | 证书哈希、公钥、组织名称、证书有效开始时间、证书失效时间、证书状态、白名单列表、黑名单列表 | 布尔结果                                 | 若该证书信息不存在，则新建 |
-| 更新证书状态 updateStatus | 证书哈希、证书状态                                | 布尔结果                                 | 若该路由名称不存在，则忽略 |
-| 查询证书信息 get          | 证书哈希                                     | 证书哈希、公钥、组织名称、证书有效开始时间、证书失效时间、证书状态、块号 | 无             |
-| 查询证书黑白名单列表 getIp    | 证书哈希                                     | 白名单列表、黑名单列表                          | 无             |
+| 登记 add       | 证书序列号、证书公钥、节点名称 | 布尔结果                                 | 若该证书信息不存在，则新建 |
+| 移除 remove | 证书序列号                                | 布尔结果                                 | 若该证书不存在，则忽略 |
+| 查询证书信息 get          | 证书序列号                                     | 证书序列号、公钥、节点名称、块号 | 无             |
 
-web3调用示例如下（可参看systemcontractv2/tool.js）：
+
+web3调用示例如下（可参看systemcontract/tool.js）：
 ```js
- var instance=getAction("CAAction");
- var func = "update(string,string,string,uint256,uint256,uint8,string,string)";
- var params = [ca.hash,ca.pubkey,ca.orgname,ca.notbefore,ca.notafter,ca.status,ca.whitelist,ca.blacklist];
- var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
-
+var instance=getAction("CAAction");
+var func = "add(string,string,string)";
+var params = [ca.serial,ca.pubkey,ca.name]; 
+var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);ig.account, config.privKey, instance.address, func, params);
 ```
 
 **（2）工具使用方法**
 
-查看证书列表
+查看注销证书列表
 
 ```shell
 babel-node tool.js CAAction all
 ```
 
-更新证书信息
+登记注销证书
 
 ```shell
-babel-node tool.js CAAction update
+babel-node tool.js CAAction add
 ```
 
-更新证书状态
+移除注销证书
 
 ```shell
-babel-node tool.js CAAction updateStatus
+babel-node tool.js CAAction remove
 ```
 
-#### 11.7.4 权限管理合约
+#### 12.6.4 权限管理合约
 
 权限管理合约是对区块链权限模型的实现。
 
@@ -2054,9 +1625,9 @@ babel-node tool.js CAAction updateStatus
 
 一个权限项由合约地址加上合约接口来唯一标识。
 
-源码路径：systemcontractv2/AuthorityFilter.sol	交易权限Filter
+源码路径：systemcontract/AuthorityFilter.sol	交易权限Filter
 
- systemcontractv2/Group.sol
+ systemcontract/Group.sol
 
 **（1）接口说明**
 
@@ -2067,7 +1638,7 @@ babel-node tool.js CAAction updateStatus
 | 交易权限Filter | 设置用户所属角色 setUserGroup     | 用户外部账户、用户所属角色合约                | 无    | 无    |
 |            | 交易权限检查 process            | 用户外部账户、交易发起账户、合约地址、合约接口、交易输入数据 |      | 无    |
 
-web3调用示例如下（可参看systemcontractv2/deploy.js）：
+web3调用示例如下（可参看systemcontract/deploy.js）：
 ```js
 var GroupReicpt= await web3sync.rawDeploy(config.account, config.privKey, "Group");
 var Group=web3.eth.contract(getAbi("Group")).at(GroupReicpt.contractAddress);
@@ -2090,25 +1661,25 @@ babel-node tool.js AuthorityFilter 用户外部账户、合约地址、合约接
 
 继承TransactionFilterBase实现新的交易Filter合约。并通过addFilter接口将新Filter注册入TransactionFilterChain即可。
 
-#### 11.7.5 全网配置合约
+#### 12.6.5 全网配置合约
 
 全网配置合约维护了区块链中部分全网运行配置信息。
 
 目标是为了通过交易的全网共识来达成全网配置的一致更新。
 
-源码路径：systemcontractv2/ConfigAction.sol
+源码路径：systemcontract/ConfigAction.sol
 
 **（1）全网配置项说明**
 
 | 配置项                  | 说明                           | 默认值       | 推荐值         |
 | -------------------- | ---------------------------- | --------- | ----------- |
-| maxBlockHeadGas      | 块最大GAS （16进制）                | 200000000 | 20000000000 |
-| intervalBlockTime    | 块间隔(ms) （16进制）               | 1000      | 1000        |
-| maxBlockTranscations | 块最大交易数（16进制）                 | 1000      | 1000        |
-| maxNonceCheckBlock   | 交易nonce检查最大块范围（16进制）         | 1000      | 1000        |
-| maxBlockLimit        | blockLimit超过当前块号的偏移最大值（16进制） | 1000      | 1000        |
-| maxTranscationGas    | 交易的最大gas（16进制）               | 20000000  | 20000000    |
-| CAVerify             | CA验证开关                       | FALSE     | FALSE       |
+| maxBlockHeadGas      | 块最大GAS                 | 2,000,000,000 | 2,000,000,000 |
+| intervalBlockTime    | 块间隔(ms)                | 1000      | 1000        |
+| maxBlockTranscations | 块最大交易数                 | 1000      | 1000        |
+| maxNonceCheckBlock   | 交易nonce检查最大块范围         | 1000      | 1000        |
+| maxBlockLimit        | blockLimit超过当前块号的偏移最大值 | 1000      | 1000        |
+| maxTranscationGas    | 交易的最大gas               | 30,000,000  | 30,000,000    |
+| CAVerify             | CA验证开关                       | false     | false       |
 
 **（2）接口说明**
 
@@ -2117,7 +1688,7 @@ babel-node tool.js AuthorityFilter 用户外部账户、合约地址、合约接
 | 设置配置项 set | 配置项、配置值 | 无      | 若配置表中已存在，则覆盖 |
 | 查询配置值 get | 配置项     | 配置值、块号 | 无            |
 
-web3调用示例如下（可参看systemcontractv2/tool.js）：
+web3调用示例如下（可参看systemcontract/tool.js）：
 ```js
 var func = "set(string,string)";
 var params = [key,value];
@@ -2164,7 +1735,6 @@ xxxxx.sh: 行x： $'\r':未找到命令
 sudo yum -y install dos2unix
 dos2unix xxxxx.sh
 ```
-
 
 
 

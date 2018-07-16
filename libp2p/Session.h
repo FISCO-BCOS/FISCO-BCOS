@@ -18,6 +18,8 @@
  * @author Gav Wood <i@gavwood.com>
  * @author Alex Leverington <nessence@gmail.com>
  * @date 2014
+ * @author toxotguo
+ * @date 2018
  */
 
 #pragma once
@@ -34,11 +36,13 @@
 #include <libdevcore/Guards.h>
 #include "RLPXFrameCoder.h"
 #include "RLPXSocket.h"
+#include "RLPXSocketSSL.h"
 #include "Common.h"
 #include "RLPXFrameWriter.h"
 #include "RLPXFrameReader.h"
 #include "SessionCAData.h"
 #include "libstatistics/InterfaceStatistics.h"
+
 
 namespace dev
 {
@@ -48,6 +52,8 @@ namespace p2p
 
 class Peer;
 class ReputationManager;
+
+
 class SessionFace
 {
 public:
@@ -57,6 +63,7 @@ public:
 	virtual void disconnect(DisconnectReason _reason) = 0;
 
 	virtual void ping() = 0;
+	virtual void announcement(h256 const& _allPeerHash) = 0;
 
 	virtual bool isConnected() const = 0;
 
@@ -90,20 +97,23 @@ public:
  * @brief The Session class
  * @todo Document fully.
  */
-class Session: public SessionFace, public std::enable_shared_from_this<SessionFace>
+class Session: public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
 	static bool isFramingAllowedForVersion(unsigned _version) { return _version > 4; }
 
-	Session(Host* _server, std::unique_ptr<RLPXFrameCoder>&& _io, std::shared_ptr<RLPXSocket> const& _s, std::shared_ptr<Peer> const& _n, PeerSessionInfo _info);
+	Session(HostApi* _server, std::unique_ptr<RLPXFrameCoder>&& _io, std::shared_ptr<RLPXSocketApi> const& _s, std::shared_ptr<Peer> const& _n, PeerSessionInfo _info);
+	
 	virtual ~Session();
 
 	void start() override;
 	void disconnect(DisconnectReason _reason) override;
 
 	void ping() override;
+	void announcement(h256 const& _allPeerHash) override;
 
-	bool isConnected() const override { return m_socket->ref().is_open(); }
+
+	bool isConnected() const override { return m_socket->isConnected(); }
 
 	NodeID id() const override;
 
@@ -148,6 +158,7 @@ private:
 	bool checkRead(std::size_t _expected, boost::system::error_code _ec, std::size_t _length);
 
 	/// Perform a single round of the write operation. This could end up calling itself asynchronously.
+	void onWrite(boost::system::error_code ec, std::size_t length);
 	void write();
 	void writeFrames();
 
@@ -160,10 +171,10 @@ private:
 	/// @returns true iff the _msg forms a valid message for sending or receiving on the network.
 	static bool checkPacket(bytesConstRef _msg);
 
-	Host* m_server;							///< The host that owns us. Never null.
+	HostApi* m_server;							///< The host that owns us. Never null.
 
 	std::unique_ptr<RLPXFrameCoder> m_io;	///< Transport over which packets are sent.
-	std::shared_ptr<RLPXSocket> m_socket;		///< Socket of peer's connection.
+	std::shared_ptr<RLPXSocketApi> m_socket;		///< Socket of peer's connection.
 	Mutex x_framing;						///< Mutex for the write queue.
 	std::deque<bytes> m_writeQueue;			///< The write queue.
 	std::deque<u256> m_writeTimeQueue; ///< to stat queue time
@@ -202,6 +213,8 @@ private:
 
 	CABaseData *m_CABaseData = nullptr;
 	unsigned m_start_t;
+
+	boost::asio::io_service::strand* m_strand;
 };
 
 template <class PeerCap>

@@ -21,27 +21,26 @@
  * @date 2014
  */
 
+#include <boost/algorithm/hex.hpp>
 #include <csignal>
 #include <jsonrpccpp/common/exception.h>
+
+#include <abi/SolidityExp.h>
+#include <abi/SolidityCoder.h>
+#include <abi/ContractAbiMgr.h>
 #include <libdevcore/CommonData.h>
+#include <libdevcore/easylog.h>
 #include <libevmcore/Instruction.h>
+#include <libethcore/CommonJS.h>
 #include <libethereum/Client.h>
 #include <libethereum/Pool.hpp>
 #include <libethereum/BlockQueue.h>
 #include <libpbftseal/PBFT.h>
 #include <libwebthree/WebThree.h>
-#include <libethcore/CommonJS.h>
-#include <libweb3jsonrpc/JsonHelper.h>
-#include <libdevcore/easylog.h>
-#include <abi/SolidityExp.h>
-#include <abi/SolidityCoder.h>
-#include <abi/ContractAbiMgr.h>
 #include <libweb3jsonrpc/JsonHelper.h>
 
-#include <boost/algorithm/hex.hpp>
-
-#include "Eth.h"
 #include "AccountHolder.h"
+#include "Eth.h"
 #include "JsonHelper.h"
 
 using namespace std;
@@ -563,6 +562,50 @@ string Eth::eth_sendRawTransaction(std::string const& _rlp)
 		{
 			BOOST_THROW_EXCEPTION(JsonRpcException("Malformed!!"));
 		}
+		else if ( ImportResult::UTXOInvalidType == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOInvalidType."));
+		}
+		else if ( ImportResult::UTXOJsonParamError == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOJsonParamError."));
+		}
+		else if ( ImportResult::UTXOTokenIDInvalid == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOTokenIDInvalid."));
+		}
+		else if ( ImportResult::UTXOTokenUsed == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOTokenUsed."));
+		}
+		else if ( ImportResult::UTXOTokenOwnerShipCheckFail == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOTokenOwnerShipCheckFail."));
+		}
+		else if ( ImportResult::UTXOTokenLogicCheckFail == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOTokenLogicCheckFail."));
+		}
+		else if ( ImportResult::UTXOTokenAccountingBalanceFail == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOTokenAccountingBalanceFail."));
+		}
+		else if ( ImportResult::UTXOTokenCntOutofRange == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOTokenCntOutofRange."));
+		}
+		else if ( ImportResult::UTXOTokenKeyRepeat == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOTokenKeyRepeat."));
+		}
+		else if ( ImportResult::UTXOTxError == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("Something Other Error in UTXO Tx."));
+		}
+		else if ( ImportResult::UTXOLowEthVersion == ir )
+		{
+			BOOST_THROW_EXCEPTION(JsonRpcException("UTXOLowEthVersion."));
+		}
 		else
 		{
 			BOOST_THROW_EXCEPTION(JsonRpcException(" Something Fail!"));
@@ -689,9 +732,487 @@ Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _bloc
 	}
 }
 
+bool Eth::isUTXOTx(Json::Value const& _json)
+{
+	if (_json.isMember("data") && _json["data"].isString())
+	{
+		string string_data = _json["data"].asString();
+		if (string_data.compare(0,2,"0x") == 0 || string_data.compare(0, 2, "0X") == 0)
+		{
+			return false;
+		}
+
+		Json::Value json;
+		Json::Reader reader;
+		try 
+		{
+			if (reader.parse(_json["data"].asString(), json, false))
+			{
+				if (json.isMember("utxotype") && 
+					json["utxotype"].isInt() &&
+					json["utxotype"].asInt() > 0)
+				{
+					return true;
+				}
+			}
+		}
+		catch (...)
+		{
+			LOG(TRACE) << "Eth::isUTXOTx parse exception";
+			BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+			return false;
+		}
+	}
+
+	return false;
+}
+
+string Eth::utxoCall(Json::Value const& _json)
+{
+	// [in]
+	Json::Value json;
+	Json::Reader reader;
+
+	// [out]
+	Json::Value root;
+	Json::FastWriter writer;  
+
+	LOG(TRACE) << "Eth::utxoCall UTXOData:" << writer.write(_json);
+
+	if (reader.parse(_json["data"].asString(), json, false))
+	{
+		if (json.isMember("queryparams") && json["queryparams"].isArray() && 
+			json.isMember("utxotype") && json["utxotype"].isInt())
+		{
+			Json::Value utxoData = json["queryparams"];
+			UTXOType utxoType = UTXOType(json["utxotype"].asInt());
+
+			switch (utxoType)
+			{
+				case UTXOType::RegisterAccount:
+				{
+					return utxo_call_registerAccount(utxoData);
+				}
+				case UTXOType::GetToken:
+				{				
+					return utxo_call_getToken(utxoData);
+				}
+				case UTXOType::GetTx:
+				{	
+					return utxo_call_getTx(utxoData);
+				}
+				case UTXOType::GetVault:
+				{
+					return utxo_call_getVault(utxoData);
+				}
+				case UTXOType::SelectTokens:
+				{
+					return utxo_call_selectTokens(utxoData);
+				}
+				case UTXOType::TokenTracking:
+				{
+					return utxo_call_tokenTracking(utxoData);
+				}
+				case UTXOType::GetBalance:
+				{
+					return utxo_call_getBalance(utxoData);
+				}
+				case UTXOType::ShowAll:
+				{
+					client()->getUTXOMgr()->showAll();
+					root["code"] = int(UTXOModel::UTXOExecuteState::Success);
+					root["msg"] = "The result shown in Logs";
+					return writer.write(root);
+				}
+				default:
+				{
+					LOG(TRACE) << "callUTXO Invalid utxo type";
+
+					root["code"] = int(UTXOModel::UTXOExecuteState::UTXOTypeInvalid);
+					root["msg"] = "SendUTXOTransaction Invalid UTXO Type";
+    				return writer.write(root);
+				}
+			}
+		}
+	}
+
+	LOG(TRACE) << "callUTXO Invalid param";
+	root["code"] = int(UTXOModel::UTXOExecuteState::OtherFail);
+	root["msg"] = "SendUTXOTransaction InValid param";
+    return writer.write(root);
+}
+
+bool Eth::getAccount(Json::Value const& utxoData, Address& account, string& ret)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	if (!(utxoData.isMember("account") && utxoData["account"].isString()))
+	{
+		root["code"] = -1;
+		root["msg"] = "Account is necessary";
+		ret = writer.write(root);
+		return false;
+	}
+	else
+	{
+		try 
+		{
+			account = jsToAddress(utxoData["account"].asString());
+		}
+		catch (...)
+		{
+			root["code"] = -1;
+			root["msg"] = "Account is not an address";
+			ret = writer.write(root);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool Eth::getValue(Json::Value const& utxoData, dev::u256& value, std::string& ret)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	if (!(utxoData.isMember("value") && utxoData["value"].isString()))
+	{
+		root["code"] = -1;
+		root["msg"] = "The parameters are necessary";
+		ret = writer.write(root);
+		return false;
+	}
+	else
+	{
+		string str = utxoData["value"].asString();
+		if (str == "undefined")
+		{
+			root["code"] = -1;
+			root["msg"] = "The parameters are necessary";
+			ret = writer.write(root);
+			return false;
+		}
+		for (size_t i = 0; i < str.size(); i++)
+		{
+			int tmp = (int)str[i];
+			if (tmp >= 48 && tmp <= 57)
+			{
+				continue;
+			}
+			else
+			{
+				root["code"] = -1;
+				root["msg"] = "Parameter needs digital format.";
+				ret = writer.write(root);
+				return false;
+			}
+		} 
+
+		value = jsToU256(str);
+	}
+
+	return true;
+}
+
+UTXOModel::QueryUTXOParam Eth::getQueryParam(Json::Value const& utxoData)
+{
+	// 分页查询查询begin和cnt设置默认值0和10
+	u256 begin = 0;
+	u256 cnt = 10;
+	u256 end = 0;
+	u256 total = 0;
+	u256 totalTokenValue = 0;
+	if (utxoData.isMember("begin") && utxoData["begin"].isString())
+	{
+		begin = jsToU256(utxoData["begin"].asString());
+	}
+	if (utxoData.isMember("cnt") && utxoData["cnt"].isString())
+	{
+		cnt = jsToU256(utxoData["cnt"].asString());
+		if (cnt > (u256)10)							// 限制分页每页最大值为10
+		{
+			cnt = (u256)10;
+		}
+	}
+
+	UTXOModel::QueryUTXOParam param = {begin, cnt, end, total, totalTokenValue};
+	return param;
+}
+
+string Eth::utxo_call_registerAccount(Json::Value const& utxoData)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	// 参数个数校验
+	if (utxoData.size() != 1) 
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is expected to 1.";
+		return writer.write(root);
+	}
+
+	// 获取操作参数
+	Address account;
+	string ret;
+	if (!getAccount(utxoData[0], account, ret)) { return ret; }	
+
+	// 执行操作
+	pair<UTXOModel::UTXOExecuteState, string> retState =client()->getUTXOMgr()->registerAccount(account);
+	root["code"] = int(retState.first);
+	root["msg"] = retState.second;
+
+	return writer.write(root);
+}
+
+string Eth::utxo_call_getToken(Json::Value const& utxoData)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	// 参数个数校验
+	if (utxoData.size() != 1) 
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is expected to 1.";
+		return writer.write(root);
+	}
+
+	// 获取查询参数
+	if (!(utxoData[0].isMember("tokenkey") && utxoData[0]["tokenkey"].isString()))
+	{
+		root["code"] = -1;
+		root["msg"] = "Token key parameters is necessary.";
+		return writer.write(root);
+	}
+	string tokenkey = (utxoData[0]["tokenkey"].asString());
+
+	// 执行查询操作				
+	string ret;
+	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->getTokenByKey(tokenkey, ret);
+	LOG(TRACE) << "utxo_call_getToken ret=" << ret;
+	root["code"] = int(retState.first);
+	root["msg"] = retState.second;
+	if (ret.size() > 0) {
+		ret.pop_back();
+		root["data"] = ret;
+	}
+
+	return writer.write(root);
+}
+
+string Eth::utxo_call_getTx(Json::Value const& utxoData)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	// 参数个数校验
+	if (utxoData.size() != 1) 
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is expected to 1.";
+		return writer.write(root);
+	}
+
+	// 获取查询参数
+	if (!(utxoData[0].isMember("txkey") && utxoData[0]["txkey"].isString()))
+	{
+		root["code"] = -1;
+		root["msg"] = "Tx key parameters is necessary.";
+		return writer.write(root);
+	}
+	string txKey = (utxoData[0]["txkey"].asString());
+
+	// 执行查询操作					
+	string ret;
+	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->getTxByKey(txKey, ret);
+	LOG(TRACE) << "utxo_call_getTx ret=" << ret;
+	root["code"] = int(retState.first);
+	root["msg"] = retState.second;
+	if (ret.size() > 0) {
+		ret.pop_back();
+		root["data"] = ret;
+	}
+					
+	return writer.write(root);
+}
+
+string Eth::utxo_call_getVault(Json::Value const& utxoData)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	// 参数个数校验
+	if (utxoData.size() != 1) 
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is expected to 1.";
+		return writer.write(root);
+	}
+	
+	// 获取查询参数
+	Address account;
+	string ret;
+	if (!getAccount(utxoData[0], account, ret)) { return ret; }		
+	u256 value;
+	if (!getValue(utxoData[0], value, ret)) { return ret; }
+	if (value >= UTXOModel::TokenState::TokenStateCnt)
+	{
+		root["code"] = -1;
+		root["msg"] = "Token State in wrong format, from 0 (0 means full query) to " + toString((int)UTXOModel::TokenState::TokenStateCnt);
+		return writer.write(root);
+	}
+	UTXOModel::TokenState tokenState = (UTXOModel::TokenState)value;
+	UTXOModel::QueryUTXOParam param = getQueryParam(utxoData[0]);	// 分页查询参数
+
+	// 执行查询操作
+	vector<string> tokenKeys;
+	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->getVaultByAccountByPart(account, tokenState, tokenKeys, param);
+	root["code"] = int(retState.first);
+	root["msg"] = retState.second;
+	if (tokenKeys.size() > 0)
+	{
+		Json::Value data;
+		for (string key: tokenKeys) { data.append(key); }
+		root["data"] = data;
+	}
+	root["begin"] = (int)param.start;
+	root["cnt"] = (int)param.cnt;
+	root["end"] = (int)param.end;
+	root["total"] = (int)param.total;
+					
+	return writer.write(root);
+}
+
+string Eth::utxo_call_tokenTracking(Json::Value const& utxoData)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	// 参数个数校验
+	if (utxoData.size() != 1) 
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is expected to 1.";
+		return writer.write(root);
+	}
+
+	// 获取查询参数
+	if (!(utxoData[0].isMember("tokenkey") && utxoData[0]["tokenkey"].isString()))
+	{
+		root["code"] = -1;
+		root["msg"] = "Token key parameters is necessary.";
+		return writer.write(root);
+	}
+	string token = (utxoData[0]["tokenkey"].asString());
+	UTXOModel::QueryUTXOParam param = getQueryParam(utxoData[0]);	// 分页查询参数
+
+	// 执行查询操作
+	vector<string> tokenKeys;
+	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->tokenTrackingByPart(token, tokenKeys, param);
+	root["code"] = int(retState.first);
+	root["msg"] = retState.second;
+	if (tokenKeys.size() > 0)
+	{
+		Json::Value data;
+		for (string key: tokenKeys) { data.append(key); }
+		root["data"] = data;
+	}
+	root["begin"] = (int)param.start;
+	root["cnt"] = (int)param.cnt;
+	root["end"] = (int)param.end;
+	root["total"] = (int)param.total;
+					
+	return writer.write(root);
+}
+
+string Eth::utxo_call_selectTokens(Json::Value const& utxoData)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	// 参数个数校验
+	if (utxoData.size() != 1) 
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is expected to 1.";
+		return writer.write(root);
+	}
+	
+	// 获取查询参数
+	Address account;
+	u256 value;
+	string ret;
+	if (!getAccount(utxoData[0], account, ret)) { return ret; }					
+	if (!getValue(utxoData[0], value, ret)) { return ret; }
+	if (0 == value)
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is bigger than 0.";
+		return writer.write(root);
+	}
+	UTXOModel::QueryUTXOParam param = getQueryParam(utxoData[0]);	// 分页查询参数
+
+	// 执行查询操作
+	vector<string> tokenKeys;
+	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->selectTokensByPart(account, value, tokenKeys, param);
+	root["code"] = int(retState.first);
+	root["msg"] = retState.second;
+	if (tokenKeys.size() > 0)
+	{
+		Json::Value data;
+		for (string key: tokenKeys) { data.append(key); }
+		root["data"] = data;
+	}
+	root["begin"] = (int)param.start;
+	root["cnt"] = (int)param.cnt;
+	root["end"] = (int)param.end;
+	root["total"] = (int)param.total;
+	root["totalTokenValue"] = (int)param.totalValue;
+	
+	return writer.write(root);
+}
+
+string Eth::utxo_call_getBalance(Json::Value const& utxoData)
+{
+	Json::Value root;
+	Json::FastWriter writer; 
+
+	// 参数个数校验
+	if (utxoData.size() != 1) 
+	{
+		root["code"] = -1;
+		root["msg"] = "The size of parameters is expected to 1.";
+		return writer.write(root);
+	}
+	
+	// 获取查询参数
+	Address account;
+	string ret;
+	if (!getAccount(utxoData[0], account, ret)) { return ret; }
+
+	// 执行查询操作
+	u256 balance = 0;
+	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->getBalanceByAccount(account, balance);
+	root["code"] = int(retState.first);
+	root["msg"] = retState.second;
+	root["balance"] = (int)balance;
+	return writer.write(root);
+}
 
 string Eth::eth_call(Json::Value const& _json, string const& _blockNumber)
 {
+	if (isUTXOTx(_json))
+	{
+		LOG(TRACE) << "Eth::eth_call is UTXO";
+		return utxoCall(_json);
+	}
+	else {
+		LOG(TRACE) << "Eth::eth_call isnot UTXO";
+	}
+
 	try
 	{
 		LOG(DEBUG) << "eth_call # _json = " << _json.toStyledString();

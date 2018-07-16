@@ -57,12 +57,11 @@ public:
 	virtual Message::Ptr sendMessage(Message::Ptr request, size_t timeout = 0) throw(ChannelException);
 	virtual void asyncSendMessage(Message::Ptr request, std::function<void(dev::channel::ChannelException, Message::Ptr)> callback, uint32_t timeout = 0);
 
-	virtual void handshake(bool enableSSL, bool isServer);
 	virtual void run();
 
 	virtual bool actived() { return _actived; };
 
-	virtual void setMessageHandler(std::function<void(dev::channel::ChannelException, Message::Ptr)> handler) { _messageHandler = handler; };
+	virtual void setMessageHandler(std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)> handler) { _messageHandler = handler; };
 
 	virtual std::string host() { return _host; };
 	virtual int port() { return _port; };
@@ -80,7 +79,6 @@ public:
 
 	std::shared_ptr<std::set<std::string> > topics() { return _topics; };
 	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
-
 	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
 private:
 	void onHandshake(const boost::system::error_code& error);
@@ -89,7 +87,7 @@ private:
 	void onRead(const boost::system::error_code& error, size_t bytesTransferred);
 
 	void startWrite();
-	void onWrite(const boost::system::error_code& error, size_t bytesTransferred);
+	void onWrite(const boost::system::error_code& error, std::shared_ptr<bytes> buffer, size_t bytesTransferred);
 	void writeBuffer(std::shared_ptr<bytes> buffer);
 
 	void onMessage(dev::channel::ChannelException e, Message::Ptr message);
@@ -101,7 +99,7 @@ private:
 
 	void updateIdleTimer();
 
-	std::function<void(dev::channel::ChannelException, Message::Ptr)> _messageHandler;
+	std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)> _messageHandler;
 
 	bool _actived = false;
 

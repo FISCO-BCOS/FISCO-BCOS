@@ -33,6 +33,10 @@
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 
+#if ETH_ENCRYPTTYPE
+#include <libdevcrypto/sm2/sm2.h>
+#endif
+
 #include "AES.h"
 #include "CryptoPP.h"
 #include "Exceptions.h"
@@ -61,6 +65,15 @@ private:
 
 bool dev::SignatureStruct::isValid() const noexcept
 {
+#if ETH_ENCRYPTTYPE
+	if (pub < h512(1) ||
+		r >= h256("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141") ||
+		s >= h256("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141") ||
+		s < h256(1) ||
+		r < h256(1))
+		return false;
+	return true;
+#else
 	if (v > 1 ||
 		r >= h256("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141") ||
 		s >= h256("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141") ||
@@ -68,6 +81,7 @@ bool dev::SignatureStruct::isValid() const noexcept
 		r < h256(1))
 		return false;
 	return true;
+#endif
 }
 
 Public SignatureStruct::recover(h256 const& _hash) const
@@ -77,8 +91,15 @@ Public SignatureStruct::recover(h256 const& _hash) const
 
 Address dev::ZeroAddress = Address();
 
-Public dev::toPublic(Secret const& _secret)
-{
+#if ETH_ENCRYPTTYPE
+Public dev::gmPub(Secret const& _secret){
+	string pri = toHex(bytesConstRef{_secret.data(),32});
+	string pub = SM2::getInstance().priToPub(pri);
+	return Public(fromHex(pub));
+}
+#endif
+
+Public dev::ecdsaPub(Secret const& _secret){
 	auto* ctx = Secp256k1Context::get();
 	secp256k1_pubkey rawPubkey;
 	// Creation will fail if the secret key is invalid.
@@ -87,14 +108,27 @@ Public dev::toPublic(Secret const& _secret)
 	std::array<byte, 65> serializedPubkey;
 	size_t serializedPubkeySize = serializedPubkey.size();
 	secp256k1_ec_pubkey_serialize(
-			ctx, serializedPubkey.data(), &serializedPubkeySize,
-			&rawPubkey, SECP256K1_EC_UNCOMPRESSED
-	);
+		ctx, serializedPubkey.data(), &serializedPubkeySize,
+		&rawPubkey, SECP256K1_EC_UNCOMPRESSED
+		);
 	assert(serializedPubkeySize == serializedPubkey.size());
 	// Expect single byte header of value 0x04 -- uncompressed public key.
 	assert(serializedPubkey[0] == 0x04);
 	// Create the Public skipping the header.
 	return Public{&serializedPubkey[1], Public::ConstructFromPointer};
+}
+
+Public dev::toPublic(Secret const& _secret)
+{
+#if ETH_ENCRYPTTYPE
+	Public gmPubKey = gmPub(_secret);
+	//LOG(DEBUG)<<"gmPubKey:"<<gmPubKey.hex();
+	return gmPubKey;
+#else
+	Public ecdsaPubKey = ecdsaPub(_secret);
+	//LOG(DEBUG)<<"ecdsaPubKey:"<<ecdsaPubKey.hex();
+	return ecdsaPubKey;
+#endif
 }
 
 Address dev::toAddress(Public const& _public)
@@ -215,7 +249,7 @@ bytesSec dev::decryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef 
 
 static const Public c_zeroKey("3f17f1962b36e491b30a40b2405849e597ba5fb5");
 
-Public dev::recover(Signature const& _sig, h256 const& _message)
+Public dev::ecdsaRecover(Signature const& _sig, h256 const& _message)
 {
 	int v = _sig[64];
 	if (v > 3)
@@ -233,9 +267,9 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
 	std::array<byte, 65> serializedPubkey;
 	size_t serializedPubkeySize = serializedPubkey.size();
 	secp256k1_ec_pubkey_serialize(
-			ctx, serializedPubkey.data(), &serializedPubkeySize,
-			&rawPubkey, SECP256K1_EC_UNCOMPRESSED
-	);
+		ctx, serializedPubkey.data(), &serializedPubkeySize,
+		&rawPubkey, SECP256K1_EC_UNCOMPRESSED
+		);
 	assert(serializedPubkeySize == serializedPubkey.size());
 	// Expect single byte header of value 0x04 -- uncompressed public key.
 	assert(serializedPubkey[0] == 0x04);
@@ -243,9 +277,65 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
 	return Public{&serializedPubkey[1], Public::ConstructFromPointer};
 }
 
+#if ETH_ENCRYPTTYPE
+Public dev::gmRecover(Signature const& _sig, h256 const& _message)
+{
+	SignatureStruct sign(_sig);
+	if (!sign.isValid())
+	{
+		return Public{};
+	}
+	if (gmVerify(sign.pub,_sig,_message))
+	{
+		return sign.pub;
+	}
+	return Public{};
+	//return sign.pub;
+}
+#endif
+
+Public dev::recover(Signature const& _sig, h256 const& _message)
+{
+#if ETH_ENCRYPTTYPE
+	return gmRecover(_sig,_message);
+#else
+	return ecdsaRecover(_sig,_message);
+#endif
+}
+
 static const u256 c_secp256k1n("115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
-Signature dev::sign(Secret const& _k, h256 const& _hash)
+#if ETH_ENCRYPTTYPE
+Signature dev::gmSign(Secret const& _k, h256 const& _hash)
+{
+	string pri = toHex(bytesConstRef{_k.data(),32});
+	string r = "", s = "";
+	if (!SM2::getInstance().sign((const char*)_hash.data(), h256::size, pri,r,s))
+	{
+		return Signature{};
+	}
+	string pub = SM2::getInstance().priToPub(pri);
+	//LOG(DEBUG) <<"_hash:"<<toHex(_hash.asBytes())<<"gmSign:"<< r + s + pub;
+	bytes byteSign = fromHex(r + s + pub);
+	//LOG(DEBUG)<<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
+	return Signature{byteSign};
+}
+
+bool dev::gmVerify(Public const& _p, Signature const& _s, h256 const& _hash)
+{
+	string signData = toHex(_s.asBytes());
+	//LOG(DEBUG)<<"verify signData:"<<signData;
+	//LOG(DEBUG)<<"_hash:"<<toHex(_hash.asBytes());
+	string pub = toHex(_p.asBytes());
+	pub = "04" + pub;
+	//LOG(DEBUG)<<"verify pub:"<<pub;
+	bool lresult = SM2::getInstance().verify(signData,signData.length(),(const char*)_hash.data(),h256::size,pub);
+	//LOG(DEBUG)<<"verify lresult:"<<lresult;
+	//assert(lresult);
+	return lresult;
+}
+#else
+Signature dev::ecdsaSign(Secret const& _k, h256 const& _hash)
 {
 	auto* ctx = Secp256k1Context::get();
 	secp256k1_ecdsa_recoverable_signature rawSig;
@@ -267,18 +357,39 @@ Signature dev::sign(Secret const& _k, h256 const& _hash)
 	return s;
 }
 
+bool dev::ecdsaVerify(Public const& _p, Signature const& _s, h256 const& _hash)
+{
+	return _p == recover(_s, _hash);
+}
+#endif
+
+Signature dev::sign(Secret const& _k, h256 const& _hash)
+{
+#if ETH_ENCRYPTTYPE
+	return gmSign(_k,_hash);
+#else
+	return ecdsaSign(_k,_hash);
+#endif
+}
+
+
+
 bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
 {
 	// TODO: Verify w/o recovery (if faster).
 	if (!_p)
 		return false;
-	return _p == recover(_s, _hash);
+#if ETH_ENCRYPTTYPE
+	return gmVerify(_p,_s,_hash);
+#else
+	return ecdsaVerify(_p,_s,_hash);
+#endif
 }
 
 bytesSec dev::pbkdf2(string const& _pass, bytes const& _salt, unsigned _iterations, unsigned _dkLen)
 {
 	bytesSec ret(_dkLen);
-	if (PKCS5_PBKDF2_HMAC<SHA256>().DeriveKey(
+	if (CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA256>().DeriveKey(
 		ret.writable().data(),
 		_dkLen,
 		0,

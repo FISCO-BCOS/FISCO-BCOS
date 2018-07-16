@@ -158,7 +158,8 @@ Linux)
                 libgmp-dev \
                 libleveldb-dev \
                 libmicrohttpd-dev \
-                libminiupnpc-dev
+                libminiupnpc-dev \
+                uuid-dev
             ;;
 
         Fedora)
@@ -169,7 +170,8 @@ Linux)
                 leveldb-devel \
                 curl-devel \
                 libmicrohttpd-devel \
-                gmp-devel
+                gmp-devel \
+                libuuid-devel
             ;;
 
 #------------------------------------------------------------------------------
@@ -203,6 +205,7 @@ Linux)
                 libleveldb-dev \
                 libmicrohttpd-dev \
                 libminiupnpc-dev \
+                uuid-dev \
                 $LLVM_PACKAGES
             ;;
 
@@ -218,7 +221,8 @@ Linux)
                 curl-devel \
                 libmicrohttpd-devel \
                 gmp-devel \
-                openssl openssl-devel
+                openssl openssl-devel \
+                libuuid-devel
             ;;
 	#add Oracle Linux Server dependencies
 	Oracle*)
@@ -233,7 +237,8 @@ Linux)
                 curl-devel \
                 libmicrohttpd-devel \
                 gmp-devel \
-                openssl openssl-devel
+                openssl openssl-devel \
+                libuuid-devel
             ;;
 
         *)

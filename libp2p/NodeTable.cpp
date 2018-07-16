@@ -23,7 +23,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
-
+unsigned const NodeTable::s_bucketSize=128; 
 
 NodeEntry::NodeEntry(NodeID const& _src, Public const& _pubk, NodeIPEndpoint const& _gw): Node(_pubk, _gw), distance(NodeTable::distance(_src, _pubk)) {
 	//LOG(INFO) <<"distance="<<distance<<","<<_gw.address.to_string()<<":"<<_gw.udpPort<<","<<_src<<","<<_pubk;

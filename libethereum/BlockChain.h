@@ -466,6 +466,8 @@ private:
 
 	mutable SharedMutex  x_blockcache;
 	mutable std::map<h256, std::pair<Block, u256> > m_blockCache;
+	mutable std::deque<h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
+	const unsigned kBlockCacheSize = 10;  // m_blockCache size, default set 10
 
 	
 	friend std::ostream& operator<<(std::ostream& _out, BlockChain const& _bc);

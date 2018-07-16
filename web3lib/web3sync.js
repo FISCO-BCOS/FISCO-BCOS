@@ -15,7 +15,7 @@ const fs=require('fs');
 const execSync =require('child_process').execSync;
 const coder = require('./codeUtils');
 var config=require('./config');
-
+var utils = require('./utils');
 /*
 *   npm install --save-dev babel-cli babel-preset-es2017
 *   echo '{ "presets": ["es2017"] }' > .babelrc
@@ -25,23 +25,15 @@ var config=require('./config');
 */
 
 function privateToPublic(privateKey) {
-  privateKey = toBuffer(privateKey)
-  // skip the type flag and use the X, Y points
-  return secp256k1.publicKeyCreate(privateKey, false).slice(1)
+  return utils.privateToPublic(privateKey);
 }
 
 function privateToAddress(privateKey) {
-  return publicToAddress(privateToPublic(privateKey))
+  return utils.privateToAddress(privateKey);
 }
 
 function publicToAddress(pubKey, sanitize) {
-  pubKey = toBuffer(pubKey)
-  if (sanitize && (pubKey.length !== 64)) {
-    pubKey = secp256k1.publicKeyConvert(pubKey, false).slice(1)
-  }
-  assert(pubKey.length === 64)
-  // Only take the lower 160bits of the hash
-  return sha3(pubKey).slice(-20)
+  return utils.publicToAddress(pubKey,sanitize);
 }
 
 
@@ -119,9 +111,7 @@ function setLength(msg, length, right) {
 }
 
 function sha3(a, bits) {
-  a = toBuffer(a)
-  if (!bits) bits = 256
-  return createKeccakHash('keccak' + bits).update(a).digest()
+  return utils.sha3(a,bits);
 }
 
 function baToJSON(ba) {
@@ -250,7 +240,8 @@ function bufferToInt(buf) {
 }
 
 function rlphash(a) {
-  return sha3(rlp.encode(a))
+  //console.log("rlpencode:",rlp.encode(a).toString("hex"));
+  return sha3(rlp.encode(a));
 }
 
 function ecrecover(msgHash, v, r, s) {
@@ -264,13 +255,7 @@ function ecrecover(msgHash, v, r, s) {
 }
 
 function ecsign(msgHash, privateKey) {
-  var sig = secp256k1.sign(msgHash, privateKey)
-
-  var ret = {}
-  ret.r = sig.signature.slice(0, 32)
-  ret.s = sig.signature.slice(32, 64)
-  ret.v = sig.recovery + 27
-  return ret
+  return utils.ecsign(msgHash,privateKey);
 }
 
 //const BN = ethUtil.BN
@@ -279,6 +264,83 @@ function ecsign(msgHash, privateKey) {
 const N_DIV_2 = new BN('7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0', 16)
 
 function Transaction(data) {
+  if (config.EncryptType == 1) {
+    data = data || {}
+    // Define Properties
+    const fields = [{
+      name: 'randomid',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'gasPrice',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'gasLimit',
+      alias: 'gas',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'blockLimit',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    },{
+      name: 'to',
+      allowZero: true,
+      length: 20,
+      default: new Buffer([])
+    }, {
+      name: 'value',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'data',
+      alias: 'input',
+      allowZero: true,
+      default: new Buffer([])
+    }, {
+      name: 'pub',
+      length: 64,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 'r',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }, {
+      name: 's',
+      length: 32,
+      allowLess: true,
+      default: new Buffer([])
+    }]
+
+    /**
+     * Returns the rlp encoding of the transaction
+     * @method serialize
+     * @return {Buffer}
+     */
+    // attached serialize
+    defineProperties(this, fields, data)
+
+    /**
+     * @prop {Buffer} from (read only) sender address of this transaction, mathematically derived from other parameters.
+     */
+    Object.defineProperty(this, 'from', {
+      enumerable: true,
+      configurable: true,
+      get: this.getSenderAddress.bind(this)
+    })
+
+    // set chainId
+    this._chainId = -4
+    this._homestead = true
+  }else{
     data = data || {}
     // Define Properties
     const fields = [{
@@ -359,6 +421,7 @@ function Transaction(data) {
     this._chainId = chainId || data.chainId || 0
     this._homestead = true
   }
+}
 
   /**
    * If the tx's `to` is to the creation address
@@ -385,9 +448,7 @@ function Transaction(data) {
       this.r = 0
       this.s = 0
     }
-
     // generate rlp params for hash
-	//console.log(this.raw.length)
     var txRawForHash = includeSignature ? this.raw : this.raw.slice(0, this.raw.length - 3)
     //var txRawForHash = includeSignature ? this.raw : this.raw.slice(0, 7)
 
@@ -661,8 +722,12 @@ async function rawDeploy(account,  privateKey,filename,types,params) {
     
     try{ 
       //用FISCO-BCOS的合约编译器fisco-solc进行编译
-      execSync("fisco-solc --overwrite --abi  --bin -o " + config.Ouputpath + "  " + filename + ".sol");
-        console.log(filename+'complie success！');
+      if (config.EncryptType == 1) {
+        execSync("fisco-solc-guomi --overwrite --abi  --bin -o " + config.Ouputpath + "  " + filename + ".sol");
+      }else{
+        execSync("fisco-solc --overwrite --abi  --bin -o " + config.Ouputpath + "  " + filename + ".sol");
+      }
+      console.log(filename+'complie success！');
     } catch(e){
         console.log(filename+'complie failed!' + e);
     }
@@ -821,6 +886,46 @@ async function sendRawTransaction(account, privateKey, to, func, params) {
 	});
 }
 
+async function sendUTXOTransaction(account, privateKey, params) {
+	var postdata = {
+		data: params[0],
+		from: account,
+		gas: 30000,
+		randomid:Math.ceil(Math.random()*100000000),
+		blockLimit:await getBlockNumber() + 1000,
+	}
+
+	var signTX = signTransaction(postdata, privateKey, null);
+
+	return new Promise((resolve, reject) => {
+		web3.eth.sendRawTransaction(signTX, function(err, address) {
+			if (!err) {
+				console.log("发送交易成功: " + address);
+
+				checkForTransactionResult(address, (err, receipt) => {
+					resolve(receipt);
+				});
+
+				//resolve(address);
+			}
+			else {
+				console.log("发送交易失败！",err);
+
+				return;
+			}
+		});
+	});
+}
+
+function callUTXO(params) {
+	var postdata = {
+		data: params[0],
+		to: ""
+	};
+
+	return web3.eth.call(postdata);
+}
+
 exports.getBlockNumber = getBlockNumber;
 exports.callByNameService = callByNameService;
 exports.sendRawTransactionByNameService = sendRawTransactionByNameService;
@@ -828,4 +933,6 @@ exports.sendRawTransaction = sendRawTransaction;
 exports.unlockAccount = unlockAccount;
 exports.rawDeploy = rawDeploy;
 exports.signTransaction=signTransaction;
+exports.sendUTXOTransaction = sendUTXOTransaction;
+exports.callUTXO = callUTXO;
 //exports.deploy=deploy;
