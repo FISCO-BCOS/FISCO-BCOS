@@ -236,12 +236,9 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 					break;
 				}
 				else if (result < 0) {
-
-
 					LOG(ERROR) << "协议解析出错: " << result;
 
 					disconnect(ChannelException(-1, "协议解析出错，连接断开"));
-
 					break;
 				}
 			}
@@ -460,7 +457,6 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 				catch (std::exception &e) {
 					LOG(ERROR) << "disconnect执行messageHandler错误 e:" << e.what();
 				}
-
 				_messageHandler = std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
 			}
 
