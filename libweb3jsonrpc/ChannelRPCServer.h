@@ -80,7 +80,6 @@ public:
 	virtual bool SendResponse(std::string const& _response, void* _addInfo = nullptr) override;
 
 
-
 	virtual void onConnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 
 
@@ -141,7 +140,6 @@ private:
 	void updateHostTopics();
 
 	std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string &topic);
-
 
 	bool _running = false;
 
