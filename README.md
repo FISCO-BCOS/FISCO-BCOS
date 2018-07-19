@@ -18,7 +18,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 ## 1.2 技术白皮书
 
-参见[金融区块链底层平台FISCO BCOS白皮书——金融区块链基础设施与实践样本v1.0](https://github.com/FISCO-BCOS/whitepaper)([PDF下载](https://raw.githubusercontent.com/FISCO-BCOS/whitepaper/master/FISCO-BCOS-WHITEPAPER.pdf))。
+参见[金融区块链底层平台FISCO BCOS白皮书——金融区块链基础设施与实践样本v1.0](https://github.com/FISCO-BCOS/whitepaper)([PDF下载](https://github.com/FISCO-BCOS/whitepaper/raw/master/FISCO%20BCOS%20Whitepaper.pdf))。
 
 
 # 2.安装部署
