@@ -161,6 +161,11 @@ void ChannelSession::setSSLSocket(std::shared_ptr<boost::asio::ssl::stream<boost
 
 void ChannelSession::onHandshake(const boost::system::error_code& error) {
 	try {
+		if(!_actived) {
+			LOG(ERROR) << "ChannelSession inactived";
+
+			return;
+		}
 		if (!error) {
 			startRead();
 		}
@@ -196,10 +201,9 @@ void ChannelSession::startRead() {
 				}
 			});
 
-#if 0
-			_sslSocket->async_read_some(boost::asio::buffer(_recvBuffer, bufferLength),
-			                            boost::bind(&ChannelSession::onRead, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-#endif
+		}
+		else {
+			LOG(ERROR) << "ChannelSession inactived";
 		}
 	}
 	catch (std::exception &e) {
@@ -210,6 +214,11 @@ void ChannelSession::startRead() {
 
 void ChannelSession::onRead(const boost::system::error_code& error, size_t bytesTransferred) {
 	try {
+		if(!_actived) {
+			LOG(ERROR) << "ChannelSession inactived";
+
+			return;
+		}
 		updateIdleTimer();
 
 		if (!error) {
@@ -257,6 +266,11 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 }
 
 void ChannelSession::startWrite() {
+	if(!_actived) {
+		LOG(ERROR) << "ChannelSession inactived";
+
+		return;
+	}
 	if (_writing) {
 		return;
 	}
@@ -284,14 +298,6 @@ void ChannelSession::startWrite() {
 			}
 		});
 
-#if 0
-		_sslSocket->get_io_service().post(
-		[ = ] {
-			boost::asio::async_write(*_sslSocket,
-			boost::asio::buffer(buffer->data(), buffer->size()),
-			boost::bind(&ChannelSession::onWrite, session, boost::asio::placeholders::error, buffer, boost::asio::placeholders::bytes_transferred));
-		});
-#endif
 	} else {
 		_writing = false;
 	}
@@ -312,6 +318,11 @@ void ChannelSession::writeBuffer(std::shared_ptr<bytes> buffer) {
 
 void ChannelSession::onWrite(const boost::system::error_code& error, std::shared_ptr<bytes> buffer, size_t bytesTransferred) {
 	try {
+		if(!_actived) {
+			LOG(ERROR) << "ChannelSession inactived";
+
+			return;
+		}
 		std::lock_guard<std::recursive_mutex> lock(_mutex);
 
 		updateIdleTimer();
@@ -335,6 +346,11 @@ void ChannelSession::onWrite(const boost::system::error_code& error, std::shared
 
 void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 	try {
+		if(!_actived) {
+			LOG(ERROR) << "ChannelSession inactived";
+
+			return;
+		}
 		auto it = _responseCallbacks.find(message->seq());
 		if (it != _responseCallbacks.end()) {
 			if(it->second->timeoutHandler.get() != NULL) {
@@ -356,7 +372,9 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 		else {
 			if (_messageHandler) {
 				_threadPool->enqueue([=]() {
+					if(_messageHandler) {
 					_messageHandler(shared_from_this(), ChannelException(0, ""), message);
+					}
 				});
 			}
 			else {
@@ -371,6 +389,11 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 
 void ChannelSession::onTimeout(const boost::system::error_code& error, std::string seq) {
 	try {
+		if(!_actived) {
+			LOG(ERROR) << "ChannelSession inactived";
+
+			return;
+		}
 		auto it = _responseCallbacks.find(seq);
 		if (it != _responseCallbacks.end()) {
 			if (it->second->callback) {
@@ -392,6 +415,11 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
 
 void ChannelSession::onIdle(const boost::system::error_code& error) {
 	try {
+		if(!_actived) {
+			LOG(ERROR) << "ChannelSession inactived";
+
+			return;
+		}
 		if (error != boost::asio::error::operation_aborted) {
 
 			LOG(ERROR) << "连接空闲，断开本连接 " << _host << ":" << _port;
@@ -420,7 +448,6 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 		std::lock_guard<std::recursive_mutex> lock(_mutex);
 		if (_actived) {
 			_idleTimer->cancel();
-			_idleTimer.reset();
 
 			//如果还存在未处理的callback或messagehandler，提示错误
 			if (!_responseCallbacks.empty()) {
@@ -472,6 +499,13 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 }
 
 void ChannelSession::updateIdleTimer() {
+	if(!_actived) {
+		LOG(ERROR) << "ChannelSession inactived";
+
+		return;
+	}
+
+	if(_idleTimer) {
 	_idleTimer->expires_from_now(boost::posix_time::seconds(5));
 	auto session = std::weak_ptr<ChannelSession>(shared_from_this());
 	_idleTimer->async_wait([session] (const boost::system::error_code& error){
@@ -480,4 +514,5 @@ void ChannelSession::updateIdleTimer() {
 			s->onIdle(error);
 		}
 	});
+	}
 }
