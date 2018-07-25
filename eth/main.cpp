@@ -99,106 +99,37 @@ static std::atomic<bool> g_silence = {false};
 
 void help()
 {
-	cout
-	        << "Usage eth [OPTIONS]" << "\n"
-	        << "Options:" << "\n" << "\n"
-	        << "Wallet usage:" << "\n";
-	AccountManager::streamAccountHelp(cout);
-	AccountManager::streamWalletHelp(cout);
-	cout
-	        << "\n";
-	cout
-	        << "Client mode (default):" << "\n"
-	        << "    --mainnet  Use the main network protocol." << "\n"
-	        << "    --ropsten  Use the Ropsten testnet." << "\n"
-	        << "    --private <name>  Use a private chain." << "\n"
-	        << "    --test  Testing mode: Disable PoW and provide test rpc interface." << "\n"
-	        << "    --config <file>  Configure specialised blockchain using given JSON information." << "\n"
-	        << "    --oppose-dao-fork  Ignore DAO hard fork (default is to participate)." << "\n"
-	        << "\n"
-	        << "    -o,--mode <full/peer>  Start a full node or a peer node (default: full)." << "\n"
-	        << "\n"
-	        << "    -j,--json-rpc  Enable JSON-RPC server (default: off)." << "\n"
-	        << "    --ipc  Enable IPC server (default: on)." << "\n"
-	        << "    --ipcpath Set .ipc socket path (default: data directory)" << "\n"
-	        << "    --admin-via-http  Expose admin interface via http - UNSAFE! (default: off)." << "\n"
-	        << "    --no-ipc  Disable IPC server." << "\n"
-	        << "    --json-rpc-port <n>  Specify JSON-RPC server port (implies '-j', default: " << SensibleHttpPort << ")." << "\n"
-	        << "    --rpccorsdomain <domain>  Domain on which to send Access-Control-Allow-Origin header." << "\n"
-	        << "    --admin <password>  Specify admin session key for JSON-RPC (default: auto-generated and printed at start-up)." << "\n"
-	        << "    -K,--kill  Kill the blockchain first." << "\n"
-	        << "    -R,--rebuild  Rebuild the blockchain from the existing database." << "\n"
-	        << "    --rescue  Attempt to rescue a corrupt database." << "\n"
-	        << "\n"
-	        << "    --import-presale <file>  Import a pre-sale key; you'll need to specify the password to this key." << "\n"
-	        << "    -s,--import-secret <secret>  Import a secret key into the key store." << "\n"
-	        << "    --master <password>  Give the master password for the key store. Use --master \"\" to show a prompt." << "\n"
-	        << "    --password <password>  Give a password for a private key." << "\n"
-	        << "\n"
-	        << "Client transacting:" << "\n"
-	        /*<< "    -B,--block-fees <n>  Set the block fee profit in the reference unit, e.g. ¢ (default: 15)." << "\n"
-	        << "    -e,--ether-price <n>  Set the ether price in the reference unit, e.g. ¢ (default: 30.679)." << "\n"
-	        << "    -P,--priority <0 - 100>  Set the default priority percentage (%) of a transaction (default: 50)." << "\n"*/
-	        << "    --ask <wei>  Set the minimum ask gas price under which no transaction will be mined (default " << toString(DefaultGasPrice) << " )." << "\n"
-	        << "    --bid <wei>  Set the bid gas price to pay for transactions (default " << toString(DefaultGasPrice) << " )." << "\n"
-	        << "    --unsafe-transactions  Allow all transactions to proceed without verification. EXTREMELY UNSAFE."
-	        << "\n"
-	        << "Client mining:" << "\n"
-	        << "    -a,--address <addr>  Set the author (mining payout) address to given address (default: auto)." << "\n"
-	        << "    -m,--mining <on/off/number>  Enable mining, optionally for a specified number of blocks (default: off)." << "\n"
-	        << "    -f,--force-mining  Mine even when there are no transactions to mine (default: off)." << "\n"
-	        << "    -C,--cpu  When mining, use the CPU." << "\n"
-	        << "    -t, --mining-threads <n>  Limit number of CPU/GPU miners to n (default: use everything available on selected platform)." << "\n"
-	        << "\n"
-	        << "Client networking:" << "\n"
-	        << "    --client-name <name>  Add a name to your client's version string (default: blank)." << "\n"
-	        << "    --bootstrap  Connect to the default Ethereum peer servers (default unless --no-discovery used)." << "\n"
-	        << "    --no-bootstrap  Do not connect to the default Ethereum peer servers (default only when --no-discovery is used)." << "\n"
-	        << "    -x,--peers <number>  Attempt to connect to a given number of peers (default: 11)." << "\n"
-	        << "    --peer-stretch <number>  Give the accepted connection multiplier (default: 7)." << "\n"
+	std::cout << "Usage fisco-bcos [OPTIONS]" << "\n"
+		<< "Options:" << "\n";
 
-	        << "    --public-ip <ip>  Force advertised public IP to the given IP (default: auto)." << "\n"
-	        << "    --listen-ip <ip>(:<port>)  Listen on the given IP for incoming connections (default: 0.0.0.0)." << "\n"
-	        << "    --listen <port>  Listen on the given port for incoming connections (default: 30303)." << "\n"
-	        << "    -r,--remote <host>(:<port>)  Connect to the given remote host (default: none)." << "\n"
-	        << "    --port <port>  Connect to the given remote port (default: 30303)." << "\n"
-	        << "    --network-id <n>  Only connect to other hosts with this network id." << "\n"
-	        << "    --upnp <on/off>  Use UPnP for NAT (default: on)." << "\n"
+	std::cout << "--config <file>						\n\tConfigure specialised blockchain using given JSON information." << "\n";
+	std::cout << "--genesis-json/--genesis <file>		\n\tSpecifies the genesis file." << "\n";
+	std::cout << "--peers/-x <number>					\n\tAttempt to connect to a given number of peers (default: 128)." << "\n";
+	std::cout << "--peer-stretch <number>				\n\tGive the accepted connection multiplier (default: 7)." << "\n";
+	std::cout << "--rescue								\n\tAttempt to rescue a corrupt database." << "\n";
+	std::cout << "\n";
+	std::cout << "-I/--import/import [--dont-check]		Import block." << "\n";
+	std::cout << "						\n\t--dont-check	Prevent checking some block aspects. Faster importing, but to apply only when the data is known to be valid." << "\n";
+	std::cout << "\n";
+	std::cout << "-E/--export/export <file> [--from <n>] [--to <n>] [--only <n>] [--format binary/hex/human]		Export block from blockchain." << "\n";
+	std::cout << "						<file>			The file saving export block data." << "\n";
+	std::cout << "						--from <n>		Export only from block n; n may be a decimal, a '0x' prefixed hash, or 'latest', default 1." << "\n";
+	std::cout << "						--to <n>			Export only to block n (inclusive); n may be a decimal, a '0x' prefixed hash, or 'latest', default 'latest'." << "\n";
+	std::cout << "						--only <n>		Equivalent to --export-from n --export-to n." << "\n";
+	std::cout << "						--format			binary/hex/human specify the format of saving data, default 'binary'." << "\n";
+	std::cout << "\n";
+	std::cout << "--export-genesis <file> [--contracts <c>] [--blocknumber <b>]		Export contract storage data for genesis.json file." << "\n";
+	std::cout << "						<file>              The generated genesis file." << "\n";
+	std::cout << "						--contracts <c>     Export the specified contract information; c may be multiple contracts address that semicolon as a delimiter. default all contracts to be export." << "\n";
+	std::cout << "						--blocknumber <b>   The blocknumber export to be done." << "\n";
+	std::cout << "\n";
+	std::cout << "--godminer <file>					\n\tSpecifies the god mod parameter file and fisco-bcos will be worked in god mode." << "\n";
+	std::cout << "--gennetworkrlp <file>			\n\tDisk encryption and node public private key generation." << "\n";
+	std::cout << "--cryptokey <file>				\n\tcrypto node.key node.private in data dir." << "\n";
+	std::cout << "--newaccount <file>				\n\tgenerate god account info in godInfo.txt." << "\n";
+	std::cout << "-V/--version						\n\tPrint fisco-bcos version info." << "\n";
+	std::cout << "-h/--help							\n\tHelp info, short usage info about fisco-bcos command line." << "\n";
 
-	        << "    --peerset <list>  Space delimited list of peers; element format: type:publickey@ipAddress[:port]." << "\n"
-	        << "        Types:" << "\n"
-	        << "        default		Attempt connection when no other peers are available and pinning is disabled." << "\n"
-	        << "        required		Keep connected at all times." << "\n"
-// TODO:
-//		<< "	--trust-peers <filename>  Space delimited list of publickeys." << "\n"
-
-	        << "    --no-discovery  Disable node discovery, implies --no-bootstrap." << "\n"
-	        << "    --pin  Only accept or connect to trusted peers." << "\n"
-	        << "    --hermit  Equivalent to --no-discovery --pin." << "\n"
-	        << "    --sociable  Force discovery and no pinning." << "\n"
-	        << "\n";
-	//MinerCLI::streamHelp(cout);
-	cout
-	        << "Import/export modes:" << "\n"
-	        << "    --from <n>  Export only from block n; n may be a decimal, a '0x' prefixed hash, or 'latest'." << "\n"
-	        << "    --to <n>  Export only to block n (inclusive); n may be a decimal, a '0x' prefixed hash, or 'latest'." << "\n"
-	        << "    --only <n>  Equivalent to --export-from n --export-to n." << "\n"
-	        << "    --dont-check  Prevent checking some block aspects. Faster importing, but to apply only when the data is known to be valid." << "\n"
-	        << "\n"
-	        << "General Options:" << "\n"
-	        << "    -d,--db-path,--datadir <path>  Load database from path (default: " << getDataDir() << ")." << "\n"
-#if ETH_EVMJIT
-	        << "    --vm <vm-kind>  Select VM; options are: interpreter, jit or smart (default: interpreter)." << "\n"
-#endif // ETH_EVMJIT
-	        << "    -v,--verbosity <0 - 9>  Set the log verbosity from 0 to 9 (default: 8)." << "\n"
-	        << "    -V,--version  Show the version and exit." << "\n"
-	        << "    -h,--help  Show this help message and exit." << "\n"
-	        << "\n"
-	        << "Experimental / Proof of Concept:" << "\n"
-	        << "    --shh  Enable Whisper." << "\n"
-	        << "    --singlepoint  Enable singlepoint." << "\n"
-	        << "\n"
-	        ;
 	exit(0);
 }
 
@@ -495,7 +426,6 @@ int main(int argc, char** argv)
 	OperationMode mode = OperationMode::Node;
 //	unsigned prime = 0;
 //	bool yesIReallyKnowWhatImDoing = false;
-	strings scripts;
 
 	/// File name for import/export.
 	string filename;
@@ -518,7 +448,7 @@ int main(int argc, char** argv)
 
 	string jsonAdmin;
 	ChainParams chainParams(genesisInfo(eth::Network::MainNetwork), genesisStateRoot(eth::Network::MainNetwork));
-	u256 gasFloor = Invalid256;
+	
 	string privateChain;
 
 	bool upnp = true;
@@ -546,7 +476,7 @@ int main(int argc, char** argv)
 	/// Mining params
 	unsigned mining = ~(unsigned)0;
 	Address author;
-	//cout << " Main:: author: " << author;
+
 	strings presaleImports;
 	bytes extraData;
 
@@ -609,37 +539,8 @@ int main(int argc, char** argv)
 		/*if (m.interpretOption(i, argc, argv))
 		{
 		}
-		else */if (arg == "--listen-ip" && i + 1 < argc)
-		{
-			listenIP = argv[++i];
-			listenSet = true;
-		}
-		else if ((arg == "--listen" || arg == "--listen-port") && i + 1 < argc)
-		{
-			listenPort = (short)atoi(argv[++i]);
-			listenSet = true;
-		}
-		else if ((arg == "--public-ip" || arg == "--public") && i + 1 < argc)
-		{
-			publicIP = argv[++i];
-		}
-		else if ((arg == "-r" || arg == "--remote") && i + 1 < argc)
-		{
-			string host = argv[++i];
-			string::size_type found = host.find_first_of(':');
-			if (found != std::string::npos)
-			{
-				remoteHost = host.substr(0, found);
-				remotePort = (short)atoi(host.substr(found + 1, host.length()).c_str());
-			}
-			else
-				remoteHost = host;
-		}
-		else if (arg == "--port" && i + 1 < argc)
-		{
-			remotePort = (short)atoi(argv[++i]);
-		}
-		else if (arg == "--password" && i + 1 < argc)
+		else */
+		if (arg == "--password" && i + 1 < argc)
 			passwordsToNote.push_back(argv[++i]);
 		else if (arg == "--master" && i + 1 < argc)
 		{
@@ -671,8 +572,6 @@ int main(int argc, char** argv)
 			mode = OperationMode::Export;
 			filename = argv[++i];
 		}
-		else if (arg == "--script" && i + 1 < argc)
-			scripts.push_back(argv[++i]);
 		else if (arg == "--format" && i + 1 < argc)
 		{
 			string m = argv[++i];
@@ -707,57 +606,8 @@ int main(int argc, char** argv)
 				return -1;
 			}
 		}
-		else if (arg == "--network-id" && i + 1 < argc)
-			try {
-				networkID = stol(argv[++i]);
-			}
-			catch (...)
-			{
-				LOG(ERROR) << "Bad " << arg << " option: " << argv[i] << "\n";
-				return -1;
-			}
-		else if (arg == "--private" && i + 1 < argc)
-			try {
-				privateChain = argv[++i];
-			}
-			catch (...)
-			{
-				LOG(ERROR) << "Bad " << arg << " option: " << argv[i] << "\n";
-				return -1;
-			}
-		else if (arg == "--independent" && i + 1 < argc)
-			try {
-				privateChain = argv[++i];
-				noPinning = enableDiscovery = true;
-			}
-			catch (...)
-			{
-				LOG(ERROR) << "Bad " << arg << " option: " << argv[i] << "\n";
-				return -1;
-			}
-		else if (arg == "-K" || arg == "--kill-blockchain" || arg == "--kill")
-			withExisting = WithExisting::Kill;
-		else if (arg == "-R" || arg == "--rebuild")
-			withExisting = WithExisting::Verify;
 		else if (arg == "-R" || arg == "--rescue")
 			withExisting = WithExisting::Rescue;
-		else if (arg == "--client-name" && i + 1 < argc)
-			clientName = argv[++i];
-		else if ((arg == "-a" || arg == "--address" || arg == "--author") && i + 1 < argc)
-			try {
-				author = h160(fromHex(argv[++i], WhenError::Throw));
-
-			}
-			catch (BadHexCharacter&)
-			{
-				LOG(ERROR) << "Bad hex in " << arg << " option: " << argv[i] << "\n";
-				return -1;
-			}
-			catch (...)
-			{
-				LOG(ERROR) << "Bad " << arg << " option: " << argv[i] << "\n";
-				return -1;
-			}
 		else if ((arg == "-s" || arg == "--import-secret") && i + 1 < argc)
 		{
 			Secret s(fromHex(argv[++i]));
@@ -768,10 +618,6 @@ int main(int argc, char** argv)
 			Secret s(fromHex(argv[++i]));
 			toImport.emplace_back(s);
 		}
-		else if ((arg == "-d" || arg == "--path" || arg == "--db-path" || arg == "--datadir") && i + 1 < argc)
-			setDataDir(argv[++i]);
-		else if (arg == "--ipcpath" && i + 1 < argc )
-			setIpcPath(argv[++i]);
 		else if ((arg == "--genesis-json" || arg == "--genesis") && i + 1 < argc)
 		{
 			try
@@ -809,110 +655,16 @@ int main(int argc, char** argv)
 				return -1;
 			}
 		}
-		else if (arg == "--gas-floor" && i + 1 < argc)
-			gasFloor = u256(argv[++i]);
-		else if (arg == "--mainnet")
-			chainParams = ChainParams(genesisInfo(eth::Network::MainNetwork), genesisStateRoot(eth::Network::MainNetwork));
-		else if (arg == "--ropsten" || arg == "--testnet")
-			chainParams = ChainParams(genesisInfo(eth::Network::Ropsten), genesisStateRoot(eth::Network::Ropsten));
-		else if (arg == "--oppose-dao-fork")
-		{
-			chainParams = ChainParams(genesisInfo(eth::Network::MainNetwork), genesisStateRoot(eth::Network::MainNetwork));
-			chainParams.otherParams["daoHardforkBlock"] = toHex(u256(-1) - 10, HexPrefix::Add);
-		}
-		else if (arg == "--bob")
-		{
-			cout << "Asking Bob for blocks (this should work in theoreum)..." << "\n";
-			while (true)
-			{
-				u256 x(h256::random());
-				u256 c;
-				for (; x != 1; ++c)
-				{
-					x = (x & 1) == 0 ? x / 2 : 3 * x + 1;
-					cout << toHex(x) << "\n";
-					this_thread::sleep_for(chrono::seconds(1));
-				}
-				cout << "Block number: " << hex << c << "\n";
-				exit(0);
-			}
-		}
-		else if (arg == "--ask" && i + 1 < argc)
-		{
-			try
-			{
-				askPrice = u256(argv[++i]);
-			}
-			catch (...)
-			{
-				LOG(ERROR) << "Bad " << arg << " option: " << argv[i] << "\n";
-				return -1;
-			}
-		}
-		else if (arg == "--bid" && i + 1 < argc)
-		{
-			try
-			{
-				bidPrice = u256(argv[++i]);
-			}
-			catch (...)
-			{
-				LOG(ERROR) << "Bad " << arg << " option: " << argv[i] << "\n";
-				return -1;
-			}
-		}
-		else if ((arg == "-m" || arg == "--mining") && i + 1 < argc)
-		{
-			string m = argv[++i];
-			if (isTrue(m))
-				mining = ~(unsigned)0;
-			else if (isFalse(m))
-				mining = 0;
-			else
-				try {
-					mining = stoi(m);
-				}
-				catch (...) {
-					LOG(ERROR) << "Unknown " << arg << " option: " << m << "\n";
-					return -1;
-				}
-		}
-		else if (arg == "-b" || arg == "--bootstrap")
-			bootstrap = true;
-		else if (arg == "--no-bootstrap")
-			bootstrap = false;
-		else if (arg == "--no-discovery")
-		{
-			disableDiscovery = true;
-			bootstrap = false;
-		}
-		else if (arg == "--pin")
-			pinning = true;
-		else if (arg == "--hermit")
-			pinning = disableDiscovery = true;
-		else if (arg == "--sociable")
-			noPinning = enableDiscovery = true;
-		else if (arg == "--unsafe-transactions")
-			alwaysConfirm = false;
 		else if (arg == "--import-presale" && i + 1 < argc)
 			presaleImports.push_back(argv[++i]);
 		/*else if (arg == "--old-interactive")
 			interactive = true;*/
-
-		else if ((arg == "-j" || arg == "--json-rpc"))
-			jsonRPCURL = jsonRPCURL == -1 ? SensibleHttpPort : jsonRPCURL;
 		else if (arg == "--admin-via-http")
 			adminViaHttp = true;
-		else if (arg == "--json-rpc-port" && i + 1 < argc)
-			jsonRPCURL = atoi(argv[++i]);
 		else if (arg == "--rpccorsdomain" && i + 1 < argc)
 			rpcCorsDomain = argv[++i];
 		else if (arg == "--json-admin" && i + 1 < argc)
 			jsonAdmin = argv[++i];
-		else if (arg == "--ipc")
-			ipc = true;
-		else if (arg == "--no-ipc")
-			ipc = false;
 		else if ((arg == "-x" || arg == "--peers") && i + 1 < argc)
 			peers = atoi(argv[++i]);
 		else if (arg == "--peer-stretch" && i + 1 < argc)
@@ -974,36 +726,6 @@ int main(int argc, char** argv)
 				}
 			}
 		}
-		else if ((arg == "-o" || arg == "--mode") && i + 1 < argc)
-		{
-			string m = argv[++i];
-			if (m == "full")
-				nodeMode = NodeMode::Full;
-			else if (m == "peer")
-				nodeMode = NodeMode::PeerServer;
-			else
-			{
-				LOG(ERROR) << "Unknown mode: " << m << "\n";
-				return -1;
-			}
-		}
-#if ETH_EVMJIT
-		else if (arg == "--vm" && i + 1 < argc)
-		{
-			string vmKind = argv[++i];
-			if (vmKind == "interpreter")
-				VMFactory::setKind(VMKind::Interpreter);
-			else if (vmKind == "jit")
-				VMFactory::setKind(VMKind::JIT);
-			else if (vmKind == "smart")
-				VMFactory::setKind(VMKind::Smart);
-			else
-			{
-				LOG(ERROR) << "Unknown VM kind: " << vmKind << "\n";
-				return -1;
-			}
-		}
-#endif
 		else if (arg == "--shh")
 			useWhisper = true;
 		else if (arg == "-h" || arg == "--help")
@@ -1114,21 +836,6 @@ int main(int argc, char** argv)
 				LOG(ERROR)<< "--gennetworkrlp parameter err";
 				exit(-1);
 			}
-		}else if (arg == "--test")
-		{
-			testingMode = true;
-			enableDiscovery = false;
-			disableDiscovery = true;
-			noPinning = true;
-			bootstrap = false;
-		}
-		else if ( arg == "--singlepoint" )
-		{
-			singlepoint = true;
-			enableDiscovery = false;
-			disableDiscovery = true;
-			noPinning = true;
-			bootstrap = false;
 		}
 		else if ( arg == "--godminer" )
 		{
