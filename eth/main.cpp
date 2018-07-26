@@ -1731,18 +1731,6 @@ int main(int argc, char** argv)
 
 		if (jsonRPCURL >= 0)
 		{
-			rpc::AdminEth* adminEth = nullptr;
-			rpc::PersonalFace* personal = nullptr;
-			rpc::AdminNet* adminNet = nullptr;
-			rpc::AdminUtils* adminUtils = nullptr;
-			if (adminViaHttp)
-			{
-				personal = new rpc::Personal(keyManager, *accountHolder, *web3.ethereum());
-				adminEth = new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get());
-				adminNet = new rpc::AdminNet(web3, *sessionManager.get());
-				adminUtils = new rpc::AdminUtils(*sessionManager.get());
-			}
-
 			//no need to maintain admin and leveldb interfaces for rpc
 			jsonrpcHttpServer.reset(new FullServer(
 			                            ethFace,
