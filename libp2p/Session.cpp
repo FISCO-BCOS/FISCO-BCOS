@@ -70,7 +70,9 @@ Session::~Session()
 		if (m_socket->isConnected())
 		{
 			boost::system::error_code ec;
-			socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+
+			//shutdown may block servals seconds - morebtcg
+			//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 			socket.close();
 		}
 	}
@@ -515,7 +517,9 @@ void Session::drop(DisconnectReason _reason)
 	try
 	{
 		boost::system::error_code ec;
-		socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+
+		//shutdown may block servals seconds - morebtcg
+		//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 		LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
 		
 		socket.close();
