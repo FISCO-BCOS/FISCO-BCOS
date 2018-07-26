@@ -46,7 +46,7 @@ class ChannelSession: public std::enable_shared_from_this<ChannelSession> {
 public:
 	ChannelSession();
 	virtual ~ChannelSession() {
-		LOG(DEBUG) << "session退出";
+		LOG(DEBUG) << "session exit";
 	};
 
 	typedef std::shared_ptr<ChannelSession> Ptr;
