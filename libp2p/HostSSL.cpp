@@ -134,6 +134,19 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 	LOG(INFO) << "HostSSL::startPeerSession! "<<pub ;
 	Public  _id=pub;
 
+	//connection must be disconnect before the creation of session object and peer object - morebtcg
+	if(_id == id()) {
+		LOG(TRACE) << "Disconnect self: "
+			<< _id << "@" << _s->nodeIPEndpoint().address.to_string()
+			<< ":" << _s->nodeIPEndpoint().tcpPort;
+
+		_s->close();
+		throw Exception("Disconnect self");
+
+		//ps->disconnect(LocalIdentity);
+		return;
+	}
+
 	NodeIPEndpoint _nodeIPEndpoint;
 	_nodeIPEndpoint.address = _s->remoteEndpoint().address();
 	_nodeIPEndpoint.tcpPort=listenPort;
@@ -166,14 +179,6 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 
 	shared_ptr<SessionFace> ps = make_shared<Session>(this, move(_io), _s, p, PeerSessionInfo({_id, clientVersion, p->endpoint.address.to_string(), listenPort, chrono::steady_clock::duration(), _rlp[2].toSet<CapDesc>(), 0, map<string, string>(), _nodeIPEndpoint}));
 	((Session *)ps.get())->setStatistics(new InterfaceStatistics(getDataDir() + "P2P" + p->id.hex(), m_statisticsInterval));
-
-	if(_id == id()) {
-		LOG(TRACE) << "Disconnect self: "
-				<< _id << "@" << _s->nodeIPEndpoint().address.to_string()
-				<< ":" << _s->nodeIPEndpoint().tcpPort;
-		ps->disconnect(LocalIdentity);
-		return;
-	}
 
 	if (protocolVersion < dev::p2p::c_protocolVersion - 1)
 	{

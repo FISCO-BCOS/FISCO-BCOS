@@ -63,10 +63,7 @@ public:
 		dev::channel::ChannelSession::Ptr toSession;
 		std::set<dev::channel::ChannelSession::Ptr> failedSessions;
 
-		//消息
 		dev::channel::Message::Ptr message;
-
-
 	};
 
 	typedef std::shared_ptr<ChannelRPCServer> Ptr;
@@ -94,19 +91,14 @@ public:
 
 	virtual void onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	//来自前置的topic请求
 	virtual void onClientTopicRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	//来自前置的链上链下二期请求
 	virtual void onClientChannelRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-	//收到来自其他节点的请求
 	virtual void onNodeRequest(dev::h512 nodeID, std::shared_ptr<dev::bytes> message);
 
-	//(废弃)收到来自其他节点的链上链下请求
 	virtual void onNodeMessage(h512 nodeID, dev::channel::Message::Ptr message);
 
-	//收到来自其它节点的链上链下二期请求
 	virtual void onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message);
 
 	void setListenAddr(const std::string &listenAddr);
