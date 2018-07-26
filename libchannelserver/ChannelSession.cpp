@@ -506,13 +506,13 @@ void ChannelSession::updateIdleTimer() {
 	}
 
 	if(_idleTimer) {
-	_idleTimer->expires_from_now(boost::posix_time::seconds(5));
-	auto session = std::weak_ptr<ChannelSession>(shared_from_this());
-	_idleTimer->async_wait([session] (const boost::system::error_code& error){
-		auto s = session.lock();
-		if(s) {
-			s->onIdle(error);
-		}
-	});
+		_idleTimer->expires_from_now(boost::posix_time::seconds(5));
+		auto session = std::weak_ptr<ChannelSession>(shared_from_this());
+		_idleTimer->async_wait([session] (const boost::system::error_code& error){
+			auto s = session.lock();
+			if(s) {
+				s->onIdle(error);
+			}
+		});
 	}
 }
