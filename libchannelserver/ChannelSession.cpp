@@ -192,10 +192,12 @@ void ChannelSession::startRead() {
 
 			std::lock_guard<std::recursive_mutex> lock(_mutex);
 
-			auto session = std::weak_ptr<ChannelSession>(shared_from_this());
+			//auto session = std::weak_ptr<ChannelSession>(shared_from_this());
+			auto session = shared_from_this();
 			_sslSocket->async_read_some(boost::asio::buffer(_recvBuffer, bufferLength),
 						                            [session](const boost::system::error_code& error, size_t bytesTransferred) {
-				auto s = session.lock();
+				//auto s = session.lock();
+				auto s = session;
 				if(s) {
 					s->onRead(error, bytesTransferred);
 				}
