@@ -104,24 +104,12 @@ void help()
 
 	std::cout << "--config <file>						\n\tConfigure specialised blockchain using given JSON information." << "\n";
 	std::cout << "--genesis-json/--genesis <file>		\n\tSpecifies the genesis file." << "\n";
-	std::cout << "--peers/-x <number>					\n\tAttempt to connect to a given number of peers (default: 128)." << "\n";
-	std::cout << "--peer-stretch <number>				\n\tGive the accepted connection multiplier (default: 7)." << "\n";
 	std::cout << "--rescue								\n\tAttempt to rescue a corrupt database." << "\n";
 	std::cout << "\n";
-	std::cout << "-I/--import/import [--dont-check]		Import block." << "\n";
-	std::cout << "						\n\t--dont-check	Prevent checking some block aspects. Faster importing, but to apply only when the data is known to be valid." << "\n";
-	std::cout << "\n";
-	std::cout << "-E/--export/export <file> [--from <n>] [--to <n>] [--only <n>] [--format binary/hex/human]		Export block from blockchain." << "\n";
-	std::cout << "						<file>			The file saving export block data." << "\n";
-	std::cout << "						--from <n>		Export only from block n; n may be a decimal, a '0x' prefixed hash, or 'latest', default 1." << "\n";
-	std::cout << "						--to <n>			Export only to block n (inclusive); n may be a decimal, a '0x' prefixed hash, or 'latest', default 'latest'." << "\n";
-	std::cout << "						--only <n>		Equivalent to --export-from n --export-to n." << "\n";
-	std::cout << "						--format			binary/hex/human specify the format of saving data, default 'binary'." << "\n";
-	std::cout << "\n";
 	std::cout << "--export-genesis <file> [--contracts <c>] [--blocknumber <b>]		Export contract storage data for genesis.json file." << "\n";
-	std::cout << "						<file>              The generated genesis file." << "\n";
-	std::cout << "						--contracts <c>     Export the specified contract information; c may be multiple contracts address that semicolon as a delimiter. default all contracts to be export." << "\n";
-	std::cout << "						--blocknumber <b>   The blocknumber export to be done." << "\n";
+	std::cout << "		<file>              The generated genesis file." << "\n";
+	std::cout << "		--contracts <c>     Export the specified contract information; c may be multiple contracts address that semicolon as a delimiter. default all contracts to be export." << "\n";
+	std::cout << "		--blocknumber <b>   The blocknumber export to be done." << "\n";
 	std::cout << "\n";
 	std::cout << "--godminer <file>					\n\tSpecifies the god mod parameter file and fisco-bcos will be worked in god mode." << "\n";
 	std::cout << "--gennetworkrlp <file>			\n\tDisk encryption and node public private key generation." << "\n";
