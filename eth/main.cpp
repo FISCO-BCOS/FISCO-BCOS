@@ -1745,9 +1745,15 @@ int main(int argc, char** argv)
 
 			//no need to maintain admin and leveldb interfaces for rpc
 			jsonrpcHttpServer.reset(new FullServer(
-			                            ethFace,// new rpc::LevelDB(), new rpc::Whisper(web3, {}),
+			                            ethFace,
+										// new rpc::LevelDB(), new rpc::Whisper(web3, {}),
+										nullptr, nullptr,
 			                            new rpc::Net(web3),
-										new rpc::Web3(web3.clientVersion())//,
+										new rpc::Web3(web3.clientVersion()),
+										nullptr,
+										nullptr, nullptr, nullptr,
+										nullptr,
+										nullptr
 										//personal,
 			                            //adminEth, adminNet, adminUtils,
 			                            //new rpc::Debug(*web3.ethereum()),
@@ -1777,14 +1783,21 @@ int main(int argc, char** argv)
 			                           ethFace,
 									   //new rpc::LevelDB(),
 									   //new rpc::Whisper(web3, {}),
+									   nullptr,
+									   nullptr,
 									   new rpc::Net(web3),
 			                           new rpc::Web3(web3.clientVersion()),
 									   //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
 			                           //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
-			                           new rpc::AdminNet(web3, *sessionManager.get())//,
+									   nullptr,
+									   nullptr,
+			                           new rpc::AdminNet(web3, *sessionManager.get()),
 			                           //new rpc::AdminUtils(*sessionManager.get()),
 			                           //new rpc::Debug(*web3.ethereum()),
 			                           //testEth
+									   nullptr,
+									   nullptr,
+									   nullptr
 			                       ));
 			auto ipcConnector = new IpcServer("geth");
 			jsonrpcIpcServer->addConnector(ipcConnector);
