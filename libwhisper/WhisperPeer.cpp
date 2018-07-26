@@ -64,8 +64,11 @@ bool WhisperPeer::interpret(unsigned _id, RLP const& _r)
 			m_unseen.insert(make_pair(0, m.first));
 		}
 
-		if (session()->id() < host()->host()->id())
-			sendMessages();
+		auto s = session();
+		if(s) {
+			if (s->id() < host()->host()->id())
+				sendMessages();
+		}
 
 		noteAdvertiseTopicsOfInterest();
 		break;
