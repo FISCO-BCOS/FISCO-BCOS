@@ -51,7 +51,7 @@ public:
 	/// How many message types do we have?
 	static unsigned messageCount() { return PBFTPacketCount; }
 
-	p2p::NodeID id() const { return session()->id(); }
+	//p2p::NodeID id() const { return session()->id(); }
 
 protected:
 	virtual bool interpret(unsigned _id, RLP const& _r);
