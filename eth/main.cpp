@@ -1743,12 +1743,15 @@ int main(int argc, char** argv)
 				adminUtils = new rpc::AdminUtils(*sessionManager.get());
 			}
 
+			//no need to maintain admin and leveldb interfaces for rpc
 			jsonrpcHttpServer.reset(new FullServer(
-			                            ethFace, new rpc::LevelDB(), new rpc::Whisper(web3, {}),
-			                            new rpc::Net(web3), new rpc::Web3(web3.clientVersion()), personal,
-			                            adminEth, adminNet, adminUtils,
-			                            new rpc::Debug(*web3.ethereum()),
-			                            testEth
+			                            ethFace,// new rpc::LevelDB(), new rpc::Whisper(web3, {}),
+			                            new rpc::Net(web3),
+										new rpc::Web3(web3.clientVersion())//,
+										//personal,
+			                            //adminEth, adminNet, adminUtils,
+			                            //new rpc::Debug(*web3.ethereum()),
+			                            //testEth
 			                        ));
 			auto httpConnector = new SafeHttpServer(jsonRPCURL, "", "", SensibleHttpThreads, limitConfigJSON);
 			httpConnector->setNode(strNodeId);
@@ -1771,13 +1774,17 @@ int main(int argc, char** argv)
 		if (ipc)
 		{
 			jsonrpcIpcServer.reset(new FullServer(
-			                           ethFace, new rpc::LevelDB(), new rpc::Whisper(web3, {}), new rpc::Net(web3),
-			                           new rpc::Web3(web3.clientVersion()), new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
-			                           new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
-			                           new rpc::AdminNet(web3, *sessionManager.get()),
-			                           new rpc::AdminUtils(*sessionManager.get()),
-			                           new rpc::Debug(*web3.ethereum()),
-			                           testEth
+			                           ethFace,
+									   //new rpc::LevelDB(),
+									   //new rpc::Whisper(web3, {}),
+									   new rpc::Net(web3),
+			                           new rpc::Web3(web3.clientVersion()),
+									   //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
+			                           //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
+			                           new rpc::AdminNet(web3, *sessionManager.get())//,
+			                           //new rpc::AdminUtils(*sessionManager.get()),
+			                           //new rpc::Debug(*web3.ethereum()),
+			                           //testEth
 			                       ));
 			auto ipcConnector = new IpcServer("geth");
 			jsonrpcIpcServer->addConnector(ipcConnector);
