@@ -373,9 +373,11 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 		}
 		else {
 			if (_messageHandler) {
-				_threadPool->enqueue([=]() {
-					if(_messageHandler) {
-					_messageHandler(shared_from_this(), ChannelException(0, ""), message);
+				auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
+				_threadPool->enqueue([session, message]() {
+					auto s = session.lock();
+					if(s && s->_messageHandler) {
+						s->_messageHandler(s, ChannelException(0, ""), message);
 					}
 				});
 			}
