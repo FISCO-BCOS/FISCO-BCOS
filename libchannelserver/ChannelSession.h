@@ -112,6 +112,9 @@ private:
 	std::queue<std::shared_ptr<bytes> > _sendBufferList;
 	bool _writing = false;
 
+	std::shared_ptr<boost::asio::deadline_timer> _idleTimer;
+	std::recursive_mutex _mutex;
+
 	std::shared_ptr<boost::asio::io_service> _ioService;
 	std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > _sslSocket;
 	std::shared_ptr<boost::asio::ip::tcp::socket> _socket;
@@ -128,9 +131,6 @@ private:
 
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
-
-	std::shared_ptr<boost::asio::deadline_timer> _idleTimer;
-	std::recursive_mutex _mutex;
 };
 
 }
