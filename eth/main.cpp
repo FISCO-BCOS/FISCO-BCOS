@@ -524,10 +524,6 @@ int main(int argc, char** argv)
 	for (int i = 1; i < argc; ++i)
 	{
 		string arg = argv[i];
-		/*if (m.interpretOption(i, argc, argv))
-		{
-		}
-		else */
 		if (arg == "--password" && i + 1 < argc)
 			passwordsToNote.push_back(argv[++i]);
 		else if (arg == "--master" && i + 1 < argc)
@@ -645,8 +641,6 @@ int main(int argc, char** argv)
 		}
 		else if (arg == "--import-presale" && i + 1 < argc)
 			presaleImports.push_back(argv[++i]);
-		/*else if (arg == "--old-interactive")
-			interactive = true;*/
 		else if (arg == "--admin-via-http")
 			adminViaHttp = true;
 		else if (arg == "--rpccorsdomain" && i + 1 < argc)
