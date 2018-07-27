@@ -64,6 +64,14 @@ string ipcSocketPath()
 UnixDomainSocketServer::UnixDomainSocketServer(string const& _appId):
 	IpcServerBase(string(getIpcPath() + "/" + _appId + ".ipc").substr(0, c_pathMaxSize))
 {
+	auto path = string(getIpcPath() + "/" + _appId + ".ipc");
+	if (path.size() > c_pathMaxSize)
+	{
+		LOG(WARNING) << "[UnixDomainSocketServer] ipc path too long and should be truncated, max_length = " << c_pathMaxSize
+			<< " ,current_length = " << path.size()
+			<< " ,path = " << path
+			;
+	}
 }
 
 UnixDomainSocketServer::~UnixDomainSocketServer()
@@ -80,7 +88,9 @@ bool UnixDomainSocketServer::StartListening()
 
 		if (access(m_path.c_str(), F_OK) != -1)
 		{
-			LOG(WARNING) << "unix domain socket start failed , path = " << m_path;
+			LOG(WARNING) << "unix domain socket start failed , path = " << m_path
+				<< " ,errno = " << errno
+				;
 			return false;
 		}
 
