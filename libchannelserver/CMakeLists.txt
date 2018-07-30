@@ -6,4 +6,5 @@ target_include_directories(channelserver PRIVATE ..)
 target_include_directories(channelserver PUBLIC ${BOOST_INCLUDE_DIR})
 
 eth_use(channelserver OPTIONAL OpenSSL)
+target_link_libraries(channelserver Boost::System Boost::DataTime)
 target_link_libraries(channelserver ${OPENSSL_SSL_LIBRARIE} ${OPENSSL_CRYPTO_LIBRARIE} krb5 z dl)
