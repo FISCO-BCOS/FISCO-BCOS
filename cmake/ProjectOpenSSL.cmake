@@ -13,7 +13,7 @@ if (ENCRYPTTYPE)
 	ExternalProject_Add(tassl
 		PREFIX ${CMAKE_SOURCE_DIR}/deps
 		DOWNLOAD_NO_PROGRESS 1
-		URL https://github.com/xxxx/TASSL-master.zip
+		URL https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/deps/src/TASSL-master.zip
 		URL_HASH SHA256=5dd14fcfe070a0c9d3e7d9561502e277e1905a8ce270733bf2884f0e2c0c8d97
 		BUILD_IN_SOURCE 1
 		CONFIGURE_COMMAND ${TASSL_CONFIG_COMMAND}

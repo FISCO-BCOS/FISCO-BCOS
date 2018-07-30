@@ -39,6 +39,17 @@ public:
 	Capability(std::shared_ptr<SessionFace> _s, HostCapabilityFace* _h, unsigned _idOffset, uint16_t _protocolID);
 	virtual ~Capability() {}
 
+	p2p::NodeID id() const {
+		auto s = session();
+
+		if(s) {
+			return s->id();
+		}
+		else {
+			return p2p::NodeID();
+		}
+	}
+
 	// Implement these in the derived class.
 	/*	static std::string name() { return ""; }
 		static u256 version() { return 0; }
