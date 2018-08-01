@@ -66,6 +66,7 @@ namespace UTXOModel
 		void addTx(const string& strKey, const UTXOTx& tx);
 		bool getTx(const string& strKey, UTXOTx& tx);
 		void addVault(const Vault& vault, bool commitDB);					// "commitDB" indicates whether to write DB immediately
+		void addVaultBatch(const vector<Vault>& vaultBatch);				// Submit vault data generated in a block in bulk
 		void updateVault(const Vault& vault, bool writeMemory);				// "writeMemory" indicates whether memory is updated immediately
 		void showAllDB();
 		void commitDB();
@@ -87,6 +88,11 @@ namespace UTXOModel
 		void clearDBRecord();
 		
 		void setBlockNum(u256 blockNum);
+		u256 getBlockNum();
+
+		void setTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken);
+		void addTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken);
+		void getTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken);
 		
 	private:
 		mutable SharedMutex m_dbCache_lock;

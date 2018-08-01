@@ -31,6 +31,7 @@
 
 #include "UTXODBMgr.h"
 #include "UTXOSharedData.h"
+#include "UTXOTxQueue.h"
 
 using namespace dev;
 using namespace eth;
@@ -116,7 +117,8 @@ namespace UTXOModel
 			} 
 			for (const Vault& vault : vaultList)
 			{
-				addVault(vault, true);
+				// Only update cache
+				addVault(vault, false);
 			}
 		}
 		delete it;
@@ -225,7 +227,7 @@ namespace UTXOModel
 			leveldb::Status s = db->Get(leveldb::ReadOptions(), key, value);
 			if (!s.ok())
 			{
-				LOG(TRACE) << "UTXODBMgr::GetFromDB Status:" << s.ToString();
+				LOG(ERROR) << "UTXODBMgr::GetFromDB Status:" << s.ToString();
 			}
 			return s.ok();
 		}
@@ -362,7 +364,8 @@ namespace UTXOModel
 
 	bool UTXODBMgr::getToken(const string& key, Token& token)
 	{
-		LOG(TRACE) << "UTXODBMgr::getToken, key:" << key;
+		stringstream strLog;
+		strLog << "UTXODBMgr::getToken, key:" << key;
 
 		DEV_READ_GUARDED(m_tokenCache_lock)
 		{
@@ -371,7 +374,8 @@ namespace UTXOModel
 			{
 				// Get token from cache
 				token = it->second;
-				LOG(TRACE) << "UTXODBMgr::getToken from memory" << ",used:" << (token.m_tokenExt.getTokenState() == TokenStateUsed);
+				//strLog << ",getToken from memory" << ",used:" << (token.m_tokenExt.getTokenState() == TokenStateUsed);
+				//LOG(TRACE) << strLog.str();
 				return true;
 			}
 		}
@@ -385,7 +389,8 @@ namespace UTXOModel
 		//LOG(TRACE) << "UTXODBMgr::getToken, key at block:" << blockNumber;
 		if (0 == blockNumber)
 		{
-			LOG(ERROR) << "UTXODBMgr::getToken Error";
+			strLog << ", Error:blockNumber=0";
+			LOG(ERROR) << strLog.str();
 			return false;
 		}
 		string strExtKey = GET_TOKEN_EXT_KEY(key, toJS(blockNumber));
@@ -395,7 +400,8 @@ namespace UTXOModel
 		if (strBaseValue.length() == 0 || 
 			strExtValue.length() == 0)
 		{
-			LOG(ERROR) << "UTXODBMgr::getToken NOT FOUND, baselength:" << strBaseValue.length() << ", extlength:" << strExtValue.length();
+			strLog << ", NOT FOUND, baselength:" << strBaseValue.length() << ", extlength:" << strExtValue.length();
+			LOG(ERROR) << strLog.str();
 			return false;
 		}
 
@@ -408,7 +414,8 @@ namespace UTXOModel
 			m_cacheToken[key] = _token;
 		}
 
-		LOG(TRACE) << "UTXODBMgr::getToken from db" << ",used:" << (token.m_tokenExt.getTokenState() == TokenStateUsed);
+		//strLog << ",getToken from db" << ",used:" << (token.m_tokenExt.getTokenState() == TokenStateUsed);
+		//LOG(TRACE) << strLog.str();
 
 		return true;
 	}
@@ -492,6 +499,37 @@ namespace UTXOModel
 					  (int)token.m_tokenBase.getValue() << ",state:" << 
 					  (int)token.m_tokenExt.getTokenState();*/
 		UTXOSharedData::getInstance()->setCacheVault(owner, tokenKey, Token_Record(tokenKey, token.m_tokenBase.getValue(), token.m_tokenExt.getTokenState()));
+	}
+
+	void UTXODBMgr::addVaultBatch(const vector<Vault>& vaultBatch)
+	{
+		ldb::WriteBatch batch;
+		for (const Vault& vault: vaultBatch)
+		{
+			batch.Put(vault.getTokenKey(), toJS(vault.rlp()));
+			string tokenKey = vault.getTokenKey();
+			Token token;
+			getToken(tokenKey, token);
+			UTXOSharedData::getInstance()->setCacheVault(vault.getOwnerHash(), tokenKey, Token_Record(tokenKey, token.m_tokenBase.getValue(), token.m_tokenExt.getTokenState()));
+		}
+		try
+		{
+			leveldb::Status s = UTXOSharedData::getInstance()->getVaultDB()->Write(leveldb::WriteOptions(), &batch);
+			if (s.ok())
+			{
+				LOG(TRACE) << "UTXODBMgr::addVaultBatch Success.";
+			}
+			else 
+			{
+				LOG(ERROR) << "UTXODBMgr::addVaultBatch Fail,status:" << s.ToString();
+				BOOST_THROW_EXCEPTION(UTXODBError());
+			}
+		}
+		catch (...)
+		{
+			LOG(ERROR) << " UTXODBMgr::addVaultBatch UTXODBError";
+			BOOST_THROW_EXCEPTION(UTXODBError());
+		}
 	}
 
 	void UTXODBMgr::updateVault(const Vault& vault, bool writeMemory)
@@ -619,6 +657,8 @@ namespace UTXOModel
 	void UTXODBMgr::commitDB()
 	{
 		ldb::WriteBatch batch;
+		vector<Vault> vaultBatch;
+		vector<h256> accountList = UTXOSharedData::getInstance()->getAccountList();
 
 		DEV_READ_GUARDED(m_dbCache_lock)
 		{
@@ -639,7 +679,10 @@ namespace UTXOModel
 				else if (perfix == VAULT_KEY_PERFIX)
 				{
 					Vault vault(jsToBytes(it->second.getValue()));
-					addVault(vault, true);
+					if (find(accountList.begin(), accountList.end(), vault.getOwnerHash()) != accountList.end())
+					{
+						vaultBatch.push_back(vault);
+					}
 				}
 				else
 				{
@@ -667,6 +710,9 @@ namespace UTXOModel
 			LOG(ERROR) << " UTXODBMgr::commitDB UTXODBError";
 			BOOST_THROW_EXCEPTION(UTXODBError());
 		}
+		// Submit vault data in bulk
+		LOG(TRACE) << "UTXODBMgr::commitDB add vault registered cnt:" << vaultBatch.size();
+		addVaultBatch(vaultBatch);
 	}
 
 	bool UTXODBMgr::accountIsRegistered(Address account)
@@ -886,7 +932,7 @@ namespace UTXOModel
 			}
 		}
 
-		LOG(TRACE) << "UTXODBMgr::getBalanceByAccount account(" << toJS(sender) << "," << toJS(account) << "), balance:" << account;
+		LOG(TRACE) << "UTXODBMgr::getBalanceByAccount account(" << toJS(sender) << "," << toJS(account) << "), balance:" << balance;
 		return true;
 	}
 
@@ -897,25 +943,47 @@ namespace UTXOModel
 		{
 			if (!m_dbHash && m_dbCacheCnt > 0)
 			{
-				BytesMap recordsMap;
-				map<string, UTXODBCache>::iterator it;
-				for (it = m_cacheWritedtoDB.begin(); it != m_cacheWritedtoDB.end(); it++)
+				Timer timer;
+				u256 utxoVersion = UTXOTxQueue::utxoVersion;
+				if (utxoVersion > 0)
 				{
-					string key = it->first;
-					if (key.substr(0,2) == VAULT_KEY_PERFIX)
+					string content;
+					map<string, UTXODBCache>::iterator it;
+					for (it = m_cacheWritedtoDB.begin(); it != m_cacheWritedtoDB.end(); it++)
 					{
-						continue;
+						string key = it->first;
+						if (key.substr(0,2) == VAULT_KEY_PERFIX)
+						{
+							continue;
+						}
+						content += it->second.getValue();
 					}
-					RLPStream k;
-        			k << key;
-					RLPStream rlp;
-       				it->second.streamRLP(rlp);
-					//LOG(TRACE) << "key:" << key << ",value:" << it->second.getValue();
-        			recordsMap.insert(make_pair(k.out(), rlp.out()));
+
+					m_dbHash = sha3(content);
+					LOG(TRACE) << "UTXODBMgr::getHash" << utxoVersion << ", cost:" << (timer.elapsed() * 1000) << ",size = " << m_cacheWritedtoDB.size() << ",dbHash = " << toJS(m_dbHash);
 				}
+				else 
+				{
+					BytesMap recordsMap;
+					map<string, UTXODBCache>::iterator it;
+					for (it = m_cacheWritedtoDB.begin(); it != m_cacheWritedtoDB.end(); it++)
+					{
+						string key = it->first;
+						if (key.substr(0,2) == VAULT_KEY_PERFIX)
+						{
+							continue;
+						}
+						RLPStream k;
+        				k << key;
+						RLPStream rlp;
+       					it->second.streamRLP(rlp);
+						//LOG(TRACE) << "key:" << key << ",value:" << it->second.getValue();
+        				recordsMap.insert(make_pair(k.out(), rlp.out()));
+					}
 				
-				m_dbHash = hash256(recordsMap);
-				LOG(TRACE) << "UTXODBMgr::getHash , size = " << m_cacheWritedtoDB.size() << ",dbHash = " << toJS(m_dbHash);
+					m_dbHash = hash256(recordsMap);
+					LOG(TRACE) << "UTXODBMgr::getHash" << utxoVersion << ", size = " << m_cacheWritedtoDB.size() << ",dbHash = " << toJS(m_dbHash);
+				}
 			}
 		}
 
@@ -942,5 +1010,58 @@ namespace UTXOModel
 	void UTXODBMgr::setBlockNum(u256 blockNum)
 	{
 		m_blockNumber = blockNum;
+	}
+
+	u256 UTXODBMgr::getBlockNum()
+	{
+		return m_blockNumber;
+	}
+
+	void UTXODBMgr::setTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken)
+	{
+		DEV_WRITE_GUARDED(m_dbCache_lock)
+		{
+			m_cacheWritedtoDB = cacheWritedtoDB;
+			m_dbCacheCnt = dbCacheCnt;
+		}
+
+		DEV_WRITE_GUARDED(m_tokenCache_lock)
+		{
+			m_cacheToken = cacheToken;
+		}	
+	}
+
+	void UTXODBMgr::addTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken)
+	{
+		DEV_WRITE_GUARDED(m_dbCache_lock)
+		{
+			for (map<string, UTXODBCache>::iterator it = cacheWritedtoDB.begin(); it != cacheWritedtoDB.end(); it++)
+			{
+				m_cacheWritedtoDB[it->first] = it->second;
+			}
+			m_dbCacheCnt += dbCacheCnt;
+		}
+
+		DEV_WRITE_GUARDED(m_tokenCache_lock)
+		{
+			for (map<string, Token>::iterator it = cacheToken.begin(); it != cacheToken.end(); it++)
+			{
+				m_cacheToken[it->first] = it->second;
+			}
+		}
+	}
+
+	void UTXODBMgr::getTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken)
+	{
+		DEV_READ_GUARDED(m_dbCache_lock)
+		{
+			cacheWritedtoDB = m_cacheWritedtoDB;
+			dbCacheCnt = m_dbCacheCnt;
+		}
+
+		DEV_READ_GUARDED(m_tokenCache_lock)
+		{
+			cacheToken = m_cacheToken;
+		}	
 	}
 }//namespace UTXOModel

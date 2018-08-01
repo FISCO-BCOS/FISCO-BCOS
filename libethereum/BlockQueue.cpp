@@ -111,7 +111,9 @@ void BlockQueue::verifierBody()
 		swap(work.blockData, res.blockData);
 		try
 		{
-			res.verified = m_bc->verifyBlock(&res.blockData, m_onBad, ImportRequirements::OutOfOrderChecks);
+			Timer timer;
+			res.verified = m_bc->verifyBlock(&res.blockData, m_onBad, work.isour?ImportRequirements::InOrderChecks:ImportRequirements::OutOfOrderChecks);
+			LOG(TRACE) << "verifyBlock cost time:" << (timer.elapsed() * 1000);
 		}
 		catch (std::exception const& _ex)
 		{
@@ -242,7 +244,7 @@ ImportResult BlockQueue::importVerified(bytesConstRef _block) {
 	return ImportResult::Success;
 }
 
-ImportResult BlockQueue::import(bytesConstRef _block, bool _isOurs)
+ImportResult BlockQueue::import(bytesConstRef _block, bool _isOurs, bool _isExecuter)
 {
 	LOG(TRACE) << std::this_thread::get_id();
 	// Check if we already know this block.
@@ -322,7 +324,7 @@ ImportResult BlockQueue::import(bytesConstRef _block, bool _isOurs)
 			// If valid, append to blocks.
 			LOG(TRACE) << "OK - ready for chain insertion.";
 			DEV_GUARDED(m_verification)
-			m_unverified.enqueue(UnverifiedBlock { h, bi.parentHash(), _block.toBytes() });
+			m_unverified.enqueue(UnverifiedBlock { h, bi.parentHash(), _block.toBytes(), _isExecuter });
 			m_moreToVerify.notify_one();
 			m_readySet.insert(h);
 			m_difficulty += bi.difficulty();
@@ -554,7 +556,7 @@ void BlockQueue::noteReady_WITH_LOCK(h256 const& _good)
 		for (auto& newReady : removed)
 		{
 			DEV_GUARDED(m_verification)
-			m_unverified.enqueue(UnverifiedBlock { newReady.first, parent, move(newReady.second) });
+			m_unverified.enqueue(UnverifiedBlock { newReady.first, parent, move(newReady.second), false });
 			m_unknownSet.erase(newReady.first);
 			m_readySet.insert(newReady.first);
 			goodQueue.push_back(newReady.first);
@@ -576,7 +578,7 @@ void BlockQueue::retryAllUnknown()
 		for (auto& newReady : removed)
 		{
 			DEV_GUARDED(m_verification)
-			m_unverified.enqueue(UnverifiedBlock{ newReady.first, parent, move(newReady.second) });
+			m_unverified.enqueue(UnverifiedBlock{ newReady.first, parent, move(newReady.second), false });
 			m_unknownSet.erase(newReady.first);
 			m_readySet.insert(newReady.first);
 			m_moreToVerify.notify_one();

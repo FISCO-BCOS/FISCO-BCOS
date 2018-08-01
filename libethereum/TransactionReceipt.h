@@ -40,6 +40,7 @@ public:
 
 	h256 const& stateRoot() const { return m_stateRoot; }
 	u256 const& gasUsed() const { return m_gasUsed; }
+	void setGasUsed(u256 _gasUsed) { m_gasUsed = _gasUsed; }
 	Address const& contractAddress() const { return m_contractAddress; }
 	LogBloom const& bloom() const { return m_bloom; }
 	LogEntries const& log() const { return m_log; }

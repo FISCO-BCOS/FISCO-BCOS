@@ -45,25 +45,32 @@ namespace UTXOModel
 	class UTXOTxQueue
 	{
 	public:
-		UTXOTxQueue(size_t totalCnt, UTXOMgr* ptrUTXOMgr);
+		UTXOTxQueue();
 		~UTXOTxQueue();
-		void enqueue(const Transaction& t);
+		void setQueue(size_t totalCnt, UTXOMgr* ptrUTXOMgr);	// Set up a separate UTXOMgr
+		void enqueue(const Transaction& t);						// Insert transactions one by one
+		void enqueueBatch(const vector<Transaction>& txs);		// Insert transactions in bulk
 		void executeUTXOTx();
-		map<h256, UTXOExecuteState> getTxResult();
+		vector<h256> getErrTxHash();
 
 		template <class T> Handler<> onReady(T const& _t) { return m_onReady.add(_t); }
+
+		static u256 utxoVersion;
 	private:
 		condition_variable m_queueReady;
 		vector<thread> m_executer;
+		map<string, UTXOMgr> m_mapUTXOMgr;
 		deque<Transaction> m_unexecuted;						// A list of parallel transactions to be executed
 		mutable Mutex x_queue;
+		mutable Mutex x_data;
 		atomic<bool> m_aborting = {false};
 		size_t m_executedCnt = {0};								// The number of parallel transactions executed in the same block
-		map<h256, UTXOExecuteState> mapUTXOTxResult;			// Execution results of parallel transactions
+		vector<h256> errTxHash;									// Error results of parallel transactions
 		size_t m_totalCnt;										// The number of transactions that are expected to be parallel in the same block
 
 		Signal<> m_onReady;
 		UTXOMgr* m_ptrUTXOMgr;
+		uint64_t m_startTime;
 	};
 }
 

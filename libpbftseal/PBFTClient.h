@@ -76,6 +76,8 @@ private:
 	uint64_t m_left_time;
 
 	ChainParams m_params;
+
+	//bool bFirstStart;
 };
 
 PBFTClient& asPBFTClient(Interface& _c);

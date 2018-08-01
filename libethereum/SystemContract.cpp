@@ -46,6 +46,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
         m_tempblock = block;
         m_tempblock->clearCurrentBytes();
         m_tempblock->setEvmEventLog(true);
+        m_client->getUTXOMgr()->clearDBRecord();
         LOG(TRACE) << "SystemContract::updateSystemContract blocknumber=" << m_tempblock->info().number();
     }
 
@@ -237,7 +238,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
         }//
     }
 
-    LOG(TRACE) << "SystemContract::updateSystemContract took:" << (t.elapsed() * 1000000);
+    LOG(TRACE) << "SystemContract::updateSystemContract took:" << (t.elapsed() * 1000);
 
 }
 

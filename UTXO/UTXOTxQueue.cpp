@@ -21,6 +21,8 @@
  * @date: 2018
  */
 
+#include <pthread.h>
+#include <sched.h>
 
 #include <libdevcore/easylog.h>
 #include <libethereum/Transaction.h>
@@ -30,22 +32,27 @@
 
 namespace UTXOModel
 {
-	UTXOTxQueue::UTXOTxQueue(size_t totalCnt, UTXOMgr* ptrUTXOMgr)
+	u256 UTXOTxQueue::utxoVersion = 0;
+
+	UTXOTxQueue::UTXOTxQueue()
 	{
-		LOG(TRACE) << "UTXOTxQueue::UTXOTxQueue()";
-		m_totalCnt = totalCnt;
-		if (0 == totalCnt)
-		{
-			return;
-		}
-		m_ptrUTXOMgr = ptrUTXOMgr;
-		unsigned verifierThreads = std::max(thread::hardware_concurrency(), 3U) - 2U;
-		for (unsigned i = 0; i < verifierThreads; ++i)
+		LOG(TRACE) << "UTXOTxQueue::UTXOTxQueue() init thread begin";
+		unsigned utxoParallelThreadCnt = std::max(thread::hardware_concurrency(), 3U) - 2U;
+		for (unsigned i = 0; i < utxoParallelThreadCnt; ++i)
 			m_executer.emplace_back([ = ]() {
-			pthread_setThreadName("executer_" + toString(i));
+			pthread_setThreadName("utxotx_" + toString(i));
+			// Thread affinity setting
+			cpu_set_t mask;
+			CPU_ZERO(&mask);
+			CPU_SET(i, &mask);
+			if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) < 0) 
+			{
+				LOG(ERROR) << "UTXOTxQueue::UTXOTxQueue() set thread affinity failed";
+			}
+			// Thread affinity setting end
 			this->executeUTXOTx();
 		});
-		LOG(TRACE) << "UTXOTxQueue::UTXOTxQueue() init thread end, ThreadCnt=" << verifierThreads << ", TxCnt:" << m_totalCnt;
+		LOG(TRACE) << "UTXOTxQueue::UTXOTxQueue() init thread end, ThreadCnt=" << utxoParallelThreadCnt;
 	}
 
 	UTXOTxQueue::~UTXOTxQueue()
@@ -59,12 +66,47 @@ namespace UTXOModel
 		m_ptrUTXOMgr = nullptr;
 	}
 
+	void UTXOTxQueue::setQueue(size_t totalCnt, UTXOMgr* ptrUTXOMgr)
+	{
+		LOG(TRACE) << "UTXOTxQueue::setQueue()";
+		m_totalCnt = totalCnt;
+		m_executedCnt = 0;
+		m_ptrUTXOMgr = ptrUTXOMgr;
+		map<string, UTXODBCache> tmp1;
+		u256 tmp2 = 0;
+		map<string, Token> tmp3;
+		m_ptrUTXOMgr->getTxResult(tmp1, tmp2, tmp3);
+		u256 blockNum = ptrUTXOMgr->getBlockNum();
+		for (unsigned i = 0; i < m_executer.size(); ++i)
+		{
+			UTXOMgr tmp;
+			tmp.setTxResult(tmp1, tmp2, tmp3);
+			tmp.setBlockNum(blockNum);
+			string name = "utxotx_" + toString(i);
+			m_mapUTXOMgr[name] = tmp;
+		}
+	}
+
 	void UTXOTxQueue::enqueue(const Transaction& t)
 	{
 		{
-			Guard l(x_queue);
+			unique_lock<Mutex> l(x_queue);
 			m_unexecuted.emplace_back(t);
 		}
+		m_startTime = utcTime();
+		m_queueReady.notify_all();
+	}
+
+	void UTXOTxQueue::enqueueBatch(const vector<Transaction>& txs)
+	{
+		{
+			unique_lock<Mutex> l(x_queue);
+			for (Transaction const& tr : txs)
+			{
+				m_unexecuted.emplace_back(tr);
+			}
+		}
+		m_startTime = utcTime();
 		m_queueReady.notify_all();
 	}
 
@@ -83,15 +125,17 @@ namespace UTXOModel
 				m_unexecuted.pop_front();
 			}
 
+			UTXOMgr executor = m_mapUTXOMgr[getThreadName()];
 			UTXOType utxoType = work.getUTXOType();
 			if (utxoType == UTXOType::InitTokens)
 			{
 				try 
 				{
-					UTXOExecuteState ret = m_ptrUTXOMgr->initTokens(work.sha3(), work.sender(), work.getUTXOTxOut());
+					UTXOExecuteState ret = executor.initTokens(work.sha3(), work.sender(), work.getUTXOTxOut());
+					if (UTXOExecuteState::Success != ret)
 					{
-						Guard l(x_queue);
-						mapUTXOTxResult[work.sha3()] = ret;
+						unique_lock<Mutex> l(x_data);
+						errTxHash.push_back(work.sha3());
 					}
 				}
 				catch (UTXOException& e)
@@ -103,10 +147,11 @@ namespace UTXOModel
 			{
 				try
 				{
-					UTXOExecuteState ret = m_ptrUTXOMgr->sendSelectedTokens(work.sha3(), work.sender(), work.getUTXOTxIn(), work.getUTXOTxOut());
+					UTXOExecuteState ret = executor.sendSelectedTokens(work.sha3(), work.sender(), work.getUTXOTxIn(), work.getUTXOTxOut());
+					if (UTXOExecuteState::Success != ret)
 					{
-						Guard l(x_queue);
-						mapUTXOTxResult[work.sha3()] = ret;
+						unique_lock<Mutex> l(x_data);
+						errTxHash.push_back(work.sha3());
 					}
 				}
 				catch (UTXOException& e)
@@ -116,20 +161,48 @@ namespace UTXOModel
 			}
 
 			{
-				Guard l(x_queue);
+				unique_lock<Mutex> l(x_data);
 				m_executedCnt++;
-				LOG(TRACE) << "UTXOTxQueue::executeUTXOTx() getThreadName:" << getThreadName() << ",executedCnt:" << m_executedCnt << ",totalCnt:" << m_totalCnt;
+				//LOG(TRACE) << "UTXOTxQueue::executeUTXOTx() getThreadName:" << getThreadName() << ",executedCnt:" << m_executedCnt << ",totalCnt:" << m_totalCnt;
 				if (m_totalCnt == m_executedCnt)
 				{
+					uint16_t cost = utcTime() - m_startTime;
+					LOG(TRACE) << "UTXOTxQueue::executeUTXOTx() execute " << m_executedCnt << " txs in " << cost << " ms,per cost:" << cost*1.0/m_executedCnt;
+
+					// If all trades are executed, UTXOMgr in TxQueue -> UTXOMgr passed in from the outside
+					map<string, UTXODBCache> cacheWritedtoDB;
+					u256 dbCacheCnt = 0;
+					map<string, Token> cacheToken;
+					for (unsigned i = 0; i < m_executer.size(); ++i)
+					{
+						string name = "utxotx_" + toString(i);
+						UTXOMgr tmp = m_mapUTXOMgr[name];
+
+						map<string, UTXODBCache> tmp1;
+						u256 tmp2 = 0;
+						map<string, Token> tmp3;
+						tmp.getTxResult(tmp1, tmp2, tmp3);
+						for (map<string, UTXODBCache>::iterator it = tmp1.begin(); it != tmp1.end(); it++)
+						{
+							cacheWritedtoDB[it->first] = it->second;
+						}
+						dbCacheCnt += tmp2;
+						for (map<string, Token>::iterator it = tmp3.begin(); it != tmp3.end(); it++)
+						{
+							cacheToken[it->first] = it->second;
+						}
+					}
+					m_ptrUTXOMgr->addTxResult(cacheWritedtoDB, dbCacheCnt, cacheToken);
+					LOG(TRACE) << "UTXOTxQueue::executeUTXOTx() setTxResult end";
 					m_onReady();
 				}
 			}
 		}
 	}
 
-	map<h256, UTXOExecuteState> UTXOTxQueue::getTxResult()
+	vector<h256> UTXOTxQueue::getErrTxHash()
 	{
-		Guard l(x_queue);
-		return mapUTXOTxResult;
+		unique_lock<Mutex> l(x_data);
+		return errTxHash;
 	}
 }

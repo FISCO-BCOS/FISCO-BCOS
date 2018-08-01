@@ -235,7 +235,7 @@ public:
 	void setChain(BlockChain const& _bc) { m_bc = &_bc; }
 
 	/// Import a block into the queue.
-	ImportResult import(bytesConstRef _block, bool _isOurs = false);
+	ImportResult import(bytesConstRef _block, bool _isOurs = false, bool _isExecuter = false);
 
 	
 	ImportResult importVerified(bytesConstRef _block);
@@ -296,6 +296,7 @@ private:
 		h256 hash;
 		h256 parentHash;
 		bytes blockData;
+		bool isour;
 	};
 
 	void noteReady_WITH_LOCK(h256 const& _b);

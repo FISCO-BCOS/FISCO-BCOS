@@ -65,7 +65,7 @@ namespace UTXOModel
 
 	UTXOExecuteState UTXOMgr::checkInitTokens(const vector<UTXOTxOut>& txOut)
 	{
-		LOG(TRACE) << "UTXOMgr::checkInitTokens";
+		//LOG(TRACE) << "UTXOMgr::checkInitTokens";
 
 		int size = txOut.size();
 		if (size > TokenMaxCnt)
@@ -146,7 +146,7 @@ namespace UTXOModel
 
 	UTXOExecuteState UTXOMgr::initTokens(h256 txHash, Address sender, const vector<UTXOTxOut>& txOut)
 	{
-		LOG(TRACE) << "UTXOMgr::initTokens";
+		//LOG(TRACE) << "UTXOMgr::initTokens";
 
 		assert(m_UTXODBMgr);
 
@@ -166,7 +166,7 @@ namespace UTXOModel
 		for (int index = 0; index < size; index++)
    		{
 			string strKey = txKey  + "_" + to_string(index);
-			LOG(TRACE) << "UTXOMgr::initTokens new Token[" << index << "] key:" << strKey;
+			//LOG(TRACE) << "UTXOMgr::initTokens new Token[" << index << "] key:" << strKey;
 			outTokenKeys.push_back(strKey);
 
 			Address initContract = txOut[index].initContract;
@@ -202,28 +202,21 @@ namespace UTXOModel
 			m_UTXODBMgr->addToken(strKey, tokenBase, tokenExt, true);
 			Vault vault(toHash, strKey);
 			m_UTXODBMgr->addVault(vault, false);
-
-			UTXOSharedData::getInstance()->clearTokenMapForGetVault();
-			UTXOSharedData::getInstance()->clearTokenMapForSelectTokens();
 		}
 
 		UTXOTx tx(inTokenKeys, outTokenKeys);
 		m_UTXODBMgr->addTx(txKey, tx);
 
-		LOG(TRACE) << "UTXOMgr::initTokens Success";
+		//LOG(TRACE) << "UTXOMgr::initTokens Success";
 		return UTXOExecuteState::Success;
 	}
 
 	UTXOExecuteState UTXOMgr::checkSendTokens(Address sender, const vector<UTXOTxIn>& txIn, const vector<UTXOTxOut>& txOut, bool bCurBlock)
 	{
-		LOG(TRACE) << "UTXOMgr::checkSendTokens";
+		//LOG(TRACE) << "UTXOMgr::checkSendTokens";
 
 		assert(m_UTXODBMgr);
 
-		if (!bCurBlock)
-		{
-			m_UTXODBMgr->clearDBRecord();
-		}
 
 		u256 inTotalValue = 0;
 		u256 outTotalValue = 0;
@@ -304,11 +297,10 @@ namespace UTXOModel
 
 	UTXOExecuteState UTXOMgr::sendSelectedTokens(h256 txHash, Address sender, const vector<UTXOTxIn>& txIn, const vector<UTXOTxOut>& txOut)
 	{
-		LOG(TRACE) << "UTXOMgr::sendSelectedTokens";
+		//LOG(TRACE) << "UTXOMgr::sendSelectedTokens";
 
 		// Perform pre-transaction validation
 		// Throw an exception if validation fails
-		Timer timerCheck;
 		UTXOExecuteState ret = checkSendTokens(sender, txIn, txOut, true);
 		if (UTXOExecuteState::Success != ret)
 		{
@@ -324,7 +316,7 @@ namespace UTXOModel
 		for (int index = 0; index < size1; index++)
    		{
 			string tokenKey = txIn[index].tokenKey;
-			LOG(TRACE) << "UTXOMgr::sendSelectedTokens old Token[" << index << "] key:" << tokenKey;
+			//LOG(TRACE) << "UTXOMgr::sendSelectedTokens old Token[" << index << "] key:" << tokenKey;
 			inTokenKeys.push_back(tokenKey);
 
 			Token token;
@@ -366,7 +358,7 @@ namespace UTXOModel
 		for (int index = 0; index < size2; index++)
    		{
 			string strKey = txKey  + "_" + to_string(index);
-			LOG(TRACE) << "UTXOMgr::sendSelectedTokens new Token[" << index << "] key:" << strKey;
+			//LOG(TRACE) << "UTXOMgr::sendSelectedTokens new Token[" << index << "] key:" << strKey;
 			outTokenKeys.push_back(strKey);
 
 			Address initContract = txOut[index].initContract;
@@ -404,13 +396,10 @@ namespace UTXOModel
 			m_UTXODBMgr->addVault(vault, false);
 		}
 
-		UTXOSharedData::getInstance()->clearTokenMapForGetVault();
-		UTXOSharedData::getInstance()->clearTokenMapForSelectTokens();
-
 		UTXOTx tx(inTokenKeys, outTokenKeys);
 		m_UTXODBMgr->addTx(txKey, tx);
 
-		LOG(TRACE) << "UTXOMgr::sendSelectedTokens Success";
+		//LOG(TRACE) << "UTXOMgr::sendSelectedTokens Success";
 		return UTXOExecuteState::Success;
 	}
 
@@ -433,8 +422,6 @@ namespace UTXOModel
 	pair<UTXOExecuteState, string> UTXOMgr::getTokenByKey(const string& tokenKey, string& ret)
 	{
 		assert(m_UTXODBMgr);
-
-		m_UTXODBMgr->clearDBRecord();
 
 		Token token;
 		if (m_UTXODBMgr->getToken(tokenKey, token) == false)
@@ -464,9 +451,7 @@ namespace UTXOModel
 
 	pair<UTXOExecuteState, string> UTXOMgr::getVaultByAccountByPart(Address sender, TokenState tokenState, vector<string>& tokenKeys, QueryUTXOParam& QueryUTXOParam)
 	{
-		assert(m_UTXODBMgr);
-
-		m_UTXODBMgr->clearDBRecord();
+		assert(m_UTXODBMgr);		
 
 		if (m_UTXODBMgr->accountIsRegistered(sender) == false)
 		{
@@ -513,8 +498,6 @@ namespace UTXOModel
 	pair<UTXOExecuteState, string> UTXOMgr::selectTokensByPart(Address sender, u256 value, vector<string>& tokenKeys, QueryUTXOParam& QueryUTXOParam)
 	{
 		assert(m_UTXODBMgr);
-
-		m_UTXODBMgr->clearDBRecord();
 
 		if (m_UTXODBMgr->accountIsRegistered(sender) == false)
 		{
@@ -598,8 +581,6 @@ namespace UTXOModel
 	{
 		assert(m_UTXODBMgr);
 
-		m_UTXODBMgr->clearDBRecord();
-
 		if (m_UTXODBMgr->accountIsRegistered(account) == false)
 		{
 			LOG(ERROR) << "UTXOMgr::getVaultByAccount Error:" << UTXOExecuteState::AccountInvalid;
@@ -613,8 +594,6 @@ namespace UTXOModel
 	void UTXOMgr::showAll()
 	{
 		assert(m_UTXODBMgr);
-
-		m_UTXODBMgr->clearDBRecord();
 
 		m_UTXODBMgr->showAllDB();
 	}
@@ -718,5 +697,45 @@ namespace UTXOModel
 		
 		assert(m_UTXODBMgr);
 		m_UTXODBMgr->setBlockNum(blockNumber);
+	}
+
+	void UTXOMgr::setBlockNum(u256 blockNum)
+	{
+		assert(m_UTXODBMgr);
+		m_UTXODBMgr->setBlockNum(blockNum);
+	}
+
+	u256 UTXOMgr::getBlockNum()
+	{
+		assert(m_UTXODBMgr);
+		return m_UTXODBMgr->getBlockNum();
+	}
+
+	void UTXOMgr::setTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken)
+	{
+		assert(m_UTXODBMgr);
+		return m_UTXODBMgr->setTxResult(cacheWritedtoDB, dbCacheCnt, cacheToken);
+	}
+
+	void UTXOMgr::addTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken)
+	{
+		assert(m_UTXODBMgr);
+		return m_UTXODBMgr->addTxResult(cacheWritedtoDB, dbCacheCnt, cacheToken);
+	}
+
+	void UTXOMgr::getTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken)
+	{
+		assert(m_UTXODBMgr);
+		return m_UTXODBMgr->getTxResult(cacheWritedtoDB, dbCacheCnt, cacheToken);
+	}
+
+	void UTXOMgr::getTokenBatch(const vector<string>& tokenKeyList)
+	{
+		assert(m_UTXODBMgr);
+		Token token;
+		for (const string& key: tokenKeyList) 
+		{
+			m_UTXODBMgr->getToken(key, token);	
+		}
 	}
 }

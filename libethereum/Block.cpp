@@ -89,7 +89,8 @@ Block::Block(Block const& _s):
     m_currentBytes(_s.m_currentBytes),
     m_author(_s.m_author),
     m_sealEngine(_s.m_sealEngine),
-    m_utxoMgr(_s.m_utxoMgr)
+    m_utxoMgr(_s.m_utxoMgr),
+    m_vecTxHash(_s.m_vecTxHash)
 {
     m_committedToSeal = false;
 }
@@ -113,6 +114,7 @@ Block& Block::operator=(Block const& _s)
     m_committedToSeal = false;
 
     m_utxoMgr = _s.m_utxoMgr;
+    m_vecTxHash = _s.m_vecTxHash;
 
     return *this;
 }
@@ -128,6 +130,7 @@ void Block::resetCurrent(u256 const& _timestamp)
     m_currentBytes.clear();
 
     m_utxoMgr.clearDBRecord();
+    m_vecTxHash.clear();
 
     sealEngine()->populateFromParent(m_currentBlock, m_previousBlock);
 
@@ -339,26 +342,31 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
         max_sync_txs = static_cast<unsigned>(_max_block_txs > m_transactions.size() ? _max_block_txs - m_transactions.size() : 0);
     }
   
+    Timer timerForGetTxQueue;
     auto ts = _tq.allTransactions();
+    LOG(TRACE) << "Block::sync getTxQueue cost:" << (timerForGetTxQueue.elapsed() * 1000);
 
     LastHashes lh;
     unsigned goodTxs = 0;
     std::map<h256, bool> parallelUTXOTx;
     size_t parallelUTXOTxCnt = 0;
+    vector<Transaction> txs;
+    shared_ptr<UTXOModel::UTXOTxQueue> utxoTxQueue = _bc.getUTXOTxQueue();
 
     if (lh.empty()) { lh = _bc.lastHashes(); }
-    m_utxoMgr.setCurBlockInfo(this, lh);
     if (_exec)
     {
-        getParallelUTXOTx(ts, parallelUTXOTx, parallelUTXOTxCnt);
-        m_state.setParallelUTXOTx(parallelUTXOTx);
-        LOG(TRACE) << "Block::sync parallelUTXOTxCnt:" << parallelUTXOTxCnt;
-    }
-    UTXOModel::UTXOTxQueue utxoTxQueue(parallelUTXOTxCnt, &m_utxoMgr);
-    m_onParallelTxQueueReady = false;
-    if (_exec && parallelUTXOTxCnt > 0)
-    {
-        m_parallelEnd = utxoTxQueue.onReady([ = ]() { this->onUTXOTxQueueReady(); });
+        getParallelUTXOTx(ts, parallelUTXOTx, txs);
+        parallelUTXOTxCnt = txs.size();
+        m_utxoMgr.setCurBlockInfo(this, lh);
+        LOG(TRACE) << "Block::sync parallelTxCnt:" << parallelUTXOTxCnt;
+        if (parallelUTXOTxCnt > 0)
+        {
+            m_state.setParallelUTXOTx(parallelUTXOTx);
+            utxoTxQueue->setQueue(parallelUTXOTxCnt, &m_utxoMgr);
+            m_onParallelTxQueueReady = false;
+            m_parallelEnd = utxoTxQueue->onReady([ = ]() { this->onUTXOTxQueueReady(); });
+        }
     }
     //for (int goodTxs = max(0, (int)ts.size() - 1); goodTxs < (int)ts.size(); )
     {
@@ -368,16 +376,18 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
             {
                 try
                 {
-                    LOG(TRACE) << "PACK-TX: Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",time=" << utcTime();
-                    //交易打包前检查
-                    for ( size_t pIndex = 0; pIndex < m_transactions.size(); pIndex++) //多做一步，当前块内也不能重复出现
-                    {
-                        if ( (m_transactions[pIndex].from() == t.from() ) && (m_transactions[pIndex].randomid() == t.randomid()) )
-                            BOOST_THROW_EXCEPTION(NonceCheckFail());
-                    }//for
-
                     UTXOType utxoType = t.getUTXOType();
-	        		LOG(TRACE) << "Block::sync utxoType:" << utxoType;
+                    LOG(TRACE) << "PACK-TX: Hash=" << (t.sha3()) << ",utxoType:" << utxoType << ",Randid=" << t.randomid() << ",time=" << utcTime();
+
+                    if (utxoType == UTXOType::InValid)
+                    {
+                        //交易打包前检查
+                        for ( size_t pIndex = 0; pIndex < m_transactions.size(); pIndex++) //多做一步，当前块内也不能重复出现
+                        {
+                            if ( (m_transactions[pIndex].from() == t.from() ) && (m_transactions[pIndex].randomid() == t.randomid()) )
+                                BOOST_THROW_EXCEPTION(NonceCheckFail());
+                        }//for
+                    }
 
                     if (_exec) {
                         u256 _t = _gp.ask(*this);
@@ -389,7 +399,7 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                             lh = _bc.lastHashes();
                         if (parallelUTXOTx[t.sha3()])
                         {
-                            utxoTxQueue.enqueue(t);
+                            utxoTxQueue->enqueue(t);
                         }
                         execute(lh, t, Permanence::Committed, OnOpFunc(), &_bc);
                         ret.first.push_back(m_receipts.back());
@@ -397,6 +407,7 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                         LOG(TRACE) << "Block::sync no need exec: t=" << toString(t.sha3());
                         m_transactions.push_back(t);
                         m_transactionSet.insert(t.sha3());
+                        m_vecTxHash.push_back(t.sha3());
                     }
                     ++goodTxs;
                 }
@@ -476,21 +487,18 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
     {
         StartWaitingForResult(parallelUTXOTxCnt);
         LOG(TRACE) << "Block::sync parallelTx end";
-        map<h256, UTXOModel::UTXOExecuteState> mapTxResult = utxoTxQueue.getTxResult(); 
-        for (auto const& t : ts)
+        vector<h256> errTxHash = utxoTxQueue->getErrTxHash();
+        for (h256 const& hash : errTxHash)
         {
-            h256 hash = t.sha3();
-            if (parallelUTXOTx[hash])
-            {
-                if (!mapTxResult.count(hash) || 
-                    UTXOModel::UTXOExecuteState::Success != mapTxResult[hash])
-                {
-                    LOG(TRACE) << hash << " Transaction Error, drop";
-                    _tq.drop(hash);
-                    BOOST_THROW_EXCEPTION(UTXOTxError());
-                }
-            }
+            LOG(TRACE) << hash << " Transaction Error, drop";
+            _tq.drop(hash);
+            BOOST_THROW_EXCEPTION(UTXOTxError());
         }
+    }
+    if (_exec)
+    {
+        UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForGetVault();
+        UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForSelectTokens();
     }
     return ret;
 }
@@ -510,15 +518,22 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
     LastHashes lh;
     DEV_TIMED_ABOVE("lastHashes", 500)
     lh = _bc.lastHashes();
+    m_utxoMgr.setCurBlockInfo(this, lh);
 
+    Timer timerGetTx;
     std::map<h256, bool> parallelUTXOTx;
     size_t parallelUTXOTxCnt = 0;
-    getParallelUTXOTx(m_transactions, parallelUTXOTx, parallelUTXOTxCnt);
+    vector<Transaction> txs;
+    getParallelUTXOTx(m_transactions, parallelUTXOTx, txs);
+    parallelUTXOTxCnt = txs.size();
+    LOG(TRACE) << "Block::exec parallelTxCnt:" << parallelUTXOTxCnt << ", time cost:" << (timerGetTx.elapsed() * 1000);
 
     if (parallelUTXOTxCnt > 0)
     {
-        return execUTXOInBlock(_bc, _tq, lh, parallelUTXOTx, parallelUTXOTxCnt);
+        // Some Transactions can be executed parallely
+        return execParallelTx(_bc, _tq, lh, Permanence::OnlyReceipt, parallelUTXOTx, txs);
     }
+    // No Transactions can be executed parallely
 
     unsigned i = 0;
     DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()), 500)
@@ -550,6 +565,9 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
         ++i;
     }
 
+    UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForGetVault();
+    UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForSelectTokens();
+
     return ret;
 }
 
@@ -570,63 +588,114 @@ void Block::StartWaitingForResult(size_t parallelUTXOTxCnt)
     }
 }
 
-TransactionReceipts Block::execUTXOInBlock(BlockChain const& _bc, TransactionQueue& _tq, const LastHashes& lh, std::map<h256, bool>& parallelUTXOTx, size_t parallelUTXOTxCnt)
+TransactionReceipts Block::execParallelTx(BlockChain const& _bc, TransactionQueue& _tq, const LastHashes& lh, Permanence _p, std::map<h256, bool>& parallelUTXOTx, const vector<Transaction>& txs)
 {
     // TRANSACTIONS
     TransactionReceipts ret;
     
     unsigned i = 0;                                                         // 传入的交易队列中的计数索引
-    UTXOModel::UTXOTxQueue utxoTxQueue(parallelUTXOTxCnt, &m_utxoMgr);
+    Timer timer;
+    shared_ptr<UTXOModel::UTXOTxQueue> utxoTxQueue = _bc.getUTXOTxQueue();
+    size_t parallelUTXOTxCnt = txs.size();
+    utxoTxQueue->setQueue(parallelUTXOTxCnt, &m_utxoMgr);
     m_onParallelTxQueueReady = false;
-    m_parallelEnd = utxoTxQueue.onReady([ = ]() { this->onUTXOTxQueueReady(); });
-    m_utxoMgr.setCurBlockInfo(this, lh);
+    m_parallelEnd = utxoTxQueue->onReady([ = ]() { this->onUTXOTxQueueReady(); });
     m_state.setParallelUTXOTx(parallelUTXOTx);
-    LOG(TRACE) << "Block::exec parallelUTXOTxCnt:" << parallelUTXOTxCnt;
-    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()) + " ", 1)
-    for (Transaction const& tr : m_transactions)
+    utxoTxQueue->enqueueBatch(txs);
+    /*vector<string> tokenKeyList;
+    for (Transaction const& tr : txs)
     {
-        try
+        vector<UTXOModel::UTXOTxIn> utxoTxIn = tr.getUTXOTxIn();
+        for (UTXOModel::UTXOTxIn in : utxoTxIn)
         {
-            LOG(TRACE) << "Block::exec transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
-            if (parallelUTXOTx[tr.sha3()])
-            {
-                utxoTxQueue.enqueue(tr);
-            }
-            execute(lh, tr, Permanence::OnlyReceipt, OnOpFunc(), &_bc);
+            tokenKeyList.push_back(in.tokenKey);
         }
-        catch (Exception& ex)
-        {
-            ex << errinfo_transactionIndex(i);
-            _tq.drop(tr.sha3());  // TODO: 是否需要分类处理？
-            throw;
-        }
-        LOG(TRACE) << "Block::exec: t=" << toString(tr.sha3());
-        LOG(TRACE) << "Block::exec: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+    }
+    m_utxoMgr.getTokenBatch(tokenKeyList);*/
+    stringstream str;
+    str << "GetParallelTx:" << (timer.elapsed() * 1000);
 
-        RLPStream receiptRLP;
-        m_receipts.back().streamRLP(receiptRLP);
-        ret.push_back(m_receipts.back());
-        ++i;
-    }
-    LOG(TRACE) << "Block::exec ParallelTxQueueReady:" << m_onParallelTxQueueReady;
-    StartWaitingForResult(parallelUTXOTxCnt);
-    LOG(TRACE) << "Block::exec parallelTx end";
-    map<h256, UTXOModel::UTXOExecuteState> mapTxResult = utxoTxQueue.getTxResult();
-    for (auto const& t : m_transactions)
+    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()) + " ", 1)
+    if (parallelUTXOTxCnt == m_transactions.size())
     {
-        h256 hash = t.sha3();
-        if (parallelUTXOTx[hash])
+        // All Transactions can be executed parallely
+        if (isSealed())
+            BOOST_THROW_EXCEPTION(InvalidOperationOnSealedBlock());
+
+        // Uncommitting is a non-trivial operation - only do it once we've verified as much of the
+        // transaction as possible.
+        uncommitToSeal();
+
+        LogEntries _log;
+        TransactionReceipt receipt = TransactionReceipt(m_state.rootHash(), (u256)0, _log, (Address)0);
+        for (Transaction const& tr : txs)
         {
-            if (!mapTxResult.count(hash) || 
-                UTXOModel::UTXOExecuteState::Success != mapTxResult[hash])
-            {
-                LOG(TRACE) << hash << " Transaction Error, drop";
-                _tq.drop(hash);
-                BOOST_THROW_EXCEPTION(UTXOTxError());
-            }
+            doAfterExecuteFullParallelTx(_p, tr, receipt, ret);
         }
     }
+    else 
+    {
+        for (Transaction const& tr : m_transactions)
+        {
+            try
+            {
+                LOG(TRACE) << "Block::exec transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
+                execute(lh, tr, Permanence::OnlyReceipt, OnOpFunc(), &_bc);
+            }
+            catch (Exception& ex)
+            {
+                ex << errinfo_transactionIndex(i);
+                _tq.drop(tr.sha3());  // TODO: 是否需要分类处理？
+                throw;
+            }
+            LOG(TRACE) << "Block::exec: t=" << toString(tr.sha3());
+            LOG(TRACE) << "Block::exec: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+
+            RLPStream receiptRLP;
+            m_receipts.back().streamRLP(receiptRLP);
+            ret.push_back(m_receipts.back());
+            ++i;
+        }
+    }
+    str << ",ExecuteOther:" << (timer.elapsed() * 1000);
+    StartWaitingForResult(parallelUTXOTxCnt);
+    str << ",ExecuteParallelTx:" << (timer.elapsed() * 1000);
+    vector<h256> errTxHash = utxoTxQueue->getErrTxHash();
+    for (h256 const& hash : errTxHash)
+    {
+        LOG(TRACE) << hash << " Transaction Error, drop";
+        _tq.drop(hash);
+        BOOST_THROW_EXCEPTION(UTXOTxError());
+    }
+    str << ",GetResult:" << (timer.elapsed() * 1000);
+    LOG(DEBUG) << "Block::exec Processed " << m_transactions.size() << " transactions in " << (timer.elapsed() * 1000) << "ms, time cost content:" << str.str();
+    
+    UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForGetVault();
+    UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForSelectTokens();
     return ret;
+}
+
+void Block::doAfterExecuteFullParallelTx(Permanence _p, const Transaction& _t, TransactionReceipt& receipt, TransactionReceipts& ret)
+{
+    if (_p == Permanence::Committed)
+    {
+        // Add to the user-originated transactions that we've executed.
+        m_transactions.push_back(_t);
+        LOG(TRACE) << "Block::execute: t=" << toString(_t.sha3());
+        m_transactionSet.insert(_t.sha3());
+        m_vecTxHash.push_back(_t.sha3());
+
+        receipt.setGasUsed(receipt.gasUsed()+30000);
+        m_receipts.push_back(receipt);
+        ret.push_back(m_receipts.back());
+    }
+   
+    if (_p == Permanence::OnlyReceipt)
+    {
+        receipt.setGasUsed(receipt.gasUsed()+30000);
+        m_receipts.push_back(receipt);
+        ret.push_back(m_receipts.back());
+    }
 }
 
 u256 Block::enactOn(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _statusCheck)
@@ -714,61 +783,13 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
     
     std::map<h256, bool> parallelUTXOTx;
     size_t parallelUTXOTxCnt = 0;
-    getParallelUTXOTx(_block.transactions, parallelUTXOTx, parallelUTXOTxCnt);
+    vector<Transaction> txs;
+    getParallelUTXOTx(_block.transactions, parallelUTXOTx, txs);
+    parallelUTXOTxCnt = txs.size();
+    LOG(TRACE) << "Block::enact parallelTxCnt:" << parallelUTXOTxCnt;
     if (parallelUTXOTxCnt > 0)
     {
-        m_state.setParallelUTXOTx(parallelUTXOTx);
-        LOG(TRACE) << "Block::enact parallelUTXOTxCnt:" << parallelUTXOTxCnt;
-        unsigned i = 0;
-        UTXOModel::UTXOTxQueue utxoTxQueue(parallelUTXOTxCnt, &m_utxoMgr);
-        m_onParallelTxQueueReady = false;
-        m_parallelEnd = utxoTxQueue.onReady([ = ]() { this->onUTXOTxQueueReady(); });
-        DEV_TIMED_ABOVE("Block::enact txExec,blk=" + toString(_block.info.number()) + ",txs=" + toString(_block.transactions.size()) + " ", 1)
-        for (Transaction const& tr : _block.transactions)
-        {
-            try
-            {
-                LOG(TRACE) << "Enacting transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
-                if (parallelUTXOTx[tr.sha3()])
-                {
-                    utxoTxQueue.enqueue(tr);
-                }
-                // 区分从enactOn和populateFromChain
-                execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
-
-                //LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
-                //LOG(TRACE) << m_state;
-            }
-            catch (Exception& ex)
-            {
-                ex << errinfo_transactionIndex(i);
-                throw;
-            }
-
-            LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
-            LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
-
-            RLPStream receiptRLP;
-            m_receipts.back().streamRLP(receiptRLP);
-            receipts.push_back(receiptRLP.out());
-            ++i;
-        }
-        StartWaitingForResult(parallelUTXOTxCnt);
-        map<h256, UTXOModel::UTXOExecuteState> mapTxResult = utxoTxQueue.getTxResult();
-        LOG(TRACE) << "Block::enact parallelTx end";
-        for (auto const& t : _block.transactions)
-        {
-            h256 hash = t.sha3();
-            if (parallelUTXOTx[hash])
-            {
-                if (!mapTxResult.count(hash) || 
-                    UTXOModel::UTXOExecuteState::Success != mapTxResult[hash])
-                {
-                    LOG(TRACE) << hash << " Transaction Error";
-                    BOOST_THROW_EXCEPTION(UTXOTxError());
-                }
-            }
-        }
+        enactParallelTx(_bc, _block.transactions, lh, Permanence::Committed, parallelUTXOTx, txs, _filtercheck, receipts);
     }
     else
     {
@@ -800,6 +821,9 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
             ++i;
         }
     }
+
+    UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForGetVault();
+    UTXOModel::UTXOSharedData::getInstance()->clearTokenMapForSelectTokens();
 
     h256 receiptsRoot;
     DEV_TIMED_ABOVE(".receiptsRoot()", 500)
@@ -943,6 +967,82 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
     return tdIncrease;
 }
 
+void Block::enactParallelTx(BlockChain const& _bc, Transactions const& txInBlock, const LastHashes& lh, Permanence _p, std::map<h256, bool>& parallelUTXOTx, const vector<Transaction>& txs, bool _filtercheck, vector<bytes>& receipts)
+{
+    unsigned i = 0;
+    Timer timer;
+    shared_ptr<UTXOModel::UTXOTxQueue> utxoTxQueue = _bc.getUTXOTxQueue();
+    size_t parallelUTXOTxCnt = txs.size();
+    utxoTxQueue->setQueue(parallelUTXOTxCnt, &m_utxoMgr);
+    m_onParallelTxQueueReady = false;
+    m_parallelEnd = utxoTxQueue->onReady([ = ]() { this->onUTXOTxQueueReady(); });
+    m_state.setParallelUTXOTx(parallelUTXOTx);
+    utxoTxQueue->enqueueBatch(txs);
+
+    stringstream str;
+    str << "GetParallelTx:" << (timer.elapsed() * 1000);
+    
+    if (parallelUTXOTxCnt == txInBlock.size())
+    {
+        if (isSealed())
+            BOOST_THROW_EXCEPTION(InvalidOperationOnSealedBlock());
+
+        // Uncommitting is a non-trivial operation - only do it once we've verified as much of the
+        // transaction as possible.
+        uncommitToSeal();
+
+        TransactionReceipts ret;
+        LogEntries _log;
+        TransactionReceipt receipt = TransactionReceipt(m_state.rootHash(), (u256)0, _log, (Address)0);
+        for (Transaction const& tr : txs)
+        {
+            doAfterExecuteFullParallelTx(_p, tr, receipt, ret);
+            RLPStream receiptRLP;
+            m_receipts.back().streamRLP(receiptRLP);
+            receipts.push_back(receiptRLP.out());
+        }
+    }
+    else 
+    {
+        for (Transaction const& tr : txInBlock)
+        {
+            try
+            {
+                LOG(TRACE) << "Enacting transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
+                // 区分从enactOn和populateFromChain
+                execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
+
+                //LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
+                //LOG(TRACE) << m_state;
+            }
+            catch (Exception& ex)
+            {
+                ex << errinfo_transactionIndex(i);
+                throw;
+            }
+
+            LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
+            LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+
+            RLPStream receiptRLP;
+            m_receipts.back().streamRLP(receiptRLP);
+            receipts.push_back(receiptRLP.out());
+            ++i;
+        }
+    }
+    str << ",ExecuteOther:" << (timer.elapsed() * 1000);
+    StartWaitingForResult(parallelUTXOTxCnt);
+    str << ",ExecuteParallelTx:" << (timer.elapsed() * 1000);
+    vector<h256> errTxHash = utxoTxQueue->getErrTxHash();
+    for (h256 const& hash : errTxHash)
+    {
+        LOG(TRACE) << hash << " Transaction Error, drop";
+        BOOST_THROW_EXCEPTION(UTXOTxError());
+    }
+    str << ",GetResult:" << (timer.elapsed() * 1000);
+    LOG(DEBUG) << "Block::enact Processed " << m_transactions.size() << " transactions in " << (timer.elapsed() * 1000) << "ms, time cost content:" << str.str();
+}
+
 // will throw exception
 ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Permanence _p, OnOpFunc const& _onOp, BlockChain const *_bcp)
 {
@@ -974,7 +1074,7 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
         m_receipts.push_back(resultReceipt.second);
         LOG(TRACE) << "Block::execute: stateRoot=" << toString(resultReceipt.second.stateRoot()) << ",gasUsed=" << toString(resultReceipt.second.gasUsed()) << ",sha3=" << toString(sha3(resultReceipt.second.rlp()));
         m_transactionSet.insert(_t.sha3());
-
+        m_vecTxHash.push_back(_t.sha3());
 
         if (_bcp) {
             (_bcp)->updateCache(_t.to());
@@ -1349,7 +1449,7 @@ string Block::vmTrace(bytesConstRef _block, BlockChain const& _bc, ImportRequire
     return ret.empty() ? "[]" : (ret + "]");
 }
 
-void Block::getParallelUTXOTx(const Transactions& transactions, std::map<h256, bool>& ret, size_t& cnt)
+void Block::getParallelUTXOTx(const Transactions& transactions, std::map<h256, bool>& ret, vector<Transaction>& txs)
 {
     std::vector<bool> artificialTx;
     isArtificialTx(transactions, artificialTx);
@@ -1358,7 +1458,10 @@ void Block::getParallelUTXOTx(const Transactions& transactions, std::map<h256, b
         const Transaction& tr = transactions[i];
         bool temp = (tr.getUTXOType() != UTXOType::InValid && !tr.isUTXOEvmTx() && !artificialTx[i]);
         ret[tr.sha3()] = temp;
-        if (temp) { cnt++; }
+        if (temp) 
+        {
+            txs.push_back(tr); 
+        }
     }
 }
 
@@ -1381,6 +1484,11 @@ void Block::isArtificialTx(const Transactions& txList, std::vector<bool>& flag)
             tokenKeyMap[in.tokenKey] = txIdx;
         }
     }
+}
+
+void Block::GetTxHash(vector<h256>& vecTxHash)
+{
+    vecTxHash = m_vecTxHash;
 }
 
 std::ostream& dev::eth::operator<<(std::ostream& _out, Block const& _s)

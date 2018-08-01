@@ -296,6 +296,8 @@ public:
 
 	void clearCurrentBytes();
 
+	void GetTxHash(vector<h256>& vecTxHash);
+	
 private:
 	SealEngineFace* sealEngine() const;
 
@@ -328,11 +330,13 @@ private:
 	std::string vmTrace(bytesConstRef _block, BlockChain const& _bc, ImportRequirements::value _ir);
 
 	// Obtaining UTXO transactions that can be processed parallelly.
-	void getParallelUTXOTx(const Transactions& transactions, std::map<h256, bool>& ret, size_t &cnt);
+	void getParallelUTXOTx(const Transactions& transactions, std::map<h256, bool>& ret, vector<Transaction>& txs);
 	// Determines whether a transaction uses a token that has already been used.
 	void isArtificialTx(const Transactions& txList, std::vector<bool>& flag);
 	// The logic of parallel transactions
-	TransactionReceipts execUTXOInBlock(BlockChain const& _bc, TransactionQueue& _tq, const LastHashes& lh, std::map<h256, bool>& parallelUTXOTx, size_t parallelUTXOTxCnt);
+	TransactionReceipts execParallelTx(BlockChain const& _bc, TransactionQueue& _tq, const LastHashes& lh, Permanence _p, std::map<h256, bool>& parallelUTXOTx, const vector<Transaction>& txs);
+	void enactParallelTx(BlockChain const& _bc, Transactions const& txInBlock, const LastHashes& lh, Permanence _p, std::map<h256, bool>& parallelUTXOTx, const vector<Transaction>& txs, bool _filtercheck, vector<bytes>& receipts);
+	void doAfterExecuteFullParallelTx(Permanence _p, const Transaction& _t, TransactionReceipt& receipt, TransactionReceipts& ret);
 
 	// Operations for parallel transactions-begin
 	void onUTXOTxQueueReady();									// Notification of completion of parallel transactions.
@@ -365,6 +369,7 @@ private:
 	bool m_evmCoverLog = false; 
 
 	UTXOModel::UTXOMgr m_utxoMgr;
+	vector<h256> m_vecTxHash;
 
 	friend std::ostream& operator<<(std::ostream& _out, Block const& _s);
 

@@ -108,6 +108,7 @@ public:
 	/// Drop a trasnaction from the list if exists and move following future trasnactions to current (if any)
 	/// @param _t Transaction hash
 	void dropGood(Transaction const& _t);
+	void dropGood(Transactions const& _transcations);	// 	Delete transactions in bulk
 
 	struct Status
 	{
@@ -191,6 +192,8 @@ private:
 	std::pair<ImportResult, h256> import(bytesConstRef _tx, IfDropped _ik = IfDropped::Ignore);
 	ImportResult check_WITH_LOCK(h256 const& _h, IfDropped _ik);
 	ImportResult manageImport_WITH_LOCK(h256 const& _h, Transaction const& _transaction);
+	std::pair<ImportResult, h256> importUTXOTx(h256 const& _h, Transaction const& _transaction, IfDropped _ik);
+	ImportResult checkUTXOTx(Transaction const& _transaction);
 
 	void insertCurrent_WITH_LOCK(std::pair<h256, Transaction> const& _p);
 	void makeCurrent_WITH_LOCK(Transaction const& _t);

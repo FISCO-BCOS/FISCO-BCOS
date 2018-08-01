@@ -303,12 +303,23 @@ void PBFTClient::rejigSealing() {
 					}
 				}
 
+				/*if (!bFirstStart)
+				{
+					// Log output at first entry
+					LOG(TRACE) << "last_exec=" << last_exec_finish_time << ",passed_time=" << passed_time << ",left=" << left_time << ",max_block_txs=" << max_block_txs << ",tx_num=" << tx_num;
+				}*/
 				VLOG(10) << "last_exec=" << last_exec_finish_time << ",passed_time=" << passed_time << ",left=" << left_time << ",max_block_txs=" << max_block_txs << ",tx_num=" << tx_num;
 
 				bool t = true;
 				if (tx_num < max_block_txs && !isSyncing() && !m_remoteWorking && m_syncTransactionQueue.compare_exchange_strong(t, false)) {
 					syncTransactionQueue(max_block_txs);
 				}
+
+				/*if (!bFirstStart)
+				{
+					LOG(TRACE) << "sync txs end, tx_num=" << m_working.pending().size();
+					bFirstStart = true;
+				}*/
 
 				//DEV_WRITE_GUARDED(x_working)
 				{
@@ -321,8 +332,10 @@ void PBFTClient::rejigSealing() {
 					m_working.resetCurrentTime();
 					m_working.setIndex(pbft()->nodeIdx());
 					m_working.setNodeList(pbft()->getMinerNodeList());
+					//Timer t1;
 					m_working.commitToSeal(bc(), m_extraData);
-
+					//LOG(TRACE) << "PBFTClient commitToSeal cost:" << (t1.elapsed() * 1000);
+					
 					m_sealingInfo = m_working.info();
 					RLPStream ts;
 					m_sealingInfo.streamRLP(ts, WithoutSeal);
@@ -332,6 +345,7 @@ void PBFTClient::rejigSealing() {
 						m_working.resetCurrent();
 						return;
 					}
+					//LOG(TRACE) << "PBFTClient commitToSeal+sealBlock cost:" << (t1.elapsed() * 1000);
 				}
 				// sealed log
 				stringstream ss;
@@ -341,6 +355,8 @@ void PBFTClient::rejigSealing() {
 			}
 			// broadcast which not contains execution result 广播（不含交易执行结果的块）
 			LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number() << "tx:" << tx_num << ",maxtx:" << max_block_txs << ",tq.num=" << m_tq.currentTxNum() << "time:" << utcTime();
+
+			//bFirstStart = false;
 
 			u256 view = 0;
 			bool generate_ret = pbft()->generateSeal(m_sealingInfo, block_data, view);
@@ -408,6 +424,7 @@ void PBFTClient::rejigSealing() {
 						m_exec_time_per_tx = (float)sealEngine()->getIntervalBlockTime();
 					}
 				}
+				LOG(TRACE) << "exec blk=" << m_sealingInfo.number() << ",cost:" << m_last_exec_finish_time - start_exec_time;
 				LOG(INFO) << "finish exec blk=" << m_sealingInfo.number() << ",finish_exec=" << m_last_exec_finish_time << ",per=" << m_exec_time_per_tx << ",tx_num=" << tx_num;
 			}
 
@@ -439,7 +456,7 @@ void PBFTClient::rejigSealing() {
 }
 
 bool PBFTClient::submitSealed(bytes const & _block, bool _isOurs) {
-	auto ret = m_bq.import(&_block, _isOurs);
+	auto ret = m_bq.import(&_block, _isOurs, true);	// Indicates that the transaction has been executed
 	LOG(DEBUG) << "PBFTClient::submitSealed m_bq.import return " << (unsigned)ret;
 	return ret == ImportResult::Success;
 }

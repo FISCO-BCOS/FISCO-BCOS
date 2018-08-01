@@ -47,6 +47,9 @@ namespace UTXOModel
 		leveldb::Options o;
 		o.max_open_files    = 256;
 		o.create_if_missing = true;
+		// Increase db cache
+		o.write_buffer_size = 100 * 1024 * 1024;
+		o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
 		leveldb::DB * db    = nullptr;
 
 		leveldb::Status status = ldb::DB::Open(o, path, &db);

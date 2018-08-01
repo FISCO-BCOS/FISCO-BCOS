@@ -84,6 +84,15 @@ namespace UTXOModel
 		
 		void setCurBlockInfo(dev::eth::Block* _tempblock, LastHashes const& _lh);
 
+		void setBlockNum(u256 blockNum);
+		u256 getBlockNum();
+
+		void setTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken);
+		void addTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken);
+		void getTxResult(map<string, UTXODBCache>& cacheWritedtoDB, u256& dbCacheCnt, map<string, Token>& cacheToken);
+
+		void getTokenBatch(const vector<string>& tokenKeyList);
+		
 	private:
 		shared_ptr<UTXODBMgr> m_UTXODBMgr;
 

@@ -145,6 +145,11 @@ void Client::updateConfig() {
 	BlockHeader::updateHeight = uvalue;
 
 	value = "";
+	m_systemcontractapi->getValue("utxoVersion", value);
+	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
+	UTXOModel::UTXOTxQueue::utxoVersion = uvalue;
+	
+	value = "";
 	m_systemcontractapi->getValue("maxTranscationGas", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
 	if ( uvalue < 30000000 )
@@ -186,7 +191,8 @@ void Client::updateConfig() {
 	LOG(TRACE) << "Client::Client NonceCheck::maxNonceCheckBlock:" << NonceCheck::maxblocksize;
 	LOG(TRACE) << "Client::Client BlockChain::maxBlockLimit:" << BlockChain::maxBlockLimit;
 	LOG(TRACE) << "Client::Client BlockChain::CAVerify:" << NodeConnParamsManager::CAVerify;
-
+	LOG(TRACE) << "Client::Client BlockChain::updateHeight:" << BlockHeader::updateHeight;
+	LOG(TRACE) << "Client::Client BlockChain::utxoVersion:" << UTXOModel::UTXOTxQueue::utxoVersion;
 }
 
 
@@ -550,7 +556,9 @@ void Client::syncBlockQueue()
 		m_syncAmount = min(c_syncMax, m_syncAmount * 11 / 10 + 1);
 	if (ir.liveBlocks.empty())
 		return;
+	Timer timer;
 	onChainChanged(ir);
+	LOG(TRACE)<<"Client onChainChanged cost:"<<(timer.elapsed() * 1000);
 }
 
 void Client::syncTransactionQueue()
@@ -707,11 +715,12 @@ void Client::onChainChanged(ImportRoute const& _ir)
 //	LOG(TRACE) << "onChainChanged()";
 	h256Hash changeds;
 	onDeadBlocks(_ir.deadBlocks, changeds);
-	for (auto const& t : _ir.goodTranactions)
+	/*for (auto const& t : _ir.goodTranactions)
 	{
 		LOG(TRACE) << "Safely dropping transaction " << t.sha3();
 		m_tq.dropGood(t);
-	}
+	}*/
+	m_tq.dropGood(_ir.goodTranactions);
 	onNewBlocks(_ir.liveBlocks, changeds);
 	resyncStateFromChain();
 	noteChanged(changeds);
@@ -1038,6 +1047,6 @@ Address Client::findContract(const string& contract)
 
 UTXOModel::UTXOMgr* Client::getUTXOMgr() 
 {
-	LOG(TRACE) << "Client::getUTXOMgr()";
+	//LOG(TRACE) << "Client::getUTXOMgr()";
 	return &m_utxoMgr; 
 }

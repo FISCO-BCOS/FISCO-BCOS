@@ -44,6 +44,7 @@
 #include "Interface.h"
 #include <libdevcrypto/AES.h>
 #include <libdevcore/FileSystem.h>
+#include <UTXO/UTXOTxQueue.h>
 
 namespace std
 {
@@ -344,6 +345,7 @@ public:
 	bytes encryptodata(bytes const& v);
 	bytes decryptodata(std::string const& v) const;
 	std::shared_ptr<Interface> getClient() const { return m_interface; }
+	std::shared_ptr<UTXOModel::UTXOTxQueue> getUTXOTxQueue() const { return m_utxoTxQueue; }
 private:
 	enum CRYPTOTYPE
 	{
@@ -469,6 +471,7 @@ private:
 	mutable std::deque<h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
 	const unsigned kBlockCacheSize = 10;  // m_blockCache size, default set 10
 
+	std::shared_ptr<UTXOModel::UTXOTxQueue> m_utxoTxQueue;
 	
 	friend std::ostream& operator<<(std::ostream& _out, BlockChain const& _bc);
 };

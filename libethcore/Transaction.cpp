@@ -171,7 +171,7 @@ bool TransactionBase::isUTXOTx(const std::string& strJson, Json::Value& _json)
 		if (reader.parse(strJson, _json, false) && 
 			_json.isMember("utxotype") && _json["utxotype"].isInt())
 		{
-			LOG(TRACE) << "TransactionBase::TransactionBase UTXO data:" << strJson;
+			//LOG(TRACE) << "TransactionBase::TransactionBase UTXO data:" << strJson;
 			return true;
 		}
 	}

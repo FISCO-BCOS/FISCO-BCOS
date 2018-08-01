@@ -47,6 +47,7 @@ void SystemContractSSL::updateSystemContract(std::shared_ptr<Block> block)
         m_tempblock = block;
         m_tempblock->clearCurrentBytes();
         m_tempblock->setEvmEventLog(true);//方便看log
+        m_client->getUTXOMgr()->clearDBRecord();
         LOG(TRACE) << "SystemContractSSL::updateSystemContract blocknumber=" << m_tempblock->info().number();
     }
 
@@ -217,7 +218,7 @@ void SystemContractSSL::updateSystemContract(std::shared_ptr<Block> block)
         }//
     }
 
-    LOG(TRACE) << "SystemContractSSL::updateSystemContract took:" << (t.elapsed() * 1000000);
+    LOG(TRACE) << "SystemContractSSL::updateSystemContract took:" << (t.elapsed() * 1000);
 
 }
 

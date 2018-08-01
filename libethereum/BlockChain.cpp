@@ -156,6 +156,8 @@ BlockChain::BlockChain(std::shared_ptr<Interface> _interface, ChainParams const&
 	m_pnoncecheck->init(*this );
 
 	m_interface = _interface;
+
+	m_utxoTxQueue = make_shared<UTXOModel::UTXOTxQueue>();
 }
 
 BlockChain::~BlockChain()
@@ -885,11 +887,11 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	//@tidy This is a behemoth of a method - could do to be split into a few smaller ones.
 #if ETH_TIMED_IMPORTS
 	Timer total;
-	double preliminaryChecks;
-	double enactment;
-	double collation;
-	double writing;
-	double checkBest;
+	int preliminaryChecks;
+	int enactment;
+	int collation;
+	int writing;
+	int checkBest;
 	Timer t;
 #endif
 
@@ -938,7 +940,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 
 
 #if ETH_TIMED_IMPORTS
-	preliminaryChecks = t.elapsed();
+	preliminaryChecks = (t.elapsed() * 1000);
 	t.restart();
 #endif
 	BatchEncrypto blocksBatch;
@@ -977,14 +979,11 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 			addBlockCache(*tempBlock, tdIncrease);
 		}
 
-		
+		goodTransactions = tempBlock->pending();
 		for (unsigned i = 0; i < tempBlock->pending().size(); ++i) {
 			blb.blooms.push_back(tempBlock->receipt(i).bloom());
 			br.receipts.push_back(tempBlock->receipt(i));
-			goodTransactions.push_back(tempBlock->pending()[i]);
-
-			LOG(INFO) << " Hash=" << (tempBlock->pending()[i].sha3()) << ",Randid=" << tempBlock->pending()[i].randomid() << ",上链=" << utcTime();
-
+			LOG(INFO) << " Hash=" << (tempBlock->pending()[i].sha3()) << ",Randid=" << tempBlock->pending()[i].randomid() << ",onchain=" << utcTime();
 		}
 
 		tempBlock->commitAll();
@@ -993,7 +992,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		td = pd.totalDifficulty + tdIncrease;
 
 #if ETH_TIMED_IMPORTS
-		enactment = t.elapsed();
+		enactment = (t.elapsed() * 1000);
 		t.restart();
 #endif // ETH_TIMED_IMPORTS
 
@@ -1013,7 +1012,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		m_details[_block.info.parentHash()].children.push_back(_block.info.hash());
 
 #if ETH_TIMED_IMPORTS
-		collation = t.elapsed();
+		collation = (t.elapsed() * 1000);
 		t.restart();
 #endif // ETH_TIMED_IMPORTS
 
@@ -1027,7 +1026,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		extrasBatch.Put(toSlice(_block.info.hash(), ExtraReceipts), (ldb::Slice)dev::ref(br.rlp()));
 
 #if ETH_TIMED_IMPORTS
-		writing = t.elapsed();
+		writing = (t.elapsed() * 1000);
 		t.restart();
 #endif // ETH_TIMED_IMPORTS
 	}
@@ -1166,13 +1165,14 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 			// Collate transaction hashes and remember who they were.
 			//h256s newTransactionAddresses;
 			{
-				bytes blockBytes;
-				RLP blockRLP(*i == _block.info.hash() ? _block.block : & (blockBytes = block(*i)));
+				// Get hash from block
+				vector<h256> vecTxHash;
+				tempBlock->GetTxHash(vecTxHash);
+				LOG(TRACE) << "vecTxHash size:" << vecTxHash.size();
 				TransactionAddress ta;
 				ta.blockHash = tbi.hash();
-				for (ta.index = 0; ta.index < blockRLP[1].itemCount(); ++ta.index)
-					extrasBatch.Put(toSlice(sha3(blockRLP[1][ta.index].data()), ExtraTransactionAddress), (ldb::Slice)dev::ref(ta.rlp()));
-				
+				for (ta.index = 0; ta.index < vecTxHash.size(); ++ta.index)
+					extrasBatch.Put(toSlice(vecTxHash[ta.index], ExtraTransactionAddress), (ldb::Slice)dev::ref(ta.rlp()));
 			}
 
 			// Update database with them.
@@ -1286,14 +1286,14 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 #endif // ETH_PARANOIA
 
 #if ETH_TIMED_IMPORTS
-	checkBest = t.elapsed();
-	if (total.elapsed() > 0.5)
+	checkBest = (t.elapsed() * 1000);
+	//if (total.elapsed() > 0.5)
 	{
 		unsigned const gasPerSecond = static_cast<double>(_block.info.gasUsed()) / enactment;
 		LOG(INFO) << "SLOW IMPORT: "
 		      << "{ \"blockHash\": \"" << _block.info.hash() << "\", "
 		      << "\"blockNumber\": " << _block.info.number() << ", "
-		      << "\"importTime\": " << total.elapsed() << ", "
+		      << "\"importTime\": " << (total.elapsed() * 1000) << ", "
 		      << "\"gasPerSecond\": " << gasPerSecond << ", "
 		      << "\"preliminaryChecks\":" << preliminaryChecks << ", "
 		      << "\"enactment\":" << enactment << ", "

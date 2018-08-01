@@ -23,6 +23,7 @@
 
 #include <libethereum/NonceCheck.h>
 #include <libdevcore/Common.h>
+#include <libethcore/Transaction.h>
 
 using namespace dev;
 
@@ -55,6 +56,10 @@ std::string NonceCheck::generateKey(Transaction const & _t)
 
 bool NonceCheck::ok(Transaction const & _transaction,bool _needinsert)
 {
+    if (_transaction.getUTXOType() != UTXOType::InValid)
+    {
+        return true;
+    }
     DEV_WRITE_GUARDED(m_lock)
     {
         string key=this->generateKey(_transaction);
@@ -77,16 +82,22 @@ bool NonceCheck::ok(Transaction const & _transaction,bool _needinsert)
 
 void NonceCheck::delCache( Transactions const & _transcations)
 {
+    Timer timer;
     DEV_WRITE_GUARDED(m_lock)
     {
         for( unsigned i=0;i<_transcations.size();i++)
         {
+            if (_transcations[i].getUTXOType() != UTXOType::InValid)
+            {
+                continue;
+            }
             string key=this->generateKey(_transcations[i]);
             auto iter=  m_cache.find( key );
             if( iter != m_cache.end() )
                 m_cache.erase(iter);   
         }//for 
     }
+    LOG(TRACE)<<"NonceCheck::delCache cost:"<<(timer.elapsed() * 1000);
 }
 
 
@@ -128,6 +139,10 @@ void NonceCheck::updateCache(BlockChain const& _bc,bool _rebuild)
                     for( unsigned j=0;j<bytestrans.size();j++)
                     {
                             Transaction	t = Transaction(bytestrans[j], CheckTransaction::None);
+                            if (t.getUTXOType() != UTXOType::InValid)
+                            { 
+                                continue;
+                            }
                             string key=this->generateKey(t);
                             auto iter=  m_cache.find( key );
                             if( iter != m_cache.end() )
@@ -145,6 +160,10 @@ void NonceCheck::updateCache(BlockChain const& _bc,bool _rebuild)
                 for( unsigned j=0;j<bytestrans.size();j++)
                 {
                         Transaction	t = Transaction(bytestrans[j], CheckTransaction::None);
+                        if (t.getUTXOType() != UTXOType::InValid)
+                        {
+                            continue;
+                        }
                         string key=this->generateKey(t);
                         auto iter=  m_cache.find( key );
                         if( iter == m_cache.end() )
