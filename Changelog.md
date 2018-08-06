@@ -1,4 +1,6 @@
 ### V1.3.2
+
+*Update
 1. 修复了节点的bootstrap.json中，配置了自身的外网ip导致网络连接异常的问题
 2. 移除了admin相关的rpc接口
 3. 修复AMOP可能导致程序异常的问题
