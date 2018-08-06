@@ -1,14 +1,22 @@
 ### V1.3.2
 
-*Update
+(2018-08-06) 
+
+* Update
+1. 优化PBFT性能
+2. 优化节点的断连
+
+* Add
+1. 增加优先级队列功能
+
+* Fix
 1. 修复了节点的bootstrap.json中，配置了自身的外网ip导致网络连接异常的问题
 2. 移除了admin相关的rpc接口
 3. 修复AMOP可能导致程序异常的问题
-4. 优化PBFT性能
-5. 优化节点的断连
-6. 增加优先级队列功能
 
 ### V1.3.1
+
+(2018-07-09)
 
 * Update
 1. 节点建立连接时过滤自身的ip端口
@@ -21,11 +29,12 @@
 1. nodejs客户端通过开关支持国密算法发送交易
 
 * Fix
-
 1. 缓存bugfix
 2. 共识bugfix
 
 ### V1.3.0
+
+(2018-06-25)
 
 * New Feature
 1. CA证书链SSL连接协议
@@ -63,41 +72,41 @@
 * Fix:
 1. 交易队列大小为10240
 
-* Delete
-  1、不再维护DFS客户端代码:移除tool目录中的DfsSample，DfsSDK，third-jars目录。节点中DFS功能相关代码暂时保留，但将不再维护，请社区慎重使用。如果有基于DFS做了一些功能的，可以继续使用V1.2.0的DFS。如果疑问请联系我们，讨论后续的维护方法。
+* Delete:
+1. 不再维护DFS客户端代码:移除tool目录中的DfsSample，DfsSDK，third-jars目录。节点中DFS功能相关代码暂时保留，但将不再维护，请社区慎重使用。如果有基于DFS做了一些功能的，可以继续使用V1.2.0的DFS。如果疑问请联系我们，讨论后续的维护方法。
 
 ### V1.2.0
 
 (2018-05-14)  
 
-- Update
+* Update
 
 1. 规范日志打印行为，统一以英文方式输出。
 
-- Add
+* Add
 
 1. 增加[可监管的零知识证明验证功能](doc/可监管的零知识证明说明.md)。
 2. 提供[弹性联盟链共识框架的主体功能](doc/弹性联盟链共识框架说明文档.md)，在系统合约部分提供的和这个功能相关的合约，以及ConsensusControl.sol 这个规则示例。
 3. 添加了[群签名和环签名验证功能](doc/启用_关闭群签名环签名ethcall.md)。
 
-- Fix
+* Fix
 
 1. 区块链浏览器miner字段兼容问题。
 
 (2018-03-29)
 
-- Fix
+* Fix
 
 1. 修正一键安装脚本编译完成之后, 启动nodejs模块缺失的问题
 
 (2018-03-28)  
 
-- Update
+* Update
 
 1. 为查询block的RPC接口增加更多的返回字段。  
 2. FISCO BCOS用户手册更新, a. 在web3lib中需要增加cnpm install的操作  b. config.js文件放入weblib3目录中。  
 
-- Add:
+* Add:
 
 1. 添加打印监控日志的功能，适配于区块链浏览器的report agent。  
 2. scripts/install_deps.sh 依赖脚本添加Linux Oracle Server的支持。  
