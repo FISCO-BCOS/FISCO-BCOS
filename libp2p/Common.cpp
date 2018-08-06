@@ -200,7 +200,7 @@ NodeSpec::NodeSpec(string const& _user)
 			m_tcpPort = stoi(ports.substr(0, p2));
 		}
 		else
-			m_tcpPort = m_udpPort = stoi(ports);
+			m_tcpPort = m_udpPort = boost::lexical_cast<int>(ports);
 	}
 }
 

@@ -70,7 +70,9 @@ Session::~Session()
 		if (m_socket->isConnected())
 		{
 			boost::system::error_code ec;
-			socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+
+			//shutdown may block servals seconds - morebtcg
+			//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 			socket.close();
 		}
 	}
@@ -276,9 +278,14 @@ RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
 
 void Session::sealAndSend(RLPStream& _s, uint16_t _protocolID)
 {
+#if 0
 	bytes b;
 	_s.swapOut(b);
 	send(move(b), _protocolID);
+#endif
+	std::shared_ptr<bytes> b = std::make_shared<bytes>();
+	_s.swapOut(*b);
+	send(b, _protocolID);
 }
 
 bool Session::checkPacket(bytesConstRef _msg)
@@ -290,12 +297,12 @@ bool Session::checkPacket(bytesConstRef _msg)
 	return true;
 }
 
-void Session::send(bytes&& _msg, uint16_t _protocolID)
+void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
 {
 	if (m_dropped)
 		return;
 
-	bytesConstRef msg(&_msg);
+	bytesConstRef msg(_msg.get());
 	if (!checkPacket(msg))
 		LOG(WARNING) << "INVALID PACKET CONSTRUCTED!";
 
@@ -323,9 +330,13 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	{
 		DEV_GUARDED(x_framing)
 		{
+			_writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
+			doWrite = (_writeQueue.size() == 1);
+#if 0
 			m_writeQueue.push_back(std::move(_msg));
 			m_writeTimeQueue.push_back(utcTime());
 			doWrite = (m_writeQueue.size() == 1);
+#endif
 		}
 
 		if (doWrite)
@@ -356,10 +367,16 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 
 		DEV_GUARDED(x_framing)
 		{
+#if 0
 			m_writeQueue.pop_front();
 			m_writeTimeQueue.pop_front();
 			if (m_writeQueue.empty())
 				return;
+#endif
+			_writeQueue.pop();
+			if(_writeQueue.empty()) {
+				return;
+			}
 		}
 		write();
 	}
@@ -378,13 +395,18 @@ void Session::write()
 		if (m_dropped)
 			return;
 
-		bytes const* out = nullptr;
+		boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
+		//bytes const* out = nullptr;
 		u256 enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
-			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
-			out = &m_writeQueue[0];
-			enter_time = m_writeTimeQueue[0];
+			task = _writeQueue.top();
+			//m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
+			m_io->writeSingleFramePacket(task.get<0>().get(), *task.get<0>());
+
+			//out = &m_writeQueue[0];
+			//enter_time = m_writeTimeQueue[0];
+			enter_time = boost::get<2>(task);
 		}
 		
 		m_start_t = utcTime();
@@ -402,7 +424,8 @@ void Session::write()
 				m_server->getIOService()->post(
 					[ = ] {
 						boost::asio::async_write(m_socket->sslref(),
-						boost::asio::buffer(*out),
+						//boost::asio::buffer(*out),
+						boost::asio::buffer(*(boost::get<0>(task))),
 						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 					});
 			}
@@ -415,7 +438,8 @@ void Session::write()
 		}
 		else
 		{
-			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			//ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			ba::async_write(m_socket->ref(), boost::asio::buffer(*(boost::get<0>(task))), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
 		
 	}
@@ -493,7 +517,9 @@ void Session::drop(DisconnectReason _reason)
 	try
 	{
 		boost::system::error_code ec;
-		socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+
+		//shutdown may block servals seconds - morebtcg
+		//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 		LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
 		
 		socket.close();
