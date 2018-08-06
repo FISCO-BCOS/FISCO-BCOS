@@ -46,7 +46,7 @@ class ChannelSession: public std::enable_shared_from_this<ChannelSession> {
 public:
 	ChannelSession();
 	virtual ~ChannelSession() {
-		LOG(DEBUG) << "session退出";
+		LOG(DEBUG) << "session exit";
 	};
 
 	typedef std::shared_ptr<ChannelSession> Ptr;
@@ -80,7 +80,6 @@ public:
 	std::shared_ptr<std::set<std::string> > topics() { return _topics; };
 	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
 	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
-
 private:
 	void onHandshake(const boost::system::error_code& error);
 
@@ -113,6 +112,9 @@ private:
 	std::queue<std::shared_ptr<bytes> > _sendBufferList;
 	bool _writing = false;
 
+	std::shared_ptr<boost::asio::deadline_timer> _idleTimer;
+	std::recursive_mutex _mutex;
+
 	std::shared_ptr<boost::asio::io_service> _ioService;
 	std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > _sslSocket;
 	std::shared_ptr<boost::asio::ip::tcp::socket> _socket;
@@ -129,9 +131,6 @@ private:
 
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
-
-	std::shared_ptr<boost::asio::deadline_timer> _idleTimer;
-	std::recursive_mutex _mutex;
 };
 
 }

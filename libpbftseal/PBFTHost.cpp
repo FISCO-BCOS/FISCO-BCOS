@@ -50,13 +50,22 @@ void PBFTHost::foreachPeer(std::function<bool(std::shared_ptr<PBFTPeer>)> const&
 		if (!_f(capabilityFromSession<PBFTPeer>(*s.first, c_oldProtocolVersion)))
 			return;
 	*/
-	RecursiveGuard l(host()->xSessions());
+	std::unordered_map<NodeID, std::weak_ptr<SessionFace>> temp_sessions; // save sessions to prevent dead lock
+
+	{
+		RecursiveGuard l(host()->xSessions());
+		temp_sessions = host()->mSessions();
+	}
 		
-		for (auto const& i : host()->mSessions())
-			if (std::shared_ptr<SessionFace> s = i.second.lock())
-				if (s->capabilities().count(std::make_pair(name(), version())))
-					if (!_f(capabilityFromSession<PBFTPeer>(*s)))
-						return;
+	for (auto const& i : temp_sessions) {
+		if (std::shared_ptr<SessionFace> s = i.second.lock()) {
+			if (s->capabilities().count(std::make_pair(name(), version()))) {
+				if (!_f(capabilityFromSession<PBFTPeer>(*s))) {
+					return;
+				}
+			}
+		}
+	}
 }
 
 
