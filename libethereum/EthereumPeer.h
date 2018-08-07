@@ -119,7 +119,7 @@ public:
 	          std::shared_ptr<EthereumPeerObserverFace> _observer
 	          , std::shared_ptr<ChannelMessageObserverFace> channelObserver);
 
-	p2p::NodeID id() const { return session()->id(); }
+	//p2p::NodeID id() const { return session()->id(); }
 
 	/// Abort sync and reset fetch
 	void setIdle();
