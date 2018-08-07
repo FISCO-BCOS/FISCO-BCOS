@@ -169,8 +169,7 @@ cd /mydata/FISCO-BCOS/cert/
 **注意：node.key 机构私钥文件请妥善保存**
 
 ### 2.4 生成SDK证书
-```
-shell
+``` shell
 cd /mydata/FISCO-BCOS/cert/
 ./sdk.sh WB sdk
 ```
