@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<config>
+    <privateKey>bcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd</privateKey>
+    <serviceId></serviceId>
+    <scenario></scenario>
+    <routeAddress>${routeAddress}</routeAddress>
+    <setNameList>${setList}</setNameList>
+    <hotChainName>hotService</hotChainName>
+    <routeChainName>routeService</routeChainName>
+    <enableTimeTask>1</enableTimeTask>
+    <timeTaskIntervalSecond>60</timeTaskIntervalSecond>
+</config>
