@@ -134,6 +134,19 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 	LOG(INFO) << "HostSSL::startPeerSession! "<<pub ;
 	Public  _id=pub;
 
+	//connection must be disconnect before the creation of session object and peer object - morebtcg
+	if(_id == id()) {
+		LOG(TRACE) << "Disconnect self: "
+			<< _id << "@" << _s->nodeIPEndpoint().address.to_string()
+			<< ":" << _s->nodeIPEndpoint().tcpPort;
+
+		_s->close();
+		throw Exception("Disconnect self");
+
+		//ps->disconnect(LocalIdentity);
+		return;
+	}
+
 	NodeIPEndpoint _nodeIPEndpoint;
 	_nodeIPEndpoint.address = _s->remoteEndpoint().address();
 	_nodeIPEndpoint.tcpPort=listenPort;
