@@ -66,6 +66,7 @@ State::State(State const& _s):
 	m_unchangedCacheEntries(_s.m_unchangedCacheEntries),
 	m_nonExistingAccountsCache(_s.m_nonExistingAccountsCache),
 	m_touched(_s.m_touched),
+	m_changeLog(_s.m_changeLog),
 	m_accountStartNonce(_s.m_accountStartNonce)
 {}
 
@@ -170,6 +171,7 @@ State& State::operator=(State const& _s)
 	m_cache = _s.m_cache;
 	m_unchangedCacheEntries = _s.m_unchangedCacheEntries;
 	m_nonExistingAccountsCache = _s.m_nonExistingAccountsCache;
+	m_changeLog = _s.m_changeLog;
 	m_touched = _s.m_touched;
 	m_accountStartNonce = _s.m_accountStartNonce;
 	return *this;
@@ -325,7 +327,6 @@ void State::addBalance(Address const& _id, u256 const& _amount)
 		//       Balance and Balance+Touch events.
 		if (!a->isDirty() && a->isEmpty())
 			m_changeLog.emplace_back(Change::Touch, _id);
-
 		// Increase the account balance. This also is done for value 0 to mark
 		// the account as dirty. Dirty account are not removed from the cache
 		// and are cleared if empty at the end of the transaction.
@@ -337,6 +338,7 @@ void State::addBalance(Address const& _id, u256 const& _amount)
 
 	if (_amount)
 		m_changeLog.emplace_back(Change::Balance, _id, _amount);
+
 }
 
 void State::subBalance(Address const& _addr, u256 const& _value)
@@ -406,8 +408,6 @@ u256 State::storage(Address const& _id, u256 const& _key) const
 
 void State::setStorage(Address const& _contract, u256 const& _key, u256 const& _value)
 {
-	//LOG(TRACE) << "State::setStorage " << _key << "," << _value;
-
 	m_changeLog.emplace_back(_contract, _key, storage(_contract, _key));
 	m_cache[_contract].setStorage(_key, _value);
 }
