@@ -85,7 +85,7 @@ void CertificateServer::loadGmFile()
 	}
 	else
 	{
-		LOG(INFO) << "CertificateServer Load KeyPair Fail! Please Check gmnode.private File.";
+		LOG(ERROR) << "CertificateServer Load KeyPair Fail! Please Check gmnode.private File.";
 		exit(-1);
 	}
 }
@@ -121,7 +121,7 @@ void CertificateServer::loadEcdsaFile()
 	}
 	else
 	{
-		LOG(INFO) << "CertificateServer Load KeyPair Fail! Please Check node.private File.";
+		LOG(ERROR) << "CertificateServer Load KeyPair Fail! Please Check node.private File.";
 		exit(-1);
 	}
 }

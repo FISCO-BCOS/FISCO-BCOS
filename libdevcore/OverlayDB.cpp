@@ -23,6 +23,7 @@
 #include <thread>
 #include <libdevcore/db.h>
 #include <libdevcore/Common.h>
+#include <libdevcore/easylog.h>
 #include "OverlayDB.h"
 #include <libdiskencryption/BatchEncrypto.h>
 #include <libdevcrypto/AES.h>//添加AES加密

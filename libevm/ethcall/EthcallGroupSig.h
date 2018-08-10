@@ -95,7 +95,7 @@ class EthcallGroupSig: public EthCallExecutor<vector_ref<char>,
     private:
         void unkown_op_type(uint8_t& op_type)
         {
-            LOG(ERROR)<<"OP_TYPE = "<<op_type<<" UNKOWN OP_TYPE, must be:"
+            LOG(WARNING)<<"OP_TYPE = "<<op_type<<" UNKOWN OP_TYPE, must be:"
                 <<CREATE<<" or "<<GENKEY<<" or "<<SIG<<" or "<<VERIFY<<" or "
                 <<OPEN<<" or "<<REVOKE; 
         }

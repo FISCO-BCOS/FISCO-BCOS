@@ -28,7 +28,6 @@
 #include <queue>
 #include <boost/lexical_cast.hpp>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <arpa/inet.h>
 #include "http_parser.h"
 #include "ChannelException.h"
