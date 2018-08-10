@@ -19,10 +19,10 @@ function execute_cmd()
     eval ${command}
     local ret=$?
     if [ $ret -ne 0 ];then
-        LOG_ERROR "execute command ${command} FAILED"
+        LOG_ERROR "FAILED execution of command: ${command}"
         exit 1
     else
-        LOG_INFO "execute command ${command} SUCCESS"
+        LOG_INFO "SUCCESS execution of command: ${command}"
     fi
 }
 
@@ -65,6 +65,7 @@ help() {
     LOG_INFO "    -d  <agency dir>    The agency cert dir that the node belongs to"
     LOG_INFO "    -n  <node name>     Node name"
     LOG_INFO "    -o  <output dir>    Data dir of the node"
+    LOG_INFO "Optional:"
     LOG_INFO "    -r  <GM shell path> The path of GM shell scripts directory"
     LOG_INFO "    -s  <sdk name>      The sdk name to connect with the node "
     LOG_INFO "    -g 			      Generate guomi cert"
@@ -125,7 +126,6 @@ commonName =  Organizational  commonName (eg, test_org)
 commonName_default = test_org
 commonName_max = 64
 [ v3_req ]
-# Extensions to add to a certificate request
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 [ v4_req ]
@@ -173,16 +173,13 @@ mkdir -p $node
 
 generate_cert_config ./
 
+batch=
+[ ! -n "$manual_input" ] && batch=-batch
+
 openssl ecparam -out node.param -name secp256k1
 openssl genpkey -paramfile node.param -out node.key
 openssl pkey -in node.key -pubout -out node.pubkey
-
-if [ -z $manual_input ]; then 
-    openssl req -new -key node.key -config cert.cnf -out node.csr -batch
-else
-    openssl req -new -key node.key -out node.csr
-fi
-
+openssl req -new -key node.key -config cert.cnf -out node.csr $batch
 openssl x509 -req -days 3650 -in node.csr -CAkey agency.key -CA agency.crt -force_pubkey node.pubkey -out node.crt -CAcreateserial -extensions v3_req -extfile cert.cnf
 openssl ec -in node.key -outform DER |tail -c +8 | head -c 32 | xxd -p -c 32 | cat >node.private
 openssl ec -in node.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat >node.nodeid

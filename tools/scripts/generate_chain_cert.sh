@@ -23,10 +23,10 @@ function execute_cmd()
     eval ${command}
     local ret=$?
     if [ $ret -ne 0 ];then
-        LOG_ERROR "execute command ${command} FAILED"
+        LOG_ERROR "FAILED execution of command: ${command}"
         exit 1
     else
-        LOG_INFO "execute command ${command} SUCCESS"
+        LOG_INFO "SUCCESS execution of command: ${command}"
     fi
 }
 
@@ -51,13 +51,14 @@ help() {
     LOG_ERROR "${1}"
     LOG_INFO "Usage:"
     LOG_INFO "    -o <ca dir>     Where ca.crt ca.key generate "
+    LOG_INFO "Optional:"
     LOG_INFO "    -m                  Input ca information manually"
     LOG_INFO "    -g                  Generate chain certificates with guomi algorithms"
     LOG_INFO "    -d                  The Path of Guomi Directory"
     LOG_INFO "    -h                  This help"
     LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -o /mydata -m"
     LOG_INFO "    bash $this_script -o /mydata "
+    LOG_INFO "    bash $this_script -o /mydata -m"
     LOG_INFO "guomi Example:"
     LOG_INFO "    bash $this_script -o /mydata -m -g"
     LOG_INFO "    bash $this_script -o /mydata -g"
@@ -106,7 +107,6 @@ commonName =  Organizational  commonName (eg, test_org)
 commonName_default = test_org
 commonName_max = 64
 [ v3_req ]
-# Extensions to add to a certificate request
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 [ v4_req ]
@@ -117,15 +117,18 @@ basicConstraints = CA:TRUE
 ## generate ECDSA cert
 generate_cert() {
     ca_dir=$1
+    batch=
+    [ ! -n "$manual_input" ] && batch=-batch
 
-    [ -n "$manual_input" ] && {
-        openssl genrsa -out $ca_dir/ca.key 2048
-        openssl req -new -x509 -days 3650 -key $ca_dir/ca.key -out $ca_dir/ca.crt
-        return
-    }
-    generate_cert_config ${ca_dir}
+    #[ -n "$manual_input" ] && {
+    #    openssl genrsa -out $ca_dir/ca.key 2048
+    #    openssl req -new -x509 -days 3650 -key $ca_dir/ca.key -out $ca_dir/ca.crt
+    #    return
+    #}
+
+    #generate_cert_config ${ca_dir}
     openssl genrsa -out $ca_dir/ca.key 2048
-    openssl req -new -x509 -days 3650 -key $ca_dir/ca.key -out $ca_dir/ca.crt -config $ca_dir/cert.cnf -batch   
+    openssl req -new -x509 -days 3650 -key $ca_dir/ca.key -out $ca_dir/ca.crt $batch   
 }
 
 ## generate guomi cert

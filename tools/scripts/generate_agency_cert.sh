@@ -19,10 +19,10 @@ function execute_cmd()
     eval ${command}
     local ret=$?
     if [ $ret -ne 0 ];then
-        LOG_ERROR "execute command ${command} FAILED"
+        LOG_ERROR "FAILED execution of command: ${command}"
         exit 1
     else
-        LOG_INFO "execute command ${command} SUCCESS"
+        LOG_INFO "SUCCESS execution of command: ${command}"
     fi
 }
 
@@ -52,19 +52,20 @@ this_script=$0
 help() {
     LOG_ERROR "${1}"
     LOG_INFO "Usage:"
-    LOG_INFO "    -c <ca dir>         The dir of ca.crt and ca.key "
+    LOG_INFO "    -c <ca dir>         The dir of chain cert files(ca.crt and ca.key)"
     LOG_INFO "    -o <output dir>     Where agency.crt agency.key generate "
     LOG_INFO "    -n <agency name>    Name of agency"
+    LOG_INFO "Optional:"
     LOG_INFO "    -m                  Input agency information manually"
     LOG_INFO "    -g                  Generate agency certificates with guomi algorithms"
     LOG_INFO "    -d                  The Path of Guomi Directory"
     LOG_INFO "    -h                  This help"
     LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n fisco-dev"
-    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n fisco-dev -m"
+    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n test_agency"
+    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n test_agency -m"
     LOG_INFO "guomi Example:"
-    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n fisco-dev -g"
-    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n fisco-dev -m -g" 
+    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n test_agency -g"
+    LOG_INFO "    bash $this_script -c /mydata -o /mydata -n test_agency -m -g" 
 exit -1
 }
 
@@ -110,7 +111,6 @@ commonName =  Organizational  commonName (eg, test_org)
 commonName_default = test_org
 commonName_max = 64
 [ v3_req ]
-# Extensions to add to a certificate request
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 [ v4_req ]
@@ -121,18 +121,14 @@ basicConstraints = CA:TRUE
 generate_cert() {
     output_dir=$1
     cp $ca_dir/ca.crt $output_dir/
-    [ -n "$manual_input" ] && {
-        openssl genrsa -out $output_dir/agency.key 2048
-        openssl req -new  -key $output_dir/agency.key -out $output_dir/agency.csr
-        openssl x509 -req -days 3650 -CA $ca_dir/ca.crt -CAkey $ca_dir/ca.key -CAcreateserial -in $output_dir/agency.csr -out $output_dir/agency.crt  -extensions v4_req 
-        return
-    }
-
     generate_cert_config $output_dir
-    openssl genrsa -out $output_dir/agency.key 2048
-    openssl req -new  -key $output_dir/agency.key -config $output_dir/cert.cnf -out $output_dir/agency.csr -batch
-    openssl x509 -req -days 3650 -CA $ca_dir/ca.crt -CAkey $ca_dir/ca.key -CAcreateserial -in $output_dir/agency.csr -out $output_dir/agency.crt  -extensions v4_req -extfile $output_dir/cert.cnf
 
+    batch=
+    [ ! -n "$manual_input" ] && batch=-batch
+
+    openssl genrsa -out $output_dir/agency.key 2048
+    openssl req -new  -key $output_dir/agency.key -config $output_dir/cert.cnf -out $output_dir/agency.csr $batch
+    openssl x509 -req -days 3650 -CA $ca_dir/ca.crt -CAkey $ca_dir/ca.key -CAcreateserial -in $output_dir/agency.csr -out $output_dir/agency.crt  -extensions v4_req -extfile $output_dir/cert.cnf
 }
 
 current_dir=`pwd`
@@ -158,7 +154,7 @@ if [ ${enable_guomi} -eq 1 ];then
 fi
 
 
-name=$output_dir/$agency_name  
+name=`readlink -f $output_dir/$agency_name`  
 if [ -z "$name" ];  then
     help "Error: Please input agency name!"
     exit 1
