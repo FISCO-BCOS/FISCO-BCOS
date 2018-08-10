@@ -17,10 +17,10 @@ function execute_cmd()
     eval ${command}
     local ret=$?
     if [ $ret -ne 0 ];then
-        LOG_ERROR "execute command ${command} FAILED"
+        LOG_ERROR "FAILED execution of command: ${command}"
         exit 1
     else
-        LOG_INFO "execute command ${command} SUCCESS"
+        LOG_INFO "SUCCESS execution of command: ${command}"
     fi
 }
 

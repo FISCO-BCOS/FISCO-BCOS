@@ -1,4 +1,3 @@
-
 var Web3= require('web3');
 var config=require('../web3lib/config');
 var fs=require('fs');

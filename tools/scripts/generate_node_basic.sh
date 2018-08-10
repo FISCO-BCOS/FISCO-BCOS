@@ -51,7 +51,8 @@ help() {
     LOG_INFO "    -p  <P2P port>            Node's P2P port"
     LOG_INFO "    -c  <channel port>        Node's channel port"
     LOG_INFO "    -e  <bootstrapnodes>      Node's bootstrap nodes"
-    LOG_INFO "    -s  <systemproxyaddress>  System Proxy Contract address"
+    LOG_INFO "Optional:"
+    LOG_INFO "    -x  <systemproxyaddress>  System Proxy Contract address"
     LOG_INFO "    -h                        This help"
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304"
@@ -60,7 +61,7 @@ help() {
 exit -1
 }
 
-while getopts "o:n:l:r:p:c:e:s:h" option;do
+while getopts "o:n:l:r:p:c:e:x:h" option;do
 	case $option in
 	o) output_dir=$OPTARG;;
     n) name=$OPTARG;;
@@ -69,7 +70,7 @@ while getopts "o:n:l:r:p:c:e:s:h" option;do
     p) p2pport=$OPTARG;;
     c) channelPort=$OPTARG;;
     e) peers=$OPTARG;;
-    s) systemproxyaddress=$OPTARG;;
+    x) systemproxyaddress=$OPTARG;;
 	h) help;;
 	esac
 done
@@ -80,9 +81,25 @@ done
 [ -z $rpcport ] && help 'Error! Please specify <RPC port> using -r'
 [ -z $p2pport ] && help 'Error! Please specify <P2P port> using -p'
 [ -z $channelPort ] && help 'Error! Please specify <channel port> using -c'
-[ -z $peers ] && help 'Error! Please specify <channel port> using -e'
+[ -z $peers ] && help 'Error! Please specify <bootstrapnodes> using -e'
 
 node_dir=$output_dir/$name/
+
+check_node_running() {
+    node_dir=$1
+    pre_dir=`pwd`
+    cd $node_dir
+
+    #Is the node running?
+    name=`pwd`/config.json
+    agent_pid=`ps aux|grep "$name"|grep -v grep|awk '{print $2}'`
+    if [ $agent_pid ]; then
+        echo "Attention! Node is running. Node will be destroied. Continue?"
+        yes_go_other_exit
+        set +e && sh stop.sh && set -e
+    fi
+    cd $pre_dir
+}
 
 generate_nodedir() {
     out=$1
@@ -106,7 +123,7 @@ generate_node_script() {
     LOG_INFO "`readlink -f $out/stop.sh` is generated"
 }
 
-generate_confg() {
+generate_config() {
     out=$1
     mkdir -p $out
     out_file=$out/config.json
@@ -205,13 +222,17 @@ generate_bootstrapnodes() {
 }
 
 if [ -d "$node_dir" ]; then
-    echo "Attention! Duplicate generation of \"$node_dir\". Overwrite?"
+    echo "Attention! Duplicate generation of \"$node_dir\". Re-generate?(This will remove all old data of the node)"
     yes_go_other_exit
+
+    check_node_running $node_dir
+
+    rm -rf $node_dir
 fi
 
 generate_nodedir $node_dir
 generate_node_script $node_dir
-generate_confg $node_dir
+generate_config $node_dir
 generate_logconf $node_dir
 generate_bootstrapnodes $node_dir
 
