@@ -44,7 +44,7 @@ int EncryptFile::encryptFile(int fileType)
 	}
 	else
 	{
-		LOG(ERROR)<<_filePath + " is not exist";
+		LOG(WARNING)<<_filePath + " is not exist";
 		return -1; //file not exist
 	}
 }
@@ -53,7 +53,7 @@ bytes EncryptFile::decrypt(const string& _enFilePath)
 {
 	if (!fileExist(_enFilePath))
 	{
-		LOG(ERROR)<<_enFilePath + "is not exist";
+		LOG(WARNING)<<_enFilePath + "is not exist";
 		return bytes{};
 	}
 	auto enFileData = contents(_enFilePath);
@@ -181,7 +181,7 @@ EncryptFile::EncryptFile(int encryptType,const string& superKey,const string& ke
 	string dataDir = getDataDir();
 	if(dataDir == "")
 	{
-		LOG(ERROR)<<"DataDir is not set";
+		LOG(WARNING)<<"DataDir is not set";
 	}
 	LOG(DEBUG)<<"FilePath:"<< dataDir+"/gmnode.key";
 #if ETH_ENCRYPTTYPE

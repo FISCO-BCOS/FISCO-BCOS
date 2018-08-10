@@ -167,7 +167,7 @@ bool BlockChain::isBlockLimitOk(Transaction const&_ts) const
 {
 	if ( (_ts.blockLimit()  == Invalid256) || ( number() >= _ts.blockLimit() ) || (_ts.blockLimit() > (number() + BlockChain::maxBlockLimit)  ) )
 	{
-		LOG(TRACE) << "BlockChain::isBlockLimitOk Fail! t.sha3()=" << _ts.sha3() << ",t.blockLimit=" << _ts.blockLimit() << ",number()=" << number() << ",maxBlockLimit=" << BlockChain::maxBlockLimit;
+		LOG(WARNING) << "BlockChain::isBlockLimitOk Fail! t.sha3()=" << _ts.sha3() << ",t.blockLimit=" << _ts.blockLimit() << ",number()=" << number() << ",maxBlockLimit=" << BlockChain::maxBlockLimit;
 		return false;
 	}
 
@@ -177,7 +177,7 @@ bool BlockChain::isNonceOk(Transaction const&_ts, bool _needinsert) const
 {
 	if ( (_ts.randomid()  == Invalid256) || ( !m_pnoncecheck ) || (! m_pnoncecheck->ok(_ts, _needinsert) ) )
 	{
-		LOG(TRACE) << "BlockChain::isNonceOk Fail! t.sha3()=" << _ts.sha3() << ",t.nonce=" << _ts.randomid();
+		LOG(WARNING) << "BlockChain::isNonceOk Fail! t.sha3()=" << _ts.sha3() << ",t.nonce=" << _ts.randomid();
 		return false;
 	}
 
@@ -293,9 +293,9 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 #else
 
 	ldb::Status dbstatus = ldb::DB::Open(o, chainPath + "/blocks", &m_blocksDB);
-	LOG(WARNING) << "open m_blocksDB result:" << dbstatus.ToString();
+	LOG(INFO) << "open m_blocksDB result:" << dbstatus.ToString();
 	dbstatus = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
-	LOG(WARNING) << "open m_extrasDB result:" << dbstatus.ToString();
+	LOG(INFO) << "open m_extrasDB result:" << dbstatus.ToString();
 
 #endif
 //	m_writeOptions.sync = true;
@@ -303,12 +303,12 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	{
 		if (boost::filesystem::space(chainPath + "/blocks").available < 1024)
 		{
-			LOG(WARNING) << "Not enough available space found on hard drive. Please free some up and then re-run. Bailing.";
+			LOG(ERROR) << "Not enough available space found on hard drive. Please free some up and then re-run. Bailing.";
 			BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
 		}
 		else
 		{
-			LOG(WARNING) <<
+			LOG(ERROR) <<
 				  "Database " <<
 				  (chainPath + "/blocks") <<
 				  "or " <<
@@ -418,9 +418,9 @@ void BlockChain::rebuild(std::string const& _path, std::function<void(unsigned, 
 	o.create_if_missing = true;
 
 	ldb::Status status = ldb::DB::Open(o, extrasPath + "/extras.old", &oldExtrasDB);
-	LOG(WARNING) << "open oldExtrasDB result:" << status.ToString();
+	LOG(INFO) << "open oldExtrasDB result:" << status.ToString();
 	status = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
-	LOG(WARNING) << "reopen m_extrasDB result:" << status.ToString();
+	LOG(INFO) << "reopen m_extrasDB result:" << status.ToString();
 
 	// Open a fresh state DB
 	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill));
@@ -575,7 +575,7 @@ tuple<ImportRoute, bool, unsigned> BlockChain::sync(BlockQueue& _bq, OverlayDB c
 				startimport = utcTime();
 				r = import(block.verified, _stateDB, (ImportRequirements::Everything & ~ImportRequirements::ValidSeal & ~ImportRequirements::CheckUncles) != 0);
 				endimport = utcTime();
-				LOG(INFO) << block.verified.info.hash(WithoutSeal) << "," << block.verified.info.number() << ",trans" << r.goodTranactions.size() << " 上链耗时" << endimport - startimport << "ms";
+				LOG(INFO) << block.verified.info.hash(WithoutSeal) << "," << block.verified.info.number() << ",trans" << r.goodTranactions.size() << " import timecost" << endimport - startimport << "ms";
 				if ((endimport - startimport) > COnChainTimeLimit)
 				{
 					LOGCOMWARNING << WarningMap.at(OnChainTimeWarning) << "|blockNumber:" << block.verified.info.number() << " onChainTime:" << endimport - startimport << "ms";
@@ -611,6 +611,7 @@ tuple<ImportRoute, bool, unsigned> BlockChain::sync(BlockQueue& _bq, OverlayDB c
 			}
 			catch (Exception& ex)
 			{
+				LOG(ERROR) << "ODD: unknow error:" << diagnostic_information(ex);
 //				LOG(INFO) << "Exception while importing block. Someone (Jeff? That you?) seems to be giving us dodgy blocks!";// << LogTag::Error << diagnostic_information(ex);
 				if (m_onBad)
 					m_onBad(ex);
@@ -663,7 +664,7 @@ ImportRoute BlockChain::import(bytes const& _block, OverlayDB const& _db, bool _
 #if ETH_CATCH
 	catch (Exception& ex)
 	{
-//		LOG(INFO) << "   Malformed block: " << diagnostic_information(ex);
+		LOG(WARNING) << "   Malformed block: " << diagnostic_information(ex);
 		ex << errinfo_phase(2);
 		ex << errinfo_now(time(0));
 		throw;
@@ -687,7 +688,7 @@ void BlockChain::insert(bytes const& _block, bytesConstRef _receipts, bool _must
 #if ETH_CATCH
 	catch (Exception& ex)
 	{
-//		LOG(INFO) << "   Malformed block: " << diagnostic_information(ex);
+		LOG(WARNING) << "   Malformed block: " << diagnostic_information(ex);
 		ex << errinfo_phase(2);
 		ex << errinfo_now(time(0));
 		throw;
@@ -782,20 +783,20 @@ void BlockChain::insert(VerifiedBlockRef _block, bytesConstRef _receipts, bool _
 	ldb::Status o = m_blocksDB->Write(m_writeOptions, &blocksBatch);
 	if (!o.ok())
 	{
-		LOG(WARNING) << "Error writing to blockchain database: " << o.ToString();
+		LOG(ERROR) << "Error writing to blockchain database: " << o.ToString();
 		WriteBatchNoter n;
 		blocksBatch.Iterate(&n);
-		LOG(WARNING) << "Fail writing to blockchain database. Bombing out.";
+		LOG(ERROR) << "Fail writing to blockchain database. Bombing out.";
 		exit(-1);
 	}
 
 	o = m_extrasDB->Write(m_writeOptions, &extrasBatch);
 	if (!o.ok())
 	{
-		LOG(WARNING) << "Error writing to extras database: " << o.ToString();
+		LOG(ERROR) << "Error writing to extras database: " << o.ToString();
 		WriteBatchNoter n;
 		extrasBatch.Iterate(&n);
-		LOG(WARNING) << "Fail writing to extras database. Bombing out.";
+		LOG(ERROR) << "Fail writing to extras database. Bombing out.";
 		exit(-1);
 	}
 }
@@ -857,7 +858,7 @@ void BlockChain::checkBlockValid(h256 const& _hash, bytes const& _block, Block &
 		}
 	}
 	if (miner_list != block.info.nodeList()) {
-		LOG(ERROR) << "miner list error, " << _hash;
+		LOG(WARNING) << "miner list error, " << _hash;
 		ostringstream oss;
 		for (size_t i = 0; i < miner_list.size(); ++i) {
 			oss << miner_list[i] << ",";
@@ -1197,7 +1198,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	}
 	else
 	{
-		LOG(INFO) << "   Imported but not best (oTD:" << details(last).totalDifficulty << " > TD:" << td << "; " << details(last).number << ".." << _block.info.number() << ")";
+		LOG(WARNING) << "   Imported but not best (oTD:" << details(last).totalDifficulty << " > TD:" << td << "; " << details(last).number << ".." << _block.info.number() << ")";
 	}
 
 	ldb::Status o = m_blocksDB->Write(m_writeOptions, &blocksBatch);
@@ -1223,9 +1224,9 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 #if ETH_PARANOIA
 	if (isKnown(_block.info.hash()) && !details(_block.info.hash()))
 	{
-		LOG(INFO) << "Known block just inserted has no details.";
-		LOG(INFO) << "Block:" << _block.info;
-		LOG(INFO) << "DATABASE CORRUPTION: CRITICAL FAILURE";
+		LOG(ERROR) << "Known block just inserted has no details.";
+		LOG(ERROR) << "Block:" << _block.info;
+		LOG(ERROR) << "DATABASE CORRUPTION: CRITICAL FAILURE";
 		exit(-1);
 	}
 
@@ -1236,9 +1237,9 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	}
 	catch (...)
 	{
-		LOG(INFO) << "Failed to initialise State object form imported block.";
-		LOG(INFO) << "Block:" << _block.info;
-		LOG(INFO) << "DATABASE CORRUPTION: CRITICAL FAILURE";
+		LOG(ERROR) << "Failed to initialise State object form imported block.";
+		LOG(ERROR) << "Block:" << _block.info;
+		LOG(ERROR) << "DATABASE CORRUPTION: CRITICAL FAILURE";
 		exit(-1);
 	}
 #endif // ETH_PARANOIA
@@ -1264,9 +1265,9 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 			}
 			if (!o.ok())
 			{
-				LOG(WARNING) << "Error writing to extras database: " << o.ToString();
+				LOG(ERROR) << "Error writing to extras database: " << o.ToString();
 				//cout << "Put" << toHex(bytesConstRef(ldb::Slice("best"))) << "=>" << toHex(bytesConstRef(ldb::Slice((char const*)&m_lastBlockHash, 32)));
-				LOG(WARNING) << "Fail writing to extras database. Bombing out.";
+				LOG(ERROR) << "Fail writing to extras database. Bombing out.";
 				exit(-1);
 			}
 		}
@@ -1290,7 +1291,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	if (total.elapsed() > 0.5)
 	{
 		unsigned const gasPerSecond = static_cast<double>(_block.info.gasUsed()) / enactment;
-		LOG(INFO) << "SLOW IMPORT: "
+		LOG(WARNING) << "SLOW IMPORT: "
 		      << "{ \"blockHash\": \"" << _block.info.hash() << "\", "
 		      << "\"blockNumber\": " << _block.info.number() << ", "
 		      << "\"importTime\": " << total.elapsed() << ", "
@@ -1439,9 +1440,9 @@ void BlockChain::rewind(unsigned _newHead)
 
 		if (!o.ok())
 		{
-			LOG(WARNING) << "Error writing to extras database: " << o.ToString();
-			cout << "Put" << toHex(bytesConstRef(ldb::Slice("best"))) << "=>" << toHex(bytesConstRef(ldb::Slice((char const*)&m_lastBlockHash, 32)));
-			LOG(WARNING) << "Fail writing to extras database. Bombing out.";
+			LOG(ERROR) << "Error writing to extras database: " << o.ToString();
+			LOG(ERROR) << "Put" << toHex(bytesConstRef(ldb::Slice("best"))) << "=>" << toHex(bytesConstRef(ldb::Slice((char const*)&m_lastBlockHash, 32)));
+			LOG(ERROR) << "Fail writing to extras database. Bombing out.";
 			exit(-1);
 		}
 		noteCanonChanged();
