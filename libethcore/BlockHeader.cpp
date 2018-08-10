@@ -237,7 +237,7 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
 				transactionsTrie.insert(&k.out(), txList[i].data());
 
 				txs.push_back(txList[i].data());
-				LOG(DEBUG) << toHex(k.out()) << toHex(txList[i].data());
+				LOG(TRACE) << toHex(k.out()) << toHex(txList[i].data());
 			}
 			LOG(TRACE) << "trieRootOver" << expectedRoot;
 			LOG(TRACE) << "orderedTrieRoot" << orderedTrieRoot(txs);

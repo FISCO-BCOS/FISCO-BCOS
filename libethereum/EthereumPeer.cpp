@@ -71,7 +71,7 @@ EthereumPeer::~EthereumPeer()
 		LOG(INFO) << "Peer aborting while being asked for " << toString(m_asking);
 		setRude();
 	}
-	LOG(WARNING) << "EthereumPeer::~EthereumPeer";
+	LOG(INFO) << "EthereumPeer::~EthereumPeer";
 	abortSync();
 }
 
@@ -240,7 +240,7 @@ void EthereumPeer::tick()
 	if(s && s->isConnected()
 			&& chrono::duration_cast<chrono::seconds>(std::chrono::steady_clock::now() - s->lastReceived()).count() > 30) { //使用pingpong代替lastTopicAck
 		try {
-			LOG(WARNING) << "Timeout Disconnect:" << id() << "@"
+			LOG(WARNING) << "Timeout Disconnect:" << id().abridged() << "@"
 					<< s->peer()->endpoint.address.to_string() << ":"
 					<< s->peer()->endpoint.tcpPort;
 
@@ -504,7 +504,7 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 
 			auto s = session();
 			if(s) {
-				LOG(TRACE) << "Recv Other Node topic Message:" << id()
+				LOG(TRACE) << "Recv Other Node topic Message:" << id().abridged()
 						<< "@"
 						<< s->peer()->endpoint.address.to_string()
 						<< ":"
@@ -527,7 +527,7 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 				_channelObserver->onTopicMessage(dynamic_pointer_cast<EthereumPeer>(shared_from_this()), type, seq, topics);
 			}
 			catch(exception &e) {
-				LOG(ERROR) << "Process:" << id() << "  topic Exception:" << e.what();
+				LOG(ERROR) << "Process:" << id().abridged() << "  topic Exception:" << e.what();
 			}
 
 			break;
@@ -539,7 +539,7 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 
 			auto s = session();
 			if(s) {
-				LOG(TRACE) << "Recv Other Node channel Message:" << id()
+				LOG(TRACE) << "Recv Other Node channel Message:" << id().abridged()
 						<< "@"
 						<< s->peer()->endpoint.address.to_string()
 						<< ":"

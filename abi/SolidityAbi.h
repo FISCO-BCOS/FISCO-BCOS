@@ -26,7 +26,6 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <libdevcore/easylog.h>
 #include <json/json.h> //for cpp json
 #include <libdevcore/RLP.h>
 

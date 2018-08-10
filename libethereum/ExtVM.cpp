@@ -82,7 +82,7 @@ void go(unsigned _depth, Executive& _e, OnOpFunc const& _onOp)
 
 	if (_depth == c_offloadPoint)
 	{
-		LOG(INFO) << "Stack offloading (depth: " << c_offloadPoint << ")";
+		LOG(WARNING) << "Stack offloading (depth: " << c_offloadPoint << ")";
 		goOnOffloadedStack(_e, _onOp);
 	}
 	else

@@ -124,7 +124,7 @@ HostApi::HostApi(string const& _clientVersion, KeyPair const& _alias, NetworkPre
 	m_strand(m_ioService)
 {
 	m_statisticsInterval = _statsInterval;
-	LOG(INFO) << "Id:" << id();
+	LOG(INFO) << "Id:" << id().abridged();
 }
 
 HostApi::HostApi(string const& _clientVersion, NetworkPreferences const& _n, bytesConstRef _restoreNetwork, int const& _statsInterval):
@@ -150,7 +150,7 @@ void HostApi::start()
 	if (isWorking())
 		return;
 
-	LOG(WARNING) << "Network start failed!";
+	LOG(ERROR) << "Network start failed!";
 	doneWorking();
 }
 
@@ -283,7 +283,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 	auto pub = _rlp[4].toHash<Public>();
 	if (pub != _id)
 	{
-		LOG(DEBUG) << "Wrong ID: " << pub << " vs. " << _id;
+		LOG(DEBUG) << "Wrong ID: " << pub.abridged() << " vs. " << _id.abridged();
 		return;
 	}
 
@@ -316,7 +316,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 
 	if (m_netPrefs.pin && !m_requiredPeers.count(_id))
 	{
-		LOG(DEBUG) << "Unexpected identity from peer (got" << _id << ", must be one of " << m_requiredPeers << ")";
+		LOG(DEBUG) << "Unexpected identity from peer (got" << _id.abridged() << ", must be one of " << m_requiredPeers << ")";
 		ps->disconnect(UnexpectedIdentity);
 		return;
 	}
@@ -339,7 +339,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 				if (s->isConnected())
 				{
 					// Already connected.
-					LOG(WARNING) << "Session already exists for peer with id" << _id;
+					LOG(INFO) << "Session already exists for peer with id" << _id.abridged();
 					ps->disconnect(DuplicatePeer);
 					return;
 				}
@@ -375,14 +375,14 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 		m_sessions[_id] = ps;
 	}
 
-	LOG(INFO) << "p2p.host.peer.register: " << _id;
+	LOG(INFO) << "p2p.host.peer.register: " << _id.abridged();
 }
 
 void Host::onNodeTableEvent(NodeID const& _n, NodeTableEventType const& _e)
 {
 	if (_e == NodeEntryAdded)
 	{
-		LOG(INFO) << "p2p.host.nodeTable.events.nodeEntryAdded: " << _n;
+		LOG(INFO) << "p2p.host.nodeTable.events.nodeEntryAdded: " << _n.abridged();
 		// only add iff node is in node table
 		if (Node n = m_nodeTable->node(_n))
 		{
@@ -398,7 +398,7 @@ void Host::onNodeTableEvent(NodeID const& _n, NodeTableEventType const& _e)
 				{
 					p = make_shared<Peer>(n);
 					m_peers[_n] = p;
-					LOG(INFO) << "p2p.host.peers.events.peerAdded: " << _n << p->endpoint;
+					LOG(INFO) << "p2p.host.peers.events.peerAdded: " << _n.abridged() << p->endpoint;
 				}
 			}
 			if (peerSlotsAvailable(Egress))
@@ -411,7 +411,7 @@ void Host::onNodeTableEvent(NodeID const& _n, NodeTableEventType const& _e)
 	}
 	else if (_e == NodeEntryDropped)
 	{
-		LOG(INFO) << "p2p.host.nodeTable.events.NodeEntryDropped: " << _n;
+		LOG(INFO) << "p2p.host.nodeTable.events.NodeEntryDropped: " << _n.abridged();
 		RecursiveGuard l(x_sessions);
 		if (m_peers.count(_n) && m_peers[_n]->peerType == PeerType::Optional)
 			m_peers.erase(_n);
@@ -469,7 +469,7 @@ void Host::sslHandshakeServer(const boost::system::error_code& error, std::share
 {
 	if (error)
 	{
-		LOG(DEBUG) << "Host::async_handshake err:" << error.message();
+		LOG(WARNING) << "Host::async_handshake err:" << error.message();
 	}
 
 	bool success = false;
@@ -509,7 +509,7 @@ bool Host::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
 	if (isExpire)
 	{
 		preverified = false;
-		LOG(ERROR)<< "Verify Certificate Expire Data Err Please Use The Right Certificate File Retry.....................";
+		LOG(WARNING)<< "Verify Certificate Expire Data Err Please Use The Right Certificate File Retry.....................";
 	}
 
 	bool lresult = true;
@@ -519,12 +519,12 @@ bool Host::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
 		if (lresult == false)
 		{
 			preverified = false;
-			LOG(ERROR)<< "System Contract Verify Certificate Err Please Use The Right Certificate File Retry.....................";
+			LOG(WARNING)<< "System Contract Verify Certificate Err Please Use The Right Certificate File Retry.....................";
 		}
 	}
 	if (preverified == false && lresult == true)
 	{
-		LOG(ERROR)<< "Verify Certificate Err Please Use The Right Certificate File Retry.....................";
+		LOG(WARNING)<< "Verify Certificate Err Please Use The Right Certificate File Retry.....................";
 	}
 	return preverified;
 }
@@ -706,7 +706,7 @@ void Host::addNode(NodeID const& _node, NodeIPEndpoint const& _endpoint)
 
 void Host::requirePeer(NodeID const& _n, NodeIPEndpoint const& _endpoint)
 {
-	LOG(TRACE) << "Host::requirePeer" << _n;
+	LOG(TRACE) << "Host::requirePeer" << _n.abridged();
 
 	m_requiredPeers.insert(_n);
 
@@ -802,7 +802,7 @@ void Host::connect(std::shared_ptr<Peer> const& _p)
 	_p->m_lastAttempted = std::chrono::system_clock::now();
 
 	bi::tcp::endpoint ep(_p->endpoint);
-	LOG(INFO) << "Attempting connection to node " << _p->id << "@" << ep << " from" << id();
+	LOG(INFO) << "Attempting connection to node " << _p->id.abridged() << "@" << ep << " from" << id();
 	auto socket = make_shared<RLPXSocket>(m_ioService);
 
 	// Verify certificate of the connected peer
@@ -819,7 +819,7 @@ void Host::connect(std::shared_ptr<Peer> const& _p)
 
 		if (ec)
 		{
-			LOG(ERROR) << "Connection refused to node" << _p->id << "@" << ep << "(" << ec.message() << ")";
+			LOG(WARNING) << "Connection refused to node" << _p->id.abridged() << "@" << ep << "(" << ec.message() << ")";
 			// Manually set error (session not present)
 			_p->m_lastDisconnect = TCPError;
 
@@ -834,7 +834,7 @@ void Host::connect(std::shared_ptr<Peer> const& _p)
 			}
 			else
 			{
-				LOG(INFO) << "Connecting to" << _p->id << "@" << ep;
+				LOG(INFO) << "Connecting to" << _p->id.abridged() << "@" << ep;
 				auto handshake = make_shared<RLPXHandshake>(this, socket, _p->id);
 				{
 					Guard l(x_connecting);
@@ -958,7 +958,7 @@ void Host::startedWorking()
 	}
 	else
 	{
-		LOG(INFO) << "p2p.start.notice id:" << id() << "TCP Listen port is invalid or unavailable.";
+		LOG(ERROR) << "p2p.start.notice id:" << id() << "TCP Listen port is invalid or unavailable.";
 		LOG(ERROR) << "P2pPort bind failed！" << "\n";
 		exit(-1);
 	}
@@ -1018,7 +1018,7 @@ void Host::reconnectAllNodes()
 	{
 		if (m_sessions.find(dev::jsToPublic(dev::toJS(stNode.first))) == m_sessions.end() && stNode.first != id().hex())
 		{
-			LOG(INFO) << " reconnect node :" << stNode.first << ". myself is " << id().hex() << "\n";
+			LOG(INFO) << " reconnect node :" << stNode.first << ". myself is " << id().abridged() << "\n";
 			NodeConnManagerSingleton::GetInstance().connNode(stNode.second);
 		}
 	}
@@ -1043,7 +1043,7 @@ void Host::disconnectByNodeId(const std::string &sNodeId)
 {
 	if (id().hex() == sNodeId)
 	{
-		LOG(ERROR) << "disconnectByNodeId  self " << id().hex() << "|" << sNodeId << "\n";
+		LOG(WARNING) << "disconnectByNodeId  self " << id().abridged() << "|" << sNodeId << "\n";
 
 		return;
 	}
@@ -1061,7 +1061,7 @@ void Host::disconnectByNodeId(const std::string &sNodeId)
 		}
 	}
 	else {
-		LOG(ERROR) << "disconnectByNodeId  can not find " << sNodeId << "\n";
+		LOG(WARNING) << "disconnectByNodeId  can not find " << sNodeId << "\n";
 	}
 
 }
@@ -1078,13 +1078,13 @@ void Host::disconnectByPub256(const std::string &_pub256)
 			auto baseDataPtr = sp->getCABaseData();
 			if (!baseDataPtr)
 			{
-				LOG(ERROR) << "disconnectByPub256 baseData is nullptr" << "\n";
+				LOG(WARNING) << "disconnectByPub256 baseData is nullptr" << "\n";
 				return;
 			}
 			std::string pub256 = baseDataPtr->getPub256();
 			if (pub256 == _pub256)
 			{
-				LOG(ERROR) << "disconnectByPub256 nodeId:" << sp->id().hex() << ",pub256" << _pub256 << "\n";
+				LOG(WARNING) << "disconnectByPub256 nodeId:" << sp->id().abridged() << ",pub256" << _pub256 << "\n";
 				disconnectByNodeId(sp->id().hex());
 				return;
 			}
@@ -1092,7 +1092,7 @@ void Host::disconnectByPub256(const std::string &_pub256)
 		it++;
 	}
 
-	LOG(ERROR) << "not found pub256:" << _pub256 << "\n";
+	LOG(WARNING) << "not found pub256:" << _pub256 << "\n";
 }
 
 void Host::recheckCAByPub256(const std::string &_pub256)
@@ -1122,7 +1122,7 @@ void Host::recheckCAByPub256(const std::string &_pub256)
 				bool ok = NodeConnManagerSingleton::GetInstance().CheckAll(sp->id().hex(), wbCAData);
 				if (!ok)
 				{
-					LOG(ERROR) << "recheckCAByPub256 false.nodeId:" << sp->id().hex() << ",pub256" << _pub256 << "\n";
+					LOG(WARNING) << "recheckCAByPub256 false.nodeId:" << sp->id().abridged() << ",pub256" << _pub256 << "\n";
 					disconnectByNodeId(sp->id().hex());
 				}
 				return;
@@ -1152,7 +1152,7 @@ void Host::recheckAllCA()
 			bool ok = NodeConnManagerSingleton::GetInstance().CheckAll(sp->id().hex(), wbCAData);
 			if (!ok)
 			{
-				LOG(ERROR) << "recheckCAByPub256 nodeId:" << sp->id().hex() << "\n";
+				LOG(WARNING) << "recheckCAByPub256 nodeId:" << sp->id().abridged() << "\n";
 				disconnectByNodeId(sp->id().hex());
 			}
 		}
@@ -1180,12 +1180,12 @@ void Host::saveCADataByNodeId(const std::string nodeId, CABaseData &baseData)
 		}
 		else
 		{
-			LOG(ERROR) << "saveCADataByNodeId nodeId:" << nodeId << " is not connected." << "\n";
+			LOG(WARNING) << "saveCADataByNodeId nodeId:" << nodeId << " is not connected." << "\n";
 		}
 
 	}
 	else {
-		LOG(ERROR) << "saveCADataByNodeId  can not find nodeId:" << nodeId << "\n";
+		LOG(WARNING) << "saveCADataByNodeId  can not find nodeId:" << nodeId << "\n";
 	}
 }
 
