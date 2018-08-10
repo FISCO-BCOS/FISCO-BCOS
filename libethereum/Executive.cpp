@@ -188,7 +188,7 @@ void Executive::initialize(Transaction const& _transaction)
 	
 	if (startGasUsed + (bigint)m_t.gas() > m_envInfo.gasLimit())
 	{
-		LOG(INFO) << "Cannot fit tx in block" << m_envInfo.number() << ": Require <" << (m_envInfo.gasLimit() - startGasUsed) << " Got" << m_t.gas();
+		LOG(WARNING) << "Cannot fit tx in block" << m_envInfo.number() << ": Require <" << (m_envInfo.gasLimit() - startGasUsed) << " Got" << m_t.gas();
 		m_excepted = TransactionException::BlockGasLimitReached;
 		BOOST_THROW_EXCEPTION(BlockGasLimitReached() << RequirementError((bigint)(m_envInfo.gasLimit() - startGasUsed), (bigint)m_t.gas()));
 	}
@@ -274,7 +274,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
 bool Executive::create(Address _sender, u256 _endowment, u256 _gasPrice, u256 _gas, bytesConstRef _init, Address _origin)
 {
-	LOG(TRACE) << "Executive::create" << _sender;
+	//LOG(TRACE) << "Executive::create" << _sender;
 
 	u256 nonce = m_s.getNonce(_sender);
 	m_s.incNonce(_sender);
@@ -391,7 +391,7 @@ bool Executive::go(OnOpFunc const& _onOp)
 		}
 		catch (EthCallIdNotFound const& _e)
 		{
-			LOG(ERROR)<<"ethcall id not found "<< diagnostic_information(_e);
+			LOG(WARNING)<<"ethcall id not found "<< diagnostic_information(_e);
 			revert();
 			throw;
 		}
@@ -405,7 +405,7 @@ bool Executive::go(OnOpFunc const& _onOp)
 		catch (Exception const& _e)
 		{
 			// TODO: AUDIT: check that this can never reasonably happen. Consider what to do if it does.
-			LOG(WARNING) << "Unexpected exception in VM. There may be a bug in this implementation. " << diagnostic_information(_e);
+			LOG(ERROR) << "Unexpected exception in VM. There may be a bug in this implementation. " << diagnostic_information(_e);
 			exit(1);
 			// Another solution would be to reject this transaction, but that also
 			// has drawbacks. Essentially, the amount of ram has to be increased here.
@@ -413,7 +413,7 @@ bool Executive::go(OnOpFunc const& _onOp)
 		catch (std::exception const& _e)
 		{
 			// TODO: AUDIT: check that this can never reasonably happen. Consider what to do if it does.
-			LOG(WARNING) << "Unexpected std::exception in VM. Not enough RAM? " << _e.what();
+			LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? " << _e.what();
 			exit(1);
 			// Another solution would be to reject this transaction, but that also
 			// has drawbacks. Essentially, the amount of ram has to be increased here.

@@ -84,7 +84,7 @@ void SystemContract::updateSystemContract(std::shared_ptr<Block> block)
 
     for (auto it = m_tempblock->pending().begin(); it != m_tempblock->pending().end(); ++it)
     {
-        LOG(INFO) << "SystemContract::updateSystemContract ==> abi address => " << contractAbiMgr.hex() << " ,to= > " << (it->to().hex());
+        LOG(TRACE) << "SystemContract::updateSystemContract ==> abi address => " << contractAbiMgr.hex() << " ,to= > " << (it->to().hex());
 
         bytes tempdata = it->data();
         bytesRef fundata = ref(tempdata);
@@ -547,9 +547,9 @@ void SystemContract::tempGetAllNode(int _blocknumber, std::vector< NodeConnParam
         }
         catch (...)
         {
-            // TODO: Some sort of notification of failure.
-            LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
             LOG(WARNING) << "SystemContract::tempGetAllNode call Fail!" << toString(_inputdata);
+            // TODO: Some sort of notification of failure.
+            LOG(WARNING) << boost::current_exception_diagnostic_information() << "\n";
         }
         return ret;
     };
@@ -793,9 +793,9 @@ ExecutionResult SystemContract::call(Address const& _to, bytes const& _inputdata
     }
     catch (...)
     {
-        // TODO: Some sort of notification of failure.
-        LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
         LOG(WARNING) << "SystemContract::call Fail!" << toString(_inputdata);
+        // TODO: Some sort of notification of failure.
+        LOG(WARNING) << boost::current_exception_diagnostic_information() << "\n";
     }
     return ret;
 }
