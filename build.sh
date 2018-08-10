@@ -16,6 +16,7 @@ sudo apt-get -y install npm
 sudo apt-get -y install openssl
 sudo apt-get -y install libssl-dev libkrb5-dev
 sudo apt-get -y install nodejs-legacy
+sudo apt-get -y install jq
 sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
 sudo cnpm install -g babel-cli babel-preset-es2017
 echo '{ "presets": ["es2017"] }' > ~/.babelrc
@@ -26,6 +27,7 @@ sudo yum -y install gcc-c++
 sudo yum -y install openssl openssl-devel
 sudo yum -y install nodejs
 sudo yum -y install npm
+sudo yum -y install jq
 sudo npm install -g cnpm --registry=https://registry.npm.taobao.org
 sudo cnpm install -g babel-cli babel-preset-es2017
 echo '{ "presets": ["es2017"] }' > ~/.babelrc
@@ -76,7 +78,7 @@ cnpm install
 if [ ! -f "/usr/local/bin/fisco-bcos" ]; then
 	echo 'fisco-bcos build fail!'
 	else
-	echo 'fisco-bcos build succ! path: /usr/local/bin/fisco-bcos'
+	echo 'fisco-bcos build SUCCESS! path: /usr/local/bin/fisco-bcos'
  fi
 
 #nodejs 版本检查
