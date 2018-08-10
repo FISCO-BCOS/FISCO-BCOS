@@ -114,14 +114,13 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	{
 		if (boost::filesystem::space(path + "/state").available < 1024)
 		{
-			LOG(WARNING) << "Not enough available space found on hard drive. Please free some up and then re-run. Bailing.";
+			LOG(ERROR) << "Not enough available space found on hard drive. Please free some up and then re-run. Bailing.";
 			BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
 		}
 		else
 		{
-			LOG(WARNING) << status.ToString();
-			LOG(WARNING) <<
-			             "Database " <<
+			LOG(ERROR) << status.ToString();
+			LOG(ERROR) << "Database " <<
 			             (path + "/state") <<
 			             "already open. You appear to have another instance of ethereum running. Bailing.";
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
@@ -237,7 +236,7 @@ void State::commit(CommitBehaviour _commitBehaviour)
 	if (_commitBehaviour == CommitBehaviour::RemoveEmptyAccounts)
 		removeEmptyAccounts();
 
-	LOG(TRACE) << "State::commit m_touched.size()=" << m_touched.size();
+	//LOG(TRACE) << "State::commit m_touched.size()=" << m_touched.size();
 
 	m_touched += dev::eth::commit(m_cache, m_state);
 	m_changeLog.clear();
@@ -414,7 +413,7 @@ void State::setStorage(Address const& _contract, u256 const& _key, u256 const& _
 
 map<h256, pair<u256, u256>> State::storage(Address const& _id) const
 {
-	LOG(TRACE) << "State::storage " << _id;
+	//LOG(TRACE) << "State::storage " << _id;
 
 	map<h256, pair<u256, u256>> ret;
 
@@ -432,7 +431,7 @@ map<h256, pair<u256, u256>> State::storage(Address const& _id) const
 				u256 const value = RLP((*it).second).toInt<u256>();
 				ret[hashedKey] = make_pair(key, value);
 
-				LOG(TRACE) << "State::storage " << hashedKey;
+				//LOG(TRACE) << "State::storage " << hashedKey;
 
 			}
 		}
@@ -448,7 +447,7 @@ map<h256, pair<u256, u256>> State::storage(Address const& _id) const
 				ret.erase(hashedKey);
 		}
 
-		LOG(TRACE) << "State::storage " << ret.size();
+		//LOG(TRACE) << "State::storage " << ret.size();
 
 	}
 	return ret;
@@ -634,7 +633,7 @@ void State::executeUTXO(const Transaction& _t, UTXOModel::UTXOMgr* _pUTXOMgr)
 			}
 			catch (UTXOModel::UTXOException& e)
 			{
-				LOG(ERROR) << "State::executeUTXO() InitTokens Error:" << e.what();
+				LOG(WARNING) << "State::executeUTXO() InitTokens Error:" << e.what();
 				BOOST_THROW_EXCEPTION(UTXOTxError());
 			}
 			break;
@@ -647,7 +646,7 @@ void State::executeUTXO(const Transaction& _t, UTXOModel::UTXOMgr* _pUTXOMgr)
 			}
 			catch (UTXOModel::UTXOException& e)
 			{
-				LOG(ERROR) << "State::executeUTXO() SendSelectedTokens Error:" << e.what();
+				LOG(WARNING) << "State::executeUTXO() SendSelectedTokens Error:" << e.what();
 				BOOST_THROW_EXCEPTION(UTXOTxError());
 			}
 			break;

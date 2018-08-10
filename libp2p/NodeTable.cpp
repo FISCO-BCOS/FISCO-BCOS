@@ -68,7 +68,7 @@ void NodeTable::processEvents()
 
 shared_ptr<NodeEntry> NodeTable::addNode(Node const& _node, NodeRelation _relation)
 {
-	LOG(TRACE)<<"NodeTable::addNode "<<_node.id<<","<<_relation;
+	LOG(TRACE)<<"NodeTable::addNode "<<_node.id.abridged()<<","<<_relation;
 	if (_relation == Known)
 	{
 		auto ret = make_shared<NodeEntry>(m_node.id, _node.id, _node.endpoint);
@@ -314,7 +314,7 @@ void NodeTable::evict(shared_ptr<NodeEntry> _leastSeen, shared_ptr<NodeEntry> _n
 
 void NodeTable::noteActiveNode(Public const& _pubk, bi::udp::endpoint const& _endpoint)
 {
-	LOG(TRACE)<<"NodeTable::noteActiveNode "<<_pubk<<","<<_endpoint;
+	LOG(TRACE)<<"NodeTable::noteActiveNode "<<_pubk.abridged()<<","<<_endpoint;
 
 	if (_pubk == m_node.address() )
 	{
@@ -418,7 +418,7 @@ void NodeTable::dropNode(shared_ptr<NodeEntry> _n)
 	}
 	
 	// notify host
-	LOG(INFO) << "p2p.nodes.drop " << _n->id;
+	LOG(INFO) << "p2p.nodes.drop " << _n->id.abridged();
 	if (m_nodeEventHandler)
 		m_nodeEventHandler->appendEvent(_n->id, NodeEntryDropped);
 }
@@ -490,7 +490,7 @@ void NodeTable::onReceived(UDPSocketFace*, bi::udp::endpoint const& _from, bytes
 					m_node.endpoint.udpPort = in.destination.udpPort;
 				}
 				
-				LOG(INFO) << "PONG from " << in.sourceid << _from;
+				LOG(INFO) << "PONG from " << in.sourceid.abridged() << _from;
 				break;
 			}
 				

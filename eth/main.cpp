@@ -72,7 +72,6 @@
 
 //#include <ethminer/MinerAux.h>
 #include "AccountManager.h"
-#include <libdevcore/easylog.h>
 
 #include <libdiskencryption/CryptoParam.h>
 #include <libdiskencryption/GenKey.h>
@@ -1360,7 +1359,7 @@ int main(int argc, char** argv)
 			int cryptoMod = cryptoParam.m_cryptoMod;
 			string superKey = cryptoParam.m_superKey;
 			string kcUrl = cryptoParam.m_kcUrl;
-			LOG(DEBUG) << "cryptoMod:" << cryptoMod<<" kcUrl:"<<kcUrl;
+			LOG(INFO) << "cryptoMod:" << cryptoMod<<" kcUrl:"<<kcUrl;
 			if(chainParams.ssl == SSL_SOCKET_V2) //new diskencrypt
 			{
 				EncryptFile _encryptFile(cryptoMod,superKey,kcUrl);
@@ -1813,7 +1812,7 @@ int main(int argc, char** argv)
 			channelServer->setListenPort(chainParams.channelPort);
 			channelModularServer->addConnector(channelServer.get());
 
-			LOG(TRACE) << "channelServer启动 IP:" << chainParams.listenIp << " Port:" << chainParams.channelPort;
+			LOG(TRACE) << "channelServer started IP:" << chainParams.listenIp << " Port:" << chainParams.channelPort;
 
 			channelModularServer->StartListening();
 			//设置json rpc的accountholder
