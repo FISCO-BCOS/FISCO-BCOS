@@ -57,11 +57,11 @@ help() {
     LOG_INFO "    -d                  The Path of Guomi Directory"
     LOG_INFO "    -h                  This help"
     LOG_INFO "Example:"
-    LOG_INFO "    $this_script -o /mydata "
-    LOG_INFO "    $this_script -o /mydata -m"
+    LOG_INFO "    bash $this_script -o /mydata "
+    LOG_INFO "    bash $this_script -o /mydata -m"
     LOG_INFO "guomi Example:"
-    LOG_INFO "    $this_script -o /mydata -m -g"
-    LOG_INFO "    $this_script -o /mydata -g"
+    LOG_INFO "    bash $this_script -o /mydata -m -g"
+    LOG_INFO "    bash $this_script -o /mydata -g"
 exit -1
 }
 
