@@ -17,12 +17,6 @@ LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-LOG_NORMAL()
-{
-    local content=${1}
-    echo -e ${content}
-}
-
 execute_cmd()
 {
     local command="${1}"
@@ -55,19 +49,19 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_NORMAL "Usage:"
-    LOG_NORMAL "    -o <ca dir>     Where ca.crt ca.key generate "
-    LOG_NORMAL "Optional:"
-    LOG_NORMAL "    -m                  Input ca information manually"
-    LOG_NORMAL "    -g                  Generate chain certificates with guomi algorithms"
-    LOG_NORMAL "    -d                  The Path of Guomi Directory"
-    LOG_NORMAL "    -h                  This help"
-    LOG_NORMAL "Example:"
-    LOG_NORMAL "    bash $this_script -o /mydata "
-    LOG_NORMAL "    bash $this_script -o /mydata -m"
-    LOG_NORMAL "guomi Example:"
-    LOG_NORMAL "    bash $this_script -o /mydata -m -g"
-    LOG_NORMAL "    bash $this_script -o /mydata -g"
+    echo "Usage:"
+    echo "    -o <ca dir>     Where ca.crt ca.key generate "
+    echo "Optional:"
+    echo "    -m                  Input ca information manually"
+    echo "    -g                  Generate chain certificates with guomi algorithms"
+    echo "    -d                  The Path of Guomi Directory"
+    echo "    -h                  This help"
+    echo "Example:"
+    echo "    bash $this_script -o /mydata "
+    echo "    bash $this_script -o /mydata -m"
+    echo "guomi Example:"
+    echo "    bash $this_script -o /mydata -m -g"
+    echo "    bash $this_script -o /mydata -g"
 exit -1
 }
 

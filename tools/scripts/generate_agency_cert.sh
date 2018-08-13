@@ -13,12 +13,6 @@ LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-LOG_NORMAL()
-{
-    local content=${1}
-    echo -e ${content}
-}
-
 execute_cmd()
 {
     local command="${1}"
@@ -57,21 +51,21 @@ agency_name=
 this_script=$0
 help() {
     LOG_ERROR "${1}"
-    LOG_NORMAL "Usage:"
-    LOG_NORMAL "    -c <ca dir>         The dir of chain cert files(ca.crt and ca.key)"
-    LOG_NORMAL "    -o <output dir>     Where agency.crt agency.key generate "
-    LOG_NORMAL "    -n <agency name>    Name of agency"
-    LOG_NORMAL "Optional:"
-    LOG_NORMAL "    -m                  Input agency information manually"
-    LOG_NORMAL "    -g                  Generate agency certificates with guomi algorithms"
-    LOG_NORMAL "    -d                  The Path of Guomi Directory"
-    LOG_NORMAL "    -h                  This help"
-    LOG_NORMAL "Example:"
-    LOG_NORMAL "    bash $this_script -c /mydata -o /mydata -n test_agency"
-    LOG_NORMAL "    bash $this_script -c /mydata -o /mydata -n test_agency -m"
-    LOG_NORMAL "guomi Example:"
-    LOG_NORMAL "    bash $this_script -c /mydata -o /mydata -n test_agency -g"
-    LOG_NORMAL "    bash $this_script -c /mydata -o /mydata -n test_agency -m -g" 
+    echo "Usage:"
+    echo "    -c <ca dir>         The dir of chain cert files(ca.crt and ca.key)"
+    echo "    -o <output dir>     Where agency.crt agency.key generate "
+    echo "    -n <agency name>    Name of agency"
+    echo "Optional:"
+    echo "    -m                  Input agency information manually"
+    echo "    -g                  Generate agency certificates with guomi algorithms"
+    echo "    -d                  The Path of Guomi Directory"
+    echo "    -h                  This help"
+    echo "Example:"
+    echo "    bash $this_script -c /mydata -o /mydata -n test_agency"
+    echo "    bash $this_script -c /mydata -o /mydata -n test_agency -m"
+    echo "guomi Example:"
+    echo "    bash $this_script -c /mydata -o /mydata -n test_agency -g"
+    echo "    bash $this_script -c /mydata -o /mydata -n test_agency -m -g" 
 exit -1
 }
 
