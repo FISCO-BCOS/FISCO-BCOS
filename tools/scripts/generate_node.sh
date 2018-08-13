@@ -13,6 +13,12 @@ function LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
+LOG_NORMAL()
+{
+    local content=${1}
+    echo -e ${content}
+}
+
 function execute_cmd()
 {
     local command="${1}"
@@ -62,27 +68,27 @@ mflag=
 this_script=$0
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -o  <output dir>            Where node files generate "
-    LOG_INFO "    -n  <node name>             Name of node"
-    LOG_INFO "    -l  <listen ip>             Node's listen IP"
-    LOG_INFO "    -r  <RPC port>              Node's RPC port"
-    LOG_INFO "    -p  <P2P port>              Node's P2P port"
-    LOG_INFO "    -c  <channel port>          Node's channel port"
-    LOG_INFO "    -e  <bootstrapnodes>      Node's bootstrap nodes"
-    LOG_INFO "    -a  <agency name>           The agency name that the node belongs to"
-    LOG_INFO "    -d  <agency dir>            The agency cert dir that the node belongs to"
-    LOG_INFO "    -i  <genesis node id>       Genesis node id"
-    LOG_INFO "    -s  <god address>	      God address"
-    LOG_INFO "    -x  <system proxy address>  System proxy address of the blockchain"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -m                          Input agency information manually"
-    LOG_INFO "    -g                          Create guomi node"
-    LOG_INFO "    -h                          This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -o /mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -d /mydata/test_agency -a test_agency -x 0x919868496524eedc26dbb81915fa1547a20f8998 -i xxxxxx -s xxxxxx"
-    LOG_INFO "GuomiExample:"
-    LOG_INFO "    bash $this_script -o /mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -x 0x919868496524eedc26dbb81915fa1547a20f8998 -i xxxxxx -s xxxxxx -g"
+    LOG_NORMAL "Usage:"
+    LOG_NORMAL "    -o  <output dir>            Where node files generate "
+    LOG_NORMAL "    -n  <node name>             Name of node"
+    LOG_NORMAL "    -l  <listen ip>             Node's listen IP"
+    LOG_NORMAL "    -r  <RPC port>              Node's RPC port"
+    LOG_NORMAL "    -p  <P2P port>              Node's P2P port"
+    LOG_NORMAL "    -c  <channel port>          Node's channel port"
+    LOG_NORMAL "    -e  <bootstrapnodes>      Node's bootstrap nodes"
+    LOG_NORMAL "    -a  <agency name>           The agency name that the node belongs to"
+    LOG_NORMAL "    -d  <agency dir>            The agency cert dir that the node belongs to"
+    LOG_NORMAL "    -i  <genesis node id>       Genesis node id"
+    LOG_NORMAL "    -s  <god address>	      God address"
+    LOG_NORMAL "    -x  <system proxy address>  System proxy address of the blockchain"
+    LOG_NORMAL "Optional:"
+    LOG_NORMAL "    -m                          Input agency information manually"
+    LOG_NORMAL "    -g                          Create guomi node"
+    LOG_NORMAL "    -h                          This help"
+    LOG_NORMAL "Example:"
+    LOG_NORMAL "    bash $this_script -o /mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -d /mydata/test_agency -a test_agency -x 0x919868496524eedc26dbb81915fa1547a20f8998 -i xxxxxx -s xxxxxx"
+    LOG_NORMAL "GuomiExample:"
+    LOG_NORMAL "    bash $this_script -o /mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -x 0x919868496524eedc26dbb81915fa1547a20f8998 -i xxxxxx -s xxxxxx -g"
 
 exit -1
 }

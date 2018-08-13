@@ -6,19 +6,25 @@ systemcontract_dir=`readlink -f ../systemcontract`
 
 this_script=$0
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-function execute_cmd()
+LOG_NORMAL()
+{
+    local content=${1}
+    echo -e ${content}
+}
+
+execute_cmd()
 {
     local command="${1}"
     LOG_INFO "RUN: ${command}"
@@ -35,14 +41,14 @@ function execute_cmd()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -w  <web3lib dir>         Directory of web3lib"
-    LOG_INFO "    -s  <systemcontract dir>  Directory of systemcontract"
-    LOG_INFO "    -h                        This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 "
-    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    LOG_NORMAL "Usage:"
+    LOG_NORMAL "Optional:"
+    LOG_NORMAL "    -w  <web3lib dir>         Directory of web3lib"
+    LOG_NORMAL "    -s  <systemcontract dir>  Directory of systemcontract"
+    LOG_NORMAL "    -h                        This help"
+    LOG_NORMAL "Example:"
+    LOG_NORMAL "    bash $this_script -d /mydata/node0 "
+    LOG_NORMAL "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
 exit -1
 }
 while getopts "d:w:s:h" option;do
