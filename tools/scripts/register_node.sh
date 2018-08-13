@@ -79,6 +79,9 @@ help() {
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -d /mydata/node0 "
     LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    LOG_INFO "Guomi Example:"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
 exit -1
 }
 while getopts "d:w:s:gh" option;do
