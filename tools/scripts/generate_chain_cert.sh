@@ -5,19 +5,19 @@ manual_input=
 cert_cnf=
 this_script=$0
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
-    echo -e "\033[34m"${content}"\033[0m"
+    echo -e "\033[32m"${content}"\033[0m"
 }
 
-function execute_cmd()
+execute_cmd()
 {
     local command="${1}"
     eval ${command}
@@ -57,11 +57,11 @@ help() {
     LOG_INFO "    -d                  The Path of Guomi Directory"
     LOG_INFO "    -h                  This help"
     LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -o /mydata "
-    LOG_INFO "    bash $this_script -o /mydata -m"
+    LOG_INFO "    $this_script -o /mydata "
+    LOG_INFO "    $this_script -o /mydata -m"
     LOG_INFO "guomi Example:"
-    LOG_INFO "    bash $this_script -o /mydata -m -g"
-    LOG_INFO "    bash $this_script -o /mydata -g"
+    LOG_INFO "    $this_script -o /mydata -m -g"
+    LOG_INFO "    $this_script -o /mydata -g"
 exit -1
 }
 
