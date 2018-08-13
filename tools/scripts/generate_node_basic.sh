@@ -1,13 +1,13 @@
 #/bin/bash
 set -e
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
     echo -e "\033[34m"${content}"\033[0m"
@@ -38,6 +38,7 @@ p2pport=
 channelPort=
 peers=
 systemproxyaddress=0x0
+enable_guomi=0
 
 this_script=$0
 help() {
@@ -53,6 +54,7 @@ help() {
     LOG_INFO "    -e  <bootstrapnodes>      Node's bootstrap nodes"
     LOG_INFO "Optional:"
     LOG_INFO "    -x  <systemproxyaddress>  System Proxy Contract address"
+    LOG_INFO "     -g                       Create guomi node"
     LOG_INFO "    -h                        This help"
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304"
@@ -61,7 +63,7 @@ help() {
 exit -1
 }
 
-while getopts "o:n:l:r:p:c:e:x:h" option;do
+while getopts "o:n:l:r:p:c:e:x:gh" option;do
 	case $option in
 	o) output_dir=$OPTARG;;
     n) name=$OPTARG;;
@@ -71,6 +73,7 @@ while getopts "o:n:l:r:p:c:e:x:h" option;do
     c) channelPort=$OPTARG;;
     e) peers=$OPTARG;;
     x) systemproxyaddress=$OPTARG;;
+    g) enable_guomi=1;;
 	h) help;;
 	esac
 done
@@ -221,7 +224,7 @@ generate_bootstrapnodes() {
     LOG_INFO "`readlink -f $out_file` is generated"
 }
 
-if [ -d "$node_dir" ]; then
+if [ -d "$node_dir" ] && [ ${enable_guomi} -eq 0 ]; then
     echo "Attention! Duplicate generation of \"$node_dir\". Re-generate?(This will remove all old data of the node)"
     yes_go_other_exit
 

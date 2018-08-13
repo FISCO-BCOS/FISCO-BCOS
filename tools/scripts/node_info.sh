@@ -1,6 +1,7 @@
 #/bin/bash
 set -e
 node_dir=
+enable_guomi=0
 web3lib_dir=`readlink -f ../web3lib`
 systemcontract_dir=`readlink -f ../systemcontract`
 
@@ -15,7 +16,7 @@ function LOG_ERROR()
 function LOG_INFO()
 {
     local content=${1}
-    echo -e "\033[34m"${content}"\033[0m"
+    echo -e "\033[32m"${content}"\033[0m"
 }
 
 function execute_cmd()
@@ -72,13 +73,17 @@ help() {
     LOG_INFO "    -d  <node dir>  Node dir you want to see"
     LOG_INFO "Optional:"
     LOG_INFO "    -h              This help"
+    LOG_INFO "    -g              Guomi Info"
     LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 "
+    LOG_INFO "    $this_script -d /mydata/node0 "
+    LOG_INFO "Guomi Example:"
+    LOG_INFO "    $this_script -d /mydata/node0 -g"
 exit -1
 }
-while getopts "d:h" option;do
+while getopts "d:gh" option;do
 	case $option in
     d) node_dir=$OPTARG;;
+    g) enable_guomi=1;;
 	h) help;;
 	esac
 done
@@ -135,10 +140,14 @@ node_basic() {
     LOG_INFO "Node ID:\t\t$id"
 }
 
-
 LOG_INFO "-----------------------------------------------------------------"
+if [ ${enable_guomi} -eq 1 ];then
+    node_basic ${node_dir}/data/gmnode.json
+    node_config_info ${node_dir}/config.json
+else
 node_basic $node_dir/data/node.json
 node_config_info $node_dir/config.json
+fi
 node_state $node_dir
 LOG_INFO "-----------------------------------------------------------------"
 
