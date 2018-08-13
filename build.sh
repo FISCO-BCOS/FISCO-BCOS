@@ -74,6 +74,10 @@ cnpm install
 cd ..
 cd ./systemcontract
 cnpm install
+cd ..
+
+#build tools
+sh tools/build.sh
 
 if [ ! -f "/usr/local/bin/fisco-bcos" ]; then
 	echo 'fisco-bcos build fail!'
