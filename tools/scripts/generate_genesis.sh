@@ -18,12 +18,6 @@ LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-LOG_NORMAL()
-{
-    local content=${1}
-    echo -e ${content}
-}
-
 yes_or_no()
 {
     read -r -p "[Y/n]: " input
@@ -43,27 +37,27 @@ yes_or_no()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_NORMAL "Usage:"
-    LOG_NORMAL "    -o <output dir>         Where genesis.json generate"
-    LOG_NORMAL "Optional:"
-    LOG_NORMAL "    -d <genesis node dir>   Genesis node dir of the blockchain"
-    LOG_NORMAL "    -i <genesis node id>    Genesis node id"
-    LOG_NORMAL "    -r <god account>        Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
-    LOG_NORMAL "    -d                      The Path of Guomi Directory"
-    LOG_NORMAL "    -g                      Generate genesis node for guomi-FISCO-BCOS"
-    LOG_NORMAL "    -h                      This help"
+    echo "Usage:"
+    echo "    -o <output dir>         Where genesis.json generate"
+    echo "Optional:"
+    echo "    -d <genesis node dir>   Genesis node dir of the blockchain"
+    echo "    -i <genesis node id>    Genesis node id"
+    echo "    -r <god account>        Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
+    echo "    -d                      The Path of Guomi Directory"
+    echo "    -g                      Generate genesis node for guomi-FISCO-BCOS"
+    echo "    -h                      This help"
     
-    LOG_NORMAL "Example:"
-    LOG_NORMAL "    bash $this_script -d /mydata/node0 -o /mydata/node1"
-    LOG_NORMAL "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1"
-    LOG_NORMAL "    bash $this_script -d /mydata/node0 -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6"
-    LOG_NORMAL "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6"
+    echo "Example:"
+    echo "    bash $this_script -d /mydata/node0 -o /mydata/node1"
+    echo "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1"
+    echo "    bash $this_script -d /mydata/node0 -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6"
+    echo "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6"
 
-    LOG_NORMAL "GUOMI Example:"
-    LOG_NORMAL "    bash $this_script -d /mydata/node0 -o /mydata/node1" -g
-    LOG_NORMAL "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1" -g
-    LOG_NORMAL "    bash $this_script -d /mydata/node0 -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
-    LOG_NORMAL "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
+    echo "GUOMI Example:"
+    echo "    bash $this_script -d /mydata/node0 -o /mydata/node1" -g
+    echo "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1" -g
+    echo "    bash $this_script -d /mydata/node0 -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
+    echo "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
 exit -1
 }
 goumi_support=0

@@ -13,12 +13,6 @@ LOG_INFO()
     echo -e "\033[34m"${content}"\033[0m"
 }
 
-LOG_NORMAL()
-{
-    local content=${1}
-    echo -e ${content}
-}
-
 yes_go_other_exit()
 {
     read -r -p "[Y/n]: " input
@@ -49,25 +43,25 @@ enable_guomi=0
 this_script=$0
 help() {
     LOG_ERROR "${1}"
-    LOG_NORMALs "$this_script: Generate node basic files except for cert files"
-    LOG_NORMALs "Usage:"
-    LOG_NORMALs "    -o  <output dir>          Where node files generate "
-    LOG_NORMALs "    -n  <node name>           Name of node"
-    LOG_NORMALs "    -l  <listen ip>           Node's listen IP"
-    LOG_NORMALs "    -r  <RPC port>            Node's RPC port"
-    LOG_NORMALs "    -p  <P2P port>            Node's P2P port"
-    LOG_NORMALs "    -c  <channel port>        Node's channel port"
-    LOG_NORMALs "    -e  <bootstrapnodes>      Node's bootstrap nodes"
-    LOG_NORMALs "Optional:"
-    LOG_NORMALs "    -x  <systemproxyaddress>  System Proxy Contract address"
-    LOG_NORMALs "     -g                       Create guomi node"
-    LOG_NORMALs "    -h                        This help"
-    LOG_NORMALs "Example:"
-    LOG_NORMALs "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304"
-    LOG_NORMALs "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed"
-    LOG_NORMALs "Guomi Example:"
-    LOG_NORMALs "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -g"
-    LOG_NORMALs "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed -g"
+    echos "$this_script: Generate node basic files except for cert files"
+    echos "Usage:"
+    echos "    -o  <output dir>          Where node files generate "
+    echos "    -n  <node name>           Name of node"
+    echos "    -l  <listen ip>           Node's listen IP"
+    echos "    -r  <RPC port>            Node's RPC port"
+    echos "    -p  <P2P port>            Node's P2P port"
+    echos "    -c  <channel port>        Node's channel port"
+    echos "    -e  <bootstrapnodes>      Node's bootstrap nodes"
+    echos "Optional:"
+    echos "    -x  <systemproxyaddress>  System Proxy Contract address"
+    echos "     -g                       Create guomi node"
+    echos "    -h                        This help"
+    echos "Example:"
+    echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304"
+    echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed"
+    echos "Guomi Example:"
+    echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -g"
+    echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed -g"
 
 exit -1
 }
