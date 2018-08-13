@@ -13,6 +13,12 @@ LOG_INFO()
     echo -e "\033[34m"${content}"\033[0m"
 }
 
+LOG_NORMAL()
+{
+    local content=${1}
+    echo -e ${content}
+}
+
 execute_cmd()
 {
     local command="${1}"
@@ -60,23 +66,23 @@ gen_guomi_cert=0
 this_script=$0
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -a  <agency name>   The agency name that the node belongs to"
-    LOG_INFO "    -d  <agency dir>    The agency cert dir that the node belongs to"
-    LOG_INFO "    -n  <node name>     Node name"
-    LOG_INFO "    -o  <output dir>    Data dir of the node"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -r  <GM shell path> The path of GM shell scripts directory"
-    LOG_INFO "    -s  <sdk name>      The sdk name to connect with the node "
-    LOG_INFO "    -g 			      Generate guomi cert"
-    LOG_INFO "    -m                  Input agency information manually"
-    LOG_INFO "    -h                  This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data"
-    LOG_INFO "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m"
-    LOG_INFO "guomi Example:"
-    LOG_INFO "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -s sdk1 -g"
-    LOG_INFO "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m -s sdk1 -g"
+    LOG_NORMAL "Usage:"
+    LOG_NORMAL "    -a  <agency name>   The agency name that the node belongs to"
+    LOG_NORMAL "    -d  <agency dir>    The agency cert dir that the node belongs to"
+    LOG_NORMAL "    -n  <node name>     Node name"
+    LOG_NORMAL "    -o  <output dir>    Data dir of the node"
+    LOG_NORMAL "Optional:"
+    LOG_NORMAL "    -r  <GM shell path> The path of GM shell scripts directory"
+    LOG_NORMAL "    -s  <GM sdk name>   The GM sdk name to connect with the node (Only when -g enabled) "
+    LOG_NORMAL "    -g 			      Generate guomi cert"
+    LOG_NORMAL "    -m                  Input agency information manually"
+    LOG_NORMAL "    -h                  This help"
+    LOG_NORMAL "Example:"
+    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data"
+    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m"
+    LOG_NORMAL "guomi Example:"
+    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -s sdk1 -g"
+    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m -s sdk1 -g"
 exit -1
 }
 
@@ -96,9 +102,9 @@ while getopts "a:d:n:o:s:r:gmh" option;do
 done
 
 [ -z $agency_name ] && help 'Error: Please specify <agency dir> using -a'
-[ -z $agency_dir ] && LOG_INFO 'Error: Please specify <agency dir> using -d, using ${agency_name} by default' && agency_dir="${agency_name}"
+[ -z $agency_dir ] && help 'Error: Please specify <agency dir> using -d, using ${agency_name} by default' && agency_dir="${agency_name}"
 [ -z $node_name ] && help 'Error: Please specify <agency dir> using -d'
-[ -z $output_dir ] && LOG_INFO 'Error: Please specify <output dir> using -o, using ${node_name} by deafult' && node_dir="${node_name}"
+[ -z $output_dir ] && help 'Error: Please specify <output dir> using -o, using ${node_name} by deafult' && node_dir="${node_name}"
 if [ ${gen_guomi_cert} -eq 1 ] && [ "${sdk_name}" == "" ]; then
     help "Please Specify sdk_name when generating guomi certificates"
 fi
