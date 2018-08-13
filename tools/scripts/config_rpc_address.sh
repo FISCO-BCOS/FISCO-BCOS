@@ -17,6 +17,12 @@ LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
+LOG_NORMAL()
+{
+    local content=${1}
+    echo -e ${content}
+}
+
 execute_cmd()
 {
     local command="${1}"
@@ -67,14 +73,14 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -o  <rpcport url>         URL of a running node of the blockchain"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -w  <web3lib dir>         Directory of web3lib"
-    LOG_INFO "    -h                        This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script  -o 127.0.0.1:8545 "
-    LOG_INFO "    bash $this_script  -o 127.0.0.1:8545 -w ../web3lib/ "
+    LOG_NORMAL "Usage:"
+    LOG_NORMAL "    -o  <rpcport url>         URL of a running node of the blockchain"
+    LOG_NORMAL "Optional:"
+    LOG_NORMAL "    -w  <web3lib dir>         Directory of web3lib"
+    LOG_NORMAL "    -h                        This help"
+    LOG_NORMAL "Example:"
+    LOG_NORMAL "    bash $this_script  -o 127.0.0.1:8545 "
+    LOG_NORMAL "    bash $this_script  -o 127.0.0.1:8545 -w ../web3lib/ "
 exit -1
 }
 while getopts "o:w:h" option;do

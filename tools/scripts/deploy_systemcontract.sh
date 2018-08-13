@@ -19,6 +19,12 @@ LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
+LOG_NORMAL()
+{
+    local content=${1}
+    echo -e ${content}
+}
+
 execute_cmd()
 {
     local command="${1}"
@@ -69,18 +75,18 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -d  <genesis node dir>   Genesis node dir of the blockchain"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -w  <web3lib dir>        Directory of web3lib"
-    LOG_INFO "    -s  <systemcontract dir> Directory of systemcontract"
-    LOG_INFO "    -h                       This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 "
-    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
-    LOG_INFO "Guomi Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
-    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
+    LOG_NORMAL "Usage:"
+    LOG_NORMAL "    -d  <genesis node dir>   Genesis node dir of the blockchain"
+    LOG_NORMAL "Optional:"
+    LOG_NORMAL "    -w  <web3lib dir>        Directory of web3lib"
+    LOG_NORMAL "    -s  <systemcontract dir> Directory of systemcontract"
+    LOG_NORMAL "    -h                       This help"
+    LOG_NORMAL "Example:"
+    LOG_NORMAL "    bash $this_script -d /mydata/node0 "
+    LOG_NORMAL "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    LOG_NORMAL "Guomi Example:"
+    LOG_NORMAL "    bash $this_script -d /mydata/node0 -g"
+    LOG_NORMAL "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
 exit -1
 }
 while getopts "d:w:s:gh" option;do

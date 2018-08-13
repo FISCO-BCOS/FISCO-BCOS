@@ -13,6 +13,12 @@ LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
+LOG_NORMAL()
+{
+    local content=${1}
+    echo -e ${content}
+}
+
 execute_cmd()
 {
     local command="${1}"
@@ -60,23 +66,23 @@ gflag=
 this_script=$0
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -o  <output dir>        Where node files generate "
-    LOG_INFO "    -n  <node name>         Name of node"
-    LOG_INFO "    -l  <listen ip>         Node's listen IP"
-    LOG_INFO "    -r  <RPC port>          Node's RPC port"
-    LOG_INFO "    -p  <P2P port>          Node's P2P port"
-    LOG_INFO "    -c  <channel port>      Node's channel port"
-    LOG_INFO "    -a  <agency name>       The agency name that the node belongs to"
-    LOG_INFO "    -d  <agency dir>        The agency cert dir that the node belongs to"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -m                      Input agency information manually"
-    LOG_INFO "    -g                      Generate guomi genesis node"
-    LOG_INFO "    -h                      This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -d /mydata/test_agency -a test_agency "
-    LOG_INFO "guomi Example:"
-    LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -g"
+    LOG_NORMAL "Usage:"
+    LOG_NORMAL "    -o  <output dir>        Where node files generate "
+    LOG_NORMAL "    -n  <node name>         Name of node"
+    LOG_NORMAL "    -l  <listen ip>         Node's listen IP"
+    LOG_NORMAL "    -r  <RPC port>          Node's RPC port"
+    LOG_NORMAL "    -p  <P2P port>          Node's P2P port"
+    LOG_NORMAL "    -c  <channel port>      Node's channel port"
+    LOG_NORMAL "    -a  <agency name>       The agency name that the node belongs to"
+    LOG_NORMAL "    -d  <agency dir>        The agency cert dir that the node belongs to"
+    LOG_NORMAL "Optional:"
+    LOG_NORMAL "    -m                      Input agency information manually"
+    LOG_NORMAL "    -g                      Generate guomi genesis node"
+    LOG_NORMAL "    -h                      This help"
+    LOG_NORMAL "Example:"
+    LOG_NORMAL "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -d /mydata/test_agency -a test_agency "
+    LOG_NORMAL "guomi Example:"
+    LOG_NORMAL "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -g"
 
 exit -1
 }
