@@ -1,19 +1,19 @@
 #/bin/bash
 set -e
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
-    echo -e "\033[34m"${content}"\033[0m"
+    echo -e "\033[32m"${content}"\033[0m"
 }
 
-function execute_cmd()
+execute_cmd()
 {
     local command="${1}"
     LOG_INFO "RUN: ${command}"
@@ -54,6 +54,7 @@ peers=
 agency_name=
 agency_dir=
 mflag=
+enable_guomi=0
 gflag=
 
 this_script=$0
@@ -69,13 +70,13 @@ help() {
     LOG_INFO "    -a  <agency name>       The agency name that the node belongs to"
     LOG_INFO "    -d  <agency dir>        The agency cert dir that the node belongs to"
     LOG_INFO "Optional:"
-    LOG_INFO "    -r  <GM shell path>     The path of GM shell scripts directory"
-    LOG_INFO "    -s  <sdk name>          The sdk name to connect with the node "
-    LOG_INFO "    -g 			          Generate guomi cert"
     LOG_INFO "    -m                      Input agency information manually"
+    LOG_INFO "    -g                      Generate guomi genesis node"
     LOG_INFO "    -h                      This help"
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -d /mydata/test_agency -a test_agency "
+    LOG_INFO "guomi Example:"
+    LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -g"
 
 exit -1
 }
@@ -90,8 +91,8 @@ while getopts "o:n:l:r:p:c:a:d:gmh" option;do
     c) channelPort=$OPTARG;;
     a) agency_name=$OPTARG;;
     d) agency_dir=$OPTARG;;
-    g) gflag=-g;;
     m) mflag=-m;;
+    g) enable_guomi=1;; 
 	h) help;;
 	esac
 done
@@ -102,22 +103,29 @@ done
 [ -z $rpcport ] && help 'Error! Please specify <RPC port> using -r'
 [ -z $p2pport ] && help 'Error! Please specify <P2P port> using -p'
 [ -z $channelPort ] && help 'Error! Please specify <channel port> using -c'
-[ -z $agency_name ] && help 'Error: Please specify <agency dir> using -a'
-[ -z $agency_dir ] && LOG_INFO 'Error: Please specify <agency dir> using -d, using ${agency_name} by default' && agency_dir="${agency_name}"
+
+if [ ${enable_guomi} -eq 0 ];then
+    [ -z $agency_name ] && help 'Error: Please specify <agency dir> using -a'
+    [ -z $agency_dir ] && LOG_INFO 'Error: Please specify <agency dir> using -d, using ${agency_name} by default' && agency_dir="${agency_name}"
+else
+    gflag=" -g"
+fi
 
 echo "---------- Generate node basic files ----------" && sleep 1
-execute_cmd "sh generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $listenip:$p2pport "
+execute_cmd "sh generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $listenip:$p2pport ${gflag}"
 echo 
 
-echo "---------- Generate node cert files ----------" && sleep 1
-execute_cmd "sh generate_node_cert.sh -a $agency_name -d $agency_dir -n $name -o $output_dir/$name/data $mflag $gflag"
-echo
+if [ ${enable_guomi} -eq 0 ];then
+    echo "---------- Generate node cert files ----------" && sleep 1
+    execute_cmd "sh generate_node_cert.sh -a $agency_name -d $agency_dir -n $name -o $output_dir/$name/data $mflag"
+    echo
 
-echo "---------- Generate node genesis file ----------" && sleep 1
-execute_cmd "sh generate_genesis.sh -d $output_dir/$name -o $output_dir/$name "
-
+    echo "---------- Generate node genesis file ----------" && sleep 1
+    execute_cmd "sh generate_genesis.sh -d $output_dir/$name -o $output_dir/$name "
+fi
+ 
 echo "---------- Deploy system contract ----------" && sleep 1
-execute_cmd "sh deploy_systemcontract.sh -d $output_dir/$name"
+execute_cmd "sh deploy_systemcontract.sh -d $output_dir/$name ${gflag}"
 echo
 echo  "Genesis node generate success!" && sleep 1
-bash node_info.sh -d $output_dir/$name
+bash node_info.sh -d $output_dir/$name ${gflag}

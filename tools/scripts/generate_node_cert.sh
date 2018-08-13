@@ -1,19 +1,19 @@
 #!/bin/bash
 set -e
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
     echo -e "\033[34m"${content}"\033[0m"
 }
 
-function execute_cmd()
+execute_cmd()
 {
     local command="${1}"
     eval ${command}
@@ -144,11 +144,11 @@ function gen_guomi_cert_func(){
         manual="yes"
     fi
     execute_cmd "cd ${guomi_dir}"
-    execute_cmd "./gmnode.sh ${agency_name} ${agency_dir} ${node_name} ${node_dir} ${manual}"
+    execute_cmd "chmod +x gmnode.sh && ./gmnode.sh ${agency_name} ${agency_dir} ${node_name} ${node_dir} ${manual}"
     #generate sdk cert
     execute_cmd "cd ${current_dir}"
     execute_cmd "cd ${guomi_dir}"
-    execute_cmd "./gmsdk.sh ${sdk_name} ${node_dir} ${manual}" 
+    execute_cmd "chmod +x gmsdk.sh && ./gmsdk.sh ${sdk_name} ${node_dir} ${manual}" 
     execute_cmd "cd ${current_dir}"
 }
 
