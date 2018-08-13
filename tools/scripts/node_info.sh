@@ -19,12 +19,6 @@ LOG_INFO()
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-LOG_NORMAL()
-{
-    local content=${1}
-    echo -e ${content}
-}
-
 execute_cmd()
 {
     local command="${1}"
@@ -75,15 +69,15 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_NORMAL "Usage:"
-    LOG_NORMAL "    -d  <node dir>  Node dir you want to see"
-    LOG_NORMAL "Optional:"
-    LOG_NORMAL "    -h              This help"
-    LOG_NORMAL "    -g              Guomi Info"
-    LOG_NORMAL "Example:"
-    LOG_NORMAL "    bash $this_script -d /mydata/node0 "
-    LOG_NORMAL "Guomi Example:"
-    LOG_NORMAL "    bash $this_script -d /mydata/node0 -g"
+    echo "Usage:"
+    echo "    -d  <node dir>  Node dir you want to see"
+    echo "Optional:"
+    echo "    -h              This help"
+    echo "    -g              Guomi Info"
+    echo "Example:"
+    echo "    bash $this_script -d /mydata/node0 "
+    echo "Guomi Example:"
+    echo "    bash $this_script -d /mydata/node0 -g"
 exit -1
 }
 while getopts "d:gh" option;do

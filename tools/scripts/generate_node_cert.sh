@@ -13,12 +13,6 @@ LOG_INFO()
     echo -e "\033[34m"${content}"\033[0m"
 }
 
-LOG_NORMAL()
-{
-    local content=${1}
-    echo -e ${content}
-}
-
 execute_cmd()
 {
     local command="${1}"
@@ -66,23 +60,23 @@ gen_guomi_cert=0
 this_script=$0
 help() {
     LOG_ERROR "${1}"
-    LOG_NORMAL "Usage:"
-    LOG_NORMAL "    -a  <agency name>   The agency name that the node belongs to"
-    LOG_NORMAL "    -d  <agency dir>    The agency cert dir that the node belongs to"
-    LOG_NORMAL "    -n  <node name>     Node name"
-    LOG_NORMAL "    -o  <output dir>    Data dir of the node"
-    LOG_NORMAL "Optional:"
-    LOG_NORMAL "    -r  <GM shell path> The path of GM shell scripts directory"
-    LOG_NORMAL "    -s  <GM sdk name>   The GM sdk name to connect with the node (Only when -g enabled) "
-    LOG_NORMAL "    -g 			      Generate guomi cert"
-    LOG_NORMAL "    -m                  Input agency information manually"
-    LOG_NORMAL "    -h                  This help"
-    LOG_NORMAL "Example:"
-    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data"
-    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m"
-    LOG_NORMAL "guomi Example:"
-    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -s sdk1 -g"
-    LOG_NORMAL "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m -s sdk1 -g"
+    echo "Usage:"
+    echo "    -a  <agency name>   The agency name that the node belongs to"
+    echo "    -d  <agency dir>    The agency cert dir that the node belongs to"
+    echo "    -n  <node name>     Node name"
+    echo "    -o  <output dir>    Data dir of the node"
+    echo "Optional:"
+    echo "    -r  <GM shell path> The path of GM shell scripts directory"
+    echo "    -s  <GM sdk name>   The GM sdk name to connect with the node (Only when -g enabled) "
+    echo "    -g 			      Generate guomi cert"
+    echo "    -m                  Input agency information manually"
+    echo "    -h                  This help"
+    echo "Example:"
+    echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data"
+    echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m"
+    echo "guomi Example:"
+    echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -s sdk1 -g"
+    echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m -s sdk1 -g"
 exit -1
 }
 
