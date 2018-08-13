@@ -3,6 +3,7 @@ set -e
 node_dir=
 web3lib_dir=`readlink -f ../web3lib`
 systemcontract_dir=`readlink -f ../systemcontract`
+enable_guomi=0
 
 this_script=$0
 
@@ -15,7 +16,7 @@ function LOG_ERROR()
 function LOG_INFO()
 {
     local content=${1}
-    echo -e "\033[34m"${content}"\033[0m"
+    echo -e "\033[32m"${content}"\033[0m"
 }
 
 function execute_cmd()
@@ -73,23 +74,32 @@ help() {
     LOG_INFO "Optional:"
     LOG_INFO "    -w  <web3lib dir>         Directory of web3lib"
     LOG_INFO "    -s  <systemcontract dir>  Directory of systemcontract"
+    LOG_INFO "    -g                        Register guomi node"
     LOG_INFO "    -h                        This help"
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -d /mydata/node0 "
     LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    LOG_INFO "Guomi Example:"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
 exit -1
 }
-while getopts "d:w:s:h" option;do
+while getopts "d:w:s:gh" option;do
 	case $option in
     d) node_dir=$OPTARG;;
     w) web3lib_dir=$OPTARG;;
     s) systemcontract_dir=$OPTARG;;
+    g) enable_guomi=1;; 
 	h) help;;
 	esac
 done
 
 [ -z $node_dir ] && help "Error: Please specify <node dir> using -d"
-[ ! -f "$node_dir/data/node.json" ] && help "Error: Missing $node_dir/data/node.json"
+if [ ${enable_guomi} -eq 0 ];then
+    [ ! -f "$node_dir/data/node.json" ] && help "Error: Missing $node_dir/data/node.json"
+else
+    [ ! -f "$node_dir/data/gmnode.json" ] && help "Error: Missing $node_dir/data/gmnode.json"
+fi
 
 check_node_running() {
     node_dir=$1
@@ -117,6 +127,16 @@ register_node_using_nodejs() {
     cd -
 }
 
+show_node() {
+    cd ${systemcontract_dir}
+    execute_cmd "babel-node tool.js NodeAction all"
+}
+
 check_node_running $node_dir
-register_node_using_nodejs  $node_dir/data/node.json
+if [ ${enable_guomi} -eq 0 ];then
+    register_node_using_nodejs  $node_dir/data/node.json
+else
+    register_node_using_nodejs  $node_dir/data/gmnode.json
+fi
+show_node
 LOG_INFO "Register Node Success!"

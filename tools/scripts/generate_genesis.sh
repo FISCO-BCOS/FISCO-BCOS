@@ -6,16 +6,16 @@ god_address=0xf78451eb46e20bc5336e279c52bda3a3e92c09b6
 init_miners=
 this_script=$0
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
-    echo -e "\033[34m"${content}"\033[0m"
+    echo -e "\033[32m"${content}"\033[0m"
 }
 
 yes_or_no()
@@ -46,11 +46,18 @@ help() {
     LOG_INFO "    -d                      The Path of Guomi Directory"
     LOG_INFO "    -g                      Generate genesis node for guomi-FISCO-BCOS"
     LOG_INFO "    -h                      This help"
+    
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -d /mydata/node0 -o /mydata/node1"
     LOG_INFO "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1"
     LOG_INFO "    bash $this_script -d /mydata/node0 -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6"
     LOG_INFO "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6"
+
+    LOG_INFO "GUOMI Example:"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -o /mydata/node1" -g
+    LOG_INFO "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1" -g
+    LOG_INFO "    bash $this_script -d /mydata/node0 -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
+    LOG_INFO "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
 exit -1
 }
 goumi_support=0
@@ -69,12 +76,16 @@ done
 [ -z $output_dirs ] && help 'Error: Please specify <output dirs> using -o'
 [ -z $god_address ] && help 'Error: Please specify <god account> using -r'
 
+
 if [ $genesis_node_dir ]; then
     data_dir=$genesis_node_dir/data
     if [ ${goumi_support} -eq 0 ];then
         nodeid_file=$data_dir/node.nodeid
     else
         nodeid_file=$data_dir/gmnode.nodeid
+        if [ ${god_address} == "0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" ];then
+            god_address=0x3b5b68db7502424007c6e6567fa690c5afd71721
+        fi
     fi
 
     if [ ! -d "$data_dir" ]; then

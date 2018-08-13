@@ -1,13 +1,39 @@
 #!/bin/bash
 
+function LOG_ERROR()
+{
+    local content=${1}
+    echo -e "\033[31m"${content}"\033[0m"
+}
+
+function LOG_INFO()
+{
+    local content=${1}
+    echo -e "\033[32m"${content}"\033[0m"
+}
+
+function execute_cmd()
+{
+    local command="${1}"
+    eval ${command}
+    local ret=$?
+    if [ $ret -ne 0 ];then
+        LOG_ERROR "execute command ${command} FAILED"
+        exit 1
+    else
+        LOG_INFO "execute command ${command} SUCCESS"
+    fi
+}
+
+
 if [ "" = "`java -version 2>&1 | grep version`" ];
 then
-    echo " Please Install JDK 1.8"
+    LOG_ERROR " Please Install JDK 1.8"
     exit;
 fi
 if [ "" = "`java -version 2>&1 | grep 1.8`" ];
 then
-    echo " Please Upgrade JDK To  1.8"
+    LOG_ERROR " Please Upgrade JDK To  1.8"
     exit;
 fi
 
@@ -23,9 +49,9 @@ function gen_sdk_cert() {
 		manual="${3}"
 	fi
 	if [ -z "$sdk" ];  then
-		echo "Usage:sdk.sh   sdk_name node_dir ${manual}"
+		LOG_INFO "Usage:sdk.sh   sdk_name node_dir ${manual}"
 	elif [  -f "${sdk}/server.crt" ]; then
-		echo "${sdk}/server.crt DIR exist! please clean all old DIR!"
+		LOG_ERROR "${sdk}/server.crt DIR exist! please clean all old DIR!"
 	else
 		mkdir -p ${sdk} && cp cert.cnf ${sdk}
 		cd ${sdk}
@@ -54,9 +80,9 @@ function gen_sdk_cert() {
 		basicConstraints = CA:FALSE
 		keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 		' > RSA.cnf
-		echo "----------------------gen sdk root ca------------------------------------"
+		LOG_INFO "----------------------gen sdk root ca------------------------------------"
 		openssl genrsa -out ca.key 2048
-		echo "----------------------gen sdk server ca----------------------------------"
+		LOG_INFO "----------------------gen sdk server ca----------------------------------"
 		if [ "${manual}" == "yes" ];then
 			openssl req -config cert.cnf -new -x509 -days 3650 -key ca.key  -config cert.cnf -out ca.crt
 			openssl genrsa -out server.key 2048
