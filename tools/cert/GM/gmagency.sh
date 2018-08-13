@@ -8,7 +8,7 @@ function LOG_ERROR()
 function LOG_INFO()
 {
     local content=${1}
-    echo -e "\033[34m"${content}"\033[0m"
+    echo -e "\033[32m"${content}"\033[0m"
 }
 
 function execute_cmd()
