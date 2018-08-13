@@ -1,24 +1,25 @@
 #/bin/bash
 set -e
 genesis_node_dir=
+enable_guomi=0
 web3lib_dir=`readlink -f ../web3lib`
 systemcontract_dir=`readlink -f ../systemcontract`
 
 this_script=$0
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
-    echo -e "\033[34m"${content}"\033[0m"
+    echo -e "\033[32m"${content}"\033[0m"
 }
 
-function execute_cmd()
+execute_cmd()
 {
     local command="${1}"
     LOG_INFO "RUN: ${command}"
@@ -77,13 +78,17 @@ help() {
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -d /mydata/node0 "
     LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    LOG_INFO "Guomi Example:"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
 exit -1
 }
-while getopts "d:w:s:h" option;do
+while getopts "d:w:s:gh" option;do
 	case $option in
     d) genesis_node_dir=$OPTARG;;
     w) web3lib_dir=$OPTARG;;
     s) systemcontract_dir=$OPTARG;;
+    g) enable_guomi=1;; 
 	h) help;;
 	esac
 done
@@ -134,6 +139,7 @@ stop_node() {
     cd -
 }
 
+
 LOG_INFO "Pre-start genesis node"
 start_node $genesis_node_dir
 sleep 10
@@ -141,8 +147,14 @@ sleep 10
 LOG_INFO "Deploy System Contract"
 deploy_systemcontract_using_nodejs
 
-LOG_INFO "Stop genesis node"
-stop_node $genesis_node_dir
+
+# guomi don't stop genesis 
+    LOG_INFO "Stop genesis node"
+    stop_node $genesis_node_dir
+if [ ${enable_guomi} -eq 1 ];then
+    LOG_INFO "Start genesis node"
+    start_node "$genesis_node_dir"
+fi
 
 [ ! -f $systemcontract_dir/output/SystemProxy.address ] && help "Error: System Contract deploy failed."
 
