@@ -74,9 +74,9 @@ help() {
     LOG_INFO "    -g                      Generate guomi genesis node"
     LOG_INFO "    -h                      This help"
     LOG_INFO "Example:"
-    LOG_INFO "    $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -d /mydata/test_agency -a test_agency "
+    LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -d /mydata/test_agency -a test_agency "
     LOG_INFO "guomi Example:"
-    LOG_INFO "    $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -g"
+    LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -g"
 
 exit -1
 }

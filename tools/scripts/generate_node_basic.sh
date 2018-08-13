@@ -59,6 +59,9 @@ help() {
     LOG_INFO "Example:"
     LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304"
     LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed"
+    LOG_INFO "Guomi Example:"
+    LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -g"
+    LOG_INFO "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed -g"
 
 exit -1
 }

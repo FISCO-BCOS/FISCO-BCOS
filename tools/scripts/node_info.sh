@@ -75,9 +75,9 @@ help() {
     LOG_INFO "    -h              This help"
     LOG_INFO "    -g              Guomi Info"
     LOG_INFO "Example:"
-    LOG_INFO "    $this_script -d /mydata/node0 "
+    LOG_INFO "    bash $this_script -d /mydata/node0 "
     LOG_INFO "Guomi Example:"
-    LOG_INFO "    $this_script -d /mydata/node0 -g"
+    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
 exit -1
 }
 while getopts "d:gh" option;do
@@ -126,18 +126,27 @@ node_config_info() {
     LOG_INFO "SystemProxy address:\t$systemproxyaddress"
 }
 
+node_genesis_info() {
+   file="${1}"
+   god_address=`get_key_value ${file} god`
+   
+   LOG_INFO "God address:\t\t${god_address}"
+}
+
 node_basic() {
     file=$1
     id=`get_key_value $file id`
     name=`get_key_value $file name`
     agency=`get_key_value $file agency`
     caHash=`get_key_value $file caHash`
+ 
     
     LOG_INFO "Name:\t\t\t$name"
     LOG_INFO "Node dir:\t\t$node_dir"
     LOG_INFO "Agency:\t\t\t$agency"
     LOG_INFO "CA hash:\t\t$caHash"
     LOG_INFO "Node ID:\t\t$id"
+
 }
 
 LOG_INFO "-----------------------------------------------------------------"
@@ -148,6 +157,7 @@ else
 node_basic $node_dir/data/node.json
 node_config_info $node_dir/config.json
 fi
+node_genesis_info ${node_dir}/genesis.json
 node_state $node_dir
 LOG_INFO "-----------------------------------------------------------------"
 
