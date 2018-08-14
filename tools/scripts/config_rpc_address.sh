@@ -67,14 +67,14 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -o  <rpcport url>         URL of a running node of the blockchain"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -w  <web3lib dir>         Directory of web3lib"
-    LOG_INFO "    -h                        This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script  -o 127.0.0.1:8545 "
-    LOG_INFO "    bash $this_script  -o 127.0.0.1:8545 -w ../web3lib/ "
+    echo "Usage:"
+    echo "    -o  <rpcport url>         URL of a running node of the blockchain"
+    echo "Optional:"
+    echo "    -w  <web3lib dir>         Directory of web3lib"
+    echo "    -h                        This help"
+    echo "Example:"
+    echo "    bash $this_script  -o 127.0.0.1:8545 "
+    echo "    bash $this_script  -o 127.0.0.1:8545 -w ../web3lib/ "
 exit -1
 }
 while getopts "o:w:h" option;do

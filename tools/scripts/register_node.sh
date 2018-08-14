@@ -7,19 +7,19 @@ enable_guomi=0
 
 this_script=$0
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-function execute_cmd()
+execute_cmd()
 {
     local command="${1}"
     LOG_INFO "RUN: ${command}"
@@ -69,19 +69,19 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -d  <node dir>            Node dir to be registered"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -w  <web3lib dir>         Directory of web3lib"
-    LOG_INFO "    -s  <systemcontract dir>  Directory of systemcontract"
-    LOG_INFO "    -g                        Register guomi node"
-    LOG_INFO "    -h                        This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 "
-    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
-    LOG_INFO "Guomi Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
-    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
+    echo "Usage:"
+    echo "    -d  <node dir>            Node dir to be registered"
+    echo "Optional:"
+    echo "    -w  <web3lib dir>         Directory of web3lib"
+    echo "    -s  <systemcontract dir>  Directory of systemcontract"
+    echo "    -g                        Register guomi node"
+    echo "    -h                        This help"
+    echo "Example:"
+    echo "    bash $this_script -d /mydata/node0 "
+    echo "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    echo "Guomi Example:"
+    echo "    bash $this_script -d /mydata/node0 -g"
+    echo "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
 exit -1
 }
 while getopts "d:w:s:gh" option;do
