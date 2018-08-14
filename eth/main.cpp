@@ -1769,25 +1769,25 @@ int main(int argc, char** argv)
 		if (ipc)
 		{
 			jsonrpcIpcServer.reset(new FullServer(
-			                           ethFace,
-									   //new rpc::LevelDB(),
-									   //new rpc::Whisper(web3, {}),
-									   nullptr,
-									   nullptr,
-									   new rpc::Net(web3),
-			                           new rpc::Web3(web3.clientVersion()),
-									   //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
-			                           //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
-									   nullptr,
-									   nullptr,
-			                           new rpc::AdminNet(web3, *sessionManager.get()),
-			                           //new rpc::AdminUtils(*sessionManager.get()),
-			                           //new rpc::Debug(*web3.ethereum()),
-			                           //testEth
-									   nullptr,
-									   nullptr,
-									   nullptr
-			                       ));
+			   ethFace,
+			   //new rpc::LevelDB(),
+			   //new rpc::Whisper(web3, {}),
+			   nullptr,
+			   nullptr,
+			   new rpc::Net(web3),
+			   new rpc::Web3(web3.clientVersion()),
+			   //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
+			   //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
+			   nullptr,
+			   nullptr,
+			   new rpc::AdminNet(web3, *sessionManager.get()),
+			   //new rpc::AdminUtils(*sessionManager.get()),
+			   //new rpc::Debug(*web3.ethereum()),
+			   //testEth
+			   nullptr,
+			   nullptr,
+			   nullptr
+			));
 			auto ipcConnector = new IpcServer("geth");
 			jsonrpcIpcServer->addConnector(ipcConnector);
 			jsonrpcIpcServer->setStatistics(new InterfaceStatistics(getDataDir() + "IPC", chainParams.statsInterval));
@@ -1798,16 +1798,16 @@ int main(int argc, char** argv)
 		if (!chainParams.listenIp.empty() && chainParams.channelPort > 0) {
 			channelModularServer.reset(
 			    new FullServer(ethFace, new rpc::LevelDB(),
-			                   new rpc::Whisper(web3, { }), new rpc::Net(web3),
-			                   new rpc::Web3(web3.clientVersion()),
-			                   new rpc::Personal(keyManager, *accountHolder,
-			                                     *web3.ethereum()),
-			                   new rpc::AdminEth(*web3.ethereum(),
-			                                     *gasPricer.get(), keyManager,
-			                                     *sessionManager.get()),
-			                   new rpc::AdminNet(web3, *sessionManager.get()),
-			                   new rpc::AdminUtils(*sessionManager.get()),
-			                   new rpc::Debug(*web3.ethereum()), testEth)
+				   new rpc::Whisper(web3, { }), new rpc::Net(web3),
+				   new rpc::Web3(web3.clientVersion()),
+				   new rpc::Personal(keyManager, *accountHolder,
+									 *web3.ethereum()),
+				   new rpc::AdminEth(*web3.ethereum(),
+									 *gasPricer.get(), keyManager,
+									 *sessionManager.get()),
+				   new rpc::AdminNet(web3, *sessionManager.get()),
+				   new rpc::AdminUtils(*sessionManager.get()),
+				   new rpc::Debug(*web3.ethereum()), testEth)
 			);
 
 			channelServer->setListenAddr(chainParams.listenIp);
