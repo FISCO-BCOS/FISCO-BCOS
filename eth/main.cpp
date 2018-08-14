@@ -1797,15 +1797,18 @@ int main(int argc, char** argv)
 		//启动ChannelServer
 		if (!chainParams.listenIp.empty() && chainParams.channelPort > 0) {
 			channelModularServer.reset(
-			    new FullServer(ethFace, new rpc::LevelDB(),
-				   new rpc::Whisper(web3, { }), new rpc::Net(web3),
-				   new rpc::Web3(web3.clientVersion()),
-				   nullptr, //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
-				   nullptr, //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
-				   new rpc::AdminNet(web3, *sessionManager.get()),
-				   nullptr, //new rpc::AdminUtils(*sessionManager.get()),
-				   nullptr, //new rpc::Debug(*web3.ethereum()),
-				   nullptr //testEth
+			    new FullServer(
+					ethFace,
+					nullptr, //new rpc::LevelDB(),
+					nullptr, //new rpc::Whisper(web3, { }),
+					new rpc::Net(web3),
+					new rpc::Web3(web3.clientVersion()),
+					nullptr, //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
+					nullptr, //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
+					new rpc::AdminNet(web3, *sessionManager.get()),
+					nullptr, //new rpc::AdminUtils(*sessionManager.get()),
+					nullptr, //new rpc::Debug(*web3.ethereum()),
+					nullptr //testEth
 				   )
 			);
 
