@@ -81,7 +81,7 @@ public:
 
     u256 ethcall(int a, int b, vector_ref<byte>bstr, string str) override 
     {
-        LOG(INFO) << "ethcall " <<  a + b << " " << bstr.toString() << str;
+        LOG(TRACE) << "ethcall " <<  a + b << " " << bstr.toString() << str;
 
         //Using vector_ref instead of vector, can modify the solidity array directly.
         //The usage of vector_ref is similar with vector, ref to libdevcore/vector_ref.h

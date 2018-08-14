@@ -147,7 +147,7 @@ void TransactionBase::transactionRLPDecode10Ele(const RLP &rlp)
 			m_type            = MessageCall;
 			m_transactionType = CNSOldTransaction;
 
-			LOG(DEBUG) << "[CNSOldTransaction] cncName|method|cnsVer|params=" 
+			LOG(TRACE) << "[CNSOldTransaction] cncName|method|cnsVer|params=" 
 				<< m_cnsParams.strContractName << "|"
 				<< m_cnsParams.strFunc << "|"
 				<< m_cnsParams.strVersion << "|"
@@ -158,7 +158,7 @@ void TransactionBase::transactionRLPDecode10Ele(const RLP &rlp)
 			m_type            = (m_receiveAddress == Address() ? ContractCreation : MessageCall);
 			m_transactionType = DefaultTransaction;
 
-			LOG(DEBUG) << "[CNSDefaultTransaction] to address = " << m_receiveAddress;
+			LOG(TRACE) << "[CNSDefaultTransaction] to address = " << m_receiveAddress;
 		}
 	}
 }
@@ -224,7 +224,7 @@ void TransactionBase::transactionRLPDecode13Ele(const RLP &rlp)
 	m_transactionType = CNSNewTransaction;
 	m_type            = (m_receiveAddress == Address() && m_strCNSName.empty()) ? ContractCreation : MessageCall;
 
-	LOG(DEBUG) << "[CNSNewTransaction] cnsName|cnsVersion|isNewCNS|m_type="
+	LOG(TRACE) << "[CNSNewTransaction] cnsName|cnsVersion|isNewCNS|m_type="
 		<< m_strCNSName << "|"
 		<< m_strCNSVer << "|"
 		<< isNewCNS() << "|"
@@ -253,7 +253,7 @@ const CnsParams &TransactionBase::cnsParams() const
 	}
 	catch (const std::exception& e)
 	{
-		LOG(DEBUG) << "# cnsParams , what msg=" << e.what();
+		LOG(WARNING) << "# cnsParams , what msg=" << e.what();
 	}
 
 	return m_cnsParams;
@@ -271,7 +271,7 @@ void TransactionBase::doGetCNSparams() const
 		auto d = libabi::ContractAbiMgr::getInstance()->getAddrAndDataInfo(m_cnsParams.strContractName, m_cnsParams.strFunc, m_cnsParams.strVersion, m_cnsParams.jParams);
 		m_addressGetByCNS = d.first;
 		m_dataGetByCNS = d.second;
-		LOG(DEBUG) << "CNSOldTransaction # constract = " << m_cnsParams.strContractName
+		LOG(TRACE) << "CNSOldTransaction # constract = " << m_cnsParams.strContractName
 			<< " ,version = " << m_cnsParams.strVersion
 			<< " ,address = " << m_addressGetByCNS
 			;
@@ -285,7 +285,7 @@ void TransactionBase::doGetCNSparams() const
 		libabi::SolidityAbi abi;
 		libabi::ContractAbiMgr::getInstance()->getContractAbi0(contract, version, abi);
 		m_addressGetByCNS = dev::jsToAddress(abi.getAddr());
-		LOG(DEBUG) << "CNSNewTransaction # constract = " << m_strCNSName
+		LOG(TRACE) << "CNSNewTransaction # constract = " << m_strCNSName
 			<< " ,version = " << m_strCNSVer
 			<< " ,address = " << m_addressGetByCNS
 			;

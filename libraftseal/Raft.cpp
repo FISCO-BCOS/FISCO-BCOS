@@ -87,21 +87,21 @@ StringHashMap Raft::jsInfo(BlockHeader const& _bi) const
 
 void Raft::resetConfig() {
 	if (! NodeConnManagerSingleton::GetInstance().getAccountType(m_key_pair.pub(), m_account_type)) {
-		LOG(ERROR) << "resetConfig: can't find myself id, stop sealing";
+		LOG(WARNING) << "resetConfig: can't find myself id, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
 
 	auto node_num =   NodeConnManagerSingleton::GetInstance().getMinerNum();
 	if (node_num == 0) {
-		LOG(ERROR) << "resetConfig: miner_num = 0, stop sealing";
+		LOG(WARNING) << "resetConfig: miner_num = 0, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
 
 	u256 node_idx = 0;
 	if (! NodeConnManagerSingleton::GetInstance().getIdx(m_key_pair.pub(), node_idx)) {
-		LOG(ERROR) << "resetConfig: can't find myself id, stop sealing";
+		LOG(WARNING) << "resetConfig: can't find myself id, stop sealing";
 		m_cfg_err = true;
 		return;
 	}
@@ -162,7 +162,7 @@ void Raft::onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 		{
 			u256 idx = u256(0);
 			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
-				LOG(ERROR) << "Recv an raft msg from unknown peer id=" << _id;
+				LOG(WARNING) << "Recv an raft msg from unknown peer id=" << _id;
 				return;
 			}
 			LOG(INFO) << "onRaftMsg: id=" << _id << ",from=" << idx;
@@ -170,11 +170,11 @@ void Raft::onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 		}
 		else
 		{
-			LOG(ERROR) << "onRaftMsg: session id error!";
+			LOG(WARNING) << "onRaftMsg: session id error!";
 		}
 
 	} else {
-		LOG(ERROR) << "Recv an illegal msg, id=" << _id;
+		LOG(WARNING) << "Recv an illegal msg, id=" << _id;
 	}
 }
 
@@ -199,7 +199,7 @@ void Raft::workLoop() {
 			break;
 		}
 		default: {
-			LOG(ERROR) << "Error state=" << m_state;
+			LOG(WARNING) << "Error state=" << m_state;
 			break;
 		}
 		}
@@ -525,7 +525,7 @@ void Raft::brocastMsg(unsigned _id, bytes const & _data) {
 			}
 			else
 			{
-				LOG(ERROR) << "brocastMsg: session id error!";
+				LOG(WARNING) << "brocastMsg: session id error!";
 			}
 
 			return true;
@@ -556,7 +556,7 @@ bool Raft::sendResponse(u256 const & _to, h512 const & _node, unsigned _id, Raft
 			}
 			else
 			{
-				LOG(ERROR) << "sendResponse: session id error!";
+				LOG(WARNING) << "sendResponse: session id error!";
 			}
 
 			return true;

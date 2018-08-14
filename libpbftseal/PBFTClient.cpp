@@ -93,7 +93,7 @@ void PBFTClient::init(ChainParams const& _params, p2p::HostApi *_host) {
 
 	pbft()->onSealGenerated([ this ](bytes const & _block, bool _isOurs) {
 		if (!submitSealed(_block, _isOurs))
-			LOG(ERROR) << "Submitting block failed...";
+			LOG(INFO) << "Submitting block failed...";
 	});
 
 	pbft()->onViewChange([this]() {
@@ -328,7 +328,7 @@ void PBFTClient::rejigSealing() {
 					m_sealingInfo.streamRLP(ts, WithoutSeal);
 
 					if (!m_working.sealBlock(&ts.out(), block_data)) {
-						LOG(ERROR) << "Error: sealBlock failed 1";
+						LOG(WARNING) << "Error: sealBlock failed 1";
 						m_working.resetCurrent();
 						return;
 					}
@@ -376,7 +376,7 @@ void PBFTClient::rejigSealing() {
 				try {
 					executeTransaction();
 				} catch (Exception &e) {
-					LOG(ERROR) << "executeTransaction exception " << e.what();
+					LOG(WARNING) << "executeTransaction exception " << e.what();
 					m_working.resetCurrent();
 					// 多条交易中有一条问题交易，其他交易会一直挂着不处理，除非有新交易过来重置标志位，现在主动重置
 					m_syncTransactionQueue = true;
@@ -394,7 +394,7 @@ void PBFTClient::rejigSealing() {
 					m_sealingInfo.streamRLP(ts2, WithoutSeal);
 
 					if (!m_working.sealBlock(ts2.out())) {
-						LOG(ERROR) << "Error: sealBlock failed 2";
+						LOG(WARNING) << "Error: sealBlock failed 2";
 						m_working.resetCurrent();
 						return;
 					}
@@ -414,7 +414,7 @@ void PBFTClient::rejigSealing() {
 			DEV_READ_GUARDED(x_working)
 			{
 				if (!m_working.isSealed()) {
-					LOG(ERROR) << "m_working is not sealed, may be reset by view change";
+					LOG(WARNING) << "m_working is not sealed, may be reset by view change";
 					return;
 				}
 

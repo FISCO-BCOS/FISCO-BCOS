@@ -24,7 +24,6 @@
 #include <memory>
 #include <libdevcore/db.h>
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <libdevcore/MemoryDB.h>
 #include <libdevcore/FileSystem.h>
 //判断是否包含odbc

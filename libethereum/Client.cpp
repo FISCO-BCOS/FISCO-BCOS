@@ -95,7 +95,7 @@ Client::Client(
 	{
 		if ( _params.godMinerStart != bc().number() + 1 )
 		{
-			LOG(WARNING) << "Current Height Don't Match Config. Please Check Config！blockchain.number=" << bc().number() << ",godMinerStart=" << _params.godMinerStart;
+			LOG(ERROR) << "Current Height Don't Match Config. Please Check Config！blockchain.number=" << bc().number() << ",godMinerStart=" << _params.godMinerStart;
 			exit(-1);
 		}
 	}
@@ -508,7 +508,7 @@ ExecutionResult Client::call(Address _dest, bytes const& _data, u256 _gas, u256 
 		Block temp(chainParams().accountStartNonce);
 		temp.setEvmEventLog(bc().chainParams().evmEventLog);
 
-		LOG(INFO) << "Nonce at " << _dest << " pre:" << m_preSeal.transactionsFrom(_dest) << " post:" << m_postSeal.transactionsFrom(_dest);
+		LOG(TRACE) << "Nonce at " << _dest << " pre:" << m_preSeal.transactionsFrom(_dest) << " post:" << m_postSeal.transactionsFrom(_dest);
 		DEV_READ_GUARDED(x_postSeal)
 		temp = m_postSeal;
 		temp.mutableState().addBalance(_from, _value + _gasPrice * _gas);

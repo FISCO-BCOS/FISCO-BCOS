@@ -168,7 +168,7 @@ u256 ethcallEntry(VM *vm, u256* sp, ExtVMFace* ext = NULL)
     {
         LOG(ERROR) << "EthCall id " << callId << " not found";
         //BOOST_THROW_EXCEPTION(EthCallNotFound());//Throw exception if callId is not found
-	BOOST_THROW_EXCEPTION(EthCallIdNotFound());
+	    BOOST_THROW_EXCEPTION(EthCallIdNotFound());
     }
 
     return it->second->run(vm, sp, ext);

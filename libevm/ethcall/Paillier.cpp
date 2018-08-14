@@ -92,9 +92,7 @@ u256 Paillier::ethcall(vector_ref<char> result, std::string d1, std::string d2)
 			//rest += tmp;
 	}
    
-	LOG(DEBUG) << "paillier d1 " << d1;
-	LOG(DEBUG) << "paillier d2 " <<	d2;
-	LOG(DEBUG) << "paillier result " <<	result.toString();
+	LOG(DEBUG) << "paillier d1 " << d1 << "\npaillier d2 " <<	d2 << "\npaillier result " <<	result.toString();
 
     return 0;
 }
