@@ -62,7 +62,7 @@ u256 TrieProof::ethcall(std::string _root, std::string _proofs, std::string _key
         std::pair<bool, std::string> ret = GenericTrieDB<MemoryDB>::verifyProof(_root, k.out(), proofs);
         if (!ret.first)
         {
-            LOG(ERROR) << "TrieProof verifyProof failed:" << ", root:" << _root;
+            LOG(WARNING) << "TrieProof verifyProof failed:" << ", root:" << _root;
             return 1;
         }
 
@@ -71,9 +71,9 @@ u256 TrieProof::ethcall(std::string _root, std::string _proofs, std::string _key
             return 0;
         }
     } catch(std::exception &e) {
-        LOG(ERROR) << "TrieProof error:" << e.what() << ", rooot:" << _root;
+        LOG(WARNING) << "TrieProof error:" << e.what() << ", rooot:" << _root;
     } catch(...) {
-        LOG(ERROR) << "TrieProof error." << ", rooot:" << _root;
+        LOG(WARNING) << "TrieProof error." << ", rooot:" << _root;
     }
 
     return 1;

@@ -59,7 +59,7 @@ NodeConnParams::NodeConnParams(const std::string & json)
     }
     catch (...)
     {
-        LOG(INFO) << "NodeConnParams format error: " << json ;
+        LOG(WARNING) << "NodeConnParams format error: " << json ;
     }
 
 
@@ -114,7 +114,6 @@ void NodeConnParamsManager::setSysContractApi(std::shared_ptr<SystemContractApi>
         m_pContractApi = sysContractApi;
         m_pContractApi->addCBOn("node", [ = ](string) {
             LOG(INFO) << "receive systemcontract node call";
-            //LOG(INFO) << "receive systemcontract node call" ;
             callSysContractData(-1);
         });
         callSysContractData(-1);
@@ -138,7 +137,7 @@ void NodeConnParamsManager::callSysContractData(int const& blockNum)
             Guard l(_xNodeConnParam);
             diffNodes(vNodeParams, vAddNodes, vDelNodes);
 
-            LOG(TRACE) << "call systemcontract diff nodes. add nodes size is " << vAddNodes.size() << ".del nodes size is " << vDelNodes.size() ;
+            LOG(INFO) << "call systemcontract diff nodes. add nodes size is " << vAddNodes.size() << ".del nodes size is " << vDelNodes.size() ;
         
             if ( vNodeParams.size() > 0 ) 
             {
@@ -401,7 +400,7 @@ void NodeConnParamsManager::connNode(const NodeConnParams &param)
     }
     catch (...)
     {
-        LOG(ERROR) << "NodeConnParamsManager::connNode network addPeer error.  enode is " << param.toEnodeInfo() ;
+        LOG(WARNING) << "NodeConnParamsManager::connNode network addPeer error.  enode is " << param.toEnodeInfo() ;
     }
 }
 
@@ -476,7 +475,7 @@ void NodeConnParamsManager::disconnNode(const std::string & sNodeId)
     }
     catch (...)
     {
-        LOG(ERROR) << "NodeConnParamsManager::connNode network disconnect error.  enode is " << sNodeId ;
+        LOG(WARNING) << "NodeConnParamsManager::connNode network disconnect error.  enode is " << sNodeId ;
     }
 }
 
@@ -624,7 +623,7 @@ bool NodeConnParamsManager::signNodeInfo(CABaseData & caBaseData)
     }
     catch (...)
     {
-        LOG(INFO) << "getSelfSignData throws exceptions. nodeId is " << m_host->id().hex() ;
+        LOG(WARNING) << "getSelfSignData throws exceptions. nodeId is " << m_host->id().hex() ;
     }
     return false;
 }
@@ -659,7 +658,7 @@ bool NodeConnParamsManager::signCAInfo(std::string seedStr, CABaseData & caBaseD
         }
     } catch (...)
     {
-        LOG(ERROR) << "catch exception in RSAKeySign" ;
+        LOG(WARNING) << "catch exception in RSAKeySign" ;
     }
 
     return true;
@@ -673,7 +672,7 @@ bool NodeConnParamsManager::checkNodeInfo(const string& sEndPointNodeId, const h
     NodeConnParams stNodeConnParam;
     if (!getNodeConnInfoBoth(sEndPointNodeId, stNodeConnParam))
     {
-        LOG(ERROR) << "No NodeConninfo (" << sEndPointNodeId.substr(0, 6) << ")." ;
+        LOG(WARNING) << "No NodeConninfo (" << sEndPointNodeId.substr(0, 6) << ")." ;
         return bRet;
     }
 
@@ -685,7 +684,7 @@ bool NodeConnParamsManager::checkNodeInfo(const string& sEndPointNodeId, const h
     
     if (hash != h)
     {
-        LOG(ERROR) << "NodeInfo hash error. (" << sEndPointNodeId.substr(0, 6) << ")'s hash is " << h.abridged() << "." ;
+        LOG(WARNING) << "NodeInfo hash error. (" << sEndPointNodeId.substr(0, 6) << ")'s hash is " << h.abridged() << "." ;
         return bRet;
     }
 
@@ -702,7 +701,7 @@ bool NodeConnParamsManager::checkNodeInfo(const std::string& sEndPointNodeId, CA
     NodeConnParams stNodeConnParam;
     if (!getNodeConnInfoBoth(sEndPointNodeId, stNodeConnParam))
     {
-        LOG(ERROR) << "No NodeConninfo (" << sEndPointNodeId << ")." ;
+        LOG(WARNING) << "No NodeConninfo (" << sEndPointNodeId << ")." ;
         return bRet;
     }
 
@@ -716,7 +715,7 @@ bool NodeConnParamsManager::checkNodeInfo(const std::string& sEndPointNodeId, CA
    
     if (!verify(Public(sEndPointNodeId), caBaseData.getNodeSign(), hash))
     {
-        LOG(ERROR) << "Sign error. (" << sEndPointNodeId << ") sSign is " << caBaseData.getNodeSign() << "." ;
+        LOG(WARNING) << "Sign error. (" << sEndPointNodeId << ") sSign is " << caBaseData.getNodeSign() << "." ;
         return bRet;
     }
 
@@ -774,8 +773,7 @@ bool NodeConnParamsManager::CheckConnectCert(const std::string& serialNumber, co
     bool caVerify = eth::NodeConnParamsManager::CAVerify;
     if (!caVerify)
     {
-        
-        LOG(DEBUG) << "CAVerify is false." ;
+        LOG(INFO) << "CAVerify is false." ;
         return true;
     }
 
@@ -783,7 +781,7 @@ bool NodeConnParamsManager::CheckConnectCert(const std::string& serialNumber, co
     std::shared_ptr<eth::SystemContractApi> pSysContractApi = getSysContractApi();
     pSysContractApi->getCaInfo(serialNumber, caInfo);
 
-    LOG(DEBUG) << "serialNumber:" << serialNumber << "|cainfo:" << caInfo.toString();
+    LOG(INFO) << "serialNumber:" << serialNumber << "|cainfo:" << caInfo.toString();
 
     if (caInfo.blocknumber == 0 || caInfo.status != eth::CaStatus::Ok)
     {
@@ -793,7 +791,7 @@ bool NodeConnParamsManager::CheckConnectCert(const std::string& serialNumber, co
 
     if (caInfo.hash != serialNumber)
     {
-        LOG(DEBUG) << "certSerialNum is not in contract";
+        LOG(INFO) << "certSerialNum is not in contract";
         return false;
     }
 
@@ -806,7 +804,6 @@ bool NodeConnParamsManager::checkCA(std::string remoteNodeID, CABaseData & caBas
     bool caVerify = eth::NodeConnParamsManager::CAVerify;
     if (!caVerify)
     {
-        
         LOG(INFO) << "CAVerify is false." ;
         return true;
     }
@@ -825,7 +822,6 @@ bool NodeConnParamsManager::checkCA(std::string remoteNodeID, CABaseData & caBas
         LOG(INFO) << "pub256 or sign is empty." ;
         return false;
     }
-
 
     eth::CaInfo caInfo;
     std::shared_ptr<eth::SystemContractApi> pSysContractApi = getSysContractApi();
@@ -872,7 +868,7 @@ void NodeConnParamsManager::ConstructHandShakeRLP(RLPStream &_rlp, RLPBaseData &
     std::string seedStr(_rbd.getSeed().begin(), _rbd.getSeed().end());
     if (seedStr.empty())
     {
-        LOG(ERROR) << "seedStr is empty.nodeId:" << m_host->id().hex() ;
+        LOG(WARNING) << "seedStr is empty.nodeId:" << m_host->id().hex() ;
         return;
     }
 
@@ -880,13 +876,13 @@ void NodeConnParamsManager::ConstructHandShakeRLP(RLPStream &_rlp, RLPBaseData &
     bool ok = signNodeInfo(wbCAData);
     if (!ok)
     {
-        LOG(ERROR) << "signNodeInfo false!!! nodeId:" << m_host->id().hex() ;
+        LOG(WARNING) << "signNodeInfo false!!! nodeId:" << m_host->id().hex() ;
         return;
     }
     ok = signCAInfo(seedStr, wbCAData);
     if (!ok)
     {
-        LOG(ERROR) << "signCAInfo false!!! nodeId:" << m_host->id().hex() ;
+        LOG(WARNING) << "signCAInfo false!!! nodeId:" << m_host->id().hex() ;
         return;
     }
 

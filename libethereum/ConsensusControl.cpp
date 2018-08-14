@@ -72,7 +72,7 @@ static bool callConsensusControl(std::shared_ptr<Interface> _client, const unord
 		ExecutionResult tmpret = _client->call(god_addr, value, addr, getaddr, gas, gasPrice, _blk_no); // call in clientbase, not in client
 		Address control_addr = abiOut<Address>(tmpret.output);
 
-		LOG(DEBUG) << "[ConsensusControl] call for control contract for blk:" << ((Client*)_client.get())->blockChain().number() << ", addr is:" << control_addr;
+		LOG(TRACE) << "[ConsensusControl] call for control contract for blk:" << ((Client*)_client.get())->blockChain().number() << ", addr is:" << control_addr;
 
 		if (control_addr == Address()) // not set or not open for ConsensusControl
 			return true;
@@ -103,7 +103,7 @@ static bool callConsensusControl(std::shared_ptr<Interface> _client, const unord
 	} 
 	catch (std::exception& e) 
 	{
-		LOG(ERROR) << "[ConsensusControl] construct or call contract error!." << e.what();
+		LOG(WARNING) << "[ConsensusControl] construct or call contract error!." << e.what();
 		return false;
 	}
 	return false;
@@ -160,7 +160,7 @@ void ConsensusControl::addAgencyCount(const dev::h256 _block_hash, const dev::Pu
 	auto node_it = m_node_agency_map.find(_id);
 	if (node_it == m_node_agency_map.end()) 
 	{
-		LOG(ERROR) << "[ConsensusControl]public id:" << _id << "| not in init list";
+		LOG(WARNING) << "[ConsensusControl]public id:" << _id << "| not in init list";
 		return;
 	}
 
@@ -200,7 +200,7 @@ bool ConsensusControl::callConsensus(std::shared_ptr<Interface> _client, const d
 	auto it = m_cache.find(_block_hash);
 	if (it == m_cache.end()) 
 	{
-		LOG(ERROR) << "[ConsensusControl] can't find blockchain hash in cache:" << _block_hash;
+		LOG(WARNING) << "[ConsensusControl] can't find blockchain hash in cache:" << _block_hash;
 		return false;
 	}
 	// agencyCountCache
@@ -219,7 +219,7 @@ bool ConsensusControl::callConsensusInCheck(std::shared_ptr<Interface> _client, 
 		auto node_it = node_agency_map.find(id);
 		if (node_it == node_agency_map.end()) 
 		{
-			LOG(ERROR) << "[ConsensusControl]public id:" << id << "| not in init list";
+			LOG(WARNING) << "[ConsensusControl]public id:" << id << "| not in init list";
 			continue;
 		}
 		string agency = node_it->second;
