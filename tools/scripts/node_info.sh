@@ -7,19 +7,19 @@ systemcontract_dir=`readlink -f ../systemcontract`
 
 this_script=$0
 
-function LOG_ERROR()
+LOG_ERROR()
 {
     local content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-function LOG_INFO()
+LOG_INFO()
 {
     local content=${1}
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-function execute_cmd()
+execute_cmd()
 {
     local command="${1}"
     LOG_INFO "RUN: ${command}"
@@ -69,15 +69,15 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -d  <node dir>  Node dir you want to see"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -h              This help"
-    LOG_INFO "    -g              Guomi Info"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 "
-    LOG_INFO "Guomi Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
+    echo "Usage:"
+    echo "    -d  <node dir>  Node dir you want to see"
+    echo "Optional:"
+    echo "    -h              This help"
+    echo "    -g              Guomi Info"
+    echo "Example:"
+    echo "    bash $this_script -d /mydata/node0 "
+    echo "Guomi Example:"
+    echo "    bash $this_script -d /mydata/node0 -g"
 exit -1
 }
 while getopts "d:gh" option;do
