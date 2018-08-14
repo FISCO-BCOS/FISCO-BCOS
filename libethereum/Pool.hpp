@@ -80,12 +80,12 @@ class LevelDBPool
         {
             if (boost::filesystem::space(db_full_name).available < 1024)
             {
-                LOG(WARNING) << "[LevelDBPool::openDB] Not enough available space found on hard drive.";
+                LOG(ERROR) << "[LevelDBPool::openDB] Not enough available space found on hard drive.";
                 BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
             }
             else
             {
-                LOG(WARNING) << "[LevelDBPool::openDB] Not enough available space found on hard drive,status=" << s.ToString()
+                LOG(ERROR) << "[LevelDBPool::openDB] Not enough available space found on hard drive,status=" << s.ToString()
                              << " ,path=" << db_full_name;
 
                 BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
@@ -111,7 +111,7 @@ class LevelDBPool
 
         if (!s.ok())
         {
-            LOG(ERROR) << "[LevelDBPool::put] write failed " << s.ToString();
+            LOG(WARNING) << "[LevelDBPool::put] write failed " << s.ToString();
             return;
         }
 
@@ -130,7 +130,7 @@ class LevelDBPool
             leveldb::ReadOptions(), _key, &ret);
         if (!s.ok())
         {
-            //LOG(ERROR) << "[LevelDBPool::get] get failed " << s.ToString();
+            LOG(WARNING) << "[LevelDBPool::get] get failed " << s.ToString();
             return std::string();
         }
         return ret;
@@ -181,7 +181,7 @@ class MemoryPool : private std::map<std::string, std::string>
         pool_iterator itr = contents::find(_key);
         if (itr == contents::end())
         {
-            LOG(ERROR) << "MemoryPool key: " << _key << " is not exist";
+            LOG(WARNING) << "MemoryPool key: " << _key << " is not exist";
             return std::string("");
         }
         return itr->second;

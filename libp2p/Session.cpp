@@ -57,7 +57,7 @@ Session::~Session()
 {
 	ThreadContext tc(info().id.abridged());
 	ThreadContext tc2(info().clientVersion);
-	LOG(INFO) << "Closing peer session :-(";
+	LOG(INFO) << "Closing peer session, Session will be free";
 	m_peer->m_lastConnected = m_peer->m_lastAttempted - chrono::seconds(1);
 
 	// Read-chain finished for one reason or another.
@@ -180,7 +180,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 	}
 	case PingPacket:
 	{
-		LOG(INFO) << "Recv Ping " << m_info.id;
+		LOG(TRACE) << "Recv Ping " << m_info.id.abridged();
 		RLPStream s;
 		sealAndSend(prep(s, PongPacket), 0);
 		break;
@@ -189,7 +189,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		DEV_GUARDED(x_info)
 		{
 			m_info.lastPing = std::chrono::steady_clock::now() - m_ping;
-			LOG(INFO) << "Recv Pong Latency: " << chrono::duration_cast<chrono::milliseconds>(m_info.lastPing).count() << " ms" << m_info.id;
+			LOG(TRACE) << "Recv Pong Latency: " << chrono::duration_cast<chrono::milliseconds>(m_info.lastPing).count() << " ms" << m_info.id.abridged();
 		}
 		break;
 	case GetAnnouncementHashPacket:
@@ -198,7 +198,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		h256 allPeerHash;
 		m_server->getAnnouncementNodeList(allPeerHash,peerNodes);
 		auto hash = _r[0].toHash<h256>();
-		LOG(INFO) << "Recv GetAnnouncementHashPacket From " << m_info.id << ",hash=" << toString(hash) << ",Our=" << toString(allPeerHash);
+		LOG(INFO) << "Recv GetAnnouncementHashPacket From " << m_info.id.abridged() << ",hash=" << toString(hash) << ",Our=" << toString(allPeerHash);
 		if( hash != allPeerHash)
 		{
 			RLPStream s;
@@ -219,7 +219,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 	}
 	case AnnouncementPacket:
 	{
-		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id;
+		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id.abridged();
 		size_t count=0;
 		for (auto const& n:_r[0])
 		{
@@ -260,7 +260,7 @@ void Session::ping()
 }
 void Session::announcement(h256 const& _allPeerHash)
 {
-	LOG(INFO) << "Send Announcement To " << m_info.id << ",Our= " << toString(_allPeerHash);
+	LOG(INFO) << "Send Announcement To " << m_info.id.abridged() << ",Our= " << toString(_allPeerHash);
 
 	if (m_socket->isConnected())
 	{

@@ -52,13 +52,13 @@ u256 VerifySign::ethcall(std::string _hash, std::string _pubs, std::string _sign
         
         if (vsign.size() != vsignIdx.size())
         {
-            LOG(ERROR) << "vsign is eq with vsignIdx size";
+            LOG(WARNING) << "vsign is eq with vsignIdx size";
             return 1;
         }
         
         if (vsign.size() > vpub.size())
         {
-            LOG(ERROR) << "vsign is bigger than pubs size";
+            LOG(WARNING) << "vsign is bigger than pubs size";
             return 1;
         }
         
@@ -75,16 +75,16 @@ u256 VerifySign::ethcall(std::string _hash, std::string _pubs, std::string _sign
             bool ok = dev::verify(pub, sig, hash);
             if (!ok)
             {
-                LOG(ERROR) << "VerifySign failed.pub:" << pub.hex() << ",sign:" << sig.hex() << ",hash:" << hash.hex();
+                LOG(WARNING) << "VerifySign failed.pub:" << pub.hex() << ",sign:" << sig.hex() << ",hash:" << hash.hex();
                 return 1;
             }
         }
         
         return 0;
     } catch(std::exception &e) {
-        LOG(ERROR) << "VerifySign error:" << e.what();
+        LOG(WARNING) << "VerifySign error:" << e.what();
     } catch(...) {
-        LOG(ERROR) << "VerifySign error.";
+        LOG(WARNING) << "VerifySign error.";
     }
 
     return 1;
