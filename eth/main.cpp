@@ -1739,7 +1739,9 @@ int main(int argc, char** argv)
 			                            new rpc::Net(web3),
 										new rpc::Web3(web3.clientVersion()),
 										nullptr,
-										nullptr, nullptr, nullptr,
+										nullptr,
+										new rpc::AdminNet(web3, *sessionManager.get()),
+										nullptr,
 										nullptr,
 										nullptr
 										//personal,
