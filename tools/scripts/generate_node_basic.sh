@@ -149,7 +149,7 @@ generate_config() {
         "logverbosity":"4",
         "coverlog":"OFF",
         "eventlog":"ON",
-        "statlog":"OFF",
+        "statlog":"ON",
         "logconf":"./log.conf"
 }' > $out_file
     LOG_INFO "`readlink -f $out_file` is generated"
