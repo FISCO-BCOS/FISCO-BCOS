@@ -191,7 +191,7 @@ public:
 			{
 				std::string errorMsg = "callback " + _proc.GetProcedureName() + 
 									   " exceptioned, error msg:" + e.what();
-				LOG_ERROR << errorMsg;
+				LOG(ERROR) << errorMsg;
 				_output["ret_code"] = -1;
 				_output["detail_info"] = errorMsg;
 			}
