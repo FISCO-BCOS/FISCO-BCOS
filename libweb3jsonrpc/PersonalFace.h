@@ -5,8 +5,6 @@
 #ifndef JSONRPC_CPP_STUB_DEV_RPC_PERSONALFACE_H_
 #define JSONRPC_CPP_STUB_DEV_RPC_PERSONALFACE_H_
 
-#include <libweb3jsonrpc/common.h> 
-
 #include "ModularServer.h"
 
 namespace dev {
@@ -29,10 +27,7 @@ namespace dev {
                 }
                 inline virtual void personal_unlockAccountI(const Json::Value &request, Json::Value &response)
                 {
-                    int param3;
-                    bool valid = dev::rpc::checkParamInt(param3, request[2u], response);
-                    if(valid)
-                        response = this->personal_unlockAccount(request[0u].asString(), request[1u].asString(), param3);
+                    response = this->personal_unlockAccount(request[0u].asString(), request[1u].asString(), request[2u].asInt());
                 }
                 inline virtual void personal_signAndSendTransactionI(const Json::Value &request, Json::Value &response)
                 {
