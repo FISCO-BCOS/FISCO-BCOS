@@ -3,6 +3,9 @@
 #include <string.h>
 #include <sys/time.h>
 #include "json/json.h"
+
+#include <libweb3jsonrpc/common.h> 
+
 #include "DfsContractCaller.h"
 #include "DfsCommon.h"
 #include "DfsMd5.h"
@@ -581,9 +584,20 @@ bool DfsFileInfoScanner::validateSourceNode(const string& src_node, string& file
 	//id; host; port; updateTime; organization; position; group; info;
 	id = items[i]["id"].asString();
 	group = items[i]["group"].asString();
-	port = items[i]["port"].asInt();
 	host = items[i]["host"].asString();
-	enable = items[i]["enable"].asInt(); 
+	Json::Value response;
+	bool valid = dev::rpc::checkParamInt(port, items[i]["port"], response);
+	if(!valid )
+	{
+		dfs_warn << "invalid port \n";
+		return false;
+	}
+	valid = dev::rpc::checkParamInt(enable, items[i]["enable"], response);
+	if( !valid )
+	{
+		dfs_warn << "invalid enable option \n";
+		return false;
+	}
 
 	//check group
 	if (group != m_GroupId)
