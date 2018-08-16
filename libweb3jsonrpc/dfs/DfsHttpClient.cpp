@@ -1,9 +1,8 @@
+#include "DfsHttpClient.h"
 #include <stdio.h>
 #include <json/json.h>
-#include <libweb3jsonrpc/common.h> 
-
 #include "DfsBase.h"
-#include "DfsHttpClient.h"
+
 
 using namespace dev::rpc::fs;
 
@@ -106,20 +105,8 @@ int DfsHttpClient::parseRspJson(const string& json)
 	if ( (!objValue["ret"].isNull()) && (!objValue["code"].isNull()) && (!objValue["info"].isNull()) )
 	{
 		m_strError = objValue["info"].asString();
-		Json::Value response;
-		bool valid = dev::rpc::checkParamInt(m_resp_code, objValue["ret"], response);
-		if(!valid)
-		{
-			m_resp_code = -1;
-			m_error_code = -1;
-			return -1;
-		}
-		valid = dev::rpc::checkParamInt(m_error_code, objValue["code"], response);
-		if(!valid)
-		{
-			m_error_code = -1;
-			return -1;
-		}
+		m_resp_code = objValue["ret"].asInt();
+		m_error_code = objValue["code"].asInt();
 	}
 	else
 	{

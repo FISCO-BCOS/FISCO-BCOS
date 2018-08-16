@@ -37,9 +37,7 @@
 #include <libethereum/BlockQueue.h>
 #include <libpbftseal/PBFT.h>
 #include <libwebthree/WebThree.h>
-#include <libweb3jsonrpc/common.h> 
 #include <libweb3jsonrpc/JsonHelper.h>
-
 
 #include "AccountHolder.h"
 #include "Eth.h"
@@ -1927,15 +1925,8 @@ curl --data '{"jsonrpc":"2.0","method":"eth_getCmByRange","id":1,"params":[{"fro
 	try
 	{
 		// [from， to)
-		
-		int64_t from;
-		bool valid = dev::rpc::checkParamInt64(from, range["from"], ret);
-		if( !valid )
-			return ret;
-		int64_t to;
-		valid = dev::rpc::checkParamInt64(to, range["to"], ret);
-		if( !valid )
-			return ret;
+		int64_t from = range["from"].asInt64();
+		int64_t to = range["to"].asInt64();
 
 		CMPool_Singleton &pool = CMPool_Singleton::Instance();
 		poolBlockNumber_t cbn = client()->number();
@@ -1983,14 +1974,8 @@ curl --data '{
 	try
 	{
 		// [from， to)
-		int64_t from;
-		bool valid = dev::rpc::checkParamInt64(from, range["from"], ret);
-		if( !valid )
-			return ret;
-		int64_t to;
-		valid = dev::rpc::checkParamInt64(to, range["to"], ret);
-		if( !valid )
-			return ret;
+		int64_t from = range["from"].asInt();
+		int64_t to = range["to"].asInt();
 
 		GovDataPool_Singleton &pool = GovDataPool_Singleton::Instance();
 		poolBlockNumber_t cbn = client()->number();

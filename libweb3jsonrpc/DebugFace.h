@@ -5,8 +5,6 @@
 #ifndef JSONRPC_CPP_STUB_DEV_RPC_DEBUGFACE_H_
 #define JSONRPC_CPP_STUB_DEV_RPC_DEBUGFACE_H_
 
-#include <libweb3jsonrpc/common.h> 
-
 #include "ModularServer.h"
 
 namespace dev {
@@ -30,17 +28,7 @@ namespace dev {
                 }
                 inline virtual void debug_storageRangeAtI(const Json::Value &request, Json::Value &response)
                 {
-                    int txIndex;
-                    bool valid = dev::rpc::checkParamInt(txIndex, request[1u], response);
-                    int maxResults;
-                    if(valid)
-                    {
-                        valid = dev::rpc::checkParamInt(maxResults, request[4u], response);
-                        if(valid)
-                            response = this->debug_storageRangeAt(request[0u].asString(), txIndex, 
-                                            request[2u].asString(), request[3u].asString(), maxResults);
-                    }
-                   
+                    response = this->debug_storageRangeAt(request[0u].asString(), request[1u].asInt(), request[2u].asString(), request[3u].asString(), request[4u].asInt());
                 }
                 inline virtual void debug_preimageI(const Json::Value &request, Json::Value &response)
                 {
@@ -48,10 +36,7 @@ namespace dev {
                 }
                 inline virtual void debug_traceBlockByNumberI(const Json::Value &request, Json::Value &response)
                 {
-                    int blockNumber;
-                    bool valid = dev::rpc::checkParamInt(blockNumber, request[0u], response);
-                    if(valid)
-                        response = this->debug_traceBlockByNumber(blockNumber, request[1u]);
+                    response = this->debug_traceBlockByNumber(request[0u].asInt(), request[1u]);
                 }
                 inline virtual void debug_traceBlockByHashI(const Json::Value &request, Json::Value &response)
                 {
