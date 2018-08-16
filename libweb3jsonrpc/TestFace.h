@@ -5,8 +5,6 @@
 #ifndef JSONRPC_CPP_STUB_DEV_RPC_TESTFACE_H_
 #define JSONRPC_CPP_STUB_DEV_RPC_TESTFACE_H_
 
-#include <libweb3jsonrpc/common.h> 
-
 #include "ModularServer.h"
 
 namespace dev {
@@ -29,17 +27,11 @@ namespace dev {
                 }
                 inline virtual void test_mineBlocksI(const Json::Value &request, Json::Value &response)
                 {
-                    int param1;
-                    bool valid = dev::rpc::checkParamInt(param1, request[0u], response);
-                    if(valid)
-                        response = this->test_mineBlocks(param1);
+                    response = this->test_mineBlocks(request[0u].asInt());
                 }
                 inline virtual void test_modifyTimestampI(const Json::Value &request, Json::Value &response)
                 {
-                    int param1;
-                    bool valid = dev::rpc::checkParamInt(param1, request[0u], response);
-                    if(valid)
-                        response = this->test_modifyTimestamp(param1);
+                    response = this->test_modifyTimestamp(request[0u].asInt());
                 }
                 inline virtual void test_addBlockI(const Json::Value &request, Json::Value &response)
                 {
@@ -47,10 +39,7 @@ namespace dev {
                 }
                 inline virtual void test_rewindToBlockI(const Json::Value &request, Json::Value &response)
                 {
-                    int param1;
-                    bool valid = dev::rpc::checkParamInt(param1, request[0u], response);
-                    if(valid)
-                        response = this->test_rewindToBlock(param1);
+                    response = this->test_rewindToBlock(request[0u].asInt());
                 }
                 virtual bool test_setChainParams(const Json::Value& param1) = 0;
                 virtual bool test_mineBlocks(int param1) = 0;

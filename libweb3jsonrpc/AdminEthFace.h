@@ -5,8 +5,6 @@
 #ifndef JSONRPC_CPP_STUB_DEV_RPC_ADMINETHFACE_H_
 #define JSONRPC_CPP_STUB_DEV_RPC_ADMINETHFACE_H_
 
-#include <libweb3jsonrpc/common.h> 
-
 #include "ModularServer.h"
 
 namespace dev {
@@ -88,24 +86,15 @@ namespace dev {
                 }
                 inline virtual void admin_eth_vmTraceI(const Json::Value &request, Json::Value &response)
                 {
-                    int txIndex;
-                    bool valid = dev::rpc::checkParamInt(txIndex, request[1u], response);
-                    if(valid)
-                        response = this->admin_eth_vmTrace(request[0u].asString(), txIndex, request[2u].asString());
+                    response = this->admin_eth_vmTrace(request[0u].asString(), request[1u].asInt(), request[2u].asString());
                 }
                 inline virtual void admin_eth_getReceiptByHashAndIndexI(const Json::Value &request, Json::Value &response)
                 {
-                    int txIndex;
-                    bool valid = dev::rpc::checkParamInt(txIndex, request[1u], response);
-                    if (valid )
-                        response = this->admin_eth_getReceiptByHashAndIndex(request[0u].asString(), txIndex, request[2u].asString());
+                    response = this->admin_eth_getReceiptByHashAndIndex(request[0u].asString(), request[1u].asInt(), request[2u].asString());
                 }
                 inline virtual void miner_startI(const Json::Value &request, Json::Value &response)
                 {
-                    int param;
-                    bool valid = dev::rpc::checkParamInt(param, request[0u], response);
-                    if(valid)
-                        response = this->miner_start(param);
+                    response = this->miner_start(request[0u].asInt());
                 }
                 inline virtual void miner_stopI(const Json::Value &request, Json::Value &response)
                 {
