@@ -43,7 +43,6 @@ help() {
     LOG_INFO "    -d <genesis node dir>   Genesis node dir of the blockchain"
     LOG_INFO "    -i <genesis node id>    Genesis node id"
     LOG_INFO "    -r <god account>        Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
-    LOG_INFO "    -d                      The Path of Guomi Directory"
     LOG_INFO "    -g                      Generate genesis node for guomi-FISCO-BCOS"
     LOG_INFO "    -h                      This help"
     
@@ -60,14 +59,14 @@ help() {
     LOG_INFO "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
 exit -1
 }
-goumi_support=0
+guomi_support=0
 while getopts "d:o:i:r:gh" option;do
 	case $option in
 	o) output_dirs=$OPTARG;;
     d) genesis_node_dir=$OPTARG;;
     i) init_miners=$OPTARG;;
     r) god_address=$OPTARG;;
-    g) goumi_support=1;;
+    g) guomi_support=1;;
 	h) help;;
 	esac
 done
@@ -79,7 +78,7 @@ done
 
 if [ $genesis_node_dir ]; then
     data_dir=$genesis_node_dir/data
-    if [ ${goumi_support} -eq 0 ];then
+    if [ ${guomi_support} -eq 0 ];then
         nodeid_file=$data_dir/node.nodeid
     else
         nodeid_file=$data_dir/gmnode.nodeid
