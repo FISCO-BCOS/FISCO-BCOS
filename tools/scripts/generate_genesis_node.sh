@@ -56,6 +56,7 @@ agency_dir=
 mflag=
 enable_guomi=0
 gflag=
+god_cmd=
 
 this_script=$0
 help() {
@@ -70,6 +71,7 @@ help() {
     echo "    -a  <agency name>       The agency name that the node belongs to"
     echo "    -d  <agency dir>        The agency cert dir that the node belongs to"
     echo "Optional:"
+    echo "    -s  <god address>       Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
     echo "    -m                      Input agency information manually"
     echo "    -g                      Generate guomi genesis node"
     echo "    -h                      This help"
@@ -81,7 +83,7 @@ help() {
 exit -1
 }
 
-while getopts "o:n:l:r:p:c:a:d:gmh" option;do
+while getopts "o:n:l:r:p:c:a:d:s:gmh" option;do
 	case $option in
 	o) output_dir=$OPTARG;;
     n) name=$OPTARG;;
@@ -91,6 +93,7 @@ while getopts "o:n:l:r:p:c:a:d:gmh" option;do
     c) channelPort=$OPTARG;;
     a) agency_name=$OPTARG;;
     d) agency_dir=$OPTARG;;
+    s) god_cmd="-s $OPTARG";;
     m) mflag=-m;;
     g) enable_guomi=1;; 
 	h) help;;
@@ -121,7 +124,7 @@ if [ ${enable_guomi} -eq 0 ];then
     echo
 
     echo "---------- Generate node genesis file ----------" && sleep 1
-    execute_cmd "sh generate_genesis.sh -d $output_dir/$name -o $output_dir/$name "
+    execute_cmd "sh generate_genesis.sh -d $output_dir/$name -o $output_dir/$name $god_cmd"
 fi
  
 echo "---------- Deploy system contract ----------" && sleep 1
