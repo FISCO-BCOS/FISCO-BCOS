@@ -5,6 +5,8 @@
 #ifndef JSONRPC_CPP_STUB_DEV_RPC_ADMINUTILSFACE_H_
 #define JSONRPC_CPP_STUB_DEV_RPC_ADMINUTILSFACE_H_
 
+#include <libweb3jsonrpc/common.h>
+
 #include "ModularServer.h"
 
 namespace dev {
@@ -21,11 +23,19 @@ namespace dev {
 
                 inline virtual void admin_setVerbosityI(const Json::Value &request, Json::Value &response)
                 {
-                    response = this->admin_setVerbosity(request[0u].asInt(), request[1u].asString());
+                    //param check
+                    int param_v;
+                    bool valid = dev::rpc::checkParamInt(param_v, request[0u], response);
+                    if(valid)
+                        response = this->admin_setVerbosity(param_v, request[1u].asString());
                 }
                 inline virtual void admin_verbosityI(const Json::Value &request, Json::Value &response)
                 {
-                    response = this->admin_verbosity(request[0u].asInt());
+                    //param check
+                    int param_v;
+                    bool valid = dev::rpc::checkParamInt(param_v, request[0u], response);
+                    if(valid)
+                        response = this->admin_verbosity(param_v);
                 }
                 inline virtual void admin_exitI(const Json::Value &request, Json::Value &response)
                 {
