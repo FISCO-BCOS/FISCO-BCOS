@@ -38,14 +38,14 @@ yes_or_no()
 help() {
     LOG_ERROR "${1}"
     echo "Usage:"
-    echo "    -o <output dir>         Where genesis.json generate"
+    echo "    -o    <output dir>            Where genesis.json generate"
+    echo "    -i/-d <genesis node id/dir>   Genesis node id or dir"
     echo "Optional:"
-    echo "    -d <genesis node dir>   Genesis node dir of the blockchain"
-    echo "    -i <genesis node id>    Genesis node id"
-    echo "    -r <god account>        Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
-    echo "    -d                      The Path of Guomi Directory"
-    echo "    -g                      Generate genesis node for guomi-FISCO-BCOS"
-    echo "    -h                      This help"
+    echo "    -i    <genesis node id>       Genesis node id  of the blockchain"
+    echo "    -d    <genesis node dir>      Genesis node dir of the blockchain"
+    echo "    -s    <god address>           Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
+    echo "    -g                            Generate genesis node for guomi-FISCO-BCOS"
+    echo "    -h                            This help"
     
     echo "Example:"
     echo "    bash $this_script -d /mydata/node0 -o /mydata/node1"
@@ -61,12 +61,12 @@ help() {
 exit -1
 }
 goumi_support=0
-while getopts "d:o:i:r:gh" option;do
+while getopts "d:o:i:s:gh" option;do
 	case $option in
 	o) output_dirs=$OPTARG;;
     d) genesis_node_dir=$OPTARG;;
     i) init_miners=$OPTARG;;
-    r) god_address=$OPTARG;;
+    s) god_address=$OPTARG;;
     g) goumi_support=1;;
 	h) help;;
 	esac
