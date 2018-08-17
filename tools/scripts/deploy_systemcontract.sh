@@ -69,18 +69,18 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -d  <genesis node dir>   Genesis node dir of the blockchain"
-    LOG_INFO "Optional:"
-    LOG_INFO "    -w  <web3lib dir>        Directory of web3lib"
-    LOG_INFO "    -s  <systemcontract dir> Directory of systemcontract"
-    LOG_INFO "    -h                       This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 "
-    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
-    LOG_INFO "Guomi Example:"
-    LOG_INFO "    bash $this_script -d /mydata/node0 -g"
-    LOG_INFO "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
+    echo "Usage:"
+    echo "    -d  <genesis node dir>   Genesis node dir of the blockchain"
+    echo "Optional:"
+    echo "    -w  <web3lib dir>        Directory of web3lib"
+    echo "    -s  <systemcontract dir> Directory of systemcontract"
+    echo "    -h                       This help"
+    echo "Example:"
+    echo "    bash $this_script -d /mydata/node0 "
+    echo "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    echo "Guomi Example:"
+    echo "    bash $this_script -d /mydata/node0 -g"
+    echo "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
 exit -1
 }
 while getopts "d:w:s:gh" option;do
