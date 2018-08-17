@@ -143,7 +143,8 @@ public:
 	/// @returns the total gas to convert, paid for from sender's account. Any unused gas gets refunded once the contract is ended.
 	u256 gas() const
 	{
-		return TransactionBase::maxGas;//注意
+		if (m_isSystemContractCall) { return 0; }
+		return TransactionBase::maxGas;
 	}
 
 	/// @returns the receiving address of the message-call transaction (undefined for contract-creation transactions).
@@ -185,6 +186,9 @@ public:
 
 	int importType() const { return m_importType; }
 	void setImportType(int t) { m_importType = t; }
+
+	bool isSystemContractCall() const { return m_isSystemContractCall; }
+	void setAsSystemContractCall() { m_isSystemContractCall = true; }
 protected:
 	/// Type of transaction.
 	enum Type
@@ -267,6 +271,8 @@ protected:
 	std::vector<UTXOModel::UTXOTxIn> m_utxoTxIn;		// UTXO Tx inpart
 	std::vector<UTXOModel::UTXOTxOut> m_utxoTxOut;		// UTXO Tx outpart
 	bool m_utxoEvmTx = false;							// UTXO Tx with contract
+
+	bool m_isSystemContractCall = false;
 };
 
 /// Nice name for vector of Transaction.
