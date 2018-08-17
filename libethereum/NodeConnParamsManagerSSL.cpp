@@ -317,12 +317,35 @@ void NodeConnParamsManagerSSL::updateBootstrapnodes()const
             } 
             root["nodes"] = nodes;
         }
-        else
+        else {
             root["nodes"].resize(0);
+        }
         
-        string content = w.write(root);
-        writeFile(getDataDir() + "/bootstrapnodes.json",content,true);
-        LOG(INFO) << "updateBootstrapnodes:  " << content ;
+		try {
+			string content = w.write(root);
+
+			if(content.empty()) {
+				LOG(ERROR) << "Empty bootstrapnodes content";
+				return;
+			}
+
+			writeFile(getDataDir() + "/bootstrapnodes.json.new",content,true);
+			if(contentsString(getDataDir() + "/bootstrapnodes.json.new") == content) {
+				boost::filesystem::path oldPath(getDataDir() + "/bootstrapnodes.json.new");
+				boost::filesystem::path newPath(getDataDir() + "/bootstrapnodes.json");
+
+				boost::filesystem::remove(newPath);
+				boost::filesystem::rename(oldPath, newPath);
+			}
+			else {
+				LOG(ERROR) << "Write bootstrapnodes fail!";
+			}
+
+			LOG(INFO) << "updateBootstrapnodes:  " << content ;
+		}
+		catch(std::exception &e) {
+			LOG(ERROR) << "Write bootstrapnodes fail: " << e.what();
+		}
     }
     catch (std::exception &e)
     {
