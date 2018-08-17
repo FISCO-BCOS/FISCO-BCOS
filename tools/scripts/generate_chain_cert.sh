@@ -49,19 +49,19 @@ yes_go_other_exit()
 
 help() {
     LOG_ERROR "${1}"
-    LOG_INFO "Usage:"
-    LOG_INFO "    -o <ca dir>     Where ca.crt ca.key generate "
-    LOG_INFO "Optional:"
-    LOG_INFO "    -m                  Input ca information manually"
-    LOG_INFO "    -g                  Generate chain certificates with guomi algorithms"
-    LOG_INFO "    -d                  The Path of Guomi Directory"
-    LOG_INFO "    -h                  This help"
-    LOG_INFO "Example:"
-    LOG_INFO "    bash $this_script -o /mydata "
-    LOG_INFO "    bash $this_script -o /mydata -m"
-    LOG_INFO "guomi Example:"
-    LOG_INFO "    bash $this_script -o /mydata -m -g"
-    LOG_INFO "    bash $this_script -o /mydata -g"
+    echo "Usage:"
+    echo "    -o <ca dir>     Where ca.crt ca.key generate "
+    echo "Optional:"
+    echo "    -m                  Input ca information manually"
+    echo "    -g                  Generate chain certificates with guomi algorithms"
+    echo "    -d                  The Path of Guomi Directory"
+    echo "    -h                  This help"
+    echo "Example:"
+    echo "    bash $this_script -o /mydata "
+    echo "    bash $this_script -o /mydata -m"
+    echo "guomi Example:"
+    echo "    bash $this_script -o /mydata -m -g"
+    echo "    bash $this_script -o /mydata -g"
 exit -1
 }
 
