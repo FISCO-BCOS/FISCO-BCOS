@@ -31,7 +31,7 @@ NonceCheck:: ~NonceCheck()
   
 }
 
-u256 NonceCheck::maxblocksize=1000;
+u256 NonceCheck::maxblocksize=100;
 
 void NonceCheck::init(BlockChain const& _bc)
 {   
