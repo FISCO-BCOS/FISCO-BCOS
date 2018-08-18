@@ -6,6 +6,7 @@
 1. 内存泄漏问题
 2. bootstrapnodes.json在磁盘满时被清空的问题
 3. p2p线程初始化统计时可能阻塞的问题
+4. StateMonitor改为单线程执行
 
 ### V1.3.2
 
