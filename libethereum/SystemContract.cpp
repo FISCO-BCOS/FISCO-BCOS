@@ -767,12 +767,9 @@ bool SystemContract::getValue(const string _key, string & _value)
 
 ExecutionResult SystemContract::call(Address const& _to, bytes const& _inputdata, bool )
 {
-
-
     ExecutionResult ret;
     try
-    {
-        
+    {        
         srand((unsigned)utcTime());
         struct timeval tv;
         gettimeofday(&tv, NULL);
@@ -780,16 +777,16 @@ ExecutionResult SystemContract::call(Address const& _to, bytes const& _inputdata
 
         DEV_WRITE_GUARDED(m_blocklock)
         {
-            u256 gas = m_tempblock->gasLimitRemaining() ;
-
-            u256 gasPrice = 100000000;
-            Transaction t(0, gasPrice, gas, _to, _inputdata, nonce);
+            //u256 gas = m_tempblock->gasLimitRemaining() ;
+            //u256 gasPrice = 100000000;
+            //Transaction t(0, gasPrice, gas, _to, _inputdata, nonce);
+            Transaction t(0, 0, 0, _to, _inputdata, nonce);
             t.forceSender(m_god);
-            LOG(TRACE) << "SystemContract::call gas=" << gas << ",gasPrice=" << gasPrice << ",nonce=" << nonce;
+            t.setAsSystemContractCall();
+            //LOG(TRACE) << "SystemContract::call gas=" << gas << ",gasPrice=" << gasPrice << ",nonce=" << nonce;
+            LOG(TRACE) << "SystemContract::call nonce=" << nonce << ",input=" <<  toString(_inputdata);
             ret = m_tempblock->execute(m_client->blockChain().lastHashes(), t, Permanence::Reverted);
         }
-
-
     }
     catch (...)
     {
