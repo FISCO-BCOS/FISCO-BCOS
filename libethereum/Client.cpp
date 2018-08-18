@@ -154,15 +154,15 @@ void Client::updateConfig() {
 	value = "";
 	m_systemcontractapi->getValue("maxNonceCheckBlock", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
-	if ( uvalue < 1000 )
-		uvalue = 1000;
+	if ( uvalue < 100 )
+		uvalue = 100;
 	NonceCheck::maxblocksize = uvalue;
 
 	value = "";
 	m_systemcontractapi->getValue("maxBlockLimit", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
-	if ( uvalue < 1000 )
-		uvalue = 1000;
+	if ( uvalue < 100 )
+		uvalue = 100;
 	BlockChain::maxBlockLimit = uvalue;
 
 	value = "";

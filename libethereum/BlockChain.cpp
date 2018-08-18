@@ -61,7 +61,7 @@ namespace fs = boost::filesystem;
 
 
 
-u256 BlockChain::maxBlockLimit = 1000;
+u256 BlockChain::maxBlockLimit = 100;
 
 std::ostream& dev::eth::operator<<(std::ostream& _out, BlockChain const& _bc)
 {
