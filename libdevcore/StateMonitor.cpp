@@ -42,7 +42,10 @@ using namespace boost;
 namespace statemonitor
 {
 
-static std::unordered_map<int, boost::mutex> monitorByTimeLockTable, monitorByNumLockTable;
+static std::map<int, StateMonitorByTime> monitorByTimeTable;
+static std::map<int, StateMonitorByNum> monitorByNumTable;
+
+static std::map<int, boost::mutex> monitorByTimeLockTable, monitorByNumLockTable;
 static boost::mutex monitorByTimeTableLock, monitorByNumTableLock; 
 
 #define LOCK_MONITOR(_Type)                                      \
@@ -251,8 +254,8 @@ void StateMonitor::report(int code, string& name, string& info)
     //report的格式：[code][name][info] state_str    
     stringstream ss;
     ss << "[" << code << "][" << name << "][" << info << "] " << state_str;
-    //开另一个线程来report
-    boost::thread report_thread(StateReporter::report, ss.str());
+
+    StateReporter::report(ss.str());
 }
 
 /*
@@ -298,11 +301,12 @@ void StateMonitorByTime::recordOnce(int code, uint64_t interval, data_t value, s
 }
 
 //按周期（_interval）进行上报
-void StateMonitorByTime::timerToReport()
+void StateMonitorByTime::timerToReport(sec_t sec_time) 
 {
-    while (_is_timer_on)
+    //std::cout << "sec_time: " << sec_time << " interval: " << _interval << " code: " << code << " state_name: " << state_name << std::endl;
+    if (_is_timer_on && sec_time % _interval == 0)
     {
-        sleep(_interval); //若在sleep时修改了interval，也要等本次跑完，下次新的interval才生效
+        //sleep(_interval); //若在sleep时修改了interval，也要等本次跑完，下次新的interval才生效
         LOCK_MONITOR(Time); //此处是在线程中跑，共享name和info变量，所以需要加与入口一样的锁
         report(code, state_name, state_info);
         UNLOCK_MONITOR();
@@ -318,11 +322,39 @@ void StateMonitorByTime::startTimer(sec_t interval)
 
     _is_timer_on = true;
 
-    //给定时器开一个新的线程
-    boost::thread timer_thread(boost::bind(&StateMonitorByTime::timerToReport, this));
-    //TODO: 核查多个StateMonitorByTime下timer是否是多个
+    enableTimerLoop();
 }
 
+void globalTimerLoop()
+{
+    StateMonitorByTime::sec_t sec_time = 0, gap = 1;
+    while(true)
+    {
+        sec_time += gap; //溢出没关系
+        sleep(gap);
+        for (auto &state : monitorByTimeTable)
+        {
+            //std::cout << "Report: " << state.first << std::endl;
+            state.second.timerToReport(sec_time);
+        }
+    }
+}
+
+void enableTimerLoop()
+{
+    static bool enabled;
+
+    static std::mutex enable_lock;
+    enable_lock.lock();
+    if (!enabled)
+    {
+        enabled = true;
+        enable_lock.unlock();
+        boost::thread timer_thread(&globalTimerLoop);
+    }
+    else
+        enable_lock.unlock();
+}
 
 /*
 *   StateMonitorByNum
@@ -378,9 +410,6 @@ void StateMonitorByNum::recordOnce(int code, uint64_t report_per_num, data_t val
     report(code, name, info);
     _cnt = 0;
 }
-
-static std::unordered_map<int, StateMonitorByTime> monitorByTimeTable;
-static std::unordered_map<int, StateMonitorByNum> monitorByNumTable;
 
 void recordStateByTimeStart(int code, uint64_t interval, int child_code)
 {
