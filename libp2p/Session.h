@@ -178,10 +178,10 @@ private:
 	std::shared_ptr<RLPXSocketApi> m_socket;		///< Socket of peer's connection.
 	Mutex x_framing;						///< Mutex for the write queue.
 
-#if 0
 	std::deque<bytes> m_writeQueue;			///< The write queue.
 	std::deque<u256> m_writeTimeQueue; ///< to stat queue time
-#endif
+
+#if 0
 	class QueueCompare {
 		public:
 			bool operator()(const boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> &lhs,
@@ -199,6 +199,7 @@ private:
 			boost::heap::compare<QueueCompare>,
 			boost::heap::stable<true>
 		> _writeQueue;
+#endif
 
 	std::vector<byte> m_data;			    ///< Buffer for ingress packet data.
 
