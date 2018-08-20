@@ -2,6 +2,12 @@
 
 (2018-08-17)
 
+* Update
+1. 优化StateMonitor，调整为单线程执行
+
+* Add
+1. 加上maxBlockHeaderGas的set操作的保护逻辑。当设置小于系统不可用的值时，将不会被设置。
+
 * Fix
 1. 内存泄漏问题
 2. bootstrapnodes.json在磁盘满时被清空的问题
