@@ -135,7 +135,7 @@ void Client::updateConfig() {
 	value = "";
 	m_systemcontractapi->getValue("maxBlockHeadGas", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
-	u256 min_block_gas = (m_maxBlockTranscations + 100) * TransactionBase::maxGas; //100: We assume that each transaction has 100 extra gas to call systemcontract 
+	u256 min_block_gas = (m_maxBlockTranscations + 100) * TransactionBase::maxGas; //100: We assume that each block has 100 extra times to call systemcontract 
 	if ( uvalue < min_block_gas )
 		uvalue = min_block_gas;
 	BlockHeader::maxBlockHeadGas = uvalue;
