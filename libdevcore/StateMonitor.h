@@ -85,17 +85,10 @@ private:
 
 class StateReporter
 {
-private:
-    static void thread_report(const std::string& state_str)
-    {
-        NormalStatLog()  << "##State Report: " << state_str;
-    }
-
 public:
     static void report(std::string state_str)
     {
-        //开另一个线程来report
-        boost::thread t(thread_report, state_str);
+        NormalStatLog()  << "##State Report: " << state_str;
     }
 };
 
