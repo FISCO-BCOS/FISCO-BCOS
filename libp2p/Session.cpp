@@ -1,16 +1,13 @@
 /*
 	This file is part of cpp-ethereum.
-
 	cpp-ethereum is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-
 	cpp-ethereum is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
-
 	You should have received a copy of the GNU General Public License
 	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -278,14 +275,9 @@ RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
 
 void Session::sealAndSend(RLPStream& _s, uint16_t _protocolID)
 {
-#if 0
 	bytes b;
 	_s.swapOut(b);
 	send(move(b), _protocolID);
-#endif
-	std::shared_ptr<bytes> b = std::make_shared<bytes>();
-	_s.swapOut(*b);
-	send(b, _protocolID);
 }
 
 bool Session::checkPacket(bytesConstRef _msg)
@@ -297,12 +289,12 @@ bool Session::checkPacket(bytesConstRef _msg)
 	return true;
 }
 
-void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
+void Session::send(bytes&& _msg, uint16_t _protocolID)
 {
 	if (m_dropped)
 		return;
 
-	bytesConstRef msg(_msg.get());
+	bytesConstRef msg(&_msg);
 	if (!checkPacket(msg))
 		LOG(WARNING) << "INVALID PACKET CONSTRUCTED!";
 
@@ -330,13 +322,9 @@ void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
 	{
 		DEV_GUARDED(x_framing)
 		{
-			_writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
-			doWrite = (_writeQueue.size() == 1);
-#if 0
 			m_writeQueue.push_back(std::move(_msg));
 			m_writeTimeQueue.push_back(utcTime());
 			doWrite = (m_writeQueue.size() == 1);
-#endif
 		}
 
 		if (doWrite)
@@ -367,16 +355,10 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 
 		DEV_GUARDED(x_framing)
 		{
-#if 0
 			m_writeQueue.pop_front();
 			m_writeTimeQueue.pop_front();
 			if (m_writeQueue.empty())
 				return;
-#endif
-			_writeQueue.pop();
-			if(_writeQueue.empty()) {
-				return;
-			}
 		}
 		write();
 	}
@@ -395,18 +377,13 @@ void Session::write()
 		if (m_dropped)
 			return;
 
-		boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
-		//bytes const* out = nullptr;
+		bytes const* out = nullptr;
 		u256 enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
-			task = _writeQueue.top();
-			//m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
-			m_io->writeSingleFramePacket(task.get<0>().get(), *task.get<0>());
-
-			//out = &m_writeQueue[0];
-			//enter_time = m_writeTimeQueue[0];
-			enter_time = boost::get<2>(task);
+			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
+			out = &m_writeQueue[0];
+			enter_time = m_writeTimeQueue[0];
 		}
 		
 		m_start_t = utcTime();
@@ -424,8 +401,7 @@ void Session::write()
 				m_server->getIOService()->post(
 					[ = ] {
 						boost::asio::async_write(m_socket->sslref(),
-						//boost::asio::buffer(*out),
-						boost::asio::buffer(*(boost::get<0>(task))),
+						boost::asio::buffer(*out),
 						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 					});
 			}
@@ -438,8 +414,7 @@ void Session::write()
 		}
 		else
 		{
-			//ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-			ba::async_write(m_socket->ref(), boost::asio::buffer(*(boost::get<0>(task))), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
 		
 	}
