@@ -42,7 +42,7 @@ BlockHeader::BlockHeader(bytesConstRef _block, BlockDataType _bdt, h256 const& _
 	populate(header);
 }
 
-u256 BlockHeader::maxBlockHeadGas = 2000000000;
+u256 BlockHeader::maxBlockHeadGas = 33000000000;
 u256 BlockHeader::updateHeight = 0;				// 字段升级所在块高
 
 void BlockHeader::clear()
