@@ -395,18 +395,18 @@ void Session::write()
 		if (m_dropped)
 			return;
 
-		boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
-		//bytes const* out = nullptr;
+		//boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
+		bytes const* out = nullptr;
 		u256 enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
-			task = _writeQueue.top();
-			//m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
-			m_io->writeSingleFramePacket(task.get<0>().get(), *task.get<0>());
+			//task = _writeQueue.top();
+			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
+			//m_io->writeSingleFramePacket(task.get<0>().get(), *task.get<0>());
 
-			//out = &m_writeQueue[0];
-			//enter_time = m_writeTimeQueue[0];
-			enter_time = boost::get<2>(task);
+			out = &m_writeQueue[0];
+			enter_time = m_writeTimeQueue[0];
+			//enter_time = boost::get<2>(task);
 		}
 		
 		m_start_t = utcTime();
@@ -424,8 +424,8 @@ void Session::write()
 				m_server->getIOService()->post(
 					[ = ] {
 						boost::asio::async_write(m_socket->sslref(),
-						//boost::asio::buffer(*out),
-						boost::asio::buffer(*(boost::get<0>(task))),
+						boost::asio::buffer(*out),
+						//boost::asio::buffer(*(boost::get<0>(task))),
 						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 					});
 			}
@@ -438,8 +438,8 @@ void Session::write()
 		}
 		else
 		{
-			//ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-			ba::async_write(m_socket->ref(), boost::asio::buffer(*(boost::get<0>(task))), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			//ba::async_write(m_socket->ref(), boost::asio::buffer(*(boost::get<0>(task))), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
 		
 	}
