@@ -330,13 +330,13 @@ void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
 	{
 		DEV_GUARDED(x_framing)
 		{
+#if 0
 			_writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
 			doWrite = (_writeQueue.size() == 1);
-#if 0
+#endif
 			m_writeQueue.push_back(std::move(_msg));
 			m_writeTimeQueue.push_back(utcTime());
 			doWrite = (m_writeQueue.size() == 1);
-#endif
 		}
 
 		if (doWrite)
