@@ -367,16 +367,17 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 
 		DEV_GUARDED(x_framing)
 		{
-#if 0
 			m_writeQueue.pop_front();
 			m_writeTimeQueue.pop_front();
 			if (m_writeQueue.empty())
 				return;
-#endif
+
+#if 0
 			_writeQueue.pop();
 			if(_writeQueue.empty()) {
 				return;
 			}
+#endif
 		}
 		write();
 	}
