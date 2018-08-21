@@ -1,0 +1,34 @@
+// "Copyright [2018] <fisco-dev>"
+/*
+    This file is part of FISCO-BCOS
+    FISCO-BCOS is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    FISCO-BCOS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** 
+ * @file: BuildInfo.h
+ * @author: fisco-dev
+ * @date: 2018
+ * build information template
+ */
+
+#pragma once
+
+#define ETH_PROJECT_VERSION "@PROJECT_VERSION@"
+#define ETH_COMMIT_HASH @ETH_COMMIT_HASH@
+#define ETH_CLEAN_REPO @ETH_CLEAN_REPO@
+#define ETH_BUILD_TYPE @ETH_BUILD_TYPE@
+#define ETH_BUILD_OS @ETH_BUILD_OS@
+#define ETH_BUILD_COMPILER @ETH_BUILD_COMPILER@
+#define ETH_BUILD_PLATFORM @ETH_BUILD_PLATFORM@
+#define ETH_BUILD_NUMBER @ETH_BUILD_NUMBER@
+#define ETH_VERSION_SUFFIX "@ETH_VERSION_SUFFIX@"
