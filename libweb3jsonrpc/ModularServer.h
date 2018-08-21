@@ -32,6 +32,9 @@
 #include <jsonrpccpp/server/iprocedureinvokationhandler.h>
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <jsonrpccpp/server/requesthandlerfactory.h>
+
+#include <libdevcore/easylog.h>
+
 #include "libstatistics/InterfaceStatistics.h"
 
 template <class I> using AbstractMethodPointer = void(I::*)(Json::Value const& _parameter, Json::Value& _result);
@@ -177,12 +180,21 @@ public:
 		auto pointer = m_methods.find(_proc.GetProcedureName());
 		if (pointer != m_methods.end())
 		{
-			std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-			(m_interface.get()->*(pointer->second))(_input, _output);
-			std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-			std::chrono::milliseconds timeLong = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-			if (ModularServer<Is...>::statistics.get() != nullptr)
-				ModularServer<Is...>::statistics->interfaceCalled(_proc.GetProcedureName(), timeLong.count());
+			try{
+				std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+				(m_interface.get()->*(pointer->second))(_input, _output);
+				std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+				std::chrono::milliseconds timeLong = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+				if (ModularServer<Is...>::statistics.get() != nullptr)
+					ModularServer<Is...>::statistics->interfaceCalled(_proc.GetProcedureName(), timeLong.count());
+			} catch(std::exception& e)
+			{
+				std::string errorMsg = "callback " + _proc.GetProcedureName() + 
+									   " exceptioned, error msg:" + e.what();
+				LOG(ERROR) << errorMsg;
+				_output["ret_code"] = -1;
+				_output["detail_info"] = errorMsg;
+			}
 		}
 		else
 			ModularServer<Is...>::HandleMethodCall(_proc, _input, _output);

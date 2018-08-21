@@ -356,13 +356,13 @@ void RLPXHandshake::error()
 
 void RLPXHandshake::transition(boost::system::error_code _ech)
 {
-	LOG(INFO) << "开始Handshake";
+	LOG(INFO) << "start to Handshake";
 	// reset timeout
 	m_idleTimer.cancel();
 
 	if (_ech || m_nextState == Error || m_cancel)
 	{
-		LOG(ERROR) << "Handshake Failed (I/O Error:" << _ech.message() << ")";
+		LOG(WARNING) << "Handshake Failed (I/O Error:" << _ech.message() << ")";
 		return error();
 	}
 
@@ -488,7 +488,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 				if (frameSize > 1024)
 				{
 					// all future frames: 16777216
-					LOG(ERROR) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress") << "hello frame is too large" << frameSize;
+					LOG(WARNING) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress") << "hello frame is too large" << frameSize;
 					m_nextState = Error;
 					transition();
 					return;
@@ -510,7 +510,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 					{
 						if (!m_io)
 						{
-							LOG(ERROR) << "Internal error in handshake: RLPXFrameCoder disappeared.";
+							LOG(WARNING) << "Internal error in handshake: RLPXFrameCoder disappeared.";
 							m_nextState = Error;
 							transition();
 							return;
@@ -519,7 +519,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 						bytesRef frame(&m_handshakeInBuffer);
 						if (!m_io->authAndDecryptFrame(frame))
 						{
-							LOG(ERROR) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress") << "hello frame: decrypt failed";
+							LOG(WARNING) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress") << "hello frame: decrypt failed";
 							m_nextState = Error;
 							transition();
 							return;
@@ -528,7 +528,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 						PacketType packetType = frame[0] == 0x80 ? HelloPacket : (PacketType)frame[0];
 						if (packetType != HelloPacket)
 						{
-							LOG(ERROR) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress") << "hello frame: invalid packet type:" << packetType;
+							LOG(WARNING) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress") << "hello frame: invalid packet type:" << packetType;
 							m_nextState = Error;
 							transition();
 							return;
@@ -542,7 +542,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 						}
 						catch (std::exception const& _e)
 						{
-							LOG(ERROR) << "Handshake causing an exception:" << _e.what();
+							LOG(WARNING) << "Handshake causing an exception:" << _e.what();
 							m_nextState = Error;
 							transition();
 						}

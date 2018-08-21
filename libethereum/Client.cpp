@@ -95,7 +95,7 @@ Client::Client(
 	{
 		if ( _params.godMinerStart != bc().number() + 1 )
 		{
-			LOG(WARNING) << "Current Height Don't Match Config. Please Check Config！blockchain.number=" << bc().number() << ",godMinerStart=" << _params.godMinerStart;
+			LOG(ERROR) << "Current Height Don't Match Config. Please Check Config！blockchain.number=" << bc().number() << ",godMinerStart=" << _params.godMinerStart;
 			exit(-1);
 		}
 	}
@@ -126,6 +126,21 @@ void Client::updateConfig() {
 	//Block::c_maxSyncTransactions = static_cast<unsigned>(uvalue);
 
 	value = "";
+	m_systemcontractapi->getValue("maxTranscationGas", value);
+	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
+	if ( uvalue < 30000000 )
+		uvalue = 30000000;
+	TransactionBase::maxGas = uvalue;
+
+	value = "";
+	m_systemcontractapi->getValue("maxBlockHeadGas", value);
+	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
+	u256 min_block_gas = (m_maxBlockTranscations + 100) * TransactionBase::maxGas; //100: We assume that each block has 100 extra times to call systemcontract 
+	if ( uvalue < min_block_gas )
+		uvalue = min_block_gas;
+	BlockHeader::maxBlockHeadGas = uvalue;
+
+	value = "";
 	m_systemcontractapi->getValue("intervalBlockTime", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
 	if ( uvalue < 1000 )
@@ -133,23 +148,9 @@ void Client::updateConfig() {
 	sealEngine()->setIntervalBlockTime(uvalue);
 
 	value = "";
-	m_systemcontractapi->getValue("maxBlockHeadGas", value);
-	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
-	if ( uvalue < 2000000000 )
-		uvalue = 2000000000;
-	BlockHeader::maxBlockHeadGas = uvalue;
-
-	value = "";
 	m_systemcontractapi->getValue("updateHeight", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
 	BlockHeader::updateHeight = uvalue;
-
-	value = "";
-	m_systemcontractapi->getValue("maxTranscationGas", value);
-	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
-	if ( uvalue < 30000000 )
-		uvalue = 30000000;
-	TransactionBase::maxGas = uvalue;
 
 	value = "";
 	m_systemcontractapi->getValue("maxNonceCheckBlock", value);
@@ -508,7 +509,7 @@ ExecutionResult Client::call(Address _dest, bytes const& _data, u256 _gas, u256 
 		Block temp(chainParams().accountStartNonce);
 		temp.setEvmEventLog(bc().chainParams().evmEventLog);
 
-		LOG(INFO) << "Nonce at " << _dest << " pre:" << m_preSeal.transactionsFrom(_dest) << " post:" << m_postSeal.transactionsFrom(_dest);
+		LOG(TRACE) << "Nonce at " << _dest << " pre:" << m_preSeal.transactionsFrom(_dest) << " post:" << m_postSeal.transactionsFrom(_dest);
 		DEV_READ_GUARDED(x_postSeal)
 		temp = m_postSeal;
 		temp.mutableState().addBalance(_from, _value + _gasPrice * _gas);

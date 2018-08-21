@@ -84,7 +84,7 @@ void SystemContractSSL::updateSystemContract(std::shared_ptr<Block> block)
     //下面除了CAAction NodeAction其他都粗暴的做
     for (auto it = m_tempblock->pending().begin(); it != m_tempblock->pending().end(); ++it)
     {
-        LOG(INFO) << "SystemContractSSL::updateSystemContract ==> abi address => " << contractAbiMgr.hex() << " ,to= > " << (it->to().hex());
+        LOG(TRACE) << "SystemContractSSL::updateSystemContract ==> abi address => " << contractAbiMgr.hex() << " ,to= > " << (it->to().hex());
 
         bytes tempdata = it->data();
         bytesRef fundata = ref(tempdata);
@@ -499,10 +499,10 @@ void SystemContractSSL::tempGetAllNode(int _blocknumber, std::vector< NodeParams
 
         }
         catch (...)
-        {
-            // TODO: Some sort of notification of failure.
-            LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
+        {            
             LOG(WARNING) << "SystemContractSSL::tempGetAllNode call Fail!" << toString(_inputdata);
+            // TODO: Some sort of notification of failure.
+            LOG(WARNING) << boost::current_exception_diagnostic_information() << "\n";
         }
         return ret;
     };
@@ -751,9 +751,9 @@ ExecutionResult SystemContractSSL::call(Address const& _to, bytes const& _inputd
     }
     catch (...)
     {
-        // TODO: Some sort of notification of failure.
-        LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
         LOG(WARNING) << "SystemContractSSL::call Fail!" << toString(_inputdata);
+        // TODO: Some sort of notification of failure.
+        LOG(WARNING) << boost::current_exception_diagnostic_information() << "\n";
     }
     return ret;
 }
