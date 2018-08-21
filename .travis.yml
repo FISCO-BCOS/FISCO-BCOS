@@ -1,0 +1,2 @@
+language: shell
+script: cd tools && sudo bash build.sh 
