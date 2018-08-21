@@ -41,11 +41,11 @@ macro(configure_project)
 
     eth_default_option(BUILD_SHARED_LIBS OFF)
    
-    #ARCH TYPE
     eth_default_option(STATIC_BUILD OFF)
+    #ARCH TYPE
     eth_default_option(ARCH_TYPE OFF)
     # unit tests
-    eth_default_option(TESTS OFF)
+    eth_default_option(TESTS ON)
     
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})

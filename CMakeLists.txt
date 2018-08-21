@@ -38,4 +38,4 @@ include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
 include(ProjectBoost)
 
-configure_project()
+configure_project(TESTS)
