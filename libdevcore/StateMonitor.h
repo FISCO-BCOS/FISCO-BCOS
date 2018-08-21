@@ -39,7 +39,7 @@
 #include "easylog.h"
 
 namespace statemonitor
-{
+{ 
 using data_t = double;
 
 class StateContainer
@@ -88,7 +88,6 @@ class StateReporter
 public:
     static void report(std::string state_str)
     {
-        // std::cout << "##State Report: " << state_str << std::endl;//暂时打印到std::cout
         NormalStatLog()  << "##State Report: " << state_str;
     }
 };
@@ -107,8 +106,8 @@ public:
 //以时间为周期，上报state
 class StateMonitorByTime : public StateMonitor
 {
-    using sec_t = uint64_t;
 public:
+    using sec_t = uint64_t;
     int code;
     std::string state_name, state_info;
 
@@ -119,14 +118,12 @@ public:
     void recordStart(int code, uint64_t interval, int child_code);
     void recordEnd(int code, std::string& name, std::string& info, int is_success, int child_code);
     void recordOnce(int code, uint64_t interval, data_t value, std::string& name, std::string& info, int is_success);
-
-    
+    void timerToReport(sec_t sec_time);
 private:
     sec_t _interval; 
     bool _is_timer_on;
 
     //按周期（_interval）进行上报
-    void timerToReport();
     void startTimer(sec_t interval);
 };
 
@@ -164,6 +161,8 @@ inline int getChildCodeFromThreadId()
     return pthread_self() & 0xfffff;
 #endif
 }
+
+void enableTimerLoop();
 
 void recordStateByTimeStart(int code, uint64_t interval,
                             int child_code = getChildCodeFromThreadId());

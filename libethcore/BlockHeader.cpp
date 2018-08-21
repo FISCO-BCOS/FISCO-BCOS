@@ -42,7 +42,7 @@ BlockHeader::BlockHeader(bytesConstRef _block, BlockDataType _bdt, h256 const& _
 	populate(header);
 }
 
-u256 BlockHeader::maxBlockHeadGas = 2000000000;
+u256 BlockHeader::maxBlockHeadGas = 33000000000;
 u256 BlockHeader::updateHeight = 0;				// 字段升级所在块高
 
 void BlockHeader::clear()
@@ -237,7 +237,7 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
 				transactionsTrie.insert(&k.out(), txList[i].data());
 
 				txs.push_back(txList[i].data());
-				LOG(DEBUG) << toHex(k.out()) << toHex(txList[i].data());
+				LOG(TRACE) << toHex(k.out()) << toHex(txList[i].data());
 			}
 			LOG(TRACE) << "trieRootOver" << expectedRoot;
 			LOG(TRACE) << "orderedTrieRoot" << orderedTrieRoot(txs);

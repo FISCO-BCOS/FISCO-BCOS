@@ -62,7 +62,7 @@ TransactionQueue::~TransactionQueue()
 
 std::pair<ImportResult, h256> TransactionQueue::import(bytesConstRef _transactionRLP, IfDropped _ik)
 {
-	LOG(TRACE) << "TransactionQueue::import ";
+	//LOG(TRACE) << "TransactionQueue::import ";
 	// Check if we already know this transaction.
 	h256 h = sha3(_transactionRLP);
 
@@ -96,7 +96,7 @@ std::pair<ImportResult, h256> TransactionQueue::import(bytesConstRef _transactio
 		}
 		catch (...)
 		{
-			LOG(ERROR) << boost::current_exception_diagnostic_information() << "\n";
+			LOG(WARNING) << boost::current_exception_diagnostic_information() << "\n";
 			return std::make_pair(ImportResult::Malformed, h);
 		}
 	}
@@ -144,7 +144,7 @@ Transactions TransactionQueue::topTransactions(unsigned _limit, h256Hash const& 
 		if (!_avoid.count(t->transaction.sha3()))
 		{
 			ret.push_back(t->transaction);
-			LOG(TRACE) << "TransactionQueue::topTransactions " << t->transaction.sha3() << ",nonce=" << t->transaction.randomid();
+			//LOG(TRACE) << "TransactionQueue::topTransactions " << t->transaction.sha3() << ",nonce=" << t->transaction.randomid();
 		}
 
 	LOG(TRACE) << "TransactionQueue::topTransactions " << ret.size();
@@ -173,7 +173,13 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 
 	try
 	{
-		assert(_h == _transaction.sha3());
+		auto _h0 = _transaction.sha3();
+		if (_h != _h0)
+		{
+			LOG(ERROR) << " transaction sha3 is not same ,before rlp h=" << _h
+				<< " ,after rlp h0= " << _h0;
+			return ImportResult::Malformed;
+		}
 
 		if ( false == m_interface->isNonceOk(_transaction))
 		{
@@ -194,17 +200,16 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 			u256 ret = m_interface->filterCheck(_transaction,FilterCheckScene::CheckDeploy);
 			if( (u256)SystemContractCode::Ok != ret)
 			{
-				LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK hasDeployPermission fail! "<<_transaction.sha3();
+				LOG(WARNING)<<"TransactionQueue::manageImport_WITH_LOCK hasDeployPermission fail! "<<_transaction.sha3();
 				return ImportResult::NoDeployPermission;
 			}
-		}
-		else {
+		} else {
 			
 			u256 ret = m_interface->filterCheck(_transaction,FilterCheckScene::CheckTx);
 			LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK FilterCheckScene::CheckTx ";
 			if( (u256)SystemContractCode::Ok != ret)
 			{
-				LOG(TRACE)<<"TransactionQueue::manageImport_WITH_LOCK hasTxPermission fail! "<<_transaction.sha3();
+				LOG(WARNING)<<"TransactionQueue::manageImport_WITH_LOCK hasTxPermission fail! "<<_transaction.sha3();
 				return ImportResult::NoTxPermission;
 			}
 		}
@@ -223,20 +228,20 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 						curBlockNum <= BlockHeader::updateHeight)
 					{
 						UTXO_EXCEPTION_THROW("TransactionQueue::manageImport_WITH_LOCK Error:LowEthVersion", UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrLowEthVersion);
-						LOG(ERROR) << "TransactionQueue::manageImport_WITH_LOCK Error:" << UTXOModel::UTXOExecuteState::LowEthVersion;
+						LOG(WARNING) << "TransactionQueue::manageImport_WITH_LOCK Error:" << UTXOModel::UTXOExecuteState::LowEthVersion;
 					}
 					_transaction.checkUTXOTransaction(m_interface->getUTXOMgr());
 				}
 				else if (utxoType != UTXOType::InValid)
-				{
+				{					
 					UTXO_EXCEPTION_THROW("TransactionQueue::manageImport_WITH_LOCK Error:UTXOTypeInvalid", UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeUTXOTypeInvalid);
-					LOG(ERROR) << "TransactionQueue::manageImport_WITH_LOCK Error:" << UTXOModel::UTXOExecuteState::UTXOTypeInvalid;
+					LOG(WARNING) << "TransactionQueue::manageImport_WITH_LOCK Error:" << UTXOModel::UTXOExecuteState::UTXOTypeInvalid;
 				}
 			}
 			catch (UTXOModel::UTXOException& e)
 			{
 				UTXOModel::EnumUTXOExceptionErrCode code = e.error_code();
-				LOG(ERROR) << "TransactionQueue::manageImport_WITH_LOCK ErrorCode:" << (int)code;
+				LOG(WARNING) << "TransactionQueue::manageImport_WITH_LOCK ErrorCode:" << (int)code;
 				if (UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrCodeUTXOTypeInvalid == code)
 				{
 					return ImportResult::UTXOInvalidType;
@@ -335,16 +340,16 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 	}
 	catch (Exception const& _e)
 	{
-		LOG(ERROR) << "Ignoring invalid transaction: " <<  diagnostic_information(_e);
+		LOG(WARNING) << "Ignoring invalid transaction: " <<  diagnostic_information(_e);
 		return ImportResult::Malformed;
 	}
 	catch (std::exception const& _e)
 	{
-		LOG(ERROR) << "Ignoring invalid transaction: " << _e.what();
+		LOG(WARNING) << "Ignoring invalid transaction: " << _e.what();
 		return ImportResult::Malformed;
 	}
 
-	LOG(INFO) << "Imported tx " << _h;
+	LOG(TRACE) << "Imported tx " << _h;
 
 	return ImportResult::Success;
 }
@@ -391,7 +396,7 @@ void TransactionQueue::insertCurrent_WITH_LOCK(std::pair<h256, Transaction> cons
 	// TODO FLAG 1  "0x" + _p.first.hex().substr(0, 5) => _p.first.hex()
 	// dev::eth::TxFlowLog(_p.first, "0x" + _p.first.hex().substr(0, 5), false, true);	
 	dev::eth::TxFlowLog(_p.first, _p.first.hex(), false, true);
-	LOG(INFO) << " Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",入队=" << utcTime();
+	LOG(TRACE) << " Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",insert_time=" << utcTime();
 }
 
 bool TransactionQueue::remove_WITH_LOCK(h256 const& _txHash)
@@ -521,7 +526,7 @@ void TransactionQueue::dropGood(Transaction const& _t)
 
 	// good drop log
 	dev::eth::TxFlowLog(_t.sha3(), "onChain");
-	LOG(INFO) << "DropGood tx" << _t.sha3();
+	LOG(TRACE) << "DropGood tx" << _t.sha3();
 }
 
 void TransactionQueue::clear()

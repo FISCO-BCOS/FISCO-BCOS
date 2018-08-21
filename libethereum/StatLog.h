@@ -256,7 +256,11 @@ public:
             it = ret.first;
             m_list.push_back(hash);
         }
-        it->second->request(str, ext); // exec handle
+        
+        if(it != m_map.end() && it->second) 
+        {
+            it->second->request(str, ext); // exec handle
+        }
 
         clearCache(hash);
     }
