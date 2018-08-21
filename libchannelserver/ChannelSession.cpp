@@ -233,7 +233,6 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 				ssize_t result = message->decode(_recvProtocolBuffer.data(), _recvProtocolBuffer.size());
 				LOG(TRACE) << "protocol parse done: " << result;
 
-
 				if (result > 0) {
 					LOG(TRACE) << "parse done: " << result;
 
@@ -361,14 +360,14 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 
 			if (it->second->callback) {
 				_threadPool->enqueue([=]() {
-				it->second->callback(e, message);
+					it->second->callback(e, message);
 					_responseCallbacks.erase(it);
 				});
 			}
 			else {
 				LOG(ERROR) << "callback empty";
 
-			_responseCallbacks.erase(it);
+				_responseCallbacks.erase(it);
 			}
 		}
 		else {
@@ -473,12 +472,16 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 
 			if (_messageHandler) {
 				try {
-					_messageHandler(shared_from_this(), e, Message::Ptr());
+					auto self = shared_from_this();
+					auto messageHandler = _messageHandler;
+					_threadPool->enqueue([messageHandler, self, e]() {
+						messageHandler(self, e, Message::Ptr());
+					});
 				}
 				catch (std::exception &e) {
 					LOG(ERROR) << "disconnect messageHandler error e:" << e.what();
 				}
-				_messageHandler = std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
+				//_messageHandler = std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
 			}
 
 			_actived = false;
