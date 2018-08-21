@@ -9,9 +9,12 @@
  # @ date: 2018
 
 #!/bin/sh
-set -e
 
 current_dir=`pwd`"/.."
+
+Ubuntu_Platform=0
+Centos_Platform=1
+Oracle_Platform=2
 
 cd ${current_dir}
 
@@ -38,6 +41,38 @@ execute_cmd() {
     fi
 }
 
+# get platform: now support debain/ubuntu, fedora/centos, oracle
+get_platform() {
+    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
+    case $(uname -s) in
+    Darwin)
+        LOG_ERROR "FISCO-BCOS V2.0 Don't Support MAC OS Yet!"
+        exit 1;;
+    FreeBSD)
+        LOG_ERROR "FISCO-BCOS V2.0 Don't Support FreeBSD Yet!"
+        exit 1;;
+    Linux)
+        if [ -f "/etc/arch-release" ]; then
+            LOG_ERROR "FISCO-BCOS V2.0 Don't Support arch-linux Yet!"
+        elif [ -f "/etc/os-release" ];then
+            DISTRO_NAME=$(. /etc/os-release; echo $NAME)
+            case $DISTRO_NAME in
+            Debian*|Ubuntu)
+                LOG_INFO "Debian*|Ubuntu Platform"
+                return ${Ubuntu_Platform};; #ubuntu type
+            Fedora|CentOS*)
+                LOG_INFO "Fedora|CentOS* Platform"
+                return ${Centos_Platform};; #centos type
+            Oracle*)
+                LOG_INFO "Oracle Platform"
+                return ${Oracle_Platform};; #oracle type
+            esac
+        else
+            LOG_ERROR "Unsupported Platform"
+        fi
+    esac
+}
+
 install_ubuntu_package() {
     for i in $@ ;
     do 
@@ -56,21 +91,41 @@ install_centos_package() {
 
 #install ubuntu package
 install_ubuntu_deps() {
-    install_ubuntu_package "cmake" "npm" "openssl" "libssl-dev" "libkrb5-dev"
+
+    install_ubuntu_package "cmake" "make" "build-essential"  \
+                            "openssl" "libssl-dev" "libkrb5-dev" \
+                            "libcurl4-openssl-dev" "libgmp-dev" \
+                            "libleveldb-dev" "libmicrohttpd-dev" \
+                            "libminiupnpc-dev" "uuid-dev"
 }
+
 
 # install centos package
 install_centos_deps() {
-    install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel"
+    install_centos_package "cmake3" "make" "gcc-c++" "leveldb-devel" \
+                            "curl-devel" "openssl" "openssl-devel" \
+                            "libmicrohttpd-devel" "gmp-devel" "libuuid-devel"
 }
 
+# install oracle package
+install_oracle_deps() {
+    install_centos_package "epel-release"
+    install_centos_deps
+}
+               
 #=== install all deps
 install_all_deps()
 {
-    if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
+    get_platform
+    platform=`echo $?`
+    if [ ${platform} -eq ${Ubuntu_Platform} ];then
         install_ubuntu_deps
-    else
+    elif [ ${platform}  -eq ${Centos_Platform} ];then
         install_centos_deps
+    elif [ ${platform} -eq ${Oracle_Platform} ];then
+        install_oracle_deps
+    else
+        LOG_ERROR "unsupported platform!"
     fi
 }
 
@@ -78,22 +133,28 @@ build_ubuntu_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake .. "
-    execute_cmd "make && make install"
+    execute_cmd "make"
+    execute_cmd "make install"
 }
 
 build_centos_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake3 .. "
-    execute_cmd "make -j2 && make install && cd ${current_dir}"
+    execute_cmd "make"
+    execute_cmd "make install && cd ${current_dir}"
 }
 
 build_source() {
-    cd ${current_dir}
-    if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
+    get_platform
+    platform=`echo $?`
+    execute_cmd "cd ${current_dir}"
+    if [ ${platform} -eq ${Ubuntu_Platform} ];then
         build_ubuntu_source
-    else
+    elif [ ${platform} -eq ${Centos_Platform} ] || [ ${platform} -eq ${Oracle_Platform} ];then
         build_centos_source
+    else
+        LOG_ERROR "unsupported platform!"
     fi
 }
 

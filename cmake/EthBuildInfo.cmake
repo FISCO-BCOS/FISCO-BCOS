@@ -37,9 +37,7 @@ function(create_build_info)
         set(ETH_BUILD_COMPILER "unknown")
     endif ()
 
-    set(ETH_BUILD_JIT_MODE "Interpreter")
-
-    set(ETH_BUILD_PLATFORM "${ETH_BUILD_OS}/${ETH_BUILD_COMPILER}/${ETH_BUILD_JIT_MODE}")
+    set(ETH_BUILD_PLATFORM "${ETH_BUILD_OS}/${ETH_BUILD_COMPILER}")
 
     if (CMAKE_BUILD_TYPE)
         set(_cmake_build_type ${CMAKE_BUILD_TYPE})
@@ -54,7 +52,6 @@ function(create_build_info)
         -DETH_BUILD_TYPE="${_cmake_build_type}"
         -DETH_BUILD_OS="${ETH_BUILD_OS}"
         -DETH_BUILD_COMPILER="${ETH_BUILD_COMPILER}"
-        -DETH_BUILD_JIT_MODE="${ETH_BUILD_JIT_MODE}"
         -DETH_BUILD_PLATFORM="${ETH_BUILD_PLATFORM}"
         -DETH_BUILD_NUMBER="${BUILD_NUMBER}"
         -DETH_VERSION_SUFFIX="${VERSION_SUFFIX}"
