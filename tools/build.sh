@@ -134,7 +134,7 @@ build_ubuntu_source() {
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake .. "
     execute_cmd "make"
-    execute_cmd "make install"
+    #execute_cmd "make install  && cd ${current_dir}"
 }
 
 build_centos_source() {
@@ -142,7 +142,7 @@ build_centos_source() {
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake3 .. "
     execute_cmd "make"
-    execute_cmd "make install && cd ${current_dir}"
+    #execute_cmd "make install && cd ${current_dir}"
 }
 
 build_source() {
