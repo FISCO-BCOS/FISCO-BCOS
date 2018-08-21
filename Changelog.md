@@ -12,6 +12,8 @@
 1. 内存泄漏问题
 2. bootstrapnodes.json在磁盘满时被清空的问题
 3. p2p线程初始化统计时可能阻塞的问题
+4. channel可能死锁无法工作的问题
+5. transaction格式非法导致asset退出的问题
 
 ### V1.3.2
 
