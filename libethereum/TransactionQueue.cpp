@@ -173,7 +173,13 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 
 	try
 	{
-		assert(_h == _transaction.sha3());
+		auto _h0 = _transaction.sha3();
+		if (_h != _h0)
+		{
+			LOG(ERROR) << " transaction sha3 is not same ,before rlp h=" << _h
+				<< " ,after rlp h0= " << _h0;
+			return ImportResult::Malformed;
+		}
 
 		if ( false == m_interface->isNonceOk(_transaction))
 		{
