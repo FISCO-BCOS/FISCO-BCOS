@@ -37,11 +37,7 @@ function(create_build_info)
         set(ETH_BUILD_COMPILER "unknown")
     endif ()
 
-    if (EVMJIT)
-        set(ETH_BUILD_JIT_MODE "JIT")
-    else ()
-        set(ETH_BUILD_JIT_MODE "Interpreter")
-    endif ()
+    set(ETH_BUILD_JIT_MODE "Interpreter")
 
     set(ETH_BUILD_PLATFORM "${ETH_BUILD_OS}/${ETH_BUILD_COMPILER}/${ETH_BUILD_JIT_MODE}")
 
@@ -63,7 +59,6 @@ function(create_build_info)
         -DETH_BUILD_NUMBER="${BUILD_NUMBER}"
         -DETH_VERSION_SUFFIX="${VERSION_SUFFIX}"
         -DPROJECT_VERSION="${PROJECT_VERSION}"
-        -DETH_FATDB="${FATDB10}"
         -P "${ETH_SCRIPTS_DIR}/buildinfo.cmake"
         )
     include_directories(BEFORE ${PROJECT_BINARY_DIR})

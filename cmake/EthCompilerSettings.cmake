@@ -108,13 +108,6 @@ if (SANITIZE)
     endif()
 endif()
 
-if (PROFILING AND (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")))
-    set(CMAKE_CXX_FLAGS "-g ${CMAKE_CXX_FLAGS}")
-    set(CMAKE_C_FLAGS "-g ${CMAKE_C_FLAGS}")
-    add_definitions(-DETH_PROFILING_GPERF)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lprofiler")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lprofiler")
-endif ()
 
 if (COVERAGE)
     set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
