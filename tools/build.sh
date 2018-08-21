@@ -25,8 +25,7 @@ LOG_INFO() {
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-execute_cmd()
-{
+execute_cmd() {
     command="${1}"
     #LOG_INFO "RUN: ${command}"
     eval ${command}
@@ -39,8 +38,7 @@ execute_cmd()
     fi
 }
 
-install_ubuntu_package()
-{
+install_ubuntu_package() {
     for i in $@ ;
     do 
         LOG_INFO "install ${i}";
@@ -48,8 +46,7 @@ install_ubuntu_package()
     done
 }
 
-install_centos_package()
-{
+install_centos_package() {
     for i in $@ ;
     do
         LOG_INFO "install ${i}";
@@ -58,15 +55,13 @@ install_centos_package()
 }
 
 #install ubuntu package
-install_ubuntu_deps()
-{
-	install_ubuntu_package "cmake" "npm" "openssl" "libssl-dev" "libkrb5-dev"
+install_ubuntu_deps() {
+    install_ubuntu_package "cmake" "npm" "openssl" "libssl-dev" "libkrb5-dev"
 }
 
 # install centos package
-install_centos_deps()
-{
-	install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel"
+install_centos_deps() {
+    install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel"
 }
 
 #=== install all deps
@@ -82,14 +77,14 @@ install_all_deps()
 build_ubuntu_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+    execute_cmd "cmake .. "
     execute_cmd "make && make install"
 }
 
 build_centos_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+    execute_cmd "cmake3 .. "
     execute_cmd "make -j2 && make install && cd ${current_dir}"
 }
 
