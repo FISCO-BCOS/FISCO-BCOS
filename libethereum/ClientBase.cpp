@@ -60,7 +60,7 @@ pair<h256, Address> ClientBase::submitTransaction(TransactionSkeleton const& _t,
 	ts.from = toAddress(_secret);
 
 	Transaction t(ts, _secret);
-	LOG(INFO) << "ClientBase::submitTransaction " << t.sha3();
+	LOG(TRACE) << "ClientBase::submitTransaction " << t.sha3();
 	ImportResult ir = m_tq.import(t);	
 	if ( ir == ImportResult::NonceCheckFail )
 	{
