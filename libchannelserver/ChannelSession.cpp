@@ -472,8 +472,10 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 
 			if (_messageHandler) {
 				try {
-					_threadPool->enqueue([=]() {
-						_messageHandler(shared_from_this(), e, Message::Ptr());
+					auto self = shared_from_this();
+					auto messageHandler = _messageHandler;
+					_threadPool->enqueue([messageHandler, self, e]() {
+						messageHandler(self, e, Message::Ptr());
 					});
 				}
 				catch (std::exception &e) {
