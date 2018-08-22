@@ -1,6 +1,6 @@
- # "Copyright [2018] <fisco-dev>"
- # @ function: clean cache
- # @ author  : fisco-dev  
+ # "Copyright [2018] <fisco-bcos>"
+ # @ function: clean built package when rebuilding
+ # @ author  : yujiechen
  # @ file    : clean_cache.sh
  # @ date    : 2018
 
