@@ -8,4 +8,5 @@ A lab version of fisco bcos for research
 - Chat in [lab-bcos](https://gitter.im/fisco-bcos/Lobby) channel on Gitter
 - Report bugs, issues or feature requests using [Github Issues](https://github.com/FISCO-BCOS/lab-bcos/issues)
 
-![TravisCI](https://img.shields.io/travis/FISCO-BCOS/lab-bcos.svg/develop.svg)](https://travis-ci.org/ethereum/cpp-ethereum)
+
+[![TravisCI](https://img.shields.io/travis/FISCO-BCOS/lab-bcos.svg/develop.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)
