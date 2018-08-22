@@ -1,16 +1,13 @@
 /*
 	This file is part of cpp-ethereum.
-
 	cpp-ethereum is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-
 	cpp-ethereum is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
-
 	You should have received a copy of the GNU General Public License
 	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -57,7 +54,7 @@ Session::~Session()
 {
 	ThreadContext tc(info().id.abridged());
 	ThreadContext tc2(info().clientVersion);
-	LOG(INFO) << "Closing peer session :-(";
+	LOG(INFO) << "Closing peer session, Session will be free";
 	m_peer->m_lastConnected = m_peer->m_lastAttempted - chrono::seconds(1);
 
 	// Read-chain finished for one reason or another.
@@ -180,7 +177,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 	}
 	case PingPacket:
 	{
-		LOG(INFO) << "Recv Ping " << m_info.id;
+		LOG(TRACE) << "Recv Ping " << m_info.id.abridged();
 		RLPStream s;
 		sealAndSend(prep(s, PongPacket), 0);
 		break;
@@ -189,7 +186,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		DEV_GUARDED(x_info)
 		{
 			m_info.lastPing = std::chrono::steady_clock::now() - m_ping;
-			LOG(INFO) << "Recv Pong Latency: " << chrono::duration_cast<chrono::milliseconds>(m_info.lastPing).count() << " ms" << m_info.id;
+			LOG(TRACE) << "Recv Pong Latency: " << chrono::duration_cast<chrono::milliseconds>(m_info.lastPing).count() << " ms" << m_info.id.abridged();
 		}
 		break;
 	case GetAnnouncementHashPacket:
@@ -198,7 +195,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		h256 allPeerHash;
 		m_server->getAnnouncementNodeList(allPeerHash,peerNodes);
 		auto hash = _r[0].toHash<h256>();
-		LOG(INFO) << "Recv GetAnnouncementHashPacket From " << m_info.id << ",hash=" << toString(hash) << ",Our=" << toString(allPeerHash);
+		LOG(INFO) << "Recv GetAnnouncementHashPacket From " << m_info.id.abridged() << ",hash=" << toString(hash) << ",Our=" << toString(allPeerHash);
 		if( hash != allPeerHash)
 		{
 			RLPStream s;
@@ -219,7 +216,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 	}
 	case AnnouncementPacket:
 	{
-		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id;
+		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id.abridged();
 		size_t count=0;
 		for (auto const& n:_r[0])
 		{
@@ -260,7 +257,7 @@ void Session::ping()
 }
 void Session::announcement(h256 const& _allPeerHash)
 {
-	LOG(INFO) << "Send Announcement To " << m_info.id << ",Our= " << toString(_allPeerHash);
+	LOG(INFO) << "Send Announcement To " << m_info.id.abridged() << ",Our= " << toString(_allPeerHash);
 
 	if (m_socket->isConnected())
 	{
@@ -278,14 +275,9 @@ RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
 
 void Session::sealAndSend(RLPStream& _s, uint16_t _protocolID)
 {
-#if 0
 	bytes b;
 	_s.swapOut(b);
 	send(move(b), _protocolID);
-#endif
-	std::shared_ptr<bytes> b = std::make_shared<bytes>();
-	_s.swapOut(*b);
-	send(b, _protocolID);
 }
 
 bool Session::checkPacket(bytesConstRef _msg)
@@ -297,12 +289,12 @@ bool Session::checkPacket(bytesConstRef _msg)
 	return true;
 }
 
-void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
+void Session::send(bytes&& _msg, uint16_t _protocolID)
 {
 	if (m_dropped)
 		return;
 
-	bytesConstRef msg(_msg.get());
+	bytesConstRef msg(&_msg);
 	if (!checkPacket(msg))
 		LOG(WARNING) << "INVALID PACKET CONSTRUCTED!";
 
@@ -330,13 +322,9 @@ void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
 	{
 		DEV_GUARDED(x_framing)
 		{
-			_writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
-			doWrite = (_writeQueue.size() == 1);
-#if 0
 			m_writeQueue.push_back(std::move(_msg));
 			m_writeTimeQueue.push_back(utcTime());
 			doWrite = (m_writeQueue.size() == 1);
-#endif
 		}
 
 		if (doWrite)
@@ -367,16 +355,10 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 
 		DEV_GUARDED(x_framing)
 		{
-#if 0
 			m_writeQueue.pop_front();
 			m_writeTimeQueue.pop_front();
 			if (m_writeQueue.empty())
 				return;
-#endif
-			_writeQueue.pop();
-			if(_writeQueue.empty()) {
-				return;
-			}
 		}
 		write();
 	}
@@ -395,18 +377,13 @@ void Session::write()
 		if (m_dropped)
 			return;
 
-		boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
-		//bytes const* out = nullptr;
+		bytes const* out = nullptr;
 		u256 enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
-			task = _writeQueue.top();
-			//m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
-			m_io->writeSingleFramePacket(task.get<0>().get(), *task.get<0>());
-
-			//out = &m_writeQueue[0];
-			//enter_time = m_writeTimeQueue[0];
-			enter_time = boost::get<2>(task);
+			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
+			out = &m_writeQueue[0];
+			enter_time = m_writeTimeQueue[0];
 		}
 		
 		m_start_t = utcTime();
@@ -424,8 +401,7 @@ void Session::write()
 				m_server->getIOService()->post(
 					[ = ] {
 						boost::asio::async_write(m_socket->sslref(),
-						//boost::asio::buffer(*out),
-						boost::asio::buffer(*(boost::get<0>(task))),
+						boost::asio::buffer(*out),
 						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 					});
 			}
@@ -438,8 +414,7 @@ void Session::write()
 		}
 		else
 		{
-			//ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-			ba::async_write(m_socket->ref(), boost::asio::buffer(*(boost::get<0>(task))), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
 		
 	}
