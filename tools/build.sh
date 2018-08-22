@@ -1,12 +1,12 @@
- # "Copyright [2018] <fisco-dev>"
- # @ function on-click install shell script(appliable for centos and ubuntu)
- # @ Require: yum or apt, git are ready
+ # "Copyright [2018] <fisco-bcos>"
+ # @ function : one-click install shell script(appliable for centos and ubuntu)
+ # @ Require  : yum or apt, git are ready
  # @ attention: if dependecies are downloaded failed, 
  #              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
  #              and execute this shell script later
- # @ author: fisco-dev  
- # @ file: build.sh
- # @ date: 2018
+ # @ author   : yujiechen  
+ # @ file     : build.sh
+ # @ date     : 2018
 
 #!/bin/sh
 
@@ -85,14 +85,14 @@ install_centos_package() {
     for i in $@ ;
     do
         LOG_INFO "install ${i}";
-        execute_cmd "yum -y install ${i}";
+        execute_cmd "sudo yum -y install ${i}";
     done
 }
 
 #install ubuntu package
 install_ubuntu_deps() {
-
-    install_ubuntu_package "cmake" "make" "build-essential"  \
+    execute_cmd "sudo apt-get update"
+    install_ubuntu_package "make" "build-essential"  \
                             "openssl" "libssl-dev" "libkrb5-dev" \
                             "libcurl4-openssl-dev" "libgmp-dev" \
                             "libleveldb-dev" "libmicrohttpd-dev" \
@@ -102,7 +102,8 @@ install_ubuntu_deps() {
 
 # install centos package
 install_centos_deps() {
-    install_centos_package "cmake3" "make" "gcc-c++" "leveldb-devel" \
+    execute_cmd "sudo yum upgrade"
+    install_centos_package "make" "gcc-c++" "leveldb-devel" \
                             "curl-devel" "openssl" "openssl-devel" \
                             "libmicrohttpd-devel" "gmp-devel" "libuuid-devel"
 }
@@ -134,7 +135,7 @@ build_ubuntu_source() {
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake .. "
     execute_cmd "make"
-    #execute_cmd "make install  && cd ${current_dir}"
+    #execute_cmd "make install && cd ${current_dir}"
 }
 
 build_centos_source() {

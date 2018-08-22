@@ -1,0 +1,51 @@
+
+#------------------------------------------------------------------------------
+# TravisCI configuration file for FISCO-BCOS
+# ------------------------------------------------------------------------------
+# This file is part of FISCO-BCOS.
+#
+# FISCO-BCOS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# FISCO-BCOS is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+#
+# (c) 2016-2018 FISCO-BCOS contributors.
+#------------------------------------------------------------------------------
+language: cpp
+branches:
+  only:
+      - dev
+      - master
+env:
+    global:
+      - TRAVIS_BUILD_TYPE=RelWithDebInfo
+      - TRAVIS_TESTS=ON
+matrix:
+    include:
+        - os: linux
+          dist: trusty
+          sudo: required
+          node_js:
+              - "8"
+    env:
+        - ZIP_SUFFIX=ubuntu-trusty
+git:
+    depth: 2
+# install cmake
+install: |
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      chmod a+x ./tools/install_cmake.sh && ./tools/install_cmake.sh;
+    fi
+before_scripts: #clean cache
+    cd tools && chmod a+x clean_cache.sh && ./clean_cache.sh && cd ..
+script:
+    cd tools && chmod a+x build.sh && ./build.sh && cd ..
+
