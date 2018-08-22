@@ -66,6 +66,7 @@ State::State(State const& _s):
 	m_unchangedCacheEntries(_s.m_unchangedCacheEntries),
 	m_nonExistingAccountsCache(_s.m_nonExistingAccountsCache),
 	m_touched(_s.m_touched),
+	m_changeLog(_s.m_changeLog),
 	m_accountStartNonce(_s.m_accountStartNonce)
 {}
 
@@ -113,14 +114,13 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	{
 		if (boost::filesystem::space(path + "/state").available < 1024)
 		{
-			LOG(WARNING) << "Not enough available space found on hard drive. Please free some up and then re-run. Bailing.";
+			LOG(ERROR) << "Not enough available space found on hard drive. Please free some up and then re-run. Bailing.";
 			BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
 		}
 		else
 		{
-			LOG(WARNING) << status.ToString();
-			LOG(WARNING) <<
-			             "Database " <<
+			LOG(ERROR) << status.ToString();
+			LOG(ERROR) << "Database " <<
 			             (path + "/state") <<
 			             "already open. You appear to have another instance of ethereum running. Bailing.";
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
@@ -170,6 +170,7 @@ State& State::operator=(State const& _s)
 	m_cache = _s.m_cache;
 	m_unchangedCacheEntries = _s.m_unchangedCacheEntries;
 	m_nonExistingAccountsCache = _s.m_nonExistingAccountsCache;
+	m_changeLog = _s.m_changeLog;
 	m_touched = _s.m_touched;
 	m_accountStartNonce = _s.m_accountStartNonce;
 	return *this;
@@ -235,7 +236,7 @@ void State::commit(CommitBehaviour _commitBehaviour)
 	if (_commitBehaviour == CommitBehaviour::RemoveEmptyAccounts)
 		removeEmptyAccounts();
 
-	LOG(TRACE) << "State::commit m_touched.size()=" << m_touched.size();
+	//LOG(TRACE) << "State::commit m_touched.size()=" << m_touched.size();
 
 	m_touched += dev::eth::commit(m_cache, m_state);
 	m_changeLog.clear();
@@ -325,7 +326,6 @@ void State::addBalance(Address const& _id, u256 const& _amount)
 		//       Balance and Balance+Touch events.
 		if (!a->isDirty() && a->isEmpty())
 			m_changeLog.emplace_back(Change::Touch, _id);
-
 		// Increase the account balance. This also is done for value 0 to mark
 		// the account as dirty. Dirty account are not removed from the cache
 		// and are cleared if empty at the end of the transaction.
@@ -337,6 +337,7 @@ void State::addBalance(Address const& _id, u256 const& _amount)
 
 	if (_amount)
 		m_changeLog.emplace_back(Change::Balance, _id, _amount);
+
 }
 
 void State::subBalance(Address const& _addr, u256 const& _value)
@@ -406,15 +407,13 @@ u256 State::storage(Address const& _id, u256 const& _key) const
 
 void State::setStorage(Address const& _contract, u256 const& _key, u256 const& _value)
 {
-	//LOG(TRACE) << "State::setStorage " << _key << "," << _value;
-
 	m_changeLog.emplace_back(_contract, _key, storage(_contract, _key));
 	m_cache[_contract].setStorage(_key, _value);
 }
 
 map<h256, pair<u256, u256>> State::storage(Address const& _id) const
 {
-	LOG(TRACE) << "State::storage " << _id;
+	//LOG(TRACE) << "State::storage " << _id;
 
 	map<h256, pair<u256, u256>> ret;
 
@@ -432,7 +431,7 @@ map<h256, pair<u256, u256>> State::storage(Address const& _id) const
 				u256 const value = RLP((*it).second).toInt<u256>();
 				ret[hashedKey] = make_pair(key, value);
 
-				LOG(TRACE) << "State::storage " << hashedKey;
+				//LOG(TRACE) << "State::storage " << hashedKey;
 
 			}
 		}
@@ -448,7 +447,7 @@ map<h256, pair<u256, u256>> State::storage(Address const& _id) const
 				ret.erase(hashedKey);
 		}
 
-		LOG(TRACE) << "State::storage " << ret.size();
+		//LOG(TRACE) << "State::storage " << ret.size();
 
 	}
 	return ret;
@@ -634,7 +633,7 @@ void State::executeUTXO(const Transaction& _t, UTXOModel::UTXOMgr* _pUTXOMgr)
 			}
 			catch (UTXOModel::UTXOException& e)
 			{
-				LOG(ERROR) << "State::executeUTXO() InitTokens Error:" << e.what();
+				LOG(WARNING) << "State::executeUTXO() InitTokens Error:" << e.what();
 				BOOST_THROW_EXCEPTION(UTXOTxError());
 			}
 			break;
@@ -647,7 +646,7 @@ void State::executeUTXO(const Transaction& _t, UTXOModel::UTXOMgr* _pUTXOMgr)
 			}
 			catch (UTXOModel::UTXOException& e)
 			{
-				LOG(ERROR) << "State::executeUTXO() SendSelectedTokens Error:" << e.what();
+				LOG(WARNING) << "State::executeUTXO() SendSelectedTokens Error:" << e.what();
 				BOOST_THROW_EXCEPTION(UTXOTxError());
 			}
 			break;

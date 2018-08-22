@@ -62,7 +62,7 @@ NodeParams::NodeParams(const std::string & json)
     }
     catch (...)
     {
-        LOG(INFO) << "NodeParams format error: " << json ;
+        LOG(WARNING) << "NodeParams format error: " << json ;
     }
 }
 
@@ -124,12 +124,12 @@ void NodeConnParamsManagerSSL::setSysContractApi(std::shared_ptr<SystemContractA
         m_pContractApi = sysContractApi;
 
         m_pContractApi->addCBOn("node", [ = ](string) {
-            LOG(INFO) << "receive systemcontract node call";
+            LOG(TRACE) << "receive systemcontract node call";
             callSysContractData(-1);
         });
       
         m_pContractApi->addCBOn("ca", [ = ](string hash) {
-            LOG(INFO) << "receive systemcontract ca call "<<hash;
+            LOG(TRACE) << "receive systemcontract ca call "<<hash;
             caModifyCallback(hash);
         });
 
@@ -141,7 +141,7 @@ void NodeConnParamsManagerSSL::callSysContractData(int const& blockNum)
 {
     std::vector< NodeParams> vNodeParams;
     m_pContractApi->getAllNode(blockNum, vNodeParams);
-    LOG(INFO) << "call systemcontract get all Nodes  size is " << vNodeParams.size() << ".block is " << blockNum;
+    LOG(TRACE) << "call systemcontract get all Nodes  size is " << vNodeParams.size() << ".block is " << blockNum;
    
     Guard l(m_mutexminer);
     {
@@ -272,7 +272,7 @@ void NodeConnParamsManagerSSL::getAllConnect( std::map<std::string, NodeIPEndpoi
 
 void NodeConnParamsManagerSSL::updateAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams)  
 {
-    LOG(INFO)<<"NodeConnParamsManagerSSL::updateAllConnect size="<<mConnectParams.size();
+    LOG(TRACE)<<"NodeConnParamsManagerSSL::updateAllConnect size="<<mConnectParams.size();
 
 	Guard l(m_mutexconnect);
     {
@@ -300,7 +300,7 @@ void NodeConnParamsManagerSSL::updateBootstrapnodes()const
         Json::Value nodes;
         Json::FastWriter w;
 
-        LOG(INFO)<<"NodeConnParamsManagerSSL::updateBootstrapnodes size="<<m_connectnodes.size();
+        LOG(TRACE)<<"NodeConnParamsManagerSSL::updateBootstrapnodes size="<<m_connectnodes.size();
 
         if( m_connectnodes.size() )
         {
@@ -317,16 +317,39 @@ void NodeConnParamsManagerSSL::updateBootstrapnodes()const
             } 
             root["nodes"] = nodes;
         }
-        else
+        else {
             root["nodes"].resize(0);
+        }
         
-        string content = w.write(root);
-        writeFile(getDataDir() + "/bootstrapnodes.json",content,true);
-        LOG(INFO) << "updateBootstrapnodes:  " << content ;
+		try {
+			string content = w.write(root);
+
+			if(content.empty()) {
+				LOG(ERROR) << "Empty bootstrapnodes content";
+				return;
+			}
+
+			writeFile(getDataDir() + "/bootstrapnodes.json.new",content,true);
+			if(contentsString(getDataDir() + "/bootstrapnodes.json.new") == content) {
+				boost::filesystem::path oldPath(getDataDir() + "/bootstrapnodes.json.new");
+				boost::filesystem::path newPath(getDataDir() + "/bootstrapnodes.json");
+
+				boost::filesystem::remove(newPath);
+				boost::filesystem::rename(oldPath, newPath);
+			}
+			else {
+				LOG(ERROR) << "Write bootstrapnodes fail!";
+			}
+
+			LOG(INFO) << "updateBootstrapnodes:  " << content ;
+		}
+		catch(std::exception &e) {
+			LOG(ERROR) << "Write bootstrapnodes fail: " << e.what();
+		}
     }
     catch (std::exception &e)
     {
-        LOG(ERROR) << "updateBootstrapnodes Fail!" << e.what() << "\n";
+        LOG(WARNING) << "updateBootstrapnodes Fail!" << e.what() << "\n";
     }
 
 }
@@ -471,7 +494,7 @@ bool NodeConnParamsManagerSSL::nodeInfoHash(h256& h)
     RLPStream _rlps;
     _rlps.appendList(3) << m_self.nodeid << m_self.agency << m_self.cahash;
     h = dev::sha3(_rlps.out());
-    LOG(INFO) << " getSelfNodeInfo hash is " << h.abridged() << "|nodeid is " << m_self.nodeid.substr(0, 6) << "|agency is " << m_self.agency.substr(0, 6) << "|cahash is " << m_self.cahash ;
+    LOG(TRACE) << " getSelfNodeInfo hash is " << h.abridged() << "|nodeid is " << m_self.nodeid.substr(0, 6) << "|agency is " << m_self.agency.substr(0, 6) << "|cahash is " << m_self.cahash ;
     return true;
 }
 
@@ -481,10 +504,10 @@ bool NodeConnParamsManagerSSL::checkCertOut(const std::string& serialNumber)
     std::shared_ptr<eth::SystemContractApi> pSysContractApi = getSysContractApi();
     pSysContractApi->getCaInfo(serialNumber, caInfo);
 
-    LOG(DEBUG) << "serialNumber:" << serialNumber << "|cainfo:" << caInfo.toString();
+    LOG(TRACE) << "serialNumber:" << serialNumber << "|cainfo:" << caInfo.toString();
     if (caInfo.serial == serialNumber)
     {
-        LOG(DEBUG) << "Cert Has Out!";
+        LOG(INFO) << "serialNumber:" << serialNumber << "|cainfo:" << caInfo.toString() << ", Cert Has Out!";
         return true;
     }
     return false;
@@ -495,7 +518,7 @@ void NodeConnParamsManagerSSL::caModifyCallback(const std::string& hash)
     eth::CaInfo caInfo;
     std::shared_ptr<eth::SystemContractApi> pSysContractApi = getSysContractApi();
     pSysContractApi->getCaInfo(hash, caInfo);
-    LOG(INFO) << "caModifyCallback getCaInfo, number:" << hash << ",info:" << caInfo.toString()  ;
+    LOG(TRACE) << "caModifyCallback getCaInfo, number:" << hash << ",info:" << caInfo.toString()  ;
 
     if ( ! caInfo.serial.empty() )
     {
