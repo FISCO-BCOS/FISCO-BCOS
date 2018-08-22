@@ -66,12 +66,12 @@ namespace libabi
 		{
 			if (boost::filesystem::space(path + "/abiname").available < 1024)
 			{
-				LOG(WARNING) << "[ContractAbiDBMgr::openDB] Not enough available space found on hard drive.";
+				LOG(ERROR) << "[ContractAbiDBMgr::openDB] Not enough available space found on hard drive.";
 				BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
 			}
 			else
 			{
-				LOG(WARNING) << "[ContractAbiDBMgr::openDB] Not enough available space found on hard drive,status=" << status.ToString()
+				LOG(ERROR) << "[ContractAbiDBMgr::openDB] Not enough available space found on hard drive,status=" << status.ToString()
 					<< " ,path=" << (path + "/abiname");
 
 				BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
@@ -148,7 +148,7 @@ namespace libabi
 		leveldb::Status s = m_db->Put(leveldb::WriteOptions(), strFindKey, dev::toJS(abi.rlp()));
 		if (!s.ok())
 		{//
-			LOG(WARNING) << "[ContractAbiDBMgr::addAbi] write failed, contract|address|version|blocknumber|timestamp|abi=>"
+			LOG(ERROR) << "[ContractAbiDBMgr::addAbi] write failed, contract|address|version|blocknumber|timestamp|abi=>"
 				<< abi.getContractName() << "|"
 				<< abi.getAddr() << "|"
 				<< abi.getVersion() << "|"

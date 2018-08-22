@@ -1,3 +1,20 @@
+### V1.3.3
+
+(2018-08-17)
+
+* Update
+1. 优化StateMonitor，调整为单线程执行
+
+* Add
+1. 加上maxBlockHeaderGas的set操作的保护逻辑。当设置小于系统不可用的值时，将不会被设置。
+
+* Fix
+1. 内存泄漏问题
+2. bootstrapnodes.json在磁盘满时被清空的问题
+3. p2p线程初始化统计时可能阻塞的问题
+4. channel可能死锁无法工作的问题
+5. transaction格式非法导致asset退出的问题
+
 ### V1.3.2
 
 (2018-08-06) 

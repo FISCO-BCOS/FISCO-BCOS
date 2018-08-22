@@ -322,7 +322,7 @@ bool Block::sync(BlockChain const& _bc, h256 const& _block, BlockHeader const& _
 
 pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQueue& _tq, GasPricer const& _gp, bool _exec, u256 const& _max_block_txs)
 {
-    LOG(TRACE) << "Block::sync ";
+    LOG(TRACE) << "Block::sync";
 
     if (isSealed())
         BOOST_THROW_EXCEPTION(InvalidOperationOnSealedBlock());
@@ -428,13 +428,13 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                     if (req > got)
                     {
                         // too old
-                        LOG(TRACE) << t.sha3() << "Dropping old transaction (nonce too low)";
+                        LOG(WARNING) << t.sha3() << "Dropping old transaction (nonce too low)";
                         _tq.drop(t.sha3());
                     }
                     else if (got > req + _tq.waiting(t.sender()))
                     {
                         // too new
-                        LOG(TRACE) << t.sha3() << "Dropping new transaction (too many nonces ahead)";
+                        LOG(WARNING) << t.sha3() << "Dropping new transaction (too many nonces ahead)";
                         _tq.drop(t.sha3());
                     }
                     else
@@ -445,18 +445,18 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
                     bigint const& got = *boost::get_error_info<errinfo_got>(e);
                     if (got > m_currentBlock.gasLimit())
                     {
-                        LOG(TRACE) << t.sha3() << "Dropping over-gassy transaction (gas > block's gas limit)";
+                        LOG(WARNING) << t.sha3() << "Dropping over-gassy transaction (gas > block's gas limit)";
                         _tq.drop(t.sha3());
                     }
                     else
                     {
-                        LOG(TRACE) << t.sha3() << "Temporarily no gas left in current block (txs gas > block's gas limit)";
+                        LOG(WARNING) << t.sha3() << "Temporarily no gas left in current block (txs gas > block's gas limit)";
                     }
                 }
                 catch (Exception const& _e)
                 {
                     // Something else went wrong - drop it.
-                    LOG(TRACE) << t.sha3() << "Dropping invalid transaction:" << diagnostic_information(_e);
+                    LOG(WARNING) << t.sha3() << "Dropping invalid transaction:" << diagnostic_information(_e);
                     _tq.drop(t.sha3());
                 }
                 catch (std::exception const&)
@@ -537,7 +537,7 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
         }
         catch (std::exception& ex)
         {
-	    LOG(ERROR)<<"execute t="<<toString(tr.sha3())<<" failed, error message:"<<ex.what();
+	        LOG(ERROR)<<"execute t="<<toString(tr.sha3())<<" failed, error message:"<<ex.what();
             _tq.drop(tr.sha3());  
             throw;
         }
@@ -928,7 +928,7 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
     {
         auto r = rootHash();
         m_state.db().rollback();
-        LOG(INFO) << "m_currentBlock.stateRoot()=" << m_currentBlock.stateRoot() << ",m_previousBlock.stateRoot()=" << m_previousBlock.stateRoot() << ",rootHash()=" << rootHash();
+        LOG(WARNING) << "m_currentBlock.stateRoot()=" << m_currentBlock.stateRoot() << ",m_previousBlock.stateRoot()=" << m_previousBlock.stateRoot() << ",rootHash()=" << rootHash();
         // TODO: API in State for this?
         BOOST_THROW_EXCEPTION(InvalidStateRoot() << Hash256RequirementError(r, m_currentBlock.stateRoot()));
     }
@@ -1204,13 +1204,13 @@ bool Block::sealBlock(bytesConstRef _header)
 bool Block::sealBlock(bytesConstRef _header, bytes & _out)
 {
     if (!m_committedToSeal) {
-        LOG(TRACE) << "sealBlock return false, for m_committedToSeal is false";
+        LOG(DEBUG) << "sealBlock return false, for m_committedToSeal is false";
         return false;
     }
 
     auto tmpBlock = BlockHeader(_header, HeaderData);
     if (tmpBlock.hash(WithoutSeal) != m_currentBlock.hash(WithoutSeal)) {
-        LOG(TRACE) << "sealBlock return false, for tmpBlock=" << tmpBlock.hash(WithoutSeal) << ",m_currentBlock=" << m_currentBlock.hash(WithoutSeal);
+        LOG(DEBUG) << "sealBlock return false, for tmpBlock=" << tmpBlock.hash(WithoutSeal) << ",m_currentBlock=" << m_currentBlock.hash(WithoutSeal);
         return false;
     }
 
@@ -1268,7 +1268,7 @@ void Block::cleanup(bool _fullCommit)
         }
         catch (BadRoot const&)
         {
-            LOG(INFO) << "Trie corrupt! :-(";
+            LOG(WARNING) << "Trie corrupt! :-(";
             throw;
         }
 
@@ -1303,7 +1303,7 @@ void Block::commitAll() {
     }
     catch (BadRoot const&)
     {
-        LOG(INFO) << "Trie corrupt! :-(";
+        LOG(WARNING) << "Trie corrupt! :-(";
         throw;
     }
 

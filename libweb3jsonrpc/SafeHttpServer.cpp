@@ -100,7 +100,7 @@ bool SafeHttpServer::StartListening() {
 	if (!isRunning()) {
 		if (0 != DfsFileServer::getInstance()->init(m_DfsStoragePath, m_DfsNodeGroupId, m_DfsNodeId, m_eth))
 		{
-			LOG(ERROR) << "init DfsFileServer failed !";
+			LOG(INFO) << "init DfsFileServer failed !";
 			//return false;
 		}
 	}

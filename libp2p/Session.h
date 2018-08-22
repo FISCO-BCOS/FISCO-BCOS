@@ -1,16 +1,13 @@
 /*
 	This file is part of cpp-ethereum.
-
 	cpp-ethereum is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
-
 	cpp-ethereum is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
-
 	You should have received a copy of the GNU General Public License
 	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -31,7 +28,6 @@
 #include <memory>
 #include <utility>
 
-#include <boost/heap/priority_queue.hpp>
 #include <libdevcore/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/Guards.h>
@@ -146,7 +142,7 @@ public:
 private:
 	static RLPStream& prep(RLPStream& _s, PacketType _t, unsigned _args = 0);
 
-	void send(std::shared_ptr<bytes> _msg, uint16_t _protocolID);
+	void send(bytes&& _msg, uint16_t _protocolID);
 
 	/// Drop the connection for the reason @a _r.
 	void drop(DisconnectReason _r);
@@ -177,31 +173,9 @@ private:
 	std::unique_ptr<RLPXFrameCoder> m_io;	///< Transport over which packets are sent.
 	std::shared_ptr<RLPXSocketApi> m_socket;		///< Socket of peer's connection.
 	Mutex x_framing;						///< Mutex for the write queue.
-
-#if 0
 	std::deque<bytes> m_writeQueue;			///< The write queue.
 	std::deque<u256> m_writeTimeQueue; ///< to stat queue time
-#endif
-	class QueueCompare {
-		public:
-			bool operator()(const boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> &lhs,
-					const boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> &rhs) const {
-				if(boost::get<1>(lhs) == 0x13 || boost::get<1>(lhs) == 0x15) {
-					return true;
-				}
-
-				return false;
-			}
-		};
-
-		boost::heap::priority_queue<
-			boost::tuple<std::shared_ptr<bytes>, uint16_t, u256>,
-			boost::heap::compare<QueueCompare>,
-			boost::heap::stable<true>
-		> _writeQueue;
-
 	std::vector<byte> m_data;			    ///< Buffer for ingress packet data.
-
 	bytes m_incoming;						///< Read buffer for ingress bytes.
 
 	std::shared_ptr<Peer> m_peer;			///< The Peer object.
