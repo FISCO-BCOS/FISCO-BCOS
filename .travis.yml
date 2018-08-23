@@ -42,7 +42,7 @@ git:
 # install cmake
 install: |
     if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-      chmod a+x ./tools/install_cmake.sh && ./tools/install_cmake.sh;
+      sudo chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash -x ./tools/ci/check-commit.sh && ./tools/ci/install_cmake.sh;
     fi
 before_scripts: #clean cache
     cd tools && chmod a+x clean_cache.sh && ./clean_cache.sh && cd ..
