@@ -11,36 +11,22 @@ A lab version of fisco bcos for research
 
 [![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)
 
-## Branching
-
-The branching method is [git-flow](https://jeffkreeftmeijer.com/git-flow/)
-
-* **master**: Latest stable branch
-* **dev**: Stable branch waiting for release(merge to master)
-* **feature-xxxx**: A developing branch of a new feature named xxxx
-* **bugfix-xxxx**: A branch to fix the bug named xxxx
-
 ## Contributing
 
-### To new feature
+[![Gitter](https://img.shields.io/gitter/room/fisco-bcos/Lobby.svg)](https://gitter.im/fisco-bcos/Lobby)
 
-1. **Create** a new branch named **feature-xxxx** forked from **dev** branch
-2. **Coding** in feature-xxxx
-3. **Pull** origin dev branch to feature-xxxx constantly
-4. **Test** your code
-5. Make **pull request** back to dev branch
-6. Wait for merging
-7. Merged !!!!
+See [CONTRIBTING](CONTRIBTING.md) and [CODING_STYLE](CODING_STYLE.md)
 
-### To fix bugs
 
-1. **Create** a new branch named **bugfix-xxxx** forked from **master** branch
-2. **Fix** the bug..
-3. **Test** the fixed code
-4. Make **pull request** to **dev** and **master** simultaneously
-5. Wait for merging
-6. Merged(**Bug fixed**)
 
-## Coding Guide
+## Documentation
 
-* [Google C++ Style](https://google.github.io/styleguide/cppguide.html)
+* readthedoc
+
+
+
+## License
+
+[![](https://img.shields.io/github/license/FISCO-BCOS/lab-bcos.svg)](LICENSE)
+
+All contributions are made under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.en.html). See [LICENSE](LICENSE).
