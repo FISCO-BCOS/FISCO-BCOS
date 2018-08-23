@@ -1,9 +1,6 @@
 # "Copyright [2018] <fisco-bcos>"
-# This script downloads the CMake binary and installs it in $PREFIX directory
-# (the cmake executable will be in $PREFIX/bin). By default $PREFIX is
-# ~/.local but can we changes with --prefix <PREFIX> argument.
-# This is mostly suitable for CIs, not end users.
-# @ function: install cmake with higher version 
+# @ function: check code format of {.h, .hpp and .cpp} files
+# @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready 
 # @ author  : wheatli
 # @ file    : check-commit.sh
 # @ date    : 2018
@@ -117,6 +114,3 @@ function check()
 }
 
 check
-
-
-

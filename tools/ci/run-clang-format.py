@@ -1,11 +1,14 @@
 #!/usr/bin/env python
-"""A wrapper script around clang-format, suitable for linting multiple files
-and to use for continuous integration.
-
-This is an alternative API for the clang-format command line.
-It runs over multiple files and directories in parallel.
-A diff output is produced and a sensible exit code is returned.
-
+"""
+@ Copyright: This file is downloaded from https://github.com/Sarcasm/run-clang-format
+@ brief: A wrapper script around clang-format, suitable for linting multiple files
+         and to use for continuous integration.
+         This is an alternative API for the clang-format command line.
+         It runs over multiple files and directories in parallel.
+         A diff output is produced and a sensible exit code is returned.
+ @ author   : Sarcasm
+ @ file     : run-clang-format.py
+ @ date     : 2018
 """
 
 from __future__ import print_function, unicode_literals
