@@ -15,7 +15,7 @@ A lab version of fisco bcos for research
 
 [![Gitter](https://img.shields.io/gitter/room/fisco-bcos/Lobby.svg)](https://gitter.im/fisco-bcos/Lobby)
 
-See [CONTRIBTING](CONTRIBTING.md) and [CODING_STYLE](CODING_STYLE.md)
+See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
 
 
 
