@@ -24,6 +24,7 @@ branches:
   only:
       - dev
       - master
+      - feature-cmake-ut
 env:
     global:
       - TRAVIS_BUILD_TYPE=RelWithDebInfo
