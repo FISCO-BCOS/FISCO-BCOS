@@ -27,7 +27,7 @@ Use clang-format tool to format your changes, see [CONTRIBUTING](CONTRIBUTING.md
 1. File comment is always at top, and includes:
    - Copyright.
    - License.
-   
+
 2. Never use `#ifdef`/`#define`/`#endif` file guards. Prefer `#pragma` once as first line below file comment.
 3. Prefer static const variable to value macros.
 4. Prefer inline constexpr functions to function macros.
@@ -181,14 +181,20 @@ Prefer exception to bool/int return type.
 
 Logging should be performed at appropriate verbosities depending on the logging message.
 The more likely a message is to repeat (and thus cause noise) the higher in verbosity it should be.
-Some rules to keep in mind:
 
- - Verbosity == 0 -> Reserved for important stuff that users must see and can understand.
- - Verbosity == 1 -> Reserved for stuff that users don't need to see but can understand.
- - Verbosity >= 2 -> Anything that is or might be displayed more than once every minute
- - Verbosity >= 3 -> Anything that only a developer would understand
- - Verbosity >= 4 -> Anything that is low-level (e.g. peer disconnects, timers being cancelled)
+We use [easylogging++](https://github.com/muflihun/easyloggingpp). Some rules to keep in mind:
 
+| Level   | Description                              |
+| ------- | ---------------------------------------- |
+| Global  | Generic level that represents all levels. Useful when setting global configuration for all levels. |
+| Trace   | Information that can be useful to back-trace certain events - mostly useful than debug logs. |
+| Debug   | Informational events most useful for developers to debug application. Only applicable if NDEBUG is not defined (for non-VC++) or _DEBUG is defined (for VC++). |
+| Fatal   | Very severe error event that will presumably lead the application to abort. |
+| Error   | Error information but will continue application to keep running. |
+| Warning | Information representing errors in application but application will keep running. |
+| Info    | Mainly useful to represent current progress of application. |
+| Verbose | Information that can be highly useful and vary with verbose logging level. Verbose logging is not applicable to hierarchical logging. |
+| Unknown | Only applicable to hierarchical logging and is used to turn off logging completely. |
 
 ## Recommended reading
 
