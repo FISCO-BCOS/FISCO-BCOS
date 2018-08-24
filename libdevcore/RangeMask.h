@@ -15,17 +15,17 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file RangeMask.h
- * @author Gav Wood <i@gavwood.com>, fisco-bcos
+ * @author Gav Wood <i@gavwood.com>
  * @date 2014
- * @modify:1.fisco-bcos use template on 2018.08.24
  */
 
 #pragma once
 
 #include <assert.h>
-#include <iostream>
+#include <algorithm>
 #include <iterator>
 #include <map>
+#include <ostream>
 #include <utility>
 #include <vector>
 
@@ -42,20 +42,18 @@ using UnsignedRanges = std::vector<UnsignedRange>;
  * Ranges are given as pairs (begin, end), denoting the interval [begin, end), i.e. end is excluded.
  * Supports set-theoretic operators, size and iteration.
  */
-template <class T>
 class RangeMask
 {
-    template <class U>
-    friend std::ostream& operator<<(std::ostream& _out, RangeMask<U> const& _r);
+    friend std::ostream& operator<<(std::ostream& _out, RangeMask const& _r);
 
 public:
-    using Range = std::pair<T, T>;
+    using Range = std::pair<unsigned, unsigned>;
     using Ranges = std::vector<Range>;
 
     /// Constructs an empty range mask with empty ground range.
     RangeMask() : m_all(0, 0) {}
     /// Constructs an empty range mask with ground range [_begin, _end).
-    RangeMask(T _begin, T _end) : m_all(_begin, _end) {}
+    RangeMask(unsigned _begin, unsigned _end) : m_all(_begin, _end) {}
     /// Constructs an empty range mask with ground range _c.
     RangeMask(Range const& _c) : m_all(_c) {}
 
@@ -64,7 +62,7 @@ public:
     RangeMask operator+(RangeMask const& _m) const { return RangeMask(*this) += _m; }
 
     /// @returns a new range mask containing the smallest _items elements (not ranges).
-    RangeMask lowest(decltype(T{} - T{}) _items) const
+    RangeMask lowest(unsigned _items) const
     {
         RangeMask ret(m_all);
         for (auto i = m_ranges.begin(); i != m_ranges.end() && _items; ++i)
@@ -79,7 +77,7 @@ public:
     RangeMask inverted() const
     {
         RangeMask ret(m_all);
-        T last = m_all.first;
+        unsigned last = m_all.first;
         for (auto i : m_ranges)
         {
             if (i.first != last)
@@ -123,11 +121,11 @@ public:
     RangeMask& unionWith(Range const& _m);
 
     /// Adds the single element _i to the range mask.
-    RangeMask& operator+=(T _m) { return unionWith(_m); }
+    RangeMask& operator+=(unsigned _m) { return unionWith(_m); }
     /// Adds the single element _i to the range mask.
-    RangeMask& unionWith(T _i) { return operator+=(Range(_i, _i + 1)); }
+    RangeMask& unionWith(unsigned _i) { return operator+=(Range(_i, _i + 1)); }
 
-    bool contains(T _i) const
+    bool contains(unsigned _i) const
     {
         auto it = m_ranges.upper_bound(_i);
         if (it == m_ranges.begin())
@@ -153,21 +151,21 @@ public:
     }
 
     /// @returns the ground range.
-    std::pair<T, T> const& all() const { return m_all; }
+    std::pair<unsigned, unsigned> const& all() const { return m_all; }
     /// Extends the ground range to include _i.
-    void extendAll(T _i)
+    void extendAll(unsigned _i)
     {
         m_all = std::make_pair(std::min(m_all.first, _i), std::max(m_all.second, _i + 1));
     }
 
-    class const_iterator : public std::iterator<std::forward_iterator_tag, T>
+    class const_iterator : public std::iterator<std::forward_iterator_tag, unsigned>
     {
         friend class RangeMask;
 
     public:
         const_iterator() {}
 
-        T operator*() const { return m_value; }
+        unsigned operator*() const { return m_value; }
         const_iterator& operator++()
         {
             if (m_owner)
@@ -196,14 +194,14 @@ public:
         {}
 
         RangeMask const* m_owner = nullptr;
-        T m_value = 0;
+        unsigned m_value = 0;
     };
 
     const_iterator begin() const { return const_iterator(*this, false); }
     const_iterator end() const { return const_iterator(*this, true); }
     /// @returns the smallest element in the range mask that is larger than _t or the end of the
     /// base range if such an element does not exist.
-    T next(T _t) const
+    unsigned next(unsigned _t) const
     {
         _t++;
         // find next item in range at least _t
@@ -241,11 +239,10 @@ private:
     /// The ground range.
     UnsignedRange m_all;
     /// Mapping begin -> end containing the ranges.
-    std::map<T, T> m_ranges;
+    std::map<unsigned, unsigned> m_ranges;
 };
 
-template <class T>
-inline std::ostream& operator<<(std::ostream& _out, RangeMask<T> const& _r)
+inline std::ostream& operator<<(std::ostream& _out, RangeMask const& _r)
 {
     _out << _r.m_all.first << "{ ";
     for (auto const& i : _r.m_ranges)
@@ -254,8 +251,7 @@ inline std::ostream& operator<<(std::ostream& _out, RangeMask<T> const& _r)
     return _out;
 }
 
-template <class T>
-RangeMask<T>& RangeMask<T>::unionWith(typename RangeMask<T>::Range const& _m)
+RangeMask& RangeMask::unionWith(RangeMask::Range const& _m)
 {
     for (auto i = _m.first; i < _m.second;)
     {
