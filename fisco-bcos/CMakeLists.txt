@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for FISCO-BCOS.
+# Link libraries into main.cpp to generate executable binrary fisco-bcos
 # ------------------------------------------------------------------------------
 # This file is part of FISCO-BCOS.
 #
@@ -19,30 +19,21 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.4)
-set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
-list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
+aux_source_directory(. SRC_LIST)
 
-project(FISCO-BCOS VERSION "2.0")
+file(GLOB HEADERS "*.h")
 
-set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
+include(EthDependencies)
 
-# basic setting
-include(EthOptions)
-include(EthCompilerSettings)
+add_executable(fisco-bcos ${SRC_LIST} ${HEADERS})
+target_include_directories(fisco-bcos PRIVATE ..)
+target_include_directories(fisco-bcos PRIVATE ../utils)
+target_include_directories(fisco-bcos PUBLIC ${BOOST_INCLUDE_DIR})
 
-# install dependencies
-include(ProjectCryptopp)
-include(ProjectSecp256k1)
-include(ProjectJsonCpp)
-include(ProjectJsonRpcCpp)
-include(ProjectBoost)
 
-configure_project(TESTS)
-# generate executable binary fisco-bcos
-add_subdirectory(fisco-bcos)
 
-if (TESTS)
-        enable_testing()
-        add_subdirectory(test)
+if (UNIX AND NOT APPLE)
+	target_link_libraries(fisco-bcos pthread)
 endif()
+
+install(TARGETS fisco-bcos DESTINATION bin)
