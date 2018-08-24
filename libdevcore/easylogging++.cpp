@@ -1217,8 +1217,6 @@ char* Str::wcharPtrToCharPtr(const wchar_t* line)
     return buff_;
 }
 
-// OS
-
 #if ELPP_OS_WINDOWS
 /// @brief Gets environment variables for Windows based OS.
 ///        We are not using <code>getenv(const char*)</code> because of CRT deprecation
@@ -1641,7 +1639,7 @@ namespace threading
 #if ELPP_ASYNC_LOGGING
 static void msleep(int ms)
 {
-    // Only when async logging enabled - this is because async is strict on compiler
+// Only when async logging enabled - this is because async is strict on compiler
 #if defined(ELPP_NO_SLEEP_FOR)
     usleep(ms * 1000);
 #else
@@ -3285,8 +3283,6 @@ PErrorWriter::~PErrorWriter(void)
 #endif
     }
 }
-
-// PerformanceTracker
 
 #if defined(ELPP_FEATURE_ALL) || defined(ELPP_FEATURE_PERFORMANCE_TRACKING)
 
