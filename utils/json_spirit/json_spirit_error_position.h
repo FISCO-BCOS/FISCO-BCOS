@@ -1,8 +1,8 @@
 /**
- * @Copyright: 
+ * @Copyright:
  *   Distributed under the MIT License, see accompanying file LICENSE.txt
- * @brief: json spirit version 4.03 
- * 
+ * @brief: json spirit version 4.03
+ *
  * @file json_spirit_error_position.h
  * @author John W. Wilkinson
  * @date 2007 - 2009
@@ -10,7 +10,6 @@
 
 #ifndef JSON_SPIRIT_ERROR_POSITION
 #define JSON_SPIRIT_ERROR_POSITION
-
 
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
@@ -21,12 +20,11 @@
 
 namespace json_spirit
 {
-
 /**
- * @brief : 
- *  An Error_position exception is thrown by the "read_or_throw" functions below on finding an error.
- *  Note the "read_or_throw" functions are around 3 times slower than the standard functions "read"
- *  functions that return a bool.
+ * @brief :
+ *  An Error_position exception is thrown by the "read_or_throw" functions below on finding an
+ * error. Note the "read_or_throw" functions are around 3 times slower than the standard functions
+ * "read" functions that return a bool.
  */
 struct Error_position
 {
