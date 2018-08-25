@@ -47,8 +47,7 @@ install: |
 before_scripts: #clean cache
     cd tools && chmod a+x clean_cache.sh && ./clean_cache.sh && cd ..
 script:
-    cd tools && chmod a+x build.sh && ./build.sh && cd ..
-    ./build/test/test-fisco-bcos
+    cd tools && chmod a+x build.sh && ./build.sh && cd .. && ./build/test/test-fisco-bcos
 after_success:
     - pip install --user codecov
     - codecov    
