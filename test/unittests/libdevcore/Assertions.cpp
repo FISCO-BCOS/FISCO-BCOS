@@ -102,22 +102,23 @@ BOOST_AUTO_TEST_CASE(testAssertEqualAux)
 BOOST_AUTO_TEST_CASE(testAssertThrow)
 {
     BOOST_REQUIRE_NO_THROW(assertThrow(true, ExternalFunctionFailure, "ExternalFunctionFailure"));
-    BOOST_CHECK_THROW(assertThrow(false, ExternalFunctionFailure,
-                     "ExternalFunctionFailure"), ExternalFunctionFailure);
-    BOOST_CHECK_THROW(assertThrow(false, BadRoot, "BadRoot Throw"), BadRoot);                
-
+    BOOST_CHECK_THROW(assertThrow(false, ExternalFunctionFailure, "ExternalFunctionFailure"),
+        ExternalFunctionFailure);
+    BOOST_CHECK_THROW(assertThrow(false, BadRoot, "BadRoot Throw"), BadRoot);
 }
 
 /// test template function "testAssertThrow"
 BOOST_AUTO_TEST_CASE(testAssertThrowAux)
 {
-    BOOST_REQUIRE_NO_THROW(assertThrowAux<ExternalFunctionFailure>(true, 
-                "ExternalFunctionFailure No Throw", 20, 
-                "test/unittests/Assertions.cpp","testAssertThrow"));
-    BOOST_CHECK_THROW(assertThrowAux<InterfaceNotSupported>(false, "InterfaceNotSupported Throw", __LINE__,
-               __FILE__, ETH_FUNC), InterfaceNotSupported);
-    BOOST_CHECK_THROW(assertThrowAux<BadRoot>(false, "BadRoot Throw", 21, 
-                "test/unittests/Assertions.cpp", "testAssertThrow"), BadRoot);
+    BOOST_REQUIRE_NO_THROW(
+        assertThrowAux<ExternalFunctionFailure>(true, "ExternalFunctionFailure No Throw", 20,
+            "test/unittests/Assertions.cpp", "testAssertThrow"));
+    BOOST_CHECK_THROW(assertThrowAux<InterfaceNotSupported>(
+                          false, "InterfaceNotSupported Throw", __LINE__, __FILE__, ETH_FUNC),
+        InterfaceNotSupported);
+    BOOST_CHECK_THROW(assertThrowAux<BadRoot>(false, "BadRoot Throw", 21,
+                          "test/unittests/Assertions.cpp", "testAssertThrow"),
+        BadRoot);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
