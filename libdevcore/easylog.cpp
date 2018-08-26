@@ -1,5 +1,5 @@
-#include <iostream>
 #include <libdevcore/easylog.h>
+#include <iostream>
 #include <string>
 #include <thread>
 #if !defined(ETH_EMSCRIPTEN)
