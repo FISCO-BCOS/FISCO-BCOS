@@ -23,8 +23,7 @@
  */
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
-#include <iostream>
-//#include "easylog.h"
+#include <libdevcore/easylog.h>
 
 #include "include/BuildInfo.h"
 
@@ -41,8 +40,8 @@ void InvariantChecker::checkInvariants(
 {
     if (!_this->invariants())
     {
-        std::cout << (_pre ? "Pre" : "Post") << "invariant failed in" << _fn << "at" << _file << ":"
-                  << _line;
+        LOG(WARNING) << (_pre ? "Pre" : "Post") << "invariant failed in" << _fn << "at" << _file
+                     << ":" << _line;
         ::boost::exception_detail::throw_exception_(FailedInvariant(), _fn, _file, _line);
     }
 }
@@ -51,7 +50,8 @@ TimerHelper::~TimerHelper()
 {
     auto e = std::chrono::high_resolution_clock::now() - m_t;
     if (!m_ms || e > chrono::milliseconds(m_ms))
-        std::cout << m_id << " " << chrono::duration_cast<chrono::milliseconds>(e).count() << " ms";
+        LOG(DEBUG) << m_id << " " << chrono::duration_cast<chrono::milliseconds>(e).count()
+                   << " ms";
 }
 
 /// get utc time(ms)
