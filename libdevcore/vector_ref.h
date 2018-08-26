@@ -51,8 +51,7 @@ public:
         typename std::remove_const<_T>::type, _T>::type;
 
     static_assert(std::is_pod<value_type>::value,
-        "vector_ref can only be used with PODs"\
-        "due to its low-level treatment of data.");
+        "vector_ref can only be used with PODs due to its low-level treatment of data.");
 
     /**
      * @brief : constructors of vector_ref
@@ -66,23 +65,26 @@ public:
     vector_ref(_T* _data, size_t _count) : m_data(_data), m_count(_count) {}
 
     /// create a new vector_ref pointing to the data part of a string (given as pointer).
-    vector_ref( typename std::conditional<std::is_const<_T>::value, 
-                std::string const*, std::string*>::type _data) :
-                m_data(reinterpret_cast<_T*>(_data->data())),
-                m_count(_data->size() / sizeof(_T)){}
+    vector_ref(
+        typename std::conditional<std::is_const<_T>::value, std::string const*, std::string*>::type
+            _data)
+      : m_data(reinterpret_cast<_T*>(_data->data())), m_count(_data->size() / sizeof(_T))
+    {}
 
     /// create a new vector_ref pointing to the data part of a vector (given as pointer).
     vector_ref(typename std::conditional<std::is_const<_T>::value,
-               std::vector<typename std::remove_const<_T>::type> const*,
-               std::vector<_T>*>::type _data): m_data(_data->data()),
-               m_count(_data->size()){}
+        std::vector<typename std::remove_const<_T>::type> const*, std::vector<_T>*>::type _data)
+      : m_data(_data->data()), m_count(_data->size())
+    {}
 
     /// create a new vector_ref pointing to the data part of a string (given as reference).
-    vector_ref( typename std::conditional<std::is_const<_T>::value,
-                std::string const&, std::string&>::type _data):
-                m_data(reinterpret_cast<_T*>(_data.data())),
-                m_count(_data.size() / sizeof(_T)){}
-    
+    // for force convertions
+    vector_ref(
+        typename std::conditional<std::is_const<_T>::value, std::string const&, std::string&>::type
+            _data)
+      : m_data(reinterpret_cast<_T*>(_data.data())), m_count(_data.size() / sizeof(_T))
+    {}
+
     /// judge whether the vector_ref pointing to an empty object or vector
     explicit operator bool() const { return m_data && m_count; }
 
@@ -105,7 +107,7 @@ public:
     std::vector<unsigned char> toBytes() const
     {
         return std::vector<unsigned char>(reinterpret_cast<unsigned char const*>(m_data),
-               reinterpret_cast<unsigned char const*>(m_data) + m_count * sizeof(_T));
+            reinterpret_cast<unsigned char const*>(m_data) + m_count * sizeof(_T));
     }
 
     /// trans the vector to string
@@ -157,7 +159,7 @@ public:
             return vector_ref<_T>();
     }
 
-    /// @returns a new vector_ref which is a shifted view of the original data 
+    /// @returns a new vector_ref which is a shifted view of the original data
     // (not going beyond it).
     vector_ref<_T> cropped(size_t _begin) const
     {
@@ -192,7 +194,7 @@ public:
         return f1 < t2 && t1 > f2;
     }
 
-    /// Copies the contents of this vector_ref to the contents of _t, 
+    /// Copies the contents of this vector_ref to the contents of _t,
     /// up to the max size of _t.
     void copyTo(vector_ref<typename std::remove_const<_T>::type> _t) const
     {
@@ -202,7 +204,7 @@ public:
             memcpy(_t.data(), m_data, std::min(_t.size(), m_count) * sizeof(_T));
     }
 
-    /// Copies the contents of this vector_ref to the contents of _t, 
+    /// Copies the contents of this vector_ref to the contents of _t,
     /// and zeros further trailing elements in _t.
     void populate(vector_ref<typename std::remove_const<_T>::type> _t) const
     {
@@ -235,7 +237,7 @@ public:
     _T* end() { return m_data + m_count; }
     _T const* begin() const { return m_data; }
     _T const* end() const { return m_data + m_count; }
-    
+
     /// @return the ith element of m_data
     _T& operator[](size_t _i)
     {
@@ -266,8 +268,8 @@ public:
     }
 
 private:
-    _T* m_data; // vector_ref pointted data
-    size_t m_count; // element size of the data
+    _T* m_data;      // vector_ref pointted data
+    size_t m_count;  // element size of the data
 };
 /// get reference of a object
 template <class _T>
