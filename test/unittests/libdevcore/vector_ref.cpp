@@ -152,8 +152,8 @@ BOOST_AUTO_TEST_CASE(testOverlap)
     // part overlap
     vector_ref<const char> sub_str_ref2(
         str_ref.data() + 3, (size_t)std::min((size_t)str.length() - 2, (size_t)5) / sizeof(char));
-
-    vector_ref<const char> non_overlap_ref(std::string("abcd"));
+    std::string tmp_str = "abcd";
+    vector_ref<const char> non_overlap_ref(tmp_str);
 
     BOOST_CHECK(str_ref.overlapsWith(sub_str_ref1) == true);
     BOOST_CHECK(str_ref.overlapsWith(sub_str_ref2) == true);
