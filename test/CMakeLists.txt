@@ -74,6 +74,7 @@ target_include_directories(test-fisco-bcos PRIVATE ..)
 target_include_directories(test-fisco-bcos PUBLIC ${BOOST_INCLUDE_DIR})
 target_link_libraries(test-fisco-bcos PRIVATE Boost::UnitTestFramework)
 target_link_libraries(test-fisco-bcos PRIVATE Boost::Filesystem)
+target_link_libraries(test-fisco-bcos PRIVATE devcore)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 
