@@ -21,13 +21,16 @@
  * @date 2018-08-24
  */
 
-#define BOOST_TEST_MODULE FISCO_BCOS_Tests
 
 #include <libdevcore/Assertions.h>
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
 
 using namespace dev;
 
+namespace dev
+{
+namespace test
+{
 BOOST_AUTO_TEST_SUITE(Assertions)
 
 /// test asserts micro
@@ -49,5 +52,7 @@ BOOST_AUTO_TEST_CASE(testAsserts)
     const char* str2 = "hello, test";
     BOOST_CHECK(asserts(str2) == false);
 }
-
 BOOST_AUTO_TEST_SUITE_END()
+
+}  // namespace test
+}  // namespace dev
