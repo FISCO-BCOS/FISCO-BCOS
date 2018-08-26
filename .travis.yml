@@ -47,9 +47,9 @@ install: |
 before_scripts: #clean cache
     cd tools && chmod a+x clean_cache.sh && ./clean_cache.sh && cd ..
 script:
-    cd tools && chmod a+x build.sh && ./build.sh && cd .. && ./build/test/test-fisco-bcos
+    cd tools && chmod a+x build.sh && ./build.sh && cd ../build && ./test/test-fisco-bcos && cd ../
 after_success:
-    - bash <(curl -s https://codecov.io/bash)
+    cd build && bash <(curl -s https://codecov.io/bash)
 webhooks:
     urls:
       - https://webhooks.gitter.im/e/334c46f8aee9f5fb65dc
