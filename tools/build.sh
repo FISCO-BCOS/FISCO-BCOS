@@ -133,7 +133,7 @@ install_all_deps()
 build_ubuntu_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake .. "
+    execute_cmd "cmake .. -DCOVERAGE=ON"
     execute_cmd "make"
     #execute_cmd "make install && cd ${current_dir}"
 }
@@ -141,7 +141,7 @@ build_ubuntu_source() {
 build_centos_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake3 .. "
+    execute_cmd "cmake3 .. -DCOVERAGE=ON"
     execute_cmd "make"
     #execute_cmd "make install && cd ${current_dir}"
 }
