@@ -33,7 +33,7 @@ void TestOutputHelper::initTest(size_t _maxTests)
     m_timer = Timer();
     m_currentTestCaseName = boost::unit_test::framework::current_test_case().p_name;
     std::cout << std::endl;
-    std::cout << "===== Test Case \"" + m_currentTestCaseName << "=====" << std::endl;
+    std::cout << "===== Test Case : " + m_currentTestCaseName << "=====" << std::endl;
     m_maxTests = _maxTests;
     m_currTest = 0;
 }
