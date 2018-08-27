@@ -26,9 +26,12 @@ file(GLOB HEADERS "*.h")
 include(EthDependencies)
 
 add_executable(fisco-bcos ${SRC_LIST} ${HEADERS})
+
 target_include_directories(fisco-bcos PRIVATE ..)
 target_include_directories(fisco-bcos PRIVATE ../utils)
-target_include_directories(fisco-bcos PUBLIC ${BOOST_INCLUDE_DIR})
+target_include_directories(fisco-bcos PRIVATE ${BOOST_INCLUDE_DIR})
+
+target_link_libraries(fisco-bcos devcore)
 
 
 

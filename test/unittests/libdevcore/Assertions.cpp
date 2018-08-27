@@ -23,17 +23,19 @@
 
 
 #include <libdevcore/Assertions.h>
+#include <libdevcore/Exceptions.h>
+#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
+#include <string>
+#include <vector>
 
 using namespace dev;
-
 namespace dev
 {
 namespace test
 {
-BOOST_AUTO_TEST_SUITE(Assertions)
-
-/// test asserts micro
+BOOST_FIXTURE_TEST_SUITE(Assertions, TestOutputHelperFixture)
+/// test micro "asserts"
 BOOST_AUTO_TEST_CASE(testAsserts)
 {
     // logical test
@@ -52,7 +54,72 @@ BOOST_AUTO_TEST_CASE(testAsserts)
     const char* str2 = "hello, test";
     BOOST_CHECK(asserts(str2) == false);
 }
-BOOST_AUTO_TEST_SUITE_END()
 
+/// test micro "assertsEqual"
+BOOST_AUTO_TEST_CASE(testAssertsEqual)
+{
+    BOOST_CHECK(assertsEqual(10, 10) == false);
+    BOOST_CHECK(assertsEqual('a', 'a') == false);
+    BOOST_CHECK(assertsEqual(10, 11) == true);
+    BOOST_CHECK(assertsEqual('a', 'b') == true);
+    std::string str1 = "abcd";
+    std::string str2 = "bcde";
+    BOOST_CHECK(assertsEqual(str1, str2) == true);
+    str2 = "abcd";
+    BOOST_CHECK(assertsEqual(str1, str2) == false);
+}
+/// test function "testAssertAux"
+BOOST_AUTO_TEST_CASE(testAssertAux)
+{
+    char const* str = "testAssertAux_func";
+    unsigned line = 10;
+    char const* file = "test/unittests/Assertions.cpp";
+    char const* func = "testAssertAux_BOOST_AUTO_TEST_CASE";
+    BOOST_CHECK(assertAux(true, str, line, file, func) == false);
+    BOOST_CHECK(assertAux(false, str, line, file, func) == true);
+    BOOST_CHECK(assertAux(true, "a + b == 10", __LINE__, __FILE__, ETH_FUNC) == false);
+    BOOST_CHECK(assertAux(false, "a + b == 10", __LINE__, __FILE__, ETH_FUNC) == true);
+}
+
+/// test template function "assertEqualAux"
+BOOST_AUTO_TEST_CASE(testAssertEqualAux)
+{
+    int a = 0xffffffff;
+    unsigned b = -1;
+    int c = -1;
+    const char* aStr = "(signed)(-1)";
+    const char* bStr = "(unsigned)(-1)";
+    unsigned line = 11;
+    char const* file = "test/unittests/Assertions.cpp";
+    char const* func = "testAssertEqualAux_BOOST_AUTO_TEST_CASE";
+    BOOST_CHECK(assertEqualAux(a, b, aStr, bStr, line, file, func) == false);
+    BOOST_CHECK(assertEqualAux(a, c, aStr, aStr, line, file, func) == false);
+    BOOST_CHECK(assertEqualAux(a, b, aStr, bStr, __LINE__, __FILE__, ETH_FUNC) == false);
+    BOOST_CHECK(assertEqualAux(a, c, aStr, aStr, __LINE__, __FILE__, ETH_FUNC) == false);
+}
+
+/// test micro "assertThrow"
+BOOST_AUTO_TEST_CASE(testAssertThrow)
+{
+    BOOST_REQUIRE_NO_THROW(assertThrow(true, ExternalFunctionFailure, "ExternalFunctionFailure"));
+    BOOST_CHECK_THROW(assertThrow(false, ExternalFunctionFailure, "ExternalFunctionFailure"),
+        ExternalFunctionFailure);
+    BOOST_CHECK_THROW(assertThrow(false, BadRoot, "BadRoot Throw"), BadRoot);
+}
+
+/// test template function "testAssertThrow"
+BOOST_AUTO_TEST_CASE(testAssertThrowAux)
+{
+    BOOST_REQUIRE_NO_THROW(
+        assertThrowAux<ExternalFunctionFailure>(true, "ExternalFunctionFailure No Throw", 20,
+            "test/unittests/Assertions.cpp", "testAssertThrow"));
+    BOOST_CHECK_THROW(assertThrowAux<InterfaceNotSupported>(
+                          false, "InterfaceNotSupported Throw", __LINE__, __FILE__, ETH_FUNC),
+        InterfaceNotSupported);
+    BOOST_CHECK_THROW(assertThrowAux<BadRoot>(false, "BadRoot Throw", 21,
+                          "test/unittests/Assertions.cpp", "testAssertThrow"),
+        BadRoot);
+}
+BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
