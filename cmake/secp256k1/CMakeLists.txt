@@ -33,13 +33,9 @@ cmake_minimum_required(VERSION 3.4)
 project(secp256k1 LANGUAGES C)
 
 set(COMMON_COMPILE_FLAGS ENABLE_MODULE_RECOVERY USE_ECMULT_STATIC_PRECOMPUTATION USE_FIELD_INV_BUILTIN USE_NUM_NONE USE_SCALAR_INV_BUILTIN)
-if (MSVC)
-	set(COMPILE_FLAGS USE_FIELD_10X26 USE_SCALAR_8X32)
-	set(COMPILE_OPTIONS "")
-else()
-	set(COMPILE_FLAGS USE_FIELD_5X52 USE_SCALAR_4X64 HAVE_BUILTIN_EXPECT HAVE___INT128)
-	set(COMPILE_OPTIONS -O3 -W -std=c89 -pedantic -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes -Wno-unused-function -Wno-long-long -Wno-overlength-strings -fvisibility=hidden)
-endif()
+set(COMPILE_FLAGS USE_FIELD_5X52 USE_SCALAR_4X64 HAVE_BUILTIN_EXPECT HAVE___INT128)
+set(COMPILE_OPTIONS -O3 -W -std=c89 -pedantic -Wall -Wextra -Wcast-align -Wnested-externs -Wshadow -Wstrict-prototypes -Wno-unused-function -Wno-long-long -Wno-overlength-strings -fvisibility=hidden)
+
 
 add_executable(gen_context src/gen_context.c)
 target_include_directories(gen_context PRIVATE ${CMAKE_SOURCE_DIR})
