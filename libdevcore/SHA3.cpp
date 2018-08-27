@@ -20,13 +20,16 @@
  */
 
 #include "SHA3.h"
-#include "RLP.h"
-#include "easylog.h"
-#include "picosha2.h"
+#include <libdevcore/easylog.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+//#if ETH_ENCRYPTTYPE
+//#include <libdevcrypto/sm3/sm3.h>
+//#endif
+#include "RLP.h"
+#include "picosha2.h"
 using namespace std;
 using namespace dev;
 
@@ -182,13 +185,12 @@ bool sha3(bytesConstRef _input, bytesRef o_output)
     // FIXME: What with unaligned memory?
     if (o_output.size() != 32)
         return false;
-#if ETH_ENCRYPTTYPE
-    SM3Hash::getInstance().sm3(
-        (const unsigned char*)_input.data(), _input.size(), (unsigned char*)o_output.data());
-//	keccak::keccak(ret.data(), 32, (uint64_t const*)_input.data(), _input.size());
-#else
+    //#if ETH_ENCRYPTTYPE
+    // SM3Hash::getInstance().sm3((const unsigned char *)_input.data(),_input.size(),(unsigned char
+    // *)o_output.data());
+    //#else
     keccak::sha3_256(o_output.data(), 32, _input.data(), _input.size());
-#endif
+    //#endif
     return true;
 }
 
