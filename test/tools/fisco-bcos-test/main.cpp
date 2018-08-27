@@ -14,20 +14,12 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty test framework for main of lab-bcos
+ * @brief: empty test framework of lab-bcos
  *
- * @file: main.cpp
+ * @file main.cpp
  * @author: yujiechen
  * @date 2018-08-24
  */
-
-#define BOOST_TEST_DYN_LINK
+#define BOOST_TEST_MAIN
 #define BOOST_TEST_MODULE FISCO_BCOS_Tests
-#define BOOST_TEST_NO_MAIN
-
-#include <boost/test/included/unit_test.hpp>
-
-int main(int argc, const char* argv[])
-{
-    return 0;
-}
+#include <boost/test/unit_test.hpp>
