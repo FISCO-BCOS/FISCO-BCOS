@@ -23,20 +23,20 @@
 
 #pragma once
 
+#include "Common.h"
+#include "CommonData.h"
+#include "CommonIO.h"
+#include "FixedHash.h"
 #include "easylogging++.h"
+#include "vector_ref.h"
 #include <chrono>
 #include <ctime>
-//#include "vector_ref.h"
-#include "Common.h"
-//#include "CommonIO.h"
-//#include "CommonData.h"
-//#include "FixedHash.h"
 //#include "Terminal.h"
 #include <map>
 #include <string>
 namespace dev
 {
-/*class ThreadContext
+class ThreadContext
 {
 public:
     ThreadContext(std::string const& _info) { push(_info); }
@@ -47,10 +47,10 @@ public:
     static std::string join(std::string const& _prior);
 };
 
-void pthread_setThreadName(std::string const& _n);*/
+void pthread_setThreadName(std::string const& _n);
 
 /// Set the current thread's log name.
-// std::string getThreadName();
+std::string getThreadName();
 }  // namespace dev
 
 namespace dev
@@ -60,7 +60,7 @@ class LogOutputStreamBase
 public:
     LogOutputStreamBase() {}
 
-    /*void append(unsigned long _t) { m_sstr << toString(_t); }
+    void append(unsigned long _t) { m_sstr << toString(_t); }
     void append(long _t) { m_sstr << toString(_t); }
     void append(unsigned int _t) { m_sstr << toString(_t); }
     void append(int _t) { m_sstr << toString(_t); }
@@ -68,13 +68,17 @@ public:
     void append(u256 const& _t) { m_sstr << toString(_t); }
     void append(u160 const& _t) { m_sstr << toString(_t); }
     void append(double _t) { m_sstr << toString(_t); }
-    template <unsigned N> void append(FixedHash<N> const& _t) { m_sstr << _t.abridged(); }
+    template <unsigned N>
+    void append(FixedHash<N> const& _t)
+    {
+        m_sstr << _t.abridged();
+    }
     void append(h160 const& _t) { m_sstr << _t.abridged(); }
     void append(h256 const& _t) { m_sstr << _t.abridged(); }
     void append(h512 const& _t) { m_sstr << _t.abridged(); }
     void append(std::string const& _t) { m_sstr << _t; }
     void append(bytes const& _t) { m_sstr << toHex(_t); }
-    void append(bytesConstRef _t) { m_sstr << toHex(_t); }*/
+    void append(bytesConstRef _t) { m_sstr << toHex(_t); }
 
     template <class T>
     void append(std::vector<T> const& _t)
@@ -140,18 +144,20 @@ public:
         }
         m_sstr << "}";
     }
-    /*template <class T, class U> void append(std::pair<T, U> const& _t)
+    template <class T, class U>
+    void append(std::pair<T, U> const& _t)
     {
-        m_sstr << EthPurple "(";
+        m_sstr << "(";
         append(_t.first);
-        m_sstr << EthPurple ", ";
+        m_sstr << ", ";
         append(_t.second);
-        m_sstr << EthPurple ")";
-    }*/
-    /*template <class T> void append(T const& _t)
+        m_sstr << ")";
+    }
+    template <class T>
+    void append(T const& _t)
     {
         m_sstr << toString(_t);
-    }*/
+    }
 
     template <class T>
     LogOutputStreamBase& operator<<(T const& _t)
