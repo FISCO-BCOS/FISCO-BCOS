@@ -1,5 +1,12 @@
 #------------------------------------------------------------------------------
-# Link libraries into main.cpp to generate executable binrary fisco-bcos
+# Find the leveldb includes and library
+# 
+# if you need to add a custom library search path, do it via via CMAKE_PREFIX_PATH 
+# 
+# This module defines
+#  LEVELDB_INCLUDE_DIRS, where to find header, etc.
+#  LEVELDB_LIBRARIES, the libraries needed to use leveldb.
+#  LEVELDB_FOUND, If false, do not try to use leveldb.
 # ------------------------------------------------------------------------------
 # This file is part of FISCO-BCOS.
 #
@@ -18,25 +25,24 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+find_path(
+    LEVELDB_INCLUDE_DIR 
+    NAMES leveldb/db.h
+    DOC "leveldb include dir"
+)
 
-aux_source_directory(. SRC_LIST)
+find_library(
+    LEVELDB_LIBRARY
+    NAMES leveldb
+    DOC "leveldb library"
+)
 
-file(GLOB HEADERS "*.h")
+set(LEVELDB_INCLUDE_DIRS ${LEVELDB_INCLUDE_DIR})
+set(LEVELDB_LIBRARIES ${LEVELDB_LIBRARY})
 
-include(EthDependencies)
-
-add_executable(fisco-bcos ${SRC_LIST} ${HEADERS})
-
-target_include_directories(fisco-bcos PRIVATE ..)
-target_include_directories(fisco-bcos PRIVATE ../utils)
-target_include_directories(fisco-bcos PRIVATE ${BOOST_INCLUDE_DIR})
-
-target_link_libraries(fisco-bcos devcore)
-
-
-
-if (UNIX AND NOT APPLE)
-	target_link_libraries(fisco-bcos pthread)
-endif()
-
-install(TARGETS fisco-bcos DESTINATION bin)
+# handle the QUIETLY and REQUIRED arguments and set LEVELDB_FOUND to TRUE
+# if all listed variables are TRUE, hide their existence from configuration view
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(leveldb DEFAULT_MSG
+    LEVELDB_LIBRARY LEVELDB_INCLUDE_DIR)
+mark_as_advanced (LEVELDB_INCLUDE_DIR LEVELDB_LIBRARY)

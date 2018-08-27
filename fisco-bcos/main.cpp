@@ -20,6 +20,8 @@
  * @author: yujiechen
  * @date 2018-08-24
  */
+#include <libdevcore/easylog.h>
+INITIALIZE_EASYLOGGINGPP
 int main(int argc, const char* argv[])
 {
     return 0;
