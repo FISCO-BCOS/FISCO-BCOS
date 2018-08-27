@@ -21,7 +21,7 @@
  *
  */
 #pragma once
-#include <libdevcore/vector_ref.h>
+#include "vector_ref.h"
 #include <vector>
 
 namespace dev

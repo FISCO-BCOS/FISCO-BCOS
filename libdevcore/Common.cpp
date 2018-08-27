@@ -21,9 +21,9 @@
  *
  * common stuff: common type definitions && timer && ScopeGuard && InvariantChecker
  */
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/easylog.h>
+#include "Common.h"
+#include "Exceptions.h"
+#include "easylog.h"
 
 #include "include/BuildInfo.h"
 
