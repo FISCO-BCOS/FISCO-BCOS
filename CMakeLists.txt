@@ -52,7 +52,7 @@ add_subdirectory(fisco-bcos)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)
 add_subdirectory(libethcore)
-#add_subdirectory(evmc)
+add_subdirectory(evmc)
 #add_subdirectory(libinterpreter)
 
 if (TESTS)
