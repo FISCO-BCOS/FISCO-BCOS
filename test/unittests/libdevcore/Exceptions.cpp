@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(testErrorInfos)
     checkErrorInfo<errinfo_required_h256>(FixedHash<32u>("0x1232324324"));
     checkErrorInfo<errinfo_got_h256, h256>(FixedHash<32u>("0x1234567890abcdef"));
     checkErrorInfo<errinfo_extraData, bytes>(std::vector<unsigned char>(10, 'a'));
-    checkErrorInfo<errinfo_externalFunction, char const *>("abcd");
+    checkErrorInfo<errinfo_externalFunction, char const*>("abcd");
     checkErrorInfo<errinfo_interface, std::string>("ERROR Interface");
     checkErrorInfo<errinfo_path, std::string>("Error Path");
 }

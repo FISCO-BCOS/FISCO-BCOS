@@ -29,6 +29,11 @@ using namespace dev;
 
 namespace
 {
+/**
+ * @brief : convert char to hex number
+ * @param _i : inputted char
+ * @return int : transformed hex number(if is invalid char, return -1)
+ */
 int fromHexChar(char _i) noexcept
 {
     if (_i >= '0' && _i <= '9')
