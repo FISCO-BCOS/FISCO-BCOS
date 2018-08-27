@@ -40,8 +40,10 @@ include(ProjectBoost)
 
 configure_project(TESTS)
 # generate executable binary fisco-bcos
+add_subdirectory(utils)
 add_subdirectory(fisco-bcos)
 add_subdirectory(libdevcore)
+add_subdirectory(libdevcrypto)
 
 if (TESTS)
         enable_testing()

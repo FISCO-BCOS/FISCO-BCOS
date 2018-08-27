@@ -29,7 +29,6 @@ using namespace std;
 using namespace dev;
 
 namespace fs = boost::filesystem;
-
 // static_assert(BOOST_VERSION >= 106400, "Wrong boost headers version");
 
 // Should be written to only once during startup
