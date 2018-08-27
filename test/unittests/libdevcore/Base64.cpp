@@ -46,7 +46,6 @@ BOOST_AUTO_TEST_CASE(testFromBase64)
         oriStr += char(decodeStr[i]);
     }
     BOOST_CHECK(oriStr == "1234ABcd");
-    BOOST_CHECK(oriStr == "1234ABCD");
 }
 
 BOOST_AUTO_TEST_CASE(testToBase64)
@@ -59,7 +58,6 @@ BOOST_AUTO_TEST_CASE(testToBase64)
     }
     bytesConstRef bsConst(&bs);
     BOOST_CHECK(toBase64(bsConst) == "MTIzNEFCY2Q=");
-    BOOST_CHECK(toBase64(bsConst) == "MTIzNEFCY2Q1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(testJsonUtils)
         {{fieldName1, {{json_spirit::int_type}, JsonFieldPresence::Required}},
             {fieldName2, {{json_spirit::str_type}, JsonFieldPresence::Required}}});
 
-    BOOST_CHECK(jsonTypeAsString(obj.at(fieldName2).type()) == "json Int");
+    BOOST_CHECK(jsonTypeAsString(obj.at(fieldName1).type()) == "json Int");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
