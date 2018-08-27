@@ -17,7 +17,7 @@
 /**
  * @brief : override append function of easylogging++
  * @file: easylog.h
- * @author: mingzhenliu
+ * @author: yujiechen
  * @date: 2017
  */
 

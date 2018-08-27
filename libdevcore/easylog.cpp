@@ -19,7 +19,7 @@
  * @brief: current handle of easylog
  *
  * @file easylog.cpp
- * @author mingzhenliu
+ * @author yujiechen
  * @date 2018-08-27
  */
 
