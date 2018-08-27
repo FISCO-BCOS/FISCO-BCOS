@@ -1,7 +1,7 @@
 codecov:
   branch: dev
 coverage:
-  range: 50...100
+  range: 30...100
   notify:
     gitter:
       default:
@@ -9,22 +9,19 @@ coverage:
         url: https://gitter.im/fisco-bcos/Lobby
   status:
     project:
-      default:
-        target: auto
-        threshold: 0.05
       app:
         target: auto
         threshold: 0.05
         paths: "!test/"
-      tests:
-        target: auto
-        paths: "test/"
-    changes:
       default:
-        enabled: no
+        target: auto
+        threshold: 0.05
     patch:
       default:
         target: 50
+    changes:
+      default:
+        enabled: no
 comment:
   layout: "reach, diff"
 flags:
