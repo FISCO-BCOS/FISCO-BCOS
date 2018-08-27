@@ -35,17 +35,6 @@ namespace fs = boost::filesystem;
 // Should be written to only once during startup
 static fs::path s_ethereumDatadir;
 static fs::path s_ethereumIpcPath;
-static int s_ssl;
-
-int dev::getSSL()
-{
-    return s_ssl;
-}
-
-void dev::setSSL(int ssl)
-{
-    s_ssl = ssl;
-}
 
 void dev::setDataDir(fs::path const& _dataDir)
 {
