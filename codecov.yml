@@ -8,9 +8,6 @@ coverage:
         threshold: 0
         url: https://gitter.im/fisco-bcos/Lobby
   status:
-    patch:
-      default:
-        target: 50
     project:
       default:
         target: auto
@@ -25,9 +22,12 @@ coverage:
     changes:
       default:
         enabled: no
+    patch:
+      default:
+        target: 50
 comment:
   layout: "reach, diff"
 flags:
   alltests:
     joined: false
-    
+
