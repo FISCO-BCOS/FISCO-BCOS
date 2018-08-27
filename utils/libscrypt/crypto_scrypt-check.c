@@ -15,12 +15,6 @@
 
 int libscrypt_check(char* mcf, const char* password)
 {
-    /* Return values:
-     * <0 error
-     * == 0 password incorrect
-     * >0 correct password
-     */
-
 #ifndef _WIN32
     char* saveptr = NULL;
 #endif
@@ -65,10 +59,6 @@ int libscrypt_check(char* mcf, const char* password)
         return -1;
 
     N = (uint64_t)1 << N;
-
-    /* Useful debugging:
-    printf("We've obtained salt 'N' r p of '%s' %d %d %d\n", tok, N,r,p);
-    */
 
     memset(salt, 0, sizeof(salt)); /* Keeps splint happy */
     retval = libscrypt_b64_decode(tok, (unsigned char*)salt, sizeof(salt));
