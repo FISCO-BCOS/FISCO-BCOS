@@ -14,9 +14,9 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file RangeMask.cpp
- * @author Christian <c@ethdev.com>
- * @date 2015
+/** @file JsonUtils.cpp
+ * @author chaychen <c@ethdev.com>
+ * @date 2018
  */
 
 #include <json_spirit/JsonSpiritHeaders.h>
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(testJsonUtils)
         {{fieldName1, {{json_spirit::int_type}, JsonFieldPresence::Required}},
             {fieldName2, {{json_spirit::str_type}, JsonFieldPresence::Required}}});
 
-    BOOST_CHECK(asserts(jsonTypeAsString(obj.at(fieldName2).type()) == "json Int") == true);
+    BOOST_CHECK(jsonTypeAsString(obj.at(fieldName2).type()) == "json Int");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
