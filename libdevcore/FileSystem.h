@@ -28,6 +28,13 @@
 
 namespace dev
 {
+#define BASE_SOCKET 0
+#define SSL_SOCKET_V1 1
+#define SSL_SOCKET_V2 2
+
+void setSSL(int ssl);  // use SSL cert for data transfer
+int getSSL();
+
 /// Sets the data dir for the default ("ethereum") prefix.
 void setDataDir(boost::filesystem::path const& _dir);
 /// @returns the path for user data.
