@@ -286,7 +286,6 @@ int libscrypt_scrypt(const uint8_t* passwd, size_t passwdlen, const uint8_t* sal
         goto err0;
     }
 
-    /* Allocate memory. */
 #ifdef HAVE_POSIX_MEMALIGN
     if ((errno = posix_memalign(&B0, 64, 128 * r * p)) != 0)
         goto err0;
