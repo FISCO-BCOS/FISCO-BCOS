@@ -20,18 +20,14 @@
  */
 
 #include "CommonIO.h"
+#include "Exceptions.h"
 #include <libdevcore/FileSystem.h>
 #include <stdio.h>
+#include <termios.h>
+#include <boost/filesystem.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#if defined(_WIN32)
-#include <windows.h>
-#else
-#include <termios.h>
-#endif
-#include "Exceptions.h"
-#include <boost/filesystem.hpp>
 using namespace std;
 using namespace dev;
 
@@ -156,30 +152,6 @@ void copyDirectory(boost::filesystem::path const& _srcDir, boost::filesystem::pa
 
 std::string getPassword(std::string const& _prompt)
 {
-#if defined(_WIN32)
-    cout << _prompt << flush;
-    // Get current Console input flags
-    HANDLE hStdin;
-    DWORD fdwSaveOldMode;
-    if ((hStdin = GetStdHandle(STD_INPUT_HANDLE)) == INVALID_HANDLE_VALUE)
-        BOOST_THROW_EXCEPTION(
-            ExternalFunctionFailure() << errinfo_externalFunction("GetStdHandle"));
-    if (!GetConsoleMode(hStdin, &fdwSaveOldMode))
-        BOOST_THROW_EXCEPTION(
-            ExternalFunctionFailure() << errinfo_externalFunction("GetConsoleMode"));
-    // Set console flags to no echo
-    if (!SetConsoleMode(hStdin, fdwSaveOldMode & (~ENABLE_ECHO_INPUT)))
-        BOOST_THROW_EXCEPTION(
-            ExternalFunctionFailure() << errinfo_externalFunction("SetConsoleMode"));
-    // Read the string
-    std::string ret;
-    std::getline(cin, ret);
-    // Restore old input mode
-    if (!SetConsoleMode(hStdin, fdwSaveOldMode))
-        BOOST_THROW_EXCEPTION(
-            ExternalFunctionFailure() << errinfo_externalFunction("SetConsoleMode"));
-    return ret;
-#else
     struct termios oflags;
     struct termios nflags;
     char password[256];
@@ -204,7 +176,6 @@ std::string getPassword(std::string const& _prompt)
 
 
     return password;
-#endif
 }
 
 }  // namespace dev
