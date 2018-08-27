@@ -14,8 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief
- *
+ * @brief Unit tests for the Base64
  * @file Base64.cpp
  * @author: chaychen
  * @date 2018

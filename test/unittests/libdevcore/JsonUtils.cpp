@@ -15,7 +15,7 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file JsonUtils.cpp
- * @author chaychen <c@ethdev.com>
+ * @author chaychen
  * @date 2018
  */
 
