@@ -24,12 +24,15 @@
 #include <libdevcore/FileSystem.h>
 #include <boost/test/unit_test.hpp>
 
-// using namespace dev::db;
-// using namespace bfp = boost::filesystem::path;
-
 BOOST_AUTO_TEST_SUITE(FileSystem)
 
-/// test asserts micro
+/**
+ * @brief Construct a new boost auto test case object,
+ * For libdevcore/FileSystem.cpp,setDataDir,getDataDir,
+ * setIpcPath, getIpcPath
+ * @author: tabsu
+ * @date 2018-08-24
+ */
 BOOST_AUTO_TEST_CASE(testFileSystem)
 {
     dev::setDataDir("./data");
