@@ -71,6 +71,7 @@ endforeach(file)
 add_executable(test-fisco-bcos ${sources})
 
 target_include_directories(test-fisco-bcos PRIVATE ..)
+target_include_directories(test-fisco-bcos PRIVATE ../utils)
 target_include_directories(test-fisco-bcos PUBLIC ${BOOST_INCLUDE_DIR})
 target_include_directories(test-fisco-bcos PRIVATE ../utils)
 target_link_libraries(test-fisco-bcos Boost::UnitTestFramework)
@@ -80,3 +81,8 @@ target_link_libraries(test-fisco-bcos devcore)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 
+if (UNIX AND NOT APPLE)
+	target_link_libraries(test-fisco-bcos pthread)
+endif()
+
+install(TARGETS test-fisco-bcos DESTINATION bin)
