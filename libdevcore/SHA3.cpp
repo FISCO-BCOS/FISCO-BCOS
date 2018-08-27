@@ -101,10 +101,6 @@ static inline void keccakf(void* state)
     }
 }
 
-/******** The FIPS202-defined functions. ********/
-
-/*** Some helper macros. ***/
-
 #define _(S) \
     do       \
     {        \
