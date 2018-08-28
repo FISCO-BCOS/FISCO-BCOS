@@ -1,5 +1,5 @@
  # "Copyright [2018] <fisco-bcos>"
- # @ function : one-click install shell script(appliable for centos and ubuntu)
+ # @ function : Generate coverage html into a tar.gz (appliable for centos and ubuntu)
  # @ Require  : yum or apt, git are ready
  # @ attention: if dependecies are downloaded failed, 
  #              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
