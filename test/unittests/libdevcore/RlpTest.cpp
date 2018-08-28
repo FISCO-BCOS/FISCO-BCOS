@@ -89,4 +89,5 @@ BOOST_AUTO_TEST_CASE(rlpRandom)
         }
     }
 }
+
 BOOST_AUTO_TEST_SUITE_END()
