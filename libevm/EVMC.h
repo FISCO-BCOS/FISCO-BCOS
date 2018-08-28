@@ -49,9 +49,7 @@ public:
     class Result
     {
     public:
-        explicit Result(evmc_result const& _result):
-            m_result(_result)
-        {}
+        explicit Result(evmc_result const& _result) : m_result(_result) {}
 
         ~Result()
         {
@@ -59,8 +57,7 @@ public:
                 m_result.release(&m_result);
         }
 
-        Result(Result&& _other) noexcept:
-            m_result(_other.m_result)
+        Result(Result&& _other) noexcept : m_result(_other.m_result)
         {
             // Disable releaser of the rvalue object.
             _other.m_result.release = nullptr;
@@ -69,20 +66,11 @@ public:
         Result(Result const&) = delete;
         Result& operator=(Result const&) = delete;
 
-        evmc_status_code status() const
-        {
-            return m_result.status_code;
-        }
+        evmc_status_code status() const { return m_result.status_code; }
 
-        int64_t gasLeft() const
-        {
-            return m_result.gas_left;
-        }
+        int64_t gasLeft() const { return m_result.gas_left; }
 
-        bytesConstRef output() const
-        {
-            return {m_result.output_data, m_result.output_size};
-        }
+        bytesConstRef output() const { return {m_result.output_data, m_result.output_size}; }
 
     private:
         evmc_result m_result;
@@ -116,5 +104,5 @@ public:
 
     owning_bytes_ref exec(u256& io_gas, ExtVMFace& _ext, OnOpFunc const& _onOp) final;
 };
-}
-}
+}  // namespace eth
+}  // namespace dev
