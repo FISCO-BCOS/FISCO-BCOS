@@ -25,9 +25,7 @@
 #include <libdevcore/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-#include <iostream>
 #include <string>
-#include <vector>
 
 using namespace dev;
 namespace dev
@@ -37,7 +35,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(Base64, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testFromBase64)
 {
-    std::string encodeStr = "MTIzNEFCY2Q=";
+    const std::string encodeStr = "MTIzNEFCY2Q=";
     bytes decodeStr = fromBase64(encodeStr);
     std::string oriStr;
     for (size_t i = 0; i < decodeStr.size(); i++)
@@ -49,7 +47,7 @@ BOOST_AUTO_TEST_CASE(testFromBase64)
 
 BOOST_AUTO_TEST_CASE(testToBase64)
 {
-    std::string decodeStr = "1234ABcd";
+    const std::string decodeStr = "1234ABcd";
     bytes bs;
     for (size_t i = 0; i < decodeStr.length(); i++)
     {
