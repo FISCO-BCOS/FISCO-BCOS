@@ -17,11 +17,9 @@
  * @brief: empty test framework of lab-bcos
  *
  * @file main.cpp
- * @author: yujiechen, jimmyshi
+ * @author: yujiechen
  * @date 2018-08-24
  */
 #define BOOST_TEST_MAIN
 #define BOOST_TEST_MODULE FISCO_BCOS_Tests
-#include <libdevcore/easylog.h>
 #include <boost/test/unit_test.hpp>
-INITIALIZE_EASYLOGGINGPP
