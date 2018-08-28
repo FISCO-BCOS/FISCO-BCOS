@@ -22,13 +22,8 @@
  */
 
 #include "FileSystem.h"
-#include "Common.h"
 
 #include <pwd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
 #include <boost/filesystem.hpp>
 using namespace std;
 using namespace dev;

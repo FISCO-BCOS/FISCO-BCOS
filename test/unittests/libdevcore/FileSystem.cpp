@@ -14,21 +14,32 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty test framework of lab-bcos
+ * @brief Construct a new boost auto test case object for FileSystem
  *
- * @file main.cpp
- * @author: yujiechen
+ * @file FileSystem.cpp
+ * @author: tabsu
  * @date 2018-08-24
  */
-#define BOOST_TEST_MODULE FISCO_BCOS_Tests
-#define BOOST_TEST_NO_MAIN
-#include <libdevcore/easylog.h>
-#include <boost/test/included/unit_test.hpp>
+
+#include <libdevcore/FileSystem.h>
 #include <boost/test/unit_test.hpp>
-INITIALIZE_EASYLOGGINGPP
-int main(int argc, const char* argv[])
+
+BOOST_AUTO_TEST_SUITE(FileSystem)
+
+BOOST_AUTO_TEST_CASE(testFileSystem)
 {
-    auto fakeInit = [](int, char* []) -> boost::unit_test::test_suite* { return nullptr; };
-    int result = boost::unit_test::unit_test_main(fakeInit, argc, const_cast<char**>(argv));
-    return result;
+    dev::setDataDir("./data");
+    BOOST_CHECK((dev::getDataDir("ethereum").string() == "./data") == true);
+    BOOST_CHECK((dev::getDataDir("test").filename() == ".test") == true);
+    BOOST_CHECK((dev::getDataDir("").string() == "./data") == true);
+
+    dev::setIpcPath("/xxx/geth.ipc");
+    BOOST_CHECK((dev::getIpcPath().string() == "/xxx") == true);
+
+    dev::setIpcPath("/xxx/eth.ipc");
+    BOOST_CHECK((dev::getIpcPath().string() == "/xxx/eth.ipc") == true);
+
+    dev::setIpcPath("geth.ipc");
 }
+
+BOOST_AUTO_TEST_SUITE_END()
