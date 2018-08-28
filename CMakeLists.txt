@@ -54,6 +54,7 @@ add_subdirectory(libdevcrypto)
 add_subdirectory(libethcore)
 add_subdirectory(evmc)
 add_subdirectory(libinterpreter)
+add_subdirectory(libevm)
 
 if (TESTS)
         enable_testing()
