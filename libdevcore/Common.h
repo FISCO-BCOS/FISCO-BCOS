@@ -19,6 +19,10 @@
  * @date 2014
  *
  * Very common stuff (i.e. that every other header needs except vector_ref.h).
+ *
+ * @author wheatli
+ * @date 2018.8.27
+ * @modify add owning_bytes_ref
  */
 
 #pragma once
@@ -301,5 +305,51 @@ enum class WithExisting : int
 
 /// Get the current time in seconds since the epoch in UTC(ms)
 uint64_t utcTime();
+
+/// Reference to a slice of buffer that also owns the buffer.
+///
+/// This is extension to the concept C++ STL library names as array_view
+/// (also known as gsl::span, array_ref, here vector_ref) -- reference to
+/// continuous non-modifiable memory. The extension makes the object also owning
+/// the referenced buffer.
+///
+/// This type is used by VMs to return output coming from RETURN instruction.
+/// To avoid memory copy, a VM returns its whole memory + the information what
+/// part of this memory is actually the output. This simplifies the VM design,
+/// because there are multiple options how the output will be used (can be
+/// ignored, part of it copied, or all of it copied). The decision what to do
+/// with it was moved out of VM interface making VMs "stateless".
+///
+/// The type is movable, but not copyable. Default constructor available.
+class owning_bytes_ref : public vector_ref<byte const>
+{
+public:
+    owning_bytes_ref() = default;
+
+    /// @param _bytes  The buffer.
+    /// @param _begin  The index of the first referenced byte.
+    /// @param _size   The number of referenced bytes.
+    owning_bytes_ref(bytes&& _bytes, size_t _begin, size_t _size) : m_bytes(std::move(_bytes))
+    {
+        // Set the reference *after* the buffer is moved to avoid
+        // pointer invalidation.
+        retarget(&m_bytes[_begin], _size);
+    }
+
+    owning_bytes_ref(owning_bytes_ref const&) = delete;
+    owning_bytes_ref(owning_bytes_ref&&) = default;
+    owning_bytes_ref& operator=(owning_bytes_ref const&) = delete;
+    owning_bytes_ref& operator=(owning_bytes_ref&&) = default;
+
+    /// Moves the bytes vector out of here. The object cannot be used any more.
+    bytes&& takeBytes()
+    {
+        reset();  // Reset reference just in case.
+        return std::move(m_bytes);
+    }
+
+private:
+    bytes m_bytes;
+};
 
 }  // namespace dev

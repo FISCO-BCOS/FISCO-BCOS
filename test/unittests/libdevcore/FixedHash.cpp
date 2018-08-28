@@ -1,0 +1,65 @@
+/**
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ *
+ * @brief Unit tests for the FixedHash
+ * @file FixedHash.cpp
+ * @author: chaychen
+ * @date 2018
+ */
+
+#include <libdevcore/CommonJS.h>
+#include <libdevcore/FixedHash.h>
+#include <test/tools/libutils/TestOutputHelper.h>
+#include <boost/test/unit_test.hpp>
+#include <string>
+
+using namespace dev;
+namespace dev
+{
+namespace test
+{
+BOOST_FIXTURE_TEST_SUITE(FixedHash, TestOutputHelperFixture)
+BOOST_AUTO_TEST_CASE(testFromUUID)
+{
+    const std::string uuid = "067150c0-7dab-4fac-b716-0e075548007e";
+    h128 h = fromUUID(uuid);
+    BOOST_CHECK("0x067150c07dab4facb7160e075548007e" == toJS(h));
+}
+
+BOOST_AUTO_TEST_CASE(testToUUID)
+{
+    const std::string str = "0x067150c07dab4facb7160e075548007e";
+    h128 h = jsToFixed<16>(str);
+    BOOST_CHECK("067150c0-7dab-4fac-b716-0e075548007e" == toUUID(h));
+}
+
+BOOST_AUTO_TEST_CASE(testLeft160)
+{
+    const std::string str = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
+    h256 h = jsToFixed<32>(str);
+    BOOST_CHECK("0x067150c07dab4facb7160e075548007e067150c0" == toJS(left160(h)));
+}
+
+BOOST_AUTO_TEST_CASE(testRight160)
+{
+    const std::string str = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
+    h256 h = jsToFixed<32>(str);
+    BOOST_CHECK("0x5548007e067150c07dab4facb7160e075548007e" == toJS(right160(h)));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+}  // namespace test
+}  // namespace dev
