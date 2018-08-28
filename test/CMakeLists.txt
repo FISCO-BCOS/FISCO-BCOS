@@ -79,6 +79,7 @@ target_link_libraries(test-fisco-bcos Boost::Filesystem)
 target_link_libraries(test-fisco-bcos Boost::Thread)
 target_link_libraries(test-fisco-bcos Boost::program_options)
 target_link_libraries(test-fisco-bcos devcore)
+target_link_libraries(test-fisco-bcos devcrypto)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 
