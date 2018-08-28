@@ -87,7 +87,6 @@ private:
         {
             bytes rlpBytes = fromHex(jsonObj.at("out").get_str());
             RLP rlpObj(rlpBytes);
-            std::cout << "#######RLP:" << rlpObj.itemCount() << std::endl;
             if (rlpType == RlpType::Test)
                 checkRlp(jsonObj.at("in"), rlpObj);
         }

@@ -90,7 +90,6 @@ void RlpTest::doRlpTests(js::mValue const& jsonObj)
         // check decode
         bool exception = false;
         checkDecode(obj, rlpType, exception);
-        std::cout << "====EXCEPTION:" << exception << std::endl;
         // invalid rlp string && exceptioned
         if (rlpType == RlpType::Invalid && exception)
             continue;
