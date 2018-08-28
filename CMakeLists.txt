@@ -25,6 +25,10 @@ list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
 project(FISCO-BCOS VERSION "2.0")
 
+if (NOT EXISTS ${CMAKE_SOURCE_DIR}/evmc/.git)
+    message(FATAL_ERROR "Git submodules not initialized, execute:\n  git submodule update --init")
+endif()
+
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
 
 # basic setting
@@ -38,12 +42,18 @@ include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
 include(ProjectBoost)
 
+#Global include path for all libs.
+include_directories("${CMAKE_SOURCE_DIR}")
+
 configure_project(TESTS)
 # generate executable binary fisco-bcos
 add_subdirectory(utils)
 add_subdirectory(fisco-bcos)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)
+add_subdirectory(libethcore)
+add_subdirectory(evmc)
+add_subdirectory(libinterpreter)
 
 if (TESTS)
         enable_testing()

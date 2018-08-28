@@ -41,13 +41,13 @@ int libscrypt_check(char* mcf, const char* password);
 #endif
 
 /* Sane default values */
-#define SCRYPT_HASH_LEN               \
-    64 /* This can be user defined -  \
-        *but 64 is the reference size \
+#define SCRYPT_HASH_LEN                     \
+    64 /* This can be user defined -  \ \ \ \
+        *but 64 is the reference size \ \ \ \
         */
-#define SCRYPT_SAFE_N                                                      \
-    30                     /* This is much higher than you want. It's just \
-                            * a blocker for insane defines                 \
+#define SCRYPT_SAFE_N                                                            \
+    30                     /* This is much higher than you want. It's just \ \ \ \
+                            * a blocker for insane defines                 \ \ \ \
                             */
 #define SCRYPT_SALT_LEN 16 /* This is just a recommended size */
 #define SCRYPT_MCF_LEN 125 /* mcf is 120 byte + nul */

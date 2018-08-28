@@ -20,6 +20,7 @@
  */
 
 #include <libdevcore/RangeMask.h>
+#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
@@ -30,7 +31,7 @@ namespace dev
 {
 namespace test
 {
-BOOST_AUTO_TEST_SUITE(RangeMaskTest)
+BOOST_FIXTURE_TEST_SUITE(RangeMaskTest, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(constructor)
 {

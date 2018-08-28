@@ -41,6 +41,14 @@ enum class WhenError
     Throw = 1,
 };
 
+/**
+ * @brief: Trans given hex numbers to string
+ * @tparam Iterator: Iterator type of given hex number
+ * @param _it : Point to the first hex number to be transformed into hex string
+ * @param _end: Point to the last hex number to be transformed into hex string
+ * @param _prefix : Prefix of the outputed hex string
+ * @return std::string : Transformed hex string of given hex numbers
+ */
 template <class Iterator>
 std::string toHex(Iterator _it, Iterator _end, std::string const& _prefix)
 {
