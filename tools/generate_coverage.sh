@@ -154,19 +154,25 @@ build_source() {
     else
         LOG_ERROR "unsupported platform!"
     fi
+    execute_cmd "cd ${prev_dir}"
 }
 
 run_unitest() {
-    execute_cmd "cd ${current_dir}/build/test && ./test-fisco-bcos"
+    execute_cmd "cd  $prev_dir/ci"
+    execute_cmd "sh test.sh"
+    execute_cmd "cd $prev_dir"
 }
 
 gen_coverage_html() {
+    timestamp="`date +%s`"
+    filename=$name-$timestamp
     execute_cmd "cd ${current_dir}"
     execute_cmd "lcov -o coverage_in -c -d ./"
     execute_cmd "lcov -o coverage -r coverage_in '/usr*' '*deps/*'"
-    execute_cmd "genhtml -o coverage_result coverage"
-    execute_cmd "tar -zcf $name.tar.gz coverage_result/*"
-    execute_cmd "mv $name.tar.gz $prev_dir"
+    execute_cmd "genhtml -o bcos_coverage coverage"
+    execute_cmd "tar -zcf $filename.tar.gz bcos_coverage/*"
+    execute_cmd "mv $filename.tar.gz $prev_dir"
+    execute_cmd "rm -rf coverage_in bcos_coverage coverage "
 
 }
 
