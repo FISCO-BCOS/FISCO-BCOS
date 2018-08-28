@@ -29,7 +29,6 @@
 //#include <libdevcrypto/sm3/sm3.h>
 //#endif
 #include "RLP.h"
-#include "picosha2.h"
 using namespace std;
 using namespace dev;
 
