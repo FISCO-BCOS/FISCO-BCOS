@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief
+ * @brief Construct a new boost auto test case object for LevelDB CRUD
  *
  * @file LevelDB.cpp
  * @author: tabsu
@@ -26,13 +26,6 @@
 
 
 BOOST_AUTO_TEST_SUITE(LevelDB)
-
-/**
- * @brief Construct a new boost auto test case object,
- * For libdevcore/LevelDB.cpp CRUD
- * @author: tabsu
- * @date 2018-08-24
- */
 
 BOOST_AUTO_TEST_CASE(testLevelDBKeyExist)
 {
