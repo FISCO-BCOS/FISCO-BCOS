@@ -53,6 +53,7 @@ ExternalProject_Add(boost
         --with-regex
         --with-test
         --with-thread
+        --with-program_options
     LOG_BUILD 1
     INSTALL_COMMAND ""
 )
@@ -95,3 +96,7 @@ add_library(Boost::Thread STATIC IMPORTED)
 set_property(TARGET Boost::Thread PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_thread${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::Thread PROPERTY INTERFACE_LINK_LIBRARIES Boost::Chrono Boost::DataTime Boost::Regex)
 add_dependencies(Boost::Thread boost)
+
+add_library(Boost::program_options STATIC IMPORTED)
+set_property(TARGET Boost::program_options PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_program_options${BOOST_LIBRARY_SUFFIX})
+add_dependencies(Boost::program_options boost)
