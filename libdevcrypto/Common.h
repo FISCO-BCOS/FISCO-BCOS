@@ -77,10 +77,10 @@ Address toAddress(Secret const& _secret);
 // for contract adddress generation
 Address toAddress(Address const& _from, u256 const& _nonce);
 
-/// Encrypts plain text using Public key.(unsymmetric encryption)
+/// Encrypts plain text using Public key.(asymmetric encryption)
 void encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher);
 
-/// Decrypts cipher using Secret key.(unsymmetric decryption)
+/// Decrypts cipher using Secret key.(asymmetric decryption)
 bool decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext);
 
 /// Symmetric encryption.
