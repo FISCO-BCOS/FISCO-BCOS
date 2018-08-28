@@ -73,8 +73,7 @@ VMKindTableEntry vmKindsTable[] = {
 #ifdef ETH_HERA
     {VMKind::Hera, "hera"},
 #endif
-    {VMKind::Interpreter, "interpreter"}
-};
+    {VMKind::Interpreter, "interpreter"}};
 
 void setVMKind(const std::string& _name)
 {
