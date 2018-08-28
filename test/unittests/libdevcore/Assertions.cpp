@@ -24,7 +24,7 @@
 
 #include <libdevcore/Assertions.h>
 #include <libdevcore/Exceptions.h>
-#include <test/tools/libutils/TestOutputHelper.h>
+#include <test/tools/libtestutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 #include <vector>

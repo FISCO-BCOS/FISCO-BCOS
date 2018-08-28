@@ -18,7 +18,7 @@
  * Fixture class for boost output when running testeth
  */
 
-#include <test/tools/libutils/TestOutputHelper.h>
+#include <test/tools/libtestutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 

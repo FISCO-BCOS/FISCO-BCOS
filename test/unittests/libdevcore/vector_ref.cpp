@@ -23,7 +23,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/vector_ref.h>
-#include <test/tools/libutils/TestOutputHelper.h>
+#include <test/tools/libtestutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 #include <vector>

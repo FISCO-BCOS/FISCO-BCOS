@@ -23,7 +23,7 @@
 
 
 #include <libdevcore/SHA3.h>
-#include <test/tools/libutils/TestOutputHelper.h>
+#include <test/tools/libtestutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdio>
 #include <string>
