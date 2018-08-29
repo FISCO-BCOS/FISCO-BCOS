@@ -33,7 +33,7 @@ target_include_directories(fisco-bcos PRIVATE ${BOOST_INCLUDE_DIR})
 
 target_link_libraries(fisco-bcos devcore)
 target_link_libraries(fisco-bcos devcrypto)
-
+target_link_libraries(fisco-bcos ethcore)
 
 if (UNIX AND NOT APPLE)
 	target_link_libraries(fisco-bcos pthread)
