@@ -54,7 +54,7 @@ bool remove_files(const std::string& file_path, unsigned int max_retry = 10)
     unsigned retry = 0;
     while (result == false && retry < max_retry)
     {
-        result = boost::filesystem::remove(file_path, err);
+        result = boost::filesystem::remove_all(file_path, err);
         retry++;
     }
     return result;
@@ -93,11 +93,11 @@ BOOST_AUTO_TEST_CASE(testFileOptions)
     for (unsigned i = 0; i < size; i++)
     {
         file_name = dst_dir + "/" + toString(i) + ".txt";
+        std::cout << "##file_name:" << file_name << std::endl;
         BOOST_CHECK(boost::filesystem::exists(file_name));
         BOOST_CHECK(contentsString(file_name) == content);
     }
     remove_files(file_dir);
-    remove_files(dst_dir);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
