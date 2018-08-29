@@ -16,7 +16,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @brief Class for handling test-fisco-bcos custom options
+ * @brief unit test for CryptoPP.
  *
  * @file crypto.cpp
  * @author yujiechen
