@@ -20,10 +20,9 @@
  */
 
 #include "Common.h"
-#include <libdevcore/Base64.h>
-//#include <libdevcore/Terminal.h>
 #include "BlockHeader.h"
 #include "Exceptions.h"
+#include <libdevcore/Base64.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/SHA3.h>
 #include <libdevcore/easylog.h>
