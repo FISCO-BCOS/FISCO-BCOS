@@ -16,11 +16,11 @@
 */
 
 #include "OverlayDB.h"
-#include "Common.h"
-#include "SHA3.h"
-#include "TrieDB.h"
-#include "db.h"
+
 #include <thread>
+#include <libdevcore/db.h>
+#include <libdevcore/Common.h>
+#include "TrieCommon.h"
 
 namespace dev
 {
@@ -50,20 +50,22 @@ void OverlayDB::commit()
     if (m_db)
     {
         auto writeBatch = m_db->createWriteBatch();
+//      cnote << "Committing nodes to disk DB:";
 #if DEV_GUARDED_DB
         DEV_READ_GUARDED(x_this)
 #endif
         {
-            for (auto const& i : m_main)
+            for (auto const& i: m_main)
             {
                 if (i.second.second)
                     writeBatch->insert(toSlice(i.first), toSlice(i.second.first));
+//              cnote << i.first << "#" << m_main[i.first].second;
             }
-            for (auto const& i : m_aux)
+            for (auto const& i: m_aux)
                 if (i.second.second)
                 {
                     bytes b = i.first.asBytes();
-                    b.push_back(255);  // for aux
+                    b.push_back(255);   // for aux
                     writeBatch->insert(toSlice(b), toSlice(i.second.first));
                 }
         }
@@ -82,8 +84,7 @@ void OverlayDB::commit()
                     LOG(WARNING) << "Fail writing to state database. Bombing out.";
                     exit(-1);
                 }
-                LOG(WARNING) << "Error writing to state database: "
-                             << boost::diagnostic_information(ex);
+                LOG(WARNING) << "Error writing to state database: " << boost::diagnostic_information(ex);
                 LOG(WARNING) << "Sleeping for" << (i + 1) << "seconds, then retrying.";
                 std::this_thread::sleep_for(std::chrono::seconds(i + 1));
             }
@@ -105,7 +106,7 @@ bytes OverlayDB::lookupAux(h256 const& _h) const
         return ret;
 
     bytes b = _h.asBytes();
-    b.push_back(255);  // for aux
+    b.push_back(255);   // for aux
     std::string const v = m_db->lookup(toSlice(b));
     if (v.empty())
         LOG(WARNING) << "Aux not found: " << _h;
@@ -139,7 +140,6 @@ bool OverlayDB::exists(h256 const& _h) const
 
 void OverlayDB::kill(h256 const& _h)
 {
-#if ETH_PARANOIA || 1
     if (!MemoryDB::kill(_h))
     {
         if (m_db)
@@ -149,17 +149,13 @@ void OverlayDB::kill(h256 const& _h)
                 // No point node ref decreasing for EmptyTrie since we never bother incrementing it
                 // in the first place for empty storage tries.
                 if (_h != EmptyTrie)
-                    LOG(INFO)
-                        << "Decreasing DB node ref count below zero with no DB node. Probably "
-                           "have a corrupt Trie."
-                        << _h;
+                    LOG(WARNING) << "Decreasing DB node ref count below zero with no DB node. Probably "
+                             "have a corrupt Trie."
+                          << _h;
                 // TODO: for 1.1: ref-counted triedb.
             }
         }
     }
-#else
-    MemoryDB::kill(_h);
-#endif
 }
 
-}  // namespace dev
+}

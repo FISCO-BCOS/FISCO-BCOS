@@ -95,9 +95,6 @@ void MemoryDB::insert(h256 const& _h, bytesConstRef _v)
     }
     else
         m_main[_h] = make_pair(_v.toString(), 1);
-#if ETH_PARANOIA
-    LOG(DEBUG) << "INST " << _h << "=>" << m_main[_h].second;
-#endif
 }
 
 bool MemoryDB::kill(h256 const& _h)
@@ -112,20 +109,6 @@ bool MemoryDB::kill(h256 const& _h)
             m_main[_h].second--;
             return true;
         }
-#if ETH_PARANOIA
-        else
-        {
-            // If we get to this point, then there was probably a node in the level DB which we need
-            // to remove and which we have previously used as part of the memory-based MemoryDB.
-            // Nothing to be worried about *as long as the node exists in the DB*.
-            LOG(DEBUG) << "NOKILL-WAS " << _h;
-        }
-        LOG(DEBUG) << "KILL " << _h << "=>" << m_main[_h].second;
-    }
-    else
-    {
-        LOG(DEBUG) << "NOKILL " << _h;
-#endif
     }
     return false;
 }
