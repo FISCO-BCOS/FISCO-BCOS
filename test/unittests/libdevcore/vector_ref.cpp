@@ -132,8 +132,20 @@ BOOST_AUTO_TEST_CASE(testContentsEqual)
     vector_ref<int> ref_v1(&v1);
     BOOST_CHECK(vector_ref<int>(&v2) != ref_v1);
     BOOST_CHECK(ref_v1.contentsEqual(v2));
+    // test empty vec_ref
+    vector_ref<int> empty_vec;
+    vector_ref<int> empty_vec2;
+    BOOST_CHECK(empty_vec.contentsEqual(v1) == false);
+    BOOST_CHECK(empty_vec.contentsEqual(empty_vec2.toVector()) == true);
 }
 
+BOOST_AUTO_TEST_CASE(testEmptyCropped)
+{
+    std::vector<int> v1(1, 19);
+    vector_ref<int> origin = ref(v1);
+    vector_ref<int> ret = origin.cropped(2, 10);
+    BOOST_CHECK(ret.empty() == true);
+}
 
 // test function "Overlap"
 BOOST_AUTO_TEST_CASE(testOverlap)
@@ -154,14 +166,9 @@ BOOST_AUTO_TEST_CASE(testOverlap)
         str_ref.data() + 3, (size_t)std::min((size_t)str.length() - 2, (size_t)5) / sizeof(char));
     // std::string tmp_str = "abcd";
     // vector_ref<const char> non_overlap_ref(tmp_str);
-
     BOOST_CHECK(str_ref.overlapsWith(sub_str_ref1) == true);
     BOOST_CHECK(str_ref.overlapsWith(sub_str_ref2) == true);
     BOOST_CHECK(sub_str_ref1.overlapsWith(sub_str_ref2) == true);
-    // BOOST_CHECK(str_ref.overlapsWith(non_overlap_ref) == false);
-    // test non-overlap
-    // BOOST_CHECK(sub_str_ref1.overlapsWith(non_overlap_ref) == false);
-    // BOOST_CHECK(sub_str_ref2.overlapsWith(non_overlap_ref) == false);
 
     /// ====test vector Overlap ====
     std::vector<int> v1_int(size);
@@ -193,6 +200,8 @@ BOOST_AUTO_TEST_CASE(testPopulateAndCopyPopulate)
     std::vector<char> tmp_dst_v(dst_v.begin(), dst_v.end());
 
     ref(tmp_src_v).copyTo(ref(tmp_dst_v));
+    ref(tmp_dst_v).populate(ref(tmp_src_v));
+    ref(tmp_dst_v).populate(ref(tmp_dst_v));
 }
 
 // test function "testCleanse"

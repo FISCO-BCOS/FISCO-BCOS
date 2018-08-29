@@ -120,6 +120,35 @@ BOOST_AUTO_TEST_CASE(testBigEndian)
     BOOST_CHECK(fromBigEndian<u256>(toBigEndianString(number)) == number);
     BOOST_CHECK(fromBigEndian<u160>(toBigEndianString(number_u160)) == number_u160);
 }
+/// test operator+
+BOOST_AUTO_TEST_CASE(testOperators)
+{
+    // test is_pod operator+
+    std::string a_str = "abcdef";
+    std::string b_str = "01234";
+    std::vector<char> a_vec(a_str.begin(), a_str.end());
+    std::vector<char> b_vec(b_str.begin(), b_str.end());
+    std::vector<char> result = a_vec + b_vec;
+    BOOST_CHECK(std::string(result.begin(), result.end()) == (a_str + b_str));
+    // test common operator+
+    std::vector<std::string> total_array;
+    std::vector<std::string> a_str_array;
+    a_str_array.push_back("11");
+    a_str_array.push_back("22");
+    total_array = a_str_array;
+    std::vector<std::string> b_str_array;
+    b_str_array.push_back("aa");
+    b_str_array.push_back("cc");
+    total_array.push_back("aa");
+    total_array.push_back("cc");
+    std::vector<std::string> c_str_array = a_str_array + b_str_array;
+    BOOST_CHECK(c_str_array == total_array);
+
+    // test toString
+    string32 s_32 = {'a', 'b', 'c'};
+    std::string s = toString(s_32);
+    BOOST_CHECK(s == "abc");
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
