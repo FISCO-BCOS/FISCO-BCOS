@@ -37,6 +37,9 @@ BOOST_AUTO_TEST_CASE(testFromUUID)
     const std::string uuid = "067150c0-7dab-4fac-b716-0e075548007e";
     h128 h = fromUUID(uuid);
     BOOST_CHECK("0x067150c07dab4facb7160e075548007e" == toJS(h));
+
+    const std::string uuidError = "067150c0+7dab-4fac-b716-0e075548007e";
+    BOOST_CHECK(h128() == fromUUID(uuidError));
 }
 
 BOOST_AUTO_TEST_CASE(testToUUID)
