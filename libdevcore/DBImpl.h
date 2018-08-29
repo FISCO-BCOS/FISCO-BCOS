@@ -17,8 +17,8 @@
 
 #pragma once
 
-#include <libdevcore/LevelDB.h>
-#include <libdevcore/db.h>
+#include "LevelDB.h"
+#include "libdevcore/db.h"
 
 namespace dev
 {

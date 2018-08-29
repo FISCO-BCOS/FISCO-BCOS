@@ -17,9 +17,9 @@
 
 #include "OverlayDB.h"
 
+#include "Common.h"
 #include "TrieCommon.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/db.h>
+#include "db.h"
 #include <thread>
 
 namespace dev

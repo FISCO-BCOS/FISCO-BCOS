@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
-#include <libdevcore/MemoryDB.h>
-#include <libdevcore/db.h>
-#include <libdevcore/easylog.h>
+#include "Common.h"
+#include "MemoryDB.h"
+#include "db.h"
+#include "easylog.h"
 #include <memory>
 
 namespace dev
