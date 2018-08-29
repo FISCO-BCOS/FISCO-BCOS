@@ -77,7 +77,9 @@ BOOST_AUTO_TEST_CASE(testSha3CommonFunc)
     const byte* ptr = copyed_sha3.data();
     const byte* p_sec = sec_sha3.data();
     BOOST_CHECK(copyed_sha3.data() != sec_sha3.data());
-
+    BOOST_CHECK(sec_sha3.data());
+    // test sha3 with SecureFixedHash input
+    BOOST_CHECK(sha3(sec_sha3).data());
     // test sha3Mac
     h256 egressMac(sha3("+++"));
     bytes magic{0x22, 0x40, 0x08, 0x91};
