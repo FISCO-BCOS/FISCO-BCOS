@@ -21,8 +21,8 @@
  * @date 2018-08-29
  */
 #include <libdevcore/CommonIO.h>
-#include <libdevcore/secure_vector.h>
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/secure_vector.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev;
