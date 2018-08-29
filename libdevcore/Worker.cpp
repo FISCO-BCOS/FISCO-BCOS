@@ -22,14 +22,21 @@
 #include "Worker.h"
 
 #include "easylog.h"
+#include <pthread.h>
 #include <chrono>
 #include <thread>
 using namespace std;
 using namespace dev;
 
+void setThreadName(std::string const& _n)
+{
+#if defined(__GLIBC__)
+    pthread_setname_np(pthread_self(), _n.c_str());
+#endif
+}
+
 void Worker::startWorking()
 {
-    //	cnote << "startWorking for thread" << m_name;
     std::unique_lock<std::mutex> l(x_work);
     if (m_work)
     {
@@ -42,8 +49,7 @@ void Worker::startWorking()
         m_state = WorkerState::Starting;
         m_state_notifier.notify_all();
         m_work.reset(new thread([&]() {
-            pthread_setThreadName(m_name.c_str());
-            //			cnote << "Thread begins";
+            setThreadName(m_name.c_str());
             while (m_state != WorkerState::Killing)
             {
                 WorkerState ex = WorkerState::Starting;
@@ -52,8 +58,7 @@ void Worker::startWorking()
                     unique_lock<mutex> l(x_work);
                     m_state = WorkerState::Started;
                 }
-                //				cnote << "Trying to set Started: Thread was" << (unsigned)ex << "; "
-                //<< ok;
+
                 m_state_notifier.notify_all();
 
                 try
@@ -67,19 +72,14 @@ void Worker::startWorking()
                     LOG(WARNING) << "Exception thrown in Worker thread: " << _e.what();
                 }
 
-                //				ex = WorkerState::Stopping;
-                //				m_state.compare_exchange_strong(ex, WorkerState::Stopped);
-
                 {
                     // the condition variable-related lock
                     unique_lock<mutex> l(x_work);
                     ex = m_state.exchange(WorkerState::Stopped);
-                    //					cnote << "State: Stopped: Thread was" << (unsigned)ex;
                     if (ex == WorkerState::Killing || ex == WorkerState::Starting)
                         m_state.exchange(ex);
                 }
                 m_state_notifier.notify_all();
-                //				cnote << "Waiting until not Stopped...";
 
                 {
                     unique_lock<mutex> l(x_work);
@@ -89,7 +89,6 @@ void Worker::startWorking()
                 }
             }
         }));
-        //		cnote << "Spawning" << m_name;
     }
 
     DEV_TIMED_ABOVE("Start worker", 100)
@@ -115,7 +114,6 @@ void Worker::stopWorking()
 
 void Worker::terminate()
 {
-    //	cnote << "stopWorking for thread" << m_name;
     std::unique_lock<Mutex> l(x_work);
     if (m_work)
     {
