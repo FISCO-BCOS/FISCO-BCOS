@@ -79,7 +79,6 @@ BOOST_AUTO_TEST_CASE(testMemoryDBAux)
     dev::EnforceRefs enforceRefs(memoryDB, true);
 
     h256 key = dev::sha3("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
-    h256 keyNotExist = dev::sha3("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120184");
 
     bytesConstRef value("helloworld");
     memoryDB.insertAux(key, value);
