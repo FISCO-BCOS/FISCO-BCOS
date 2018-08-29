@@ -361,9 +361,9 @@ Secret Nonce::next()
     return sha3(~m_value);
 }
 
-void dev::crypto::ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s)
+bool dev::crypto::ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s)
 {
-    Secp256k1PP::get()->agree(_s, _r, o_s);
+    return Secp256k1PP::get()->agree(_s, _r, o_s);
 }
 
 bytes ecies::kdf(Secret const& _z, bytes const& _s1, unsigned kdByteLen)

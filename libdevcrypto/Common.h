@@ -226,7 +226,7 @@ private:
 namespace ecdh
 {
 // bool agree(Secret const& _s, Public const& _r, Secret& o_s) noexcept;
-void agree(Secret const& _s, Public const& _r, Secret& o_s);
+bool agree(Secret const& _s, Public const& _r, Secret& o_s);
 }  // namespace ecdh
 
 namespace ecies

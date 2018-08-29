@@ -153,7 +153,8 @@ bool Secp256k1PP::decryptECIES(Secret const& _k, bytesConstRef _sharedMacData, b
         return false;
 
     Secret z;
-    ecdh::agree(_k, *(Public*)(io_text.data() + 1), z);
+    if (!ecdh::agree(_k, *(Public*)(io_text.data() + 1), z))
+        return false;
     auto key = ecies::kdf(z, bytes(), 64);
     bytesConstRef eKey = bytesConstRef(&key).cropped(0, 16);
     bytesRef mKeyMaterial = bytesRef(&key).cropped(16, 16);
@@ -261,7 +262,7 @@ void Secp256k1PP::decrypt(Secret const& _k, bytes& io_text)
     io_text = std::move(plain);
 }
 
-void Secp256k1PP::agree(Secret const& _s, Public const& _r, Secret& o_s)
+bool Secp256k1PP::agree(Secret const& _s, Public const& _r, Secret& o_s)
 {
     // TODO: mutex ASN1::secp256k1() singleton
     // Creating Domain is non-const for m_oid and m_oid is not thread-safe
@@ -269,5 +270,5 @@ void Secp256k1PP::agree(Secret const& _s, Public const& _r, Secret& o_s)
     assert(d.AgreedValueLength() == sizeof(o_s));
     byte remote[65] = {0x04};
     memcpy(&remote[1], _r.data(), 64);
-    d.Agree(o_s.writable().data(), _s.data(), remote);
+    return d.Agree(o_s.writable().data(), _s.data(), remote);
 }

@@ -59,7 +59,7 @@ public:
     /// Decrypts text (replace input). (ECIES w/AES128-CTR-SHA256)
     bool decryptECIES(Secret const& _k, bytesConstRef _sharedMacData, bytes& io_text);
 
-    void agree(Secret const& _s, Public const& _r, Secret& o_s);
+    bool agree(Secret const& _s, Public const& _r, Secret& o_s);
 
 private:
     Secp256k1PP() = default;

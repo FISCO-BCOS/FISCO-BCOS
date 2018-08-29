@@ -29,11 +29,6 @@ namespace dev
 {
 namespace crypto
 {
-namespace ecdh
-{
-void agree(Secret const& _s, Public const& _r, Secret& o_s);
-}
-
 /**
  * @brief Derive DH shared secret from EC keypairs.
  * As ephemeral keys are single-use, agreement is limited to a single occurrence.
@@ -50,7 +45,7 @@ public:
     Secret seckey() { return m_ephemeral.secret(); }
 
     /// Input public key for dh agreement, output generated shared secret.
-    void agree(Public const& _remoteEphemeral, Secret& o_sharedSecret) const;
+    bool agree(Public const& _remoteEphemeral, Secret& o_sharedSecret) const;
 
 protected:
     KeyPair m_ephemeral;               ///< Ephemeral keypair; generated.
