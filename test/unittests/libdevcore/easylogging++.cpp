@@ -315,6 +315,688 @@ BOOST_AUTO_TEST_CASE(WriteAllTestN_TIMES)
     BOOST_CHECK_EQUAL(s, tail(4));
 }
 
+BOOST_AUTO_TEST_CASE(ConfigurationsTestSet)
+{
+    Configurations c;
+    c.set(Level::Info, el::ConfigurationType::Enabled, "true");
+    c.set(Level::Info, el::ConfigurationType::Enabled, "true");
+    BOOST_CHECK_EQUAL(c.size(), 1);
+    Configurations c2;
+    c2 = c;
+    c2.set(Level::Info, el::ConfigurationType::Enabled, "false");
+    BOOST_CHECK_EQUAL(c.get(Level::Info, el::ConfigurationType::Enabled)->value(), "true");
+    BOOST_CHECK_EQUAL(c2.get(Level::Info, el::ConfigurationType::Enabled)->value(), "false");
+    BOOST_CHECK_EQUAL(c2.size(), 1);
+}
+
+BOOST_AUTO_TEST_CASE(ConfigurationsTestHasConfiguration)
+{
+    Configurations c;
+    c.set(Level::Info, el::ConfigurationType::Enabled, "true");
+    c.set(Level::Debug, el::ConfigurationType::Enabled, "false");
+    c.set(Level::Info, el::ConfigurationType::Format, "%level: %msg");
+
+    BOOST_CHECK(c.hasConfiguration(ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(ConfigurationType::Format));
+    BOOST_CHECK(!c.hasConfiguration(ConfigurationType::Filename));
+    BOOST_CHECK(!c.hasConfiguration(ConfigurationType::MaxLogFileSize));
+
+    BOOST_CHECK(c.hasConfiguration(Level::Debug, ConfigurationType::Enabled));
+    BOOST_CHECK(!c.hasConfiguration(Level::Verbose, ConfigurationType::Format));
+}
+
+BOOST_AUTO_TEST_CASE(ConfigurationsTestSetForAllLevels)
+{
+    Configurations c;
+    c.setGlobally(el::ConfigurationType::Enabled, "true");
+    BOOST_CHECK(!c.hasConfiguration(Level::Global, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Debug, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Info, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Warning, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Error, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Fatal, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Verbose, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Trace, ConfigurationType::Enabled));
+}
+
+
+BOOST_AUTO_TEST_CASE(ConfigurationsTestParsingFromFile)
+{
+    std::fstream confFile("/tmp/temp-test.conf", std::fstream::out);
+    confFile << " * GLOBAL:\n"
+             << "    FORMAT               =  %datetime %level %msg\n"
+             << "* INFO:\n"
+             // Following should be included in format because its inside the quotes
+             << "    FORMAT               =  \"%datetime %level [%user@%host] [%func] [%loc] "
+                "%msg## This should be included in format\" ## This should be excluded\n"
+             << "* DEBUG:\n"
+             << "    FORMAT               =  %datetime %level [%user@%host] [%func] [%loc] %msg ## "
+                "Comment before EOL char\n"
+             << "## Comment on empty line\n"
+             // WARNING is defined by GLOBAL
+             << "* ERROR:\n"
+             << "    FORMAT               =  %datetime %level %msg\n"
+             << "* FATAL:\n"
+             << "    FORMAT               =  %datetime %level %msg\n"
+             << "* VERBOSE:\n"
+             << "    FORMAT               =  %datetime %level-%vlevel %msg\n"
+             << "* TRACE:\n"
+             << "    FORMAT               =  %datetime %level [%func] [%loc] %msg\n";
+    confFile.close();
+
+    Configurations c("/tmp/temp-test.conf", false, nullptr);
+    BOOST_CHECK(!c.hasConfiguration(Level::Debug, ConfigurationType::Enabled));
+    BOOST_CHECK(!c.hasConfiguration(Level::Global, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Global, ConfigurationType::Format));
+    BOOST_CHECK(c.hasConfiguration(Level::Info, ConfigurationType::Format));
+    BOOST_CHECK_EQUAL(
+        "%datetime %level %msg", c.get(Level::Global, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level [%user@%host] [%func] [%loc] %msg## This should be included in format",
+        c.get(Level::Info, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level [%user@%host] [%func] [%loc] %msg",
+        c.get(Level::Debug, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level %msg", c.get(Level::Warning, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level %msg", c.get(Level::Error, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level %msg", c.get(Level::Fatal, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level-%vlevel %msg", c.get(Level::Verbose, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level [%func] [%loc] %msg",
+        c.get(Level::Trace, ConfigurationType::Format)->value());
+}
+
+BOOST_AUTO_TEST_CASE(ConfigurationsTestParsingFromText)
+{
+    std::stringstream ss;
+    ss << " * GLOBAL:\n"
+       << "    FORMAT               =  %datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg\n"
+       << "* DEBUG:\n"
+       << "    FORMAT               =  %datetime %level [%user@%host] [%func] [%loc] %msg\n"
+       // INFO and WARNING uses is defined by GLOBAL
+       << "* ERROR:\n"
+       << "    FORMAT               =  %datetime %level %msg\n"
+       << "* FATAL:\n"
+       << "    FORMAT               =  %datetime %level %msg\n"
+       << "* VERBOSE:\n"
+       << "    FORMAT               =  %datetime %level-%vlevel %msg\n"
+       << "* TRACE:\n"
+       << "    FORMAT               =  %datetime %level [%func] [%loc] %msg\n";
+
+    Configurations c;
+    c.parseFromText(ss.str());
+    BOOST_CHECK(!c.hasConfiguration(Level::Debug, ConfigurationType::Enabled));
+    BOOST_CHECK(!c.hasConfiguration(Level::Global, ConfigurationType::Enabled));
+    BOOST_CHECK(c.hasConfiguration(Level::Global, ConfigurationType::Format));
+    BOOST_CHECK(c.hasConfiguration(Level::Info, ConfigurationType::Format));
+    BOOST_CHECK_EQUAL("%datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg",
+        c.get(Level::Global, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg",
+        c.get(Level::Info, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg",
+        c.get(Level::Warning, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level [%user@%host] [%func] [%loc] %msg",
+        c.get(Level::Debug, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level %msg", c.get(Level::Error, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level %msg", c.get(Level::Fatal, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level-%vlevel %msg", c.get(Level::Verbose, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level [%func] [%loc] %msg",
+        c.get(Level::Trace, ConfigurationType::Format)->value());
+}
+
+BOOST_AUTO_TEST_CASE(ConfigurationsTestParsingFromTextWithEscape)
+{
+    std::stringstream ss;
+    ss << " * GLOBAL:\n"
+       << "    FORMAT               =  %datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg\n"
+       << "* DEBUG:\n"
+       << "    FORMAT               =  \"%datetime %level [%user@%host] [%func] [%loc] \\\"inside "
+          "quotes\\\" %msg\"\n"
+       // INFO and WARNING uses is defined by GLOBAL
+       << "* ERROR:\n"
+       << "    FORMAT               =  \"%datetime %level \\\"##hash##\\\" %msg\"\n"
+       << "* FATAL:\n"
+       << "    FORMAT               =  %datetime %level ## Comment out log format specifier "
+          "temporarily %msg\n"
+       << "* VERBOSE:\n"
+       << "    FORMAT               =  %datetime %level-%vlevel %msg\n"
+       << "* TRACE:\n"
+       << "    FORMAT               =  %datetime %level [%func] [%loc] %msg\n";
+
+    Configurations c;
+    c.parseFromText(ss.str());
+    BOOST_CHECK_EQUAL("%datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg",
+        c.get(Level::Global, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg",
+        c.get(Level::Info, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime{%d/%M/%Y %h:%m:%s,%g} %level %msg",
+        c.get(Level::Warning, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level [%user@%host] [%func] [%loc] \"inside quotes\" %msg",
+        c.get(Level::Debug, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level \"##hash##\" %msg",
+        c.get(Level::Error, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level", c.get(Level::Fatal, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(
+        "%datetime %level-%vlevel %msg", c.get(Level::Verbose, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level [%func] [%loc] %msg",
+        c.get(Level::Trace, ConfigurationType::Format)->value());
+}
+
+BOOST_AUTO_TEST_CASE(CommandLineArgsTestSetArgs)
+{
+    const char* c[10];
+    c[0] = "myprog";
+    c[1] = "-arg1";
+    c[2] = "--arg2WithValue=1";
+    c[3] = "--arg3WithValue=something=some_other_thing";
+    c[4] = "-arg1";  // Shouldn't be added
+    c[5] = "--arg3WithValue=this_should_be_ignored_since_key_already_exist";
+    c[6] = "--arg4WithValue=this_should_Added";
+    c[7] = "\0";
+    CommandLineArgs cmd(7, c);
+    BOOST_CHECK_EQUAL(4, cmd.size());
+    BOOST_CHECK(!cmd.hasParamWithValue("-arg1"));
+    BOOST_CHECK(!cmd.hasParam("--arg2WithValue"));
+    BOOST_CHECK(!cmd.hasParam("--arg3WithValue"));
+    BOOST_CHECK(cmd.hasParamWithValue("--arg2WithValue"));
+    BOOST_CHECK(cmd.hasParamWithValue("--arg3WithValue"));
+    BOOST_CHECK(cmd.hasParam("-arg1"));
+    BOOST_CHECK_EQUAL(cmd.getParamValue("--arg2WithValue"), "1");
+    BOOST_CHECK_EQUAL(cmd.getParamValue("--arg3WithValue"), "something=some_other_thing");
+    BOOST_CHECK_EQUAL(cmd.getParamValue("--arg4WithValue"), "this_should_Added");
+}
+
+
+BOOST_AUTO_TEST_CASE(CommandLineArgsTestLoggingFlagsArg)
+{
+    const char* c[3];
+    c[0] = "myprog";
+    c[1] = "--logging-flags=5";  // NewLineForContainer & LogDetailedCrashReason (1 & 4)
+    c[2] = "\0";
+
+    unsigned short currFlags = ELPP->flags();  // For resetting after test
+
+    BOOST_CHECK(!Loggers::hasFlag(LoggingFlag::NewLineForContainer));
+    BOOST_CHECK(!Loggers::hasFlag(LoggingFlag::LogDetailedCrashReason));
+
+    Helpers::setArgs(2, c);
+
+    // BOOST_CHECK(Loggers::hasFlag(LoggingFlag::NewLineForContainer));
+    // BOOST_CHECK(Loggers::hasFlag(LoggingFlag::LogDetailedCrashReason));
+
+    // Reset to original state
+    std::stringstream resetter;
+    resetter << "--logging-flags=" << currFlags;
+    c[1] = resetter.str().c_str();
+    Helpers::setArgs(2, c);
+    BOOST_CHECK(!Loggers::hasFlag(LoggingFlag::NewLineForContainer));
+    BOOST_CHECK(!Loggers::hasFlag(LoggingFlag::LogDetailedCrashReason));
+}
+
+
+const char* getIp(const el::LogMessage*)
+{
+    return "127.0.0.1";
+}
+
+BOOST_AUTO_TEST_CASE(CustomFormatSpecifierTestTestInstall)
+{
+    BOOST_CHECK(!el::Helpers::hasCustomFormatSpecifier("%ip"));
+    el::Helpers::installCustomFormatSpecifier(el::CustomFormatSpecifier("%ip", getIp));
+    BOOST_CHECK(el::Helpers::hasCustomFormatSpecifier("%ip"));
+}
+
+BOOST_AUTO_TEST_CASE(CustomFormatSpecifierTestTestResolution)
+{
+    Configurations c;
+    c.setGlobally(el::ConfigurationType::Format, "%datetime{%a %b %d, %H:%m} %ip: %msg");
+    el::Loggers::reconfigureLogger(consts::kDefaultLoggerId, c);
+    LOG(INFO) << "My ip test";
+    std::string s = BUILD_STR(getDate() << " 127.0.0.1: My ip test\n");
+    BOOST_CHECK_EQUAL(s, tail(1));
+    // Reset back
+    reconfigureLoggersForTest();
+}
+
+BOOST_AUTO_TEST_CASE(CustomFormatSpecifierTestTestUnInstall)
+{
+    BOOST_CHECK(el::Helpers::hasCustomFormatSpecifier("%ip"));
+    el::Helpers::uninstallCustomFormatSpecifier("%ip");
+    BOOST_CHECK(!el::Helpers::hasCustomFormatSpecifier("%ip"));
+}
+
+
+static const char* filename = "/tmp/files_utils_test";
+static el::base::type::fstream_t* fs;
+
+
+static void cleanFile(const char* filename = logfile, el::base::type::fstream_t* fs = nullptr)
+{
+    if (fs != nullptr && fs->is_open())
+    {
+        fs->close();
+        fs->open(filename, el::base::type::fstream_t::out);
+    }
+    else
+    {
+        el::base::type::fstream_t f(filename, el::base::type::fstream_t::out);
+        if (f.is_open())
+        {
+            f.close();
+        }
+        ELPP_UNUSED(f);
+    }
+}
+
+static void removeFile(const char* path)
+{
+    (void)(system(BUILD_STR("rm -rf " << path).c_str()) + 1);  // (void)(...+1) -> ignore result for
+                                                               // gcc 4.6+
+}
+
+BOOST_AUTO_TEST_CASE(FileUtilsTestNewFileStream)
+{
+    fs = File::newFileStream(filename);
+    // BOOST_CHECK_NE(NULL, fs);
+    BOOST_CHECK(fs->is_open());
+    cleanFile(filename, fs);
+}
+
+
+BOOST_AUTO_TEST_CASE(FileUtilsTestGetSizeOfFile)
+{
+    fs = File::newFileStream(filename);
+    BOOST_CHECK_EQUAL(File::getSizeOfFile(fs), 0);
+    const char* data = "123";
+    (*fs) << data;
+    fs->flush();
+    BOOST_CHECK_EQUAL(File::getSizeOfFile(fs), strlen(data));
+}
+
+BOOST_AUTO_TEST_CASE(FileUtilsTestPathExists)
+{
+    BOOST_CHECK(File::pathExists(filename));
+    removeFile(filename);
+    BOOST_CHECK(!File::pathExists(filename));
+}
+
+BOOST_AUTO_TEST_CASE(FileUtilsTestExtractPathFromFilename)
+{
+    BOOST_CHECK_EQUAL(
+        "/this/is/path/on/unix/", File::extractPathFromFilename("/this/is/path/on/unix/file.txt"));
+    BOOST_CHECK_EQUAL("C:\\this\\is\\path\\on\\win\\",
+        File::extractPathFromFilename("C:\\this\\is\\path\\on\\win\\file.txt", "\\"));
+}
+
+BOOST_AUTO_TEST_CASE(FileUtilsTestCreatePath)
+{
+    const char* path = "/tmp/my/one/long/path";
+    BOOST_CHECK(!File::pathExists(path));
+    BOOST_CHECK(File::createPath(path));
+    BOOST_CHECK(File::pathExists(path));
+    removeFile(path);
+    BOOST_CHECK(!File::pathExists(path));
+}
+
+BOOST_AUTO_TEST_CASE(FileUtilsTestBuildStrippedFilename)
+{
+    char buf[50] = "";
+
+    File::buildStrippedFilename("this_is_myfile.cc", buf, 50);
+    BOOST_CHECK_EQUAL("this_is_myfile.cc", buf);
+
+    Str::clearBuff(buf, 20);
+    BOOST_CHECK_EQUAL("", buf);
+
+    File::buildStrippedFilename("this_is_myfilename_with_more_than_50_characters.cc", buf, 50);
+    BOOST_CHECK_EQUAL("..s_is_myfilename_with_more_than_50_characters.cc", buf);
+}
+
+BOOST_AUTO_TEST_CASE(FormatSpecifierTestTestFBaseSpecifier)
+{
+    Configurations c;
+    c.setGlobally(el::ConfigurationType::Format, "%datetime{%a %b %d, %H:%m} %fbase: %msg");
+    el::Loggers::reconfigureLogger(consts::kDefaultLoggerId, c);
+    LOG(INFO) << "My fbase test";
+    std::string s = BUILD_STR(getDate() << " easylogging++.cpp: My fbase test\n");
+    BOOST_CHECK_EQUAL(s, tail(1));
+    // Reset back
+    reconfigureLoggersForTest();
+}
+
+BOOST_AUTO_TEST_CASE(FormatSpecifierTestTestLevShortSpecifier)
+{
+    const char* param[10];
+    param[0] = "myprog";
+    param[1] = "--v=5";
+    param[2] = "\0";
+    el::Helpers::setArgs(2, param);
+
+
+    // Regression origional %level still correct
+    Configurations c;
+    c.setGlobally(el::ConfigurationType::Format, "%level %msg");
+    c.set(el::Level::Verbose, el::ConfigurationType::Format, "%level-%vlevel %msg");
+    el::Loggers::reconfigureLogger(consts::kDefaultLoggerId, c);
+    {
+        std::string levelINFO = "INFO hello world\n";
+        std::string levelDEBUG = "DEBUG hello world\n";
+        std::string levelWARN = "WARNING hello world\n";
+        std::string levelERROR = "ERROR hello world\n";
+        std::string levelFATAL = "FATAL hello world\n";
+        std::string levelVER = "VERBOSE-2 hello world\n";
+        std::string levelTRACE = "TRACE hello world\n";
+        LOG(INFO) << "hello world";
+        BOOST_CHECK_EQUAL(levelINFO, tail(1));
+        LOG(DEBUG) << "hello world";
+        BOOST_CHECK_EQUAL(levelDEBUG, tail(1));
+        LOG(WARNING) << "hello world";
+        BOOST_CHECK_EQUAL(levelWARN, tail(1));
+        LOG(ERROR) << "hello world";
+        BOOST_CHECK_EQUAL(levelERROR, tail(1));
+        LOG(FATAL) << "hello world";
+        BOOST_CHECK_EQUAL(levelFATAL, tail(1));
+        VLOG(2) << "hello world";
+        BOOST_CHECK_EQUAL(levelVER, tail(1));
+        LOG(TRACE) << "hello world";
+        BOOST_CHECK_EQUAL(levelTRACE, tail(1));
+    }
+
+    // Test %levshort new specifier
+    c.setGlobally(el::ConfigurationType::Format, "%levshort  %msg");
+    c.set(el::Level::Verbose, el::ConfigurationType::Format, "%levshort%vlevel %msg");
+    el::Loggers::reconfigureLogger(consts::kDefaultLoggerId, c);
+    {
+        std::string levelINFO = "I  hello world\n";
+        std::string levelDEBUG = "D  hello world\n";
+        std::string levelWARN = "W  hello world\n";
+        std::string levelERROR = "E  hello world\n";
+        std::string levelFATAL = "F  hello world\n";
+        std::string levelVER = "V2 hello world\n";
+        std::string levelTRACE = "T  hello world\n";
+        LOG(INFO) << "hello world";
+        BOOST_CHECK_EQUAL(levelINFO, tail(1));
+        LOG(DEBUG) << "hello world";
+        BOOST_CHECK_EQUAL(levelDEBUG, tail(1));
+        LOG(WARNING) << "hello world";
+        BOOST_CHECK_EQUAL(levelWARN, tail(1));
+        LOG(ERROR) << "hello world";
+        BOOST_CHECK_EQUAL(levelERROR, tail(1));
+        LOG(FATAL) << "hello world";
+        BOOST_CHECK_EQUAL(levelFATAL, tail(1));
+        VLOG(2) << "hello world";
+        BOOST_CHECK_EQUAL(levelVER, tail(1));
+        LOG(TRACE) << "hello world";
+        BOOST_CHECK_EQUAL(levelTRACE, tail(1));
+    }
+
+    // Reset back
+    reconfigureLoggersForTest();
+}
+
+BOOST_AUTO_TEST_CASE(GlobalConfigurationTestParse)
+{
+    const char* globalConfFile = "/tmp/global-conf-test.conf";
+    std::fstream confFile(globalConfFile, std::fstream::out);
+    confFile << "-- performance\n"
+             << "    ## This just skips configuring performance logger any more.\n"
+             << "-- global-test-logger\n"
+             << "* GLOBAL:\n"
+             << "    FORMAT               =  GLOBAL_TEST\n"
+             << "* INFO:\n"
+             // Following should be included in format because its inside the quotes
+             << "* DEBUG:\n"
+             << "    FORMAT               =  %datetime %level [%user@%host] [%func] [%loc] %msg ## "
+                "Comment before EOL char\n"
+             << "## Comment on empty line\n"
+             // WARNING is defined by GLOBAL
+             << "* ERROR:\n"
+             << "    FORMAT               =  %datetime %level %msg\n"
+             << "* FATAL:\n"
+             << "    FORMAT               =  %datetime %level %msg\n"
+             << "* VERBOSE:\n"
+             << "    FORMAT               =  %datetime %level-%vlevel %msg\n"
+             << "* TRACE:\n"
+             << "    FORMAT               =  %datetime %level [%func] [%loc] %msg\n";
+    confFile.close();
+
+    Logger* perfLogger = Loggers::getLogger("performance", false);
+    BOOST_CHECK(perfLogger != NULL);
+
+    std::string perfFormatConf =
+        perfLogger->configurations()->get(Level::Info, ConfigurationType::Format)->value();
+    std::string perfFilenameConf =
+        perfLogger->configurations()->get(Level::Info, ConfigurationType::Filename)->value();
+    std::size_t totalLoggers = elStorage->registeredLoggers()->size();
+
+    BOOST_CHECK(Loggers::getLogger("global-test-logger", false) == nullptr);
+
+    Loggers::configureFromGlobal(globalConfFile);
+
+    BOOST_CHECK_EQUAL(totalLoggers + 1, elStorage->registeredLoggers()->size());
+    BOOST_CHECK_EQUAL(perfFormatConf,
+        perfLogger->configurations()->get(Level::Info, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL(perfFilenameConf,
+        perfLogger->configurations()->get(Level::Info, ConfigurationType::Filename)->value());
+
+    // Not nullptr anymore
+    Logger* testLogger = Loggers::getLogger("global-test-logger", false);
+    BOOST_CHECK(testLogger != nullptr);
+
+    BOOST_CHECK_EQUAL("GLOBAL_TEST",
+        testLogger->configurations()->get(Level::Info, ConfigurationType::Format)->value());
+    BOOST_CHECK_EQUAL("%datetime %level [%user@%host] [%func] [%loc] %msg",
+        testLogger->configurations()->get(Level::Debug, ConfigurationType::Format)->value());
+}
+
+/*
+BOOST_AUTO_TEST_CASE(HelpersTestConvertTemplateToStdString)
+{
+    std::vector<int> vecInt;
+    vecInt.push_back(1);
+    vecInt.push_back(2);
+    vecInt.push_back(3);
+    vecInt.push_back(4);
+    std::string strVecInt = el::Helpers::convertTemplateToStdString(vecInt);
+    BOOST_CHECK_EQUAL("[1, 2, 3, 4]", strVecInt);
+}
+*/
+
+BOOST_AUTO_TEST_CASE(RegisteredHitCountersTestValidationEveryN)
+{
+    RegisteredHitCounters r;
+
+    // Ensure no hit counters are registered yet
+    BOOST_CHECK(r.empty());
+
+    unsigned long int line = __LINE__;
+    r.validateEveryN(__FILE__, line, 2);
+
+    // Confirm size
+    BOOST_CHECK_EQUAL(1, r.size());
+
+    // Confirm hit count
+    BOOST_CHECK_EQUAL(1, r.getCounter(__FILE__, line)->hitCounts());
+
+    // Confirm validations
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 2));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 2));
+
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 2));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 2));
+
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 2));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 2));
+
+    line = __LINE__;
+    r.validateEveryN(__FILE__, line, 3);
+    // Confirm size
+    BOOST_CHECK_EQUAL(2, r.size());
+    // Confirm hitcounts
+    BOOST_CHECK_EQUAL(1, r.getCounter(__FILE__, line)->hitCounts());
+
+    // Confirm validations
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(r.validateEveryN(__FILE__, line, 3));
+    BOOST_CHECK(!r.validateEveryN(__FILE__, line, 3));
+
+    // Confirm size once again
+    BOOST_CHECK_EQUAL(2, r.size());
+}
+
+
+BOOST_AUTO_TEST_CASE(RegisteredHitCountersTestValidationAfterN)
+{
+    RegisteredHitCounters r;
+
+    // Ensure no hit counters are registered yet
+    BOOST_CHECK(r.empty());
+
+    unsigned long int line = __LINE__;
+    unsigned int n = 2;
+
+    // Register
+    r.validateAfterN(__FILE__, line, n);  // 1
+
+    // Confirm size
+    BOOST_CHECK_EQUAL(1, r.size());
+
+    // Confirm hit count
+    BOOST_CHECK_EQUAL(1, r.getCounter(__FILE__, line)->hitCounts());
+
+    // Confirm validations
+    BOOST_CHECK(!r.validateAfterN(__FILE__, line, n));  // 2
+    BOOST_CHECK(r.validateAfterN(__FILE__, line, n));   // 3
+    BOOST_CHECK(r.validateAfterN(__FILE__, line, n));   // 4
+    BOOST_CHECK(r.validateAfterN(__FILE__, line, n));   // 5
+    BOOST_CHECK(r.validateAfterN(__FILE__, line, n));   // 6
+}
+
+BOOST_AUTO_TEST_CASE(RegisteredHitCountersTestValidationNTimes)
+{
+    RegisteredHitCounters r;
+
+    // Ensure no hit counters are registered yet
+    BOOST_CHECK(r.empty());
+
+    unsigned long int line = __LINE__;
+    unsigned int n = 5;
+
+    // Register
+    r.validateNTimes(__FILE__, line, n);  // 1
+
+    // Confirm size
+    BOOST_CHECK_EQUAL(1, r.size());
+
+    // Confirm hit count
+    BOOST_CHECK_EQUAL(1, r.getCounter(__FILE__, line)->hitCounts());
+
+    // Confirm validations
+    BOOST_CHECK(r.validateNTimes(__FILE__, line, n));   // 2
+    BOOST_CHECK(r.validateNTimes(__FILE__, line, n));   // 3
+    BOOST_CHECK(r.validateNTimes(__FILE__, line, n));   // 4
+    BOOST_CHECK(r.validateNTimes(__FILE__, line, n));   // 5
+    BOOST_CHECK(!r.validateNTimes(__FILE__, line, n));  // 6
+    BOOST_CHECK(!r.validateNTimes(__FILE__, line, n));  // 7
+    BOOST_CHECK(!r.validateNTimes(__FILE__, line, n));  // 8
+    BOOST_CHECK(!r.validateNTimes(__FILE__, line, n));  // 9
+}
+
+BOOST_AUTO_TEST_CASE(LogFormatResolutionTestNormalFormat)
+{
+    LogFormat format(Level::Info, ELPP_LITERAL("%logger %thread"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %thread"), format.userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %thread"), format.format());
+    BOOST_CHECK_EQUAL("", format.dateTimeFormat());
+
+    LogFormat format2(Level::Info, ELPP_LITERAL("%logger %datetime{%Y-%M-%d %h:%m:%s  } %thread"));
+    BOOST_CHECK_EQUAL(
+        ELPP_LITERAL("%logger %datetime{%Y-%M-%d %h:%m:%s  } %thread"), format2.userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime %thread"), format2.format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d %h:%m:%s  ", format2.dateTimeFormat());
+
+    LogFormat format3(Level::Info, ELPP_LITERAL("%logger %datetime{%Y-%M-%d} %thread"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime{%Y-%M-%d} %thread"), format3.userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime %thread"), format3.format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d", format3.dateTimeFormat());
+}
+
+
+BOOST_AUTO_TEST_CASE(LogFormatResolutionTestDefaultFormat)
+{
+    LogFormat defaultFormat(Level::Info, ELPP_LITERAL("%logger %datetime %thread"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime %thread"), defaultFormat.userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime %thread"), defaultFormat.format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d %H:%m:%s,%g", defaultFormat.dateTimeFormat());
+
+    LogFormat defaultFormat2(Level::Info, ELPP_LITERAL("%logger %datetime %thread"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime %thread"), defaultFormat2.userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime %thread"), defaultFormat2.format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d %H:%m:%s,%g", defaultFormat2.dateTimeFormat());
+
+    LogFormat defaultFormat4(
+        Level::Verbose, ELPP_LITERAL("%logger %level-%vlevel %datetime %thread"));
+    BOOST_CHECK_EQUAL(
+        ELPP_LITERAL("%logger %level-%vlevel %datetime %thread"), defaultFormat4.userFormat());
+    BOOST_CHECK_EQUAL(
+        ELPP_LITERAL("%logger VERBOSE-%vlevel %datetime %thread"), defaultFormat4.format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d %H:%m:%s,%g", defaultFormat4.dateTimeFormat());
+}
+
+BOOST_AUTO_TEST_CASE(LogFormatResolutionTestEscapedFormat)
+{
+    SubsecondPrecision ssPrec(3);
+
+    LogFormat escapeTest(Level::Info, ELPP_LITERAL("%logger %datetime{%%H %H} %thread"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime{%%H %H} %thread"), escapeTest.userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%logger %datetime %thread"), escapeTest.format());
+    BOOST_CHECK_EQUAL("%%H %H", escapeTest.dateTimeFormat());
+    BOOST_CHECK(
+        Str::startsWith(DateTime::getDateTime(escapeTest.dateTimeFormat().c_str(), &ssPrec), "%H"));
+
+    LogFormat escapeTest2(
+        Level::Info, ELPP_LITERAL("%%logger %%datetime{%%H %H %%H} %%thread %thread %%thread"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%%logger %%datetime{%%H %H %%H} %%thread %thread %%thread"),
+        escapeTest2.userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%%logger %%datetime{%%H %H %%H} %%thread %thread %thread"),
+        escapeTest2.format());
+    BOOST_CHECK_EQUAL("", escapeTest2.dateTimeFormat());  // Date/time escaped
+    BOOST_CHECK(
+        Str::startsWith(DateTime::getDateTime(escapeTest.dateTimeFormat().c_str(), &ssPrec), "%H"));
+
+    LogFormat escapeTest3(
+        Level::Info, ELPP_LITERAL("%%logger %datetime{%%H %H %%H} %%thread %thread %%thread"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%%logger %datetime{%%H %H %%H} %%thread %thread %%thread"),
+        escapeTest3.userFormat());
+    BOOST_CHECK_EQUAL(
+        ELPP_LITERAL("%%logger %datetime %%thread %thread %thread"), escapeTest3.format());
+    BOOST_CHECK_EQUAL("%%H %H %%H", escapeTest3.dateTimeFormat());  // Date/time escaped
+    BOOST_CHECK(
+        Str::startsWith(DateTime::getDateTime(escapeTest.dateTimeFormat().c_str(), &ssPrec), "%H"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
+
 }  // namespace test
 }  // namespace dev
