@@ -39,9 +39,6 @@
 
 namespace dev
 {
-/// Requests the user to enter a password on the console.
-std::string getPassword(std::string const& _prompt);
-
 /// Retrieve and returns the contents of the given file.
 /// If the file doesn't exist or isn't readable, returns an empty container / bytes.
 bytes contents(boost::filesystem::path const& _file);
@@ -67,10 +64,6 @@ inline void writeFile(
 /// Non-recursively copies directory contents.
 /// Throws boost::filesystem_error on error.
 void copyDirectory(boost::filesystem::path const& _srcDir, boost::filesystem::path const& _dstDir);
-
-/// Nicely renders the given bytes to a string, optionally as HTML.
-/// @a _bytes: bytes array to be rendered as string. @a _width of a bytes line.
-std::string memDump(bytes const& _bytes, unsigned _width = 8, bool _html = false);
 
 // Stream I/O functions.
 // Provides templated stream I/O for all STL collections so they can be shifted on to any
@@ -109,15 +102,9 @@ inline std::ostream& operator<<(std::ostream& _out, std::set<T, U> const& _e);
 template <class T, class U>
 inline std::ostream& operator<<(std::ostream& _out, std::unordered_set<T, U> const& _e);
 
-#if defined(_WIN32)
-template <class T>
-inline std::string toString(
-    std::chrono::time_point<T> const& _e, std::string const& _format = "%Y-%m-%d %H:%M:%S")
-#else
 template <class T>
 inline std::string toString(
     std::chrono::time_point<T> const& _e, std::string const& _format = "%F %T")
-#endif
 {
     unsigned long milliSecondsSinceEpoch =
         std::chrono::duration_cast<std::chrono::milliseconds>(_e.time_since_epoch()).count();
@@ -126,11 +113,7 @@ inline std::string toString(
 
     tm timeValue;
     auto time = std::chrono::system_clock::to_time_t(tpAfterDuration);
-#if defined(_WIN32)
-    gmtime_s(&timeValue, &time);
-#else
     gmtime_r(&time, &timeValue);
-#endif
 
     unsigned const millisRemainder = milliSecondsSinceEpoch % 1000;
     char buffer[1024];
