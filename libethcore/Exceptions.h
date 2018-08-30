@@ -111,6 +111,10 @@ DEV_SIMPLE_EXCEPTION(AccountLocked);
 DEV_SIMPLE_EXCEPTION(TransactionRefused);
 DEV_SIMPLE_EXCEPTION(UnknownAccount);
 
+/// block header related exception
+DEV_SIMPLE_EXCEPTION(NoHashRecorded);
+DEV_SIMPLE_EXCEPTION(GenesisBlockCannotBeCalculated);
+
 struct VMException : Exception
 {
 };

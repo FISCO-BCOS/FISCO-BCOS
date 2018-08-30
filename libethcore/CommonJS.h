@@ -28,8 +28,6 @@
 #include <libdevcrypto/Common.h>
 #include <string>
 
-// devcrypto
-
 namespace dev
 {
 /// Leniently convert string to Public (h512). Accepts integers, "0x" prefixing, non-exact length.
@@ -53,12 +51,7 @@ inline Address jsToAddress(std::string const& _s)
     return eth::toAddress(_s);
 }
 
-/// Convert u256 into user-readable string. Returns int/hex value of 64 bits int, hex of 160 bits
-/// FixedHash. As a fallback try to handle input as h256.
-std::string prettyU256(u256 _n, bool _abridged = true);
-
 }  // namespace dev
-
 
 // ethcore
 namespace dev
@@ -67,7 +60,10 @@ namespace eth
 {
 /// Convert to a block number, a bit like jsToInt, except that it correctly recognises "pending" and
 /// "latest".
-BlockNumber jsToBlockNumber(std::string const& _js);
+BlockNumber jsToBlockNumber(std::string const& _js)
+{
+    return (unsigned)jsToInt(_js);
+}
 
 }  // namespace eth
 }  // namespace dev
