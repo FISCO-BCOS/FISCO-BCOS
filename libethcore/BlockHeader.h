@@ -38,43 +38,19 @@ namespace dev
 {
 namespace eth
 {
-enum IncludeSeal
-{
-    WithoutSeal = 0,
-    WithSeal = 1,
-    OnlySeal = 2
-};
-
 enum Strictness
 {
     CheckEverything,
-    JustSeal,
     QuickNonce,
     IgnoreSeal,
     CheckNothingNew
 };
-
-// TODO: for implementing soon.
-/*enum Check
-{
-    CheckBasic,
-    CheckExtended,
-    CheckBlock,
-    CheckParent,
-    CheckSeal,
-    CheckSealQuickly,
-    CheckAll = CheckBasic | CheckExtended | CheckBlock | CheckParent | CheckSeal,
-};
-using Checks = FlagSet<Check>;*/
 
 enum BlockDataType
 {
     HeaderData,
     BlockData
 };
-
-DEV_SIMPLE_EXCEPTION(NoHashRecorded);
-DEV_SIMPLE_EXCEPTION(GenesisBlockCannotBeCalculated);
 
 /** @brief Encapsulation of a block header.
  * Class to contain all of a block header's data. It is able to parse a block header and populate
@@ -101,9 +77,10 @@ class BlockHeader
     friend class BlockChain;
 
 public:
-    static const unsigned BasicFields = 13;
+    static const unsigned BasicFields = 12;
 
     BlockHeader();
+    /// construct block or block header according to input params
     explicit BlockHeader(
         bytesConstRef _data, BlockDataType _bdt = BlockData, h256 const& _hashWith = h256());
     explicit BlockHeader(
@@ -111,160 +88,151 @@ public:
       : BlockHeader(&_data, _bdt, _hashWith)
     {}
     BlockHeader(BlockHeader const& _other);
+
+    /// assignment function
     BlockHeader& operator=(BlockHeader const& _other);
 
-    static h256 headerHashFromBlock(bytes const& _block) { return headerHashFromBlock(&_block); }
-    static h256 headerHashFromBlock(bytesConstRef _block);
+    /// extract block header from block
     static RLP extractHeader(bytesConstRef _block);
 
-    explicit operator bool() const { return m_timestamp != Invalid256; }
+    /// get the hash of block header according to block data
+    static h256 headerHashFromBlock(bytes const& _block) { return headerHashFromBlock(&_block); }
+    static h256 headerHashFromBlock(bytesConstRef _block);
 
+
+    /// operator override: (), ==, !=
+    explicit operator bool() const { return m_timestamp != Invalid256; }
     bool operator==(BlockHeader const& _cmp) const
     {
-        return m_parentHash == _cmp.parentHash() && m_sha3Uncles == _cmp.sha3Uncles() &&
-               m_author == _cmp.author() && m_stateRoot == _cmp.stateRoot() &&
+        return m_parentHash == _cmp.parentHash() && m_stateRoot == _cmp.stateRoot() &&
                m_transactionsRoot == _cmp.transactionsRoot() &&
                m_receiptsRoot == _cmp.receiptsRoot() && m_logBloom == _cmp.logBloom() &&
-               m_difficulty == _cmp.difficulty() && m_number == _cmp.number() &&
-               m_gasLimit == _cmp.gasLimit() && m_gasUsed == _cmp.gasUsed() &&
-               m_timestamp == _cmp.timestamp() && m_extraData == _cmp.extraData();
+               m_number == _cmp.number() && m_gasLimit == _cmp.gasLimit() &&
+               m_gasUsed == _cmp.gasUsed() && m_timestamp == _cmp.timestamp() &&
+               m_extraData == _cmp.extraData() && m_sealer == _cmp.sealer() &&
+               m_sealerList == sealerList();
     }
     bool operator!=(BlockHeader const& _cmp) const { return !operator==(_cmp); }
 
-    void clear();
-    void noteDirty() const
-    {
-        Guard l(m_hashLock);
-        m_hashWithout = m_hash = h256();
-    }
+    /// populate block header from parent
     void populateFromParent(BlockHeader const& parent);
+    void clear();
 
+    /// block header verify
     // TODO: pull out into abstract class Verifier.
     void verify(Strictness _s = CheckEverything, BlockHeader const& _parent = BlockHeader(),
         bytesConstRef _block = bytesConstRef()) const;
     void verify(Strictness _s, bytesConstRef _block) const { verify(_s, BlockHeader(), _block); }
 
-    h256 hash(IncludeSeal _i = WithSeal) const;
-    void streamRLP(RLPStream& _s, IncludeSeal _i = WithSeal) const;
+    ///------set interfaces related to block header------
+    ///
+    h256 hash() const;
+    void noteDirty() const
+    {
+        Guard l(m_hashLock);
+        m_hash = h256();
+    }
+    /// field 0: set parent
+    void setParentHash(h256 const& _parentHash)
+    {
+        m_parentHash = _parentHash;
+        noteDirty();
+    }
+    /// field 1-3: set roots:
+    /// param1: transaction root
+    /// param2: receipt root
+    /// param3: state root
+    void setRoots(h256 const& _trans_root, h256 const& _receipt_root, h256 const& _state_root)
+    {
+        m_transactionsRoot = _trans_root;
+        m_receiptsRoot = _receipt_root;
+        m_stateRoot = _state_root;
+        noteDirty();
+    }
+    /// field 4: set logBloom
+    void setLogBloom(LogBloom const& _logBloom)
+    {
+        m_logBloom = _logBloom;
+        noteDirty();
+    }
+    /// field 5: set block number
+    void setNumber(int64_t _blockNumber)
+    {
+        m_number = _blockNumber;
+        noteDirty();
+    }
+    /// field 6: set gas limit
+    void setGasLimit(u256 const& _gasLimit)
+    {
+        m_gasLimit = _gasLimit;
+        noteDirty();
+    }
+    /// field 7: set gas used
+    void setGasUsed(u256 const& _gasUsed)
+    {
+        m_gasUsed = _gasUsed;
+        noteDirty();
+    }
+    /// field 8: set extra data
+    void setExtraData(bytes const& _content, unsigned int index = 0)
+    {
+        m_extraData[index] = _content;
+        noteDirty();
+    }
+    void setExtraData(std::vector<bytes> const& _extra)
+    {
+        m_extraData = _extra;
+        noteDirty();
+    }
+    /// field 9: set timestamp
+    void setTimestamp(int64_t _timestamp)
+    {
+        m_timestamp = _timestamp;
+        noteDirty();
+    }
+    /// field 10: set m_sealer
+    void setSealer(u256 _sealer)
+    {
+        m_sealer = _sealer;
+        noteDirty();
+    }
+    /// filed 11: set m_sealerList
+    void setSealerList(h512s const& _sealerList)
+    {
+        m_sealerList = _sealerList;
+        noteDirty();
+    }
+    ///------set interfaces related to block header END------
 
-    void setParentHash(h256 const& _v)
-    {
-        m_parentHash = _v;
-        noteDirty();
-    }
-    void setSha3Uncles(h256 const& _v)
-    {
-        m_sha3Uncles = _v;
-        noteDirty();
-    }
-    void setTimestamp(int64_t _v)
-    {
-        m_timestamp = _v;
-        noteDirty();
-    }
-    void setAuthor(Address const& _v)
-    {
-        m_author = _v;
-        noteDirty();
-    }
-    void setRoots(h256 const& _t, h256 const& _r, h256 const& _u, h256 const& _s)
-    {
-        m_transactionsRoot = _t;
-        m_receiptsRoot = _r;
-        m_stateRoot = _s;
-        m_sha3Uncles = _u;
-        noteDirty();
-    }
-    void setGasUsed(u256 const& _v)
-    {
-        m_gasUsed = _v;
-        noteDirty();
-    }
-    void setNumber(int64_t _v)
-    {
-        m_number = _v;
-        noteDirty();
-    }
-    void setGasLimit(u256 const& _v)
-    {
-        m_gasLimit = _v;
-        noteDirty();
-    }
-    void setExtraData(bytes const& _v)
-    {
-        m_extraData = _v;
-        noteDirty();
-    }
-    void setLogBloom(LogBloom const& _v)
-    {
-        m_logBloom = _v;
-        noteDirty();
-    }
-    void setDifficulty(u256 const& _v)
-    {
-        m_difficulty = _v;
-        noteDirty();
-    }
-    template <class T>
-    void setSeal(unsigned _offset, T const& _value)
-    {
-        Guard l(m_sealLock);
-        if (m_seal.size() <= _offset)
-            m_seal.resize(_offset + 1);
-        m_seal[_offset] = rlp(_value);
-        noteDirty();
-    }
-    template <class T>
-    void setSeal(T const& _value)
-    {
-        setSeal(0, _value);
-    }
+    /// ------ get interfaces related to block header------
+    h256 const& parentHash() const { return m_parentHash; }                            /// field 0
+    h256 const& stateRoot() const { return m_stateRoot; }                              /// field 1
+    h256 const& transactionsRoot() const { return m_transactionsRoot; }                /// field 2
+    h256 const& receiptsRoot() const { return m_receiptsRoot; }                        /// field 3
+    LogBloom const& logBloom() const { return m_logBloom; }                            /// field 4
+    int64_t number() const { return m_number; }                                        /// field 5
+    u256 const& gasLimit() const { return m_gasLimit; }                                /// field 6
+    u256 const& gasUsed() const { return m_gasUsed; }                                  /// field 7
+    int64_t timestamp() const { return m_timestamp; }                                  /// field 8
+    bytes const& extraData(unsigned int _index) const { return m_extraData[_index]; }  // field 9
+    std::vector<bytes> const& extraData() const { return m_extraData; }                /// field 9
+    u256 const& sealer() const { return m_sealer; }                                    /// field 10
+    h512s const& sealerList() const { return m_sealerList; }                           /// field 11
+    /// ------ get interfaces related to block header END------
 
-    h256 const& parentHash() const { return m_parentHash; }
-    h256 const& sha3Uncles() const { return m_sha3Uncles; }
-    bool hasUncles() const { return m_sha3Uncles != EmptyListSHA3; }
-    int64_t timestamp() const { return m_timestamp; }
-    Address const& author() const { return m_author; }
-    h256 const& stateRoot() const { return m_stateRoot; }
-    h256 const& transactionsRoot() const { return m_transactionsRoot; }
-    h256 const& receiptsRoot() const { return m_receiptsRoot; }
-    u256 const& gasUsed() const { return m_gasUsed; }
-    int64_t number() const { return m_number; }
-    u256 const& gasLimit() const { return m_gasLimit; }
-    bytes const& extraData() const { return m_extraData; }
-    LogBloom const& logBloom() const { return m_logBloom; }
-    u256 const& difficulty() const { return m_difficulty; }
-    template <class T>
-    T seal(unsigned _offset = 0) const
-    {
-        T ret;
-        Guard l(m_sealLock);
-        if (_offset < m_seal.size())
-            ret = RLP(m_seal[_offset]).convert<T>(RLP::VeryStrict);
-        return ret;
-    }
-
-private:
+private:  /// private function fileds
     void populate(RLP const& _header);
-    void streamRLPFields(RLPStream& _s) const;
-    std::vector<bytes> seal() const
-    {
-        Guard l(m_sealLock);
-        return m_seal;
-    }
+    /// trans all fileds of the block header into a given stream
+    // void streamRLPFields(RLPStream& _s) const;
     h256 hashRawRead() const
     {
         Guard l(m_hashLock);
         return m_hash;
     }
-    h256 hashWithoutRawRead() const
-    {
-        Guard l(m_hashLock);
-        return m_hashWithout;
-    }
 
+private:  /// private data fields
+    /// -------structure of block header------
     h256 m_parentHash;
-    h256 m_sha3Uncles;
     h256 m_stateRoot;
     h256 m_transactionsRoot;
     h256 m_receiptsRoot;
@@ -272,26 +240,23 @@ private:
     int64_t m_number = 0;
     u256 m_gasLimit;
     u256 m_gasUsed;
-    bytes m_extraData;
     int64_t m_timestamp = -1;
+    std::vector<bytes> m_extraData;  /// field for extension
+    /// Extended fields of FISCO-BCOS
+    u256 m_sealer = Invalid256;  // index of the sealer created this block
+    h512s m_sealerList;          /// sealer list
+    /// -------structure of block header end------
 
-    Address m_author;
-    u256 m_difficulty;
-
-    std::vector<bytes> m_seal;  ///< Additional (RLP-encoded) header fields.
-    mutable Mutex m_sealLock;
-
-    mutable h256 m_hash;         ///< (Memoised) SHA3 hash of the block header with seal.
-    mutable h256 m_hashWithout;  ///< (Memoised) SHA3 hash of the block header without seal.
-    mutable Mutex m_hashLock;    ///< A lock for both m_hash and m_hashWithout.
+    mutable h256 m_hash;       ///< (Memoised) SHA3 hash of the block header with seal.
+    mutable Mutex m_hashLock;  ///< A lock for both m_hash
 };
 
 inline std::ostream& operator<<(std::ostream& _out, BlockHeader const& _bi)
 {
-    _out << _bi.hash(WithoutSeal) << " " << _bi.parentHash() << " " << _bi.sha3Uncles() << " "
-         << _bi.author() << " " << _bi.stateRoot() << " " << _bi.transactionsRoot() << " "
-         << _bi.receiptsRoot() << " " << _bi.logBloom() << " " << _bi.difficulty() << " "
-         << _bi.number() << " " << _bi.gasLimit() << " " << _bi.gasUsed() << " " << _bi.timestamp();
+    _out << _bi.hash() << " " << _bi.parentHash() << " "
+         << " " << _bi.stateRoot() << " " << _bi.transactionsRoot() << " " << _bi.receiptsRoot()
+         << " " << _bi.logBloom() << " " << _bi.number() << " " << _bi.gasLimit() << " "
+         << _bi.gasUsed() << " " << _bi.timestamp() << " " << _bi.sealer();
     return _out;
 }
 

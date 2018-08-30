@@ -114,9 +114,9 @@ public:
     BlockHeader const& header() const { return m_headerInfo; }
 
     int64_t number() const { return m_headerInfo.number(); }
-    Address const& author() const { return m_headerInfo.author(); }
+    // Address const& author() const { return m_headerInfo.author(); }
     int64_t timestamp() const { return m_headerInfo.timestamp(); }
-    u256 const& difficulty() const { return m_headerInfo.difficulty(); }
+    // u256 const& difficulty() const { return m_headerInfo.difficulty(); }
     u256 const& gasLimit() const { return m_headerInfo.gasLimit(); }
     LastBlockHashesFace const& lastHashes() const { return m_lastHashes; }
     u256 const& gasUsed() const { return m_gasUsed; }
