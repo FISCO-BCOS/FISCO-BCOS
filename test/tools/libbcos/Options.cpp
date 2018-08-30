@@ -60,6 +60,8 @@ Options::Options(int argc, char** argv)
         std::cout << test_options << std::endl;
         exit(0);
     }
+    else if (vm.count("--all"))
+        all = true;
     else if (vm.count("testpath") || vm.count("t"))
         testpath = vm["testpath"].as<std::string>();
 }

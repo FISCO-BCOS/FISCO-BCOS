@@ -47,6 +47,7 @@ struct SignatureStruct
     SignatureStruct() = default;
     SignatureStruct(Signature const& _s) { *(h520*)this = _s; }
     SignatureStruct(h256 const& _r, h256 const& _s, byte _v) : r(_r), s(_s), v(_v) {}
+
     operator Signature() const { return *(h520 const*)this; }
 
     /// @returns true if r,s,v values are valid, otherwise false
@@ -61,9 +62,11 @@ struct SignatureStruct
 using Secrets = std::vector<Secret>;
 
 /// Convert a secret key into the public key equivalent.
+/// if convert failed, assertion failed
 Public toPublic(Secret const& _secret);
 
 /// Convert a public key to address.
+/// right160(sha3(_public.ref()))
 Address toAddress(Public const& _public);
 
 /// Convert a secret key into address of public key equivalent.
@@ -71,12 +74,13 @@ Address toAddress(Public const& _public);
 Address toAddress(Secret const& _secret);
 
 // Convert transaction from and nonce to address.
+// for contract adddress generation
 Address toAddress(Address const& _from, u256 const& _nonce);
 
-/// Encrypts plain text using Public key.
+/// Encrypts plain text using Public key.(asymmetric encryption)
 void encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher);
 
-/// Decrypts cipher using Secret key.
+/// Decrypts cipher using Secret key.(asymmetric decryption)
 bool decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext);
 
 /// Symmetric encryption.
@@ -141,14 +145,6 @@ Signature sign(Secret const& _k, h256 const& _hash);
 /// Verify signature.
 bool verify(Public const& _k, Signature const& _s, h256 const& _hash);
 
-/// Derive key via PBKDF2.
-bytesSec pbkdf2(
-    std::string const& _pass, bytes const& _salt, unsigned _iterations, unsigned _dkLen = 32);
-
-/// Derive key via Scrypt.
-bytesSec scrypt(std::string const& _pass, bytes const& _salt, uint64_t _n, uint32_t _r, uint32_t _p,
-    unsigned _dkLen);
-
 /// Simple class that represents a "key pair".
 /// All of the data of the class can be regenerated from the secret key (m_secret) alone.
 /// Actually stores a tuplet of secret, public and address (the right 160-bits of the public).
@@ -162,9 +158,6 @@ public:
 
     /// Create a new, randomly generated object.
     static KeyPair create();
-
-    /// Create from an encrypted seed.
-    static KeyPair fromEncryptedSeed(bytesConstRef _seed, std::string const& _password);
 
     Secret const& secret() const { return m_secret; }
 
@@ -186,9 +179,6 @@ private:
 namespace crypto
 {
 DEV_SIMPLE_EXCEPTION(InvalidState);
-
-/// Key derivation
-h256 kdf(Secret const& _priv, h256 const& _hash);
 
 /**
  * @brief Generator for non-repeating nonce material.
@@ -221,8 +211,9 @@ private:
 
 namespace ecdh
 {
-bool agree(Secret const& _s, Public const& _r, Secret& o_s) noexcept;
-}
+// bool agree(Secret const& _s, Public const& _r, Secret& o_s) noexcept;
+bool agree(Secret const& _s, Public const& _r, Secret& o_s);
+}  // namespace ecdh
 
 namespace ecies
 {

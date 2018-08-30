@@ -24,7 +24,7 @@
 #include <cryptopp/oids.h>
 #include <cryptopp/osrng.h>
 #include <libdevcore/Assertions.h>
-#include <libdevcore/Guards.h>  // <boost/thread> conflicts with <thread>
+#include <libdevcore/Guards.h>
 #include <libdevcore/SHA3.h>
 
 // static_assert(CRYPTOPP_VERSION == 565, "Wrong Crypto++ version");
@@ -154,7 +154,7 @@ bool Secp256k1PP::decryptECIES(Secret const& _k, bytesConstRef _sharedMacData, b
 
     Secret z;
     if (!ecdh::agree(_k, *(Public*)(io_text.data() + 1), z))
-        return false;  // Invalid pubkey or seckey.
+        return false;
     auto key = ecies::kdf(z, bytes(), 64);
     bytesConstRef eKey = bytesConstRef(&key).cropped(0, 16);
     bytesRef mKeyMaterial = bytesRef(&key).cropped(16, 16);
@@ -206,15 +206,15 @@ void Secp256k1PP::encrypt(Public const& _k, bytes& io_cipher)
     }
 
 
-    size_t plen = io_cipher.size();
+    size_t plain_len = io_cipher.size();
     bytes ciphertext;
-    ciphertext.resize(e.CiphertextLength(plen));
+    ciphertext.resize(e.CiphertextLength(plain_len));
 
     {
         Guard l(ctx.x_rng);
-        e.Encrypt(ctx.m_rng, io_cipher.data(), plen, ciphertext.data());
+        e.Encrypt(ctx.m_rng, io_cipher.data(), plain_len, ciphertext.data());
     }
-
+    // reset plain text after encrypt
     memset(io_cipher.data(), 0, io_cipher.size());
     io_cipher = std::move(ciphertext);
 }
@@ -260,4 +260,15 @@ void Secp256k1PP::decrypt(Secret const& _k, bytes& io_text)
 
     io_text.resize(r.messageLength);
     io_text = std::move(plain);
+}
+
+bool Secp256k1PP::agree(Secret const& _s, Public const& _r, Secret& o_s)
+{
+    // TODO: mutex ASN1::secp256k1() singleton
+    // Creating Domain is non-const for m_oid and m_oid is not thread-safe
+    CryptoPP::ECDH<CryptoPP::ECP>::Domain d(CryptoPP::ASN1::secp256k1());
+    assert(d.AgreedValueLength() == sizeof(o_s));
+    byte remote[65] = {0x04};
+    memcpy(&remote[1], _r.data(), 64);
+    return d.Agree(o_s.writable().data(), _s.data(), remote);
 }

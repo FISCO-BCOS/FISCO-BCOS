@@ -36,6 +36,11 @@ class Options
 public:
     std::string testpath;  ///< Custom test folder path
 
+    /// Test selection
+    /// @{
+    bool all = false;  ///< Running every test, including time consuming ones.
+    /// @}
+
     /// The first time used, options are parsed with argc, argv
     // static Options const& get(int argc = 0, const char** argv = 0);
     static Options const& get();

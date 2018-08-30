@@ -43,17 +43,17 @@ include(ProjectJsonRpcCpp)
 include(ProjectBoost)
 
 #Global include path for all libs.
-include_directories("${CMAKE_SOURCE_DIR}")
+include_directories("${CMAKE_SOURCE_DIR}" "utils")
 
 configure_project(TESTS)
 # generate executable binary fisco-bcos
-add_subdirectory(utils)
 add_subdirectory(fisco-bcos)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)
 add_subdirectory(libethcore)
 add_subdirectory(evmc)
 add_subdirectory(libinterpreter)
+add_subdirectory(libevm)
 
 if (TESTS)
         enable_testing()

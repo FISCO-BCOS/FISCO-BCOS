@@ -23,17 +23,16 @@
 #include "Common.h"
 #include "AES.h"
 #include "CryptoPP.h"
+#include "ECDHE.h"
 #include "Exceptions.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
-#include <libdevcore/Guards.h>  // <boost/thread> conflicts with <thread>
+#include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/SHA3.h>
-#include <libscrypt/libscrypt.h>
 #include <secp256k1.h>
-#include <secp256k1_ecdh.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
 using namespace std;
@@ -42,6 +41,10 @@ using namespace dev::crypto;
 
 namespace
 {
+/**
+ * @brief : init secp256k1_context globally(maybe for secure consider)
+ * @return secp256k1_context const* : global static secp256k1_context
+ */
 secp256k1_context const* getCtx()
 {
     static std::unique_ptr<secp256k1_context, decltype(&secp256k1_context_destroy)> s_ctx{
@@ -60,6 +63,11 @@ bool dev::SignatureStruct::isValid() const noexcept
     return (v <= 1 && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
 
+/**
+ * @brief : obtain public key according to secret key
+ * @param _secret : the data of secret key
+ * @return Public : created public key; if create failed, assertion failed
+ */
 Public dev::toPublic(Secret const& _secret)
 {
     auto* ctx = getCtx();
@@ -78,6 +86,12 @@ Public dev::toPublic(Secret const& _secret)
     return Public{&serializedPubkey[1], Public::ConstructFromPointer};
 }
 
+/**
+ * @brief obtain address from public key
+ *        by adding the last 20Bytes of sha3(public key)
+ * @param _public : the public key need to convert to address
+ * @return Address : the converted address
+ */
 Address dev::toAddress(Public const& _public)
 {
     return right160(sha3(_public.ref()));
@@ -88,11 +102,26 @@ Address dev::toAddress(Secret const& _secret)
     return toAddress(toPublic(_secret));
 }
 
+/**
+ * @brief : 1.serialize (_from address, nonce) into rlpStream
+ *          2.calculate the sha3 of serialized (_from, nonce)
+ *          3.obtaining the last 20Bytes of the sha3 as address
+ *          (mainly used for contract address generating)
+ * @param _from : address that sending this transaction
+ * @param _nonce : random number
+ * @return Address : generated address
+ */
 Address dev::toAddress(Address const& _from, u256 const& _nonce)
 {
     return right160(sha3(rlpList(_from, _nonce)));
 }
 
+/**
+ * @brief : encrypt plain text with public key
+ * @param _k : public key
+ * @param _plain : plain text need to be encrypted
+ * @param o_cipher : encrypted ciper text
+ */
 void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
 {
     bytes io = _plain.toBytes();
@@ -100,6 +129,14 @@ void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
     o_cipher = std::move(io);
 }
 
+/**
+ * @brief : decrypt ciper text with secret key
+ * @param _k : private key used to decrypt
+ * @param _cipher : ciper text
+ * @param o_plaintext : decrypted plain text
+ * @return true : decrypt succeed
+ * @return false : decrypt failed(maybe key or ciper text is invalid)
+ */
 bool dev::decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
 {
     bytes io = _cipher.toBytes();
@@ -255,25 +292,6 @@ bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
     return _p == recover(_s, _hash);
 }
 
-bytesSec dev::pbkdf2(string const& _pass, bytes const& _salt, unsigned _iterations, unsigned _dkLen)
-{
-    bytesSec ret(_dkLen);
-    if (CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA256>().DeriveKey(ret.writable().data(), _dkLen, 0,
-            reinterpret_cast<byte const*>(_pass.data()), _pass.size(), _salt.data(), _salt.size(),
-            _iterations) != _iterations)
-        BOOST_THROW_EXCEPTION(CryptoException() << errinfo_comment("Key derivation failed."));
-    return ret;
-}
-
-bytesSec dev::scrypt(std::string const& _pass, bytes const& _salt, uint64_t _n, uint32_t _r,
-    uint32_t _p, unsigned _dkLen)
-{
-    bytesSec ret(_dkLen);
-    if (libscrypt_scrypt(reinterpret_cast<uint8_t const*>(_pass.data()), _pass.size(), _salt.data(),
-            _salt.size(), _n, _r, _p, ret.writable().data(), _dkLen) != 0)
-        BOOST_THROW_EXCEPTION(CryptoException() << errinfo_comment("Key derivation failed."));
-    return ret;
-}
 
 KeyPair::KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec))
 {
@@ -292,23 +310,6 @@ KeyPair KeyPair::create()
     }
 }
 
-KeyPair KeyPair::fromEncryptedSeed(bytesConstRef _seed, std::string const& _password)
-{
-    return KeyPair(Secret(sha3(aesDecrypt(_seed, _password))));
-}
-
-h256 crypto::kdf(Secret const& _priv, h256 const& _hash)
-{
-    // H(H(r||k)^h)
-    h256 s;
-    sha3mac(Secret::random().ref(), _priv.ref(), s.ref());
-    s ^= _hash;
-    sha3(s.ref(), s.ref());
-
-    if (!s || !_hash || !_priv)
-        BOOST_THROW_EXCEPTION(InvalidState());
-    return s;
-}
 
 Secret Nonce::next()
 {
@@ -323,23 +324,9 @@ Secret Nonce::next()
     return sha3(~m_value);
 }
 
-bool ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s) noexcept
+bool dev::crypto::ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s)
 {
-    auto* ctx = getCtx();
-    static_assert(sizeof(Secret) == 32, "Invalid Secret type size");
-    secp256k1_pubkey rawPubkey;
-    std::array<byte, 65> serializedPubKey{{0x04}};
-    std::copy(_r.asArray().begin(), _r.asArray().end(), serializedPubKey.begin() + 1);
-    if (!secp256k1_ec_pubkey_parse(
-            ctx, &rawPubkey, serializedPubKey.data(), serializedPubKey.size()))
-        return false;  // Invalid public key.
-    // FIXME: We should verify the public key when constructed, maybe even keep
-    //        secp256k1_pubkey as the internal data of Public.
-    std::array<byte, 33> compressedPoint;
-    if (!secp256k1_ecdh_raw(ctx, compressedPoint.data(), &rawPubkey, _s.data()))
-        return false;  // Invalid secret key.
-    std::copy(compressedPoint.begin() + 1, compressedPoint.end(), o_s.writable().data());
-    return true;
+    return Secp256k1PP::get()->agree(_s, _r, o_s);
 }
 
 bytes ecies::kdf(Secret const& _z, bytes const& _s1, unsigned kdByteLen)
