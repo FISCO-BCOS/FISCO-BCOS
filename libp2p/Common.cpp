@@ -128,14 +128,14 @@ std::string p2p::reasonOf(DisconnectReason _r)
 void NodeIPEndpoint::streamRLP(RLPStream& _s, RLPAppend _append) const
 {
 	if (_append == StreamList)
-		_s.appendList(4);
+		_s.appendList(3);
 	if (address.is_v4())
 		_s << bytesConstRef(&address.to_v4().to_bytes()[0], 4);
 	else if (address.is_v6())
 		_s << bytesConstRef(&address.to_v6().to_bytes()[0], 16);
 	else
 		_s << bytes();
-	_s << udpPort << tcpPort << host;
+	_s << udpPort << tcpPort;
 }
 
 void NodeIPEndpoint::interpretRLP(RLP const& _r)
@@ -148,7 +148,6 @@ void NodeIPEndpoint::interpretRLP(RLP const& _r)
 		address = bi::address();
 	udpPort = _r[1].toInt<uint16_t>();
 	tcpPort = _r[2].toInt<uint16_t>();
-	host = _r[3].toString();
 }
 
 void DeadlineOps::reap()
@@ -200,7 +199,7 @@ NodeSpec::NodeSpec(string const& _user)
 			m_tcpPort = stoi(ports.substr(0, p2));
 		}
 		else
-			m_tcpPort = m_udpPort = boost::lexical_cast<int>(ports);
+			m_tcpPort = m_udpPort = stoi(ports);
 	}
 }
 
@@ -237,31 +236,3 @@ std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep
 
 }
 
-
-boost::asio::ip::address HostResolver::query(std::string host)
-{
-	ba::ip::address result;
-	try
-	{
-		ba::io_service ioService; 
-		ba::ip::tcp::resolver resolver(ioService);
-		ba::ip::tcp::resolver::query query(host,"");
-
-		for( ba::ip::tcp::resolver::iterator i = resolver.resolve(query); i != ba::ip::tcp::resolver::iterator();++i)
-		{
-			ba::ip::tcp::endpoint end = *i;
-			if( result.to_string().empty() || result.to_string() == "0.0.0.0" )
-				result = end.address();
-
-			LOG(INFO) << "HostResolver::query " << host << ":" << end.address().to_string();
-		}
-	}
-	catch (std::exception const& _e)
-	{
-		LOG(WARNING) << "Exception in HostResolver::query " << _e.what();
-	}
-	if( result.to_string().empty() || result.to_string() == "0.0.0.0" )
-		LOG(WARNING) << "HostResolver::query " << host << " Is Emtpy! " ;
-
-	return result;
-}

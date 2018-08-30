@@ -17,6 +17,7 @@ namespace dev {
                     this->bindAndAddMethod(jsonrpc::Procedure("net_version", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::NetFace::net_versionI);
                     this->bindAndAddMethod(jsonrpc::Procedure("net_peerCount", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::NetFace::net_peerCountI);
                     this->bindAndAddMethod(jsonrpc::Procedure("net_listening", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN,  NULL), &dev::rpc::NetFace::net_listeningI);
+                    this->bindAndAddMethod(jsonrpc::Procedure("net_peers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::NetFace::net_peersI);
                 }
 
                 inline virtual void net_versionI(const Json::Value &request, Json::Value &response)
@@ -34,9 +35,15 @@ namespace dev {
                     (void)request;
                     response = this->net_listening();
                 }
+                inline virtual void	net_peersI(const Json::Value &request, Json::Value &response) {
+                	(void)request;
+                	response = this->net_peers();
+                }
+
                 virtual std::string net_version() = 0;
                 virtual std::string net_peerCount() = 0;
                 virtual bool net_listening() = 0;
+                virtual Json::Value net_peers() = 0;
         };
 
     }

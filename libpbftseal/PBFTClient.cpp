@@ -23,7 +23,6 @@
 
 #include <libdevcore/easylog.h>
 #include <libethereum/EthereumHost.h>
-#include <libethereum/NodeConnParamsManagerApi.h>
 #include <libp2p/Host.h>
 #include "PBFTClient.h"
 #include "PBFT.h"
@@ -52,7 +51,7 @@ PBFTClient* dev::eth::asPBFTClient(Interface* _c)
 PBFTClient::PBFTClient(
     ChainParams const& _params,
     int _networkID,
-    p2p::HostApi* _host,
+    std::shared_ptr<p2p::Host> _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -72,14 +71,13 @@ PBFTClient::PBFTClient(
 
 PBFTClient::~PBFTClient() {
 	pbft()->cancelGeneration();
-	stopWorking();
+	//stopWorking();
 }
 
-void PBFTClient::init(ChainParams const& _params, p2p::HostApi *_host) {
-	m_params = _params;
-	m_working.setEvmCoverLog(m_params.evmCoverLog);
-	m_working.setEvmEventLog(m_params.evmEventLog);
-
+void PBFTClient::init(ChainParams const& _params, std::shared_ptr<p2p::Host> _host) {
+	//m_params = _params;
+	//m_working.setEvmCoverLog(m_params.evmCoverLog);
+	//m_working.setEvmEventLog(m_params.evmEventLog);
 
 	// register PBFTHost
 	auto pbft_host = _host->registerCapability(make_shared<PBFTHost>([this](unsigned _id, std::shared_ptr<Capability> _peer, RLP const & _r) {
@@ -100,6 +98,7 @@ void PBFTClient::init(ChainParams const& _params, p2p::HostApi *_host) {
 		DEV_WRITE_GUARDED(x_working)
 		{
 			if (m_working.isSealed()) {
+				LOG(DEBUG) << "onViewChange resetCurrent";
 				m_working.resetCurrent();
 			}
 		}
@@ -136,6 +135,8 @@ void PBFTClient::syncBlockQueue() {
 	DEV_WRITE_GUARDED(x_working)
 	{
 		if (m_working.isSealed() && m_working.info().number() <= bc().info().number()) {
+			LOG(DEBUG) << "reset m_working: " << m_working.info().number()
+					<< " ,bc number:" << bc().info().number();
 			m_working.resetCurrent();
 		}
 	}
@@ -245,7 +246,7 @@ void PBFTClient::doWork(bool _doWait)
 }
 
 void PBFTClient::rejigSealing() {
-	bool would_seal = m_wouldSeal && (pbft()->accountType() == EN_ACCOUNT_TYPE_MINER);
+	bool would_seal = m_wouldSeal && pbft()->accountType();
 	bool is_major_syncing = isMajorSyncing();
 	if (would_seal && !is_major_syncing)
 	{
@@ -313,7 +314,12 @@ void PBFTClient::rejigSealing() {
 				//DEV_WRITE_GUARDED(x_working)
 				{
 					tx_num = m_working.pending().size();
+
+#ifdef REALTIME_PBFT
+					if (tx_num == 0 && utcTime() - pbft()->lastConsensusTime() < sealEngine()->getIntervalBlockTime()) {
+#else
 					if (tx_num < max_block_txs && utcTime() - pbft()->lastConsensusTime() < sealEngine()->getIntervalBlockTime()) {
+#endif
 						VLOG(10) << "Wait for next interval, tx:" << tx_num;
 						return;
 					}
@@ -321,7 +327,7 @@ void PBFTClient::rejigSealing() {
 					m_working.resetCurrentTime();
 					m_working.setIndex(pbft()->nodeIdx());
 					m_working.setNodeList(pbft()->getMinerNodeList());
-					m_working.commitToSeal(bc(), m_extraData);
+					m_working.commitToSeal(bc(), pbft()->nodeIdx(), m_extraData);
 
 					m_sealingInfo = m_working.info();
 					RLPStream ts;

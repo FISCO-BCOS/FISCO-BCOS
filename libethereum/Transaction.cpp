@@ -68,6 +68,8 @@ TransactionException dev::eth::toTransactionException(Exception const& _e)
 		return TransactionException::OutOfStack;
 	if (!!dynamic_cast<StackUnderflow const*>(&_e))
 		return TransactionException::StackUnderflow;
+	if(!!dynamic_cast<PrecompiledError const*>(&_e))
+		return TransactionException::PrecompiledError;
 	if (!!dynamic_cast<EthCallIdNotFound const*>(&_e))
 	    	return TransactionException::EthCallIdNotFound;
 	return TransactionException::Unknown;

@@ -22,6 +22,8 @@
 #include "ChainOperationParams.h"
 #include <libdevcore/easylog.h>
 #include <libdevcore/CommonData.h>
+#include "Precompiled.h"
+
 using namespace std;
 using namespace dev;
 using namespace eth;
@@ -49,6 +51,8 @@ ChainOperationParams::ChainOperationParams()
 		{"networkID", "0x0"}
 	};
 	blockReward = u256("0x4563918244F40000");
+
+	initPrecompiled();
 }
 
 u256 ChainOperationParams::u256Param(string const& _name) const
@@ -71,5 +75,12 @@ string ChainOperationParams::param(string const& _name) const
 		at = it->second;
 
 	return at;
+}
+
+void ChainOperationParams::initPrecompiled(){
+	precompiled.insert(make_pair(Address(1), PrecompiledContract(3000, 0, PrecompiledRegistrar::executor("ecrecover"))));
+	precompiled.insert(make_pair(Address(2), PrecompiledContract(60, 12, PrecompiledRegistrar::executor("sha256"))));
+	precompiled.insert(make_pair(Address(3), PrecompiledContract(600, 120, PrecompiledRegistrar::executor("ripemd160"))));
+	precompiled.insert(make_pair(Address(4), PrecompiledContract(15, 3, PrecompiledRegistrar::executor("identity"))));
 }
 

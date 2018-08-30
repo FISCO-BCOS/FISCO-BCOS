@@ -1,13 +1,16 @@
 /*
 	This file is part of cpp-ethereum.
+
 	cpp-ethereum is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
+
 	cpp-ethereum is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
+
 	You should have received a copy of the GNU General Public License
 	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -15,8 +18,6 @@
  * @author Gav Wood <i@gavwood.com>
  * @author Alex Leverington <nessence@gmail.com>
  * @date 2014
- * @author toxotguo
- * @date 2018
  */
 
 #include "Session.h"
@@ -32,29 +33,25 @@ using namespace std;
 using namespace dev;
 using namespace dev::p2p;
 
-Session::Session(HostApi* _server, std::unique_ptr<RLPXFrameCoder>&& _io, std::shared_ptr<RLPXSocketApi> const& _s, std::shared_ptr<Peer> const& _n, PeerSessionInfo _info):
-	m_server(_server),
-	m_io(move(_io)),
+Session::Session(Host* _h, std::shared_ptr<RLPXSocket> const& _s, std::shared_ptr<Peer> const& _n, PeerSessionInfo _info):
+	m_server(_h),
 	m_socket(_s),
 	m_peer(_n),
 	m_info(_info),
 	m_ping(chrono::steady_clock::time_point::max())
 {
-	registerFraming(0);
+	//registerFraming(0);
 	m_peer->m_lastDisconnect = NoDisconnect;
 	m_lastReceived = m_connect = chrono::steady_clock::now();
 	DEV_GUARDED(x_info)
-	m_info.socketId = m_socket->ref().native_handle();
-
-	
-	m_strand=_server->getStrand();
+	m_info.socketId = m_socket->ref().lowest_layer().native_handle();
 }
 
 Session::~Session()
 {
 	ThreadContext tc(info().id.abridged());
 	ThreadContext tc2(info().clientVersion);
-	LOG(INFO) << "Closing peer session, Session will be free";
+	LOG(INFO) << "Closing peer session :-(";
 	m_peer->m_lastConnected = m_peer->m_lastAttempted - chrono::seconds(1);
 
 	// Read-chain finished for one reason or another.
@@ -63,28 +60,14 @@ Session::~Session()
 
 	try
 	{
-		bi::tcp::socket& socket = m_socket->ref();
-		if (m_socket->isConnected())
+		if (m_socket->ref().lowest_layer().is_open())
 		{
 			boost::system::error_code ec;
-
-			//shutdown may block servals seconds - morebtcg
-			//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			socket.close();
+			m_socket->ref().lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			m_socket->ref().lowest_layer().close();
 		}
 	}
 	catch (...) {}
-
-	if (m_CABaseData)
-	{
-		delete m_CABaseData;
-		m_CABaseData = nullptr;
-	}
-}
-
-ReputationManager& Session::repMan()
-{
-	return m_server->repMan();
 }
 
 NodeID Session::id() const
@@ -122,10 +105,11 @@ template <class T> vector<T> randomSelection(vector<T> const& _t, unsigned _n)
 	return ret;
 }
 
-// read package after receive the packae
+// 收到数据包
 bool Session::readPacket(uint16_t _capId, PacketType _t, RLP const& _r)
 {
 	m_lastReceived = chrono::steady_clock::now();
+	//LOG(INFO) << _t << _r;
 	try // Generic try-catch block designed to capture RLP format errors - TODO: give decent diagnostics, make a bit more specific over what is caught.
 	{
 		// v4 frame headers are useless, offset packet type used
@@ -133,7 +117,8 @@ bool Session::readPacket(uint16_t _capId, PacketType _t, RLP const& _r)
 		if (_capId == 0 && _t < UserPacket)
 			return interpret(_t, _r);
 
-		if (isFramingEnabled())
+		//if (isFramingEnabled())
+		if(false)
 		{
 			for (auto const& i : m_capabilities)
 				if (i.second->c_protocolID == _capId)
@@ -177,7 +162,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 	}
 	case PingPacket:
 	{
-		LOG(TRACE) << "Recv Ping " << m_info.id.abridged();
+		LOG(INFO) << "Recv Ping " << m_info.id;
 		RLPStream s;
 		sealAndSend(prep(s, PongPacket), 0);
 		break;
@@ -186,60 +171,9 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		DEV_GUARDED(x_info)
 		{
 			m_info.lastPing = std::chrono::steady_clock::now() - m_ping;
-			LOG(TRACE) << "Recv Pong Latency: " << chrono::duration_cast<chrono::milliseconds>(m_info.lastPing).count() << " ms" << m_info.id.abridged();
+			LOG(INFO) << "Recv Pong Latency: " << chrono::duration_cast<chrono::milliseconds>(m_info.lastPing).count() << " ms" << m_info.id;
 		}
 		break;
-	case GetAnnouncementHashPacket:
-	{
-		std::vector<Node>	peerNodes;
-		h256 allPeerHash;
-		m_server->getAnnouncementNodeList(allPeerHash,peerNodes);
-		auto hash = _r[0].toHash<h256>();
-		LOG(INFO) << "Recv GetAnnouncementHashPacket From " << m_info.id.abridged() << ",hash=" << toString(hash) << ",Our=" << toString(allPeerHash);
-		if( hash != allPeerHash)
-		{
-			RLPStream s;
-			prep(s, AnnouncementPacket, 1) ;
-			s.appendList(peerNodes.size());
-			for( size_t i = 0; i < peerNodes.size(); i++)
-			{
-				LOG(INFO) << "Announcement " << peerNodes[i].endpoint.name() << "," << peerNodes[i].endpoint.host;
-				peerNodes[i].endpoint.streamRLP(s);
-			}
-			sealAndSend(s, 0);
-		}
-		else
-		{
-			LOG(INFO) <<" AnnouncementHash Is Same.Don't Need Send AnnouncementPacket";
-		}
-		break;
-	}
-	case AnnouncementPacket:
-	{
-		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id.abridged();
-		size_t count=0;
-		for (auto const& n:_r[0])
-		{
-			if( count >= 20 )
-				break;
-
-			NodeIPEndpoint nodeIPEndpoint(n);
-			LOG(INFO) << "AnnouncementPacket " << nodeIPEndpoint.name() << ":" << nodeIPEndpoint.host;
-			if( m_server->tcpPublic() != nodeIPEndpoint )
-			{
-				if( !nodeIPEndpoint.host.empty() )
-				{
-					bi::address query = HostResolver::query(nodeIPEndpoint.host);
-					if( query.to_string() != "0.0.0.0" )
-						nodeIPEndpoint.address = query;
-				}
-				count ++;
-				m_server->connect(nodeIPEndpoint);
-			}	
-		}
-		
-		break;
-	}
 	case GetPeersPacket:
 	case PeersPacket:
 		break;
@@ -255,18 +189,6 @@ void Session::ping()
 	sealAndSend(prep(s, PingPacket), 0);
 	m_ping = std::chrono::steady_clock::now();
 }
-void Session::announcement(h256 const& _allPeerHash)
-{
-	LOG(INFO) << "Send Announcement To " << m_info.id.abridged() << ",Our= " << toString(_allPeerHash);
-
-	if (m_socket->isConnected())
-	{
-		RLPStream s;
-		prep(s, GetAnnouncementHashPacket, 1) ;
-		s << _allPeerHash;
-		sealAndSend(s, 0);
-	}
-}
 
 RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
 {
@@ -275,9 +197,9 @@ RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
 
 void Session::sealAndSend(RLPStream& _s, uint16_t _protocolID)
 {
-	bytes b;
-	_s.swapOut(b);
-	send(move(b), _protocolID);
+	std::shared_ptr<bytes> b = std::make_shared<bytes>();
+	_s.swapOut(*b);
+	send(b, _protocolID);
 }
 
 bool Session::checkPacket(bytesConstRef _msg)
@@ -289,217 +211,127 @@ bool Session::checkPacket(bytesConstRef _msg)
 	return true;
 }
 
-void Session::send(bytes&& _msg, uint16_t _protocolID)
+void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
 {
-	if (m_dropped)
-		return;
-
-	bytesConstRef msg(&_msg);
+	bytesConstRef msg(_msg.get());
+	//LOG(TRACE) << RLP(msg.cropped(1));
 	if (!checkPacket(msg))
 		LOG(WARNING) << "INVALID PACKET CONSTRUCTED!";
 
-	if (!m_socket->isConnected())
+	if (!m_socket->ref().lowest_layer().is_open())
 		return;
 
 	bool doWrite = false;
-	if (isFramingEnabled())
+	DEV_GUARDED(x_framing)
 	{
-		DEV_GUARDED(x_framing)
-		{
-			doWrite = m_encFrames.empty();
-			auto f = getFraming(_protocolID);
-			if (!f)
-				return;
+		_writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
+		doWrite = (_writeQueue.size() == 1);
 
-			f->writer.enque(RLPXPacket(_protocolID, msg));
-			multiplexAll();
-		}
-
-		if (doWrite)
-			writeFrames();
+#if 0
+		m_writeQueue.push_back(std::move(_msg));
+		_protocolIDQueue.push_back(_protocolID);
+		m_writeTimeQueue.push_back(utcTime());
+		doWrite = (m_writeQueue.size() == 1);
+#endif
 	}
-	else
-	{
-		DEV_GUARDED(x_framing)
-		{
-			m_writeQueue.push_back(std::move(_msg));
-			m_writeTimeQueue.push_back(utcTime());
-			doWrite = (m_writeQueue.size() == 1);
-		}
 
-		if (doWrite)
-			write();
-	}
-}
-
-void Session::onWrite(boost::system::error_code ec, std::size_t length)
-{
-	try
-	{
-		if (m_dropped)
-		return;
-
-		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
-		if (elapsed >= 10) {
-			LOG(WARNING) << "ba::async_write write-time=" << elapsed << ",len=" << length << ",id=" << id();
-		}
-		ThreadContext tc(info().id.abridged());
-		ThreadContext tc2(info().clientVersion);
-		// must check queue, as write callback can occur following dropped()
-		if (ec)
-		{
-			LOG(WARNING) << "Error sending: " << ec.message();
-			drop(TCPError);
-			return;
-		}
-
-		DEV_GUARDED(x_framing)
-		{
-			m_writeQueue.pop_front();
-			m_writeTimeQueue.pop_front();
-			if (m_writeQueue.empty())
-				return;
-		}
+	if (doWrite)
 		write();
-	}
-	catch (exception &e) 
-	{
-		LOG(ERROR) << "Error:" << e.what();
-		drop(TCPError);
-		return;
-	}
 }
 
 void Session::write()
 {
-	try
-	{
-		if (m_dropped)
-			return;
+	try {
+		boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
 
-		bytes const* out = nullptr;
 		u256 enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
-			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
-			out = &m_writeQueue[0];
-			enter_time = m_writeTimeQueue[0];
+			task = _writeQueue.top();
+
+			Header header;
+			uint32_t length =  sizeof(Header) + boost::get<0>(task)->size();
+			header.length = htonl(length);
+			header.protocolID = htonl(boost::get<1>(task));
+
+			std::shared_ptr<bytes> out = boost::get<0>(task);
+			out->insert(out->begin(), (byte*)&header, ((byte*)&header) + sizeof(Header));
+
+			enter_time = boost::get<2>(task);
 		}
-		
+
+		auto self(shared_from_this());
 		m_start_t = utcTime();
 		unsigned queue_elapsed = (unsigned)(m_start_t - enter_time);
 		if (queue_elapsed > 10) {
 			LOG(WARNING) << "Session::write queue-time=" << queue_elapsed;
 		}
 
-		auto session = shared_from_this();
-		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
+		auto asyncWrite = [this, self](boost::system::error_code ec, std::size_t length)
 		{
-			if( m_socket->isConnected())
-			{
-				
-				m_server->getIOService()->post(
-					[ = ] {
-						boost::asio::async_write(m_socket->sslref(),
-						boost::asio::buffer(*out),
-						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-					});
+
+			unsigned elapsed = (unsigned)(utcTime() - m_start_t);
+			if (elapsed >= 10) {
+				LOG(WARNING) << "ba::async_write write-time=" << elapsed << ",len=" << length << ",id=" << id();
 			}
-			else
+			ThreadContext tc(info().id.abridged());
+			ThreadContext tc2(info().clientVersion);
+			// must check queue, as write callback can occur following dropped()
+			if (ec)
 			{
-				LOG(WARNING) << "Error sending ssl socket is close!" ;
+				LOG(WARNING) << "Error sending: " << ec.message();
 				drop(TCPError);
 				return;
 			}
+
+			DEV_GUARDED(x_framing)
+			{
+				_writeQueue.pop();
+
+				if(_writeQueue.empty()) {
+					return;
+				}
+			}
+			write();
+		};
+
+		if(m_socket->ref().lowest_layer().is_open())
+		{
+			m_server->getIOService()->post(
+				[ = ] {
+					boost::asio::async_write(m_socket->ref(),
+					boost::asio::buffer(*(boost::get<0>(task))),
+					asyncWrite);
+				});
 		}
 		else
 		{
-			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			LOG(WARNING) << "Error sending ssl socket is close!" ;
+			drop(TCPError);
+			return;
 		}
-		
 	}
-	catch (exception &e) 
-	{
-		LOG(ERROR) << "Error:" << e.what();
+	catch(std::exception &e) {
+		LOG(ERROR) << "Error while write" << e.what();
 		drop(TCPError);
 		return;
 	}
-
-}
-
-void Session::writeFrames()
-{
-	bytes const* out = nullptr;
-	DEV_GUARDED(x_framing)
-	{
-		if (m_encFrames.empty())
-			return;
-		else
-			out = &m_encFrames[0];
-	}
-
-	m_start_t = utcTime();
-	auto self(shared_from_this());
-
-	auto asyncWrite = [this, self](boost::system::error_code ec, std::size_t length)
-	{
-		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
-		if (elapsed >= 10) {
-			LOG(WARNING) << "ba::async_write write-time=" << elapsed << ",len=" << length << ",id=" << id();
-		}
-		ThreadContext tc(info().id.abridged());
-		ThreadContext tc2(info().clientVersion);
-		// must check queue, as write callback can occur following dropped()
-		if (ec)
-		{
-			LOG(WARNING) << "Error sending: " << ec.message();
-			drop(TCPError);
-			
-			return;
-		}
-
-		DEV_GUARDED(x_framing)
-		{
-			if (!m_encFrames.empty())
-				m_encFrames.pop_front();
-
-			multiplexAll();
-			if (m_encFrames.empty())
-				return;
-		}
-
-		writeFrames();
-	};
-	if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
-	{
-		ba::async_write(m_socket->sslref(), ba::buffer(*out),  m_strand->wrap(asyncWrite) );
-	}
-	else
-	{
-		ba::async_write(m_socket->ref(), ba::buffer(*out), m_strand->wrap(asyncWrite));
-	}
-	
 }
 
 void Session::drop(DisconnectReason _reason)
 {
 	if (m_dropped)
 		return;
-	m_dropped = true;
 
-	bi::tcp::socket& socket = m_socket->ref();
-	if (m_socket->isConnected())
-	try
-	{
-		boost::system::error_code ec;
-
-		//shutdown may block servals seconds - morebtcg
-		//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-		LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
-		
-		socket.close();
-	}
-	catch (...) {}
+	if (m_socket->ref().lowest_layer().is_open())
+		try
+		{
+			boost::system::error_code ec;
+			LOG(WARNING) << "Closing " << m_socket->ref().lowest_layer().remote_endpoint(ec) << "(" << reasonOf(_reason) << ")";
+			m_socket->ref().lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			m_socket->ref().lowest_layer().close();
+		}
+		catch (...) {}
 
 	m_peer->m_lastDisconnect = _reason;
 	if (_reason == BadProtocol)
@@ -507,34 +339,27 @@ void Session::drop(DisconnectReason _reason)
 		m_peer->m_rating /= 2;
 		m_peer->m_score /= 2;
 	}
-	
-
-	if( TCPError == _reason )
-		m_server->reconnectNow();
+	m_dropped = true;
 }
 
 void Session::disconnect(DisconnectReason _reason)
 {
 	LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")";
 
-	if (m_socket->isConnected())
+	if (m_socket->ref().lowest_layer().is_open())
 	{
 		RLPStream s;
 		prep(s, DisconnectPacket, 1) << (int)_reason;
 		sealAndSend(s, 0);
 	}
 	drop(_reason);
-	
 }
 
 void Session::start()
 {
 	ping();
 
-	if (isFramingEnabled())
-		m_strand->post(boost::bind(&Session::doReadFrames,this));//doReadFrames();
-	else
-		m_strand->post(boost::bind(&Session::doRead,this));//doRead();
+	doRead();
 }
 
 void Session::doRead()
@@ -543,119 +368,44 @@ void Session::doRead()
 	if (m_dropped)
 		return;
 	auto self(shared_from_this());
-	m_data.resize(h256::size);
+	m_data.resize(sizeof(Header));
 
 	auto asyncRead = [this, self](boost::system::error_code ec, std::size_t length)
 	{
-		if( length < 1 )
-		{
-			doRead();
-			return ;
-		}
+		if (!checkRead(sizeof(Header), ec, length))
+			return;
 
-		ThreadContext tc(info().id.abridged());
-		ThreadContext tc2(info().clientVersion);
-		if (!checkRead(h256::size, ec, length))
-			return;
-		else if (!m_io->authAndDecryptHeader(bytesRef(m_data.data(), length)))
-		{
-			LOG(WARNING) << "header decrypt failed";
-			drop(BadProtocol); // todo: better error
-			return;
-		}
+		Header *header = (Header*)m_data.data();
 
-		uint16_t hProtocolId;
-		uint32_t hLength;
-		uint8_t hPadding;
-		try
-		{
-			RLPXFrameInfo header(bytesConstRef(m_data.data(), length));
-			hProtocolId = header.protocolId;
-			hLength = header.length;
-			hPadding = header.padding;
-		}
-		catch (std::exception const& _e)
-		{
-			//LOG(WARNING) << "Exception decoding frame header RLP:" << _e.what() << bytesConstRef(m_data.data(), h128::size).cropped(3);
-			LOG(WARNING) << "Exception decoding frame header RLP:" << _e.what() << bytesConstRef(m_data.data(), h128::size).cropped(3).toString();
-			drop(BadProtocol);
-			return;
-		}
+		uint32_t hLength = ntohl(header->length);
+		uint32_t protocolID = ntohl(header->protocolID);
 
 		/// read padded frame and mac
-		auto tlen = hLength + hPadding + h128::size;
-		m_data.resize(tlen);
+		m_data.clear();
+		m_data.resize(hLength - sizeof(Header));
 
-		auto _asyncRead = [this, self, hLength, hProtocolId, tlen](boost::system::error_code ec, std::size_t length)
+		auto _asyncRead = [this, self, hLength, protocolID](boost::system::error_code ec, std::size_t length)
 		{
-			
 			ThreadContext tc(info().id.abridged());
 			ThreadContext tc2(info().clientVersion);
-			if (!checkRead(tlen, ec, length))
+			if (!checkRead(hLength - sizeof(Header), ec, length))
 				return;
-			else if (!m_io->authAndDecryptFrame(bytesRef(m_data.data(), tlen)))
-			{
-				LOG(WARNING) << "frame decrypt failed";
-				drop(BadProtocol); // todo: better error
-				return;
-			}
 
-			bytesConstRef frame(m_data.data(), hLength);
-			if (!checkPacket(frame))
-			{
-				LOG(WARNING) << "Received " << frame.size() << ": " << toHex(frame) << "\n";
-				LOG(WARNING) << "INVALID MESSAGE RECEIVED";
-				disconnect(BadProtocol);
-				return;
-			}
-			else
-			{
-				auto packetType = (PacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
-				RLP r(frame.cropped(1));
-				bool ok = readPacket(hProtocolId, packetType, r);
-				(void)ok;
+			bytesConstRef frame(m_data.data(), length);
+			auto packetType = (PacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
 
-				if (!ok)
-					LOG(WARNING) << "Couldn't interpret packet." << RLP(r);
+			RLP r(frame.cropped(1));
+			bool ok = readPacket((unsigned short)protocolID, packetType, r);
+			if (!ok)
+				LOG(WARNING) << "Couldn't interpret packet." << RLP(r);
 
-			}
 			doRead();
 		};
 
-		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
-		{
-			if( m_socket->isConnected() )
-				ba::async_read(m_socket->sslref(), boost::asio::buffer(m_data, tlen),  m_strand->wrap(_asyncRead));
-			else
-			{
-				LOG(WARNING) << "Error Reading ssl socket is close!" ;
-				drop(TCPError);
-				return;
-			}
-		}
-		else
-		{
-			ba::async_read(m_socket->ref(), boost::asio::buffer(m_data, tlen), m_strand->wrap(_asyncRead));
-		}
-		
+		ba::async_read(m_socket->ref(), boost::asio::buffer(m_data, hLength - sizeof(Header)), _asyncRead);
 	};
 
-	if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
-	{
-		if( m_socket->isConnected() )
-			ba::async_read(m_socket->sslref(), boost::asio::buffer(m_data, h256::size),  m_strand->wrap(asyncRead) );
-		else
-		{
-			LOG(WARNING) << "Error Reading ssl socket is close!" ;
-			drop(TCPError);
-			return;
-		}
-	}
-	else
-	{
-		ba::async_read(m_socket->ref(), boost::asio::buffer(m_data, h256::size), m_strand->wrap(asyncRead));
-	}
-	
+	ba::async_read(m_socket->ref(), boost::asio::buffer(m_data, h256::size), asyncRead);
 }
 
 bool Session::checkRead(std::size_t _expected, boost::system::error_code _ec, std::size_t _length)
@@ -664,134 +414,24 @@ bool Session::checkRead(std::size_t _expected, boost::system::error_code _ec, st
 	{
 		LOG(WARNING) << "Error reading: " << _ec.message();
 		drop(TCPError);
-		
 		return false;
 	}
 	else if (_ec && _length < _expected)
 	{
-		LOG(WARNING) << "Error reading - Abrupt peer disconnect: " << _ec.message()<<","<<_expected<<","<<_length;
-		repMan().noteRude(*this);
+		LOG(WARNING) << "Error reading - Abrupt peer disconnect: " << _ec.message();
 		drop(TCPError);
-		
 		return false;
 	}
 	else if (_length != _expected)
 	{
 		// with static m_data-sized buffer this shouldn't happen unless there's a regression
 		// sec recommends checking anyways (instead of assert)
-		LOG(WARNING) << "Error reading - TCP read buffer length differs from expected frame size."<<_expected<<","<<_length;
+		LOG(WARNING) << "Error reading - TCP read buffer length differs from expected frame size.";
 		disconnect(UserReason);
 		return false;
 	}
 
 	return true;
-}
-
-void Session::doReadFrames()
-{
-	if (m_dropped)
-		return; // ignore packets received while waiting to disconnect
-
-	auto self(shared_from_this());
-	m_data.resize(h256::size);
-
-	auto asyncRead = [this, self](boost::system::error_code ec, std::size_t length)
-	{
-		if( length < 1 )
-		{
-			doReadFrames();
-			return ;
-		}
-		ThreadContext tc(info().id.abridged());
-		ThreadContext tc2(info().clientVersion);
-		if (!checkRead(h256::size, ec, length))
-			return;
-
-		DEV_GUARDED(x_framing)
-		{
-			if (!m_io->authAndDecryptHeader(bytesRef(m_data.data(), length)))
-			{
-				LOG(WARNING) << "header decrypt failed";
-				drop(BadProtocol); // todo: better error
-				return;
-			}
-		}
-
-		bytesConstRef rawHeader(m_data.data(), length);
-		try
-		{
-			RLPXFrameInfo tmpHeader(rawHeader);
-		}
-		catch (std::exception const& _e)
-		{
-			LOG(WARNING) << "Exception decoding frame header RLP:" << _e.what() ;//<< bytesConstRef(m_data.data(), h128::size).cropped(3);
-			drop(BadProtocol);
-			return;
-		}
-
-		RLPXFrameInfo header(rawHeader);
-		auto tlen = header.length + header.padding + h128::size; // padded frame and mac
-		m_data.resize(tlen);
-		auto _asyncRead = [this, self, tlen, header](boost::system::error_code ec, std::size_t length)
-		{
-			
-			ThreadContext tc(info().id.abridged());
-			ThreadContext tc2(info().clientVersion);
-			if (!checkRead(tlen, ec, length))
-				return;
-
-			bytesRef frame(m_data.data(), tlen);
-			vector<RLPXPacket> px;
-			DEV_GUARDED(x_framing)
-			{
-				auto f = getFraming(header.protocolId);
-				if (!f)
-				{
-					LOG(WARNING) << "Unknown subprotocol " << header.protocolId;
-					drop(BadProtocol);
-					return;
-				}
-
-				auto v = f->reader.demux(*m_io, header, frame);
-				px.swap(v);
-			}
-
-			for (RLPXPacket& p : px)
-			{
-				PacketType packetType = (PacketType)RLP(p.type()).toInt<unsigned>(RLP::AllowNonCanon);
-				bool ok = readPacket(header.protocolId, packetType, RLP(p.data()));
-				ok = true;
-				(void)ok;
-			}
-			doReadFrames();
-		};
-		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
-		{
-			ba::async_read(m_socket->sslref(), boost::asio::buffer(m_data, tlen), m_strand->wrap( _asyncRead) );
-		}
-		else
-		{
-			ba::async_read(m_socket->ref(), boost::asio::buffer(m_data, tlen), m_strand->wrap( _asyncRead));
-		}
-		
-	};
-	if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
-	{
-		ba::async_read(m_socket->sslref(), boost::asio::buffer(m_data, h256::size),  m_strand->wrap(asyncRead) );
-	}
-	else
-	{
-		ba::async_read(m_socket->ref(), boost::asio::buffer(m_data, h256::size), m_strand->wrap(asyncRead));
-	}
-	
-}
-
-std::shared_ptr<Session::Framing> Session::getFraming(uint16_t _protocolID)
-{
-	if (m_framing.find(_protocolID) == m_framing.end())
-		return nullptr;
-	else
-		return m_framing[_protocolID];
 }
 
 void Session::registerCapability(CapDesc const& _desc, std::shared_ptr<Capability> _p)
@@ -800,42 +440,4 @@ void Session::registerCapability(CapDesc const& _desc, std::shared_ptr<Capabilit
 	{
 		m_capabilities[_desc] = _p;
 	}
-}
-
-void Session::registerFraming(uint16_t _id)
-{
-	DEV_GUARDED(x_framing)
-	{
-		if (m_framing.find(_id) == m_framing.end())
-		{
-			std::shared_ptr<Session::Framing> f(new Session::Framing(_id));
-			m_framing[_id] = f;
-		}
-	}
-}
-
-void Session::multiplexAll()
-{
-	for (auto& f : m_framing)
-		f.second->writer.mux(*m_io, maxFrameSize(), m_encFrames);
-}
-
-CABaseData* Session::getCABaseData()
-{
-	return m_CABaseData;
-}
-
-void Session::saveCABaseData(CABaseData* baseData)
-{
-	m_CABaseData = baseData;
-}
-
-bool Session::setStatistics(dev::InterfaceStatistics *stats)
-{
-		if (stats && m_statistics.get() == nullptr)
-		{
-			m_statistics.reset(stats);
-			return true;
-		}
-		return false;
 }

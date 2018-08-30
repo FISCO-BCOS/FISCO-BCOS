@@ -22,7 +22,6 @@
  */
 
 #include <libethereum/EthereumHost.h>
-#include <libethereum/NodeConnParamsManagerApi.h>
 #include <libp2p/Host.h>
 #include "RaftClient.h"
 #include "Raft.h"
@@ -50,7 +49,7 @@ RaftClient* dev::eth::asRaftClient(Interface* _c)
 RaftClient::RaftClient(
     ChainParams const& _params,
     int _networkID,
-    p2p::HostApi* _host,
+    std::shared_ptr<p2p::Host> _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -69,7 +68,7 @@ RaftClient::~RaftClient() {
 	stopWorking();
 }
 
-void RaftClient::init(ChainParams const&, p2p::HostApi *_host) {
+void RaftClient::init(ChainParams const&, std::shared_ptr<p2p::Host> _host) {
 	auto raft_host = _host->registerCapability(make_shared<RaftHost>([this](unsigned _id, std::shared_ptr<Capability> _peer, RLP const & _r) {
 		raft()->onRaftMsg(_id, _peer, _r);
 	}));
@@ -112,7 +111,7 @@ void RaftClient::syncBlockQueue() {
 
 void RaftClient::rejigSealing()
 {
-	bool would_seal = m_wouldSeal && (raft()->accountType() == EN_ACCOUNT_TYPE_MINER);
+	bool would_seal = m_wouldSeal && raft()->accountType();
 	bool is_major_syncing = isMajorSyncing();
 	if (would_seal && !is_major_syncing)
 	{
@@ -138,7 +137,7 @@ void RaftClient::rejigSealing()
 				}
 
 				m_working.setIndex(raft()->nodeIdx());
-				m_working.commitToSeal(bc(), m_extraData);
+				m_working.commitToSeal(bc(), raft()->nodeIdx(), m_extraData);
 
 				bc().addBlockCache(m_working, m_working.info().difficulty());
 			}

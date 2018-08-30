@@ -19,7 +19,6 @@
  * @author: fisco-dev
  * 
  * @date: 2017
-
  */
 
 #pragma once
@@ -34,6 +33,7 @@
 #include <boost/asio.hpp>
 #include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelException.h>
+#include <libchannelserver/ChannelMessage.h>
 #include <libchannelserver/ChannelSession.h>
 #include <libchannelserver/ChannelServer.h>
 #include <libethereum/Web3Observer.h>
@@ -55,14 +55,17 @@ public:
 	};
 
 	struct ChannelMessageSession {
+		//When sending channelmessage
 		dev::channel::ChannelSession::Ptr fromSession;
 		h512 toNodeID;
 		std::set<h512> failedNodeIDs;
 
+		//When receiveing channelmessage
 		h512 fromNodeID;
 		dev::channel::ChannelSession::Ptr toSession;
 		std::set<dev::channel::ChannelSession::Ptr> failedSessions;
 
+		//message
 		dev::channel::Message::Ptr message;
 	};
 
@@ -85,9 +88,10 @@ public:
 
 	virtual void onClientRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message);
 
-
-	virtual void onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
-
+#if 0
+	// abandon
+	virtual void onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelMessage::Ptr message);
+#endif
 
 	virtual void onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
@@ -97,7 +101,10 @@ public:
 
 	virtual void onNodeRequest(dev::h512 nodeID, std::shared_ptr<dev::bytes> message);
 
-	virtual void onNodeMessage(h512 nodeID, dev::channel::Message::Ptr message);
+#if 0
+	//abandon
+	virtual void onNodeMessage(h512 nodeID, dev::channel::ChannelMessage::Ptr message);
+#endif
 
 	virtual void onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message);
 
@@ -115,9 +122,11 @@ public:
 
 	void setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext);
 
+	void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server);
+
 	void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,	std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
 
-	virtual dev::channel::TopicMessage::Ptr pushChannelMessage(dev::channel::TopicMessage::Ptr message);
+	virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(dev::channel::TopicChannelMessage::Ptr message);
 
 	virtual std::string newSeq();
 

@@ -27,17 +27,16 @@
 #include <libethereum/Interface.h>
 #include <libethereum/BlockChain.h>
 #include <libethereum/EthereumHost.h>
-#include <libethereum/NodeConnParamsManagerApi.h>
 #include <libdevcrypto/Common.h>
 #include "PBFT.h"
+#include "Common.h"
 #include <libdevcore/easylog.h>
 #include <libdevcore/LogGuard.h>
 #include <libethereum/StatLog.h>
-#include <libethereum/ConsensusControl.h>
 using namespace std;
 using namespace dev;
 using namespace eth;
-const unsigned PBFT::kCollectInterval = 60;
+
 void PBFT::init()
 {
 	ETH_REGISTER_SEAL_ENGINE(PBFT);
@@ -59,9 +58,8 @@ void PBFT::initEnv(std::weak_ptr<PBFTHost> _host, BlockChain* _bc, OverlayDB* _d
 	Guard l(m_mutex);
 
 	m_host = _host;
-	m_bc.reset(_bc);
-	m_stateDB.reset(_db);
-	m_bq.reset(bq);
+	m_bc = _bc;
+	m_stateDB = _db;
 
 	m_bc->setSignChecker([this](BlockHeader const & _header, std::vector<std::pair<u256, Signature>> _sign_list) {
 		return checkBlockSign(_header, _sign_list);
@@ -95,7 +93,7 @@ void PBFT::initBackupDB() {
 	ldb::Options o;
 	o.max_open_files = 256;
 	o.create_if_missing = true;
-	std::string path = m_bc->chainParams().dataDir + "/pbftMsgBackup";
+	std::string path = getDataDir() + "/pbftMsgBackup";
 	ldb::Status status = ldb::DB::Open(o, path, &m_backup_db);
 	if (!status.ok() || !m_backup_db)
 	{
@@ -117,54 +115,27 @@ void PBFT::initBackupDB() {
 }
 
 void PBFT::resetConfig() {
-	if (!NodeConnManagerSingleton::GetInstance().getAccountType(m_key_pair.pub(), m_account_type)) {
-		LOG(WARNING) << "resetConfig Fail: can't find myself id, stop sealing";
-		m_cfg_err = true;
-		return;
-	}
-
-	auto node_num = NodeConnManagerSingleton::GetInstance().getMinerNum();
-	if (node_num == 0) {
-		LOG(WARNING) << "resetConfig Fail: miner_num = 0, stop sealing";
-		m_cfg_err = true;
-		return;
-	}
-
-	u256 node_idx;
-	if (!NodeConnManagerSingleton::GetInstance().getIdx(m_key_pair.pub(), node_idx)) {
-		//BOOST_THROW_EXCEPTION(PbftInitFailed() << errinfo_comment("NodeID not in cfg"));
-		LOG(INFO) << "resetConfig Fail: can't find myself id, stop sealing";
-		m_cfg_err = true;
-		return;
-	}
-	if (node_num != m_node_num || node_idx != m_node_idx) {
-		m_node_num = node_num;
-		m_node_idx = node_idx;
-		m_f = (m_node_num - 1 ) / 3;
-
-		m_prepare_cache.clear();
-		m_sign_cache.clear();
-		m_recv_view_change_req.clear();
-		
-		ConsensusControl::instance().clearAllCache();
-		m_commitMap.clear();
-
-		if (!getMinerList(-1, m_miner_list)) {
-			LOG(WARNING) << "resetConfig Fail: getMinerList return false";
-			m_cfg_err = true;
-			return;
+	m_node_idx = -1;
+	auto node_num = m_miner_list.size();
+	for(size_t i=0; i<m_miner_list.size(); ++i) {
+		if(m_miner_list[i] == m_key_pair.pub()) {
+			m_account_type = 1;
+			m_node_idx = i;
+			break;
 		}
-
-		if (m_miner_list.size() != m_node_num) {
-			LOG(WARNING) << "resetConfig Fail: m_miner_list.size=" << m_miner_list.size() << ",m_node_num=" << m_node_num;
-			m_cfg_err = true;
-			return;
-		}
-		LOG(INFO) << "resetConfig Sucess: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
 	}
-	// consensuscontrol init cache
-	ConsensusControl::instance().resetNodeCache();
-	m_cfg_err = false;
+
+	//if (node_num != m_node_num || node_idx != m_node_idx) {
+	auto m_node_num = getMinerNodeList().size();
+	m_f = (m_node_num - 1 ) / 3;
+
+	m_prepare_cache.clear();
+	m_sign_cache.clear();
+	m_recv_view_change_req.clear();
+
+	LOG(INFO) << "resetConfig: m_node_idx=" << m_node_idx.convert_to<ssize_t>() << ", m_node_num=" << m_node_num;
+
+	m_cfg_err = (m_node_idx < 0);
 }
 
 StringHashMap PBFT::jsInfo(BlockHeader const& _bi) const
@@ -217,7 +188,7 @@ bool PBFT::shouldSeal(Interface*)
 {
 	Guard l(m_mutex);
 
-	if (m_cfg_err || m_account_type != EN_ACCOUNT_TYPE_MINER) { // do not issue the block if not find myself in systemcontract config or this node is no a miner (配置中找不到自己或非记账节点就不出块)
+	if (m_cfg_err || !m_account_type) { // do not issue the block if not find myself in systemcontract config or this node is no a miner (配置中找不到自己或非记账节点就不出块)
 		return false;
 	}
 
@@ -229,9 +200,11 @@ bool PBFT::shouldSeal(Interface*)
 
 	if (ret.second != m_node_idx) {
 		if (auto h = m_host.lock()) {
-			h512 node_id = h512(0);
-			if (NodeConnManagerSingleton::GetInstance().getPublicKey(ret.second, node_id) && !h->isConnected(node_id)) {
-				LOG(WARNING) << "getLeader ret:<" << ret.first << "," << ret.second << ">" << ", need viewchange for disconnected";
+			h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
+
+			if(node_id != h512() && !h->isConnected(node_id)) {
+			//if (NodeConnManagerSingleton::GetInstance().getPublicKey(ret.second, node_id) && !h->isConnected(node_id)) {
+				LOG(ERROR) << "getLeader ret:<" << ret.first << "," << ret.second << ">" << ", need viewchange for disconnected";
 				m_last_consensus_time = 0;
 				m_last_sign_time = 0;  // set m_last_consensus_time and m_last_sign_time to zero can guarantee "fastviewchange" to work (两个都设置为0，才能保证快速切换)
 				m_signalled.notify_all();
@@ -274,19 +247,19 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 	handlePrepareMsg(m_node_idx, req, true); // 指明是来自自己的Req
 }
 
-std::pair<bool, u256> PBFT::getLeader() const {
+std::pair<bool, u256> PBFT::getLeader() {
 	if (m_cfg_err || m_leader_failed || m_highest_block.number() == Invalid256) {
 		return std::make_pair(false, Invalid256);
 	}
 
-	return std::make_pair(true, (m_view + m_highest_block.number()) % m_node_num);
+	return std::make_pair(true, (m_view + m_highest_block.number()) % getMinerNodeList().size());
 }
 
 void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
 	Guard l(m_mutex);
 
-	auto old_height = m_highest_block.number();
-	auto old_view = m_view;
+	//auto old_height = m_highest_block.number();
+	//auto old_view = m_view;
 
 	m_highest_block = _b;
 
@@ -309,24 +282,21 @@ void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
 	ss << "blk:" << m_highest_block.number().convert_to<string>()
 		<< " hash:" << _b.hash(WithoutSeal).abridged() << " idx:" << m_highest_block.genIndex().convert_to<string>()
 		<< " next:" << m_consensus_block_number.convert_to<string>();
-	PBFTFlowLog(old_height + old_view, ss.str());
+	//PBFTFlowLog(old_height + old_view, ss.str());
 }
 
 void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
 	if (_id <= ViewChangeReqPacket) {
-		NodeID nodeid;
-		auto session = _peer->session();
-		if (session && (nodeid = session->id()))
-		{
-			u256 idx = u256(0);
-			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
-				LOG(WARNING) << "Recv an pbft msg from unknown peer id=" << _id;
-				return;
-			}
-			//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
-			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data()));
+		//LOG(INFO) << "onPBFTMsg: id=" << _id;
+		ssize_t index = getIndexByMiner(_peer->session()->id());
+		if(index < 0) {
+		//if (!NodeConnManagerSingleton::GetInstance().getIdx(_peer->session()->id(), idx)) {
+			LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << _peer->session()->id();
+			return;
 		}
 
+		//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
+		m_msg_queue.push(PBFTMsgPacket(u256(index), _peer->session()->id(), _id, _r[0].data()));
 	} else {
 		LOG(WARNING) << "Recv an illegal msg, id=" << _id;
 	}
@@ -404,12 +374,50 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 	if (key.size() > 0 && time_flag && height_flag) {
 		std::unordered_set<h512> filter;
 		filter.insert(_node);
-		h512 gen_node_id = h512(0);
-		if (NodeConnManagerSingleton::GetInstance().getPublicKey(pbft_msg.idx, gen_node_id)) {
+		h512 gen_node_id = getMinerByIndex(pbft_msg.idx.convert_to<size_t>());
+		if(gen_node_id != h512()) {
+		//if (NodeConnManagerSingleton::GetInstance().getPublicKey(pbft_msg.idx, gen_node_id)) {
 			filter.insert(gen_node_id);
 		}
 		broadcastMsg(key, _id, _r.toBytes(), filter);
 	}
+}
+
+h512s PBFT::getMinerNodeList() {
+	Guard lock(_current_miner_mutex);
+
+	if(m_highest_block.number() != _current_miner_num) {
+		auto minerList = m_miner_list;
+
+		auto miners = _storage->select(m_highest_block.hash(), m_highest_block.number().convert_to<int>(), "_sys_miners_", "list");
+		for(size_t i=0; i<miners->size(); ++i) {
+			auto miner = miners->get(i);
+			if(boost::lexical_cast<int>(miner->getField("enable_num")) >= m_highest_block.number().convert_to<int>()) {
+				h512 nodeID = h512(miner->getField("node_id"));
+
+				if(miner->getField("status") == "0") {
+					minerList.push_back(nodeID);
+				}
+				else {
+					for(auto it=minerList.begin(); it!=minerList.end(); ++it) {
+						if(*it == nodeID) {
+							minerList.erase(it);
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		_current_miner_list = minerList;
+		_current_miner_num = m_highest_block.number();
+	}
+
+	return _current_miner_list;
+}
+
+void PBFT::setMinerNodeList(h512s minerList) {
+	m_miner_list = minerList;
 }
 
 void PBFT::changeViewForEmptyBlockWithoutLock(u256 const& _from) {
@@ -430,6 +438,10 @@ void PBFT::changeViewForEmptyBlockWithLock() {
 	m_empty_block_flag = true;
 	m_leader_failed = true; // m_leader_failed would set in checkTimeout, however we set in this place is aim to let the empty block leader not issue a empty block at once (在checkTimeout的时候会设置，但是这里加上的目的是为了让出空块者不会立即再出空块)
 	m_signalled.notify_all();
+}
+
+void PBFT::setStorage(dev::storage::StateStorage::Ptr storage) {
+	_storage = storage;
 }
 
 void PBFT::checkTimeout() {
@@ -456,17 +468,6 @@ void PBFT::checkTimeout() {
 				} else {
 					++iter;
 				}
-			}
-
-			// start viewchange log
-			if (m_view + 1 == m_to_view) 
-			{
-				PBFTFlowViewChangeLog(m_highest_block.number() + m_view, " view:" + m_view.convert_to<string>());
-			}
-			else 
-			{
-				STAT_ERROR_MSG_LOGGUARD(STAT_PBFT_VIEWCHANGE_TAG) << "Timeout and ViewChanged!" 
-					<< " m_view=" << m_view << ", m_to_view=" << m_to_view << ", m_change_cycle=" << m_change_cycle;
 			}
 
 			if (!broadcastViewChangeReq()) {
@@ -504,28 +505,52 @@ Signature PBFT::signHash(h256 const & _hash) const {
 	return dev::sign(m_key_pair.sec(), _hash);
 }
 
-bool PBFT::checkSign(u256 const & _idx, h256 const & _hash, Signature const & _sig) const {
+bool PBFT::checkSign(u256 const & _idx, h256 const & _hash, Signature const & _sig) {
 	Public pub_id;
+
+#if 0
 	if (!NodeConnManagerSingleton::GetInstance().getPublicKey(_idx, pub_id)) {
 		LOG(WARNING) << "Can't find node, idx=" << _idx;
 		return false;
 	}
+#endif
+	dev::h512 nodeID = getMinerByIndex(_idx.convert_to<size_t>());
+	if(nodeID == h512()) {
+		LOG(WARNING) << "Can't find node, idx=" << _idx;
+		return false;
+	}
+
+	pub_id = jsToPublic(toJS(nodeID.hex()));
+
 	return dev::verify(pub_id, _sig, _hash);
 }
 
-bool PBFT::checkSign(PBFTMsg const& _req) const {
+bool PBFT::checkSign(PBFTMsg const& _req) {
 	Public pub_id;
+
+#if 0
 	if (!NodeConnManagerSingleton::GetInstance().getPublicKey(_req.idx, pub_id)) {
 		LOG(WARNING) << "Can't find node, idx=" << _req.idx;
 		return false;
 	}
+#endif
+	size_t idx = _req.idx.convert_to<size_t>();
+	dev::h512 nodeID = getMinerByIndex(idx);
+	if(nodeID == h512()) {
+		LOG(ERROR) << "Can't find node, idx=" << idx;
+		return false;
+	}
+
+	pub_id = jsToPublic(toJS(nodeID.hex()));
+
 	return dev::verify(pub_id, _req.sig, _req.block_hash) && dev::verify(pub_id, _req.sig2, _req.fieldsWithoutBlock());
 }
 
 bool PBFT::broadcastViewChangeReq() {
 	LOG(INFO) << "Ready to broadcastViewChangeReq, blk=" << m_highest_block.number() << ",view=" << m_view << ",to_view=" << m_to_view << ",m_change_cycle=" << m_change_cycle;
 
-	if (m_account_type != EN_ACCOUNT_TYPE_MINER) {
+
+	if (!m_account_type) {
 		LOG(INFO) << "broadcastViewChangeReq give up for not miner";
 		return true;
 	}
@@ -611,31 +636,23 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<PBFTPeer> _p)
 		{
-			NodeID nodeid;
-			auto session = _p->session();
-			if (session && (nodeid = session->id()))
-			{
-				unsigned account_type = 0;
-				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
-					LOG(INFO) << "Cannot get account type for peer" << nodeid;
-					return true;
-				}
-				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
-					return true;
-				}
-				if (_filter.count(nodeid)) {  // forward the broadcast to other node (转发广播)
-					this->broadcastMark(_key, _id, _p);
-					return true;
-				}
-				if (this->broadcastFilter(_key, _id, _p)) {
-					return true;
-				}
-
-				RLPStream ts;
-				_p->prep(ts, _id, 1).append(_data);
-				_p->sealAndSend(ts);
-				this->broadcastMark(_key, _id, _p);
+			if(getIndexByMiner(_p->session()->id()) < 0) {
+				return true;
 			}
+
+			if (_filter.count(_p->session()->id())) {  // 转发广播
+				this->broadcastMark(_key, _id, _p);
+				return true;
+			}
+
+			if (this->broadcastFilter(_key, _id, _p)) {
+				return true;
+			}
+
+			RLPStream ts;
+			_p->prep(ts, _id, 1).append(_data);
+			_p->sealAndSend(ts);
+			this->broadcastMark(_key, _id, _p);
 			return true;
 		});
 		return true;
@@ -756,6 +773,11 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		return;
 	}
 
+	if (_req.idx == m_raw_prepare_cache.idx && _req.height == m_raw_prepare_cache.height && _req.view == m_raw_prepare_cache.view) {
+		LOG(ERROR) << oss.str() << "Discard an duplicated block from same node with same height&view";
+		return;
+	}
+
 	if (!_self && _req.idx == m_node_idx) {
 		LOG(WARNING) << oss.str() << "Discard an illegal prepare, your own req";
 		return;
@@ -771,6 +793,8 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		recvFutureBlock(_from, _req);
 		return;
 	}
+
+	addRawPrepare(_req); // 必须在recvFutureBlock之后
 
 	auto leader = getLeader();
 	if (!leader.first || _req.idx != leader.second) {
@@ -804,8 +828,12 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		}
 		m_last_exec_finish_time = utcTime();
 	}
-	catch (std::exception &ex) {
+	catch (Exception &ex) {
 		LOG(WARNING) << oss.str()  << "CheckBlockValid failed" << ex.what();
+		return;
+	}
+	catch (std::exception &e) {
+		LOG(WARNING) << oss.str()  << "CheckBlockValid failed" << e.what();
 		return;
 	}
 
@@ -819,8 +847,8 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		return;
 	}
 
-	// regenerate block data (重新生成block数据)
-	outBlock.commitToSeal(*m_bc, outBlock.info().extraData());
+	// 重新生成block数据
+	outBlock.commitToSeal(*m_bc, _req.idx, outBlock.info().extraData());
 	m_bc->addBlockCache(outBlock, outBlock.info().difficulty());
 
 	RLPStream ts;
@@ -833,12 +861,9 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 	LOG(DEBUG) << "finish exec tx, blk=" << _req.height << ", time=" << utcTime();
 	// execed log
 	stringstream ss;
-	// TODO FLAG2  hash means real hash!
-	// ss << "hash:" << _req.block_hash.abridged() << " realhash:" << outBlock.info().hash(WithoutSeal).abridged() 
-	// 	<< " height:" << _req.height << " txnum:" << outBlock.pending().size();
-	ss << "hash:" << outBlock.info().hash(WithoutSeal) << " unexected_hash:" << _req.block_hash.abridged()
+	ss << "hash:" << _req.block_hash.abridged() << " realhash:" << outBlock.info().hash(WithoutSeal).abridged() 
 		<< " height:" << _req.height << " txnum:" << outBlock.pending().size();
-	PBFTFlowLog(m_highest_block.number() + m_view, ss.str());
+	//PBFTFlowLog(m_highest_block.number() + m_view, ss.str());
 
 	// regenerate Prepare package (重新生成Prepare)
 	PrepareReq req;
@@ -856,7 +881,7 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 		return;
 	}
 
-	if (m_account_type == EN_ACCOUNT_TYPE_MINER && !broadcastSignReq(req)) {
+	if (m_account_type && !broadcastSignReq(req)) {
 		LOG(WARNING) << oss.str()  << "broadcastSignReq failed";
 		//return;
 	}
@@ -1064,17 +1089,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 void PBFT::checkAndSave() {
 	u256 have_sign = m_sign_cache[m_prepare_cache.block_hash].size();
 	u256 have_commit = m_commit_cache[m_prepare_cache.block_hash].size();
-	bool committed = false;
-	auto it = m_commitMap.find(m_prepare_cache.block_hash);
-	if (it != m_commitMap.end())
-		committed = it->second;
-
-	if (have_sign >= quorum() 
-		&& have_commit >= quorum() /* match for the requirement for pbft 满足pbft要求*/
-		&& !committed /* match pbft and trigger once 满足pbft和联盟控制的条件下保证只触发一次*/
-		&& ConsensusControl::instance().callConsensus(m_bc->getClient(), m_prepare_cache.block_hash) /* match consensus contrl 满足联盟控制要求*/
-		) {  // only trigger once 只发一次
-		m_commitMap[m_prepare_cache.block_hash] = true;
+	if (have_sign >= quorum() && have_commit == quorum()) {
 		LOG(INFO) << "######### Reach enough commit for block="  << m_prepare_cache.height << ",hash=" << m_prepare_cache.block_hash.abridged() << ",have_sign=" << have_sign << ",have_commit=" << have_commit << ",quorum=" << quorum();
 
 		if (m_prepare_cache.view != m_view) {
@@ -1085,9 +1100,7 @@ void PBFT::checkAndSave() {
 		if (m_prepare_cache.height > m_highest_block.number()) {
 			// add signature 把签名加上
 			std::vector<std::pair<u256, Signature>> sig_list;
-			// sig_list.reserve(static_cast<unsigned>(quorum()));
-			// in the consensus control, the sig list must be all related sign, not just for pbft request
-			sig_list.reserve(static_cast<unsigned>(have_commit));
+			sig_list.reserve(static_cast<unsigned>(quorum()));
 			for (auto item : m_commit_cache[m_prepare_cache.block_hash]) {
 				sig_list.push_back(std::make_pair(item.second.idx, Signature(item.first.c_str())));
 			}
@@ -1123,7 +1136,7 @@ void PBFT::checkAndCommit() {
 		m_committed_prepare_cache = m_raw_prepare_cache;
 		backupMsg(backup_key_committed, m_committed_prepare_cache);
 
-		if (m_account_type == EN_ACCOUNT_TYPE_MINER && !broadcastCommitReq(m_prepare_cache)) {
+		if (m_account_type && !broadcastCommitReq(m_prepare_cache)) {
 			LOG(WARNING) << "broadcastCommitReq failed";
 		}
 
@@ -1150,9 +1163,6 @@ void PBFT::checkAndChangeView() {
 		m_prepare_cache.clear();
 		m_sign_cache.clear();
 		m_commit_cache.clear();
-
-		ConsensusControl::instance().clearAllCache();
-		m_commitMap.clear();
 
 		for (auto iter = m_recv_view_change_req.begin(); iter != m_recv_view_change_req.end();) {
 			if (iter->first <= m_view) {
@@ -1212,13 +1222,6 @@ void PBFT::addSignReq(SignReq const & _req) {
 
 void PBFT::addCommitReq(CommitReq const & _req) {
 	m_commit_cache[_req.block_hash][_req.sig.hex()] = _req;
-	// consensuscontrol
-	Public pub_id;
-	if (!NodeConnManagerSingleton::GetInstance().getPublicKey(_req.idx, pub_id)) {
-		LOG(WARNING) << "Can't find node in addPrepareReq(), idx=" << _req.idx;
-		return ;
-	}
-	ConsensusControl::instance().addAgencyCount(_req.block_hash, pub_id);
 }
 
 void PBFT::delCache(h256 const& _hash) {
@@ -1241,11 +1244,6 @@ void PBFT::delCache(h256 const& _hash) {
 	if (_hash == m_prepare_cache.block_hash) {
 		m_prepare_cache.clear();
 	}
-	// 删除对应hash的所有cache 
-	ConsensusControl::instance().clearBlockCache(_hash);
-	auto it = m_commitMap.find(_hash);
-	if (it != m_commitMap.end())
-		m_commitMap.erase(it);
 }
 
 void PBFT::delViewChange() {
@@ -1278,23 +1276,12 @@ void PBFT::collectGarbage() {
 		for (auto iter = m_sign_cache.begin(); iter != m_sign_cache.end();) {
 			for (auto iter2 = iter->second.begin(); iter2 != iter->second.end();) {
 				if (iter2->second.height < m_highest_block.number()) {
-					// must before erase() 必须放在erase之前
-					Public pub_id;
-					if (NodeConnManagerSingleton::GetInstance().getPublicKey(iter2->second.idx, pub_id)) {
-						ConsensusControl::instance().clearBlockCache(iter->first, pub_id);
-					}
 					iter2 = iter->second.erase(iter2);
 				} else {
 					++iter2;
 				}
 			}
-			if (iter->second.size() == 0) {
-				// must before erase() 必须放在erase之前
-				ConsensusControl::instance().clearBlockCache(iter->first);
-				auto it = m_commitMap.find(iter->first);
-				if (it != m_commitMap.end())
-					m_commitMap.erase(it);
-
+			if (iter->second.size() == 0) {			
 				iter = m_sign_cache.erase(iter);
 			} else {
 				++iter;
@@ -1322,87 +1309,33 @@ void PBFT::collectGarbage() {
 	}
 }
 
-
-bool PBFT::getMinerList(int _blk_no, h512s &_miner_list) const {
-	std::map<std::string, NodeConnParams> all_node;
-	NodeConnManagerSingleton::GetInstance().getAllNodeConnInfo(_blk_no, all_node);
-
-	unsigned miner_num = 0;
-	for (auto iter = all_node.begin(); iter != all_node.end(); ++iter) {
-		if (iter->second._iIdentityType == EN_ACCOUNT_TYPE_MINER) {
-			++miner_num;
-		}
-	}
-	_miner_list.resize(miner_num);
-	for (auto iter = all_node.begin(); iter != all_node.end(); ++iter) {
-		if (iter->second._iIdentityType == EN_ACCOUNT_TYPE_MINER) {
-			auto idx = static_cast<unsigned>(iter->second._iIdx);
-			if (idx >= miner_num) {
-				LOG(WARNING) << "getMinerList return false cause for idx=" << idx << ",miner_num=" << miner_num;
-				return false;
-			}
-			_miner_list[idx] = jsToPublic(toJS(iter->second._sNodeId));
-		}
-	}
-
-	return true;
-
-}
-
 bool PBFT::checkBlockSign(BlockHeader const& _header, std::vector<std::pair<u256, Signature>> _sign_list) {
 	Timer t;
 
 	LOG(TRACE) << "PBFT::checkBlockSign " << _header.number();
 
+	auto minerList = getMinerNodeList();
 
-	h512s miner_list;
-	if (!getMinerList(static_cast<int>(_header.number() - 1), miner_list)) {
-		LOG(WARNING) << "checkBlockSign failed for getMinerList return false, blk=" <<  _header.number() - 1;
+	//LOG(DEBUG) << "checkBlockSign call getAllNodeConnInfo: blk=" << _header.number() - 1 << ", miner_num=" << minerList.size();
+	LOG(WARNING) << "miner size:" << minerList.size();
+
+	// 检查签名数量
+	if (_sign_list.size() < (minerList.size() - (minerList.size() - 1) / 3)) {
+		LOG(ERROR) << "checkBlockSign failed, blk=" << _header.number() << " not enough sign, sign_num=" << _sign_list.size() << ",miner_num" << minerList.size();
 		return false;
 	}
 
-	LOG(DEBUG) << "checkBlockSign call getAllNodeConnInfo: blk=" << _header.number() - 1 << ", miner_num=" << miner_list.size();
-
-	// check public key list 检查公钥列表
-	if (_header.nodeList() != miner_list) {
-		ostringstream oss;
-		for (size_t i = 0; i < miner_list.size(); ++i) {
-			oss << miner_list[i] << ",";
-		}
-		LOG(WARNING) << "checkBlockSign failed, chain_block=" << _header.number() << ",miner_list size=" << miner_list.size() << ",value=" << oss.str();
-		oss.clear();
-		for (size_t i = 0; i < _header.nodeList().size(); ++i) {
-			oss << _header.nodeList()[i] << ",";
-		}
-		LOG(WARNING) << "checkBlockSign failed, down_block=" << _header.number() << ",miner_list size=" << _header.nodeList().size() << ",value=" << oss.str();
-		return false;
-	}
-
-	// check signatures count 检查签名数量
-	if (_sign_list.size() < (miner_list.size() - (miner_list.size() - 1) / 3)) {
-		LOG(WARNING) << "checkBlockSign failed, blk=" << _header.number() << " not enough sign, sign_num=" << _sign_list.size() << ",miner_num" << miner_list.size();
-		return false;
-	}
-
-	h512s publicid_list;
-
-	// check signatures valid 检查签名是否有效
+	// 检查签名是否有效
 	for (auto item : _sign_list) {
-		if (item.first >= miner_list.size()) {
-			LOG(WARNING) << "checkBlockSign failed, block=" << _header.number() << "sig idx=" << item.first << ", out of bound, miner_list size=" << miner_list.size();
+		if (item.first >= minerList.size()) {
+			LOG(WARNING) << "checkBlockSign failed, block=" << _header.number() << "sig idx=" << item.first << ", out of bound, minerList size=" << minerList.size();
 			return false;
 		}
 
-		if (!dev::verify(miner_list[static_cast<int>(item.first)], item.second, _header.hash(WithoutSeal))) {
+		if (!dev::verify(minerList[static_cast<int>(item.first)], item.second, _header.hash(WithoutSeal))) {
 			LOG(WARNING) << "checkBlockSign failed, verify false, blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal);
 			return false;
 		}
-		publicid_list.push_back(miner_list[static_cast<int>(item.first)]);
-	}
-
-	if (!ConsensusControl::instance().callConsensusInCheck(m_bc->getClient(), publicid_list, static_cast<dev::eth::BlockNumber>(_header.number() - 1))) {
-		LOG(WARNING) << "[ConsensusControl]checkBlockSign failed, not match current consensus control rule! blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal);
-		return false;
 	}
 
 	LOG(DEBUG) << "checkBlockSign success, blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal) << ",timecost=" << t.elapsed() / 1000 << "ms";
@@ -1448,4 +1381,28 @@ void PBFT::reloadMsg(std::string const& _key, PBFTMsg * _msg) {
 	_msg->populate(rlp[0]);
 
 	LOG(INFO) << "reloadMsg, data len=" << data.size() << ", height=" << _msg->height << ",hash=" << _msg->block_hash.abridged() << ",idx=" << _msg->idx;
+}
+
+dev::h512 PBFT::getMinerByIndex(size_t index) {
+	auto miners = getMinerNodeList();
+
+	if(index < miners.size()) {
+		return miners[index];
+	}
+
+	return dev::h512();
+}
+
+ssize_t PBFT::getIndexByMiner(dev::h512 nodeID) {
+	auto miners = getMinerNodeList();
+
+	ssize_t index = -1;
+	for(size_t i=0; i<miners.size(); ++i) {
+		if(miners[i] == nodeID) {
+			index = i;
+			break;
+		}
+	}
+
+	return index;
 }

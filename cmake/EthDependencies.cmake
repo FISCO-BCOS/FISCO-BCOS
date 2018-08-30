@@ -74,11 +74,11 @@ endif()
 #
 # https://travis-ci.org/bobsummerwill/cpp-ethereum/jobs/145955041
 
-if (UNIX AND NOT APPLE)
-	set(Boost_USE_STATIC_LIBS OFF)
-else()
-	set(Boost_USE_STATIC_LIBS ON)
-endif()
+#if (UNIX AND NOT APPLE)
+#	set(Boost_USE_STATIC_LIBS OFF)
+#else()
+#	set(Boost_USE_STATIC_LIBS ON)
+#endif()
 
 include_directories(BEFORE "${PROJECT_BINARY_DIR}/include")
 

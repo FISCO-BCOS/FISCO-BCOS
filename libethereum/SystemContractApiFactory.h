@@ -21,6 +21,7 @@
  * @date: 2018
  */
 
+#if 0
 #include "SystemContractApi.h"
 #include "Client.h"
 
@@ -37,3 +38,4 @@ class SystemContractApiFactory
 
 }
 }
+#endif

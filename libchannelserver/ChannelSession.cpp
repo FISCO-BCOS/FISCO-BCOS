@@ -16,13 +16,14 @@
 */
 /**
  * @file: ChannelSession.cpp
- * @author: fisco-dev
+ * @author: monan
  * 
- * @date: 2017
+ * @date: 2018
  */
 
 #include <iostream>
 #include <libdevcore/easylog.h>
+#include <libdevcore/Common.h>
 
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
@@ -67,7 +68,7 @@ Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout) t
 		callback->_mutex.unlock();
 
 		if (callback->_error.errorCode() != 0) {
-			LOG(ERROR) << "asyncSendMessage error:" << callback->_error.errorCode() << " " << callback->_error.what();
+			LOG(ERROR) << "asyncSendMessage ERROR:" << callback->_error.errorCode() << " " << callback->_error.what();
 			throw callback->_error;
 		}
 
@@ -84,7 +85,7 @@ void ChannelSession::asyncSendMessage(Message::Ptr request, std::function<void(d
 	try {
 		if (!_actived) {
 			if(callback) {
-				callback(ChannelException(-3, "session expired"), Message::Ptr());
+				callback(ChannelException(-3, "Session inactived"), Message::Ptr());
 			}
 
 			return;
@@ -112,30 +113,14 @@ void ChannelSession::asyncSendMessage(Message::Ptr request, std::function<void(d
 		}
 
 		std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-
 		request->encode(*buffer);
 
 		writeBuffer(buffer);
-
-
 	}
 	catch (std::exception &e) {
 		LOG(ERROR) << "ERROR:" << e.what();
 	}
 }
-
-#if 0
-void ChannelSession::handshake(bool enableSSL, bool isServer) {
-	if (enableSSL) {
-		if (isServer) {
-			_sslSocket->async_handshake(boost::asio::ssl::stream_base::server, boost::bind(&ChannelSession::onHandshake, shared_from_this(), boost::asio::placeholders::error));
-		}
-		else {
-			_sslSocket->async_handshake(boost::asio::ssl::stream_base::client, boost::bind(&ChannelSession::onHandshake, shared_from_this(), boost::asio::placeholders::error));
-		}
-	}
-}
-#endif
 
 void ChannelSession::run() {
 	try {
@@ -156,53 +141,34 @@ void ChannelSession::setSSLSocket(std::shared_ptr<boost::asio::ssl::stream<boost
 	_sslSocket = socket;
 
 	_idleTimer = std::make_shared<boost::asio::deadline_timer>(_sslSocket->get_io_service());
-	//_idleTimer->async_wait(boost::bind(&ChannelSession::onIdle, shared_from_this(), boost::asio::placeholders::error));
-}
-
-void ChannelSession::onHandshake(const boost::system::error_code& error) {
-	try {
-		if(!_actived) {
-			LOG(ERROR) << "ChannelSession inactived";
-
-			return;
-		}
-		if (!error) {
-			startRead();
-		}
-		else {
-			LOG(ERROR) << "SSL handshake error: " << error.message();
-
-			try {
-				_sslSocket->lowest_layer().close();
-			}
-			catch (std::exception &e) {
-				LOG(ERROR) << "shutdown error:" << e.what();
-			}
-		}
-	}
-	catch (std::exception &e) {
-		LOG(ERROR) << "ERROR:" << e.what();
-	}
 }
 
 void ChannelSession::startRead() {
 	try {
 		if (_actived) {
-			LOG(TRACE) << "start read:" << bufferLength;
+			LOG(TRACE) << "Start read:" << bufferLength;
 
 			std::lock_guard<std::recursive_mutex> lock(_mutex);
 
-			//auto session = std::weak_ptr<ChannelSession>(shared_from_this());
 			auto session = shared_from_this();
-			_sslSocket->async_read_some(boost::asio::buffer(_recvBuffer, bufferLength),
-						                            [session](const boost::system::error_code& error, size_t bytesTransferred) {
-				//auto s = session.lock();
-				auto s = session;
-				if(s) {
-					s->onRead(error, bytesTransferred);
-				}
-			});
-
+			if(_enableSSL) {
+				_sslSocket->async_read_some(boost::asio::buffer(_recvBuffer, bufferLength),
+														[session](const boost::system::error_code& error, size_t bytesTransferred) {
+					auto s = session;
+					if(s) {
+						s->onRead(error, bytesTransferred);
+					}
+				});
+			}
+			else {
+				_sslSocket->next_layer().async_read_some(boost::asio::buffer(_recvBuffer, bufferLength),
+														[session](const boost::system::error_code& error, size_t bytesTransferred) {
+					auto s = session;
+					if(s) {
+						s->onRead(error, bytesTransferred);
+					}
+				});
+			}
 		}
 		else {
 			LOG(ERROR) << "ChannelSession inactived";
@@ -221,20 +187,23 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
 			return;
 		}
+
 		updateIdleTimer();
 
 		if (!error) {
-			LOG(TRACE) << "read: " << bytesTransferred << " bytes data:" << std::string(_recvBuffer, _recvBuffer + bytesTransferred);
+			LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:" << std::string(_recvBuffer, _recvBuffer + bytesTransferred);
 
 			_recvProtocolBuffer.insert(_recvProtocolBuffer.end(), _recvBuffer, _recvBuffer + bytesTransferred);
 
 			while (true) {
-				auto message = std::make_shared<Message>();
+				auto message = _messageFactory->buildMessage();
+
 				ssize_t result = message->decode(_recvProtocolBuffer.data(), _recvProtocolBuffer.size());
-				LOG(TRACE) << "protocol parse done: " << result;
+				LOG(TRACE) << "Parse result: " << result;
+
 
 				if (result > 0) {
-					LOG(TRACE) << "parse done: " << result;
+					LOG(TRACE) << "Decode success: " << result;
 
 					onMessage(ChannelException(0, ""), message);
 
@@ -246,18 +215,19 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 					break;
 				}
 				else if (result < 0) {
-					LOG(ERROR) << "protocol parse error: " << result;
+					LOG(ERROR) << "Protocol parser error: " << result;
 
-					disconnect(ChannelException(-1, "protocol parse error, disconnect"));
+					disconnect(ChannelException(-1, "Protocol parser error, disconnect"));
+
 					break;
 				}
 			}
 		}
 		else {
-			LOG(ERROR) << "read error:" << error.value() << "," << error.message();
+			LOG(ERROR) << "Read failed:" << error.value() << "," << error.message();
 
 			if (_actived) {
-				disconnect(ChannelException(-1, "read failed，disconnect "));
+				disconnect(ChannelException(-1, "Read failed，disconnect"));
 			}
 		}
 	}
@@ -272,6 +242,7 @@ void ChannelSession::startWrite() {
 
 		return;
 	}
+
 	if (_writing) {
 		return;
 	}
@@ -288,17 +259,28 @@ void ChannelSession::startWrite() {
 		[ session, buffer ] {
 			auto s = session.lock();
 			if(s) {
-				boost::asio::async_write(*s->sslSocket(),
-						boost::asio::buffer(buffer->data(), buffer->size()),
-						[=](const boost::system::error_code& error, size_t bytesTransferred) {
-							auto s = session.lock();
-							if(s) {
-								s->onWrite(error, buffer, bytesTransferred);
-							}
-				});
+				if(s->enableSSL()) {
+					boost::asio::async_write(*s->sslSocket(),
+							boost::asio::buffer(buffer->data(), buffer->size()),
+							[=](const boost::system::error_code& error, size_t bytesTransferred) {
+								auto s = session.lock();
+								if(s) {
+									s->onWrite(error, buffer, bytesTransferred);
+								}
+					});
+				}
+				else {
+					boost::asio::async_write(s->sslSocket()->next_layer(),
+										boost::asio::buffer(buffer->data(), buffer->size()),
+										[=](const boost::system::error_code& error, size_t bytesTransferred) {
+											auto s = session.lock();
+											if(s) {
+												s->onWrite(error, buffer, bytesTransferred);
+											}
+								});
+				}
 			}
 		});
-
 	} else {
 		_writing = false;
 	}
@@ -324,17 +306,18 @@ void ChannelSession::onWrite(const boost::system::error_code& error, std::shared
 
 			return;
 		}
+
 		std::lock_guard<std::recursive_mutex> lock(_mutex);
 
 		updateIdleTimer();
 
 		if (!error) {
-			LOG(TRACE) << "write:" << bytesTransferred;
+			LOG(TRACE) << "Write: " << bytesTransferred;
 		}
 		else {
-			LOG(ERROR) << "write error: " << error.message();
+			LOG(ERROR) << "Write error: " << error.message();
 
-			disconnect(ChannelException(-1, "write error，disconnect"));
+			disconnect(ChannelException(-1, "Write error，disconnect"));
 		}
 
 		_writing = false;
@@ -352,6 +335,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 
 			return;
 		}
+
 		auto it = _responseCallbacks.find(message->seq());
 		if (it != _responseCallbacks.end()) {
 			if(it->second->timeoutHandler.get() != NULL) {
@@ -365,7 +349,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 				});
 			}
 			else {
-				LOG(ERROR) << "callback empty";
+				LOG(ERROR) << "Callback empty";
 
 				_responseCallbacks.erase(it);
 			}
@@ -381,7 +365,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 				});
 			}
 			else {
-				LOG(ERROR) << "messageHandler empty";
+				LOG(ERROR) << "MessageHandler empty";
 			}
 		}
 	}
@@ -397,18 +381,19 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
 
 			return;
 		}
+
 		auto it = _responseCallbacks.find(seq);
 		if (it != _responseCallbacks.end()) {
 			if (it->second->callback) {
-				it->second->callback(ChannelException(-2, "response timeout"), Message::Ptr());
+				it->second->callback(ChannelException(-2, "Response timeout"), Message::Ptr());
 			}
 			else {
-				LOG(ERROR) << "callback empty";
+				LOG(ERROR) << "Callback empty";
 			}
 
 			_responseCallbacks.erase(it);
 		} else {
-			LOG(WARNING) << "timeout and not found seq: " << seq << " callback，may timeout";
+			LOG(WARNING) << "Seq timeout: " << seq;
 		}
 	}
 	catch (std::exception &e) {
@@ -423,11 +408,11 @@ void ChannelSession::onIdle(const boost::system::error_code& error) {
 
 			return;
 		}
+
 		if (error != boost::asio::error::operation_aborted) {
+			LOG(ERROR) << "Idle connection, disconnect " << _host << ":" << _port;
 
-			LOG(ERROR) << "idle connection，disconnect " << _host << ":" << _port;
-
-			disconnect(ChannelException(-1, "idle connection，disconnect"));
+			disconnect(ChannelException(-1, "Idle connection, disconnect"));
 		}
 		else {
 		}
@@ -453,17 +438,13 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 						if (it.second->callback) {
 							_threadPool->enqueue([=]() {
 								it.second->callback(e, Message::Ptr());
-
-								//_responseCallbacks.erase(it);
 								});
 						} else {
-							LOG(ERROR)<< "callback empty";
-
-							//_responseCallbacks.erase(it);
+							LOG(ERROR)<< "Callback empty";
 						}
 					}
 					catch (std::exception &e) {
-						LOG(ERROR) << "disconnect responseCallback: " << it.first << " error:" << e.what();
+						LOG(ERROR) << "Disconnect responseCallback: " << it.first << " error:" << e.what();
 					}
 				}
 
@@ -472,26 +453,23 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 
 			if (_messageHandler) {
 				try {
-					auto self = shared_from_this();
-					auto messageHandler = _messageHandler;
-					_threadPool->enqueue([messageHandler, self, e]() {
-						messageHandler(self, e, Message::Ptr());
-					});
+					_messageHandler(shared_from_this(), e, Message::Ptr());
 				}
 				catch (std::exception &e) {
-					LOG(ERROR) << "disconnect messageHandler error e:" << e.what();
+					LOG(ERROR) << "disconnect messageHandler error:" << e.what();
 				}
-				//_messageHandler = std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
+
+				_messageHandler = std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
 			}
 
 			_actived = false;
 			_sslSocket->lowest_layer().close();
 
-			LOG(DEBUG) << "disconnected";
+			LOG(DEBUG) << "Disconnected";
 		}
 	}
 	catch (std::exception &e) {
-		LOG(WARNING) << "close error:" << e.what();
+		LOG(WARNING) << "Close error: " << e.what();
 	}
 }
 
@@ -503,7 +481,8 @@ void ChannelSession::updateIdleTimer() {
 	}
 
 	if(_idleTimer) {
-		_idleTimer->expires_from_now(boost::posix_time::seconds(5));
+		_idleTimer->expires_from_now(boost::posix_time::seconds(_idleTime));
+
 		auto session = std::weak_ptr<ChannelSession>(shared_from_this());
 		_idleTimer->async_wait([session] (const boost::system::error_code& error){
 			auto s = session.lock();
