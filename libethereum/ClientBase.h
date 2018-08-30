@@ -68,7 +68,7 @@ struct ClientWatch
 class ClientBase: public Interface
 {
 public:
-	ClientBase(TransactionQueue::Limits const& _l = TransactionQueue::Limits{1024, 1024}): m_tq(std::shared_ptr<Interface>(this), _l) {}
+	ClientBase(TransactionQueue::Limits const& _l = TransactionQueue::Limits{1024, 1024}): m_tq(this, _l) {}
 	virtual ~ClientBase() {}
 
 	/// Submits the given transaction.

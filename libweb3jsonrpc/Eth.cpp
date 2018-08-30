@@ -57,9 +57,9 @@ const unsigned dev::SensibleHttpThreads = 8;
 #endif
 const unsigned dev::SensibleHttpPort = 6789;
 
-Eth::Eth(eth::Interface& _eth, eth::AccountHolder& _ethAccounts):
-	m_eth(_eth),
-	m_ethAccounts(_ethAccounts)
+Eth::Eth(eth::Interface& _eth/*, eth::AccountHolder& _ethAccounts*/):
+	m_eth(_eth)//,
+	//m_ethAccounts(_ethAccounts)
 {
 }
 
@@ -108,7 +108,9 @@ string Eth::eth_gasPrice()
 
 Json::Value Eth::eth_accounts()
 {
+#if 0
 	return toJson(m_ethAccounts.allAccounts());
+#endif
 }
 
 string Eth::eth_blockNumber()
@@ -412,12 +414,15 @@ string Eth::eth_getCode(string const& _address, string const& _blockNumber)
 
 void Eth::setTransactionDefaults(TransactionSkeleton& _t)
 {
+#if 0
 	if (!_t.from)
 		_t.from = m_ethAccounts.defaultTransactAccount();
+#endif
 }
 
 string Eth::eth_sendTransaction(Json::Value const& _json)
 {
+#if 0
 	try
 	{
 		//std::cout << "eth_sendTransaction " << _json << "\n";
@@ -489,10 +494,12 @@ string Eth::eth_sendTransaction(Json::Value const& _json)
 	}
 	BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
 	return string();
+#endif
 }
 
 string Eth::eth_signTransaction(Json::Value const& _json)
 {
+#if 0
 	try
 	{
 		TransactionSkeleton t = toTransactionSkeleton(_json);
@@ -513,6 +520,7 @@ string Eth::eth_signTransaction(Json::Value const& _json)
 	{
 		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
 	}
+#endif
 }
 
 Json::Value Eth::eth_inspectTransaction(std::string const& _rlp)
@@ -1590,6 +1598,7 @@ bool Eth::eth_submitHashrate(string const& , string const& )
 
 string Eth::eth_register(string const& _address)
 {
+#if 0
 	try
 	{
 		return toJS(m_ethAccounts.addProxyAccount(jsToAddress(_address)));
@@ -1598,10 +1607,12 @@ string Eth::eth_register(string const& _address)
 	{
 		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
 	}
+#endif
 }
 
 bool Eth::eth_unregister(string const& _accountId)
 {
+#if 0
 	try
 	{
 		return m_ethAccounts.removeProxyAccount(jsToInt(_accountId));
@@ -1610,10 +1621,12 @@ bool Eth::eth_unregister(string const& _accountId)
 	{
 		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
 	}
+#endif
 }
 
 Json::Value Eth::eth_fetchQueuedTransactions(string const& _accountId)
 {
+#if 0
 	try
 	{
 		auto id = jsToInt(_accountId);
@@ -1628,6 +1641,7 @@ Json::Value Eth::eth_fetchQueuedTransactions(string const& _accountId)
 	{
 		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
 	}
+#endif
 }
 
 string Eth::eth_unverifiedBlockQueueSize()

@@ -29,12 +29,14 @@
 #include <arpa/inet.h>
 #include <libdevcore/easylog.h>
 
+#include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/ssl.hpp>
+
 #include "ChannelException.h"
-#include "ChannelMessage.h"
+#include "Message.h"
 #include "ThreadPool.h"
 
 namespace dev
@@ -46,7 +48,7 @@ class ChannelSession: public std::enable_shared_from_this<ChannelSession> {
 public:
 	ChannelSession();
 	virtual ~ChannelSession() {
-		LOG(DEBUG) << "session exit";
+		LOG(TRACE) << "Session exit";
 	};
 
 	typedef std::shared_ptr<ChannelSession> Ptr;
@@ -57,6 +59,7 @@ public:
 	virtual Message::Ptr sendMessage(Message::Ptr request, size_t timeout = 0) throw(ChannelException);
 	virtual void asyncSendMessage(Message::Ptr request, std::function<void(dev::channel::ChannelException, Message::Ptr)> callback, uint32_t timeout = 0);
 
+	//virtual void handshake(bool enableSSL, bool isServer);
 	virtual void run();
 
 	virtual bool actived() { return _actived; };
@@ -69,20 +72,25 @@ public:
 	virtual void setHost(std::string host) { _host = host; };
 	virtual void setPort(int port) { _port = port; };
 
+	virtual bool enableSSL() { return _enableSSL; }
+	virtual void setEnableSSL(bool ssl) { _enableSSL = ssl; }
+
 	virtual std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > sslSocket() { return _sslSocket;};
 	virtual void setSSLSocket(std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > socket);
-
-	virtual std::shared_ptr<boost::asio::ip::tcp::socket> socket() { return _socket; };
-	virtual void setSocket(std::shared_ptr<boost::asio::ip::tcp::socket> socket) { _socket = socket; };
 
 	virtual void setIOService(std::shared_ptr<boost::asio::io_service> IOService) { _ioService = IOService; };
 
 	std::shared_ptr<std::set<std::string> > topics() { return _topics; };
 	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
-	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
-private:
-	void onHandshake(const boost::system::error_code& error);
 
+	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
+
+	MessageFactory::Ptr messageFactory() { return _messageFactory; }
+	void setMessageFactory(MessageFactory::Ptr messageFactory) { _messageFactory = messageFactory; }
+
+	void setIdleTime(size_t idleTime) { _idleTime = idleTime; }
+
+private:
 	void startRead();
 	void onRead(const boost::system::error_code& error, size_t bytesTransferred);
 
@@ -99,9 +107,11 @@ private:
 
 	void updateIdleTimer();
 
+	MessageFactory::Ptr _messageFactory;
 	std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)> _messageHandler;
 
 	bool _actived = false;
+	bool _enableSSL = true;
 
 	std::string _host;
 	int _port = 0;
@@ -117,7 +127,6 @@ private:
 
 	std::shared_ptr<boost::asio::io_service> _ioService;
 	std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > _sslSocket;
-	std::shared_ptr<boost::asio::ip::tcp::socket> _socket;
 
 	struct ResponseCallback: public std::enable_shared_from_this<ResponseCallback> {
 		typedef std::shared_ptr<ResponseCallback> Ptr;
@@ -131,6 +140,8 @@ private:
 
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
+
+	size_t _idleTime = 30;
 };
 
 }

@@ -40,7 +40,7 @@
 #include "Block.h"
 #include "CommonNet.h"
 #include "ClientBase.h"
-#include "SystemContractApi.h"
+// #include "SystemContractApi.h"
 namespace dev
 {
 namespace eth
@@ -75,7 +75,7 @@ public:
 	Client(
 	    ChainParams const& _params,
 	    int _networkID,
-	    p2p::HostApi* _host,
+	    std::shared_ptr<p2p::Host> _host,
 	    std::shared_ptr<GasPricer> _gpForAdoption,
 	    std::string const& _dbPath = std::string(),
 	    WithExisting _forceAction = WithExisting::Trust,
@@ -202,7 +202,6 @@ public:
 
 	u256 filterCheck(const Transaction & _t, FilterCheckScene _checkscene = FilterCheckScene::None) const override;
 	void updateSystemContract(std::shared_ptr<Block> block) override;
-	virtual std::shared_ptr<SystemContractApi> getSystemContract() const override { return m_systemcontractapi; }
 	void updateCache(Address address) override;
 
 	virtual bool isMining() const { return m_wouldSeal; }
@@ -211,7 +210,7 @@ public:
 
 	std::shared_ptr<EthereumHost> sharedHost();
 
-	//p2p::HostApi* host();
+	//p2p::Host* host();
 
 	//get the result from state query result
 	int getResultInt(ExecutionResult& result, int& value);
@@ -223,7 +222,7 @@ public:
 protected:
 	/// Perform critical setup functions.
 	/// Must be called in the constructor of the finally derived class.
-	void init(p2p::HostApi* _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId);
+	void init(std::shared_ptr<p2p::Host> _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId);
 
 	/// InterfaceStub methods
 	BlockChain& bc() override { return m_bc; }
@@ -329,7 +328,7 @@ protected:
 	std::chrono::system_clock::time_point m_lastGetWork;	///< Is there an active and valid remote worker?
 
 	std::weak_ptr<EthereumHost> m_host;		///< Our Ethereum Host. Don't do anything if we can't lock.
-	std::shared_ptr<p2p::HostApi> m_p2p_host;
+	std::shared_ptr<p2p::Host> m_p2p_host;
 	Handler<> m_tqReady;
 	Handler<h256 const&> m_tqReplaced;
 	Handler<> m_bqReady;
@@ -358,7 +357,7 @@ protected:
 	bytes m_extraData;
 
 	u256 m_maxBlockTranscations = 1000; 
-	std::shared_ptr<SystemContractApi> m_systemcontractapi;
+	//std::shared_ptr<SystemContractApi> m_systemcontractapi;
 
 	bool m_omit_empty_block = true;
 

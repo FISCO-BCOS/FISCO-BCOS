@@ -38,17 +38,21 @@
 #include <libethcore/Exceptions.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/CommonJS.h>
+#include <libevm/VMFace.h>
 #include <libdevcore/easylog.h>
 #include <libdiskencryption/BatchEncrypto.h>
 #include <libweb3jsonrpc/RPCallback.h>
+#include <libinitializer/Initializer.h>
 #include <UTXO/UTXOSharedData.h>
 
 #include "Block.h"
 #include "Defaults.h"
 #include "GenesisInfo.h"
-#include "NodeConnParamsManagerApi.h"
 #include "State.h"
 #include "Utility.h"
+#include "Defaults.h"
+#include <libdevcore/easylog.h>
+#include <libweb3jsonrpc/RPCallback.h>
 
 using namespace std;
 using namespace dev;
@@ -146,7 +150,7 @@ static const unsigned c_minCacheSize = 1024 * 1024 * 32;
 
 #endif
 
-BlockChain::BlockChain(std::shared_ptr<Interface> _interface, ChainParams const& _p, std::string const& _dbPath, WithExisting _we, ProgressCallback const& _pc):
+BlockChain::BlockChain(ChainParams const& _p, std::string const& _dbPath, WithExisting _we, ProgressCallback const& _pc):
 	m_dbPath(_dbPath),
 	m_pnoncecheck(make_shared<NonceCheck>())
 {
@@ -155,7 +159,7 @@ BlockChain::BlockChain(std::shared_ptr<Interface> _interface, ChainParams const&
 
 	m_pnoncecheck->init(*this );
 
-	m_interface = _interface;
+	//m_interface = _interface;
 }
 
 BlockChain::~BlockChain()
@@ -184,20 +188,20 @@ bool BlockChain::isNonceOk(Transaction const&_ts, bool _needinsert) const
 	return true;
 }
 
-u256 BlockChain::filterCheck(const Transaction & _t, FilterCheckScene _checkscene) const
-{
-	LOG(TRACE) << "BlockChain::filterCheck Scene：" << (int)(_checkscene);
-	return m_interface->filterCheck(_t, _checkscene);
-}
+// u256 BlockChain::filterCheck(const Transaction & _t, FilterCheckScene _checkscene) const
+// {
+// 	LOG(TRACE) << "BlockChain::filterCheck Scene：" << (int)(_checkscene);
+// 	return m_interface->filterCheck(_t, _checkscene);
+// }
 
-void    BlockChain::updateSystemContract(std::shared_ptr<Block> block)
-{
-	m_interface->updateSystemContract(block);
-}
+// void    BlockChain::updateSystemContract(std::shared_ptr<Block> block)
+// {
+// 	m_interface->updateSystemContract(block);
+// }
 
-void BlockChain::updateCache(Address address) const {
-	m_interface->updateCache(address);
-}
+// void BlockChain::updateCache(Address address) const {
+// 	m_interface->updateCache(address);
+// }
 
 BlockHeader const& BlockChain::genesis() const
 {
@@ -221,7 +225,10 @@ void BlockChain::init(ChainParams const& _p, std::string const& _path)
 
 	// Initialise with the genesis as the last block on the longest chain.
 	m_params = _p;
-	m_sealEngine.reset(m_params.createSealEngine());
+
+	//m_sealEngine.reset(m_params.createSealEngine());
+	m_sealEngine = m_params.getInitializer()->pbftInitializer()->pbft();
+
 	m_genesis.clear();
 	genesis();
 
@@ -309,14 +316,17 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 		else
 		{
 			LOG(ERROR) <<
-				  "Database " <<
-				  (chainPath + "/blocks") <<
-				  "or " <<
-				  (extrasPath + "/extras") <<
-				  "already open. You appear to have another instance of ethereum running. Bailing.";
+			      "Database " <<
+			      (chainPath + "/blocks") <<
+			      "or " <<
+			      (extrasPath + "/extras") <<
+			      "already open. You appear to have another instance of ethereum running. Bailing.";
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
 		}
 	}
+
+//	m_writeOptions.sync = true;
+
 	if (_we != WithExisting::Verify && !details(m_genesisHash))
 	{
 		BlockHeader gb(m_params.genesisBlock());
@@ -568,6 +578,8 @@ tuple<ImportRoute, bool, unsigned> BlockChain::sync(BlockQueue& _bq, OverlayDB c
 		do {
 			try
 			{
+				LOG(TRACE) << "Syncing blocks:" << block.verified.info.hash();
+
 				// Nonce & uncle nonces already verified in verification thread at this point.
 				ImportRoute r;
 				DEV_TIMED_ABOVE("BLOCKSTAT timeout 500ms " + toString(block.verified.info.hash(WithoutSeal)) + toString(block.verified.info.number()), 500)
@@ -586,6 +598,12 @@ tuple<ImportRoute, bool, unsigned> BlockChain::sync(BlockQueue& _bq, OverlayDB c
 				std::move(std::begin(r.goodTranactions), std::end(r.goodTranactions), std::back_inserter(goodTransactions));
 				++count;
 			}
+			catch(dev::eth::UnexpectedException &e) {
+				LOG(ERROR) << "Syncing blocks error. UnexpectedException:" << e.what();
+
+				this_thread::sleep_for(chrono::seconds(1));
+				continue;
+			}
 			catch (dev::eth::UnknownParent)
 			{
 				LOG(WARNING) << "ODD: Import queue contains block with unknown parent.";// << LogTag::Error << boost::current_exception_diagnostic_information();
@@ -597,17 +615,20 @@ tuple<ImportRoute, bool, unsigned> BlockChain::sync(BlockQueue& _bq, OverlayDB c
 			{
 				LOG(WARNING) << "ODD: Import queue contains a block with future time.";
 				this_thread::sleep_for(chrono::seconds(1));
-				continue;
+				//continue;
+				break;
 			}
 			catch (dev::eth::TransientError)
 			{
 				this_thread::sleep_for(chrono::milliseconds(100));
-				continue;
+				//continue;
+				break;
 			}
 			catch (dev::eth::AlreadyHaveBlock)
 			{
 				LOG(WARNING) << "ODD: Try to import one already have block. blk=" << block.verified.info.number() << ",hash=" << block.verified.info.hash(WithoutSeal);
-				continue;
+				//continue;
+				break;
 			}
 			catch (Exception& ex)
 			{
@@ -619,7 +640,10 @@ tuple<ImportRoute, bool, unsigned> BlockChain::sync(BlockQueue& _bq, OverlayDB c
 				// Can't continue - chain  bad.
 				badBlocks.push_back(block.verified.info.hash());
 			}
-		} while (false);
+
+			break;
+		//} while (false);
+		} while (true);
 	}
 	return make_tuple(ImportRoute{dead, fresh, goodTransactions}, _bq.doneDrain(badBlocks), count);
 }
@@ -834,6 +858,9 @@ void BlockChain::checkBlockValid(h256 const& _hash, bytes const& _block, Block &
 		BOOST_THROW_EXCEPTION(FutureTime());
 	}
 
+	//TODO: PBFT类来检查共识列表
+#if 0
+	// 要放到UnknownParent检测之后
 	std::map<std::string, NodeConnParams> all_node;
 	NodeConnManagerSingleton::GetInstance().getAllNodeConnInfo(static_cast<int>(block.info.number() - 1), all_node);
 	unsigned miner_num = 0;
@@ -871,12 +898,13 @@ void BlockChain::checkBlockValid(h256 const& _hash, bytes const& _block, Block &
 		LOG(WARNING) << "block node_list size=" << block.info.nodeList().size() << ",value=" << oss2.str();
 		BOOST_THROW_EXCEPTION(MinerListError());
 	}
+#endif
 
 	//Block s(*this, _db);
 	//s.enactOn(block, *this);
-	
-	_outBlock.setEvmCoverLog(m_params.evmCoverLog);
-	_outBlock.setEvmEventLog(m_params.evmEventLog);
+	// 跑一遍交易，但是不验证state_root, receipt_root, gas_used, log_bloom
+	//_outBlock.setEvmCoverLog(m_params.evmCoverLog);
+	//_outBlock.setEvmEventLog(m_params.evmEventLog);
 	_outBlock.enactOn(block, *this, false);
 }
 
@@ -1034,6 +1062,11 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 	}
 
 #if ETH_CATCH
+	catch(dev::eth::UnexpectedException &e) {
+		LOG(ERROR) << "导入区块错误 UnexpectedException:" << e.what();
+
+		BOOST_THROW_EXCEPTION(e);
+	}
 	catch (BadRoot& ex)
 	{
 		m_pnoncecheck->delCache(goodTransactions);
@@ -1276,7 +1309,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 		m_pnoncecheck->updateCache(*this, isunclechain); 
 		
 		//this->updateSystemContract(goodTransactions);
-		this->updateSystemContract(tempBlock);
+		//this->updateSystemContract(tempBlock);
 		LOG(TRACE) << "BlockChain setBlockInfo";
 		UTXOModel::UTXOSharedData::getInstance()->setPreBlockInfo(tempBlock, lastHashes());
 		CallbackWorker::getInstance().addBlock(tempBlock);

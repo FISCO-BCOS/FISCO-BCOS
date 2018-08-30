@@ -27,7 +27,7 @@
 #------------------------------------------------------------------------------
 
 include(EthUtils)
-set(LIBS whisper;webthree;web3jsonrpc)
+set(LIBS webthree;web3jsonrpc)
 
 set(Web3_INCLUDE_DIRS ${CPP_ETHEREUM_DIR})
 

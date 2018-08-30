@@ -24,7 +24,6 @@
 #include "StatLog.h"
 #include <stack>
 #include <libdevcore/easylog.h>
-#include "NodeConnParamsManagerApi.h"
 
 using namespace std;
 namespace dev
@@ -280,6 +279,7 @@ void TxFlowLog(const u256& hash, const string& str, bool is_discarded, bool is_i
 
 void BroadcastTxSizeLog(const h512 &node_id, size_t packet_size)
 {
+#if 0
     u256 idx = u256(0);
     if (!NodeConnManagerSingleton::GetInstance().getIdx(node_id, idx))
     {
@@ -288,10 +288,12 @@ void BroadcastTxSizeLog(const h512 &node_id, size_t packet_size)
     }
 
     statemonitor::recordStateByTimeOnce((int)(dev::StatCode::BROADCAST_TX_SIZE + idx), LogConstant::BroadcastTxInterval, (double)packet_size, STAT_BROADCAST_TX_SIZE, "to idx=" + toString(idx));
+#endif 
 }
 
 void BroadcastBlockSizeLog(const h512 &node_id, size_t packet_size)
 {
+#if 0
     u256 idx = u256(0);
     if (!NodeConnManagerSingleton::GetInstance().getIdx(node_id, idx))
     {
@@ -300,6 +302,7 @@ void BroadcastBlockSizeLog(const h512 &node_id, size_t packet_size)
     }
 
     statemonitor::recordStateByTimeOnce((int)(dev::StatCode::BROADCAST_BLOCK_SIZE + idx), LogConstant::BroadcastBlockInterval, (double)packet_size, STAT_BROADCAST_BLOCK_SIZE, "to idx=" + toString(idx));
+#endif
 }
 
 }

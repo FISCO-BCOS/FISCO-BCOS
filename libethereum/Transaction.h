@@ -67,7 +67,8 @@ enum class TransactionException
 	UTXOTokenKeyRepeat,
 	UTXOLowEthVersion,
 	UTXOTxError,
-	UTXODBError
+	UTXODBError,
+	PrecompiledError
 };
 
 enum class CodeDeposit

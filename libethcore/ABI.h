@@ -49,8 +49,15 @@ public:
 	}
 
 	void serialise(string32 const& _t) {
-		bytes ret;
+		bytes ret(32);
 		bytesConstRef((byte const*) _t.data(), 32).populate(bytesRef(&ret));
+
+		fixedItems.push_back(ret);
+	}
+
+	void serialise(string64 const& _t) {
+		bytes ret(64);
+		bytesConstRef((byte const*) _t.data(), 64).populate(bytesRef(&ret));
 
 		fixedItems.push_back(ret);
 	}
@@ -98,7 +105,12 @@ public:
 		bytes dynamic;
 		for(auto it = dynamicItems.begin(); it != dynamicItems.end(); ++it) dynamic += it->data;
 
+		if(_id.empty()) {
+			return fixed + dynamic;
+		}
+		else {
 		return sha3(_id).ref().cropped(0, 4).toBytes() + fixed + dynamic;
+		}
 	}
 
 	template<unsigned N>
@@ -122,6 +134,10 @@ public:
 
 	void deserialise(string32& out) {
 		data.cropped(0, 32).populate(bytesRef((byte*) out.data(), 32));
+	}
+
+	void deserialise(string64& out) {
+		data.cropped(0, 64).populate(bytesRef((byte*) out.data(), 64));
 	}
 
 	void deserialise(bool& out) {
