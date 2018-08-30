@@ -45,3 +45,20 @@ bool Net::net_listening()
 {
 	return m_network.isNetworkStarted();
 }
+
+Json::Value Net::net_peers() {
+	auto peers =  m_network.peers();
+
+	Json::Value ret;
+	for(auto it: peers) {
+		Json::Value entry;
+		entry["id"] = it.id.hex();
+		entry["host"] = it.host;
+		entry["port"] = it.port;
+		entry["lastPing"] = it.lastPing.count();
+
+		ret.append(entry);
+	}
+
+	return ret;
+}

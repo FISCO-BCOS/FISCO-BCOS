@@ -31,6 +31,7 @@
 #include <leveldb/db.h>
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
+#include <boost/filesystem.hpp>
 #include <libdevcore/easylog.h>
 #include "Client.h"
 

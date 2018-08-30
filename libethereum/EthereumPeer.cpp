@@ -28,7 +28,6 @@
 #include <libp2p/Session.h>
 #include <libp2p/Host.h>
 #include "EthereumHost.h"
-#include "NodeConnParamsManagerApi.h"
 
 using namespace std;
 using namespace dev;
@@ -88,14 +87,17 @@ void EthereumPeer::init(unsigned _hostProtocolVersion, u256 _hostNetworkId, u256
 
 bool EthereumPeer::isRude() const
 {
+#if 0
 	auto s = session();
 	if (s)
 		return s->repMan().isRude(*s, name());
+#endif
 	return false;
 }
 
 unsigned EthereumPeer::askOverride() const
 {
+#if 0
 	std::string static const badGeth = "Geth/v0.9.27";
 	auto s = session();
 	if (!s)
@@ -104,10 +106,13 @@ unsigned EthereumPeer::askOverride() const
 		return 1;
 	bytes const& d = s->repMan().data(*s, name());
 	return d.empty() ? c_maxBlocksAsk : RLP(d).toInt<unsigned>(RLP::LaissezFaire);
+#endif
+	return c_maxBlocksAsk;
 }
 
 void EthereumPeer::setRude()
 {
+#if 0
 	auto s = session();
 	if (!s)
 		return;
@@ -116,6 +121,7 @@ void EthereumPeer::setRude()
 	LOG(INFO) << "Rude behaviour; askOverride now" << askOverride() << ", was" << old;
 	s->repMan().noteRude(*s, name());
 	s->addNote("manners", "RUDE");
+#endif
 }
 
 void EthereumPeer::abortSync()
@@ -445,44 +451,6 @@ bool EthereumPeer::interpret(unsigned _id, RLP const& _r)
 				setIdle();
 				m_observer->onPeerReceipts(dynamic_pointer_cast<EthereumPeer>(shared_from_this()), _r);
 			}
-			break;
-		}
-		case NodeInfoSync:
-		{
-			
-			unsigned itemCount = _r.itemCount();
-			LOG(INFO) << "NodeInfoSync itemCount is : " << itemCount << "\n";
-			if (itemCount == 0)
-			{
-				break;
-			}
-			vector<eth::NodeConnParams> vParams(itemCount);
-			for (unsigned i = 0; i < itemCount; ++i)
-			{
-				eth::NodeConnParams params;
-				params._sNodeId = _r[i][0].toStringStrict();
-				params._sAgencyInfo = _r[i][1].toStringStrict();
-				params._sAgencyDesc = _r[i][2].toStringStrict();
-				params._iIdentityType = _r[i][3].toInt();
-				params._sIP = _r[i][4].toStringStrict();
-				params._iPort = _r[i][5].toInt();
-
-				
-				NodeConnManagerSingleton::GetInstance().addNewNodeConnInfo(params);
-				
-			}
-
-			break;
-		}
-		case DelNodeInfoSync:
-		{
-			
-			const string sNodeId = _r[0].toString();
-			LOG(INFO) << "DelNodeInfoSync nodeid is : " << sNodeId << std::endl;
-			bool bExisted = false;
-			NodeConnManagerSingleton::GetInstance().delNodeConnInfo(sNodeId, bExisted);
-			LOG(INFO) << "delNodeConnInfo " << sNodeId << "|" << bExisted << std::endl;
-			
 			break;
 		}
 		case CustomMessage: {

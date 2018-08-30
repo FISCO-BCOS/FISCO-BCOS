@@ -24,7 +24,6 @@
 #include <ctime>
 #include <boost/filesystem.hpp>
 #include <boost/timer.hpp>
-
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/TrieHash.h>
@@ -34,7 +33,6 @@
 #include <libevm/VMFactory.h>
 #include <UTXO/UTXOSharedData.h>
 #include <UTXO/UTXOTxQueue.h>
-
 #include "BlockChain.h"
 #include "Defaults.h"
 #include "ExtVM.h"
@@ -42,7 +40,7 @@
 #include "BlockChain.h"
 #include "TransactionQueue.h"
 #include "GenesisInfo.h"
-#include "SystemContractApi.h"
+#include <libstorage/DBFactoryPrecompiled.h>
 
 using namespace std;
 using namespace dev;
@@ -52,8 +50,7 @@ namespace fs = boost::filesystem;
 
 #define ETH_TIMED_ENACTMENTS 0
 
-unsigned Block::c_maxSyncTransactions = 100; 
-
+unsigned Block::c_maxSyncTransactions = 5000;
 
 Block::Block(BlockChain const& _bc, OverlayDB const& _db, BaseState _bs, Address const& _author):
     m_state(Invalid256, _db, _bs),
@@ -64,6 +61,7 @@ Block::Block(BlockChain const& _bc, OverlayDB const& _db, BaseState _bs, Address
     m_previousBlock.clear();
     m_currentBlock.clear();
 //  assert(m_state.root() == m_previousBlock.stateRoot());
+    _precompiledContext = std::make_shared<dev::precompiled::PrecompiledContext>();
 }
 
 Block::Block(BlockChain const& _bc, OverlayDB const& _db, h256 const& _root, Address const& _author):
@@ -75,6 +73,7 @@ Block::Block(BlockChain const& _bc, OverlayDB const& _db, h256 const& _root, Add
     m_state.setRoot(_root);
     m_previousBlock.clear();
     m_currentBlock.clear();
+    _precompiledContext = std::make_shared<dev::precompiled::PrecompiledContext>();
 //  assert(m_state.root() == m_previousBlock.stateRoot());
 }
 
@@ -91,6 +90,7 @@ Block::Block(Block const& _s):
     m_sealEngine(_s.m_sealEngine),
     m_utxoMgr(_s.m_utxoMgr)
 {
+	_precompiledContext = _s._precompiledContext->clone();
     m_committedToSeal = false;
 }
 
@@ -114,6 +114,7 @@ Block& Block::operator=(Block const& _s)
 
     m_utxoMgr = _s.m_utxoMgr;
 
+    _precompiledContext = _s._precompiledContext->clone();
     return *this;
 }
 
@@ -137,6 +138,7 @@ void Block::resetCurrent(u256 const& _timestamp)
     m_precommit = m_state;
     m_committedToSeal = false;
 
+    _precompiledContext->afterBlock(false);
     performIrregularModifications();
 }
 
@@ -253,6 +255,8 @@ bool Block::sync(BlockChain const& _bc, h256 const& _block, BlockHeader const& _
     {
         // We mined the last block.
         // Our state is good - we just need to move on to next.
+    	LOG(DEBUG) << "sync reset m_currentBlock";
+
         m_previousBlock = m_currentBlock;
         resetCurrent();                 
         ret = true;
@@ -338,7 +342,23 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
     } else {
         max_sync_txs = static_cast<unsigned>(_max_block_txs > m_transactions.size() ? _max_block_txs - m_transactions.size() : 0);
     }
-  
+    //auto ts = _tq.topTransactions(max_sync_txs, m_transactionSet);
+    try {
+		dev::precompiled::BlockInfo blockInfo;
+		blockInfo.hash = info().hash();
+		blockInfo.number = info().number();
+
+		LOG(DEBUG) << "precompiled: Block::sync beforeBlock:" << blockInfo.hash << " " << blockInfo.number;
+
+		_precompiledContext = std::make_shared<dev::precompiled::PrecompiledContext>();
+		_bc.precompiledEngineFactory()->initPrecompiledContext(blockInfo, _precompiledContext);
+
+		_precompiledContext->beforeBlock();
+	}
+	catch(exception &e) {
+		LOG(ERROR) << "ERROR:" << e.what();
+	}
+    //ret.second = (ts.size() == max_sync_txs);  // say there's more to the caller if we hit the limit
     auto ts = _tq.allTransactions();
 
     LastHashes lh;
@@ -368,8 +388,20 @@ pair<TransactionReceipts, bool> Block::sync(BlockChain const& _bc, TransactionQu
             {
                 try
                 {
-                    LOG(TRACE) << "PACK-TX: Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",time=" << utcTime();
-                    //交易打包前检查
+                LOG(TRACE) << "PACK-TX: Hash=" << (t.sha3()) << ",Randid=" << t.randomid() << ",time=" << utcTime();
+
+                    if ( ! _bc.isBlockLimitOk(t)  ) //blocklimit 检查
+                    {
+                        LOG(WARNING) << "Block::sync " << t.sha3() << " transition blockLimit=" << t.blockLimit() << " chain number=" << _bc.number();
+                        BOOST_THROW_EXCEPTION(BlockLimitCheckFail());
+                    }
+                    //cout<<"Block::sync "<<_bc.nonceCheck()<<"\n";
+
+                    if ( !_bc.isNonceOk(t) ) //链上已经出现了
+                    {
+                        LOG(WARNING) << "Block::sync " << t.sha3() << " " << t.randomid();
+                        BOOST_THROW_EXCEPTION(NonceCheckFail());
+                    }
                     for ( size_t pIndex = 0; pIndex < m_transactions.size(); pIndex++) //多做一步，当前块内也不能重复出现
                     {
                         if ( (m_transactions[pIndex].from() == t.from() ) && (m_transactions[pIndex].randomid() == t.randomid()) )
@@ -514,7 +546,11 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
     std::map<h256, bool> parallelUTXOTx;
     size_t parallelUTXOTxCnt = 0;
     getParallelUTXOTx(m_transactions, parallelUTXOTx, parallelUTXOTxCnt);
+    dev::precompiled::BlockInfo blockInfo;
+	blockInfo.hash = info().hash();
+	blockInfo.number = info().number();
 
+	LOG(DEBUG) << "precompiled: Block::exec beforeBlock:" << blockInfo.hash << " " << blockInfo.number;
     if (parallelUTXOTxCnt > 0)
     {
         return execUTXOInBlock(_bc, _tq, lh, parallelUTXOTx, parallelUTXOTxCnt);
@@ -710,6 +746,22 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
 
     LOG(TRACE) << "Block:enact tx_num=" << _block.transactions.size();
     // All ok with the block generally. Play back the transactions now...
+
+    try {
+		dev::precompiled::BlockInfo blockInfo;
+		blockInfo.hash = info().hash();
+		blockInfo.number = info().number();
+
+		LOG(DEBUG) << "precompiled: Block::enact beforeBlock:" << blockInfo.hash << " " << blockInfo.number;
+
+		_bc.precompiledEngineFactory()->initPrecompiledContext(blockInfo, _precompiledContext);
+
+		_precompiledContext->beforeBlock();
+    }
+    catch(exception &e) {
+    	LOG(ERROR) << "Error:" << e.what();
+    }
+
     m_utxoMgr.setCurBlockInfo(this, lh);
     
     std::map<h256, bool> parallelUTXOTx;
@@ -801,6 +853,17 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
         }
     }
 
+    if(_statusCheck) {
+		//校验块执行完后的dbHash和块头的dbHash是否一致，如果不一致，数据可能被篡改过
+		h256 hash = dbHash();
+
+		if(hash != m_currentBlock.dbHash()) {
+			LOG(ERROR) << "enact块dbHash与实际dbHash不符 enact块dbHash:" << m_currentBlock.dbHash() << " 实际dbHash:" << hash;
+
+			DBHashError ex;
+			BOOST_THROW_EXCEPTION(ex);
+		}
+    }
     h256 receiptsRoot;
     DEV_TIMED_ABOVE(".receiptsRoot()", 500)
     receiptsRoot = orderedTrieRoot(receipts);
@@ -926,6 +989,7 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
     // Hash the state trie and check against the state_root hash in m_currentBlock.
     if (_statusCheck && m_currentBlock.stateRoot() != m_previousBlock.stateRoot() && m_currentBlock.stateRoot() != rootHash())
     {
+    	_precompiledContext->afterBlock(false);
         auto r = rootHash();
         m_state.db().rollback();
         LOG(WARNING) << "m_currentBlock.stateRoot()=" << m_currentBlock.stateRoot() << ",m_previousBlock.stateRoot()=" << m_previousBlock.stateRoot() << ",rootHash()=" << rootHash();
@@ -935,6 +999,7 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
 
     if (_statusCheck && m_currentBlock.gasUsed() != gasUsed())
     {
+    	_precompiledContext->afterBlock(false);
         // Rollback the trie.
         m_state.db().rollback();        // TODO: API in State for this?
         BOOST_THROW_EXCEPTION(InvalidGasUsed() << RequirementError(bigint(gasUsed()), bigint(m_currentBlock.gasUsed())));
@@ -953,7 +1018,27 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
     // Uncommitting is a non-trivial operation - only do it once we've verified as much of the
     // transaction as possible.
     uncommitToSeal();
+#if 0
+    // if ( _bcp != nullptr )
+    // {
+    //     u256 check = _bcp->filterCheck(_t, FilterCheckScene::BlockExecuteTransation);
+    //     if ( (u256)SystemContractCode::Ok != check )
+    //     {
+    //         LOG(WARNING) << "Block::execute " << _t.sha3() << " transition filterCheck Fail" << check;
+    //         BOOST_THROW_EXCEPTION(FilterCheckFail());
+    //     }
+    // }
+#endif
 
+    dev::precompiled::BlockInfo blockInfo;
+    blockInfo.hash = info().hash();
+    blockInfo.number = info().number();
+    _precompiledContext->setBlockInfo(blockInfo);
+    //初始化环境EnvInfo 每次执行交易都会初始化环境，
+
+    EnvInfo envInfo(info(), _lh, gasUsed(), m_evmCoverLog, m_evmEventLog);
+    envInfo.setPrecompiledEngine(_precompiledContext);
+#if 0
     if ( _bcp != nullptr )
     {
         u256 check = _bcp->filterCheck(_t, FilterCheckScene::BlockExecuteTransation);
@@ -963,8 +1048,9 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
             BOOST_THROW_EXCEPTION(FilterCheckFail());
         }
     }
+#endif
 
-    std::pair<ExecutionResult, TransactionReceipt> resultReceipt = m_state.execute(EnvInfo(info(), _lh, gasUsed(), m_evmCoverLog, m_evmEventLog), *m_sealEngine, _t, _p, _onOp, &m_utxoMgr);
+    std::pair<ExecutionResult, TransactionReceipt> resultReceipt = m_state.execute(envInfo, *m_sealEngine, _t, _p, _onOp, &m_utxoMgr);
 
     if (_p == Permanence::Committed)
     {
@@ -974,12 +1060,6 @@ ExecutionResult Block::execute(LastHashes const& _lh, Transaction const& _t, Per
         m_receipts.push_back(resultReceipt.second);
         LOG(TRACE) << "Block::execute: stateRoot=" << toString(resultReceipt.second.stateRoot()) << ",gasUsed=" << toString(resultReceipt.second.gasUsed()) << ",sha3=" << toString(sha3(resultReceipt.second.rlp()));
         m_transactionSet.insert(_t.sha3());
-
-
-        if (_bcp) {
-            (_bcp)->updateCache(_t.to());
-        }
-
     }
    
     if (_p == Permanence::OnlyReceipt)
@@ -1032,7 +1112,7 @@ void Block::performIrregularModifications()
     }
 }
 
-void Block::commitToSeal(BlockChain const& _bc, bytes const& _extraData)
+void Block::commitToSeal(BlockChain const& _bc, u256 genIndex, bytes const& _extraData)
 {
     if (isSealed())
         BOOST_THROW_EXCEPTION(InvalidOperationOnSealedBlock());
@@ -1135,6 +1215,8 @@ void Block::commitToSeal(BlockChain const& _bc, bytes const& _extraData)
         m_currentBlock.setExtraData(ed);
     }
 
+    m_currentBlock.setDBHash(dbHash());
+    //m_currentBlock.setIndex(genIndex); 本应设置index，为了保持向前兼容暂时不设置
     m_committedToSeal = true;
 }
 
@@ -1173,6 +1255,7 @@ void Block::commitToSealAfterExecTx(BlockChain const&) {
     m_currentBlock.setHashList(hashList);
 
     m_committedToSeal = true;
+	m_currentBlock.setDBHash(dbHash());
 }
 
 void Block::uncommitToSeal()
@@ -1310,15 +1393,38 @@ void Block::commitAll() {
     m_state.db().commit();  // TODO: State API for this?
 
     LOG(TRACE) << "Committed: stateRoot" << m_currentBlock.stateRoot() << "=" << rootHash() << "=" << toHex(asBytes(db().lookup(rootHash())));
+    try {
+		dev::precompiled::BlockInfo blockInfo;
+		blockInfo.hash = info().hash();
+		blockInfo.number = info().number();
 
+		LOG(DEBUG) << "Committed PrecompiledContext:" << blockInfo.hash << " " << blockInfo.number;
     //m_previousBlock = m_currentBlock;
+		_precompiledContext->setBlockInfo(blockInfo);
     //sealEngine()->populateFromParent(m_currentBlock, m_previousBlock);
+		_precompiledContext->afterBlock(true);
+    }
+    catch(exception &e) {
+    	LOG(ERROR) << "Error:" << e.what();
+    }
 
     LOG(TRACE) << "finalising enactment. current -> previous, hash is" << m_previousBlock.hash();
 }
 
 void dev::eth::Block::clearCurrentBytes() {
     m_currentBytes.clear();
+}
+
+void dev::eth::Block::extract(BlockChain const& bc, h256 const& hash, ImportRequirements::value ir) {
+	m_currentBytes = bc.block(hash);
+	BlockHeader bi(m_currentBytes);      // No need to check - it's already in the DB.
+	auto vb = bc.verifyBlock(&m_currentBytes, function<void(Exception&)>(), ir | ImportRequirements::TransactionBasic);
+	m_state.setRoot(bi.stateRoot());
+	//m_currentBlock
+
+	m_transactions = vb.transactions;
+
+	clearCurrentBytes();
 }
 
 
@@ -1360,6 +1466,19 @@ void Block::getParallelUTXOTx(const Transactions& transactions, std::map<h256, b
         ret[tr.sha3()] = temp;
         if (temp) { cnt++; }
     }
+}
+
+h256 Block::dbHash() {
+	dev::precompiled::DBFactoryPrecompiled::Ptr dbFactory =
+		std::dynamic_pointer_cast<dev::precompiled::DBFactoryPrecompiled>(_precompiledContext->getPrecompiled(Address(0x1001)));
+	if(dbFactory) {
+		h256 hash = dbFactory->hash(_precompiledContext);
+
+		return hash;
+	}
+	else {
+		return h256();
+	}
 }
 
 void Block::isArtificialTx(const Transactions& txList, std::vector<bool>& flag)

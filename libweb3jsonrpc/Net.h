@@ -43,6 +43,7 @@ public:
 	virtual std::string net_version() override;
 	virtual std::string net_peerCount() override;
 	virtual bool net_listening() override;
+	virtual Json::Value net_peers() override;
 
 private:
 	NetworkFace& m_network;

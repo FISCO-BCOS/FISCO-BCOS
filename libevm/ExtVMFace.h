@@ -33,6 +33,7 @@
 #include <libethcore/ChainOperationParams.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/FileSystem.h>
+#include <libprecompiled/PrecompiledContext.h>
 
 using namespace std;
 namespace dev
@@ -166,6 +167,7 @@ struct CallParameters
 	bytesRef out;
 	OnOpFunc onOp;
 };
+class BlockChain;
 
 class EnvInfo
 {
@@ -183,7 +185,8 @@ public:
 		m_lastHashes(_lh),
 		m_gasUsed(_gasUsed),
 		m_coverlog(_cl),
-		m_eventlog(_el)
+		m_eventlog(_el),
+		_blockHash(_current.hash())
 	{
 		
 	}
@@ -200,7 +203,8 @@ public:
 		m_lastHashes(_lh),
 		m_gasUsed(_gasUsed),
 		m_coverlog(_cl),
-		m_eventlog(_el)
+		m_eventlog(_el),
+		_blockHash(_current.hash())
 	{
 		
 	}
@@ -226,6 +230,10 @@ public:
 	bool eventLog()const { return m_eventlog;}
 	void setCoverLog(bool _cl){ m_coverlog=_cl;}
 	void setEventLog(bool _el){ m_eventlog=_el;}
+	dev::precompiled::PrecompiledContext::Ptr precompiledEngine() const { return _precompiledEngine; }
+	void setPrecompiledEngine(dev::precompiled::PrecompiledContext::Ptr precompiledEngine) { _precompiledEngine = precompiledEngine; }
+
+	h256 blockHash() const { return _blockHash; }
 
 private:
 	u256 m_number;
@@ -238,6 +246,8 @@ private:
 
 	bool m_coverlog;//the flag of print coverlog
 	bool m_eventlog;//the flag of print event log
+	dev::precompiled::PrecompiledContext::Ptr _precompiledEngine;
+	h256 _blockHash;
 };
 
 /**
@@ -312,7 +322,7 @@ public:
 	/// Return the EVM gas-price schedule for this execution context.
 	virtual EVMSchedule const& evmSchedule() const { return DefaultSchedule; }
 
-private:
+protected:
 	EnvInfo const& m_envInfo;
 
 public:

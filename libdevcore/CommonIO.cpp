@@ -133,8 +133,6 @@ void dev::writeFile(std::string const& _file, bytesConstRef _data, bool _writeDe
 }
 
 
-
-//追加内容到文件
 void dev::appendFile(std::string const& _file, bytesConstRef _data)
 {
 	namespace fs = boost::filesystem;

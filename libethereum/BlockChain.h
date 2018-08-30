@@ -44,6 +44,7 @@
 #include "Interface.h"
 #include <libdevcrypto/AES.h>
 #include <libdevcore/FileSystem.h>
+#include <libprecompiled/PrecompiledContextFactory.h>
 
 namespace std
 {
@@ -116,7 +117,7 @@ class BlockChain
 public:
 	/// Doesn't open the database - if you want it open it's up to you to subclass this and open it
 	/// in the constructor there.
-	BlockChain(std::shared_ptr<Interface> _interface, ChainParams const& _p, std::string const& _path, WithExisting _we = WithExisting::Trust, ProgressCallback const& _pc = ProgressCallback());
+	BlockChain(ChainParams const& _p, std::string const& _path, WithExisting _we = WithExisting::Trust, ProgressCallback const& _pc = ProgressCallback());
 	~BlockChain();
 
 	/// Reopen everything.
@@ -325,10 +326,10 @@ public:
 	bool isBlockLimitOk(Transaction const&_ts) const ;
 	bool isNonceOk(Transaction const&_ts, bool _needinsert = false) const ;
 
-	u256 filterCheck(const Transaction & _t, FilterCheckScene _checkscene = FilterCheckScene::None) const ;
+	// u256 filterCheck(const Transaction & _t, FilterCheckScene _checkscene = FilterCheckScene::None) const ;
 	//void    updateSystemContract(Transactions & _transcations);
-	void    updateSystemContract(std::shared_ptr<Block> block);
-	void updateCache(Address address)const;
+	// void    updateSystemContract(std::shared_ptr<Block> block);
+	// void updateCache(Address address)const;
 
 	static u256 maxBlockLimit;
 	
@@ -343,7 +344,9 @@ public:
 	bytes encryptodata(bytesConstRef const& v);
 	bytes encryptodata(bytes const& v);
 	bytes decryptodata(std::string const& v) const;
-	std::shared_ptr<Interface> getClient() const { return m_interface; }
+    //    std::shared_ptr<Interface> getClient() const { return m_interface; }
+	precompiled::PrecompiledContextFactory::Ptr precompiledEngineFactory() const { return _precompiledEngineFactory; };
+	void setPrecompiledEngineFactory(precompiled::PrecompiledContextFactory::Ptr precompiledEngineFactory) { _precompiledEngineFactory = precompiledEngineFactory; };
 private:
 	enum CRYPTOTYPE
 	{
@@ -461,14 +464,15 @@ private:
 
 	std::string m_dbPath;
 
-	std::shared_ptr<NonceCheck> m_pnoncecheck; 
-	std::shared_ptr<Interface> m_interface;
+	std::shared_ptr<NonceCheck> m_pnoncecheck; //为了保证nonce一定范围的唯一性
+	//std::shared_ptr<Interface> m_interface;//指向client
 
 	mutable SharedMutex  x_blockcache;
 	mutable std::map<h256, std::pair<Block, u256> > m_blockCache;
 	mutable std::deque<h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
 	const unsigned kBlockCacheSize = 10;  // m_blockCache size, default set 10
 
+	precompiled::PrecompiledContextFactory::Ptr _precompiledEngineFactory;
 	
 	friend std::ostream& operator<<(std::ostream& _out, BlockChain const& _bc);
 };

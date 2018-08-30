@@ -28,11 +28,7 @@
 #------------------------------------------------------------------------------
 
 include(EthUtils)
-if (ODBC)
-	set(LIBS ethashseal;ethereum;evm;ethcore;evmcore;ethash-cl;ethash;evmjit;testutils;pbftseal;singlepoint;raftseal;diskencryption;odbc)
-else ()
-	set(LIBS ethashseal;ethereum;evm;ethcore;evmcore;ethash-cl;ethash;evmjit;testutils;pbftseal;singlepoint;raftseal;diskencryption)
-endif()
+set(LIBS ethashseal;ethereum;evm;ethcore;evmcore;ethash-cl;evmjit;testutils;pbftseal;singlepoint;raftseal;diskencryption)
 set(Eth_INCLUDE_DIRS "${CPP_ETHEREUM_DIR}")
 
 # if the project is a subset of main cpp-ethereum project

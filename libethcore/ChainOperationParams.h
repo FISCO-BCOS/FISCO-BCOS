@@ -55,6 +55,8 @@ struct ChainOperationParams
 {
 	ChainOperationParams();
 
+	void initPrecompiled();
+
 	explicit operator bool() const { return accountStartNonce != Invalid256; }
 
 	/// The chain sealer name: e.g. PBFT, Raft, SinglePoint
@@ -125,6 +127,7 @@ struct ChainOperationParams
 	u256 godMinerStart = 0;
 	u256 godMinerEnd = 0;
 	std::map<std::string, NodeConnParams> godMinerList;
+	std::string AMOPDBTopic;
 	//for ssl 
 	std::map<std::string, NodeParams> godMinerListSSL;
 };
