@@ -111,6 +111,12 @@ static std::string getDate(const char* format = "%a %b %d, %H:%m")
     return DateTime::getDateTime(format, &ssPrec);
 }
 
+static bool fileExists(const char* filename)
+{
+    el::base::type::fstream_t fstr(filename, el::base::type::fstream_t::in);
+    return fstr.is_open();
+}
+
 #define BUILD_STR(strb)        \
     [&]() -> std::string {     \
         std::stringstream ssb; \
@@ -994,6 +1000,810 @@ BOOST_AUTO_TEST_CASE(LogFormatResolutionTestEscapedFormat)
     BOOST_CHECK_EQUAL("%%H %H %%H", escapeTest3.dateTimeFormat());  // Date/time escaped
     BOOST_CHECK(
         Str::startsWith(DateTime::getDateTime(escapeTest.dateTimeFormat().c_str(), &ssPrec), "%H"));
+}
+
+class Integer : public el::Loggable
+{
+public:
+    Integer(int i) : m_underlyingInt(i) {}
+    Integer& operator=(const Integer& integer)
+    {
+        m_underlyingInt = integer.m_underlyingInt;
+        return *this;
+    }
+    virtual ~Integer(void) {}
+    inline operator int() const { return m_underlyingInt; }
+    inline void operator++() { ++m_underlyingInt; }
+    inline void operator--() { --m_underlyingInt; }
+    inline bool operator==(const Integer& integer) const
+    {
+        return m_underlyingInt == integer.m_underlyingInt;
+    }
+    void inline log(el::base::type::ostream_t& os) const { os << m_underlyingInt; }
+
+private:
+    int m_underlyingInt;
+};
+
+
+BOOST_AUTO_TEST_CASE(LoggableTestTestValidLog)
+{
+    Integer myint = 5;
+    LOG(INFO) << "My integer = " << myint;
+    std::string expected = BUILD_STR(getDate() << " My integer = 5\n");
+    BOOST_CHECK_EQUAL(expected, tail(1));
+    ++myint;
+    LOG(INFO) << "My integer = " << myint;
+    expected = BUILD_STR(getDate() << " My integer = 6\n");
+    BOOST_CHECK_EQUAL(expected, tail(1));
+}
+
+class String
+{
+public:
+    String(const char* s) : m_str(s) {}
+    const char* c_str(void) const { return m_str; }
+
+private:
+    const char* m_str;
+};
+
+inline MAKE_LOGGABLE(String, str, os)
+{
+    os << str.c_str();
+    return os;
+}
+
+BOOST_AUTO_TEST_CASE(LoggableTestMakeLoggable)
+{
+    LOG(INFO) << String("this is my string");
+    std::string expected = BUILD_STR(getDate() << " this is my string\n");
+    BOOST_CHECK_EQUAL(expected, tail(1));
+}
+
+BOOST_AUTO_TEST_CASE(LoggerTestValidId)
+{
+    BOOST_CHECK(Logger::isValidId("a-valid-id"));
+    BOOST_CHECK(!Logger::isValidId("a valid id"));
+    BOOST_CHECK(!Logger::isValidId("logger-with-space-at-end "));
+    BOOST_CHECK(Logger::isValidId("logger_with_no_space_at_end"));
+    BOOST_CHECK(Logger::isValidId("my-great-logger-with-number-1055"));
+}
+
+BOOST_AUTO_TEST_CASE(MacrosTestVaLength)
+{
+    BOOST_CHECK_EQUAL(10, el_getVALength("a", "b", "c", "d", "e", "f", "g", "h", "i", "j"));
+    BOOST_CHECK_EQUAL(9, el_getVALength("a", "b", "c", "d", "e", "f", "g", "h", "i"));
+    BOOST_CHECK_EQUAL(8, el_getVALength("a", "b", "c", "d", "e", "f", "g", "h"));
+    BOOST_CHECK_EQUAL(7, el_getVALength("a", "b", "c", "d", "e", "f", "g"));
+    BOOST_CHECK_EQUAL(6, el_getVALength("a", "b", "c", "d", "e", "f"));
+    BOOST_CHECK_EQUAL(5, el_getVALength("a", "b", "c", "d", "e"));
+    BOOST_CHECK_EQUAL(4, el_getVALength("a", "b", "c", "d"));
+    BOOST_CHECK_EQUAL(3, el_getVALength("a", "b", "c"));
+    BOOST_CHECK_EQUAL(2, el_getVALength("a", "b"));
+    BOOST_CHECK_EQUAL(1, el_getVALength("a"));
+}
+
+#if ELPP_OS_UNIX
+BOOST_AUTO_TEST_CASE(OSUtilsTestGetBashOutput)
+{
+    const char* bashCommand = "echo 'test'";
+    std::string bashResult = OS::getBashOutput(bashCommand);
+    BOOST_CHECK_EQUAL("test", bashResult);
+}
+#endif
+
+BOOST_AUTO_TEST_CASE(OSUtilsTestGetEnvironmentVariable)
+{
+    std::string variable = OS::getEnvironmentVariable("PATH", "pathResult");
+    BOOST_CHECK(!variable.empty());
+}
+
+BOOST_AUTO_TEST_CASE(PLogTestWriteLog)
+{
+    std::fstream file("/tmp/a/file/that/does/not/exist.txt", std::fstream::in);
+    if (file.is_open())
+    {
+        // We dont expect to open file
+        BOOST_CHECK(false);
+    }
+    PLOG(INFO) << "This is plog";
+    std::string expected = BUILD_STR(getDate() << " This is plog: No such file or directory [2]\n");
+    std::string actual = tail(1);
+    BOOST_CHECK_EQUAL(expected, actual);
+}
+
+static std::vector<el::base::type::string_t> loggedMessages;
+
+class LogHandler : public el::LogDispatchCallback
+{
+public:
+    void handle(const LogDispatchData* data)
+    {
+        loggedMessages.push_back(data->logMessage()->message());
+    }
+};
+
+BOOST_AUTO_TEST_CASE(LogDispatchCallbackTestInstallation)
+{
+    LOG(INFO) << "Log before handler installed";
+    BOOST_CHECK(loggedMessages.empty());
+
+    // Install handler
+    Helpers::installLogDispatchCallback<LogHandler>("LogHandler");
+    LOG(INFO) << "Should be part of loggedMessages - 1";
+    BOOST_CHECK_EQUAL(1, loggedMessages.size());
+    type::string_t expectedMessage = ELPP_LITERAL("Should be part of loggedMessages - 1");
+    BOOST_CHECK_EQUAL(expectedMessage, loggedMessages.at(0));
+}
+
+BOOST_AUTO_TEST_CASE(LogDispatchCallbackTestUninstallation)
+{
+    // Uninstall handler
+    Helpers::uninstallLogDispatchCallback<LogHandler>("LogHandler");
+    LOG(INFO) << "This is not in list";
+    BOOST_CHECK(loggedMessages.end() == std::find(loggedMessages.begin(), loggedMessages.end(),
+                                            ELPP_LITERAL("This is not in list")));
+}
+
+class Person
+{
+public:
+    Person(const std::string& name, unsigned int num) : m_name(name), m_num(num) {}
+    const std::string& name(void) const { return m_name; }
+    unsigned int num(void) const { return m_num; }
+
+private:
+    std::string m_name;
+    unsigned int m_num;
+};
+
+class PersonPred
+{
+public:
+    PersonPred(const std::string& name, unsigned int num) : name(name), n(num) {}
+    bool operator()(const Person* p) { return p != nullptr && p->name() == name && p->num() == n; }
+
+private:
+    std::string name;
+    unsigned int n;
+};
+
+class People : public Registry<Person>
+{
+public:
+    void regNew(const char* name, Person* person) { Registry<Person>::registerNew(name, person); }
+    void clear() { Registry<Person>::unregisterAll(); }
+    Person* getPerson(const char* name) { return Registry<Person>::get(name); }
+};
+
+class PeopleWithPred : public RegistryWithPred<Person, PersonPred>
+{
+public:
+    void regNew(Person* person) { RegistryWithPred<Person, PersonPred>::registerNew(person); }
+    void clear() { RegistryWithPred<Person, PersonPred>::unregisterAll(); }
+    Person* get(const std::string& name, unsigned int numb)
+    {
+        return RegistryWithPred<Person, PersonPred>::get(name, numb);
+    }
+};
+
+/// Tests for usage of registry (Thread unsafe but its OK with gtest)
+BOOST_AUTO_TEST_CASE(RegistryTestRegisterAndUnregister)
+{
+    People people;
+    Person* john = new Person("John", 433212345);
+    people.regNew("John", john);
+
+    Person* john2 = new Person("John", 123456);
+    people.regNew("John", john2);
+
+    BOOST_CHECK_EQUAL(1, people.size());
+    unsigned int n = people.getPerson("John")->num();
+    BOOST_CHECK_EQUAL(n, 123456);
+
+    People people2;
+    people2 = people;
+    BOOST_CHECK_EQUAL(1, people2.size());
+    BOOST_CHECK_EQUAL(1, people.size());
+
+    people.clear();
+    BOOST_CHECK(people.empty());
+    BOOST_CHECK_EQUAL(1, people2.size());
+    people2.clear();
+    BOOST_CHECK(people2.empty());
+
+    PeopleWithPred peopleWithPred;
+    peopleWithPred.regNew(new Person("McDonald", 123));
+    peopleWithPred.regNew(new Person("McDonald", 157));
+    BOOST_CHECK_EQUAL(peopleWithPred.size(), 2);
+
+    Person* p = peopleWithPred.get("McDonald", 157);
+    BOOST_CHECK_EQUAL(p->name(), "McDonald");
+    BOOST_CHECK_EQUAL(p->num(), 157);
+
+    PeopleWithPred peopleWithPred2;
+    peopleWithPred2 = peopleWithPred;
+    BOOST_CHECK_EQUAL(peopleWithPred.size(), 2);
+    BOOST_CHECK_EQUAL(peopleWithPred2.size(), 2);
+
+    peopleWithPred.clear();
+    BOOST_CHECK(peopleWithPred.empty());
+    peopleWithPred2.clear();
+    BOOST_CHECK(peopleWithPred2.empty());
+}
+
+static bool handlerCalled;
+
+void handler(const char*, std::size_t)
+{
+    handlerCalled = true;
+}
+
+BOOST_AUTO_TEST_CASE(StrictFileSizeCheckTestHandlerCalled)
+{
+    BOOST_CHECK(!handlerCalled);
+    BOOST_CHECK(ELPP->hasFlag(LoggingFlag::StrictLogFileSizeCheck));
+
+    el::Loggers::getLogger("handler_check_logger");
+    el::Loggers::reconfigureLogger(
+        "handler_check_logger", el::ConfigurationType::Filename, "/tmp/logs/max-size.log");
+    el::Loggers::reconfigureLogger(
+        "handler_check_logger", el::ConfigurationType::MaxLogFileSize, "100");
+    el::Helpers::installPreRollOutCallback(handler);
+    for (int i = 0; i < 100; ++i)
+    {
+        CLOG(INFO, "handler_check_logger") << "Test " << i;
+    }
+    BOOST_CHECK(handlerCalled);
+}
+
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestWildCardMatch)
+{
+    BOOST_CHECK(Str::wildCardMatch("main", "m*"));
+    BOOST_CHECK(Str::wildCardMatch("mei.cpp", "m*cpp"));
+    BOOST_CHECK(Str::wildCardMatch("me.cpp", "me.cpp"));
+    BOOST_CHECK(Str::wildCardMatch("me.cpp", "m?.cpp"));
+    BOOST_CHECK(Str::wildCardMatch("m/f.cpp", "m??.cpp"));
+    BOOST_CHECK(Str::wildCardMatch("", "*"));
+    BOOST_CHECK(!Str::wildCardMatch("", "?"));
+    BOOST_CHECK(Str::wildCardMatch(
+        "fastquery--and anything after or before", "*****************fast*****query*****"));
+    BOOST_CHECK(!Str::wildCardMatch("some thing not matching", "some * matching all"));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestTrim)
+{
+    std::string strLeftWhiteSpace(" string 1");
+    std::string strLeftRightWhiteSpace(" string 2 ");
+    std::string strRightWhiteSpace("string 3 ");
+    std::string strLeftRightWhiteSpaceWithTabAndNewLine("  string 4 \t\n");
+    BOOST_CHECK_EQUAL("string 1", Str::trim(strLeftWhiteSpace));
+    BOOST_CHECK_EQUAL("string 2", Str::trim(strLeftRightWhiteSpace));
+    BOOST_CHECK_EQUAL("string 3", Str::trim(strRightWhiteSpace));
+    BOOST_CHECK_EQUAL("string 4", Str::trim(strLeftRightWhiteSpaceWithTabAndNewLine));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestStartsAndEndsWith)
+{
+    BOOST_CHECK(Str::startsWith("Dotch this", "Dotch"));
+    BOOST_CHECK(!Str::startsWith("Dotch this", "dotch"));
+    BOOST_CHECK(!Str::startsWith("    Dotch this", "dotch"));
+    BOOST_CHECK(Str::endsWith("Dotch this", "this"));
+    BOOST_CHECK(!Str::endsWith("Dotch this", "This"));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestReplaceAll)
+{
+    std::string str = "This is cool";
+    char replaceWhat = 'o';
+    char replaceWith = '0';
+    BOOST_CHECK_EQUAL("This is c00l", Str::replaceAll(str, replaceWhat, replaceWith));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestToUpper)
+{
+    std::string str = "This iS c0ol";
+    BOOST_CHECK_EQUAL("THIS IS C0OL", Str::toUpper(str));
+    str = "enabled = ";
+    BOOST_CHECK_EQUAL("ENABLED = ", Str::toUpper(str));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestCStringEq)
+{
+    BOOST_CHECK(Str::cStringEq("this", "this"));
+    BOOST_CHECK(!Str::cStringEq(nullptr, "this"));
+    BOOST_CHECK(Str::cStringEq(nullptr, nullptr));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestCStringCaseEq)
+{
+    BOOST_CHECK(Str::cStringCaseEq("this", "This"));
+    BOOST_CHECK(Str::cStringCaseEq("this", "this"));
+    BOOST_CHECK(Str::cStringCaseEq(nullptr, nullptr));
+    BOOST_CHECK(!Str::cStringCaseEq(nullptr, "nope"));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestContains)
+{
+    BOOST_CHECK(Str::contains("the quick brown fox jumped over the lazy dog", 'a'));
+    BOOST_CHECK(!Str::contains("the quick brown fox jumped over the lazy dog", '9'));
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestReplaceFirstWithEscape)
+{
+    el::base::type::string_t str = ELPP_LITERAL("Rolling in the deep");
+    Str::replaceFirstWithEscape(str, ELPP_LITERAL("Rolling"), ELPP_LITERAL("Swimming"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("Swimming in the deep"), str);
+    str = ELPP_LITERAL("this is great and this is not");
+    Str::replaceFirstWithEscape(str, ELPP_LITERAL("this is"), ELPP_LITERAL("that was"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("that was great and this is not"), str);
+    str = ELPP_LITERAL("%this is great and this is not");
+    Str::replaceFirstWithEscape(str, ELPP_LITERAL("this is"), ELPP_LITERAL("that was"));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("this is great and that was not"), str);
+    str = ELPP_LITERAL("%datetime %level %msg");
+    Str::replaceFirstWithEscape(
+        str, ELPP_LITERAL("%level"), LevelHelper::convertToString(Level::Info));
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%datetime INFO %msg"), str);
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestAddToBuff)
+{
+    char buf[100];
+    char* bufLim = buf + 100;
+    char* buffPtr = buf;
+
+    buffPtr = Str::addToBuff("The quick brown fox", buffPtr, bufLim);
+    BOOST_CHECK_EQUAL("The quick brown fox", buf);
+    buffPtr = Str::addToBuff(" jumps over the lazy dog", buffPtr, bufLim);
+    BOOST_CHECK_EQUAL("The quick brown fox jumps over the lazy dog", buf);
+}
+
+BOOST_AUTO_TEST_CASE(StringUtilsTestConvertAndAddToBuff)
+{
+    char buf[100];
+    char* bufLim = buf + 100;
+    char* buffPtr = buf;
+
+    buffPtr = Str::addToBuff("Today is lets say ", buffPtr, bufLim);
+    buffPtr = Str::convertAndAddToBuff(5, 1, buffPtr, bufLim);
+    buffPtr = Str::addToBuff(" but we write it as ", buffPtr, bufLim);
+    buffPtr = Str::convertAndAddToBuff(5, 2, buffPtr, bufLim);
+    BOOST_CHECK_EQUAL("Today is lets say 5 but we write it as 05", buf);
+}
+
+static const char* kSysLogFile = "/var/log/syslog";
+static const char* s_currentHost = el::base::utils::OS::currentHost().c_str();
+
+BOOST_AUTO_TEST_CASE(SysLogTestWriteLog)
+{
+    if (!fileExists(kSysLogFile))
+    {
+        // Do not check for syslog config, just dont test it
+        return;
+    }
+    // To avoid "Easylogging++ last message repeated 2 times"
+    SYSLOG(INFO) << "last message suppress";
+
+    SYSLOG(INFO) << "this is my syslog";
+    sleep(1);  // Make sure daemon has picked it up
+    std::string expectedEnd =
+        BUILD_STR(s_currentHost << " " << kSysLogIdent << ": INFO : this is my syslog\n");
+    std::string actual = tail(1, kSysLogFile);
+    BOOST_CHECK(Str::endsWith(actual, expectedEnd));
+}
+
+BOOST_AUTO_TEST_CASE(SysLogTestDebugVersionLogs)
+{
+    if (!fileExists(kSysLogFile))
+    {
+        // Do not check for syslog config, just dont test it
+        return;
+    }
+// Test enabled
+#undef ELPP_DEBUG_LOG
+#define ELPP_DEBUG_LOG 0
+
+    std::string currentTail = tail(1, kSysLogFile);
+
+    DSYSLOG(INFO) << "No DSYSLOG should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    BOOST_CHECK(Str::endsWith(currentTail, tail(1, kSysLogFile)));
+
+    DSYSLOG_IF(true, INFO) << "No DSYSLOG_IF should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    BOOST_CHECK(Str::endsWith(currentTail, tail(1, kSysLogFile)));
+
+    DCSYSLOG(INFO, "performance") << "No DCSYSLOG should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    BOOST_CHECK(Str::endsWith(currentTail, tail(1, kSysLogFile)));
+
+    DCSYSLOG(INFO, "performance") << "No DCSYSLOG should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    BOOST_CHECK(Str::endsWith(currentTail, tail(1, kSysLogFile)));
+
+// Reset
+#undef ELPP_DEBUG_LOG
+#define ELPP_DEBUG_LOG 1
+
+    // Now test again
+    DSYSLOG(INFO) << "DSYSLOG should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    std::string expected =
+        BUILD_STR(s_currentHost << " " << kSysLogIdent << ": INFO : DSYSLOG should be resolved\n");
+    BOOST_CHECK(Str::endsWith(tail(1, kSysLogFile), expected));
+
+    DSYSLOG_IF(true, INFO) << "DSYSLOG_IF should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    expected = BUILD_STR(
+        s_currentHost << " " << kSysLogIdent << ": INFO : DSYSLOG_IF should be resolved\n");
+    BOOST_CHECK(Str::endsWith(tail(1, kSysLogFile), expected));
+
+    DCSYSLOG(INFO, el::base::consts::kSysLogLoggerId) << "DCSYSLOG should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    expected =
+        BUILD_STR(s_currentHost << " " << kSysLogIdent << ": INFO : DCSYSLOG should be resolved\n");
+    BOOST_CHECK(Str::endsWith(tail(1, kSysLogFile), expected));
+
+    DCSYSLOG(INFO, el::base::consts::kSysLogLoggerId) << "DCSYSLOG should be resolved";
+    sleep(1);  // Make sure daemon has picked it up
+    expected =
+        BUILD_STR(s_currentHost << " " << kSysLogIdent << ": INFO : DCSYSLOG should be resolved\n");
+    BOOST_CHECK(Str::endsWith(tail(1, kSysLogFile), expected));
+}
+
+
+const char* getConfFile(void)
+{
+    const char* file = "/tmp/temp-test.conf";
+    std::fstream confFile(file, std::fstream::out);
+    confFile << " * GLOBAL:\n"
+             << "    FILENAME             =  /tmp/my-test.log\n"
+             << "    FORMAT               =  %datetime %level %msg\n"
+             << "    MAX_LOG_FILE_SIZE        =  1\n"
+             << "    TO_STANDARD_OUTPUT   =  TRUE\n"
+             << "* DEBUG:\n"
+             // NOTE escaped %level and %host below
+             << "    FORMAT               =  %datetime %%level %level [%user@%%host] [%func] "
+                "[%loc] %msg\n"
+             // INFO and WARNING uses is defined by GLOBAL
+             << "* ERROR:\n"
+             << "    FILENAME             =  /tmp/my-test-err.log\n"
+             << "    FORMAT               =  %%logger %%logger %logger %%logger %msg\n"
+             << "    MAX_LOG_FILE_SIZE        =  10\n"
+             << "* FATAL:\n"
+             << "    FORMAT               =  %datetime %%datetime{%H:%m} %level %msg\n"
+             << "* VERBOSE:\n"
+             << "    FORMAT               =  %%datetime{%h:%m} %datetime %level-%vlevel %msg\n"
+             << "* TRACE:\n"
+             << "    FORMAT               =  %datetime{%h:%m} %%level %level [%func] [%loc] %msg\n";
+    confFile.close();
+    return file;
+}
+
+BOOST_AUTO_TEST_CASE(TypedConfigurationsTestInitialization)
+{
+    std::string testFile = "/tmp/my-test.log";
+    std::remove(testFile.c_str());
+
+    Configurations c(getConfFile());
+    TypedConfigurations tConf(&c, ELPP->registeredLoggers()->logStreamsReference());
+
+    BOOST_CHECK(tConf.enabled(Level::Global));
+
+    BOOST_CHECK_EQUAL(
+        ELPP_LITERAL("%datetime %level %msg"), tConf.logFormat(Level::Info).userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%datetime INFO %msg"), tConf.logFormat(Level::Info).format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d %H:%m:%s,%g", tConf.logFormat(Level::Info).dateTimeFormat());
+
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%datetime %%level %level [%user@%%host] [%func] [%loc] %msg"),
+        tConf.logFormat(Level::Debug).userFormat());
+    std::string expected =
+        BUILD_STR("%datetime %level DEBUG [" << el::base::utils::OS::currentUser()
+                                             << "@%%host] [%func] [%loc] %msg");
+#if defined(ELPP_UNICODE)
+    char* orig = Str::wcharPtrToCharPtr(tConf.logFormat(Level::Debug).format().c_str());
+#else
+    const char* orig = tConf.logFormat(Level::Debug).format().c_str();
+#endif
+    BOOST_CHECK_EQUAL(expected, std::string(orig));
+    BOOST_CHECK_EQUAL("%Y-%M-%d %H:%m:%s,%g", tConf.logFormat(Level::Debug).dateTimeFormat());
+
+    // This double quote is escaped at run-time for %date and %datetime
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%datetime %%datetime{%H:%m} %level %msg"),
+        tConf.logFormat(Level::Fatal).userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%datetime %%datetime{%H:%m} FATAL %msg"),
+        tConf.logFormat(Level::Fatal).format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d %H:%m:%s,%g", tConf.logFormat(Level::Fatal).dateTimeFormat());
+
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%datetime{%h:%m} %%level %level [%func] [%loc] %msg"),
+        tConf.logFormat(Level::Trace).userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%datetime %level TRACE [%func] [%loc] %msg"),
+        tConf.logFormat(Level::Trace).format());
+    BOOST_CHECK_EQUAL("%h:%m", tConf.logFormat(Level::Trace).dateTimeFormat());
+
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%%datetime{%h:%m} %datetime %level-%vlevel %msg"),
+        tConf.logFormat(Level::Verbose).userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%%datetime{%h:%m} %datetime VERBOSE-%vlevel %msg"),
+        tConf.logFormat(Level::Verbose).format());
+    BOOST_CHECK_EQUAL("%Y-%M-%d %H:%m:%s,%g", tConf.logFormat(Level::Verbose).dateTimeFormat());
+
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%%logger %%logger %logger %%logger %msg"),
+        tConf.logFormat(Level::Error).userFormat());
+    BOOST_CHECK_EQUAL(ELPP_LITERAL("%%logger %%logger %logger %logger %msg"),
+        tConf.logFormat(Level::Error).format());
+    BOOST_CHECK_EQUAL("", tConf.logFormat(Level::Error).dateTimeFormat());
+}
+
+
+BOOST_AUTO_TEST_CASE(TypedConfigurationsTestSharedFileStreams)
+{
+    Configurations c(getConfFile());
+    TypedConfigurations tConf(&c, ELPP->registeredLoggers()->logStreamsReference());
+    // Make sure we have only two unique file streams for ALL and ERROR
+    el::base::type::EnumType lIndex = LevelHelper::kMinValid;
+    el::base::type::fstream_t* prev = nullptr;
+    LevelHelper::forEachLevel(&lIndex, [&]() -> bool {
+        if (prev == nullptr)
+        {
+            prev = tConf.fileStream(LevelHelper::castFromInt(lIndex));
+        }
+        else
+        {
+            if (LevelHelper::castFromInt(lIndex) == Level::Error)
+            {
+                BOOST_CHECK(prev != tConf.fileStream(LevelHelper::castFromInt(lIndex)));
+            }
+            else
+            {
+                BOOST_CHECK_EQUAL(prev, tConf.fileStream(LevelHelper::castFromInt(lIndex)));
+            }
+        }
+        return false;
+    });
+}
+
+BOOST_AUTO_TEST_CASE(TypedConfigurationsTestNonExistentFileCreation)
+{
+    Configurations c(getConfFile());
+    c.setGlobally(ConfigurationType::Filename, "/tmp/logs/el.gtest.log");
+    c.set(Level::Info, ConfigurationType::ToFile, "true");
+    c.set(Level::Error, ConfigurationType::ToFile, "true");
+    c.set(Level::Info, ConfigurationType::Filename, "/a/file/not/possible/to/create/log.log");
+    c.set(Level::Error, ConfigurationType::Filename, "/tmp/logs/el.gtest.log");
+    TypedConfigurations tConf(&c, ELPP->registeredLoggers()->logStreamsReference());
+    BOOST_CHECK(tConf.toFile(Level::Global));
+    BOOST_CHECK(!tConf.toFile(Level::Info));
+    BOOST_CHECK(tConf.toFile(Level::Error));
+    BOOST_CHECK(nullptr == tConf.fileStream(Level::Info));   // nullptr
+    BOOST_CHECK(nullptr != tConf.fileStream(Level::Error));  // Not null
+}
+
+BOOST_AUTO_TEST_CASE(TypedConfigurationsTestWriteToFiles)
+{
+    std::string testFile = "/tmp/my-test.log";
+    Configurations c(getConfFile());
+    TypedConfigurations tConf(&c, ELPP->registeredLoggers()->logStreamsReference());
+    {
+        BOOST_CHECK(tConf.fileStream(Level::Info)->is_open());
+        BOOST_CHECK_EQUAL(testFile, tConf.filename(Level::Info));
+        *tConf.fileStream(Level::Info) << "-Info";
+        *tConf.fileStream(Level::Debug) << "-Debug";
+        tConf.fileStream(Level::Debug)->flush();
+        *tConf.fileStream(Level::Error) << "-Error";
+        tConf.fileStream(Level::Error)->flush();
+    }
+    std::ifstream reader(tConf.filename(Level::Info), std::fstream::in);
+    std::string line = std::string();
+    std::getline(reader, line);
+    BOOST_CHECK_EQUAL("-Info-Debug", line);
+}
+
+BOOST_AUTO_TEST_CASE(UtilitiesTestSafeDelete)
+{
+    int* i = new int(12);
+    BOOST_CHECK(i != nullptr);
+    safeDelete(i);
+    BOOST_CHECK(nullptr == i);
+}
+
+
+BOOST_AUTO_TEST_CASE(VerboseAppArgumentsTestAppArgsLevel)
+{
+    const char* c[10];
+    c[0] = "myprog";
+    c[1] = "--v=5";
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(VLOG_IS_ON(1));
+    BOOST_CHECK(VLOG_IS_ON(2));
+    BOOST_CHECK(VLOG_IS_ON(3));
+    BOOST_CHECK(VLOG_IS_ON(4));
+    BOOST_CHECK(VLOG_IS_ON(5));
+    BOOST_CHECK(!VLOG_IS_ON(6));
+    BOOST_CHECK(!VLOG_IS_ON(8));
+    BOOST_CHECK(!VLOG_IS_ON(9));
+
+    c[0] = "myprog";
+    c[1] = "--v=x";  // SHOULD BE ZERO NOW!
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(!VLOG_IS_ON(1));
+    BOOST_CHECK(!VLOG_IS_ON(2));
+    BOOST_CHECK(!VLOG_IS_ON(3));
+    BOOST_CHECK(!VLOG_IS_ON(4));
+    BOOST_CHECK(!VLOG_IS_ON(5));
+    BOOST_CHECK(!VLOG_IS_ON(6));
+    BOOST_CHECK(!VLOG_IS_ON(8));
+    BOOST_CHECK(!VLOG_IS_ON(9));
+
+    c[0] = "myprog";
+    c[1] = "-v";  // Sets to max level (9)
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(VLOG_IS_ON(1));
+    BOOST_CHECK(VLOG_IS_ON(2));
+    BOOST_CHECK(VLOG_IS_ON(3));
+    BOOST_CHECK(VLOG_IS_ON(4));
+    BOOST_CHECK(VLOG_IS_ON(5));
+    BOOST_CHECK(VLOG_IS_ON(6));
+    BOOST_CHECK(VLOG_IS_ON(8));
+    BOOST_CHECK(VLOG_IS_ON(9));
+
+    c[0] = "myprog";
+    c[1] = "--verbose";  // Sets to max level (9)
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(VLOG_IS_ON(1));
+    BOOST_CHECK(VLOG_IS_ON(2));
+    BOOST_CHECK(VLOG_IS_ON(3));
+    BOOST_CHECK(VLOG_IS_ON(4));
+    BOOST_CHECK(VLOG_IS_ON(5));
+    BOOST_CHECK(VLOG_IS_ON(6));
+    BOOST_CHECK(VLOG_IS_ON(8));
+    BOOST_CHECK(VLOG_IS_ON(9));
+
+    // ----------------------- UPPER CASE VERSION OF SAME TEST CASES -----------------
+    c[0] = "myprog";
+    c[1] = "--V=5";
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(VLOG_IS_ON(1));
+    BOOST_CHECK(VLOG_IS_ON(2));
+    BOOST_CHECK(VLOG_IS_ON(3));
+    BOOST_CHECK(VLOG_IS_ON(4));
+    BOOST_CHECK(VLOG_IS_ON(5));
+    BOOST_CHECK(!VLOG_IS_ON(6));
+    BOOST_CHECK(!VLOG_IS_ON(8));
+    BOOST_CHECK(!VLOG_IS_ON(9));
+
+    c[0] = "myprog";
+    c[1] = "--V=x";  // SHOULD BECOME ZERO!
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(!VLOG_IS_ON(1));
+    BOOST_CHECK(!VLOG_IS_ON(2));
+    BOOST_CHECK(!VLOG_IS_ON(3));
+    BOOST_CHECK(!VLOG_IS_ON(4));
+    BOOST_CHECK(!VLOG_IS_ON(5));
+    BOOST_CHECK(!VLOG_IS_ON(6));
+    BOOST_CHECK(!VLOG_IS_ON(8));
+    BOOST_CHECK(!VLOG_IS_ON(9));
+
+    c[0] = "myprog";
+    c[1] = "-V";  // Sets to max level (9)
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(VLOG_IS_ON(1));
+    BOOST_CHECK(VLOG_IS_ON(2));
+    BOOST_CHECK(VLOG_IS_ON(3));
+    BOOST_CHECK(VLOG_IS_ON(4));
+    BOOST_CHECK(VLOG_IS_ON(5));
+    BOOST_CHECK(VLOG_IS_ON(6));
+    BOOST_CHECK(VLOG_IS_ON(8));
+    BOOST_CHECK(VLOG_IS_ON(9));
+
+    c[0] = "myprog";
+    c[1] = "--VERBOSE";  // Sets to max level (9)
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+    BOOST_CHECK(VLOG_IS_ON(1));
+    BOOST_CHECK(VLOG_IS_ON(2));
+    BOOST_CHECK(VLOG_IS_ON(3));
+    BOOST_CHECK(VLOG_IS_ON(4));
+    BOOST_CHECK(VLOG_IS_ON(5));
+    BOOST_CHECK(VLOG_IS_ON(6));
+    BOOST_CHECK(VLOG_IS_ON(8));
+    BOOST_CHECK(VLOG_IS_ON(9));
+}
+
+BOOST_AUTO_TEST_CASE(VerboseAppArgumentsTestAppArgsVModules)
+{
+    const char* c[10];
+    c[0] = "myprog";
+    c[1] = "-vmodule=main*=3,easy.\?\?\?=1";
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+
+    BOOST_CHECK((ELPP->vRegistry()->allowed(2, "main.cpp")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(3, "main.h")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(4, "main.c")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(5, "main.cpp")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(2, "main.cxx")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "main.cc")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(3, "main-file-for-prog.cc")));
+
+    el::Loggers::removeFlag(el::LoggingFlag::AllowVerboseIfModuleNotSpecified);  // Check strictly
+
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(4, "tmain.cxx")));
+
+    BOOST_CHECK(ELPP->vRegistry()->allowed(1, "easy.cpp"));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.cxx")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.hxx")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.hpp")));
+
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(2, "easy.cpp")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(2, "easy.cxx")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(2, "easy.hxx")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(2, "easy.hpp")));
+
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(1, "easy.cc")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(1, "easy.hh")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(1, "easy.h")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(1, "easy.c")));
+}
+
+BOOST_AUTO_TEST_CASE(VerboseAppArgumentsTestAppArgsVModulesExtension)
+{
+    el::Loggers::ScopedRemoveFlag scopedFlag(LoggingFlag::DisableVModulesExtensions);
+    ELPP_UNUSED(scopedFlag);
+
+    const char* c[10];
+    c[0] = "myprog";
+    c[1] = "-vmodule=main*=3,easy*=1";
+    c[2] = "\0";
+    el::Helpers::setArgs(2, c);
+
+    BOOST_CHECK((ELPP->vRegistry()->allowed(2, "main.cpp")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(3, "main.h")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(4, "main.c")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(5, "main.cpp")));
+
+    BOOST_CHECK((ELPP->vRegistry()->allowed(2, "main.cxx")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "main.cc")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(3, "main-file-for-prog.cc")));
+    BOOST_CHECK(ELPP->vRegistry()->allowed(1, "easy.cpp"));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.cxx")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.hxx")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.hpp")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.cc")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.hh")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.h")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy.c")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(3, "easy-vector.cc")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(2, "easy-vector.cc")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(1, "easy-vector.cc")));
+}
+
+BOOST_AUTO_TEST_CASE(VerboseAppArgumentsTestVModulesClear)
+{
+    el::Loggers::ScopedRemoveFlag scopedFlag(LoggingFlag::DisableVModulesExtensions);
+    ELPP_UNUSED(scopedFlag);
+
+    const char* c[10];
+    c[0] = "myprog";
+    c[1] = "-vmodule=main*=3,easy*=1";
+    c[2] = "--v=6";
+    c[3] = "\0";
+    el::Helpers::setArgs(3, c);
+
+    BOOST_CHECK((ELPP->vRegistry()->allowed(2, "main.cpp")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(5, "main.cpp")));
+    ELPP->vRegistry()->clearModules();
+    BOOST_CHECK((ELPP->vRegistry()->allowed(2, "main.cpp")));
+    BOOST_CHECK((ELPP->vRegistry()->allowed(5, "main.cpp")));
+    BOOST_CHECK(!(ELPP->vRegistry()->allowed(7, "main.cpp")));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
