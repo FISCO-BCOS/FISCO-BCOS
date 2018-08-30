@@ -32,11 +32,12 @@ using namespace dev::eth;
 
 TransactionBase::TransactionBase(TransactionSkeleton const& _ts, Secret const& _s)
   : m_type(_ts.creation ? ContractCreation : MessageCall),
-    m_nonce(_ts.nonce),
+    m_randomid(_ts.randomid),
     m_value(_ts.value),
     m_receiveAddress(_ts.to),
     m_gasPrice(_ts.gasPrice),
     m_gas(_ts.gas),
+    m_blockLimit(_ts.blockLimit),
     m_data(_ts.data),
     m_sender(_ts.from)
 {
@@ -53,22 +54,23 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
             BOOST_THROW_EXCEPTION(
                 InvalidTransactionFormat() << errinfo_comment("transaction RLP must be a list"));
 
-        m_nonce = rlp[0].toInt<u256>();
+        m_randomid = rlp[0].toInt<u256>();
         m_gasPrice = rlp[1].toInt<u256>();
         m_gas = rlp[2].toInt<u256>();
-        m_type = rlp[3].isEmpty() ? ContractCreation : MessageCall;
-        m_receiveAddress = rlp[3].isEmpty() ? Address() : rlp[3].toHash<Address>(RLP::VeryStrict);
-        m_value = rlp[4].toInt<u256>();
+        m_blockLimit = rlp[3].toInt<u256>();  // 3
+        m_type = rlp[4].isEmpty() ? ContractCreation : MessageCall;
+        m_receiveAddress = rlp[4].isEmpty() ? Address() : rlp[4].toHash<Address>(RLP::VeryStrict);
+        m_value = rlp[5].toInt<u256>();
 
-        if (!rlp[5].isData())
+        if (!rlp[6].isData())
             BOOST_THROW_EXCEPTION(InvalidTransactionFormat()
                                   << errinfo_comment("transaction data RLP must be an array"));
 
-        m_data = rlp[5].toBytes();
+        m_data = rlp[6].toBytes();
 
-        int const v = rlp[6].toInt<int>();
-        h256 const r = rlp[7].toInt<u256>();
-        h256 const s = rlp[8].toInt<u256>();
+        int const v = rlp[7].toInt<int>();
+        h256 const r = rlp[8].toInt<u256>();
+        h256 const s = rlp[9].toInt<u256>();
 
         if (isZeroSignature(r, s))
         {
@@ -93,9 +95,9 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
         if (_checkSig == CheckTransaction::Everything)
             m_sender = sender();
 
-        if (rlp.itemCount() > 9)
+        /*if (rlp.itemCount() > 10)
             BOOST_THROW_EXCEPTION(InvalidTransactionFormat()
-                                  << errinfo_comment("too many fields in the transaction RLP"));
+                                  << errinfo_comment("too many fields in the transaction RLP"));*/
     }
     catch (Exception& _e)
     {
@@ -158,8 +160,8 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forE
     if (m_type == NullTransaction)
         return;
 
-    _s.appendList((_sig || _forEip155hash ? 3 : 0) + 6);
-    _s << m_nonce << m_gasPrice << m_gas;
+    _s.appendList((_sig || _forEip155hash ? 3 : 0) + 7);
+    _s << m_randomid << m_gasPrice << m_gas << m_blockLimit;
     if (m_type == MessageCall)
         _s << m_receiveAddress;
     else
@@ -213,6 +215,15 @@ int64_t TransactionBase::baseGasRequired(
     for (auto i : _data)
         g += i ? _es.txDataNonZeroGas : _es.txDataZeroGas;
     return g;
+}
+
+bigint TransactionBase::gasRequired(
+    bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es, u256 const& _gas)
+{
+    bigint ret = (_contractCreation ? _es.txCreateGas : _es.txGas) + _gas;
+    for (auto i : _data)
+        ret += i ? _es.txDataNonZeroGas : _es.txDataZeroGas;
+    return ret;
 }
 
 h256 TransactionBase::sha3(IncludeSignature _sig) const
