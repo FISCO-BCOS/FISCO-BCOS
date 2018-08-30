@@ -22,6 +22,7 @@
 
 #include <libdevcore/Common.h>
 #include <libethcore/BlockHeader.h>
+#include "Transaction.h"
 
 #pragma once
 
@@ -30,7 +31,7 @@ namespace dev
 namespace eth
 {
 
-class Transaction;
+//class Transaction;
 
 /// @brief Verified block info, does not hold block data, but a reference instead
 struct VerifiedBlockRef

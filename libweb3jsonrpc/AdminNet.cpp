@@ -25,7 +25,6 @@
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
-#include <libethereum/NodeConnParamsManagerApi.h>
 #include <libethereum/EthereumPeer.h>
 #include <libethereum/EthereumHost.h>
 #include "AdminNet.h"
@@ -123,6 +122,7 @@ bool AdminNet::admin_addPeer(string const& _node)
 //add new peer info
 bool AdminNet::admin_addNodePubKeyInfo(string const& _node)
 {
+#if 0
 	bool bRet = false;
 	LOG(INFO) << "AdminNet::admin_addNodePubKeyInfo |" << _node << "\n";
 	NodeConnParams nodeParam(_node);
@@ -143,12 +143,19 @@ bool AdminNet::admin_addNodePubKeyInfo(string const& _node)
 	NodeConnManagerSingleton::GetInstance().sendNodeInfoSync(vParams);
 
 	LOG(INFO) << "admin_addNodePubKeyInfo sendNodeInfoSync.node id is " << nodeParam._sNodeId  << "\n";
+
+	//不进行连接，连接以合约中的为主
+	//进行连接 需要序列化出他的enode信息
+//	NodeConnManagerSingleton::GetInstance().connNode(nodeParam);
+	return true;
+#endif
 	return true;
 }
 
 //delete peer info in config
 bool AdminNet::admin_delNodePubKeyInfo(string const& _node)
 {
+#if 0
 	bool bExisted = false;
 	LOG(INFO) << "AdminNet::admin_delNodePubKeyInfo |" << _node << "\n";
 
@@ -158,6 +165,11 @@ bool AdminNet::admin_delNodePubKeyInfo(string const& _node)
 	{
 		//broadcast to add new protocol
 		NodeConnManagerSingleton::GetInstance().sendDelNodeInfoSync(_node);
+
+		//断掉连接以合约为主，这里主要做配置的同步落地
+		////需要断掉连接
+		//NodeConnManagerSingleton::GetInstance().disconnNode(_node);
+		//LOG(INFO) << "delNodeconninfo node exiteds. node id is : " << _node << "\n";
 	}
 	else
 	{
@@ -166,11 +178,14 @@ bool AdminNet::admin_delNodePubKeyInfo(string const& _node)
 
 
 	return true;
+#endif
+	return true;
 }
 
 //show all public keys info
 Json::Value AdminNet::admin_NodePubKeyInfos()
 {
+#if 0
 	Json::Value ret;
 	std::map<std::string, eth::NodeConnParams> mNodeConnParams;
 	NodeConnManagerSingleton::GetInstance().getAllNodeConnInfoContract(mNodeConnParams);
@@ -181,10 +196,13 @@ Json::Value AdminNet::admin_NodePubKeyInfos()
 	}
 
 	return ret;
+#endif
+	return Json::Value();
 }
 
 Json::Value AdminNet::admin_ConfNodePubKeyInfos()
 {
+#if 0
 	Json::Value ret;
 	std::map<std::string, eth::NodeConnParams> mNodeConnParams;
 	NodeConnManagerSingleton::GetInstance().getAllConfNodeConnInfo(mNodeConnParams);
@@ -195,4 +213,6 @@ Json::Value AdminNet::admin_ConfNodePubKeyInfos()
 	}
 
 	return ret;
+#endif
+	return Json::Value();
 }

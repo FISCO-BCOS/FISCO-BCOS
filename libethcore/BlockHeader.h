@@ -132,7 +132,7 @@ public:
 
 	h256 hash(IncludeSeal _i = WithSeal) const;
 	void streamRLP(RLPStream& _s, IncludeSeal _i = WithSeal) const;
-
+	void setDBHash(h256 dbHash) { m_hash_list[1] = dbHash; }
 	void setParentHash(h256 const& _v) { m_parentHash = _v; noteDirty(); }
 	void setSha3Uncles(h256 const& _v) { m_sha3Uncles = _v; noteDirty(); }
 	void setTimestamp(u256 const& _v) { m_timestamp = _v; noteDirty(); }
@@ -151,6 +151,7 @@ public:
 	void setHashList(h256s const& _list) { m_hash_list = _list; noteDirty(); }
 	void setStrList(std::vector<std::string> const& _list) { m_str_list = _list; noteDirty(); }
 
+	h256 const& dbHash() const { return m_hash_list[1]; }
 	h256 const& parentHash() const { return m_parentHash; }
 	h256 const& sha3Uncles() const { return m_sha3Uncles; }
 	u256 const& timestamp() const { return m_timestamp; }

@@ -30,7 +30,6 @@
 #include <libwhisper/WhisperHost.h>
 #include <libethereum/ClientTest.h>
 //#include <libethashseal/EthashClient.h>
-#include <libethereum/NodeConnParamsManagerApi.h>
 #include <libsinglepoint/SinglePointClient.h>
 #include "BuildInfo.h"
 //#include <libethashseal/Ethash.h>
@@ -38,6 +37,7 @@
 #include <libpbftseal/PBFTClient.h>
 #include <libraftseal/Raft.h>
 #include <libraftseal/RaftClient.h>
+#include <libinitializer/Initializer.h>
 #include "Swarm.h"
 #include "Support.h"
 #include <libdevcore/FileSystem.h>
@@ -53,23 +53,13 @@ WebThreeDirect::WebThreeDirect(
     eth::ChainParams const& _params,
     WithExisting _we,
     std::set<std::string> const& _interfaces,
-    NetworkPreferences const& _n,
-    bytesConstRef _network,
     bool _testing
 ):
 	m_clientVersion(_clientVersion)
 {
-	if (dev::getSSL() == SSL_SOCKET_V2)
-	{
-		m_net = new  HostSSL(_clientVersion,CertificateServer::GetInstance().keypair(),_n);
-	}
-	else
-	{
-		m_net = new Host(_clientVersion,_n,_network,_params.statsInterval);
-	}
+	m_net = _params.getInitializer()->p2pInitializer()->host();
 	LOG(INFO) << "My enode:" << enode();
-	//set NodeConnParamsManager's NetworkFace pointer
-	NodeConnManagerSingleton::GetInstance().setNetworkFace(this);
+
 	if (_dbPath.size())
 		Defaults::setDBPath(_dbPath);
 	if (_interfaces.count("eth"))
@@ -112,15 +102,8 @@ WebThreeDirect::WebThreeDirect(
 		m_ethereum->setExtraData(rlpList(0, string(dev::Version) + "++" + string(DEV_QUOTED(ETH_COMMIT_HASH)).substr(0, 4) + (ETH_CLEAN_REPO ? "-" : "*") + string(DEV_QUOTED(ETH_BUILD_TYPE)).substr(0, 1) + boost::join(bps, "/")));
 	}
 
-	if (_interfaces.count("shh"))
-		m_whisper = m_net->registerCapability(make_shared<WhisperHost>());
-
-	if (_interfaces.count("bzz"))
-	{
-		m_swarm.reset(new bzz::Client(this));
-	}
-
 	m_support = make_shared<Support>(this);
+	m_ethereum->setNetworkId(u256(0));
 }
 
 WebThreeDirect::~WebThreeDirect()
@@ -136,14 +119,7 @@ WebThreeDirect::~WebThreeDirect()
 	// the guarantee is that m_ethereum is only reset *after* all sessions have ended (sessions are allowed to
 	// use bits of data owned by m_ethereum).
 	m_net->stop();
-	m_ethereum.reset();
-}
-
-bzz::Interface* WebThreeDirect::swarm() const
-{
-	if (!m_swarm)
-		BOOST_THROW_EXCEPTION(InterfaceNotSupported("bzz"));
-	return m_swarm.get();
+	//m_ethereum.reset();
 }
 
 std::string WebThreeDirect::composeClientVersion(std::string const& _client)
@@ -204,17 +180,17 @@ bytes WebThreeDirect::saveNetwork()
 
 void WebThreeDirect::addNode(NodeID const& _node, bi::tcp::endpoint const& _host)
 {
-	m_net->addNode(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
+	//m_net->addNode(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
 }
 
 void WebThreeDirect::requirePeer(NodeID const& _node, bi::tcp::endpoint const& _host)
 {
-	m_net->requirePeer(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
+	//m_net->requirePeer(_node, NodeIPEndpoint(_host.address(), _host.port(), _host.port()));
 }
 
 void WebThreeDirect::addPeer(NodeSpec const& _s, PeerType _t)
 {
 	LOG(DEBUG) << "WebThreeDirect::addPeer ";
-	m_net->addPeer(_s, _t);
+	//m_net->addPeer(_s, _t);
 }
 

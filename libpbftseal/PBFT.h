@@ -31,6 +31,9 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/SealEngine.h>
 #include <libethereum/CommonNet.h>
+#include <libethereum/BlockQueue.h>
+#include <libdevcore/FixedHash.h>
+#include <libstorage/StateStorage.h>
 #include "Common.h"
 #include "PBFTHost.h"
 
@@ -43,9 +46,11 @@ namespace eth
 DEV_SIMPLE_EXCEPTION(PbftInitFailed);
 DEV_SIMPLE_EXCEPTION(UnexpectError);
 
-class PBFT: public SealEngineFace, Worker
+class PBFT: public SealEngineFace, Worker, public std::enable_shared_from_this<PBFT>
 {
 public:
+	typedef std::shared_ptr<PBFT> Ptr;
+
 	PBFT();
 	virtual ~PBFT();
 
@@ -62,7 +67,7 @@ public:
 	unsigned accountType() const { return m_account_type; }
 	u256 view() const { return m_view; }
 	u256 to_view() const {return m_to_view; }
-	u256 quorum() const { return m_node_num - m_f; }
+	//u256 quorum() const { return m_node_num - m_f; }
 	const BlockHeader& getHighestBlock() const { return m_highest_block; } 
 	bool isLeader() {
 		auto ret = getLeader();
@@ -92,12 +97,16 @@ public:
 
 	void onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const& _r);
 
-	h512s getMinerNodeList() const {  /*Guard l(m_mutex);*/ return m_miner_list; }
+	h512s getMinerNodeList();
+	void setMinerNodeList(h512s minerList);
 
 	void changeViewForEmptyBlockWithoutLock(u256 const& _from);
 	void changeViewForEmptyBlockWithLock();
 
+	u256 quorum() { return getMinerNodeList().size() - m_f; }
 	uint64_t lastExecFinishTime() const { return m_last_exec_finish_time; }
+
+	void setStorage(dev::storage::StateStorage::Ptr storage);
 private:
 	void initBackupDB();
 	void resetConfig();
@@ -111,14 +120,11 @@ private:
 
 	void collectGarbage();
 
-
-	bool getMinerList(int _blk_no, h512s & _miner_list) const;
-
-	std::pair<bool, u256> getLeader() const;
+	std::pair<bool, u256> getLeader();
 
 	Signature signHash(h256 const& _hash) const;
-	bool checkSign(u256 const& _idx, h256 const& _hash, Signature const& _sign) const;
-	bool checkSign(PBFTMsg const& _req) const;
+	bool checkSign(u256 const& _idx, h256 const& _hash, Signature const& _sign);
+	bool checkSign(PBFTMsg const& _req);
 
 	// 广播消息
 	// broadcast msg
@@ -127,8 +133,8 @@ private:
 	bool broadcastCommitReq(PrepareReq const & _req);
 	bool broadcastViewChangeReq();
 	bool broadcastMsg(std::string const& _key, unsigned _id, bytes const& _data, std::unordered_set<h512> const& _filter = std::unordered_set<h512>());
-	bool broadcastFilter(std::string const& _key, unsigned _id, shared_ptr<PBFTPeer> _p);
-	void broadcastMark(std::string const& _key, unsigned _id, shared_ptr<PBFTPeer> _p);
+	bool broadcastFilter(std::string const& _key, unsigned _id, std::shared_ptr<PBFTPeer> _p);
+	void broadcastMark(std::string const& _key, unsigned _id, std::shared_ptr<PBFTPeer> _p);
 	void clearMask();
 
 	// 处理响应消息
@@ -167,10 +173,13 @@ private:
 	void backupMsg(std::string const& _key, PBFTMsg const& _msg);
 	void reloadMsg(std::string const& _key, PBFTMsg * _msg);
 
+	dev::h512 getMinerByIndex(size_t index);
+	ssize_t getIndexByMiner(dev::h512 nodeID);
+
 private:
 	mutable Mutex m_mutex;
 
-	unsigned m_account_type;
+	unsigned m_account_type = 0;
 	KeyPair m_key_pair;
 	std::string m_sealer = "pbft";
 
@@ -178,13 +187,12 @@ private:
 	std::function<void()> m_onViewChange;
 
 	std::weak_ptr<PBFTHost> m_host;
-	std::shared_ptr<BlockChain> m_bc;
-	std::shared_ptr<OverlayDB> m_stateDB;
-	std::shared_ptr<BlockQueue> m_bq;
+	BlockChain *m_bc;
+	OverlayDB *m_stateDB;
 
 	u256 m_node_idx = 0;
 	u256 m_view = 0;
-	u256 m_node_num = 0;
+	//u256 m_node_num = 0;
 	u256 m_f = 0;
 
 	unsigned m_view_timeout;
@@ -209,9 +217,14 @@ private:
 	std::chrono::system_clock::time_point m_last_collect_time;
 
 	BlockHeader m_highest_block;
-	u256 m_consensus_block_number; // the block which is waiting consensus 在等待共识的块
+	u256 m_consensus_block_number; // 在等待共识的块
 
-	h512s m_miner_list;
+	h512s m_miner_list; //static miner list
+	dev::storage::StateStorage::Ptr _storage;
+
+	Mutex _current_miner_mutex; //miner list mutex
+	u256 _current_miner_num = u256(0); //cached miners block num
+	h512s _current_miner_list; //cached miner list
 
 	bool m_cfg_err = false;
 
@@ -226,7 +239,7 @@ private:
 	// msg queue 消息队列
 	PBFTMsgQueue m_msg_queue;
 
-	static const unsigned kCollectInterval; // second
+	static const unsigned kCollectInterval = 60; // second
 	static const size_t kKnownPrepare = 1024;
 	static const size_t kKnownSign = 1024;
 	static const size_t kKnownCommit = 1024;

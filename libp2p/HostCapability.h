@@ -17,8 +17,8 @@
 /** @file HostCapability.h
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
- * @author toxotguo
- * @date 2018
+ *
+ * Miscellanea required for the Host/Session classes.
  */
 
 #pragma once
@@ -36,9 +36,7 @@ namespace p2p
 
 class HostCapabilityFace
 {
-	friend class HostApi;
 	friend class Host;
-	friend class HostSSL;
 	template <class T> friend class HostCapability;
 	friend class Capability;
 	friend class Session;
@@ -47,7 +45,7 @@ public:
 	HostCapabilityFace() {}
 	virtual ~HostCapabilityFace() {}
 
-	HostApi* host() const { return m_host; }
+	Host* host() const { return m_host; }
 
 	std::vector<std::pair<std::shared_ptr<SessionFace>, std::shared_ptr<Peer>>> peerSessions() const;
 	std::vector<std::pair<std::shared_ptr<SessionFace>, std::shared_ptr<Peer>>> peerSessions(u256 const& _version) const;
@@ -64,7 +62,7 @@ protected:
 	virtual void onStopping() {}
 
 private:
-	HostApi* m_host = nullptr;
+	Host* m_host = nullptr;
 };
 
 template<class PeerCap>
@@ -85,7 +83,7 @@ protected:
 
 	virtual std::shared_ptr<Capability> newPeerCapability(std::shared_ptr<SessionFace> const& _s, unsigned _idOffset, CapDesc const& _cap, uint16_t _capID)
 	{
-		_s->registerFraming(_capID);
+		//_s->registerFraming(_capID);
 		auto p = std::make_shared<PeerCap>(_s, this, _idOffset, _cap, _capID);
 		_s->registerCapability(_cap, p);
 		return p;

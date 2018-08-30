@@ -31,7 +31,7 @@ using namespace dev;
 void Worker::startWorking()
 {
 //	LOG(INFO) << "startWorking for thread" << m_name;
-	Guard l(x_work);
+	DEV_RECURSIVE_GUARDED(x_work);
 	if (m_work)
 	{
 		WorkerState ex = WorkerState::Stopped;
@@ -64,7 +64,8 @@ void Worker::startWorking()
 				}
 				catch (std::exception const& _e)
 				{
-					LOG(ERROR) << "Exception thrown in Worker thread[" << m_name << "]: " << _e.what();
+					LOG(ERROR) << "Exception thrown in Worker thread[" << m_name << "]: " << _e.what()
+							<< " " << boost::diagnostic_information(_e);
 				}
 
 //				ex = WorkerState::Stopping;
@@ -90,22 +91,37 @@ void Worker::startWorking()
 
 void Worker::stopWorking()
 {
-	DEV_GUARDED(x_work)
-		if (m_work)
-		{
-			WorkerState ex = WorkerState::Started;
-			m_state.compare_exchange_strong(ex, WorkerState::Stopping);
+	DEV_RECURSIVE_GUARDED(x_work)
+	if (m_work) {
+		WorkerState ex = WorkerState::Started;
+		m_state.compare_exchange_strong(ex, WorkerState::Stopping);
+	}
+	else {
+		return;
+	}
 
-			DEV_TIMED_ABOVE("Stop worker", 100)
-				while (m_state != WorkerState::Stopped)
-					this_thread::sleep_for(chrono::microseconds(20));
+	DEV_TIMED_ABOVE("Stop worker", 100)
+	while (true) {
+		bool stop = false;
+
+		DEV_RECURSIVE_GUARDED(x_work) {
+			if(m_state == WorkerState::Stopped) {
+				stop = true;
+			}
 		}
+
+		if(stop) {
+			break;
+		}
+
+		this_thread::sleep_for(chrono::microseconds(20));
+	}
 }
 
 void Worker::terminate()
 {
 //	LOG(INFO) << "stopWorking for thread" << m_name;
-	DEV_GUARDED(x_work)
+	DEV_RECURSIVE_GUARDED(x_work)
 		if (m_work)
 		{
 			m_state.exchange(WorkerState::Killing);

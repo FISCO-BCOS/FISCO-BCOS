@@ -25,7 +25,7 @@
 #include "BlockChain.h"
 #include "Executive.h"
 #include "State.h"
-#include "SystemContractApi.h"
+// #include "SystemContractApi.h"
 #include <libdevcore/easylog.h>
 
 using namespace std;
@@ -87,27 +87,16 @@ ExecutionResult ClientBase::call(Address const& _from, u256 _value, Address _des
 	ExecutionResult ret;
 	try
 	{
-		
-		// In source c++-ethereum, funcion 'call' would construct a temp block, when this block is not a recently generated block, eth would load this block from db(Block::populateFromChain)
-		// In this case, we add 'BlockCache' in BlockChain.cpp to cache recent 10 block
-		// Thus, when 'call' is be called, we first try to find whether this block is in cache.
-		Block temp(Block::NullType::Null);
-		bool hit = false;
-		if (_blockNumber > 0) {
-			auto hash = bc().numberHash(_blockNumber);
-			if (hash != h256()) { // found in db
-				std::pair<Block, u256> ret = bc().getBlockCache(hash);
-				if (ret.first.info().number() != Invalid256) {  // use block height to decide whether hit the cache
-					temp = ret.first;
-					hit = true;
-				}
-			} 
-		}
-		if(!hit)
-			temp = block(_blockNumber);
-		// Block temp = block(_blockNumber);
+		Block temp = block(_blockNumber);
 		temp.setEvmEventLog(bc().chainParams().evmEventLog);
 
+		dev::precompiled::BlockInfo blockInfo;
+		blockInfo.hash = temp.info().hash();
+		blockInfo.number = temp.info().number();
+
+		LOG(DEBUG)<< "precompiled: Block::sync beforeBlock:" << blockInfo.hash << " " << blockInfo.number;
+
+		bc().precompiledEngineFactory()->initPrecompiledContext(blockInfo, temp.precompiledContext());
 		u256 nonce = max<u256>(temp.transactionsFrom(_from), m_tq.maxNonce(_from));
 		u256 gas = _gas == Invalid256 ? gasLimitRemaining() : _gas;
 		u256 gasPrice = _gasPrice == Invalid256 ? gasBidPrice() : _gasPrice;
@@ -118,12 +107,7 @@ ExecutionResult ClientBase::call(Address const& _from, u256 _value, Address _des
 		if (_ff == FudgeFactor::Lenient)
 			temp.mutableState().addBalance(_from, (u256)(t.gas() * t.gasPrice() + t.value()));
 
-		u256 check = bc().filterCheck(t, FilterCheckScene::CheckCall);
-		if ( (u256)SystemContractCode::Ok != check  )
-		{
-			BOOST_THROW_EXCEPTION(NoCallPermission());
-		}
-		ret = temp.execute(bc().lastHashes(), t, Permanence::Reverted);
+		ret = temp.execute(bc().lastHashes(), t, Permanence::Reverted, OnOpFunc(), &bc());
 
 	}
 	catch (...)
@@ -147,7 +131,7 @@ ExecutionResult ClientBase::create(Address const& _from, u256 _value, bytes cons
 		t.forceSender(_from);
 		if (_ff == FudgeFactor::Lenient)
 			temp.mutableState().addBalance(_from, (u256)(t.gas() * t.gasPrice() + t.value()));
-		ret = temp.execute(bc().lastHashes(), t, Permanence::Reverted);
+		ret = temp.execute(bc().lastHashes(), t, Permanence::Reverted, OnOpFunc(), &bc());
 	}
 	catch (...)
 	{

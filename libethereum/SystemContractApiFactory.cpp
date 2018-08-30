@@ -1,3 +1,4 @@
+#if 0
 #include "SystemContractApi.h"
 #include "SystemContractApiFactory.h"
 #include "SystemContract.h"
@@ -18,3 +19,4 @@ std::shared_ptr<SystemContractApi> SystemContractApiFactory::create(const Addres
 		return shared_ptr<SystemContractApi>(new SystemContract(_address, _god, _client));
 	}
 }
+#endif

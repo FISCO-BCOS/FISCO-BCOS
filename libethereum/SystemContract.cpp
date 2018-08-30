@@ -19,7 +19,7 @@
  * @author: toxotguo
  * @date: 2018
  */
-
+#if 0
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
@@ -799,3 +799,4 @@ ExecutionResult SystemContract::call(Address const& _to, bytes const& _inputdata
     }
     return ret;
 }
+#endif

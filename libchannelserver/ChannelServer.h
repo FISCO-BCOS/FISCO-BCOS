@@ -16,9 +16,9 @@
 */
 /**
  * @file: ChannelServer.h
- * @author: fisco-dev
+ * @author: monan
  * 
- * @date: 2017
+ * @date: 2018
  */
 
 #pragma once
@@ -34,6 +34,7 @@
 #include <boost/asio/ssl.hpp>
 #include <libdevcore/FixedHash.h>
 
+#include "Message.h"
 #include "ChannelException.h"
 #include "ChannelSession.h"
 #include "ThreadPool.h"
@@ -45,6 +46,8 @@ namespace channel {
 
 class ChannelServer: public std::enable_shared_from_this<ChannelServer> {
 public:
+	typedef std::shared_ptr<ChannelServer> Ptr;
+
 	void run();
 
 	void onAccept(const boost::system::error_code& error, ChannelSession::Ptr session);
@@ -63,6 +66,9 @@ public:
 	void setIOService(std::shared_ptr<boost::asio::io_service> ioService) { _ioService = ioService; };
 	void setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext) { _sslContext = sslContext; };
 
+	MessageFactory::Ptr messageFactory() { return _messageFactory; }
+	void setMessageFactory(MessageFactory::Ptr messageFactory) { _messageFactory = messageFactory; }
+
 	void stop();
 
 private:
@@ -77,6 +83,7 @@ private:
 	ThreadPool::Ptr _threadPool;
 
 	std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> _connectionHandler;
+	MessageFactory::Ptr _messageFactory;
 
 	std::string _listenHost = "";
 	int _listenPort = 0;

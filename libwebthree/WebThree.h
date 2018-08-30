@@ -32,8 +32,6 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/Exceptions.h>
 #include <libp2p/Host.h>
-#include <libp2p/HostSSL.h>
-#include <libwhisper/WhisperHost.h>
 #include <libethereum/Client.h>
 #include <libethereum/ChainParams.h>
 
@@ -105,8 +103,6 @@ public:
 	/// Get enode string.
 	virtual std::string enode() const = 0;
 
-	virtual void disconnectByNodeId(const std::string &sNodeId) = 0;
-
 	virtual eth::Client* ethereum() const = 0;
 };
 
@@ -132,8 +128,6 @@ public:
 	    eth::ChainParams const& _params,
 	    WithExisting _we = WithExisting::Trust,
 	    std::set<std::string> const& _interfaces = {"eth", "shh", "bzz"},
-	    p2p::NetworkPreferences const& _n = p2p::NetworkPreferences(),
-	    bytesConstRef _network = bytesConstRef(),
 	    bool _testing = false
 	);
 
@@ -143,12 +137,8 @@ public:
 	// The mainline interfaces:
 
 	eth::Client* ethereum() const { if (!m_ethereum) BOOST_THROW_EXCEPTION(InterfaceNotSupported("eth")); return m_ethereum.get(); }
-	std::shared_ptr<shh::WhisperHost> whisper() const { auto w = m_whisper.lock(); if (!w) BOOST_THROW_EXCEPTION(InterfaceNotSupported("shh")); return w; }
-	bzz::Interface* swarm() const;
 
 	Support* support() const { return m_support.get(); }
-
-	// Misc stuff:
 
 	static std::string composeClientVersion(std::string const& _client);
 	std::string const& clientVersion() const { return m_clientVersion; }
@@ -208,9 +198,9 @@ public:
 
 	std::string enode() const override { return m_net->enode(); }
 
-	//bool getSelfSignData(Signature &_sign) const { return m_net->getSelfSignData(_sign); }
+	bool getSelfSignData(Signature &_sign) const { return m_net->getSelfSignData(_sign); }
 
-	void disconnectByNodeId(const std::string &sNodeId) { return m_net->disconnectByNodeId(sNodeId); }
+	//void disconnectByNodeId(const std::string &sNodeId) { return m_net.disconnectByNodeId(sNodeId); }
 
 	/// Gets the nodes.
 	p2p::Peers nodes() const override { return m_net->getPeers(); }
@@ -224,16 +214,14 @@ public:
 	/// Is network working? there may not be any peers yet.
 	bool isNetworkStarted() const override { return m_net->isStarted(); }
 
-	p2p::HostApi const& net() {return *m_net;}
+	p2p::Host const& net() {return *m_net;}
 
 private:
 	std::string m_clientVersion;					///< Our end-application client's name/version.
 
-	//p2p::HostApi m_net;								///< Should run in background and send us events when blocks found and allow us to send blocks as required.
-	HostApi*	m_net;
+	p2p::Host::Ptr m_net;								///< Should run in background and send us events when blocks found and allow us to send blocks as required.
+
 	std::unique_ptr<eth::Client> m_ethereum;		///< Client for Ethereum ("eth") protocol.
-	std::weak_ptr<shh::WhisperHost> m_whisper;		///< Client for Whisper ("shh") protocol.
-	std::shared_ptr<bzz::Client> m_swarm;			///< Client for Swarm ("bzz") protocol.
 
 	std::shared_ptr<Support> m_support;
 };
@@ -263,22 +251,6 @@ public:
 
 // TODO, probably move into shh:
 
-class WhisperSlave: public shh::Interface
-{
-public:
-	WhisperSlave(RPCSlave*) {}
-
-	// TODO: implement all of the virtuals with the RLPClient link.
-};
-
-class WhisperMaster
-{
-public:
-	WhisperMaster(RPCMaster*) {}
-
-	// TODO: implement the master-end of whatever the RLPClient link will send over.
-};
-
 /**
  * @brief Main API hub for interfacing with Web 3 components.
  *
@@ -297,7 +269,6 @@ public:
 	// The mainline interfaces.
 
 	eth::Interface* ethereum() const { if (!m_ethereum) BOOST_THROW_EXCEPTION(InterfaceNotSupported("eth")); return m_ethereum; }
-	shh::Interface* whisper() const { if (!m_whisper) BOOST_THROW_EXCEPTION(InterfaceNotSupported("shh")); return m_whisper; }
 	bzz::Interface* swarm() const { BOOST_THROW_EXCEPTION(InterfaceNotSupported("bzz")); }
 
 	// Peer network stuff - forward through RPCSlave, probably with P2PNetworkSlave/Master classes like Whisper & Ethereum.
@@ -322,7 +293,6 @@ public:
 
 private:
 	EthereumSlave* m_ethereum = nullptr;
-	WhisperSlave* m_whisper = nullptr;
 
 	// TODO:
 	RPCSlave m_rpcSlave;

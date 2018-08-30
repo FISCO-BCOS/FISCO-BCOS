@@ -28,7 +28,6 @@ using namespace dev::eth;
 using namespace p2p;
 #include <libp2p/Host.h>
 using namespace dev::p2p;
-class HostApi;
 
 void PBFTHost::foreachPeer(std::function<bool(std::shared_ptr<PBFTPeer>)> const& _f) const
 {

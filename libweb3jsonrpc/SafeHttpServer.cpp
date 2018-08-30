@@ -23,6 +23,7 @@
 #include <microhttpd.h>
 #include <sstream>
 #include "SafeHttpServer.h"
+#include <libethereum/Client.h>
 #include "DfsFileServer.h"
 
 using namespace std;
@@ -42,10 +43,10 @@ bool SafeHttpServer::SendResponse(string const& _response, void* _addInfo)
 {
 	struct mhd_coninfo* client_connection = static_cast<struct mhd_coninfo*>(_addInfo);
 	struct MHD_Response *result = MHD_create_response_from_buffer(
-	                                  _response.size(),
-	                                  static_cast<void *>(const_cast<char *>(_response.c_str())),
-	                                  MHD_RESPMEM_MUST_COPY
-	                              );
+		_response.size(),
+		static_cast<void *>(const_cast<char *>(_response.c_str())),
+		MHD_RESPMEM_MUST_COPY
+	);
 
 	MHD_add_response_header(result, "Content-Type", "application/json");
 	MHD_add_response_header(result, "Access-Control-Allow-Origin", m_allowedOrigin.c_str());
