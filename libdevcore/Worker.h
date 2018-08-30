@@ -44,6 +44,8 @@ enum class WorkerState
     Killing
 };
 
+void setThreadName(std::string const&);
+
 class Worker
 {
 protected:

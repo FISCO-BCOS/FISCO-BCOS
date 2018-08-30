@@ -23,7 +23,6 @@
 
 #include "Common.h"
 #include "RLP.h"
-#include "easylog.h"
 #include <unordered_map>
 
 namespace dev
