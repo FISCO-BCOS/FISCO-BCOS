@@ -32,7 +32,6 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/SHA3.h>
-#include <libscrypt/libscrypt.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
@@ -293,25 +292,6 @@ bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
     return _p == recover(_s, _hash);
 }
 
-bytesSec dev::pbkdf2(string const& _pass, bytes const& _salt, unsigned _iterations, unsigned _dkLen)
-{
-    bytesSec ret(_dkLen);
-    if (CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA256>().DeriveKey(ret.writable().data(), _dkLen, 0,
-            reinterpret_cast<byte const*>(_pass.data()), _pass.size(), _salt.data(), _salt.size(),
-            _iterations) != _iterations)
-        BOOST_THROW_EXCEPTION(CryptoException() << errinfo_comment("Key derivation failed."));
-    return ret;
-}
-
-bytesSec dev::scrypt(std::string const& _pass, bytes const& _salt, uint64_t _n, uint32_t _r,
-    uint32_t _p, unsigned _dkLen)
-{
-    bytesSec ret(_dkLen);
-    if (libscrypt_scrypt(reinterpret_cast<uint8_t const*>(_pass.data()), _pass.size(), _salt.data(),
-            _salt.size(), _n, _r, _p, ret.writable().data(), _dkLen) != 0)
-        BOOST_THROW_EXCEPTION(CryptoException() << errinfo_comment("Key derivation failed."));
-    return ret;
-}
 
 KeyPair::KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec))
 {
@@ -330,23 +310,6 @@ KeyPair KeyPair::create()
     }
 }
 
-KeyPair KeyPair::fromEncryptedSeed(bytesConstRef _seed, std::string const& _password)
-{
-    return KeyPair(Secret(sha3(aesDecrypt(_seed, _password))));
-}
-
-h256 crypto::kdf(Secret const& _priv, h256 const& _hash)
-{
-    // H(H(r||k)^h)
-    h256 s;
-    sha3mac(Secret::random().ref(), _priv.ref(), s.ref());
-    s ^= _hash;
-    sha3(s.ref(), s.ref());
-
-    if (!s || !_hash || !_priv)
-        BOOST_THROW_EXCEPTION(InvalidState());
-    return s;
-}
 
 Secret Nonce::next()
 {

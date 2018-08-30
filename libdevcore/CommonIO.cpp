@@ -48,38 +48,6 @@ void createDirectoryIfNotExistent(boost::filesystem::path const& _path)
 
 }  // namespace
 
-string memDump(bytes const& _bytes, unsigned _width, bool _html)
-{
-    stringstream ret;
-    if (_html)
-        ret << "<pre style=\"font-family: Monospace,Lucida Console,Courier,Courier New,sans-serif; "
-               "font-size: small\">";
-    for (unsigned i = 0; i < _bytes.size(); i += _width)
-    {
-        ret << hex << setw(4) << setfill('0') << i << " ";
-        for (unsigned j = i; j < i + _width; ++j)
-            if (j < _bytes.size())
-                if (_bytes[j] >= 32 && _bytes[j] < 127)
-                    if ((char)_bytes[j] == '<' && _html)
-                        ret << "&lt;";
-                    else if ((char)_bytes[j] == '&' && _html)
-                        ret << "&amp;";
-                    else
-                        ret << (char)_bytes[j];
-                else
-                    ret << '?';
-            else
-                ret << ' ';
-        ret << " ";
-        for (unsigned j = i; j < i + _width && j < _bytes.size(); ++j)
-            ret << setfill('0') << setw(2) << hex << (unsigned)_bytes[j] << " ";
-        ret << "\n";
-    }
-    if (_html)
-        ret << "</pre>";
-    return ret.str();
-}
-
 template <typename _T>
 inline _T contentsGeneric(boost::filesystem::path const& _file)
 {
@@ -149,33 +117,4 @@ void copyDirectory(boost::filesystem::path const& _srcDir, boost::filesystem::pa
     for (fs::directory_iterator file(_srcDir); file != fs::directory_iterator(); ++file)
         fs::copy_file(file->path(), _dstDir / file->path().filename());
 }
-
-std::string getPassword(std::string const& _prompt)
-{
-    struct termios oflags;
-    struct termios nflags;
-    char password[256];
-
-    // disable echo in the terminal
-    tcgetattr(fileno(stdin), &oflags);
-    nflags = oflags;
-    nflags.c_lflag &= ~ECHO;
-    nflags.c_lflag |= ECHONL;
-
-    if (tcsetattr(fileno(stdin), TCSANOW, &nflags) != 0)
-        BOOST_THROW_EXCEPTION(ExternalFunctionFailure() << errinfo_externalFunction("tcsetattr"));
-
-    printf("%s", _prompt.c_str());
-    if (!fgets(password, sizeof(password), stdin))
-        BOOST_THROW_EXCEPTION(ExternalFunctionFailure() << errinfo_externalFunction("fgets"));
-    password[strlen(password) - 1] = 0;
-
-    // restore terminal
-    if (tcsetattr(fileno(stdin), TCSANOW, &oflags) != 0)
-        BOOST_THROW_EXCEPTION(ExternalFunctionFailure() << errinfo_externalFunction("tcsetattr"));
-
-
-    return password;
-}
-
 }  // namespace dev

@@ -145,14 +145,6 @@ Signature sign(Secret const& _k, h256 const& _hash);
 /// Verify signature.
 bool verify(Public const& _k, Signature const& _s, h256 const& _hash);
 
-/// Derive key via PBKDF2.
-bytesSec pbkdf2(
-    std::string const& _pass, bytes const& _salt, unsigned _iterations, unsigned _dkLen = 32);
-
-/// Derive key via Scrypt.
-bytesSec scrypt(std::string const& _pass, bytes const& _salt, uint64_t _n, uint32_t _r, uint32_t _p,
-    unsigned _dkLen);
-
 /// Simple class that represents a "key pair".
 /// All of the data of the class can be regenerated from the secret key (m_secret) alone.
 /// Actually stores a tuplet of secret, public and address (the right 160-bits of the public).
@@ -166,9 +158,6 @@ public:
 
     /// Create a new, randomly generated object.
     static KeyPair create();
-
-    /// Create from an encrypted seed.
-    static KeyPair fromEncryptedSeed(bytesConstRef _seed, std::string const& _password);
 
     Secret const& secret() const { return m_secret; }
 
@@ -190,9 +179,6 @@ private:
 namespace crypto
 {
 DEV_SIMPLE_EXCEPTION(InvalidState);
-
-/// Key derivation
-h256 kdf(Secret const& _priv, h256 const& _hash);
 
 /**
  * @brief Generator for non-repeating nonce material.
