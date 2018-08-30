@@ -20,7 +20,6 @@
  * @date 2018
  */
 
-#include "../libdevcore/MemTrie.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/TransientDirectory.h>
@@ -31,7 +30,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
-#include <fstream>
+
 using namespace std;
 using namespace dev;
 using namespace dev::test;
