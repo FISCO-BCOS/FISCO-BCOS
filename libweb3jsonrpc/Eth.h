@@ -67,14 +67,15 @@ namespace rpc
 class Eth: public dev::rpc::EthFace
 {
 public:
-	Eth(eth::Interface& _eth, eth::AccountHolder& _ethAccounts);
+	//Eth(eth::Interface& _eth, eth::AccountHolder& _ethAccounts);
+	Eth(eth::Interface& _eth);
 
 	virtual RPCModules implementedModules() const override
 	{
 		return RPCModules{RPCModule{"eth", "1.0"}};
 	}
 
-	eth::AccountHolder const& ethAccounts() const { return m_ethAccounts; }
+	//eth::AccountHolder const& ethAccounts() const { return m_ethAccounts; }
 
 	virtual std::string eth_protocolVersion() override;
 	virtual std::string eth_hashrate() override;
@@ -168,7 +169,7 @@ protected:
 	eth::Interface* client() { return &m_eth; }
 
 	eth::Interface& m_eth;
-	eth::AccountHolder& m_ethAccounts;
+	//eth::AccountHolder& m_ethAccounts;
 
 	bool isUTXOTx(Json::Value const& _json);
 	string utxoCall(Json::Value const& _json);

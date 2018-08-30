@@ -8,7 +8,7 @@ add_library(contract ${SRC_LIST} ${HEADERS})
 
 find_package(Dev)
 
-target_include_directories(contract PRIVATE ..)
+target_include_directories(contract PRIVATE .. ${JSONCPP_INCLUDE_DIR})
 target_link_libraries(contract ${Dev_DEVCORE_LIBRARIES})
 
 install(TARGETS contract RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)

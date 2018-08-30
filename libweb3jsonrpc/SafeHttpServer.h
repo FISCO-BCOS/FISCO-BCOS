@@ -23,12 +23,15 @@
 
 #include <string>
 #include "libstatistics/RateLimitHttpServer.h"
-#include <libethereum/Client.h>
 #include <libdevcore/easylog.h>
 #include "dfs/DfsFileServer.h"
 
 namespace dev
 {
+	
+namespace eth{
+class Client;
+}
 
 class SafeHttpServer: public jsonrpc::HttpServer
 {

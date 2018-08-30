@@ -35,6 +35,10 @@ ETH_SIMPLE_EXCEPTION_VM(OutOfStack);
 ETH_SIMPLE_EXCEPTION_VM(StackUnderflow);
 ETH_SIMPLE_EXCEPTION_VM(EthCallIdNotFound);
 
+struct UnexpectedException: virtual Exception {};
+#define ETH_UNEXPECTED_EXCEPTION(X) struct X: virtual UnexpectedException { const char* what() const noexcept override { return #X; } }
+ETH_UNEXPECTED_EXCEPTION(PrecompiledError);
+
 /// EVM Virtual Machine interface
 class VMFace
 {

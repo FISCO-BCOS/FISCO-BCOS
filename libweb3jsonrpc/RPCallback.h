@@ -60,7 +60,7 @@ namespace dev {
             SSPtr getSessionInfoByHash(std::string hash);
             
             //set accountHolder for sign
-            void setAccountHolder(AccountHolder* _ethAccounts) { m_ethAccounts = _ethAccounts;}
+            //void setAccountHolder(AccountHolder* _ethAccounts) { m_ethAccounts = _ethAccounts;}
         private:
             RPCallback();
             unordered_map<std::string, SSPtr> m_hashSessionMap;

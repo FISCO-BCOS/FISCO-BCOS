@@ -25,6 +25,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/ChainOperationParams.h>
 #include <libethcore/BlockHeader.h>
+// #include <libinitializer/Initializer.h>
 #include "Account.h"
 
 namespace dev
@@ -33,6 +34,7 @@ namespace eth
 {
 
 class SealEngineFace;
+class Initializer;
 
 struct ChainParams: public ChainOperationParams
 {
@@ -45,6 +47,7 @@ struct ChainParams: public ChainOperationParams
 	SealEngineFace* createSealEngine();
 
 	/// Genesis params.
+	h256 dbHash = h256();
 	h256 parentHash = h256();
 	Address author = Address();
 	u256 difficulty = 1;
@@ -69,8 +72,12 @@ struct ChainParams: public ChainOperationParams
 	ChainParams loadGenesis(std::string const& _json, h256 const& _stateRoot = h256()) const;
 	ChainParams loadGodMiner(std::string const& _json) const;
 
+	std::shared_ptr<Initializer> getInitializer() const { return _initializer; };
+	void setInitializer(std::shared_ptr<Initializer> initializer);
 private:
+	void init();
 	void populateFromGenesis(bytes const& _genesisRLP, AccountMap const& _state);
+	std::shared_ptr<Initializer> _initializer;
 };
 
 }

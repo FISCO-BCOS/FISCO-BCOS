@@ -20,7 +20,7 @@
  * @author: toxotguo
  * @date: 2018
  */
-
+#if 0
 #pragma once
 #include <libdevcore/Guards.h>
 #include <libdevcore/Common.h>
@@ -139,4 +139,4 @@ private:
 }
 
 
-
+#endif

@@ -28,7 +28,6 @@
 #include <libethereum/Interface.h>
 #include <libethereum/BlockChain.h>
 #include <libethereum/EthereumHost.h>
-#include <libethereum/NodeConnParamsManagerApi.h>
 #include <libdevcrypto/Common.h>
 #include "Raft.h"
 #include <libdevcore/easylog.h>
@@ -86,6 +85,7 @@ StringHashMap Raft::jsInfo(BlockHeader const& _bi) const
 }
 
 void Raft::resetConfig() {
+#if 0
 	if (! NodeConnManagerSingleton::GetInstance().getAccountType(m_key_pair.pub(), m_account_type)) {
 		LOG(WARNING) << "resetConfig: can't find myself id, stop sealing";
 		m_cfg_err = true;
@@ -116,12 +116,13 @@ void Raft::resetConfig() {
 	}
 
 	m_cfg_err = false;
+#endif
 }
 
 bool Raft::shouldSeal(Interface*)
 {
 	RecursiveGuard l(m_mutex);
-	if (m_cfg_err || m_account_type != EN_ACCOUNT_TYPE_MINER || m_state != EN_STATE_LEADER) {
+	if (m_cfg_err || m_account_type != 1u || m_state != EN_STATE_LEADER) {
 		return false;
 	}
 
@@ -156,15 +157,17 @@ void Raft::reportBlock(BlockHeader const & _b) {
 
 void Raft::onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
 	if (_id <= RaftHeartBeatRespPacket) {
-		NodeID nodeid;
+		p2p::NodeID nodeid;
 		auto session = _peer->session();
 		if (session && (nodeid = session->id()))
 		{
 			u256 idx = u256(0);
+#if 0
 			if (!NodeConnManagerSingleton::GetInstance().getIdx(nodeid, idx)) {
 				LOG(WARNING) << "Recv an raft msg from unknown peer id=" << _id;
 				return;
 			}
+#endif
 			LOG(INFO) << "onRaftMsg: id=" << _id << ",from=" << idx;
 			m_msg_queue.push(RaftMsgPacket(idx, nodeid, _id, _r[0].data()));
 		}
@@ -181,7 +184,7 @@ void Raft::onRaftMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 void Raft::workLoop() {
 	while (isWorking())
 	{
-		if (m_cfg_err || m_account_type != EN_ACCOUNT_TYPE_MINER) {
+		if (m_cfg_err || m_account_type != 1u) {
 			this_thread::sleep_for(std::chrono::milliseconds(1000));
 			continue;
 		}
@@ -508,15 +511,16 @@ void Raft::brocastMsg(unsigned _id, bytes const & _data) {
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<RaftPeer> _p)
 		{
-			NodeID nodeid;
+			p2p::NodeID nodeid;
 			auto session = _p->session();
 			if (session && (nodeid = session->id()))
 			{
 				unsigned account_type = 0;
-				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type) || account_type != EN_ACCOUNT_TYPE_MINER ) {
+#if 0
+				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type) || account_type != 1u ) {
 					return true;
 				}
-
+#endif
 				RLPStream ts;
 				_p->prep(ts, _id, 1).append(_data);
 				_p->sealAndSend(ts);
@@ -541,7 +545,7 @@ bool Raft::sendResponse(u256 const & _to, h512 const & _node, unsigned _id, Raft
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<RaftPeer> _p)
 		{
-			NodeID nodeid;
+			p2p::NodeID nodeid;
 			auto session = _p->session();
 			if (session && (nodeid = session->id()))
 			{

@@ -22,7 +22,7 @@
  */
 
 #include <libethereum/Block.h>
-
+#include <boost/filesystem.hpp>
 #include "UTXOSharedData.h"
 
 namespace UTXOModel

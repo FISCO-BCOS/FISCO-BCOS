@@ -16,9 +16,9 @@
 */
 /**
  * @file: ChannelServer.cpp
- * @author: fisco-dev
+ * @author: monan
  * 
- * @date: 2017
+ * @date: 2018
  */
 
 #include "ChannelServer.h"
@@ -38,11 +38,11 @@ void dev::channel::ChannelServer::run() {
 
 		boost::asio::socket_base::reuse_address optionReuseAddress(true);
 		_acceptor->set_option(optionReuseAddress);
-
 	}
 
 	_serverThread = std::make_shared<std::thread>([=]() {
 			pthread_setThreadName("ChannelServer" );
+
 			while (true) {
 				try {
 					startAccept();
@@ -52,9 +52,10 @@ void dev::channel::ChannelServer::run() {
 					LOG(ERROR) << "IO thread error:" << e.what();
 				}
 
-				LOG(ERROR) << "try restart ";
+				LOG(ERROR) << "Try restart";
 
 				sleep(1);
+
 				if(_ioService->stopped()) {
 					_ioService->reset();
 				}
@@ -68,30 +69,34 @@ void dev::channel::ChannelServer::run() {
 void dev::channel::ChannelServer::onAccept(const boost::system::error_code& error, ChannelSession::Ptr session) {
 	if (!error) {
 		auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint();
-		LOG(TRACE) << "receive new connection: " << remoteEndpoint.address().to_string() << ":" << remoteEndpoint.port();
+		LOG(TRACE) << "Receive new connection: " << remoteEndpoint.address().to_string() << ":" << remoteEndpoint.port();
 
 		session->setHost(remoteEndpoint.address().to_string());
 		session->setPort(remoteEndpoint.port());
 
 		if (_enableSSL) {
-			LOG(TRACE) << "start SSL handshake";
+			LOG(TRACE) << "Start SSL handshake";
 			session->sslSocket()->async_handshake(
 			    boost::asio::ssl::stream_base::server,
 			    boost::bind(&ChannelServer::onHandshake, shared_from_this(),
 			                boost::asio::placeholders::error, session));
 		}
 		else {
-			_connectionHandler(ChannelException(-1, error.message()), session);
+			LOG(TRACE) << "Call connectionHandler";
+
+			if (_connectionHandler) {
+				_connectionHandler(ChannelException(), session);
+			}
 		}
 	}
 	else {
-		LOG(ERROR) << "accept error: " << error.message();
+		LOG(ERROR) << "Accept failed: " << error.message();
 
 		try {
 			session->sslSocket()->lowest_layer().close();
 		}
 		catch (std::exception &e) {
-			LOG(ERROR) << "close error" << e.what();
+			LOG(ERROR) << "Close error" << e.what();
 		}
 	}
 
@@ -103,15 +108,12 @@ void dev::channel::ChannelServer::startAccept() {
 		ChannelSession::Ptr session = std::make_shared<ChannelSession>();
 		session->setThreadPool(_threadPool);
 		session->setIOService(_ioService);
+		session->setEnableSSL(_enableSSL);
+		session->setMessageFactory(_messageFactory);
 
-		if (_enableSSL) {
-			session->setSSLSocket(std::make_shared<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> >(*_ioService, *_sslContext));
+		session->setSSLSocket(std::make_shared<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> >(*_ioService, *_sslContext));
 
-			_acceptor->async_accept(session->sslSocket()->lowest_layer(), boost::bind(&ChannelServer::onAccept, shared_from_this(), boost::asio::placeholders::error, session));
-		}
-		else {
-			//session->setSocket(std::make_shared())
-		}
+		_acceptor->async_accept(session->sslSocket()->lowest_layer(), boost::bind(&ChannelServer::onAccept, shared_from_this(), boost::asio::placeholders::error, session));
 	}
 	catch (std::exception &e) {
 		LOG(ERROR) << "ERROR:" << e.what();
@@ -129,16 +131,16 @@ void dev::channel::ChannelServer::asyncConnect(std::string host, int port, std::
 
 void dev::channel::ChannelServer::stop() {
 	try {
-		LOG(DEBUG) << "close acceptor";
+		LOG(DEBUG) << "Close acceptor";
 
 		_acceptor->close();
 	}
 	catch (std::exception &e) {
-		LOG(ERROR) << "ERRROR:" << e.what();
+		LOG(ERROR) << "ERROR:" << e.what();
 	}
 
 	try {
-		LOG(DEBUG) << "close ioService";
+		LOG(DEBUG) << "Close ioService";
 		_ioService->stop();
 	}
 	catch (std::exception &e) {
@@ -159,12 +161,13 @@ void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& e
 		}
 		else {
 			LOG(ERROR) << "SSL handshake error: " << error.message();
+			//_connectionHandler(ChannelException(-1, "SSL handshake error"), session);
 
 			try {
 				session->sslSocket()->lowest_layer().close();
 			}
 			catch (std::exception &e) {
-				LOG(ERROR) << "shutdown error:" << e.what();
+				LOG(ERROR) << "Close error:" << e.what();
 			}
 		}
 	}

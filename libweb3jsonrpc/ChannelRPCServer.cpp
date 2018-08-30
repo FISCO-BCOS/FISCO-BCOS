@@ -36,6 +36,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/random.hpp>
 #include <libethereum/EthereumHost.h>
+#include <libp2p/Common.h>
 #include <libdevcore/easylog.h>
 #include <uuid/uuid.h>
 #include "JsonHelper.h"
@@ -51,7 +52,7 @@ ChannelRPCServer::~ChannelRPCServer() {
 bool ChannelRPCServer::StartListening() {
 	if (!_running)
 	{
-		LOG(INFO) << "start ChannelRPCServer: " << _listenAddr << ":" << _listenPort;
+		LOG(TRACE) << "Start ChannelRPCServer: " << _listenAddr << ":" << _listenPort;
 
 		_ioService = std::make_shared<boost::asio::io_service>();
 		
@@ -81,12 +82,15 @@ bool ChannelRPCServer::StartListening() {
 				try {
 						auto host = _host.lock();
 						if(host) {
-					_host.lock()->sendTopicsMessage(p2p::NodeID(), 0, _host.lock()->getTopicsSeq(), std::make_shared<std::set<std::string> >());
+							host->sendTopicsMessage(p2p::NodeID(), 0, _host.lock()->getTopicsSeq(), std::make_shared<std::set<std::string> >());
+						}
+					}
+					catch (std::exception &e) {
+						LOG(ERROR) << "Send topics error:" << e.what();
+					}
 				}
-					}
-				catch (std::exception &e) {
-						LOG(ERROR) << "send topics error:" << e.what();
-					}
+				else {
+					break;
 				}
 			}
 		});
@@ -136,7 +140,7 @@ void ChannelRPCServer::initSSLContext()
 {
 	vector< pair<string,Public> >  certificates;
 	string nodepri;
-	CertificateServer::GetInstance().getCertificateList(certificates,nodepri);
+	//CertificateServer::GetInstance().getCertificateList(certificates,nodepri);
 
 	EC_KEY * ecdh=EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
 	SSL_CTX_set_tmp_ecdh(_sslContext->native_handle(),ecdh);
@@ -165,7 +169,8 @@ void ChannelRPCServer::initSSLContext()
 bool ChannelRPCServer::StopListening()
 {
 	if (_running) {
-		_ioService->stop();
+		//_ioService->stop();
+		_server->stop();
 	}
 
 	_running = false;
@@ -186,7 +191,8 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
 		std::shared_ptr<bytes> resp(new bytes());
 
-		dev::channel::Message::Ptr message = make_shared<dev::channel::Message>();
+		//dev::channel::ChannelMessage::Ptr message = make_shared<dev::channel::ChannelMessage>();
+		auto message = it->second->messageFactory()->buildMessage();
 		message->setSeq(it->first);
 		message->setResult(0);
 		message->setType(0x12);
@@ -277,11 +283,13 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 		LOG(INFO) << "receive sdk message length:" << message->length() << " type:" << message->type() << " sessionID:" << message->seq();
 
 		switch (message->type()) {
-		case 0x20:
-		case 0x21:
+#if 0
+		case 0x20: //链上链下请求 废弃
+		case 0x21: //链上链下响应 废弃
 			onClientMessage(session, message);
 			break;
-		case 0x12:
+#endif
+		case 0x12://普通区块链请求
 			onClientEthereumRequest(session, message);
 			break;
 		case 0x13:
@@ -316,7 +324,8 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 	}
 }
 
-void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
+#if 0
+void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelMessage::Ptr message) {
 	LOG(DEBUG) << "receive sdk channel message";
 
 	if (message->dataSize() < 128) {
@@ -355,6 +364,7 @@ void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr se
 		session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
 	}
 }
+#endif
 
 void dev::ChannelRPCServer::onClientEthereumRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
 	//LOG(DEBUG) << "receive client ethereum request";
@@ -510,7 +520,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 }
 
 void dev::ChannelRPCServer::onNodeRequest(h512 nodeID, std::shared_ptr<dev::bytes> message) {
-	auto msg = std::make_shared<dev::channel::Message>();
+	auto msg = _server->messageFactory()->buildMessage();
 	ssize_t result = msg->decode(message->data(), message->size());
 
 	if (result <= 0) {
@@ -521,12 +531,14 @@ void dev::ChannelRPCServer::onNodeRequest(h512 nodeID, std::shared_ptr<dev::byte
 	LOG(DEBUG) << "receive node mssage length:" << message->size() << " type:" << msg->type() << " seq:" << msg->seq();
 
 	switch (msg->type()) {
-	case 0x20:
-	case 0x21:
+#if 0
+	case 0x20: //链上链下请求 废弃
+	case 0x21: //链上链下响应 废弃
 		onNodeMessage(nodeID, msg);
 		break;
-	case 0x30:
-	case 0x31:
+#endif
+	case 0x30: //链上链下二期请求
+	case 0x31: //链上链下二期响应
 		onNodeChannelRequest(nodeID, msg);
 		break;
 	default:
@@ -534,7 +546,8 @@ void dev::ChannelRPCServer::onNodeRequest(h512 nodeID, std::shared_ptr<dev::byte
 	}
 }
 
-void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::Message::Ptr message) {
+#if 0
+void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::ChannelMessage::Ptr message) {
 	LOG(DEBUG) << "receive other node channel message:" << message->dataSize() + 14;
 
 	try {
@@ -589,6 +602,7 @@ void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::Message::Pt
 		LOG(ERROR) << "ERROR:" << e.what();
 	}
 }
+#endif
 
 void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message) {
 	LOG(DEBUG) << "receive from node:" << nodeID << " chanel message size:" << message->dataSize() + 14;
@@ -725,6 +739,10 @@ void ChannelRPCServer::setSSLContext(std::shared_ptr<boost::asio::ssl::context> 
 	_sslContext = sslContext;
 }
 
+void ChannelRPCServer::setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server) {
+	_server = server;
+}
+
 void ChannelRPCServer::asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
 		std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback) {
 	try {
@@ -825,7 +843,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic, dev::channel::
 	}
 }
 
-dev::channel::TopicMessage::Ptr ChannelRPCServer::pushChannelMessage(dev::channel::TopicMessage::Ptr message) {
+dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(dev::channel::TopicChannelMessage::Ptr message) {
 	try {
 		std::string topic = message->topic();
 
@@ -838,12 +856,12 @@ dev::channel::TopicMessage::Ptr ChannelRPCServer::pushChannelMessage(dev::channe
 			throw dev::channel::ChannelException(103, "send failed，no node follow topic:" + topic);
 		}
 
-		dev::channel::TopicMessage::Ptr response;
+		dev::channel::TopicChannelMessage::Ptr response;
 		for(auto it: activedSessions) {
 			dev::channel::Message::Ptr responseMessage = it->sendMessage(message, 0);
 
 			if(responseMessage.get() != NULL && responseMessage->result() == 0) {
-				response = std::make_shared<TopicMessage>(responseMessage.get());
+				response = std::make_shared<TopicChannelMessage>(responseMessage.get());
 				break;
 			}
 		}
@@ -895,7 +913,7 @@ dev::channel::TopicMessage::Ptr ChannelRPCServer::pushChannelMessage(dev::channe
 		throw e;
 	}
 
-	return dev::channel::TopicMessage::Ptr();
+	return dev::channel::TopicChannelMessage::Ptr();
 }
 
 std::string ChannelRPCServer::newSeq() {

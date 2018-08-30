@@ -17,8 +17,6 @@
 /** @file HostCapability.cpp
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
-*  @author toxotguo
- * @date 2018
  */
 
 #include "HostCapability.h"
