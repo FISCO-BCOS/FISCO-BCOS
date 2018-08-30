@@ -34,6 +34,7 @@ BOOST_AUTO_TEST_CASE(testLevelDBKeyExist)
     std::string key = "hellow";
     dev::db::Slice sliceKey(key.data(), key.size());
     BOOST_CHECK(ldb.exists(sliceKey) == false);
+    boost::filesystem::remove_all(path);
 }
 
 BOOST_AUTO_TEST_CASE(testLevelDBKeyValue)
@@ -55,6 +56,7 @@ BOOST_AUTO_TEST_CASE(testLevelDBKeyValue)
 
     ldb.kill(sliceKey);
     BOOST_CHECK(ldb.exists(sliceKey) == false);
+    boost::filesystem::remove_all(path);
 }
 
 BOOST_AUTO_TEST_CASE(testLevelDBBatch)
@@ -84,6 +86,8 @@ BOOST_AUTO_TEST_CASE(testLevelDBBatch)
         BOOST_CHECK(ret == value);
         ldb.kill(sliceKey);
     }
+
+    boost::filesystem::remove_all(path);
 }
 
 BOOST_AUTO_TEST_CASE(testLevelDBForeach)
@@ -108,6 +112,8 @@ BOOST_AUTO_TEST_CASE(testLevelDBForeach)
     BOOST_CHECK(count == 1);
 
     ldb.kill(sliceKey);
+
+    boost::filesystem::remove_all(path);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
