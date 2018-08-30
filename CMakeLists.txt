@@ -49,7 +49,6 @@ include(EthDependencies)
 include(EthUtils)
 
 include(ProjectOpenSSL)
-include(ProjectBoost)
 include(ProjectCryptopp)
 include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
@@ -60,10 +59,13 @@ if (GROUPSIG)
 endif()
 
 if (ZKG_VERIFY)
-include(ProjectLibZkg)
+    include(ProjectLibZkg)
 endif()
 
 configure_project(CPUID CURL EVMJIT FATDB ROCKSDB PARANOID VMTRACE)
+if(BUILD_BOOST)
+include(ProjectBoost)
+endif()
 
 add_subdirectory(eth)
 add_subdirectory(libdevcore)
@@ -85,9 +87,14 @@ if (NOT EMSCRIPTEN)
 endif()
 
 add_subdirectory(libchannelserver)
+add_subdirectory(libconsole)
+add_subdirectory(libprecompiled)
+add_subdirectory(libstorage)
 add_subdirectory(libweb3jsonrpc)
 add_subdirectory(libwebthree)
+add_subdirectory(libinitializer)
 add_subdirectory(libwhisper)
+add_subdirectory(doc)
 add_subdirectory(abi)
 add_subdirectory(UTXO)
 add_subdirectory(utils)
@@ -98,3 +105,4 @@ endif()
 
 # TODO - split out json_spirit, libscrypt and sec256k1
 
+add_subdirectory(unittest)

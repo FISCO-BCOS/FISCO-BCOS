@@ -34,7 +34,6 @@
 #include "BlockQueue.h"
 #include "EthereumPeer.h"
 #include "BlockChainSync.h"
-#include "NodeConnParamsManagerApi.h"
 #include "StatLog.h"
 
 using namespace std;
@@ -456,7 +455,6 @@ EthereumHost::EthereumHost(BlockChain const& _ch, OverlayDB const& _db, Transact
 	m_sync.reset(new BlockChainSync(*this));
 	m_peerObserver = make_shared<EthereumPeerObserver>(*m_sync, x_sync, m_tq);
 
-	NodeConnManagerSingleton::GetInstance().setEthereumHost(this);
 	m_latestBlockSent = _ch.currentHash();
 	m_tq.onImport([this](ImportResult _ir, h256 const & _h, h512 const & _nodeId) { onTransactionImported(_ir, _h, _nodeId); });
 

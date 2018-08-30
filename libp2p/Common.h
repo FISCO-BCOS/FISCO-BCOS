@@ -40,7 +40,6 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/Guards.h>
-
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
 
@@ -73,10 +72,8 @@ bool isPublicAddress(std::string const& _addressToCheck);
 
 class UPnP;
 class Capability;
-class HostApi;
 class Host;
 class Session;
-
 
 struct NetworkStartRequired: virtual dev::Exception {};
 struct InvalidPublicIPAddress: virtual dev::Exception {};
@@ -90,8 +87,6 @@ enum PacketType
 	PongPacket,
 	GetPeersPacket,
 	PeersPacket,
-	GetAnnouncementHashPacket,
-	AnnouncementPacket,
 	UserPacket = 0x10
 };
 
@@ -135,16 +130,30 @@ using CapDesc = std::pair<std::string, u256>;
 using CapDescSet = std::set<CapDesc>;
 using CapDescs = std::vector<CapDesc>;
 
+/*
+ * Used by Host to pass negotiated information about a connection to a
+ * new Peer Session; PeerSessionInfo is then maintained by Session and can
+ * be queried for point-in-time status information via Host.
+ */
+struct PeerSessionInfo
+{
+	NodeID const id;
+	std::string const clientVersion;
+	std::string const host;
+	unsigned short const port;
+	std::chrono::steady_clock::duration lastPing;
+	std::set<CapDesc> const caps;
+	unsigned socketId;
+	std::map<std::string, std::string> notes;
+	unsigned const protocolVersion;
+};
+
+using PeerSessionInfos = std::vector<PeerSessionInfo>;
 
 enum class PeerType
 {
 	Optional,
 	Required
-};
-
-class HostResolver{
-	public:
-		static boost::asio::ip::address query(std::string);
 };
 
 /**
@@ -164,18 +173,8 @@ public:
 
 	NodeIPEndpoint() = default;
 	NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp): address(_addr), udpPort(_udp), tcpPort(_tcp) {}
-	NodeIPEndpoint(std::string _host, uint16_t _udp, uint16_t _tcp):  udpPort(_udp), tcpPort(_tcp) ,host(_host)
-	{
-		address = HostResolver::query(host);
-	}
 	NodeIPEndpoint(RLP const& _r) { interpretRLP(_r); }
-	NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint )
-	{
-		address = _nodeIPEndpoint.address;
-		udpPort = _nodeIPEndpoint.udpPort;
-		tcpPort = _nodeIPEndpoint.tcpPort;
-		host = _nodeIPEndpoint.host;
-	}
+
 	operator bi::udp::endpoint() const { return bi::udp::endpoint(address, udpPort); }
 	operator bi::tcp::endpoint() const { return bi::tcp::endpoint(address, tcpPort); }
 	
@@ -187,58 +186,28 @@ public:
 	}
 
 	bool operator==(NodeIPEndpoint const& _cmp) const {
-		if ( address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort )
-			return true;
-		if ( udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort )
-		{
-			if ((address.to_string() == "0.0.0.0" && _cmp.address.to_string() == "127.0.0.1") 
-				|| (address.to_string() == "127.0.0.1" && _cmp.address.to_string() == "0.0.0.0"))
-				return true;
-		}
-		return false;
+		return address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort;
  	}
 	bool operator!=(NodeIPEndpoint const& _cmp) const {
-		return !operator == (_cmp);
+		return !operator==(_cmp);
  	}
 	
+	bool operator<(const dev::p2p::NodeIPEndpoint &rhs) const {
+		if(address < rhs.address) {
+			return true;
+		}
+
+		return tcpPort < rhs.tcpPort;
+	}
+
 	void streamRLP(RLPStream& _s, RLPAppend _append = StreamList) const;
 	void interpretRLP(RLP const& _r);
-	std::string name()const {
-		std::ostringstream os;
-		os << address.to_string() << ":" << tcpPort << ":" << udpPort;
-		return os.str();
-	}
-	bool	isValid()
-	{
-		return (! address.to_string().empty()) && (tcpPort != 0 );
-	}
+
 	// TODO: make private, give accessors and rename m_...
 	bi::address address;
 	uint16_t udpPort = 0;
 	uint16_t tcpPort = 0;
-	std::string host;
 };
-
-/*
- * Used by Host to pass negotiated information about a connection to a
- * new Peer Session; PeerSessionInfo is then maintained by Session and can
- * be queried for point-in-time status information via Host.
- */
-struct PeerSessionInfo
-{
-	NodeID const id;
-	std::string const clientVersion;
-	std::string const host;
-	unsigned short const port;
-	std::chrono::steady_clock::duration lastPing;
-	std::set<CapDesc> const caps;
-	unsigned socketId;
-	std::map<std::string, std::string> notes;
-	unsigned const protocolVersion;
-	NodeIPEndpoint nodeIPEndpoint;
-};
-
-using PeerSessionInfos = std::vector<PeerSessionInfo>;
 
 struct NodeSpec
 {
@@ -342,7 +311,10 @@ private:
 	
 /// Simple stream output for a NodeIPEndpoint.
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep);
+
 }
+
+
 
 /// std::hash for asio::adress
 namespace std

@@ -19,7 +19,7 @@
  * @author: toxotguo
  * @date: 2018
  */
-
+#if 0
 #pragma once
 
 #include <libdevcore/Common.h>
@@ -27,7 +27,6 @@
 #include <libdevcrypto/Common.h>
 
 #include "Transaction.h"
-#include "NodeConnParamsManager.h"
 
 using namespace std;
 using namespace dev::eth;
@@ -182,5 +181,5 @@ class SystemContractApi
 }
 }
 
-
+#endif
 

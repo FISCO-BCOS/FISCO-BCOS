@@ -26,7 +26,7 @@
 #include <libethcore/SealEngine.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Precompiled.h>
-#include <libethereum/NodeConnParamsManagerApi.h>
+#include <libinitializer/Initializer.h>
 #include "GenesisInfo.h"
 #include "State.h"
 #include "Account.h"
@@ -38,6 +38,18 @@ namespace js = json_spirit;
 
 ChainParams::ChainParams()
 {
+	init();
+}
+
+ChainParams::ChainParams(string const& _json, h256 const& _stateRoot)
+{
+	*this = loadConfig(_json, _stateRoot);
+	//构造函数调用会构造新对象，不会对调用者产生影响，所以用初始化函数对初始化对象。
+	init();
+}
+
+void ChainParams::init()
+{
 	for (unsigned i = 1; i <= 4; ++i)
 		genesisState[Address(i)] = Account(0, 1);
 	// Setup default precompiled contracts as equal to genesis of Frontier.
@@ -45,12 +57,6 @@ ChainParams::ChainParams()
 	precompiled.insert(make_pair(Address(2), PrecompiledContract(60, 12, PrecompiledRegistrar::executor("sha256"))));
 	precompiled.insert(make_pair(Address(3), PrecompiledContract(600, 120, PrecompiledRegistrar::executor("ripemd160"))));
 	precompiled.insert(make_pair(Address(4), PrecompiledContract(15, 3, PrecompiledRegistrar::executor("identity"))));
-}
-
-ChainParams::ChainParams(string const& _json, h256 const& _stateRoot)
-{
-	*this = loadConfig(_json, _stateRoot);
-	ChainParams();
 }
 
 ChainParams ChainParams::loadGodMiner(std::string const& _json) const
@@ -118,6 +124,7 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	cp.storagePath = obj.count("dfsStorage") ? obj["dfsStorage"].get_str() : "";
 	cp.statLog = obj.count("statlog") ? ( (obj["statlog"].get_str() == "ON") ? true : false) : false;
 	cp.broadcastToNormalNode = obj.count("broadcastToNormalNode") ? ( (obj["broadcastToNormalNode"].get_str() == "ON") ? true : false) : false;
+	cp.AMOPDBTopic = obj["db_topic"].get_str();
 	// params
 	if( obj.count("params") )
 	{
@@ -212,6 +219,10 @@ SealEngineFace* ChainParams::createSealEngine()
 	return ret;
 }
 
+void ChainParams::setInitializer(Initializer::Ptr initializer) {
+	 _initializer = initializer;
+}
+
 void ChainParams::populateFromGenesis(bytes const& _genesisRLP, AccountMap const& _state)
 {
 	BlockHeader bi(_genesisRLP, RLP(&_genesisRLP)[0].isList() ? BlockData : HeaderData);
@@ -275,6 +286,7 @@ bytes ChainParams::genesisBlock() const
 	}
 
 	block.appendList(BlockHeader::BasicFields + sealFields)
+			<< dbHash
 	        << parentHash
 	        << EmptyListSHA3	// sha3(uncles)
 	        << author

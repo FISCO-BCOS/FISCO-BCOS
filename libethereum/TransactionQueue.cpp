@@ -26,7 +26,7 @@
 #include "Transaction.h"
 #include "TransactionQueue.h"
 #include "StatLog.h"
-#include "SystemContractApi.h"
+// #include "SystemContractApi.h"
 
 using namespace std;
 using namespace dev;
@@ -36,7 +36,7 @@ using namespace dev::eth;
 
 const size_t c_maxVerificationQueueSize = 8192;
 
-TransactionQueue::TransactionQueue(std::shared_ptr<Interface> _interface, unsigned _limit, unsigned _futureLimit):
+TransactionQueue::TransactionQueue(Interface *_interface, unsigned _limit, unsigned _futureLimit):
 	m_current(PriorityCompare { *this }),
 	m_limit(_limit),
 	m_futureLimit(_futureLimit)
@@ -62,7 +62,7 @@ TransactionQueue::~TransactionQueue()
 
 std::pair<ImportResult, h256> TransactionQueue::import(bytesConstRef _transactionRLP, IfDropped _ik)
 {
-	//LOG(TRACE) << "TransactionQueue::import ";
+	LOG(TRACE) << "TransactionQueue::import ";
 	// Check if we already know this transaction.
 	h256 h = sha3(_transactionRLP);
 
@@ -81,6 +81,7 @@ std::pair<ImportResult, h256> TransactionQueue::import(bytesConstRef _transactio
 			// If it doesn't work, the signature is bad.
 			// The transaction's nonce may yet be invalid (or, it could be "valid" but we may be missing a marginally older transaction).
 			//LOG(TRACE)<<"TransactionQueue::import befor check ";
+			m_interface->startStatTranscation(h);
 
 			t = Transaction(_transactionRLP, CheckTransaction::Everything);
 			if (t.isCNS())
@@ -144,7 +145,7 @@ Transactions TransactionQueue::topTransactions(unsigned _limit, h256Hash const& 
 		if (!_avoid.count(t->transaction.sha3()))
 		{
 			ret.push_back(t->transaction);
-			//LOG(TRACE) << "TransactionQueue::topTransactions " << t->transaction.sha3() << ",nonce=" << t->transaction.randomid();
+			LOG(TRACE) << "TransactionQueue::topTransactions " << t->transaction.sha3() << ",nonce=" << t->transaction.randomid();
 		}
 
 	LOG(TRACE) << "TransactionQueue::topTransactions " << ret.size();
@@ -193,7 +194,7 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 			LOG(WARNING) << "TransactionQueue::manageImport_WITH_LOCK BlockLimit fail! " << _transaction.sha3() << "," << _transaction.blockLimit();
 			return ImportResult::BlockLimitCheckFail;
 		}
-		
+#if 0		
 		if( _transaction.isCreation())
 		{
 			
@@ -213,7 +214,7 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 				return ImportResult::NoTxPermission;
 			}
 		}
-
+#endif
 		// check before import
 		{
 			try

@@ -40,7 +40,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 	add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
 	add_compile_options(-DELPP_THREAD_SAFE)
 	
-	add_compile_options(-Wa,-march=generic64)
+	#add_compile_options(-Wa,-march=generic64)
 	
 	if(STATIC_BUILD)
 		SET(BUILD_SHARED_LIBRARIES OFF)
@@ -53,11 +53,16 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 	add_compile_options(-fno-omit-frame-pointer)
 	
 	# Configuration-specific compiler settings.
-	set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -DETH_DEBUG -DELPP_THREAD_SAFE")
+	set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g3 -ggdb -DELPP_THREAD_SAFE")
 	set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -DETH_RELEASE -DELPP_THREAD_SAFE")
 	set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -DETH_RELEASE -DELPP_THREAD_SAFE")
 	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DETH_RELEASE -DELPP_THREAD_SAFE")
-
+	if (TESTS)
+		set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
+		set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
+		set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
+		set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
+	endif (TESTS)
 	option(USE_LD_GOLD "Use GNU gold linker" ON)
 	if (USE_LD_GOLD)
 		execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
@@ -181,17 +186,3 @@ if (PROFILING AND (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_C
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lprofiler")
 endif ()
 
-if (COVERAGE)
-	set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
-	set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
-	set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
-	set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
-	find_program(LCOV_TOOL lcov)
-	message(STATUS "lcov tool: ${LCOV_TOOL}")
-	if (LCOV_TOOL)
-		add_custom_target(coverage.info
-			COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -c -d ${CMAKE_BINARY_DIR}
-			COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -r ${CMAKE_BINARY_DIR}/coverage.info '/usr*' '${CMAKE_BINARY_DIR}/deps/*' '${CMAKE_SOURCE_DIR}/deps/*'
-		)
-	endif()
-endif ()

@@ -31,6 +31,7 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/ChainOperationParams.h>
 #include <libevm/ExtVMFace.h>
+#include <libprecompiled/PrecompiledContext.h>
 #include "Account.h"
 #include "Transaction.h"
 #include "TransactionReceipt.h"
@@ -78,7 +79,9 @@ public:
 	// TODO: pass in ChainOperationParams rather than u256
 
 	/// Default constructor; creates with a blank database prepopulated with the genesis block.
-	Block(u256 const& _accountStartNonce): m_state(_accountStartNonce, OverlayDB(), BaseState::Empty), m_precommit(_accountStartNonce) {}
+	Block(u256 const& _accountStartNonce): m_state(_accountStartNonce, OverlayDB(), BaseState::Empty), m_precommit(_accountStartNonce) {
+		_precompiledContext = std::make_shared<dev::precompiled::PrecompiledContext>();
+	}
 
 	/// Basic state object from database.
 	/// Use the default when you already have a database and you just want to make a Block object
@@ -95,10 +98,16 @@ public:
 	Block(BlockChain const& _bc, OverlayDB const& _db, h256 const& _root, Address const& _author = Address());
 
 	enum NullType { Null };
-	Block(NullType): m_state(0, OverlayDB(), BaseState::Empty), m_precommit(0) {}
+	Block(NullType): m_state(0, OverlayDB(), BaseState::Empty), m_precommit(0) {
+		_precompiledContext = std::make_shared<dev::precompiled::PrecompiledContext>();
+	}
 
 	/// Construct from a given blockchain. Empty, but associated with @a _bc 's chain params.
-	explicit Block(BlockChain const& _bc): Block(Null) { noteChain(_bc); }
+	explicit Block(BlockChain const& _bc): Block(Null) {
+		noteChain(_bc);
+
+		_precompiledContext = std::make_shared<dev::precompiled::PrecompiledContext>();
+	}
 
 	/// Copy state object.
 	Block(Block const& _s);
@@ -248,7 +257,7 @@ public:
 	/// The only thing left to do after this is to actually mine().
 	///
 	/// This may be called multiple times and without issue.
-	void commitToSeal(BlockChain const& _bc, bytes const& _extraData = {});
+	void commitToSeal(BlockChain const& _bc, u256 genIndex, bytes const& _extraData = {});
 	void commitToSealAfterExecTx(BlockChain const& _bc); // 必须在commitToSeal之后再调用
 
 	/// Pass in a properly sealed header matching this block.
@@ -295,6 +304,9 @@ public:
 	void setNodeList(h512s const& _nodes);
 
 	void clearCurrentBytes();
+	dev::precompiled::PrecompiledContext::Ptr precompiledContext() { return _precompiledContext; }
+
+	void extract(BlockChain const& _bc, h256 const& _hash, ImportRequirements::value _ir = ImportRequirements::None);
 
 private:
 	SealEngineFace* sealEngine() const;
@@ -326,6 +338,7 @@ private:
 
 	/// Provide a standard VM trace for debugging purposes.
 	std::string vmTrace(bytesConstRef _block, BlockChain const& _bc, ImportRequirements::value _ir);
+	h256 dbHash();
 
 	// Obtaining UTXO transactions that can be processed parallelly.
 	void getParallelUTXOTx(const Transactions& transactions, std::map<h256, bool>& ret, size_t &cnt);
@@ -365,6 +378,7 @@ private:
 	bool m_evmCoverLog = false; 
 
 	UTXOModel::UTXOMgr m_utxoMgr;
+	dev::precompiled::PrecompiledContext::Ptr _precompiledContext;
 
 	friend std::ostream& operator<<(std::ostream& _out, Block const& _s);
 

@@ -36,11 +36,8 @@ public:
 	ChannelException(int errorCode, const std::string &msg): _errorCode(errorCode), _msg(msg) {};
 
 	virtual int errorCode() { return _errorCode; };
-	#ifdef __APPLE__
-		virtual const char* what() const _NOEXCEPT override { return _msg.c_str(); };
-	#else
-		virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return _msg.c_str(); };
-	#endif
+	virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return _msg.c_str(); };
+
 	bool operator!() const {
 		return _errorCode == 0;
 	}

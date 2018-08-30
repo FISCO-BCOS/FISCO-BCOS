@@ -155,6 +155,7 @@ using strings = std::vector<std::string>;
 
 // Fixed-length string types.
 using string32 = std::array<char, 32>;
+using string64 = std::array<char, 64>;
 static const string32 ZeroString32 = {{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }};
 
 // Null/Invalid values for convenience.

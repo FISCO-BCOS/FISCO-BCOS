@@ -29,16 +29,15 @@
 #include <abi/ContractAbiMgr.h>
 #include <libdevcore/easylog.h>
 #include <libp2p/Host.h>
+#include <libinitializer/Initializer.h>
 #include <UTXO/UTXOSharedData.h>
-
 #include "Block.h"
 #include "Client.h"
 #include "Defaults.h"
 #include "Executive.h"
 #include "EthereumHost.h"
-#include "NodeConnParamsManager.h"
-#include "SystemContractApi.h"
-#include "SystemContractApiFactory.h"
+// #include "SystemContractApi.h"
+//#include "SystemContractApiFactory.h"
 #include "TransactionQueue.h"
 #include "Utility.h"
 
@@ -54,12 +53,10 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, ActivityReport const& _r)
 	return _out;
 }
 
-
-
 Client::Client(
     ChainParams const& _params,
     int _networkID,
-    p2p::HostApi* _host,
+	std::shared_ptr<p2p::Host> _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -67,18 +64,19 @@ Client::Client(
 ):
 	ClientBase(_l),
 	Worker("client", 0),
-	m_bc(std::shared_ptr<Interface>(this), _params, _dbPath, _forceAction, [](unsigned d, unsigned t) { LOG(ERROR) << "REVISING BLOCKCHAIN: Processed " << d << " of " << t << "...\r"; }),
+	m_bc(_params, _dbPath, _forceAction, [](unsigned d, unsigned t) { LOG(ERROR) << "REVISING BLOCKCHAIN: Processed " << d << " of " << t << "...\r"; }),
      m_gp(_gpForAdoption ? _gpForAdoption : make_shared<TrivialGasPricer>()),
      m_preSeal(chainParams().accountStartNonce),
      m_postSeal(chainParams().accountStartNonce),
      m_working(chainParams().accountStartNonce),
      m_p2p_host(_host)
 {
+	m_bc.setPrecompiledEngineFactory(_params.getInitializer()->amdbInitializer()->precompiledContextFactory());
 	init(_host, _dbPath, _forceAction, _networkID);
 
-	//cout<<"Client::Client systemproxyaddress:0x"<<toString(_params.sysytemProxyAddress)<<"\n";
-	//cout<<"Client::Client god:0x"<<toString(_params.god)<<"\n";
-
+	_params.getInitializer()->rpcInitializer()->channelRPCServer()->setHost(host());
+	host().lock()->setWeb3Observer(_params.getInitializer()->rpcInitializer()->channelRPCServer()->buildObserver());
+#if 0
 	libabi::ContractAbiMgr::getInstance()->initialize(getDataDir());
 
 	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
@@ -109,11 +107,14 @@ Client::Client(
 		
 		updateConfig();
 	});
-
 	NodeConnManagerSingleton::GetInstance().setSysContractApi(m_systemcontractapi);
+#endif
+	//先启动channelRPCServer，承接来自分布式存储的请求
+	_params.getInitializer()->rpcInitializer()->channelRPCServer()->StartListening();
 }
 
 void Client::updateConfig() {
+#if 0
 	string value;
 
 	m_systemcontractapi->getValue("maxBlockTranscations", value);
@@ -187,38 +188,46 @@ void Client::updateConfig() {
 	LOG(TRACE) << "Client::Client NonceCheck::maxNonceCheckBlock:" << NonceCheck::maxblocksize;
 	LOG(TRACE) << "Client::Client BlockChain::maxBlockLimit:" << BlockChain::maxBlockLimit;
 	LOG(TRACE) << "Client::Client BlockChain::CAVerify:" << NodeConnParamsManager::CAVerify;
-
+#endif
 }
-
-
 
 u256 Client::filterCheck(const Transaction & _t, FilterCheckScene) const
 {
-
-
+#if 0
 	if ( m_systemcontractapi )
 		return m_systemcontractapi->transactionFilterCheck(_t);
 	else
 		return (u256)SystemContractCode::Other;
+#endif
+	return u256(0);
 }
+
 
 //void    Client::updateSystemContract(const Transactions & _transcations)
 void    Client::updateSystemContract(std::shared_ptr<Block> block)
 {
+#if 0
 	m_systemcontractapi->updateSystemContract(block);
+#endif
 }
 
 void Client::updateCache(Address address) {
+#if 0
 	m_systemcontractapi->updateCache(address);
+#endif
 }
 
 
 Client::~Client()
 {
+	if(isMining()) {
+		stopSealing();
+	}
+
 	stopWorking();
 }
 
-void Client::init(p2p::HostApi* _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
+void Client::init(std::shared_ptr<p2p::Host> _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
 {
 	DEV_TIMED_FUNCTION_ABOVE(500);
 
@@ -519,6 +528,11 @@ ExecutionResult Client::call(Address _dest, bytes const& _data, u256 _gas, u256 
 			e.go();
 		e.finalize();
 	}
+	catch (dev::eth::UnexpectedException &e) {
+		//非必现的VM错误
+		//TODO: 增加给用户的错误返回
+		LOG(WARNING) << "Client::call failed: " << boost::current_exception_diagnostic_information();
+	}
 	catch (...)
 	{
 		LOG(WARNING) << "Client::call failed: " << boost::current_exception_diagnostic_information();
@@ -765,7 +779,7 @@ void Client::rejigSealing()
 					LOG(INFO) << "Tried to seal sealed block...";
 					return;
 				}
-				m_working.commitToSeal(bc(), m_extraData);
+				m_working.commitToSeal(bc(), dev::u256(0), m_extraData);
 			}
 			DEV_READ_GUARDED(x_working)
 			{
@@ -898,11 +912,17 @@ void Client::prepareForTransaction()
 
 Block Client::block(h256 const& _block) const
 {
-
 	try
 	{
+		//获取已落地的区块时，不再populate, 直接获取区块数据
+#if 0
 		Block ret(bc(), m_stateDB);
 		ret.populateFromChain(bc(), _block);
+#endif
+
+		Block ret(bc(), m_stateDB);
+		ret.extract(bc(), _block);
+
 		return ret;
 	}
 	catch (Exception& ex)
@@ -1034,7 +1054,9 @@ int Client::getResultInt(ExecutionResult& result, int& value)
 //find the contract address by name
 Address Client::findContract(const string& contract)
 {
+#if 0
 	return m_systemcontractapi->getRoute(contract);
+#endif
 }
 
 UTXOModel::UTXOMgr* Client::getUTXOMgr() 

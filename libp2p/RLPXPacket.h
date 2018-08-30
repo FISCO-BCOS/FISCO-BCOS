@@ -17,8 +17,6 @@
 /** @file RLPXPacket.h
  * @author Alex Leverington <nessence@gmail.com>
  * @date 2015
- * @author toxotguo
- * @date 2018
  */
 
 #pragma once
