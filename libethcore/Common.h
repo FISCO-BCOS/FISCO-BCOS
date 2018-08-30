@@ -59,8 +59,6 @@ extern const bytes c_blockhashContractCode;
 /// User-friendly string representation of the amount _b in wei.
 std::string formatBalance(bigint const& _b);
 
-DEV_SIMPLE_EXCEPTION(InvalidAddress);
-
 /// Convert the given string into an address.
 Address toAddress(std::string const& _s);
 
