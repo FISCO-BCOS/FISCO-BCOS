@@ -25,6 +25,7 @@
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
+#include <libdevcore/easylog.h>
 
 using namespace dev;
 using namespace dev::crypto;
@@ -57,7 +58,7 @@ bytes dev::aesDecrypt(
     catch (std::exception const& e)
     {
         // FIXME: Handle this error better.
-        std::cerr << e.what() << '\n';
+        LOG(ERROR) << e.what();
         return bytes();
     }
 }
