@@ -37,9 +37,9 @@ TransactionBase::TransactionBase(TransactionSkeleton const& _ts, Secret const& _
     m_receiveAddress(_ts.to),
     m_gasPrice(_ts.gasPrice),
     m_gas(_ts.gas),
-    m_blockLimit(_ts.blockLimit),
     m_data(_ts.data),
-    m_sender(_ts.from)
+    m_sender(_ts.from),
+    m_blockLimit(_ts.blockLimit)
 {
     if (_s)
         sign(_s);

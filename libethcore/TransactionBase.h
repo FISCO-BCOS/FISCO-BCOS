@@ -260,10 +260,10 @@ protected:
                    ///< creation transaction.
     boost::optional<SignatureStruct> m_vrs;  ///< The signature of the transaction. Encodes the
                                              ///< sender.
-    u256 m_blockLimit;         ///< The latest block number to be packaged for transaction.
-    u256 m_importTime = 0;     ///< The utc time at which a transaction enters the queue.
-    mutable h256 m_hashWith;   ///< Cached hash of transaction with signature.
-    mutable Address m_sender;  ///< Cached sender, determined from signature.
+    mutable h256 m_hashWith;                 ///< Cached hash of transaction with signature.
+    mutable Address m_sender;                ///< Cached sender, determined from signature.
+    u256 m_blockLimit;      ///< The latest block number to be packaged for transaction.
+    u256 m_importTime = 0;  ///< The utc time at which a transaction enters the queue.
 };
 
 /// Nice name for vector of Transaction.
