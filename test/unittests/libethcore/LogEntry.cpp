@@ -60,6 +60,25 @@ BOOST_AUTO_TEST_CASE(LogEntryBasic)
     BOOST_CHECK(le.data == compareLe.data);
 }
 
+BOOST_AUTO_TEST_CASE(BloomTest)
+{
+    Address address("ccdeac59d35627b7de09332e819d5159e7bb7250");
+    h256s topics({"123344", "445566"});
+    bytes data({'a', 'b', '5', '6'});
+
+    LogEntry le = LogEntry(address, topics, data);
+    LogBloom bl = le.bloom();
+
+    RLPStream s;
+    le.streamRLP(s);
+    RLP r(&s.out());
+    LogEntry compareLe(r);
+
+    LogBloom compareBl = compareLe.bloom();
+
+    BOOST_CHECK(bl == compareBl);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
