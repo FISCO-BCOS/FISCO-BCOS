@@ -15,7 +15,7 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file TransactionBase.cpp
- * @author Gav Wood <i@gavwood.com>
+ * @author Gav Wood <i@gavwood.com>, chaychen
  * @date 2014
  */
 
@@ -73,25 +73,13 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
 
         m_blockLimit = rlp[9].toInt<u256>();
 
-        if (isZeroSignature(r, s))
-        {
-            m_chainId = v;
-            m_vrs = SignatureStruct{r, s, 0};
-        }
-        else
-        {
-            if (v > 36)
-                m_chainId = (v - 35) / 2;
-            else if (v == 27 || v == 28)
-                m_chainId = -4;
-            else
-                BOOST_THROW_EXCEPTION(InvalidSignature());
+        if ((v != 27) && (v != 28))
+            BOOST_THROW_EXCEPTION(InvalidSignature());
 
-            m_vrs = SignatureStruct{r, s, static_cast<byte>(v - (m_chainId * 2 + 35))};
+        m_vrs = SignatureStruct{r, s, static_cast<byte>(v - 27)};
 
-            if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
-                BOOST_THROW_EXCEPTION(InvalidSignature());
-        }
+        if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
+            BOOST_THROW_EXCEPTION(InvalidSignature());
 
         if (_checkSig == CheckTransaction::Everything)
             m_sender = sender();
@@ -124,18 +112,13 @@ Address const& TransactionBase::sender() const
 {
     if (!m_sender)
     {
-        if (hasZeroSignature())
-            m_sender = MaxAddress;
-        else
-        {
-            if (!m_vrs)
-                BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
+        if (!m_vrs)
+            BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
-            auto p = recover(*m_vrs, sha3(WithoutSignature));
-            if (!p)
-                BOOST_THROW_EXCEPTION(InvalidSignature());
-            m_sender = right160(dev::sha3(bytesConstRef(p.data(), sizeof(p))));
-        }
+        auto p = recover(*m_vrs, sha3(WithoutSignature));
+        if (!p)
+            BOOST_THROW_EXCEPTION(InvalidSignature());
+        m_sender = right160(dev::sha3(bytesConstRef(p.data(), sizeof(p))));
     }
     return m_sender;
 }
@@ -156,12 +139,12 @@ void TransactionBase::sign(Secret const& _priv)
         m_vrs = sigStruct;
 }
 
-void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forEip155hash) const
+void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig) const
 {
     if (m_type == NullTransaction)
         return;
 
-    _s.appendList((_sig || _forEip155hash ? 3 : 0) + 7);
+    _s.appendList((_sig ? 3 : 0) + 7);
     _s << m_nonce << m_gasPrice << m_gas;
     if (m_type == MessageCall)
         _s << m_receiveAddress;
@@ -174,17 +157,8 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forE
         if (!m_vrs)
             BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
-        if (hasZeroSignature())
-            _s << m_chainId;
-        else
-        {
-            int const vOffset = m_chainId * 2 + 35;
-            _s << (m_vrs->v + vOffset);
-        }
-        _s << (u256)m_vrs->r << (u256)m_vrs->s;
+        _s << (int)(m_vrs->v + 27) << (u256)m_vrs->r << (u256)m_vrs->s;
     }
-    else if (_forEip155hash)
-        _s << m_chainId << 0 << 0;
 
     _s << m_blockLimit;
 }
@@ -198,12 +172,6 @@ void TransactionBase::checkLowS() const
         BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
     if (m_vrs->s > c_secp256k1n / 2)
-        BOOST_THROW_EXCEPTION(InvalidSignature());
-}
-
-void TransactionBase::checkChainId(int chainId) const
-{
-    if (m_chainId != chainId && m_chainId != -4)
         BOOST_THROW_EXCEPTION(InvalidSignature());
 }
 
@@ -235,7 +203,7 @@ h256 TransactionBase::sha3(IncludeSignature _sig) const
         return m_hashWith;
 
     RLPStream s;
-    streamRLP(s, _sig, m_chainId > 0 && _sig == WithoutSignature);
+    streamRLP(s, _sig);
 
     auto ret = dev::sha3(s.out());
     if (_sig == WithSignature)

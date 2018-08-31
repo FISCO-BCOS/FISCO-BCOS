@@ -93,15 +93,11 @@ void SealEngineFace::verifyTransaction(ImportRequirements::value _ir, Transactio
     BlockHeader const& _header, u256 const& _gasUsed) const
 {
     if ((_ir & ImportRequirements::TransactionSignatures) &&
-        _header.number() < chainParams().EIP158ForkBlock && _t.isReplayProtected())
-        BOOST_THROW_EXCEPTION(InvalidSignature());
-
-    if ((_ir & ImportRequirements::TransactionSignatures) &&
-        _header.number() < chainParams().experimentalForkBlock && _t.hasZeroSignature())
+        _header.number() < chainParams().experimentalForkBlock)
         BOOST_THROW_EXCEPTION(InvalidSignature());
 
     if ((_ir & ImportRequirements::TransactionBasic) &&
-        _header.number() >= chainParams().experimentalForkBlock && _t.hasZeroSignature() &&
+        _header.number() >= chainParams().experimentalForkBlock &&
         (_t.value() != 0 || _t.gasPrice() != 0 || _t.nonce() != 0))
         BOOST_THROW_EXCEPTION(InvalidZeroSignatureTransaction()
                               << errinfo_got((bigint)_t.gasPrice())
