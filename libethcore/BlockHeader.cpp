@@ -225,15 +225,22 @@ void BlockHeader::populateFromParent(BlockHeader const& _parent)
 /**
  * @brief : check the validation of the block header
  *
- * @param _s
- * @param _parent
- * @param _block
+ * @param _s: strictness, including CheckEverything,QuickNonce and CheckNothingNew
+ * @param _parent: the parent block header, default is a empty block header
+ *                 (if the parent block header is empty, doesn't need to be verified)
+ *                 (if the parent block header is not empty, must chcek hash, timestamp and
+ * blocknumber)
+ * @param _block: the block contains the block header to be verified
+ *                default is empty, doesn't need to be verified
+ *                if the block is not empty, must check the transacton state
  */
 void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRef _block) const
 {
     /// check block number
-    if (m_number > ~(unsigned)0)
+    if (m_number >= Invalid256)
+    {
         BOOST_THROW_EXCEPTION(InvalidNumber());
+    }
     /// check gas
     if (_s != CheckNothingNew && m_gasUsed > m_gasLimit)
         BOOST_THROW_EXCEPTION(
