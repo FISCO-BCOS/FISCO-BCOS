@@ -81,6 +81,8 @@ struct LocalisedLogEntry : public LogEntry
     unsigned transactionIndex = 0;
     unsigned logIndex = 0;
     BlockPolarity polarity = BlockPolarity::Unknown;
+    // This mined variable means the corresponding tx has been placed in a generated block.
+    // So this mined variable could not been deleted.
     bool mined = false;
     bool isSpecial = false;
     h256 special;
