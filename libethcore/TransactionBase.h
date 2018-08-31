@@ -256,11 +256,11 @@ protected:
     u256 m_gasPrice;           ///< The base fee and thus the implied exchange rate of ETH to GAS.
     u256 m_gas;  ///< The total gas to convert, paid for from sender's account. Any unused gas gets
                  ///< refunded once the contract is ended.
-    u256 m_blockLimit;  ///< The latest block number to be packaged for transaction.
-    bytes m_data;       ///< The data associated with the transaction, or the initialiser if it's a
-                        ///< creation transaction.
+    bytes m_data;  ///< The data associated with the transaction, or the initialiser if it's a
+                   ///< creation transaction.
     boost::optional<SignatureStruct> m_vrs;  ///< The signature of the transaction. Encodes the
                                              ///< sender.
+    u256 m_blockLimit;         ///< The latest block number to be packaged for transaction.
     u256 m_importTime = 0;     ///< The utc time at which a transaction enters the queue.
     mutable h256 m_hashWith;   ///< Cached hash of transaction with signature.
     mutable Address m_sender;  ///< Cached sender, determined from signature.
