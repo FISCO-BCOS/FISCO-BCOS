@@ -16,7 +16,7 @@
  *
  * @brief
  *
- * @file Assertions.cpp
+ * @file BlockHeader.cpp
  * @author: yujiechen
  * @date 2018-08-24
  */
@@ -167,6 +167,26 @@ BOOST_AUTO_TEST_CASE(testConstructFromBlock)
 {
     BOOST_REQUIRE_NO_THROW(BlockHeader(block_rlp.out(), BlockData));
     BOOST_CHECK_THROW(BlockHeader(block_rlp.out(), HeaderData), Exception);
+    /// test headerHashFromBlock
+    BOOST_CHECK(block_header_genesis.headerHashFromBlock(block_rlp.out()));
+}
+
+BOOST_AUTO_TEST_CASE(testExtraHeaderException)
+{
+    /// invalid block format because header invalid
+    RLPStream invalid_rlp;
+    invalid_rlp << 10;
+    BOOST_CHECK_THROW(
+        block_header_genesis.extractHeader(ref(invalid_rlp.out())), InvalidBlockFormat);
+    // invalid block format because transaction invalid
+    RLPStream invalid_txlist;
+    invalid_txlist.appendList(2);
+    RLPStream header_rlp;
+    block_header_genesis.streamRLP(header_rlp);
+    invalid_txlist.appendRaw(header_rlp.out());
+    invalid_txlist.appendRaw(invalid_rlp.out());
+    BOOST_CHECK_THROW(
+        block_header_genesis.extractHeader(ref(invalid_txlist.out())), InvalidBlockFormat);
 }
 
 BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
@@ -201,6 +221,23 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
         expectedRoot, block_header_child.receiptsRoot(), block_header_child.stateRoot());
     BOOST_REQUIRE_NO_THROW(block_header_child.verify(
         CheckEverything, block_header_genesis, ref(block_child_rlp.out())));
+    /// test invalid timestamp
+    block_header_child.setTimestamp(u256(current_time));
+    BOOST_CHECK_THROW(block_header_child.verify(
+                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
+        InvalidTimestamp);
+    /// test invalid number
+    block_header_child.setTimestamp(u256(current_time + 100));
+    block_header_child.setNumber(block_header_child.number() + u256(2));
+    BOOST_CHECK_THROW(block_header_child.verify(
+                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
+        InvalidNumber);
+    /// test invalid parentHash
+    block_header_child.setNumber(block_header_child.number() - u256(2));
+    block_header_child.setParentHash(sha3("+++"));
+    BOOST_CHECK_THROW(block_header_child.verify(
+                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
+        InvalidParentHash);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
