@@ -21,6 +21,9 @@
  * @date: 2017
  */
 
+#include "Rsa.h"
+
+#include <libdevcore/easylog.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
@@ -28,9 +31,6 @@
 #include <cstring>
 #include <iostream>
 #include <string>
-
-#include "Rsa.h"
-using namespace std;
 
 std::string dev::crypto::RSAKeyVerify(const std::string& pubStr, const std::string& strData)
 {
@@ -42,8 +42,7 @@ std::string dev::crypto::RSAKeyVerify(const std::string& pubStr, const std::stri
     BIO* bio = NULL;
     if ((bio = BIO_new_mem_buf(const_cast<char*>(pubStr.c_str()), -1)) == NULL)
     {
-        std::cout << "BIO_new_mem_buf failed!"
-                  << "\n";
+        LOG(ERROR) << "BIO_new_mem_buf failed!";
         return "";
     }
 
@@ -51,8 +50,7 @@ std::string dev::crypto::RSAKeyVerify(const std::string& pubStr, const std::stri
     RSA* pRSAPublicKey = RSA_new();
     if (PEM_read_bio_RSA_PUBKEY(bio, &pRSAPublicKey, 0, 0) == NULL)
     {
-        std::cout << "PEM_read_bio_RSA_PUBKEY failed!"
-                  << "\n";
+        LOG(ERROR) << "PEM_read_bio_RSA_PUBKEY failed!";
         return "";
     }
 
@@ -74,16 +72,14 @@ std::string dev::crypto::RSAKeySign(const std::string& strPemFileName, const std
 {
     if (strPemFileName.empty() || strData.empty())
     {
-        std::cout << "strPemFileName or strData is empty"
-                  << "\n";
+        LOG(ERROR) << "strPemFileName or strData is empty";
         return "";
     }
 
     FILE* hPriKeyFile = fopen(strPemFileName.c_str(), "rb");
     if (hPriKeyFile == NULL)
     {
-        std::cout << "open file:" << strPemFileName << " faied!"
-                  << "\n";
+        LOG(ERROR) << "open file:" << strPemFileName << " faied!";
         return "";
     }
 
@@ -91,10 +87,10 @@ std::string dev::crypto::RSAKeySign(const std::string& strPemFileName, const std
     RSA* pRSAPriKey = RSA_new();
     if (PEM_read_RSAPrivateKey(hPriKeyFile, &pRSAPriKey, 0, 0) == NULL)
     {
-        std::cout << "PEM_read_RSAPrivateKey faied!"
-                  << "\n";
+        LOG(ERROR) << "PEM_read_RSAPrivateKey faied!";
         return "";
     }
+
     int nLen = RSA_size(pRSAPriKey);
     char* pDecode = new char[nLen + 1];
 
@@ -104,6 +100,7 @@ std::string dev::crypto::RSAKeySign(const std::string& strPemFileName, const std
     {
         strRet = std::string((char*)pDecode, ret);
     }
+
     delete[] pDecode;
     RSA_free(pRSAPriKey);
     fclose(hPriKeyFile);

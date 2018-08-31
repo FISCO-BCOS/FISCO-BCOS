@@ -123,6 +123,9 @@ bigint parseBigEndianRightPadded(bytesConstRef _in, bigint const& _begin, bigint
 
 ETH_REGISTER_PRECOMPILED(modexp)(bytesConstRef _in)
 {
+    // This is a protocol of bignumber modular
+    // Described here:
+    // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-198.md
     bigint const baseLength(parseBigEndianRightPadded(_in, 0, 32));
     bigint const expLength(parseBigEndianRightPadded(_in, 32, 32));
     bigint const modLength(parseBigEndianRightPadded(_in, 64, 32));
@@ -186,25 +189,5 @@ ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
 
     return multComplexity(maxLength) * max<bigint>(adjustedExpLength, 1) / 20;
 }
-/*
-ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
-{
-    return dev::crypto::alt_bn128_G1_add(_in);
-}
 
-ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
-{
-    return dev::crypto::alt_bn128_G1_mul(_in);
-}
-
-ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
-{
-    return dev::crypto::alt_bn128_pairing_product(_in);
-}
-
-ETH_REGISTER_PRECOMPILED_PRICER(alt_bn128_pairing_product)(bytesConstRef _in)
-{
-    return 100000 + (_in.size() / 192) * 80000;
-}
-*/
 }  // namespace

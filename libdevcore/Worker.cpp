@@ -28,7 +28,7 @@
 using namespace std;
 using namespace dev;
 
-void setThreadName(std::string const& _n)
+void dev::setThreadName(std::string const& _n)
 {
 #if defined(__GLIBC__)
     pthread_setname_np(pthread_self(), _n.c_str());

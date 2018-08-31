@@ -25,8 +25,6 @@
 
 #include <iostream>
 
-using namespace std;
-
 namespace dev
 {
 namespace crypto
