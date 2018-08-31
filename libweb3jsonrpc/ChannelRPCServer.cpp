@@ -65,7 +65,8 @@ bool ChannelRPCServer::StartListening() {
 #endif
 		}
 		else{
-			initContext();
+			std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
+			_server->setConnectionHandler(fp);
 		}
 
 		_server->run();
