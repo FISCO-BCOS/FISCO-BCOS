@@ -56,9 +56,9 @@ public:
 
     /// Constructs a signed message-call transaction.
     TransactionBase(u256 const& _value, u256 const& _gasPrice, u256 const& _gas,
-        Address const& _dest, bytes const& _data, u256 const& _randomid, Secret const& _secret)
+        Address const& _dest, bytes const& _data, u256 const& _nonce, Secret const& _secret)
       : m_type(MessageCall),
-        m_randomid(_randomid),
+        m_nonce(_nonce),
         m_value(_value),
         m_receiveAddress(_dest),
         m_gasPrice(_gasPrice),
@@ -70,9 +70,9 @@ public:
 
     /// Constructs a signed contract-creation transaction.
     TransactionBase(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, bytes const& _data,
-        u256 const& _randomid, Secret const& _secret)
+        u256 const& _nonce, Secret const& _secret)
       : m_type(ContractCreation),
-        m_randomid(_randomid),
+        m_nonce(_nonce),
         m_value(_value),
         m_gasPrice(_gasPrice),
         m_gas(_gas),
@@ -83,9 +83,9 @@ public:
 
     /// Constructs an unsigned message-call transaction.
     TransactionBase(u256 const& _value, u256 const& _gasPrice, u256 const& _gas,
-        Address const& _dest, bytes const& _data, u256 const& _randomid = 0)
+        Address const& _dest, bytes const& _data, u256 const& _nonce = 0)
       : m_type(MessageCall),
-        m_randomid(_randomid),
+        m_nonce(_nonce),
         m_value(_value),
         m_receiveAddress(_dest),
         m_gasPrice(_gasPrice),
@@ -95,9 +95,9 @@ public:
 
     /// Constructs an unsigned contract-creation transaction.
     TransactionBase(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, bytes const& _data,
-        u256 const& _randomid = 0)
+        u256 const& _nonce = 0)
       : m_type(ContractCreation),
-        m_randomid(_randomid),
+        m_nonce(_nonce),
         m_value(_value),
         m_gasPrice(_gasPrice),
         m_gas(_gas),
@@ -187,13 +187,13 @@ public:
     bytes const& data() const { return m_data; }
 
     /// @returns the transaction-count of the sender.
-    u256 randomid() const { return m_randomid; }
+    u256 nonce() const { return m_nonce; }
 
     /// Sets the nonce to the given value. Clears any signature.
-    void setRandomid(u256 const& _n)
+    void setNonce(u256 const& _n)
     {
         clearSignature();
-        m_randomid = _n;
+        m_nonce = _n;
     }
 
     /// @returns the latest block number to be packaged for transaction.
@@ -256,7 +256,10 @@ protected:
 
     Type m_type = NullTransaction;  ///< Is this a contract-creation transaction or a message-call
                                     ///< transaction?
-    u256 m_randomid;                ///< The transaction-count of the sender.
+    u256 m_nonce;                   ///< The transaction-count of the sender. Combined with
+                                    ///< blockLimit for transaction de-duplication, and its
+                                    ///< uniqueness is guaranteed by the client sending the
+                                    ///< transaction.
     u256 m_value;  ///< The amount of ETH to be transferred by this transaction. Called 'endowment'
                    ///< for contract-creation transactions.
     Address m_receiveAddress;  ///< The receiving address of the transaction.
@@ -288,7 +291,7 @@ inline std::ostream& operator<<(std::ostream& _out, TransactionBase const& _t)
         _out << "[CREATE]";
 
     _out << "/" << _t.data().size() << "$" << _t.value() << "+" << _t.gas() << "@" << _t.gasPrice();
-    _out << "<-" << _t.safeSender().abridged() << " #" << _t.randomid() << "*" << _t.blockLimit()
+    _out << "<-" << _t.safeSender().abridged() << " #" << _t.nonce() << "*" << _t.blockLimit()
          << "}";
     return _out;
 }

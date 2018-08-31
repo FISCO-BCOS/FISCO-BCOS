@@ -218,7 +218,7 @@ struct TransactionSkeleton
     Address to;
     u256 value;
     bytes data;
-    u256 randomid = Invalid256;
+    u256 nonce = Invalid256;
     u256 gas = Invalid256;
     u256 gasPrice = Invalid256;
     u256 blockLimit = Invalid256;

@@ -32,7 +32,7 @@ using namespace dev::eth;
 
 TransactionBase::TransactionBase(TransactionSkeleton const& _ts, Secret const& _s)
   : m_type(_ts.creation ? ContractCreation : MessageCall),
-    m_randomid(_ts.randomid),
+    m_nonce(_ts.nonce),
     m_value(_ts.value),
     m_receiveAddress(_ts.to),
     m_gasPrice(_ts.gasPrice),
@@ -54,23 +54,24 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
             BOOST_THROW_EXCEPTION(
                 InvalidTransactionFormat() << errinfo_comment("transaction RLP must be a list"));
 
-        m_randomid = rlp[0].toInt<u256>();
+        m_nonce = rlp[0].toInt<u256>();
         m_gasPrice = rlp[1].toInt<u256>();
         m_gas = rlp[2].toInt<u256>();
-        m_blockLimit = rlp[3].toInt<u256>();  // 3
-        m_type = rlp[4].isEmpty() ? ContractCreation : MessageCall;
-        m_receiveAddress = rlp[4].isEmpty() ? Address() : rlp[4].toHash<Address>(RLP::VeryStrict);
-        m_value = rlp[5].toInt<u256>();
+        m_type = rlp[3].isEmpty() ? ContractCreation : MessageCall;
+        m_receiveAddress = rlp[3].isEmpty() ? Address() : rlp[3].toHash<Address>(RLP::VeryStrict);
+        m_value = rlp[4].toInt<u256>();
 
-        if (!rlp[6].isData())
+        if (!rlp[5].isData())
             BOOST_THROW_EXCEPTION(InvalidTransactionFormat()
                                   << errinfo_comment("transaction data RLP must be an array"));
 
-        m_data = rlp[6].toBytes();
+        m_data = rlp[5].toBytes();
 
-        int const v = rlp[7].toInt<int>();
-        h256 const r = rlp[8].toInt<u256>();
-        h256 const s = rlp[9].toInt<u256>();
+        int const v = rlp[6].toInt<int>();
+        h256 const r = rlp[7].toInt<u256>();
+        h256 const s = rlp[8].toInt<u256>();
+
+        m_blockLimit = rlp[9].toInt<u256>();
 
         if (isZeroSignature(r, s))
         {
@@ -161,7 +162,7 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forE
         return;
 
     _s.appendList((_sig || _forEip155hash ? 3 : 0) + 7);
-    _s << m_randomid << m_gasPrice << m_gas << m_blockLimit;
+    _s << m_nonce << m_gasPrice << m_gas;
     if (m_type == MessageCall)
         _s << m_receiveAddress;
     else
@@ -184,6 +185,8 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig, bool _forE
     }
     else if (_forEip155hash)
         _s << m_chainId << 0 << 0;
+
+    _s << m_blockLimit;
 }
 
 static const u256 c_secp256k1n(
