@@ -200,10 +200,10 @@ public:
     u256 blockLimit() const { return m_blockLimit; }
 
     /// @returns the utc time at which a transaction enters the queue.
-    u256 importTime() const { return m_importtime; }
+    u256 importTime() const { return m_importTime; }
 
     /// Sets the utc time at which a transaction enters the queue.
-    void setImportTime(u256 _t) { m_importtime = _t; }
+    void setImportTime(u256 _t) { m_importTime = _t; }
 
     /// @returns true if the transaction was signed
     bool hasSignature() const { return m_vrs.is_initialized(); }
@@ -273,7 +273,7 @@ protected:
                                              ///< sender.
     int m_chainId = -4;                      ///< EIP155 value for calculating transaction hash
                                              ///< https://github.com/ethereum/EIPs/issues/155
-    u256 m_importtime = 0;     ///< The utc time at which a transaction enters the queue.
+    u256 m_importTime = 0;     ///< The utc time at which a transaction enters the queue.
     mutable h256 m_hashWith;   ///< Cached hash of transaction with signature.
     mutable Address m_sender;  ///< Cached sender, determined from signature.
 };
