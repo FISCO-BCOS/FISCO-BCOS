@@ -117,7 +117,7 @@ public:
 
     /// TODO Important: delete the author field as we don't use POW
     Address const author() const { return Address(0); }
-    int64_t timestamp() const { return m_headerInfo.timestamp(); }
+    u256 timestamp() const { return m_headerInfo.timestamp(); }
     /// TODO Important: delete the difficulty field as we don't use POW
     u256 const difficulty() const { return Invalid256; }
     u256 const& gasLimit() const { return m_headerInfo.gasLimit(); }

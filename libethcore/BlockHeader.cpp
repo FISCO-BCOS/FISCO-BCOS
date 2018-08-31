@@ -124,11 +124,32 @@ void BlockHeader::clear()
 /// get hash of the block header
 h256 BlockHeader::hash() const
 {
-    h256 dummy;
     Guard l(m_hashLock);
+    if (m_hash == h256())
+    {
+        std::cout << "#############recalculate hash" << std::endl;
+        RLPStream s;
+        streamRLP(s);
+        m_hash = sha3(s.out());
+    }
     return m_hash;
 }
 
+void BlockHeader::streamRLP(RLPStream& _s) const
+{
+    unsigned basicFieldsCnt = BlockHeader::BasicFields;
+    _s.appendList(basicFieldsCnt);
+    BlockHeader::streamRLPFields(_s);
+}
+void BlockHeader::streamRLPFields(RLPStream& _s) const
+{
+    std::cout << "m_timestamp:" << m_timestamp << std::endl;
+    _s << m_parentHash << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_logBloom
+       << m_number << m_gasLimit << m_gasUsed << m_timestamp;
+    _s.appendVector(m_extraData);
+    _s << m_sealer;
+    _s.appendVector(m_sealerList);
+}
 /// calculate hash of the block header according to given block
 h256 BlockHeader::headerHashFromBlock(bytesConstRef _block)
 {
@@ -153,7 +174,7 @@ RLP BlockHeader::extractHeader(bytesConstRef _block)
     if (!header.isList())
         BOOST_THROW_EXCEPTION(InvalidBlockFormat() << errinfo_comment("Block header must be a list")
                                                    << BadFieldError(0, header.data().toString()));
-    // check the transaction(must be list)
+    // check the transactions(must be list)
     if (!root[1].isList())
         BOOST_THROW_EXCEPTION(InvalidBlockFormat()
                               << errinfo_comment("Block transactions must be a list")
@@ -175,10 +196,10 @@ void BlockHeader::populate(RLP const& _header)
         m_transactionsRoot = _header[field = 2].toHash<h256>(RLP::VeryStrict);
         m_receiptsRoot = _header[field = 3].toHash<h256>(RLP::VeryStrict);
         m_logBloom = _header[field = 4].toHash<LogBloom>(RLP::VeryStrict);
-        m_number = _header[field = 5].toPositiveInt64();
+        m_number = _header[field = 5].toInt<u256>();
         m_gasLimit = _header[field = 6].toInt<u256>();
         m_gasUsed = _header[field = 7].toInt<u256>();
-        m_timestamp = _header[field = 8].toPositiveInt64();
+        m_timestamp = _header[field = 8].toInt<u256>();
         m_extraData = _header[field = 9].toVector<bytes>();
         m_sealer = _header[field = 10].toInt<u256>();
         m_sealerList = _header[field = 11].toVector<h512>();
@@ -196,10 +217,11 @@ void BlockHeader::populate(RLP const& _header)
 void BlockHeader::populateFromParent(BlockHeader const& _parent)
 {
     m_stateRoot = _parent.stateRoot();
-    m_number = _parent.m_number + 1;
-    m_parentHash = _parent.m_hash;
+    m_number = _parent.number() + u256(1);
+    m_parentHash = _parent.hash();
     m_gasLimit = _parent.m_gasLimit;
-    m_gasUsed = 0;
+    m_gasUsed = u256(0);
+    noteDirty();
 }
 
 /**
@@ -237,10 +259,10 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
         auto txList = root[1];
         auto expectedRoot = trieRootOver(txList.itemCount(), [&](unsigned i) { return rlp(i); },
             [&](unsigned i) { return txList[i].data().toBytes(); });
-
         LOG(WARNING) << "Expected trie root: " << toString(expectedRoot);
         if (m_transactionsRoot != expectedRoot)
         {
+            std::cout << "check root" << std::endl;
             /// debug information, delete temporarily
             /*
             MemoryDB tm;

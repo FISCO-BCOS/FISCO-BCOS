@@ -42,7 +42,6 @@ enum Strictness
 {
     CheckEverything,
     QuickNonce,
-    IgnoreSeal,
     CheckNothingNew
 };
 
@@ -116,6 +115,7 @@ public:
 
     /// populate block header from parent
     void populateFromParent(BlockHeader const& parent);
+    void streamRLP(RLPStream& _s) const;
     void clear();
 
     /// block header verify
@@ -210,7 +210,7 @@ public:
         noteDirty();
     }
     /// field 9: set timestamp
-    void setTimestamp(int64_t _timestamp)
+    void setTimestamp(u256 _timestamp)
     {
         m_timestamp = _timestamp;
         noteDirty();
@@ -230,25 +230,34 @@ public:
     ///------set interfaces related to block header END------
 
     /// ------ get interfaces related to block header------
-    h256 const& parentHash() const { return m_parentHash; }                            /// field 0
-    h256 const& stateRoot() const { return m_stateRoot; }                              /// field 1
-    h256 const& transactionsRoot() const { return m_transactionsRoot; }                /// field 2
-    h256 const& receiptsRoot() const { return m_receiptsRoot; }                        /// field 3
-    LogBloom const& logBloom() const { return m_logBloom; }                            /// field 4
-    u256 number() const { return m_number; }                                           /// field 5
-    u256 const& gasLimit() const { return m_gasLimit; }                                /// field 6
-    u256 const& gasUsed() const { return m_gasUsed; }                                  /// field 7
-    int64_t timestamp() const { return m_timestamp; }                                  /// field 8
-    bytes const& extraData(unsigned int _index) const { return m_extraData[_index]; }  // field 9
-    std::vector<bytes> const& extraData() const { return m_extraData; }                /// field 9
-    u256 const& sealer() const { return m_sealer; }                                    /// field 10
-    h512s const& sealerList() const { return m_sealerList; }                           /// field 11
+    h256 const& parentHash() const { return m_parentHash; }              /// field 0
+    h256 const& stateRoot() const { return m_stateRoot; }                /// field 1
+    h256 const& transactionsRoot() const { return m_transactionsRoot; }  /// field 2
+    h256 const& receiptsRoot() const { return m_receiptsRoot; }          /// field 3
+    LogBloom const& logBloom() const { return m_logBloom; }              /// field 4
+    u256 number() const { return m_number; }                             /// field 5
+    u256 const& gasLimit() const { return m_gasLimit; }                  /// field 6
+    u256 const& gasUsed() const { return m_gasUsed; }                    /// field 7
+    u256 timestamp() const { return m_timestamp; }                       /// field 8
+    bool extraData(bytes& item, unsigned int _index) const
+    {
+        if (_index >= m_extraData.size())
+        {
+            return false;
+        }
+        item = m_extraData[_index];
+        return true;
+    }  // field 9
+
+    std::vector<bytes> const& extraData() const { return m_extraData; }  /// field 9
+    u256 const& sealer() const { return m_sealer; }                      /// field 10
+    h512s const& sealerList() const { return m_sealerList; }             /// field 11
     /// ------ get interfaces related to block header END------
 
 private:  /// private function fileds
     void populate(RLP const& _header);
     /// trans all fileds of the block header into a given stream
-    // void streamRLPFields(RLPStream& _s) const;
+    void streamRLPFields(RLPStream& _s) const;
     h256 hashRawRead() const
     {
         Guard l(m_hashLock);
@@ -265,7 +274,7 @@ private:  /// private data fields
     u256 m_number = Invalid256;
     u256 m_gasLimit;
     u256 m_gasUsed;
-    int64_t m_timestamp = -1;
+    u256 m_timestamp = Invalid256;
     std::vector<bytes> m_extraData;  /// field for extension
     /// Extended fields of FISCO-BCOS
     u256 m_sealer = Invalid256;  /// index of the sealer created this block
