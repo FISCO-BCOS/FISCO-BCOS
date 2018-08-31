@@ -20,7 +20,7 @@
  *
  * @author wheatli
  * @date 2018.8.28
- * @record change log to easylog
+ * @brief Block header structures of lab-bcos
  */
 
 #pragma once
@@ -156,7 +156,7 @@ public:
         noteDirty();
     }
     /// field 5: set block number
-    void setNumber(int64_t _blockNumber)
+    void setNumber(u256 _blockNumber)
     {
         m_number = _blockNumber;
         noteDirty();
@@ -173,12 +173,37 @@ public:
         m_gasUsed = _gasUsed;
         noteDirty();
     }
-    /// field 8: set extra data
-    void setExtraData(bytes const& _content, unsigned int index = 0)
+    /// field 8: set/append extra data
+    void appendExtraDataArray(bytes const& _content)
     {
-        m_extraData[index] = _content;
+        m_extraData.push_back(_content);
         noteDirty();
     }
+
+    bool appendExtraDataItem(bytes const& _content, unsigned int _index = 0)
+    {
+        if (_index >= m_extraData.size())
+            return false;
+        else
+        {
+            for (uint64_t i = 0; i < _content.size(); i++)
+                m_extraData[_index].push_back(_content[i]);
+            return true;
+        }
+    }
+
+    bool setExtraData(bytes const& _content, unsigned int _index = 0)
+    {
+        if (_index >= m_extraData.size())
+            return false;
+        else
+        {
+            m_extraData[_index] = _content;
+            noteDirty();
+            return true;
+        }
+    }
+
     void setExtraData(std::vector<bytes> const& _extra)
     {
         m_extraData = _extra;
@@ -210,7 +235,7 @@ public:
     h256 const& transactionsRoot() const { return m_transactionsRoot; }                /// field 2
     h256 const& receiptsRoot() const { return m_receiptsRoot; }                        /// field 3
     LogBloom const& logBloom() const { return m_logBloom; }                            /// field 4
-    int64_t number() const { return m_number; }                                        /// field 5
+    u256 number() const { return m_number; }                                           /// field 5
     u256 const& gasLimit() const { return m_gasLimit; }                                /// field 6
     u256 const& gasUsed() const { return m_gasUsed; }                                  /// field 7
     int64_t timestamp() const { return m_timestamp; }                                  /// field 8
@@ -237,13 +262,13 @@ private:  /// private data fields
     h256 m_transactionsRoot;
     h256 m_receiptsRoot;
     LogBloom m_logBloom;
-    int64_t m_number = 0;
+    u256 m_number = Invalid256;
     u256 m_gasLimit;
     u256 m_gasUsed;
     int64_t m_timestamp = -1;
     std::vector<bytes> m_extraData;  /// field for extension
     /// Extended fields of FISCO-BCOS
-    u256 m_sealer = Invalid256;  // index of the sealer created this block
+    u256 m_sealer = Invalid256;  /// index of the sealer created this block
     h512s m_sealerList;          /// sealer list
     /// -------structure of block header end------
 

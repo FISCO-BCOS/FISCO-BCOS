@@ -113,10 +113,13 @@ public:
 
     BlockHeader const& header() const { return m_headerInfo; }
 
-    int64_t number() const { return m_headerInfo.number(); }
-    // Address const& author() const { return m_headerInfo.author(); }
+    u256 number() const { return m_headerInfo.number(); }
+
+    /// TODO Important: delete the author field as we don't use POW
+    Address const author() const { return Address(0); }
     int64_t timestamp() const { return m_headerInfo.timestamp(); }
-    // u256 const& difficulty() const { return m_headerInfo.difficulty(); }
+    /// TODO Important: delete the difficulty field as we don't use POW
+    u256 const difficulty() const { return Invalid256; }
     u256 const& gasLimit() const { return m_headerInfo.gasLimit(); }
     LastBlockHashesFace const& lastHashes() const { return m_lastHashes; }
     u256 const& gasUsed() const { return m_gasUsed; }
