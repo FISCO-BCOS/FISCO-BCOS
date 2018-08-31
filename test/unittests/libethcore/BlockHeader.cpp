@@ -142,7 +142,8 @@ BOOST_AUTO_TEST_CASE(testCopyStruct)
     BOOST_CHECK(block_header_copy == block_header_backup);
     BOOST_CHECK(block_header_backup.hash() == block_header_copy.hash());
     /// test assignment
-    BlockHeader block_header_copy2 = block_header_genesis;
+    BlockHeader block_header_copy2;
+    block_header_copy2 = block_header_genesis;
     BOOST_CHECK(block_header_copy2 == block_header_genesis);
     BOOST_CHECK(block_header_copy2.hash() == block_header_genesis.hash());
 }
@@ -238,6 +239,21 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
     BOOST_CHECK_THROW(block_header_child.verify(
                           CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
         InvalidParentHash);
+    /// test invalid number
+    block_header_child.setNumber(Invalid256);
+    BOOST_CHECK_THROW(block_header_child.verify(
+                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
+        InvalidNumber);
+    // test gas
+    block_header_child.setParentHash(block_header_genesis.hash());
+    block_header_child.setNumber(block_header_genesis.number() + 1);
+    block_header_child.setGasUsed(u256(1000000));
+    block_header_child.setGasLimit(u256(1000));
+    BOOST_CHECK_THROW(block_header_child.verify(
+                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
+        TooMuchGasUsed);
+    BOOST_REQUIRE_NO_THROW(block_header_child.verify(
+        CheckNothingNew, block_header_genesis, ref(block_child_rlp.out())));
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
