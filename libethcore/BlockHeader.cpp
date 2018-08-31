@@ -127,7 +127,6 @@ h256 BlockHeader::hash() const
     Guard l(m_hashLock);
     if (m_hash == h256())
     {
-        std::cout << "#############recalculate hash" << std::endl;
         RLPStream s;
         streamRLP(s);
         m_hash = sha3(s.out());
@@ -143,7 +142,6 @@ void BlockHeader::streamRLP(RLPStream& _s) const
 }
 void BlockHeader::streamRLPFields(RLPStream& _s) const
 {
-    std::cout << "m_timestamp:" << m_timestamp << std::endl;
     _s << m_parentHash << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_logBloom
        << m_number << m_gasLimit << m_gasUsed << m_timestamp;
     _s.appendVector(m_extraData);
@@ -261,35 +259,7 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
             [&](unsigned i) { return txList[i].data().toBytes(); });
         LOG(WARNING) << "Expected trie root: " << toString(expectedRoot);
         if (m_transactionsRoot != expectedRoot)
-        {
-            std::cout << "check root" << std::endl;
-            /// debug information, delete temporarily
-            /*
-            MemoryDB tm;
-            GenericTrieDB<MemoryDB> transactionsTrie(&tm);
-            transactionsTrie.init();
-
-            vector<bytesConstRef> txs;
-
-            for (unsigned i = 0; i < txList.itemCount(); ++i)
-            {
-                RLPStream k;
-                k << i;
-
-                transactionsTrie.insert(&k.out(), txList[i].data());
-
-                txs.push_back(txList[i].data());
-                LOG(DEBUG) << toHex(k.out()) << toHex(txList[i].data());
-            }
-            LOG(DEBUG) << "trieRootOver" << expectedRoot;
-            LOG(DEBUG) << "orderedTrieRoot" << orderedTrieRoot(txs);
-            LOG(DEBUG) << "TrieDB" << transactionsTrie.root();
-            LOG(DEBUG) << "Contents:";
-            for (auto const& t : txs)
-                LOG(DEBUG) << toHex(t);*/
-
             BOOST_THROW_EXCEPTION(InvalidTransactionsRoot()
                                   << Hash256RequirementError(expectedRoot, m_transactionsRoot));
-        }
     }
 }
