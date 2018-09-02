@@ -42,7 +42,9 @@ BOOST_FIXTURE_TEST_SUITE(LogEntryTest, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(LogEntryBasic)
 {
     Address address("ccdeac59d35627b7de09332e819d5159e7bb7250");
-    h256s topics({"123344", "445566"});
+    h256 t1("0x12345678");
+    h256 t2("0x9abcdef0");
+    h256s topics = {t1, t2};
     bytes data({'a', 'b', '5', '6'});
 
     LogEntry le = LogEntry(address, topics, data);
@@ -63,20 +65,23 @@ BOOST_AUTO_TEST_CASE(LogEntryBasic)
 BOOST_AUTO_TEST_CASE(BloomTest)
 {
     Address address("ccdeac59d35627b7de09332e819d5159e7bb7250");
-    h256s topics({"123344", "445566"});
+    h256 t1("0x12345678");
+    h256 t2("0x9abcdef0");
+    h256s topics = {t1, t2};
     bytes data({'a', 'b', '5', '6'});
 
     LogEntry le = LogEntry(address, topics, data);
     LogBloom bl = le.bloom();
+    std::cout << "logentry: " << bl.hex() << std::endl;
 
-    RLPStream s;
-    le.streamRLP(s);
-    RLP r(&s.out());
-    LogEntry compareLe(r);
-
-    LogBloom compareBl = compareLe.bloom();
-
-    BOOST_CHECK(bl == compareBl);
+    std::string compareLb(
+        "000000000000004000000000000000000000000000040000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000"
+        "000000000000000000000200000000000000000008000000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000"
+        "00000000000000000000000000000000000000000000000000000000000000");
+    BOOST_CHECK(bl.hex() == compareLb);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
