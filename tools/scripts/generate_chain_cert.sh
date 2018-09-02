@@ -60,8 +60,8 @@ help() {
     echo "    bash $this_script -o /mydata "
     echo "    bash $this_script -o /mydata -m"
     echo "guomi Example:"
-    echo "    bash $this_script -o /mydata -m -g"
-    echo "    bash $this_script -o /mydata -g"
+    echo "    bash $this_script -o ~/mydata -m -g"
+    echo "    bash $this_script -o ~/mydata -g"
 exit -1
 }
 
@@ -147,7 +147,7 @@ function generate_guomi_cert() {
     #execute_cmd "cd GM && chmod a+x *"
     execute_cmd "cd ${guomi_dir}"
     ##callback gmchain.sh
-    execute_cmd "./gmchain.sh ${dst_dir} ${manual}"
+    execute_cmd "bash gmchain.sh ${dst_dir} ${manual}"
     execute_cmd "cd ${current_dir}"
 }
 
