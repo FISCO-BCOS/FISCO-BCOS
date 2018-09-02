@@ -27,7 +27,6 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-#include <vector>
 
 using namespace dev;
 namespace dev
