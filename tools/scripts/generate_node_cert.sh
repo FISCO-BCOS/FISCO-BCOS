@@ -75,8 +75,8 @@ help() {
     echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data"
     echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m"
     echo "guomi Example:"
-    echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -s sdk1 -g"
-    echo "    bash $this_script -a test_agency -d /mydata/test_agency -n node0 -o /mydata/node0/data -m -s sdk1 -g"
+    echo "    bash $this_script -a test_agency -d ~/mydata/test_agency -n node0 -o ~/mydata/node0/data -s sdk1 -g"
+    echo "    bash $this_script -a test_agency -d ~/mydata/test_agency -n node0 -o ~/mydata/node0/data -m -s sdk1 -g"
 exit -1
 }
 
