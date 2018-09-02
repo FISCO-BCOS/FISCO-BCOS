@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(BloomTest)
 
     LogEntry le = LogEntry(address, topics, data);
     LogBloom bl = le.bloom();
-    std::cout << "logentry: " << bl.hex() << std::endl;
+    std::cout << "LogBloom: " << bl.hex() << std::endl;
 
     std::string compareLb(
         "000000000000004000000000000000000000000000040000000000000000000000000000000000000000000000"
