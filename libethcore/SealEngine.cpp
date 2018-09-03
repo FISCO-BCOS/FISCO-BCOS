@@ -23,12 +23,6 @@ using namespace dev;
 using namespace eth;
 
 SealEngineRegistrar* SealEngineRegistrar::s_this = nullptr;
-
-void NoProof::init()
-{
-    ETH_REGISTER_SEAL_ENGINE(NoProof);
-}
-
 void SealEngineFace::verify(
     Strictness _s, BlockHeader const& _bi, BlockHeader const& _parent, bytesConstRef _block) const
 {
@@ -36,11 +30,6 @@ void SealEngineFace::verify(
 
     if (_s != CheckNothingNew)
     {
-        if (_bi.difficulty() < chainParams().minimumDifficulty)
-            BOOST_THROW_EXCEPTION(
-                InvalidDifficulty() << RequirementError(
-                    bigint(chainParams().minimumDifficulty), bigint(_bi.difficulty())));
-
         if (_bi.gasLimit() < chainParams().minGasLimit)
             BOOST_THROW_EXCEPTION(InvalidGasLimit() << RequirementError(
                                       bigint(chainParams().minGasLimit), bigint(_bi.gasLimit())));
@@ -48,22 +37,6 @@ void SealEngineFace::verify(
         if (_bi.gasLimit() > chainParams().maxGasLimit)
             BOOST_THROW_EXCEPTION(InvalidGasLimit() << RequirementError(
                                       bigint(chainParams().maxGasLimit), bigint(_bi.gasLimit())));
-
-        if (_bi.number() && _bi.extraData().size() > chainParams().maximumExtraDataSize)
-        {
-            BOOST_THROW_EXCEPTION(ExtraDataTooBig()
-                                  << RequirementError(bigint(chainParams().maximumExtraDataSize),
-                                         bigint(_bi.extraData().size()))
-                                  << errinfo_extraData(_bi.extraData()));
-        }
-
-        u256 const& daoHardfork = chainParams().daoHardforkBlock;
-        if (daoHardfork != 0 && daoHardfork + 9 >= daoHardfork && _bi.number() >= daoHardfork &&
-            _bi.number() <= daoHardfork + 9)
-            if (_bi.extraData() != fromHex("0x64616f2d686172642d666f726b"))
-                BOOST_THROW_EXCEPTION(
-                    ExtraDataIncorrect()
-                    << errinfo_comment("Received block from the wrong fork (invalid extradata)."));
     }
 
     if (_parent)
@@ -129,15 +102,4 @@ SealEngineFace* SealEngineRegistrar::create(ChainOperationParams const& _params)
     if (ret)
         ret->setChainParams(_params);
     return ret;
-}
-
-EVMSchedule const& SealEngineBase::evmSchedule(u256 const& _blockNumber) const
-{
-    return chainParams().scheduleForBlockNumber(_blockNumber);
-}
-
-u256 SealEngineBase::blockReward(u256 const& _blockNumber) const
-{
-    EVMSchedule const& schedule{evmSchedule(_blockNumber)};
-    return chainParams().blockReward(schedule);
 }
