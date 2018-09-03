@@ -69,7 +69,7 @@ public:
     u256 minGasLimit;
     u256 maxGasLimit;
     u256 gasLimitBoundDivisor;
-    
+
     int networkID = 0;  // Distinguishes different sub protocols.
 
     u256 minimumDifficulty;
