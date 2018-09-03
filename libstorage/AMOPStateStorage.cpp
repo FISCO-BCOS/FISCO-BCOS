@@ -6,6 +6,7 @@
 
 #include <libchannelserver/ChannelMessage.h>
 #include "StateDB.h"
+#include "Common.h"
 
 using namespace dev;
 using namespace dev::storage;
@@ -102,7 +103,7 @@ Entries::Ptr AMOPStateStorage::select(h256 hash, int num,
         entry->setField(columns[j], fieldValue);
       }
 
-      entry->setStatus(boost::lexical_cast<int>(entry->getField("status")));
+      entry->setStatus(boost::lexical_cast<int>(entry->getField(STATUS)));
       if (entry->getStatus() == 0) {
         entry->setDirty(false);
         entries->addEntry(entry);

@@ -10,12 +10,13 @@
 #include <boost/lexical_cast.hpp>
 #include <map>
 #include "StateDB.h"
+#include "Common.h"
 
 using namespace dev::storage;
 
 Entry::Entry() {
   // status为必选字段
-  _fields.insert(std::make_pair("status", "0"));
+  _fields.insert(std::make_pair(STATUS, "0"));
 }
 
 std::string Entry::getField(const std::string &key) const {
@@ -45,7 +46,7 @@ void Entry::setField(const std::string &key, std::string value) {
 std::map<std::string, std::string> *Entry::fields() { return &_fields; }
 
 uint32_t Entry::getStatus() {
-  auto it = _fields.find("status");
+  auto it = _fields.find(STATUS);
   if (it == _fields.end()) {
     return 0;
   } else {
@@ -54,10 +55,10 @@ uint32_t Entry::getStatus() {
 }
 
 void Entry::setStatus(int status) {
-  auto it = _fields.find("status");
+  auto it = _fields.find(STATUS);
   if (it == _fields.end()) {
     _fields.insert(
-        std::make_pair("status", boost::lexical_cast<std::string>(status)));
+        std::make_pair(STATUS, boost::lexical_cast<std::string>(status)));
   } else {
     it->second = boost::lexical_cast<std::string>(status);
   }
