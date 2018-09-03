@@ -126,27 +126,6 @@ private:
     ChainOperationParams m_params;
 };
 
-class SealEngineBase : public SealEngineFace
-{
-public:
-    void generateSeal(BlockHeader const& _bi) override
-    {
-        RLPStream ret;
-        _bi.streamRLP(ret);
-        if (m_onSealGenerated)
-            m_onSealGenerated(ret.out());
-    }
-    void onSealGenerated(std::function<void(bytes const&)> const& _f) override
-    {
-        m_onSealGenerated = _f;
-    }
-    EVMSchedule const& evmSchedule(u256 const& _blockNumber) const override;
-    u256 blockReward(u256 const& _blockNumber) const override;
-
-protected:
-    std::function<void(bytes const& s)> m_onSealGenerated;
-};
-
 using SealEngineFactory = std::function<SealEngineFace*()>;
 
 class SealEngineRegistrar
@@ -188,13 +167,5 @@ private:
 #define ETH_REGISTER_SEAL_ENGINE(Name)                               \
     static SealEngineFactory __eth_registerSealEngineFactory##Name = \
         SealEngineRegistrar::registerSealEngine<Name>(#Name)
-
-class NoProof : public eth::SealEngineBase
-{
-public:
-    static std::string name() { return "NoProof"; }
-    static void init();
-};
-
 }  // namespace eth
 }  // namespace dev

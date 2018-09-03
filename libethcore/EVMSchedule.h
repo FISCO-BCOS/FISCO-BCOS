@@ -17,13 +17,12 @@
 /** @file EVMSchedule.h
  * @author wheatli
  * @date 2018.8.28
- * @modify copy from aleth
+ * @brief:
  */
 
 #pragma once
 
 #include <libdevcore/Common.h>
-
 #include <boost/optional.hpp>
 #include <array>
 
@@ -35,11 +34,12 @@ struct EVMSchedule
 {
     EVMSchedule() : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}) {}
     EVMSchedule(bool _efcd, bool _hdc, unsigned const& _txCreateGas)
-      : exceptionalFailedCodeDeposit(_efcd),
+      : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}),
+        exceptionalFailedCodeDeposit(_efcd),
         haveDelegateCall(_hdc),
-        tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}),
         txCreateGas(_txCreateGas)
     {}
+    std::array<unsigned, 8> tierStepGas;
     bool exceptionalFailedCodeDeposit = true;
     bool haveDelegateCall = true;
     bool eip150Mode = false;
@@ -50,34 +50,43 @@ struct EVMSchedule
     bool haveStaticCall = false;
     bool haveCreate2 = false;
     bool haveExtcodehash = false;
-    std::array<unsigned, 8> tierStepGas;
+    /// gas cost for specified calculation
+    /// exp gas cost
     unsigned expGas = 10;
     unsigned expByteGas = 10;
+    /// sha3 gas cost
     unsigned sha3Gas = 30;
     unsigned sha3WordGas = 6;
+    /// load/store gas cost
     unsigned sloadGas = 50;
     unsigned sstoreSetGas = 20000;
     unsigned sstoreResetGas = 5000;
     unsigned sstoreRefundGas = 15000;
+    /// jump gas cost
     unsigned jumpdestGas = 1;
+    /// log gas cost
     unsigned logGas = 375;
     unsigned logDataGas = 8;
     unsigned logTopicGas = 375;
+    /// creat contract gas cost
     unsigned createGas = 32000;
+    /// call function of contract gas cost
     unsigned callGas = 40;
     unsigned callStipend = 2300;
     unsigned callValueTransferGas = 9000;
     unsigned callNewAccountGas = 25000;
+
     unsigned suicideRefundGas = 24000;
     unsigned memoryGas = 3;
     unsigned quadCoeffDiv = 512;
     unsigned createDataGas = 200;
+    /// transaction related gas
     unsigned txGas = 21000;
     unsigned txCreateGas = 53000;
     unsigned txDataZeroGas = 4;
     unsigned txDataNonZeroGas = 68;
     unsigned copyGas = 3;
-
+    /// extra code related gas
     unsigned extcodesizeGas = 20;
     unsigned extcodecopyGas = 20;
     unsigned extcodehashGas = 400;
@@ -94,10 +103,19 @@ struct EVMSchedule
     bool zeroValueTransferChargesNewAccountGas() const { return !eip158Mode; }
 };
 
+/// exceptionalFailedCodeDeposit: true
+/// haveDelegateCall: true
+/// tierStepGas: {0, 2, 3, 5, 8, 10, 20, 0}
+/// txCreateGas: 53000
 static const EVMSchedule DefaultSchedule = EVMSchedule();
+/// exceptionalFailedCodeDeposit: false
+/// haveDelegateCall: false
+/// tierStepGas: {0, 2, 3, 5, 8, 10, 20, 0}
+/// txCreateGas: 21000
 static const EVMSchedule FrontierSchedule = EVMSchedule(false, false, 21000);
+/// value of params are equal to DefaultSchedule
 static const EVMSchedule HomesteadSchedule = EVMSchedule(true, true, 53000);
-
+/// EIP150(refer to: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-150.md)
 static const EVMSchedule EIP150Schedule = [] {
     EVMSchedule schedule = HomesteadSchedule;
     schedule.eip150Mode = true;
@@ -109,7 +127,7 @@ static const EVMSchedule EIP150Schedule = [] {
     schedule.suicideGas = 5000;
     return schedule;
 }();
-
+/// EIP158
 static const EVMSchedule EIP158Schedule = [] {
     EVMSchedule schedule = EIP150Schedule;
     schedule.expByteGas = 50;
@@ -148,5 +166,11 @@ static const EVMSchedule ExperimentalSchedule = [] {
     EVMSchedule schedule = ConstantinopleSchedule;
     return schedule;
 }();
+
+static const EVMSchedule FiscoBcosSchedule = [] {
+    EVMSchedule schedule = ConstantinopleSchedule;
+    return schedule;
+}();
+
 }  // namespace eth
 }  // namespace dev
