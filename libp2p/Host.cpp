@@ -37,7 +37,6 @@
 #include "Session.h"
 #include "Common.h"
 #include "Capability.h"
-#include "UPnP.h"
 #include "RLPxHandshake.h"
 #include "Host.h"
 using namespace std;
