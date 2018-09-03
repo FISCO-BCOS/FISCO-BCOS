@@ -830,12 +830,14 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
         {
             try
             {
-                LOG(TRACE) << "Enacting transaction: " << tr.randomid() << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value() << toString(tr.sha3());
+                LOG(TRACE) << "Enacting transaction: " << tr.randomid()
+                           << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value()
+                           << toString(tr.sha3());
                 // 区分从enactOn和populateFromChain
                 execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
 
-                //LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
-                //LOG(TRACE) << m_state;
+                // LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
+                // LOG(TRACE) << m_state;
             }
             catch (Exception& ex)
             {
@@ -844,7 +846,9 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
             }
 
             LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
-            LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot()) << ",gasUsed=" << toString(m_receipts.back().gasUsed()) << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+            LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot())
+                       << ",gasUsed=" << toString(m_receipts.back().gasUsed())
+                       << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
 
             RLPStream receiptRLP;
             m_receipts.back().streamRLP(receiptRLP);
