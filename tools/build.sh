@@ -134,7 +134,7 @@ build_ubuntu_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake .. -DCOVERAGE=ON"
-    execute_cmd "make -j`cat /proc/cpuinfo |grep "cores"|uniq`"
+    execute_cmd "make"
     #execute_cmd "make install && cd ${current_dir}"
 }
 
@@ -142,7 +142,7 @@ build_centos_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake3 .. -DCOVERAGE=ON"
-    execute_cmd "make -j`cat /proc/cpuinfo |grep "cores"|uniq`"
+    execute_cmd "make"
     #execute_cmd "make install && cd ${current_dir}"
 }
 
