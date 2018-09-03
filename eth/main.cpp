@@ -84,7 +84,6 @@
 
 INITIALIZE_EASYLOGGINGPP
 
-using namespace std;
 using namespace dev;
 using namespace dev::p2p;
 using namespace dev::eth;
@@ -382,12 +381,9 @@ int main(int argc, char** argv)
 
 	WithExisting withExisting = WithExisting::Trust;
 
-	std::string filename;
-	string configJSON;
-	string genesisJSON;
+	std::string configJSON;
+	std::string genesisJSON;
 
-	int blockNumber = 0;
-	std::string contracts;
 	for (int i = 1; i < argc; ++i)
 	{
 		string arg = argv[i];

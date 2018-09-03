@@ -58,6 +58,7 @@ R"E(
         "keystoredir":"./data/keystore/",
         "datadir":"./data/",
         "vm":"interpreter",
+        "db_topic":"DB",
         "networkid":"12345",
         "logverbosity":"4",
         "coverlog":"OFF",

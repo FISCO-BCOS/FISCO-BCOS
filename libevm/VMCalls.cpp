@@ -139,6 +139,7 @@ void VM::caseCall()
 
 bool VM::caseCallSetup(CallParameters *callParams)
 {
+#if 0
 	m_runGas = toUint64(m_schedule->callGas);
 
 	if (m_op == Instruction::CALL && !m_ext->exists(asAddress(*(m_sp - 1))))
@@ -170,6 +171,8 @@ bool VM::caseCallSetup(CallParameters *callParams)
 	m_runGas = toUint64(callParams->gas);
 	ON_OP();
 	updateIOGas();
+#endif
+	ON_OP();
 
 	if (m_op != Instruction::DELEGATECALL && *(m_sp - 2) > 0)
 		callParams->gas += m_schedule->callStipend;

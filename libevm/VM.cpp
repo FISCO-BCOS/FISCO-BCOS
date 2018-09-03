@@ -107,18 +107,24 @@ uint64_t VM::gasForMem(u512 _size)
 
 void VM::updateIOGas()
 {
+#if 0
 	if (m_io_gas < m_runGas)
 		throwOutOfGas();
 	m_io_gas -= m_runGas;
+#endif
+	//m_io_gas -= 1;
 }
 
 void VM::updateGas()
 {
+#if 0
 	if (m_newMemSize > m_mem.size())
 		m_runGas += toUint64(gasForMem(m_newMemSize) - gasForMem(m_mem.size()));
 	m_runGas += (m_schedule->copyGas * ((m_copyMemSize + 31) / 32));
 	if (m_io_gas < m_runGas)
 		throwOutOfGas();
+#endif
+	//m_runGas += 1;
 }
 
 void VM::updateMem()

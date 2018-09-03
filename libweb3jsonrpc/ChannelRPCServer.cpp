@@ -58,15 +58,13 @@ bool ChannelRPCServer::StartListening() {
 		
 		if (dev::getSSL() == SSL_SOCKET_V2)
 		{
-#if ETH_ENCRYPTTYPE
-			initContext();
-#else
+#ifndef ETH_ENCRYPTTYPE
 			initSSLContext();
 #endif
 		}
-		else{
-			initContext();
-		}
+
+		std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
+		_server->setConnectionHandler(fp);
 
 		_server->run();
 
@@ -96,48 +94,15 @@ bool ChannelRPCServer::StartListening() {
 		});
 
 		_topicThread->detach();
-
 	}
 
 	return true;
 }
 
-void ChannelRPCServer::initContext()
-{
-	string certData = asString( contents( getDataDir() + "/ca.crt") );
-	if (certData == "")
-	{
-		LOG(ERROR)<<"Get ca.crt File Err......................";
-		exit(-1);
-	}
-	certData = asString( contents( getDataDir() + "/server.crt") );
-	if (certData == "")
-	{
-		LOG(ERROR)<<"Get server.crt File Err......................";
-		exit(-1);
-	}
-	certData = asString( contents( getDataDir() + "/server.key") );
-	if (certData == "")
-	{
-		LOG(ERROR)<<"Get server.key File Err......................";
-		exit(-1);
-	}
-	_sslContext->load_verify_file(getDataDir() + "ca.crt");
-	_sslContext->use_certificate_chain_file(getDataDir() + "server.crt");
-	_sslContext->use_private_key_file(getDataDir() + "server.key", boost::asio::ssl::context_base::pem);
-
-	_server = make_shared<dev::channel::ChannelServer>();
-	_server->setIOService(_ioService);
-	_server->setSSLContext(_sslContext);
-
-	_server->setEnableSSL(true);
-	_server->setBind(_listenAddr, _listenPort);
-
-	std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
-	_server->setConnectionHandler(fp);
-}
 void ChannelRPCServer::initSSLContext()
 {
+	_sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+
 	vector< pair<string,Public> >  certificates;
 	string nodepri;
 	//CertificateServer::GetInstance().getCertificateList(certificates,nodepri);

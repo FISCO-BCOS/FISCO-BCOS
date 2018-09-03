@@ -1,8 +1,6 @@
 aux_source_directory(. SRC_LIST)
-aux_source_directory(./dfs SRC_LIST)
 
 file(GLOB HEADERS "*.h")
-include_directories(./dfs)
 
 add_library(web3jsonrpc ${SRC_LIST} ${HEADERS})
 
