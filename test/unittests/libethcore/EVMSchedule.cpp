@@ -85,6 +85,11 @@ void testConstantinopleScheduleCase()
     BOOST_CHECK(ConstantinopleSchedule.haveExtcodehash == true);
 }
 
+void testFiscoBcosScheduleCase()
+{
+    testConstantinopleScheduleCase();
+}
+
 void testExperimentalScheduleCase()
 {
     testConstantinopleScheduleCase();
@@ -126,7 +131,10 @@ BOOST_AUTO_TEST_CASE(ExperimentalSchedule)
 {
     testExperimentalScheduleCase();
 }
-
+BOOST_AUTO_TEST_CASE(FiscoBcosSchedule)
+{
+    testFiscoBcosScheduleCase();
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

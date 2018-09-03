@@ -166,5 +166,11 @@ static const EVMSchedule ExperimentalSchedule = [] {
     EVMSchedule schedule = ConstantinopleSchedule;
     return schedule;
 }();
+
+static const EVMSchedule FiscoBcosSchedule = [] {
+    EVMSchedule schedule = ConstantinopleSchedule;
+    return schedule;
+}();
+
 }  // namespace eth
 }  // namespace dev
