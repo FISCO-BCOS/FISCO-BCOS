@@ -112,14 +112,14 @@ while read line;do
 		nodeid=$(openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
 		nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
 		"
-		ip_list=$"${ip_list}node.${index}="${line}:$(( port_start + index * 3 ))"
+		ip_list=$"${ip_list}node.${index}="${line}:$(( port_start + index * 4 ))"
 		"
 		((++index))
 	done
 done < $ip_file
 
 echo "#!/bin/bash" > "$output_dir/start_all.sh"
-
+echo "PPath=\`pwd\`" >> "$output_dir/start_all.sh"
 echo "生成节点配置..."
 #生成每个节点的配置、创世块文件和启动脚本
 index=0
@@ -150,7 +150,7 @@ while read line;do
 		listen_ip=0.0.0.0
 		listen_port=$(( port_start + 1 + index * 4 ))
 		http_listen_port=$(( port_start + 2 + index * 4 ))
-		console_port=$(( port_start + 4 + index * 4 ))
+		console_port=$(( port_start + 3 + index * 4 ))
 	
 	[p2p]
 		listen_ip=0.0.0.0
@@ -234,9 +234,9 @@ EOF
 	
 		cp "$output_dir/ca.crt" "$node_dir/data/"
 		cp "$eth_path" "$node_dir/eth"
+		echo "cd \${PPath}/node_${line}_${index}" >> "$output_dir/start_all.sh"
+		echo "nohup setsid fisco-bcos --config config${i}.conf --genesis genesis.json &" >> "$output_dir/start_all.sh"
 		((++index))
-		
-		echo "cd $node_dir" >> "$output_dir/start_all.sh"
 		[ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
 	done
 done < $ip_file

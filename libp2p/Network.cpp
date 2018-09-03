@@ -34,7 +34,6 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Exceptions.h>
 #include "Common.h"
-#include "UPnP.h"
 #include "Network.h"
 
 using namespace std;
@@ -169,46 +168,6 @@ int Network::tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkPreferences const& 
 	}
 
 	return -1;
-}
-
-bi::tcp::endpoint Network::traverseNAT(std::set<bi::address> const& _ifAddresses, unsigned short _listenPort, bi::address& o_upnpInterfaceAddr)
-{
-	asserts(_listenPort != 0);
-
-	unique_ptr<UPnP> upnp;
-	try
-	{
-		upnp.reset(new UPnP);
-	}
-	// let m_upnp continue as null - we handle it properly.
-	catch (...) {}
-
-	bi::tcp::endpoint upnpEP;
-	if (upnp && upnp->isValid())
-	{
-		bi::address pAddr;
-		int extPort = 0;
-		for (auto const& addr: _ifAddresses)
-			if (addr.is_v4() && isPrivateAddress(addr) && (extPort = upnp->addRedirect(addr.to_string().c_str(), _listenPort)))
-			{
-				pAddr = addr;
-				break;
-			}
-
-		auto eIP = upnp->externalIP();
-		bi::address eIPAddr(bi::address::from_string(eIP));
-		if (extPort && eIP != string("0.0.0.0") && !isPrivateAddress(eIPAddr))
-		{
-			LOG(INFO) << "Punched through NAT and mapped local port" << _listenPort << "onto external port" << extPort << ".";
-			LOG(INFO) << "External addr:" << eIP;
-			o_upnpInterfaceAddr = pAddr;
-			upnpEP = bi::tcp::endpoint(eIPAddr, (unsigned short)extPort);
-		}
-		else
-			LOG(WARNING) << "Couldn't punch through NAT (or no NAT in place).";
-	}
-
-	return upnpEP;
 }
 
 bi::tcp::endpoint Network::resolveHost(string const& _addr)
