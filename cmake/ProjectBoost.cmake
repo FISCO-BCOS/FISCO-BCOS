@@ -1,7 +1,7 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-set(BOOST_CXXFLAGS "")
+set(BOOST_CXXFLAGS "cxxflags=-fPIC")
 if (WIN32)
     set(BOOST_BOOTSTRAP_COMMAND bootstrap.bat)
     set(BOOST_BUILD_TOOL b2.exe)

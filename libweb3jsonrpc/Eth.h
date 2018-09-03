@@ -31,7 +31,6 @@
 #include <libdevcrypto/Common.h>
 #include <libethereum/Client.h>
 #include <UTXO/UTXOData.h>
-
 #include "EthFace.h"
 #include "SessionManager.h"
 

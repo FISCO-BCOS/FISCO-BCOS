@@ -246,8 +246,6 @@ private:
 	static const size_t kKnownViewChange = 1024;
 
 	static const unsigned kMaxChangeCycle = 20;
-	// log whether the commit is called before, use to trigger commit phase under consensus control
-	std::unordered_map<h256, bool> m_commitMap;
 };
 
 }
