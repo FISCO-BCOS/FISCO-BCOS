@@ -18,9 +18,10 @@
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
  *
- * @author wheatli
+ * @author wheatli, chaychen
  * @date 2018.8.27
  * @modify add asAddress and fromAddress
+ *         remove the special contract for block hash storage defined in EIP96
  *
  * Ethereum-specific data structures & algorithms.
  */
@@ -51,19 +52,8 @@ extern const unsigned c_minorProtocolVersion;
 /// Current database version.
 extern const unsigned c_databaseVersion;
 
-/// Address of the special contract for block hash storage defined in EIP96
-extern const Address c_blockhashContractAddress;
-/// Code of the special contract for block hash storage defined in EIP96
-extern const bytes c_blockhashContractCode;
-
-/// User-friendly string representation of the amount _b in wei.
-std::string formatBalance(bigint const& _b);
-
 /// Convert the given string into an address.
 Address toAddress(std::string const& _s);
-
-/// Get information concerning the currency denominations.
-std::vector<std::pair<u256, std::string>> const& units();
 
 /// The log bloom's size (2048-bit).
 using LogBloom = h2048;
@@ -220,10 +210,6 @@ struct TransactionSkeleton
     u256 gas = Invalid256;
     u256 gasPrice = Invalid256;
     u256 blockLimit = Invalid256;
-
-    std::string userReadable(bool _toProxy,
-        std::function<std::pair<bool, std::string>(TransactionSkeleton const&)> const& _getNatSpec,
-        std::function<std::string(Address const&)> const& _formatAddress) const;
 };
 
 
