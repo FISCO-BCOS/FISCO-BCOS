@@ -70,7 +70,6 @@ bool isLocalHostAddress(std::string const& _addressToCheck);
 bool isPublicAddress(bi::address const& _addressToCheck);
 bool isPublicAddress(std::string const& _addressToCheck);
 
-class UPnP;
 class Capability;
 class Host;
 class Session;

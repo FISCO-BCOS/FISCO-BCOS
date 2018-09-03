@@ -66,7 +66,7 @@ namespace dev {
             unordered_map<std::string, SSPtr> m_hashSessionMap;
             SharedMutex x_map;
             SharedMutex x_sessionMap;
-            AccountHolder* m_ethAccounts;
+            //AccountHolder* m_ethAccounts;
         };
         
         class CallbackWorker : public Worker {

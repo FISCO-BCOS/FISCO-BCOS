@@ -276,37 +276,6 @@ public:
 };
 
 
-
-/**
- * Connect Node Struct match bootstrap.json 
- **/
-class ConnectParams{
-public:
-	std::string host="";
-	u256		port=0;
-	std::string toString()const {
-		std::ostringstream os;
-		os << host << ":"  << port ;
-		return os.str();
-	}
-	bool Valid() const {
-		return host != "" && port != 0 ;
-	} 
-	ConnectParams() {};
-	ConnectParams(const std::string & json);
-	//转换为enode 信息 enode://${nodeid}@${ip}:${port}
-	std::string endPoint()const {
-		std::ostringstream os;
-		os << host << ":" << port;
-		return os.str();
-	}
-	bool operator==(const ConnectParams &p1)const {
-		return (host == p1.host
-		        && port == p1.port);
-	}
-};
-
-
 /**
 * Miner Node Struct
 */
