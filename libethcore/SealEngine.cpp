@@ -65,22 +65,6 @@ void SealEngineFace::populateFromParent(BlockHeader& _bi, BlockHeader const& _pa
 void SealEngineFace::verifyTransaction(ImportRequirements::value _ir, TransactionBase const& _t,
     BlockHeader const& _header, u256 const& _gasUsed) const
 {
-    if ((_ir & ImportRequirements::TransactionSignatures) &&
-        _header.number() < chainParams().experimentalForkBlock)
-        BOOST_THROW_EXCEPTION(InvalidSignature());
-
-    if ((_ir & ImportRequirements::TransactionBasic) &&
-        _header.number() >= chainParams().experimentalForkBlock &&
-        (_t.value() != 0 || _t.gasPrice() != 0 || _t.nonce() != 0))
-        BOOST_THROW_EXCEPTION(InvalidZeroSignatureTransaction()
-                              << errinfo_got((bigint)_t.gasPrice())
-                              << errinfo_got((bigint)_t.value())
-                              << errinfo_got((bigint)_t.nonce()));
-
-    if (_header.number() >= chainParams().homesteadForkBlock &&
-        (_ir & ImportRequirements::TransactionSignatures) && _t.hasSignature())
-        _t.checkLowS();
-
     eth::EVMSchedule const& schedule = evmSchedule(_header.number());
 
     // Pre calculate the gas needed for execution

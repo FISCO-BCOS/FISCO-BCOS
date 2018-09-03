@@ -188,15 +188,6 @@ int64_t TransactionBase::baseGasRequired(
     return g;
 }
 
-bigint TransactionBase::gasRequired(
-    bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es, u256 const& _gas)
-{
-    bigint ret = (_contractCreation ? _es.txCreateGas : _es.txGas) + _gas;
-    for (auto i : _data)
-        ret += i ? _es.txDataNonZeroGas : _es.txDataZeroGas;
-    return ret;
-}
-
 h256 TransactionBase::sha3(IncludeSignature _sig) const
 {
     if (_sig == WithSignature && m_hashWith)
