@@ -60,8 +60,8 @@ help() {
     echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304"
     echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed"
     echos "Guomi Example:"
-    echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -g"
-    echos "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed -g"
+    echos "    bash $this_script -o ~/mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -g"
+    echos "    bash $this_script -o ~/mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -e 127.0.0.1:30303,127.0.0.1:30304 -s 0x210a7d467c3c43307f11eda35f387be456334fed -g"
 
 exit -1
 }

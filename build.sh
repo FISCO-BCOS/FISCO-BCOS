@@ -6,11 +6,12 @@
 #
 
 #!/bin/sh
-set -e
 
 current_dir=`pwd`
 
 enable_guomi=0
+Ubuntu_Platform=0
+Centos_Platform=1
 
 LOG_ERROR()
 {
@@ -38,6 +39,40 @@ execute_cmd()
     fi
 }
 
+# get platform: now support debain/ubuntu, fedora/centos, oracle
+get_platform()
+{
+    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
+    case $(uname -s) in
+    Darwin)
+        LOG_ERROR "FISCO-BCOS V2.0 Don't Support MAC OS Yet!"
+        exit 1;;
+    FreeBSD)
+        LOG_ERROR "FISCO-BCOS V2.0 Don't Support FreeBSD Yet!"
+        exit 1;;
+    Linux)
+        if [ -f "/etc/arch-release" ]; then
+            LOG_ERROR "FISCO-BCOS V2.0 Don't Support arch-linux Yet!"
+        elif [ -f "/etc/os-release" ];then
+            DISTRO_NAME=$(. /etc/os-release; echo $NAME)
+            case $DISTRO_NAME in
+            Debian*|Ubuntu)
+                LOG_INFO "Debian*|Ubuntu Platform"
+                return ${Ubuntu_Platform};; #ubuntu type
+            Fedora|CentOS*)
+                LOG_INFO "Fedora|CentOS* Platform"
+                return ${Centos_Platform};; #centos type
+            Oracle*)
+                LOG_INFO "Oracle Platform"
+                return ${Centos_Platform};; #oracle type
+            esac
+        else
+            LOG_ERROR "Unsupported Platform"
+        fi
+    esac
+}
+
+
 install_ubuntu_package()
 {
 	for i in $@ ;
@@ -52,7 +87,7 @@ install_centos_package()
 	for i in $@ ;
 	do
 		LOG_INFO "install ${i}";
-		execute_cmd "yum -y install ${i}";
+		execute_cmd "sudo yum -y install ${i}";
 	done
 }
 
@@ -80,20 +115,25 @@ install_centos_deps()
 
 install_all_deps()
 {
-	if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
+	get_platform
+        platform=`echo $?`
+	if [ ${platform} -eq ${Ubuntu_Platform} ];then
 		install_ubuntu_deps
 		if [ $enable_guomi -eq 0 ];then
 			execute_cmd "sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc"
 		else
 			execute_cmd "sudo cp fisco-solc-guomi-ubuntu  /usr/bin/fisco-solc-guomi && chmod +x  /usr/bin/fisco-solc-guomi"
 		fi
-	else
+	elif [ ${platform} -eq ${Centos_Platform} ];then
 		install_centos_deps
 		if [ $enable_guomi -eq 0 ];then
 			execute_cmd "sudo cp fisco-solc  /usr/bin/fisco-solc"
 		else
 			execute_cmd "sudo cp fisco-solc-guomi-centos  /usr/bin/fisco-solc-guomi && chmod +x /usr/bin/fisco-solc-guomi"
 		fi
+	else
+		LOG_ERROR "Unsupported Platform"
+		exit 1
 	fi
 	execute_cmd "chmod +x scripts/install_deps.sh && ./scripts/install_deps.sh"
 	execute_cmd "sudo chmod +x /usr/bin/fisco-solc"
@@ -156,16 +196,21 @@ build_centos_source()
 	else
 		execute_cmd "cmake3 -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
 	fi
-	execute_cmd "make -j2 && make install && cd ${current_dir}"
+	execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
 build_source()
 {
 	cd ${current_dir}
-	if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
+	get_platform
+    platform=`echo $?`
+	if [ ${platform} -eq ${Ubuntu_Platform} ];then
 		build_ubuntu_source
-	else
+	elif [ ${platform} -eq ${Centos_Platform} ];then
 		build_centos_source
+	else
+		LOG_ERROR "Unsupported Platform, Exit"
+		exit 1
 	fi
 }
 
