@@ -122,20 +122,20 @@ install_all_deps()
 		if [ $enable_guomi -eq 0 ];then
 			execute_cmd "sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc"
 		else
-			execute_cmd "sudo cp fisco-solc-guomi-ubuntu  /usr/bin/fisco-solc-guomi && chmod +x  /usr/bin/fisco-solc-guomi"
+			execute_cmd "sudo cp fisco-solc-guomi-ubuntu  /usr/bin/fisco-solc-guomi && sudo chmod +x  /usr/bin/fisco-solc-guomi"
 		fi
 	elif [ ${platform} -eq ${Centos_Platform} ];then
 		install_centos_deps
 		if [ $enable_guomi -eq 0 ];then
 			execute_cmd "sudo cp fisco-solc  /usr/bin/fisco-solc"
 		else
-			execute_cmd "sudo cp fisco-solc-guomi-centos  /usr/bin/fisco-solc-guomi && chmod +x /usr/bin/fisco-solc-guomi"
+			execute_cmd "sudo cp fisco-solc-guomi-centos  /usr/bin/fisco-solc-guomi && sudo chmod +x /usr/bin/fisco-solc-guomi"
 		fi
 	else
 		LOG_ERROR "Unsupported Platform"
 		exit 1
 	fi
-	execute_cmd "chmod +x scripts/install_deps.sh && ./scripts/install_deps.sh"
+	execute_cmd "chmod +x scripts/install_deps.sh && sudo ./scripts/install_deps.sh"
 	execute_cmd "sudo chmod +x /usr/bin/fisco-solc"
 	#install console
 	execute_cmd "sudo cnpm install -g ethereum-console"
