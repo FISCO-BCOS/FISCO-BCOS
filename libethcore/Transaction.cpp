@@ -186,32 +186,32 @@ bool TransactionBase::isUTXOTx(const std::string& strJson, Json::Value& _json)
 void TransactionBase::transactionRLPDecode13Ele(const RLP &rlp)
 {
 	int index = 0;
-	
-	m_randomid        = rlp[index++].toInt<u256>(); //0
-	m_gasPrice        = rlp[index++].toInt<u256>(); //1
-	m_gas             = rlp[index++].toInt<u256>(); //2
-	m_blockLimit      = rlp[index++].toInt<u256>(); //3
-	m_receiveAddress  = rlp[index].isEmpty() ? Address() : rlp[index].toHash<Address>(RLP::VeryStrict); //4
-	m_type            = rlp[index++].isEmpty() ? ContractCreation : MessageCall;
-	m_value           = rlp[index++].toInt<u256>(); //5
-	if (!rlp[index].isData())
-		BOOST_THROW_EXCEPTION(InvalidTransactionFormat() << errinfo_comment("transaction data RLP must be an array"));
-	m_data            = rlp[index++].toBytes();     // 6
-	m_strCNSName      = rlp[index++].toString();    // 7
-	m_strCNSVer       = rlp[index++].toString();    // 8
-	m_cnsType         = rlp[index++].toInt<u256>(); // 9
+
+    m_randomid = rlp[index++].toInt<u256>();    // 0
+    m_gasPrice = rlp[index++].toInt<u256>();    // 1
+    m_gas = rlp[index++].toInt<u256>();         // 2
+    m_blockLimit = rlp[index++].toInt<u256>();  // 3
+    m_receiveAddress = rlp[index].isEmpty() ? Address() : rlp[index].toHash<Address>(RLP::VeryStrict);  // 4
+    m_type = rlp[index++].isEmpty() ? ContractCreation : MessageCall;
+    m_value = rlp[index++].toInt<u256>();  // 5
+    if (!rlp[index].isData())
+        BOOST_THROW_EXCEPTION(InvalidTransactionFormat() << errinfo_comment("transaction data RLP must be an array"));
+    m_data = rlp[index++].toBytes();         // 6
+    m_strCNSName = rlp[index++].toString();  // 7
+    m_strCNSVer = rlp[index++].toString();   // 8
+    m_cnsType = rlp[index++].toInt<u256>();  // 9
 
 #if ETH_ENCRYPTTYPE
-	h512 pub          = rlp[index++].toInt<u512>(); // 10
-	h256 r            = rlp[index++].toInt<u256>(); // 11
-	h256 s            = rlp[index++].toInt<u256>(); // 12
-	m_vrs             = SignatureStruct{ r, s, pub };
+    h512 pub = rlp[index++].toInt<u512>();  // 10
+    h256 r = rlp[index++].toInt<u256>();    // 11
+    h256 s = rlp[index++].toInt<u256>();    // 12
+    m_vrs = SignatureStruct{r, s, pub};
 #else
-	byte v            = rlp[index++].toInt<byte>(); // 10
-	h256 r            = rlp[index++].toInt<u256>(); // 11
-	h256 s            = rlp[index++].toInt<u256>(); // 12
+    byte v = rlp[index++].toInt<byte>();  // 10
+    h256 r = rlp[index++].toInt<u256>();  // 11
+    h256 s = rlp[index++].toInt<u256>();  // 12
 
-	if (v > 36)
+    if (v > 36)
 		m_chainId = (v - 35) / 2;
 	else if (v == 27 || v == 28)
 		m_chainId = -4;
@@ -219,10 +219,10 @@ void TransactionBase::transactionRLPDecode13Ele(const RLP &rlp)
 		BOOST_THROW_EXCEPTION(InvalidSignature());
 
 	v = v - (m_chainId * 2 + 35);
-	m_vrs             = SignatureStruct{ r, s, v };
+	m_vrs = SignatureStruct{ r, s, v };
 #endif
 	m_transactionType = CNSNewTransaction;
-	m_type            = (m_receiveAddress == Address() && m_strCNSName.empty()) ? ContractCreation : MessageCall;
+	m_type = (m_receiveAddress == Address() && m_strCNSName.empty()) ? ContractCreation : MessageCall;
 
 	LOG(TRACE) << "[CNSNewTransaction] cnsName|cnsVersion|isNewCNS|m_type="
 		<< m_strCNSName << "|"
