@@ -1227,7 +1227,18 @@ string Eth::eth_call(Json::Value const& _json, string const& _blockNumber)
 
 		TransactionSkeleton t = toTransactionSkeleton(_json);
 		setTransactionDefaults(t);
+		//web3j的兼容
+		if (_json.isMember("data") && _json["data"].isString())
+		{
+			string string_data = _json["data"].asString();
+			if (string_data.compare(0,2,"0x") == 0 || string_data.compare(0, 2, "0X") == 0)
+			{
+				string_data.erase(0, 2);
+			}
 
+			string json;
+			boost::algorithm::unhex(string_data.begin(), string_data.end(), std::back_inserter(json));
+		}
 		std::string result;
 		CnsParams params;
 		if (isOldCNSCall(t, params, _json))
