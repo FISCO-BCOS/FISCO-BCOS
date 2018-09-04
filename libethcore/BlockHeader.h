@@ -185,7 +185,10 @@ public:
         if (_index >= m_extraData.size())
             return false;
         else
+        {
             m_extraData[_index] = _content;
+            return true;
+        }
     }
 
     bool setExtraData(bytes const& _content, unsigned int _index = 0)
