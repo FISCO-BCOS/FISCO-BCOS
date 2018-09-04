@@ -14,16 +14,13 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file ChainOperationsParams.h
+/** @file PrecompiledContract.h
  * @author Gav Wood <i@gavwood.com>
  * @date 2015
  */
 
 #pragma once
 
-#include "Common.h"
-#include "EVMSchedule.h"
-#include "PrecompiledContract.h"
 #include <libdevcore/Common.h>
 #include <libethcore/Precompiled.h>
 
@@ -31,33 +28,26 @@ namespace dev
 {
 namespace eth
 {
-struct ChainOperationParams
+class PrecompiledContract
 {
-    ChainOperationParams();
-
-    explicit operator bool() const { return accountStartNonce != Invalid256; }
-
-    /// The chain sealer name: e.g. PBFT, Raft.
-    std::string sealEngineName = "PBFT";
-
 public:
-    EVMSchedule const& scheduleForBlockNumber(u256 const& _blockNumber) const;
-    u256 maximumExtraDataSize = 1024;
-    u256 accountStartNonce = 0;
-    bool tieBreakingGas = true;
-    u256 minGasLimit;
-    u256 maxGasLimit;
-    u256 gasLimitBoundDivisor;
+    PrecompiledContract() = default;
+    PrecompiledContract(PrecompiledPricer const& _cost, PrecompiledExecutor const& _exec,
+        u256 const& _startingBlock = 0)
+      : m_cost(_cost), m_execute(_exec), m_startingBlock(_startingBlock)
+    {}
+    PrecompiledContract(unsigned _base, unsigned _word, PrecompiledExecutor const& _exec,
+        u256 const& _startingBlock = 0);
 
-    int networkID = 0;  // Distinguishes different sub protocols.
+    bigint cost(bytesConstRef _in) const { return m_cost(_in); }
+    std::pair<bool, bytes> execute(bytesConstRef _in) const { return m_execute(_in); }
 
-    u256 minimumDifficulty;
-    u256 difficultyBoundDivisor;
-    u256 durationLimit;
-    bool allowFutureBlocks = false;
+    u256 const& startingBlock() const { return m_startingBlock; }
 
-    /// Precompiled contracts as specified in the chain params.
-    std::unordered_map<Address, PrecompiledContract> precompiled;
+private:
+    PrecompiledPricer m_cost;
+    PrecompiledExecutor m_execute;
+    u256 m_startingBlock = 0;
 };
 
 }  // namespace eth

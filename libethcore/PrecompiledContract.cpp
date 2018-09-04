@@ -14,28 +14,24 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file ChainOperationParams.cpp
+/** @file PrecompiledContract.cpp
  * @author Gav Wood <i@gavwood.com>
  * @date 2015
  */
 
-#include "ChainOperationParams.h"
+#include "PrecompiledContract.h"
 #include <libdevcore/CommonData.h>
-using namespace std;
 using namespace dev;
 using namespace eth;
 
-ChainOperationParams::ChainOperationParams()
-  : minGasLimit(0x1388),
-    maxGasLimit("0x7fffffffffffffff"),
-    gasLimitBoundDivisor(0x0400),
-    networkID(0x0),
-    minimumDifficulty(0x020000),
-    difficultyBoundDivisor(0x0800),
-    durationLimit(0x0d)
+PrecompiledContract::PrecompiledContract(
+    unsigned _base, unsigned _word, PrecompiledExecutor const& _exec, u256 const& _startingBlock)
+  : PrecompiledContract(
+        [=](bytesConstRef _in) -> bigint {
+            bigint s = _in.size();
+            bigint b = _base;
+            bigint w = _word;
+            return b + (s + 31) / 32 * w;
+        },
+        _exec, _startingBlock)
 {}
-
-EVMSchedule const& ChainOperationParams::scheduleForBlockNumber(u256 const&) const
-{
-    return FiscoBcosSchedule;
-}
