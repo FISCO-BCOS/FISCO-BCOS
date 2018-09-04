@@ -45,6 +45,8 @@ enum class CheckTransaction
 };
 
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
+/// Remove m_chainId ,EIP155 value for calculating transaction hash
+/// https://github.com/ethereum/EIPs/issues/155
 class TransactionBase
 {
 public:
@@ -134,11 +136,6 @@ public:
     /// @throws InvalidSValue if the signature has an invalid S value.
     void checkLowS() const;
 
-    /// @throws InvalidSValue if the chain id is neither -4 nor equal to @a chainId
-    /// Note that "-4" is the chain ID of the pre-155 rules, which should also be considered valid
-    /// after EIP155
-    void checkChainId(int chainId = -4) const;
-
     /// @returns true if transaction is non-null.
     explicit operator bool() const { return m_type != NullTransaction; }
 
@@ -148,8 +145,7 @@ public:
     /// Serialises this transaction to an RLPStream.
     /// @throws TransactionIsUnsigned if including signature was requested but it was not
     /// initialized
-    void streamRLP(
-        RLPStream& _s, IncludeSignature _sig = WithSignature, bool _forEip155hash = false) const;
+    void streamRLP(RLPStream& _s, IncludeSignature _sig = WithSignature) const;
 
     /// @returns the RLP serialisation of this transaction.
     bytes rlp(IncludeSignature _sig = WithSignature) const
@@ -196,14 +192,17 @@ public:
         m_nonce = _n;
     }
 
+    /// @returns the latest block number to be packaged for transaction.
+    u256 blockLimit() const { return m_blockLimit; }
+
+    /// @returns the utc time at which a transaction enters the queue.
+    u256 importTime() const { return m_importTime; }
+
+    /// Sets the utc time at which a transaction enters the queue.
+    void setImportTime(u256 _t) { m_importTime = _t; }
+
     /// @returns true if the transaction was signed
     bool hasSignature() const { return m_vrs.is_initialized(); }
-
-    /// @returns true if the transaction was signed with zero signature
-    bool hasZeroSignature() const { return m_vrs && isZeroSignature(m_vrs->r, m_vrs->s); }
-
-    /// @returns true if the transaction uses EIP155 replay protection
-    bool isReplayProtected() const { return m_chainId != -4; }
 
     /// @returns the signature of the transaction (the signature has the sender encoded in it)
     /// @throws TransactionIsUnsigned if signature was not initialized
@@ -237,7 +236,10 @@ protected:
 
     Type m_type = NullTransaction;  ///< Is this a contract-creation transaction or a message-call
                                     ///< transaction?
-    u256 m_nonce;                   ///< The transaction-count of the sender.
+    u256 m_nonce;                   ///< The transaction-count of the sender. Combined with
+                                    ///< blockLimit for transaction de-duplication, and its
+                                    ///< uniqueness is guaranteed by the client sending the
+                                    ///< transaction.
     u256 m_value;  ///< The amount of ETH to be transferred by this transaction. Called 'endowment'
                    ///< for contract-creation transactions.
     Address m_receiveAddress;  ///< The receiving address of the transaction.
@@ -248,11 +250,10 @@ protected:
                    ///< creation transaction.
     boost::optional<SignatureStruct> m_vrs;  ///< The signature of the transaction. Encodes the
                                              ///< sender.
-    int m_chainId = -4;                      ///< EIP155 value for calculating transaction hash
-                                             ///< https://github.com/ethereum/EIPs/issues/155
-
-    mutable h256 m_hashWith;   ///< Cached hash of transaction with signature.
-    mutable Address m_sender;  ///< Cached sender, determined from signature.
+    mutable h256 m_hashWith;                 ///< Cached hash of transaction with signature.
+    mutable Address m_sender;                ///< Cached sender, determined from signature.
+    u256 m_blockLimit;      ///< The latest block number to be packaged for transaction.
+    u256 m_importTime = 0;  ///< The utc time at which a transaction enters the queue.
 };
 
 /// Nice name for vector of Transaction.
@@ -268,7 +269,8 @@ inline std::ostream& operator<<(std::ostream& _out, TransactionBase const& _t)
         _out << "[CREATE]";
 
     _out << "/" << _t.data().size() << "$" << _t.value() << "+" << _t.gas() << "@" << _t.gasPrice();
-    _out << "<-" << _t.safeSender().abridged() << " #" << _t.nonce() << "}";
+    _out << "<-" << _t.safeSender().abridged() << " #" << _t.nonce() << "*" << _t.blockLimit()
+         << "}";
     return _out;
 }
 
