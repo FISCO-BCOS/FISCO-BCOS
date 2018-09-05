@@ -435,7 +435,7 @@ void Host::connect(NodeIPEndpoint const &endpoint)
 		m_pendingPeerConns.insert(endpoint);
 	}
 
-	LOG(INFO) << "Attempting connection to node " << endpoint;
+	LOG(INFO) << "Attempting connection to node " << endpoint.address.to_string() << ":" << endpoint.tcpPort;;
 	auto socket = make_shared<RLPXSocket>(m_ioService, *_sslContext);
 
 	//客户端验证证书有效性
@@ -443,7 +443,7 @@ void Host::connect(NodeIPEndpoint const &endpoint)
 	{
 		if (ec)
 		{
-			LOG(ERROR) << "Connection refused to node" << endpoint << "(" << ec.message() << ")";
+			LOG(ERROR) << "Connection refused to node " << endpoint << "(" << ec.message() << ")";
 			// Manually set error (session not present)
 
 			Guard l(x_pendingNodeConns);
@@ -451,7 +451,7 @@ void Host::connect(NodeIPEndpoint const &endpoint)
 		}
 		else
 		{
-			LOG(INFO) << "Connecting to" << endpoint.address.to_string() << ":" << endpoint.tcpPort;
+			LOG(INFO) << "Connecting to " << endpoint.address.to_string() << ":" << endpoint.tcpPort;
 
 			std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
 			socket->ref().set_verify_callback(newVerifyCallback(endpointPublicKey));
