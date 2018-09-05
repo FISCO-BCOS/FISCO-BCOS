@@ -1,11 +1,9 @@
-# Building docs script
 # Requirements:
 #   sudo apt-get install doxygen graphviz
-#   [Build doxygen from CMake script](https://stackoverflow.com/questions/34878276/build-doxygen-from-cmake-script)  
 
-if(NOT BUILD_DOCS)
-  return()
-endif()
+# if(NOT BUILD_DOCS)
+#   return()
+# endif()
 
 find_package(Doxygen QUIET)
 

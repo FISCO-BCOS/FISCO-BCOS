@@ -132,9 +132,7 @@ public:
 
 	h256 hash(IncludeSeal _i = WithSeal) const;
 	void streamRLP(RLPStream& _s, IncludeSeal _i = WithSeal) const;
-	void setDBHash(h256 dbHash) { 
-        while(m_hash_list.size() < 2 ){m_hash_list.push_back(h256());}
-        m_hash_list[1] = dbHash;}
+	void setDBHash(h256 dbHash) { while(m_hash_list.size() < 2 ){ m_hash_list.push_back(h256());} m_hash_list[1] = dbHash;}
 	void setParentHash(h256 const& _v) { m_parentHash = _v; noteDirty(); }
 	void setSha3Uncles(h256 const& _v) { m_sha3Uncles = _v; noteDirty(); }
 	void setTimestamp(u256 const& _v) { m_timestamp = _v; noteDirty(); }
