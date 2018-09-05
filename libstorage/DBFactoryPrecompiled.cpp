@@ -1,6 +1,7 @@
 #include "DBFactoryPrecompiled.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string.hpp>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libdevcore/easylog.h>
@@ -117,6 +118,44 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 		std::vector<std::string> fieldNameList;
 		boost::split(fieldNameList, fieldNames, boost::is_any_of(","));
 
+		DBPrecompiled::Ptr sysTable;
+
+		std::string str = "_sys_tables_";
+		auto it = _name2Table.find(str);
+		if(it != _name2Table.end()) {
+			LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
+			sysTable = std::dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(it->second));
+
+			break;
+		}
+		else {
+
+			dev::storage::StateDB::Ptr db = _memoryDBFactory->openTable(context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), str);
+
+			DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
+			dbPrecompiled->setDB(db);
+			dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
+
+			Address address = context->registerPrecompiled(dbPrecompiled);
+			_name2Table.insert(std::make_pair(str, address));
+
+			sysTable = dbPrecompiled;
+		}
+
+		 //确认表是否存在
+		auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
+		if (tableEntries->size() == 0) {
+			//写入表信息
+			auto tableEntry = sysTable->getDB()->newEntry();
+			tableEntry->setField("table_name", tableName);
+			tableEntry->setField("key_field", keyName);
+			tableEntry->setField("value_field", boost::join(fieldNameList, ","));
+			sysTable->getDB()->insert(tableName, tableEntry);
+		}
+
+		out = abi.abiIn("");
+
+#if 0
 		auto table = _memoryDBFactory->createTable(context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName, keyName, fieldNameList);
 
 		DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
@@ -127,7 +166,7 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 		_name2Table.insert(std::make_pair(tableName, address));
 
 		out = abi.abiIn("", address);
-
+#endif
 		break;
 	}
 	default: {
