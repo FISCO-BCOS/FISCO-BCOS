@@ -149,8 +149,8 @@ void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
     auto& env = static_cast<ExtVMFace&>(*_context);
     result->tx_gas_price = toEvmC(env.gasPrice());
     result->tx_origin = toEvmC(env.origin());
-    result->block_number = static_cast<int64_t>(env.envInfo().number());
-    result->block_timestamp = static_cast<uint64_t>(env.envInfo().timestamp());
+    result->block_number = env.envInfo().number();
+    result->block_timestamp = env.envInfo().timestamp();
     result->block_gas_limit = static_cast<int64_t>(env.envInfo().gasLimit());
 }
 
@@ -159,7 +159,6 @@ void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number
     auto& env = static_cast<ExtVMFace&>(*_envPtr);
     *o_hash = toEvmC(env.blockHash(_number));
 }
-
 
 void create(evmc_result* o_result, ExtVMFace& _env, evmc_message const* _msg) noexcept
 {
