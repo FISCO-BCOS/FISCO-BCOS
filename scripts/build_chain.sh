@@ -131,7 +131,7 @@ while read line;do
 	[common]
 		data_path=data/
 		log_config=log.conf
-	
+		ext_header=0
 	[secure]
 		key=data/node.key
 		cert=data/node.crt
@@ -221,13 +221,13 @@ EOF
 	cat << EOF > "$node_dir/start.sh"
 	#!/bin/bash
 	
-	nohup setsid ./eth --config config${i}.conf --genesis genesis.json&
+	nohup setsid ../fisco-bcos --config config${i}.conf --genesis genesis.json&
 EOF
 
 	cat << EOF > "$node_dir/stop.sh"
 	#!/bin/bash
 	
-	nohup setsid ./eth --config config${i}.conf --genesis genesis.json&
+	nohup setsid ../fisco-bcos --config config${i}.conf --genesis genesis.json&
 EOF
 	
 		chmod +x "$node_dir/start.sh"
@@ -235,7 +235,7 @@ EOF
 		cp "$output_dir/ca.crt" "$node_dir/data/"
 		cp "$eth_path" "$node_dir/eth"
 		echo "cd \${PPath}/node_${line}_${index}" >> "$output_dir/start_all.sh"
-		echo "nohup setsid fisco-bcos --config config${i}.conf --genesis genesis.json &" >> "$output_dir/start_all.sh"
+		echo "nohup setsid ./fisco-bcos --config config${i}.conf --genesis genesis.json &" >> "$output_dir/start_all.sh"
 		((++index))
 		[ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
 	done
