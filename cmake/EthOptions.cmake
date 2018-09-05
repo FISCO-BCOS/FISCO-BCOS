@@ -18,6 +18,12 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+# change-list
+# 2018/09/05: yujiechen
+# 1. add DEBUG flag
+# 2. add ETH_DEBUG definition when DEBUG flag has been set
+# 3. add ETH_TESTS definition when TESTS flag has been set
+
 macro(eth_default_option O DEF)
     if (DEFINED ${O})
         if (${${O}})
@@ -46,7 +52,16 @@ macro(configure_project)
     eth_default_option(ARCH_TYPE OFF)
     # unit tests
     eth_default_option(TESTS ON)
-    
+    if (TESTS)
+        add_definitions(-DETH_TESTS)
+    endif()
+
+    #debug
+    eth_default_option(DEBUG OFF)
+    if (DEBUG)
+        add_definitions(-DETH_DEBUG)
+    endif()
+
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})
         set(SUPPORT_${FEATURE} TRUE)
