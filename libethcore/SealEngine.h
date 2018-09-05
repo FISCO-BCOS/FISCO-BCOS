@@ -99,7 +99,6 @@ public:
         return this;
     }
     virtual EVMSchedule const& evmSchedule(u256 const& _blockNumber) const = 0;
-    virtual u256 blockReward(u256 const& _blockNumber) const = 0;
 
     virtual bool isPrecompiled(Address const& _a, u256 const& _blockNumber) const
     {
