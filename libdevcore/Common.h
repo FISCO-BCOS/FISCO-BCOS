@@ -25,7 +25,7 @@
  * @modify add owning_bytes_ref
  *
  * @author yujiechen
- * @data 2018.9.5
+ * @date 2018.9.5
  * @modify: remove useless micro-definition 'DEV_IF_THROWS'
  *          remove useless functions: toLog2, inUnits
  *          add ETH_TESTS flag to recover the DEV_INVARANIT_CHECK in both debug mode and test mode
