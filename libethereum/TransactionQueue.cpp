@@ -225,8 +225,7 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 				if (UTXOType::InitTokens == utxoType || 
 					UTXOType::SendSelectedTokens == utxoType) 
 				{
-					if (0 == BlockHeader::updateHeight || 
-						curBlockNum <= BlockHeader::updateHeight)
+					if (curBlockNum < BlockHeader::updateHeight)
 					{
 						UTXO_EXCEPTION_THROW("TransactionQueue::manageImport_WITH_LOCK Error:LowEthVersion", UTXOModel::EnumUTXOExceptionErrCode::EnumUTXOExceptionErrLowEthVersion);
 						LOG(WARNING) << "TransactionQueue::manageImport_WITH_LOCK Error:" << UTXOModel::UTXOExecuteState::LowEthVersion;
