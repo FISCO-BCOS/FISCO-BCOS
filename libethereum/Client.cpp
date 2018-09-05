@@ -78,6 +78,7 @@ Client::Client(
 	host().lock()->setWeb3Observer(_params.getInitializer()->rpcInitializer()->channelRPCServer()->buildObserver());
 
 	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir());
+	UTXOModel::UTXOSharedData::getInstance()->setBlockNum(u256(number()));
 	LOG(INFO) << "UTXOSharedData->initialize() End";
 #if 0
 	libabi::ContractAbiMgr::getInstance()->initialize(getDataDir());
