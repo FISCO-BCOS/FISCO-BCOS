@@ -8,8 +8,6 @@ target_link_libraries(
     PRIVATE interpreter ${JSONCPP_LIBRARY}  evmc::loader
 )
 
-target_include_directories(evm PRIVATE ..)
-target_include_directories(evm PRIVATE ../utils)
 if(EVM_OPTIMIZE)
     target_compile_definitions(evm PRIVATE EVM_OPTIMIZE)
 endif()
