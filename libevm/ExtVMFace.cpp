@@ -21,8 +21,8 @@
  */
 
 #include "ExtVMFace.h"
-
 #include <evmc/helpers.h>
+#include <evmc/uint256.h>
 
 namespace dev
 {
@@ -47,7 +47,7 @@ void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address c
 {
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
-    assert(fromEvmC(*_addr) == env.myAddress);
+    assert(fromEvmC(*_addr) == env.myAddress());
     u256 key = fromEvmC(*_key);
     *o_result = toEvmC(env.store(key));
 }
@@ -57,7 +57,7 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
 {
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
-    assert(fromEvmC(*_addr) == env.myAddress);
+    assert(fromEvmC(*_addr) == env.myAddress());
     u256 index = fromEvmC(*_key);
     u256 value = fromEvmC(*_value);
     u256 oldValue = env.store(index);
@@ -71,11 +71,9 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
     else if (value == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        env.sub.refunds += env.evmSchedule().sstoreRefundGas;
+        env.sub().refunds += env.evmSchedule().sstoreRefundGas;
     }
-
     env.setStore(index, value);  // Interface uses native endianness
-
     return status;
 }
 
@@ -98,6 +96,18 @@ void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address 
     *o_result = toEvmC(env.codeHashAt(fromEvmC(*_addr)));
 }
 
+/**
+ * @brief : copy code between [_codeOffset, _codeOffset + _bufferSize] to bufferData
+ *          if _codeOffset is larger than code length, then return 0;
+ *          if _codeOffset + _bufferSize is larger than the end of the code, than only copy
+ * [_codeOffset, _codeEnd]
+ * @param _context : evm context, including to myAddress, caller, gas, origin, value, etc.
+ * @param _addr: the evmc-address of the code
+ * @param _codeOffset: the offset begin to copy code
+ * @param _bufferData : buffer store the copied code
+ * @param _bufferSize : code size to copy
+ * @return size_t : return copied code size(in byte)
+ */
 size_t copyCode(evmc_context* _context, evmc_address const* _addr, size_t _codeOffset,
     byte* _bufferData, size_t _bufferSize)
 {
@@ -120,7 +130,7 @@ void selfdestruct(
 {
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
-    assert(fromEvmC(*_addr) == env.myAddress);
+    assert(fromEvmC(*_addr) == env.myAddress());
     env.suicide(fromEvmC(*_beneficiary));
 }
 
@@ -130,7 +140,7 @@ void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data
 {
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
-    assert(fromEvmC(*_addr) == env.myAddress);
+    assert(fromEvmC(*_addr) == env.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
     env.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }
@@ -138,20 +148,19 @@ void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data
 void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
 {
     auto& env = static_cast<ExtVMFace&>(*_context);
-    result->tx_gas_price = toEvmC(env.gasPrice);
-    result->tx_origin = toEvmC(env.origin);
-    result->block_coinbase = toEvmC(env.envInfo().author());
+    result->tx_gas_price = toEvmC(env.gasPrice());
+    result->tx_origin = toEvmC(env.origin());
     result->block_number = static_cast<int64_t>(env.envInfo().number());
-    result->block_timestamp = static_cast<int64_t>(env.envInfo().timestamp());
+    result->block_timestamp = static_cast<uint64_t>(env.envInfo().timestamp());
     result->block_gas_limit = static_cast<int64_t>(env.envInfo().gasLimit());
-    result->block_difficulty = toEvmC(env.envInfo().difficulty());
 }
 
-void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number)
+void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, uint64_t _number)
 {
     auto& env = static_cast<ExtVMFace&>(*_envPtr);
     *o_hash = toEvmC(env.blockHash(_number));
 }
+
 
 void create(evmc_result* o_result, ExtVMFace& _env, evmc_message const* _msg) noexcept
 {
@@ -161,42 +170,15 @@ void create(evmc_result* o_result, ExtVMFace& _env, evmc_message const* _msg) no
     u256 salt = fromEvmC(_msg->create2_salt);
     Instruction opcode = _msg->kind == EVMC_CREATE ? Instruction::CREATE : Instruction::CREATE2;
 
-    // ExtVM::create takes the sender address from .myAddress.
-    assert(fromEvmC(_msg->sender) == _env.myAddress);
+    // ExtVM::create takes the sender address from .myAddress().
+    assert(fromEvmC(_msg->sender) == _env.myAddress());
 
-    CreateResult result = _env.create(value, gas, init, opcode, salt, {});
-    o_result->status_code = result.status;
-    o_result->gas_left = static_cast<int64_t>(gas);
-    o_result->release = nullptr;
+    *o_result = _env.create(value, gas, init, opcode, salt, {});
 
-    if (result.status == EVMC_SUCCESS)
+    if (o_result->status_code == EVMC_SUCCESS)
     {
-        o_result->create_address = toEvmC(result.address);
         o_result->output_data = nullptr;
         o_result->output_size = 0;
-    }
-    else
-    {
-        // Pass the output to the EVM without a copy. The EVM will delete it
-        // when finished with it.
-
-        // First assign reference. References are not invalidated when vector
-        // of bytes is moved. See `.takeBytes()` below.
-        o_result->output_data = result.output.data();
-        o_result->output_size = result.output.size();
-
-        // Place a new vector of bytes containing output in result's reserved memory.
-        auto* data = evmc_get_optional_storage(o_result);
-        static_assert(sizeof(bytes) <= sizeof(*data), "Vector is too big");
-        new (data) bytes(result.output.takeBytes());
-        // Set the destructor to delete the vector.
-        o_result->release = [](evmc_result const* _result) {
-            auto* data = evmc_get_const_optional_storage(_result);
-            auto& output = reinterpret_cast<bytes const&>(*data);
-            // Explicitly call vector's destructor to release its data.
-            // This is normal pattern when placement new operator is used.
-            output.~bytes();
-        };
     }
 }
 
@@ -215,37 +197,14 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
     params.valueTransfer = _msg->kind == EVMC_DELEGATECALL ? 0 : params.apparentValue;
     params.senderAddress = fromEvmC(_msg->sender);
     params.codeAddress = fromEvmC(_msg->destination);
-    params.receiveAddress = _msg->kind == EVMC_CALL ? params.codeAddress : env.myAddress;
+    params.receiveAddress = _msg->kind == EVMC_CALL ? params.codeAddress : env.myAddress();
     params.data = {_msg->input_data, _msg->input_size};
     params.staticCall = (_msg->flags & EVMC_STATIC) != 0;
     params.onOp = {};
-
-    CallResult result = env.call(params);
-    o_result->status_code = result.status;
-    o_result->gas_left = static_cast<int64_t>(params.gas);
-
-    // Pass the output to the EVM without a copy. The EVM will delete it
-    // when finished with it.
-
-    // First assign reference. References are not invalidated when vector
-    // of bytes is moved. See `.takeBytes()` below.
-    o_result->output_data = result.output.data();
-    o_result->output_size = result.output.size();
-
-    // Place a new vector of bytes containing output in result's reserved memory.
-    auto* data = evmc_get_optional_storage(o_result);
-    static_assert(sizeof(bytes) <= sizeof(*data), "Vector is too big");
-    new (data) bytes(result.output.takeBytes());
-    // Set the destructor to delete the vector.
-    o_result->release = [](evmc_result const* _result) {
-        auto* data = evmc_get_const_optional_storage(_result);
-        auto& output = reinterpret_cast<bytes const&>(*data);
-        // Explicitly call vector's destructor to release its data.
-        // This is normal pattern when placement new operator is used.
-        output.~bytes();
-    };
+    *o_result = env.call(params);
 }
 
+/// function table
 evmc_context_fn_table const fnTable = {
     accountExists,
     getStorage,
@@ -267,17 +226,17 @@ ExtVMFace::ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _calle
     unsigned _depth, bool _isCreate, bool _staticCall)
   : evmc_context{&fnTable},
     m_envInfo(_envInfo),
-    myAddress(_myAddress),
-    caller(_caller),
-    origin(_origin),
-    value(_value),
-    gasPrice(_gasPrice),
-    data(_data),
-    code(std::move(_code)),
-    codeHash(_codeHash),
-    depth(_depth),
-    isCreate(_isCreate),
-    staticCall(_staticCall)
+    m_myAddress(_myAddress),
+    m_caller(_caller),
+    m_origin(_origin),
+    m_value(_value),
+    m_gasPrice(_gasPrice),
+    m_data(_data),
+    m_code(std::move(_code)),
+    m_codeHash(_codeHash),
+    m_depth(_depth),
+    m_isCreate(_isCreate),
+    m_staticCall(_staticCall)
 {}
 
 }  // namespace eth

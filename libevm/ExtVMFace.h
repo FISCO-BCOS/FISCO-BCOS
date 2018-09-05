@@ -29,6 +29,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/Instruction.h>
+#include <libethcore/LastBlockHashesFace.h>
 #include <libethcore/LogEntry.h>
 
 #include <evmc/evmc.h>
@@ -64,12 +65,16 @@ struct SubState
 };
 
 class ExtVMFace;
-class LastBlockHashesFace;
 class VMFace;
 
+/**
+ * @brief : execute the opcode of evm
+ *
+ */
 using OnOpFunc = std::function<void(uint64_t /*steps*/, uint64_t /* PC */, Instruction /*instr*/,
     bigint /*newMemSize*/, bigint /*gasCost*/, bigint /*gas*/, VMFace const*, ExtVMFace const*)>;
 
+/// set parameters and functions for the evm call
 struct CallParameters
 {
     CallParameters() = default;
@@ -85,17 +90,18 @@ struct CallParameters
         data(_data),
         onOp(_onOpFunc)
     {}
-    Address senderAddress;
-    Address codeAddress;
-    Address receiveAddress;
-    u256 valueTransfer;
+    Address senderAddress;   /// address of the transaction sender
+    Address codeAddress;     /// address of the contract
+    Address receiveAddress;  /// address of the transaction receiver
+    u256 valueTransfer;      /// transferred wei between the sender and receiver
     u256 apparentValue;
     u256 gas;
-    bytesConstRef data;
-    bool staticCall = false;
+    bytesConstRef data;       /// transaction data
+    bool staticCall = false;  /// only true when the transaction is a message call
     OnOpFunc onOp;
 };
 
+/// the information related to the EVM
 class EnvInfo
 {
 public:
@@ -108,20 +114,25 @@ public:
         u256 const& _gasLimit)
       : EnvInfo(_current, _lh, _gasUsed)
     {
+        /// modify the gasLimit of current blockheader with given gasLimit
         m_headerInfo.setGasLimit(_gasLimit);
     }
-
+    /// @return block header
     BlockHeader const& header() const { return m_headerInfo; }
 
-    u256 number() const { return m_headerInfo.number(); }
+    /// @return block number
+    int64_t number() const { return m_headerInfo.number(); }
 
-    /// TODO Important: delete the author field as we don't use POW
-    Address const author() const { return Address(0); }
-    u256 timestamp() const { return m_headerInfo.timestamp(); }
-    /// TODO Important: delete the difficulty field as we don't use POW
-    u256 const difficulty() const { return Invalid256; }
+    /// @return timestamp
+    uint64_t timestamp() const { return m_headerInfo.timestamp(); }
+
+    /// @return gasLimit of the block header
     u256 const& gasLimit() const { return m_headerInfo.gasLimit(); }
+
+    /// @return interfaces that can get a list of recent block hashes(256)
     LastBlockHashesFace const& lastHashes() const { return m_lastHashes; }
+
+    /// @return used gas of the evm
     u256 const& gasUsed() const { return m_gasUsed; }
 
 private:
@@ -133,6 +144,7 @@ private:
 /// Represents a call result.
 ///
 /// @todo: Replace with evmc_result in future.
+/*
 struct CallResult
 {
     evmc_status_code status;
@@ -141,11 +153,12 @@ struct CallResult
     CallResult(evmc_status_code status, owning_bytes_ref&& output)
       : status{status}, output{std::move(output)}
     {}
-};
+};*/
 
 /// Represents a CREATE result.
 ///
 /// @todo: Replace with evmc_result in future.
+/*
 struct CreateResult
 {
     evmc_status_code status;
@@ -155,7 +168,7 @@ struct CreateResult
     CreateResult(evmc_status_code status, owning_bytes_ref&& output, h160 const& address)
       : status{status}, output{std::move(output)}, address{address}
     {}
-};
+};*/
 
 /**
  * @brief Interface and null implementation of the class for specifying VM externalities.
@@ -195,64 +208,114 @@ public:
     virtual bool exists(Address) { return false; }
 
     /// Suicide the associated contract and give proceeds to the given address.
-    virtual void suicide(Address) { sub.suicides.insert(myAddress); }
+    virtual void suicide(Address) { m_sub.suicides.insert(m_myAddress); }
 
     /// Create a new (contract) account.
-    virtual CreateResult create(u256, u256&, bytesConstRef, Instruction, u256, OnOpFunc const&) = 0;
+    virtual evmc_result create(u256, u256&, bytesConstRef, Instruction, u256, OnOpFunc const&) = 0;
 
     /// Make a new message call.
-    virtual CallResult call(CallParameters&) = 0;
+    virtual evmc_result call(CallParameters&) = 0;
 
     /// Revert any changes made (by any of the other calls).
     virtual void log(h256s&& _topics, bytesConstRef _data)
     {
-        sub.logs.push_back(LogEntry(myAddress, std::move(_topics), _data.toBytes()));
+        m_sub.logs.push_back(LogEntry(m_myAddress, std::move(_topics), _data.toBytes()));
     }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    virtual h256 blockHash(u256 _number) = 0;
+    virtual h256 blockHash(uint64_t _number) = 0;
 
     /// Get the execution environment information.
     EnvInfo const& envInfo() const { return m_envInfo; }
 
     /// Return the EVM gas-price schedule for this execution context.
+    /// default is FiscoBcosSchedule
     virtual EVMSchedule const& evmSchedule() const { return DefaultSchedule; }
+
+public:
+    /// ------ get interfaces related to ExtVMFace------
+    Address const& myAddress() { return m_myAddress; }
+    Address const& caller() { return m_caller; }
+    Address const& origin() { return m_origin; }
+    u256 const& value() { return m_value; }
+    u256 const& gasPrice() { return m_gasPrice; }
+    bytesConstRef const& data() { return m_data; }
+    bytes const& code() { return m_code; }
+    h256 const& codeHash() { return m_codeHash; }
+    u256 const& salt() { return m_salt; }
+    SubState& sub() { return m_sub; }
+    unsigned const& depth() { return m_depth; }
+    bool const& isCreate() { return m_isCreate; }
+    bool const& staticCall() { return m_staticCall; }
+    /// ------ set interfaces related to ExtVMFace------
+    void setMyAddress(Address _contractAddr) { m_myAddress = _contractAddr; }
+    void setCaller(Address _senderAddr) { m_caller = _senderAddr; }
+    void setOrigin(Address _origin) { m_origin = _origin; }
+    void setValue(u256 _value) { m_value = _value; }
+    void setGasePrice(u256 _gasPrice) { m_gasPrice = _gasPrice; }
+    void setData(bytesConstRef _data) { m_data = _data; }
+    void setCode(bytes _code) { m_code = _code; }
+    void setCodeHash(h256 _codeHash) { m_codeHash = _codeHash; }
+    void setSalt(u256 _salt) { m_salt = _salt; }
+    void setSub(SubState _sub) { m_sub = _sub; }
+    void setDepth(unsigned _depth) { m_depth = _depth; }
+    void setCreate(bool _isCreate) { m_isCreate = _isCreate; }
+    void setStaticCall(bool _staticCall) { m_staticCall = _staticCall; }
 
 private:
     EnvInfo const& m_envInfo;
 
-public:
-    // TODO: make private
-    Address myAddress;  ///< Address associated with executing code (a contract, or contract-to-be).
-    Address caller;     ///< Address which sent the message (either equal to origin or a contract).
-    Address origin;     ///< Original transactor.
-    u256 value;         ///< Value (in Wei) that was passed to this address.
-    u256 gasPrice;      ///< Price of gas (that we already paid).
-    bytesConstRef data;       ///< Current input data.
-    bytes code;               ///< Current code that is executing.
-    h256 codeHash;            ///< SHA3 hash of the executing code
-    u256 salt;                ///< Values used in new address construction by CREATE2
-    SubState sub;             ///< Sub-band VM state (suicides, refund counter, logs).
-    unsigned depth = 0;       ///< Depth of the present call.
-    bool isCreate = false;    ///< Is this a CREATE call?
-    bool staticCall = false;  ///< Throw on state changing.
+private:
+    Address m_myAddress;  ///< Address associated with executing code (a contract, or
+                          ///< contract-to-be).
+    Address m_caller;  ///< Address which sent the message (either equal to origin or a contract).
+    Address m_origin;  ///< Original transactor.
+    u256 m_value;      ///< Value (in Wei) that was passed to this address.
+    u256 m_gasPrice;   ///< Price of gas (that we already paid).
+    bytesConstRef m_data;       ///< Current input data.
+    bytes m_code;               ///< Current code that is executing.
+    h256 m_codeHash;            ///< SHA3 hash of the executing code
+    u256 m_salt;                ///< Values used in new address construction by CREATE2
+    SubState m_sub;             ///< Sub-band VM state (suicides, refund counter, logs).
+    unsigned m_depth = 0;       ///< Depth of the present call.
+    bool m_isCreate = false;    ///< Is this a CREATE call?
+    bool m_staticCall = false;  ///< Throw on state changing.
 };
 
+/**
+ * @brief : trans ethereum addess to evm address
+ * @param _addr : the ehereum address
+ * @return evmc_address : the transformed evm address
+ */
 inline evmc_address toEvmC(Address const& _addr)
 {
     return reinterpret_cast<evmc_address const&>(_addr);
 }
 
+/**
+ * @brief : trans ethereum hash to evm hash
+ * @param _h : hash value
+ * @return evmc_uint256be : transformed hash
+ */
 inline evmc_uint256be toEvmC(h256 const& _h)
 {
     return reinterpret_cast<evmc_uint256be const&>(_h);
 }
-
+/**
+ * @brief : trans uint256 number of evm-represented to u256
+ * @param _n : the uint256 number that can parsed by evm
+ * @return u256 : transformed u256 number
+ */
 inline u256 fromEvmC(evmc_uint256be const& _n)
 {
     return fromBigEndian<u256>(_n.bytes);
 }
 
+/**
+ * @brief : trans evm address to ethereum address
+ * @param _addr : the address that can parsed by evm
+ * @return Address : the transformed ethereum address
+ */
 inline Address fromEvmC(evmc_address const& _addr)
 {
     return reinterpret_cast<Address const&>(_addr);
