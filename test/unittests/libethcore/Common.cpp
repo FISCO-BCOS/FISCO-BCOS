@@ -45,11 +45,11 @@ BOOST_AUTO_TEST_CASE(testBadBlock)
     blockHeader.setParentHash(sha3("parent"));
     blockHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
     blockHeader.setLogBloom(LogBloom(0));
-    blockHeader.setNumber(u256(0));
+    blockHeader.setNumber(0);
     blockHeader.setGasLimit(u256(3000000));
     blockHeader.setGasUsed(u256(100000));
     uint64_t current_time = utcTime();
-    blockHeader.setTimestamp(u256(current_time));
+    blockHeader.setTimestamp(current_time);
     blockHeader.appendExtraDataArray(jsToBytes("0x1020"));
     blockHeader.setSealer(u256("0x00"));
     h512s sealer_list;
