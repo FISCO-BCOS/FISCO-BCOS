@@ -148,6 +148,19 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
     /// test evmc_get_optional_storage
     auto* data = evmc_get_optional_storage(&call_result);
     BOOST_CHECK(memcmp(data->pointer, origin_str.c_str(), call_result.output_size) == 0);
+    ///========== TEST emit_log(eth::log)=====================
+    evmc_uint256be topics[2];
+    topics[0] = toEvmC(sha3("0"));
+    topics[1] = toEvmC(sha3("1"));
+    fake_ext_vm.fn_table->emit_log(
+        &fake_ext_vm, &code_addr, call_result.output_data, call_result.output_size, topics, 2);
+    BOOST_CHECK(fake_ext_vm.sub().logs.size() == 1);
+    BOOST_CHECK(fake_ext_vm.sub().logs[0].topics.size() == 2);
+    BOOST_CHECK(fake_ext_vm.sub().logs[0].topics[0] == sha3("0"));
+    BOOST_CHECK(fake_ext_vm.sub().logs[0].topics[1] == sha3("1"));
+    BOOST_CHECK(memcpy(
+        fake_ext_vm.sub().logs[0].data.data(), call_result.output_data, call_result.output_size));
+    BOOST_CHECK(fake_ext_vm.sub().logs[0].data.size() == call_result.output_size);
     /// test release
     call_result.release(&call_result);
     ///========== TEST create contract=====================
@@ -236,26 +249,21 @@ BOOST_AUTO_TEST_CASE(testCodeRelated)
     ///========== TEST selfdestruct=====================
     fake_ext_vm.fn_table->selfdestruct(&fake_ext_vm, &code_addr, &code_addr);
     BOOST_CHECK(fake_ext_vm.sub().suicides.count(fromEvmC(code_addr)) == 1);
-}
-/*
 
-
-void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
-{
-    auto& env = static_cast<ExtVMFace&>(*_context);
-    result->tx_gas_price = toEvmC(env.gasPrice());
-    result->tx_origin = toEvmC(env.origin());
-    result->block_number = static_cast<int64_t>(env.envInfo().number());
-    result->block_timestamp = static_cast<int64_t>(env.envInfo().timestamp());
-    result->block_gas_limit = static_cast<int64_t>(env.envInfo().gasLimit());
+    ///========== test getTxContext =====================
+    evmc_tx_context result;
+    fake_ext_vm.fn_table->get_tx_context(&result, &fake_ext_vm);
+    BOOST_CHECK(fromEvmC(result.tx_gas_price) == fake_ext_vm.gasPrice());
+    BOOST_CHECK(fromEvmC(result.tx_origin) == fake_ext_vm.origin());
+    BOOST_CHECK(result.block_number == fake_ext_vm.envInfo().number());
+    BOOST_CHECK(result.block_timestamp == fake_ext_vm.envInfo().timestamp());
+    BOOST_CHECK(result.block_gas_limit == static_cast<int64_t>(fake_ext_vm.envInfo().gasLimit()));
+    ///========== test getBlockHash =====================
+    evmc_uint256be block_hash;
+    fake_ext_vm.fn_table->get_block_hash(&block_hash, &fake_ext_vm, 20);
+    BOOST_CHECK(fromEvmC(block_hash) == sha3(toString(20)));
+    fake_ext_vm.fn_table->get_block_hash(&block_hash, &fake_ext_vm, fake_ext_vm.envInfo().number());
 }
-
-void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, uint64_t _number)
-{
-    auto& env = static_cast<ExtVMFace&>(*_envPtr);
-    *o_hash = toEvmC(env.blockHash(_number));
-}
-*/
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

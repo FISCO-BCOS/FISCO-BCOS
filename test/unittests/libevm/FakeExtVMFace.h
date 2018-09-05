@@ -73,7 +73,7 @@ public:
         genesis.setParentHash(sha3("parent"));
         genesis.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
         genesis.setLogBloom(LogBloom(0));
-        genesis.setNumber(0);
+        genesis.setNumber(1);
         genesis.setGasLimit(u256(3000000));
         genesis.setGasUsed(u256(100000));
         int64_t current_time = utcTime();
@@ -188,7 +188,8 @@ public:
     /// Read address's code.
     virtual bytes const& codeAt(Address contract_addr) { return code(); }
 
-    virtual h256 blockHash(uint64_t _number) { return sha3("test"); }
+    virtual h256 blockHash(int64_t number) { return sha3(toString(number)); }
+
     FakeExtVM(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin,
         u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash,
         unsigned _depth, bool _isCreate, bool _staticCall)
