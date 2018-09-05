@@ -76,14 +76,12 @@ Client::Client(
 
 	_params.getInitializer()->rpcInitializer()->channelRPCServer()->setHost(host());
 	host().lock()->setWeb3Observer(_params.getInitializer()->rpcInitializer()->channelRPCServer()->buildObserver());
-#if 0
-	libabi::ContractAbiMgr::getInstance()->initialize(getDataDir());
-
-	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
 
 	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir());
 	LOG(INFO) << "UTXOSharedData->initialize() End";
-
+#if 0
+	libabi::ContractAbiMgr::getInstance()->initialize(getDataDir());
+	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
 	//创建系统合约api
 	m_systemcontractapi = SystemContractApiFactory::create(_params.sysytemProxyAddress, _params.god, this);
 

@@ -39,6 +39,7 @@ BlockHeader::BlockHeader(bytesConstRef _block, BlockDataType _bdt, h256 const& _
 {
 	RLP header = _bdt == BlockData ? extractHeader(_block) : RLP(_block);
 	m_hash = _hashWith ? _hashWith : sha3(header.data());
+	m_hash_list.resize(2);
 	populate(header);
 }
 
@@ -64,6 +65,7 @@ void BlockHeader::clear()
 	m_gen_idx = Invalid256;
 	m_node_list.clear();
 	m_hash_list.clear();
+	m_hash_list.resize(2);
 	m_str_list.clear();
 	noteDirty();
 }
