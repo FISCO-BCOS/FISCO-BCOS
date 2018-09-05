@@ -80,6 +80,9 @@ target_link_libraries(test-fisco-bcos Boost::program_options)
 target_link_libraries(test-fisco-bcos devcore)
 target_link_libraries(test-fisco-bcos devcrypto)
 target_link_libraries(test-fisco-bcos ethcore)
+target_link_libraries(test-fisco-bcos evmc)
+target_link_libraries(test-fisco-bcos interpreter)
+
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 

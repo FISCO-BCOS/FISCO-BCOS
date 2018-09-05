@@ -1,0 +1,258 @@
+/**
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ *
+ * @brief
+ *
+ * @file FakeEvmcTest.cpp
+ * @author: jimmyshi
+ * @date 2018-09-04
+ */
+
+#include <evmc/evmc.h>
+#include <libdevcore/FixedHash.h>
+#include <libdevcore/SHA3.h>
+#include <libinterpreter/interpreter.h>
+#include <test/tools/libutils/TestOutputHelper.h>
+#include <boost/test/unit_test.hpp>
+#include <map>
+#include <memory>
+
+
+using namespace std;
+using namespace dev;
+using namespace dev::test;
+
+namespace
+{
+bool operator==(evmc_uint256be const& a, evmc_uint256be const& b)
+{
+    bool is = true;
+    for (size_t i = 0; i < 32; i++)
+        is &= (a.bytes[i] != b.bytes[i]);
+    return is;
+}
+
+bool isZero(evmc_uint256be const& x)
+{
+    for (size_t i = 0; i < 32; i++)
+    {
+        if (x.bytes[i] != 0)
+            return false;
+    }
+    return true;
+}
+
+class FakeState
+{
+public:
+    using AccountStateType = map<string, evmc_uint256be>;
+    using AccountCodeStateType = map<string, bytes>;
+    using StateType = map<string, AccountStateType>;
+
+    void set(evmc_address const& addr, evmc_uint256be const& key, evmc_uint256be const& value)
+    {
+        state[toKey(addr)][toKey(key)] = value; // create if the key is non-exist
+    }
+
+    evmc_uint256be& get(evmc_address const& addr, evmc_uint256be const& key)
+    {
+        return state[toKey(addr)][toKey(key)];
+    }
+
+    evmc_uint256be& accountBalance(evmc_address const& addr)
+    {
+        return state[toKey(addr)]["balance"];
+    }
+
+    bytes& accountCode(evmc_address const& addr) { return codeState[toKey(addr)]; }
+
+    void accountSuicide(evmc_address const& addr)
+    {
+        state[toKey(addr)].clear();
+        codeState[toKey(addr)].clear();
+    }
+
+    bool addressExist(evmc_address const& addr) { return state[toKey(addr)].size() != 0; }
+
+    bool valueExist(evmc_address const& addr, evmc_uint256be const& key)
+    {
+        AccountStateType& account = state[toKey(addr)];
+        return account.find(toKey(key)) != account.end();
+    }
+
+private:
+    inline string toKey(evmc_address const& addr) { return string((const char*)addr.bytes, 20); }
+
+    inline string toKey(evmc_uint256be const& key) { return string((const char*)key.bytes, 32); }
+
+    StateType state;
+    AccountCodeStateType codeState;
+};
+
+FakeState fakeState;
+
+int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
+{
+    (void)_context;
+    return fakeState.addressExist(*_addr);
+}
+
+void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr,
+    evmc_uint256be const* _key) noexcept
+{
+    (void)_context;
+    *o_result = fakeState.get(*_addr, *_key);
+}
+
+evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr,
+    evmc_uint256be const* _key, evmc_uint256be const* _value) noexcept
+{
+    evmc_uint256be oldValue = fakeState.get(*_addr, *_key);
+    fakeState.set(*_addr, *_key, *_value);
+
+    evmc_uint256be value = *_value;
+
+    if (value == oldValue)
+        return EVMC_STORAGE_UNCHANGED;
+
+    auto status = EVMC_STORAGE_MODIFIED;
+    if (isZero(oldValue))
+        status = EVMC_STORAGE_ADDED;
+    else if (isZero(value))
+    {
+        status = EVMC_STORAGE_DELETED;
+    }
+
+    fakeState.set(*_addr, *_key, *_value);  
+
+    return status;
+}
+
+void getBalance(
+    evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr) noexcept
+{
+    (void)_context;
+    *o_result = fakeState.accountBalance(*_addr);
+}
+
+size_t getCodeSize(evmc_context* _context, evmc_address const* _addr)
+{
+    (void)_context;
+    return fakeState.accountCode(*_addr).size();
+}
+
+void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr)
+{
+    (void)_context;
+    bytes const& code = fakeState.accountCode(*_addr);
+    h256 codeHash = sha3(code);
+    *o_result = reinterpret_cast<evmc_uint256be const&>(codeHash);
+}
+
+size_t copyCode(evmc_context* _context, evmc_address const* _addr, size_t _codeOffset,
+    byte* _bufferData, size_t _bufferSize)
+{
+    bytes const& code = fakeState.accountCode(*_addr);
+    // Handle "big offset" edge case.
+    if (_codeOffset >= code.size())
+        return 0;
+
+    size_t maxToCopy = code.size() - _codeOffset;
+    size_t numToCopy = std::min(maxToCopy, _bufferSize);
+    std::copy_n(&code[_codeOffset], numToCopy, _bufferData);
+    return numToCopy;
+}
+
+void selfdestruct(
+    evmc_context* _context, evmc_address const* _addr, evmc_address const* _beneficiary) noexcept
+{
+    (void)_context;
+    (void)_addr;
+    fakeState.accountSuicide(*_beneficiary);
+}
+
+void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _msg) noexcept
+{
+    /// TODO: Implement this callback if required.
+    (void)o_result;
+    (void)_context;
+    (void)_msg;
+}
+
+void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
+{
+    result->tx_gas_price = evmc_uint256be();
+    result->tx_origin = evmc_address();
+    result->block_coinbase = evmc_address();
+    result->block_number = 100;
+    result->block_timestamp = 123456;
+    result->block_gas_limit = 0x13880000000000;
+    result->block_difficulty = evmc_uint256be();  // We don't need it at all
+}
+
+void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number)
+{
+    bytes const& fakeBlock = bytes();
+    h256 blockHash = sha3(fakeBlock);
+    *o_hash = reinterpret_cast<evmc_uint256be const&>(blockHash);
+}
+
+void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data, size_t _dataSize,
+    evmc_uint256be const _topics[], size_t _numTopics) noexcept
+{
+    (void)_context;
+    (void)_addr;
+    (void)_data;
+    (void)_dataSize;
+    (void)_topics;
+    (void)_numTopics;
+}
+
+
+evmc_context_fn_table const fakeFnTable = {
+    accountExists,
+    getStorage,
+    setStorage,
+    getBalance,
+    getCodeSize,
+    getCodeHash,
+    copyCode,
+    selfdestruct,
+    call,
+    getTxContext,
+    getBlockHash,
+    log,
+};
+
+class FakeEvmc
+{
+public:
+    FakeEvmc()
+    {
+        m_instance = evmc_create_interpreter();
+        m_callbackTable.fn_table = &fakeFnTable;
+    }
+    // execute(evmc_instance* _instance, evmc_context* _context, evmc_revision _rev, const
+    // evmc_message* _msg, uint8_t const* _code, size_t _codeSize)
+    evmc_result execute() { return evmc_result(); }
+
+
+private:
+    struct evmc_instance* m_instance;
+    struct evmc_context m_callbackTable;
+};
+
+}  // namespace
