@@ -45,11 +45,11 @@ public:
         block_header_genesis.setRoots(
             sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
         block_header_genesis.setLogBloom(LogBloom(0));
-        block_header_genesis.setNumber(u256(0));
+        block_header_genesis.setNumber(int64_t(0));
         block_header_genesis.setGasLimit(u256(3000000));
         block_header_genesis.setGasUsed(u256(100000));
         current_time = utcTime();
-        block_header_genesis.setTimestamp(u256(current_time));
+        block_header_genesis.setTimestamp(current_time);
         block_header_genesis.appendExtraDataArray(jsToBytes("0x1020"));
         block_header_genesis.setSealer(u256("0x00"));
         for (unsigned int i = 0; i < 10; i++)
@@ -100,10 +100,10 @@ BOOST_AUTO_TEST_CASE(testBlockerHeaderGetter)
     BOOST_CHECK(block_header_genesis.transactionsRoot() == sha3("transactionRoot"));
     BOOST_CHECK(block_header_genesis.receiptsRoot() == sha3("receiptRoot"));
     BOOST_CHECK(block_header_genesis.logBloom() == LogBloom(0));
-    BOOST_CHECK(block_header_genesis.number() == u256(0));
+    BOOST_CHECK(block_header_genesis.number() == 0);
     BOOST_CHECK(block_header_genesis.gasLimit() == u256(3000000));
     BOOST_CHECK(block_header_genesis.gasUsed() == u256(100000));
-    BOOST_CHECK(block_header_genesis.timestamp() == u256(current_time));
+    BOOST_CHECK(block_header_genesis.timestamp() == current_time);
     bytes invalid_item;
     BOOST_CHECK(block_header_genesis.extraData(invalid_item, 1) == false);
     bytes valid_item;
@@ -156,8 +156,7 @@ BOOST_AUTO_TEST_CASE(testPopulateFromParent)
     BOOST_CHECK(block_header_populated.hash() != block_header_genesis.hash());
     BOOST_CHECK(block_header_populated != block_header_genesis);
     BOOST_CHECK(block_header_populated.stateRoot() == block_header_genesis.stateRoot());
-    BOOST_CHECK(block_header_populated.number() == u256(block_header_genesis.number() + u256(1)));
-    // std::cout << "#####parent hash:" << block_header_populated.parentHash() << std::endl;
+    BOOST_CHECK(block_header_populated.number() == block_header_genesis.number() + 1);
     BOOST_CHECK(block_header_populated.parentHash() == block_header_genesis.hash());
     BOOST_CHECK(block_header_populated.gasLimit() == block_header_genesis.gasLimit());
     BOOST_CHECK(block_header_populated.gasUsed() == u256(0));
@@ -223,24 +222,24 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
     BOOST_REQUIRE_NO_THROW(block_header_child.verify(
         CheckEverything, block_header_genesis, ref(block_child_rlp.out())));
     /// test invalid timestamp
-    block_header_child.setTimestamp(u256(current_time));
+    block_header_child.setTimestamp(current_time);
     BOOST_CHECK_THROW(block_header_child.verify(
                           CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
         InvalidTimestamp);
     /// test invalid number
-    block_header_child.setTimestamp(u256(current_time + 100));
-    block_header_child.setNumber(block_header_child.number() + u256(2));
+    block_header_child.setTimestamp(current_time + 100);
+    block_header_child.setNumber(block_header_child.number() + 2);
     BOOST_CHECK_THROW(block_header_child.verify(
                           CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
         InvalidNumber);
     /// test invalid parentHash
-    block_header_child.setNumber(block_header_child.number() - u256(2));
+    block_header_child.setNumber(block_header_child.number() - 2);
     block_header_child.setParentHash(sha3("+++"));
     BOOST_CHECK_THROW(block_header_child.verify(
                           CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
         InvalidParentHash);
     /// test invalid number
-    block_header_child.setNumber(Invalid256);
+    block_header_child.setNumber(INT64_MAX);
     BOOST_CHECK_THROW(block_header_child.verify(
                           CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
         InvalidNumber);

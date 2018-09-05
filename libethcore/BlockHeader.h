@@ -100,7 +100,7 @@ public:
 
 
     /// operator override: (), ==, !=
-    explicit operator bool() const { return m_timestamp != Invalid256; }
+    explicit operator bool() const { return m_timestamp != UINT64_MAX; }
     bool operator==(BlockHeader const& _cmp) const
     {
         return m_parentHash == _cmp.parentHash() && m_stateRoot == _cmp.stateRoot() &&
@@ -156,7 +156,7 @@ public:
         noteDirty();
     }
     /// field 5: set block number
-    void setNumber(u256 _blockNumber)
+    void setNumber(int64_t _blockNumber)
     {
         m_number = _blockNumber;
         noteDirty();
@@ -209,7 +209,7 @@ public:
         noteDirty();
     }
     /// field 9: set timestamp
-    void setTimestamp(u256 _timestamp)
+    void setTimestamp(uint64_t _timestamp)
     {
         m_timestamp = _timestamp;
         noteDirty();
@@ -234,10 +234,10 @@ public:
     h256 const& transactionsRoot() const { return m_transactionsRoot; }  /// field 2
     h256 const& receiptsRoot() const { return m_receiptsRoot; }          /// field 3
     LogBloom const& logBloom() const { return m_logBloom; }              /// field 4
-    u256 number() const { return m_number; }                             /// field 5
+    int64_t number() const { return m_number; }                          /// field 5
     u256 const& gasLimit() const { return m_gasLimit; }                  /// field 6
     u256 const& gasUsed() const { return m_gasUsed; }                    /// field 7
-    u256 timestamp() const { return m_timestamp; }                       /// field 8
+    uint64_t timestamp() const { return m_timestamp; }                   /// field 8
     bool extraData(bytes& item, unsigned int _index) const
     {
         if (_index >= m_extraData.size())
@@ -270,10 +270,10 @@ private:  /// private data fields
     h256 m_transactionsRoot;
     h256 m_receiptsRoot;
     LogBloom m_logBloom;
-    u256 m_number = Invalid256;
+    int64_t m_number = 0;
     u256 m_gasLimit;
     u256 m_gasUsed;
-    u256 m_timestamp = Invalid256;
+    uint64_t m_timestamp = UINT64_MAX;
     std::vector<bytes> m_extraData;  /// field for extension
     /// Extended fields of FISCO-BCOS
     u256 m_sealer = Invalid256;  /// index of the sealer created this block

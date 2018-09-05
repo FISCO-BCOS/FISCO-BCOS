@@ -103,17 +103,12 @@ struct EVMSchedule
     bool zeroValueTransferChargesNewAccountGas() const { return !eip158Mode; }
 };
 
-/// exceptionalFailedCodeDeposit: true
-/// haveDelegateCall: true
-/// tierStepGas: {0, 2, 3, 5, 8, 10, 20, 0}
-/// txCreateGas: 53000
-static const EVMSchedule DefaultSchedule = EVMSchedule();
 /// exceptionalFailedCodeDeposit: false
 /// haveDelegateCall: false
 /// tierStepGas: {0, 2, 3, 5, 8, 10, 20, 0}
 /// txCreateGas: 21000
 static const EVMSchedule FrontierSchedule = EVMSchedule(false, false, 21000);
-/// value of params are equal to DefaultSchedule
+/// value of params are equal to HomesteadSchedule
 static const EVMSchedule HomesteadSchedule = EVMSchedule(true, true, 53000);
 /// EIP150(refer to: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-150.md)
 static const EVMSchedule EIP150Schedule = [] {
@@ -171,6 +166,8 @@ static const EVMSchedule FiscoBcosSchedule = [] {
     EVMSchedule schedule = ConstantinopleSchedule;
     return schedule;
 }();
+
+static const EVMSchedule DefaultSchedule = FiscoBcosSchedule;
 
 }  // namespace eth
 }  // namespace dev
