@@ -22,7 +22,6 @@
 
 #include "ExtVMFace.h"
 #include <evmc/helpers.h>
-#include <evmc/uint256.h>
 
 namespace dev
 {
