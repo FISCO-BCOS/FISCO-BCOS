@@ -64,7 +64,7 @@ public:
 
     void set(evmc_address const& addr, evmc_uint256be const& key, evmc_uint256be const& value)
     {
-        state[toKey(addr)][toKey(key)] = value; // create if the key is non-exist
+        state[toKey(addr)][toKey(key)] = value;  // create if the key is non-exist
     }
 
     evmc_uint256be& get(evmc_address const& addr, evmc_uint256be const& key)
@@ -136,7 +136,7 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
         status = EVMC_STORAGE_DELETED;
     }
 
-    fakeState.set(*_addr, *_key, *_value);  
+    fakeState.set(*_addr, *_key, *_value);
 
     return status;
 }
