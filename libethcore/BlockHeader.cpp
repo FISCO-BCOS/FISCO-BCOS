@@ -114,7 +114,7 @@ void BlockHeader::clear()
     m_number = 0;
     m_gasLimit = 0;
     m_gasUsed = 0;
-    m_timestamp = -1;
+    m_timestamp = UINT64_MAX;
     m_extraData.clear();
     m_sealer = Invalid256;
     m_sealerList.clear();
@@ -142,8 +142,10 @@ void BlockHeader::streamRLP(RLPStream& _s) const
 }
 void BlockHeader::streamRLPFields(RLPStream& _s) const
 {
-    _s << m_parentHash << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_logBloom
-       << m_number << m_gasLimit << m_gasUsed << m_timestamp;
+    _s << m_parentHash << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_logBloom;
+    _s.append(bigint(m_number));
+    _s << m_gasLimit << m_gasUsed;
+    _s.append(bigint(m_timestamp));
     _s.appendVector(m_extraData);
     _s << m_sealer;
     _s.appendVector(m_sealerList);
@@ -194,10 +196,10 @@ void BlockHeader::populate(RLP const& _header)
         m_transactionsRoot = _header[field = 2].toHash<h256>(RLP::VeryStrict);
         m_receiptsRoot = _header[field = 3].toHash<h256>(RLP::VeryStrict);
         m_logBloom = _header[field = 4].toHash<LogBloom>(RLP::VeryStrict);
-        m_number = _header[field = 5].toInt<u256>();
+        m_number = _header[field = 5].toPositiveInt64();
         m_gasLimit = _header[field = 6].toInt<u256>();
         m_gasUsed = _header[field = 7].toInt<u256>();
-        m_timestamp = _header[field = 8].toInt<u256>();
+        m_timestamp = uint64_t(_header[field = 8]);
         m_extraData = _header[field = 9].toVector<bytes>();
         m_sealer = _header[field = 10].toInt<u256>();
         m_sealerList = _header[field = 11].toVector<h512>();
@@ -215,7 +217,7 @@ void BlockHeader::populate(RLP const& _header)
 void BlockHeader::populateFromParent(BlockHeader const& _parent)
 {
     m_stateRoot = _parent.stateRoot();
-    m_number = _parent.number() + u256(1);
+    m_number = _parent.number() + 1;
     m_parentHash = _parent.hash();
     m_gasLimit = _parent.m_gasLimit;
     m_gasUsed = u256(0);
@@ -237,14 +239,16 @@ void BlockHeader::populateFromParent(BlockHeader const& _parent)
 void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRef _block) const
 {
     /// check block number
-    if (m_number >= Invalid256)
+    if (m_number >= INT64_MAX || m_number < 0)
     {
         BOOST_THROW_EXCEPTION(InvalidNumber());
     }
     /// check gas
     if (_s != CheckNothingNew && m_gasUsed > m_gasLimit)
+    {
         BOOST_THROW_EXCEPTION(
             TooMuchGasUsed() << RequirementError(bigint(m_gasLimit), bigint(m_gasUsed)));
+    }
     /// check block header of the parent
     if (_parent)
     {

@@ -60,7 +60,7 @@ namespace eth
 {
 /// Convert to a block number, a bit like jsToInt, except that it correctly recognises "pending" and
 /// "latest".
-BlockNumber jsToBlockNumber(std::string const& _js)
+inline BlockNumber jsToBlockNumber(std::string const& _js)
 {
     return (unsigned)jsToInt(_js);
 }

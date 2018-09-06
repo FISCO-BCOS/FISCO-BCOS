@@ -5,7 +5,7 @@ add_library(evm ${sources})
 target_link_libraries(
     evm
     PUBLIC ethcore devcore evmc::evmc
-    PRIVATE interpreter jsoncpp_lib_static  evmc::loader
+    PRIVATE interpreter ${JSONCPP_LIBRARY}  evmc::loader
 )
 
 if(EVM_OPTIMIZE)
