@@ -189,10 +189,10 @@ namespace dev
 			void startPeerSession(Public const& _id, RLP const& _hello, std::shared_ptr<RLPXSocket> const& _s);
 
 			/// Get session by id
-			std::shared_ptr<SessionFace> peerSession(NodeID const& _id) { RecursiveGuard l(x_sessions); return m_sessions.count(_id) ? m_sessions[_id].lock() : std::shared_ptr<SessionFace>(); }
+			std::shared_ptr<SessionFace> peerSession(NodeID const& _id) const { RecursiveGuard l(x_sessions); return m_sessions.count(_id) ? m_sessions[_id].lock() : std::shared_ptr<SessionFace>(); }
 
 			//判断是否连接
-			bool isConnected(const NodeID & nodeID);
+			bool isConnected(const NodeID & nodeID) const;
 
 			/// Get our current node ID.
 			NodeID id() const { return m_alias.pub(); }

@@ -555,8 +555,8 @@ int main(int argc, char** argv)
 
 	if(chainParams.getInitializer()->consoleInitializer()->consoleServer()) {
 		chainParams.getInitializer()->consoleInitializer()->consoleServer()->setInterface(web3.ethereum());
+		chainParams.getInitializer()->consoleInitializer()->consoleServer()->setWebThreeDirect(&web3);
 		chainParams.getInitializer()->consoleInitializer()->consoleServer()->StartListening();
-
 		cout << "ConsoleServer started." << std::endl;
 	}
 
