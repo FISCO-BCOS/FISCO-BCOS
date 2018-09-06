@@ -25,6 +25,7 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Exceptions.h>
 #include <libethcore/BlockHeader.h>
+#include <libevm/VMFace.h>
 #include "BlockChain.h"
 #include "VerifiedBlock.h"
 #include "State.h"
@@ -112,6 +113,9 @@ void BlockQueue::verifierBody()
 		try
 		{
 			res.verified = m_bc->verifyBlock(&res.blockData, m_onBad, ImportRequirements::OutOfOrderChecks);
+		}
+		catch (dev::eth::UnexpectedException &e) {
+			//非必现的错误，插入到m_unverified里，等待下次执行
 		}
 		catch (std::exception const& _ex)
 		{

@@ -190,33 +190,6 @@ void Client::updateConfig() {
 #endif
 }
 
-u256 Client::filterCheck(const Transaction & _t, FilterCheckScene) const
-{
-#if 0
-	if ( m_systemcontractapi )
-		return m_systemcontractapi->transactionFilterCheck(_t);
-	else
-		return (u256)SystemContractCode::Other;
-#endif
-	return u256(0);
-}
-
-
-//void    Client::updateSystemContract(const Transactions & _transcations)
-void    Client::updateSystemContract(std::shared_ptr<Block> block)
-{
-#if 0
-	m_systemcontractapi->updateSystemContract(block);
-#endif
-}
-
-void Client::updateCache(Address address) {
-#if 0
-	m_systemcontractapi->updateCache(address);
-#endif
-}
-
-
 Client::~Client()
 {
 	if(isMining()) {
