@@ -48,53 +48,6 @@ bool isZero(evmc_uint256be const& x)
     return true;
 }
 
-class FakeState
-{
-public:
-    using AccountStateType = map<string, evmc_uint256be>;
-    using AccountCodeStateType = map<string, bytes>;
-    using StateType = map<string, AccountStateType>;
-
-    void set(evmc_address const& addr, evmc_uint256be const& key, evmc_uint256be const& value)
-    {
-        state[toKey(addr)][toKey(key)] = value;  // create if the key is non-exist
-    }
-
-    evmc_uint256be& get(evmc_address const& addr, evmc_uint256be const& key)
-    {
-        return state[toKey(addr)][toKey(key)];
-    }
-
-    evmc_uint256be& accountBalance(evmc_address const& addr)
-    {
-        return state[toKey(addr)]["balance"];
-    }
-
-    bytes& accountCode(evmc_address const& addr) { return codeState[toKey(addr)]; }
-
-    void accountSuicide(evmc_address const& addr)
-    {
-        state[toKey(addr)].clear();
-        codeState[toKey(addr)].clear();
-    }
-
-    bool addressExist(evmc_address const& addr) { return state[toKey(addr)].size() != 0; }
-
-    bool valueExist(evmc_address const& addr, evmc_uint256be const& key)
-    {
-        AccountStateType& account = state[toKey(addr)];
-        return account.find(toKey(key)) != account.end();
-    }
-
-private:
-    inline string toKey(evmc_address const& addr) { return string((const char*)addr.bytes, 20); }
-
-    inline string toKey(evmc_uint256be const& key) { return string((const char*)key.bytes, 32); }
-
-    StateType state;
-    AccountCodeStateType codeState;
-};
-
 FakeState fakeState;
 
 int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
@@ -239,7 +192,7 @@ FakeEvmc::FakeEvmc(evmc_instance* _instance)
 }
 
 evmc_result FakeEvmc::execute(dev::eth::EVMSchedule const& schedule, bytes code, bytes data,
-    Address myAddress, Address caller, u256 value, int64_t gas, int32_t depth, bool isCreate,
+    Address destination, Address caller, u256 value, int64_t gas, int32_t depth, bool isCreate,
     bool isStaticCall)
 {
     auto mode = toRevision(schedule);
@@ -247,8 +200,8 @@ evmc_result FakeEvmc::execute(dev::eth::EVMSchedule const& schedule, bytes code,
     uint32_t flags = isStaticCall ? EVMC_STATIC : 0;
     h256 codeHash = sha3(code);
     assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
-    evmc_message msg = {toEvmC(myAddress), toEvmC(caller), toEvmC(value), data.data(), data.size(),
-        toEvmC(codeHash), toEvmC(0x0_cppui256), gas, depth, kind, flags};
+    evmc_message msg = {toEvmC(destination), toEvmC(caller), toEvmC(value), data.data(),
+        data.size(), toEvmC(codeHash), toEvmC(0x0_cppui256), gas, depth, kind, flags};
 
     return m_instance->execute(m_instance, m_context, mode, &msg, code.data(), code.size());
 }
@@ -256,6 +209,11 @@ evmc_result FakeEvmc::execute(dev::eth::EVMSchedule const& schedule, bytes code,
 void FakeEvmc::destroy()
 {
     m_instance->destroy(m_instance);
+}
+
+FakeState& FakeEvmc::getState()
+{
+    return fakeState;
 }
 
 }  // namespace test
