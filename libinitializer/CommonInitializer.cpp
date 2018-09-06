@@ -8,6 +8,7 @@
 #include "CommonInitializer.h"
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string/replace.hpp>
+#include <libethcore/BlockHeader.h>
 
 using namespace dev;
 using namespace dev::eth;
@@ -15,7 +16,9 @@ using namespace dev::eth;
 void CommonInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	_dataPath = pt.get<std::string>("common.data_path", "");
 	_logConfig = pt.get<std::string>("common.log_config", "${DATAPATH}/log.conf");
-
+	_extHeader = pt.get<unsigned int>("common.ext_header", 0);
+	BlockHeader::updateHeight = _extHeader;
+	
 	completePath(_logConfig);
 
 	if(_dataPath.empty()) {

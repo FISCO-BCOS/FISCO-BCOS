@@ -85,8 +85,7 @@ h256 BlockHeader::hash(IncludeSeal _i) const
 
 bool BlockHeader::IsBlockAfterUpdate() const
 {
-	return (0 != BlockHeader::updateHeight && 
-			m_number > BlockHeader::updateHeight);
+	return m_number >= BlockHeader::updateHeight;
 }
 
 void BlockHeader::streamRLPFields(RLPStream& _s) const

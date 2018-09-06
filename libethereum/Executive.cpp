@@ -182,6 +182,7 @@ void Executive::initialize(Transaction const& _transaction)
 {
 	m_t = _transaction;
 
+#if 0
 	// Avoid transactions that would take us beyond the block gas limit.
 	u256 startGasUsed = m_envInfo.gasUsed();
 
@@ -196,7 +197,7 @@ void Executive::initialize(Transaction const& _transaction)
 	
 	m_baseGasRequired = m_t.gasRequired(m_sealEngine.evmSchedule(m_envInfo));
 	
-
+#endif
 	// Avoid unaffordable transactions.
 	bigint gasCost = (bigint)m_t.gas() * m_t.gasPrice();
 	bigint totalCost = m_t.value() + gasCost;
@@ -238,9 +239,13 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
 	m_savepoint = m_s.savepoint();
 
+	dev::precompiled::BlockInfo blockInfo;
+	blockInfo.hash = m_envInfo.blockHash();
+	blockInfo.number = m_envInfo.number();
 	
 	if (m_sealEngine.isPrecompiled(_p.codeAddress))
-	{
+	{		
+		/*
 		bigint g = m_sealEngine.costOfPrecompiled(_p.codeAddress, _p.data);
 		if (_p.gas < g)
 		{
@@ -253,6 +258,20 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 			m_gas = (u256)(_p.gas - g);
 			m_sealEngine.executePrecompiled(_p.codeAddress, _p.data, _p.out);
 		}
+		*/
+
+		m_gas = _p.gas;
+		m_sealEngine.executePrecompiled(_p.codeAddress, _p.data, _p.out);
+	}
+	else if(m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress)) {
+		m_gas = _p.gas;
+
+		LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
+
+		auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
+		bytesConstRef(&result).copyTo(_p.out);
+
+		LOG(DEBUG) << "Precompiled result: " << result;
 	}
 	else
 	{
@@ -267,8 +286,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 		}
 	}
 
-	// Transfer ether.
-	m_s.transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
+	// Transfer ether. 不需要再传递balance了
+	// m_s.transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
 	return !m_ext;
 }
 
@@ -401,6 +420,20 @@ bool Executive::go(OnOpFunc const& _onOp)
 			m_gas = 0;
 			m_excepted = toTransactionException(_e);
 			revert();
+		}
+		catch(UnexpectedException const& _e) {
+			//非必现的vm错误，由代理、分布式存储等外围组件导致，需重试
+			LOG(ERROR) << "Unexpected exception:" << _e.what();
+
+			//抛出异常，外围根据场景做不同的处理
+			//rpc调用：返回失败
+			//共识节点打包：放弃本轮共识，view+1
+			//共识节点签名：放弃签名
+			//节点同步区块：放弃该区块，重新同步区块
+			//启动校验阶段：放弃该区块，等待一段时间后重试，重试超过一定次数重新同步区块
+			m_gas = 0;
+
+			throw _e;
 		}
 		catch (Exception const& _e)
 		{
