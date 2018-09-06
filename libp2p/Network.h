@@ -1,0 +1,92 @@
+/*
+    This file is part of cpp-ethereum.
+
+    cpp-ethereum is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    cpp-ethereum is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file Network.h
+ * @author Alex Leverington <nessence@gmail.com>
+ * @author Gav Wood <i@gavwood.com>
+ * @date 2014
+ */
+
+#pragma once
+
+#include "Common.h"
+#include <libdevcore/Guards.h>
+#include <libdevcore/RLP.h>
+#include <array>
+#include <deque>
+#include <memory>
+#include <vector>
+namespace ba = boost::asio;
+namespace bi = ba::ip;
+
+namespace dev
+{
+namespace p2p
+{
+static unsigned short c_defaultListenPort = 16789;
+
+struct NetworkPreferences
+{
+    // Default Network Preferences
+    NetworkPreferences(unsigned short lp = c_defaultListenPort) : listenPort(lp) {}
+
+    // Network Preferences with specific Listen IP
+    NetworkPreferences(std::string const& l, unsigned short lp = c_defaultListenPort, bool u = true)
+      : publicIPAddress(), listenIPAddress(l), listenPort(lp), traverseNAT(u)
+    {}
+
+    // Network Preferences with intended Public IP
+    NetworkPreferences(std::string const& publicIP, std::string const& l = std::string(),
+        unsigned short lp = c_defaultListenPort, bool u = true)
+      : publicIPAddress(publicIP), listenIPAddress(l), listenPort(lp), traverseNAT(u)
+    {
+        if (!publicIPAddress.empty() && !isPublicAddress(publicIPAddress))
+            BOOST_THROW_EXCEPTION(InvalidPublicIPAddress());
+    }
+
+    /// Addressing
+
+    std::string publicIPAddress;
+    std::string listenIPAddress;
+    unsigned short listenPort = c_defaultListenPort;
+
+
+    /// Preferences
+
+    bool traverseNAT = true;
+    bool discovery = true;  // Discovery is activated with network.
+    bool pin = false;       // Only accept or connect to trusted peers.
+};
+
+/**
+ * @brief Network Class
+ * Static network operations and interface(s).
+ */
+class Network
+{
+public:
+    /// @returns public and private interface addresses
+    static std::set<bi::address> getInterfaceAddresses();
+
+    /// Try to bind and listen on _listenPort, else attempt net-allocated port.
+    static int tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkPreferences const& _netPrefs);
+
+    /// Resolve "host:port" string as TCP endpoint. Returns unspecified endpoint on failure.
+    static bi::tcp::endpoint resolveHost(std::string const& _host);
+};
+
+}  // namespace p2p
+}  // namespace dev
