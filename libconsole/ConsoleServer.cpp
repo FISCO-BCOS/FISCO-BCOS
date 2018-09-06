@@ -14,6 +14,7 @@
 #include <libp2p/Common.h>
 #include <libp2p/Host.h>
 #include <libdevcore/FixedHash.h>
+#include <libstorage/StateDB.h>
 
 using namespace dev;
 using namespace console;
@@ -97,7 +98,15 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
 		}
 		else if(func == "p2p.peers")
 		{
-			output = peers(args);
+			output = p2pPeers(args);
+		}
+		else if(func == "p2p.miners")
+		{
+			output = p2pMiners(args);
+		}
+		else if(func == "amdb.select")
+		{
+			output = amdbSelect(args);
 		}
 		else {
 			output = "Unknown command, enter 'help' for command list";
@@ -137,8 +146,8 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 
 		ss << std::endl;
 
-		ss << "Block number:" << _interface->number() << " at view:" << dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->view() << std::endl;
-
+		ss << "Block number:" << _interface->number() << " at view:" << dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->view();
+		ss << std::endl;
 		output = ss.str();
 	}
 	catch(std::exception &e) {
@@ -150,7 +159,7 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 	return output;
 }
 
-std::string ConsoleServer::peers(const std::vector<std::string> args) {
+std::string ConsoleServer::p2pPeers(const std::vector<std::string> args) {
 	std::string output;
 
 	try {
@@ -158,17 +167,16 @@ std::string ConsoleServer::peers(const std::vector<std::string> args) {
 
 		ss << "=============P2P Peers=============\n";
 		ss << "Node number: ";
-		size_t peerCount = _webThreeDirect->peerCount();
 		std::vector<p2p::PeerSessionInfo> peers = _webThreeDirect->peers();
-		ss << peers.size();
+		ss << peers.size() << std::endl;
 		const dev::p2p::Host &host = _webThreeDirect->net();
 		for(size_t i = 0; i < peers.size(); i++)
 		{
 			const p2p::NodeID nodeid = peers[i].id;
-			ss << "nodeid: " << nodeid << std::endl;
-			ss << "ip: " << peers[i].host << std::endl;
-			ss << "port:" << peers[i].port << std::endl;
-			ss << "connected: " << host.isConnected(nodeid) << std::endl;
+			ss << "Nodeid: " << nodeid << std::endl;
+			ss << "Ip: " << peers[i].host << std::endl;
+			ss << "Port:" << peers[i].port << std::endl;
+			ss << "Connected: " << host.isConnected(nodeid) << std::endl;
 		}
 		ss << std::endl;
 		output = ss.str();
@@ -177,6 +185,93 @@ std::string ConsoleServer::peers(const std::vector<std::string> args) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
 
 		output = "ERROR while p2p.peers";
+	}
+
+	return output;
+}
+
+std::string ConsoleServer::p2pMiners(const std::vector<std::string> args) {
+	std::string output;
+
+	try {
+		std::stringstream ss;
+
+		ss << "=============P2P Miners=============\n";
+		ss << "Miners number: ";
+		dev::h512s minerNodeList =
+				dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->getMinerNodeList();
+		ss << minerNodeList.size() << std::endl;
+		const dev::p2p::Host &host = _webThreeDirect->net();
+		for(size_t i = 0; i < minerNodeList.size(); i++)
+		{
+			const p2p::NodeID nodeid = minerNodeList[i];
+			ss << "Nodeid: " << nodeid << std::endl;
+//			ss << "ip: " << peers[i].host << std::endl;
+//			ss << "port:" << peers[i].port << std::endl;
+//			ss << "connected: " << host.isConnected(nodeid) << std::endl;
+		}
+		ss << std::endl;
+		output = ss.str();
+	}
+	catch(std::exception &e) {
+		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
+
+		output = "ERROR while p2p.peers";
+	}
+
+	return output;
+}
+
+std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
+	std::string output;
+
+	try {
+		std::stringstream ss;
+		if(args.size() == 2)
+		{
+			std::string tableName = args[0];
+			std::string key = args[1];
+			unsigned int number = _interface->number();
+			h256 hash = _interface->hashFromNumber(number);
+			ss << "number: " << number << std::endl;
+			ss << "hash: " << hash << std::endl;
+			dev::storage::Entries entries = _stateStorage->select(
+					_interface->hashFromNumber(number), number, tableName, key);
+//			storage::Entries::Ptr entries = std::make_shared<storage::Entries>();
+//			storage::Entry::Ptr entry = std::make_shared<storage::Entry>();
+//			entry->setField("key1", "hello1");
+//			entry->setField("key2", "hello2");
+//			entry->setField("key3", "hello3");
+//			entry->setField("key4", "hello4");
+//			entries->addEntry(entry);
+      size_t size = entries->size();
+      ss << "Number of entries: " << size << std::endl;
+      for (size_t i = 0; i < size; ++i)
+      {
+        storage::Entry::Ptr entry = entries->get(i);
+        std::map<std::string, std::string> *fields = entry->fields();
+        std::map<std::string, std::string>::iterator it;
+        for(it = fields->begin(); it != fields->end(); it++)
+        {
+          ss << it->first << ": " << it->second << std::endl;
+        }
+      }
+//			ss << "tableName: " << tableName << std::endl;
+//			ss << "key:"<< key << std::endl;
+			output = ss.str();
+		}
+		else
+		{
+			ss << "You must specify table name and table key, for example" << std::endl;
+			ss << "amdb.select t_test name" << std::endl;
+		}
+		ss << std::endl;
+		output = ss.str();
+	}
+	catch(std::exception &e) {
+		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
+
+		output = "ERROR while amdb.select";
 	}
 
 	return output;
