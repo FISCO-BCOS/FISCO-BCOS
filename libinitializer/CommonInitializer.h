@@ -28,6 +28,7 @@ public:
 private:
 	std::string _dataPath;
 	std::string _logConfig;
+	u256 _extHeader;
 };
 
 }
