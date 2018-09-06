@@ -48,7 +48,6 @@ namespace eth
 
 class Client;
 class DownloadMan;
-class SystemContractApi;
 
 enum ClientWorkState
 {
@@ -199,10 +198,6 @@ public:
 
 	virtual Block block(h256 const& _block) const override;
 	using ClientBase::block;
-
-	u256 filterCheck(const Transaction & _t, FilterCheckScene _checkscene = FilterCheckScene::None) const override;
-	void updateSystemContract(std::shared_ptr<Block> block) override;
-	void updateCache(Address address) override;
 
 	virtual bool isMining() const { return m_wouldSeal; }
 	bool checkWorking() {return isWorking();};
