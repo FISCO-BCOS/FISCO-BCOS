@@ -169,11 +169,13 @@ BlockChain::~BlockChain()
 
 bool BlockChain::isBlockLimitOk(Transaction const&_ts) const
 {
+#if 0
 	if ( (_ts.blockLimit()  == Invalid256) || ( number() >= _ts.blockLimit() ) || (_ts.blockLimit() > (number() + BlockChain::maxBlockLimit)  ) )
 	{
 		LOG(WARNING) << "BlockChain::isBlockLimitOk Fail! t.sha3()=" << _ts.sha3() << ",t.blockLimit=" << _ts.blockLimit() << ",number()=" << number() << ",maxBlockLimit=" << BlockChain::maxBlockLimit;
 		return false;
 	}
+#endif
 
 	return true;
 }
@@ -187,21 +189,6 @@ bool BlockChain::isNonceOk(Transaction const&_ts, bool _needinsert) const
 
 	return true;
 }
-
-// u256 BlockChain::filterCheck(const Transaction & _t, FilterCheckScene _checkscene) const
-// {
-// 	LOG(TRACE) << "BlockChain::filterCheck Scene：" << (int)(_checkscene);
-// 	return m_interface->filterCheck(_t, _checkscene);
-// }
-
-// void    BlockChain::updateSystemContract(std::shared_ptr<Block> block)
-// {
-// 	m_interface->updateSystemContract(block);
-// }
-
-// void BlockChain::updateCache(Address address) const {
-// 	m_interface->updateCache(address);
-// }
 
 BlockHeader const& BlockChain::genesis() const
 {

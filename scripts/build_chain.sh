@@ -131,7 +131,7 @@ while read line;do
 	[common]
 		data_path=data/
 		log_config=log.conf
-	
+		ext_header=0
 	[secure]
 		key=data/node.key
 		cert=data/node.crt
@@ -221,24 +221,23 @@ EOF
 	cat << EOF > "$node_dir/start.sh"
 	#!/bin/bash
 	
-	nohup setsid ./eth --config config${i}.conf --genesis genesis.json&
+	nohup setsid ./fisco-bcos --config config${i}.conf --genesis genesis.json&
 EOF
 
 	cat << EOF > "$node_dir/stop.sh"
 	#!/bin/bash
-	
-	nohup setsid ./eth --config config${i}.conf --genesis genesis.json&
+	weth_pid=`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print $2}'`
+    kill -9 ${weth_pid}
 EOF
 	
 		chmod +x "$node_dir/start.sh"
 	
 		cp "$output_dir/ca.crt" "$node_dir/data/"
-		cp "$eth_path" "$node_dir/eth"
-		echo "cd \${PPath}/node_${line}_${index}" >> "$output_dir/start_all.sh"
-		echo "nohup setsid fisco-bcos --config config${i}.conf --genesis genesis.json &" >> "$output_dir/start_all.sh"
+		cp "$eth_path" "$node_dir/fisco-bcos"
+		echo "cd \${PPath}/node_${line}_${index} && ./start.sh" >> "$output_dir/start_all.sh"
 		((++index))
 		[ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
 	done
 done < $ip_file
 
-echo "全部完成"
+echo "All completed."

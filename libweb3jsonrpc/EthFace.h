@@ -83,8 +83,6 @@ public:
 		this->bindAndAddMethod(jsonrpc::Procedure("eth_getStorageAtCNS", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getStorageAtCNSI);
 		this->bindAndAddMethod(jsonrpc::Procedure("eth_getTransactionCountCNS", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getTransactionCountCNSI);
 
-        this->bindAndAddMethod(jsonrpc::Procedure("eth_getCmByRange", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT,  NULL), &dev::rpc::EthFace::eth_getCmByRangeI);
-        this->bindAndAddMethod(jsonrpc::Procedure("eth_getGovDataByRange", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT,  NULL), &dev::rpc::EthFace::eth_getGovDataByRangeI);
     }
 
     inline virtual void eth_protocolVersionI(const Json::Value &request, Json::Value &response)
@@ -358,15 +356,6 @@ public:
 		response = this->eth_getTransactionCountCNS(request[0u].asString(), request[1u].asString());
 	}
 
-    inline virtual void eth_getCmByRangeI(const Json::Value &request, Json::Value &response)
-    {
-        response = this->eth_getCmByRange(request[0u]);
-    }
-    inline virtual void eth_getGovDataByRangeI(const Json::Value &request, Json::Value &response)
-    {
-        response = this->eth_getGovDataByRange(request[0u]);
-    }
-
     virtual std::string eth_protocolVersion() = 0;
     virtual std::string eth_hashrate() = 0;
     virtual std::string eth_coinbase() = 0;
@@ -435,8 +424,6 @@ public:
 	virtual std::string eth_getStorageAtCNS(std::string const& strContractName, std::string const& _position, std::string const& _blockNumber) = 0;
 	virtual std::string eth_getTransactionCountCNS(std::string const& strContractName, std::string const& _blockNumber) = 0;
 
-    virtual Json::Value eth_getCmByRange(const Json::Value& param1) = 0;
-    virtual Json::Value eth_getGovDataByRange(const Json::Value& param1) = 0;
 };
 
 }
