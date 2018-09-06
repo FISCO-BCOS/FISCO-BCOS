@@ -1,3 +1,4 @@
+#include <evmc/helpers.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/SHA3.h>
 #include <libdevcrypto/Common.h>
