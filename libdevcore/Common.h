@@ -28,7 +28,6 @@
  * @date 2018.9.5
  * @modify: remove useless micro-definition 'DEV_IF_THROWS'
  *          remove useless functions: toLog2, inUnits
- *          add ETH_TESTS flag to recover the DEV_INVARANIT_CHECK in both debug mode and test mode
  */
 
 #pragma once
@@ -224,7 +223,7 @@ private:
 };
 
 /// Scope guard for invariant check in a class derived from HasInvariants.
-#if (ETH_DEBUG || ETH_TESTS)
+#if ETH_DEBUG
 #define DEV_INVARIANT_CHECK \
     ::dev::InvariantChecker __dev_invariantCheck(this, BOOST_CURRENT_FUNCTION, __FILE__, __LINE__)
 #define DEV_INVARIANT_CHECK_HERE \
