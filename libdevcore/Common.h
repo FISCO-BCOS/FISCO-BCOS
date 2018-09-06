@@ -23,6 +23,11 @@
  * @author wheatli
  * @date 2018.8.27
  * @modify add owning_bytes_ref
+ *
+ * @author yujiechen
+ * @date 2018.9.5
+ * @modify: remove useless micro-definition 'DEV_IF_THROWS'
+ *          remove useless functions: toLog2, inUnits
  */
 
 #pragma once
@@ -66,13 +71,6 @@ using byte = uint8_t;
     catch (...)                  \
     {                            \
     }
-
-#define DEV_IF_THROWS(X) \
-    try                  \
-    {                    \
-        X;               \
-    }                    \
-    catch (...)
 
 namespace dev
 {
@@ -147,6 +145,7 @@ u256 constexpr Invalid256 =
 inline s256 u2s(u256 _u)
 {
     static const bigint c_end = bigint(1) << 256;
+    /// get the +/- symbols
     if (boost::multiprecision::bit_test(_u, 255))
         return s256(-(c_end - _u));
     else
@@ -163,18 +162,6 @@ inline u256 s2u(s256 _u)
         return u256(c_end + _u);
 }
 //-----------Common Convertions and Calcultations--------------------
-/// Converts given int to a string and appends one of a series of units according to its size.
-std::string inUnits(bigint const& _b, strings const& _units);
-
-/// @returns the smallest n >= 0 such that (1 << n) >= _x
-inline unsigned int toLog2(u256 _x)
-{
-    unsigned ret;
-    for (ret = 0; _x >>= 1; ++ret)
-    {
-    }
-    return ret;
-}
 
 template <size_t n>
 inline u256 exp10()
@@ -270,6 +257,7 @@ public:
     {
         return std::chrono::high_resolution_clock::now() - m_t;
     }
+    /// return seconds
     double elapsed() const
     {
         return std::chrono::duration_cast<std::chrono::microseconds>(duration()).count() /
