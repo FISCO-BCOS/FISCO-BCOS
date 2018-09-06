@@ -33,7 +33,6 @@
 #include <libevmcore/Instruction.h>
 #include <libethcore/CommonJS.h>
 #include <libethereum/Client.h>
-#include <libethereum/Pool.hpp>
 #include <libethereum/BlockQueue.h>
 #include <libpbftseal/PBFT.h>
 #include <libwebthree/WebThree.h>
@@ -1938,97 +1937,3 @@ std::string Eth::eth_callNewCNS(TransactionSkeleton &t, std::string const& _bloc
 	return toJS(er.output);
 }
 
-Json::Value Eth::eth_getCmByRange(Json::Value const &range)
-{
-	/*
-curl --data '{"jsonrpc":"2.0","method":"eth_getCmByRange","id":1,"params":[{"from":0,"to":-1}]}' localhost:8545
-*/
-	Json::Value ret;
-	ret["from"] = 0;
-	ret["to"] = 0;
-	Json::Value cms(Json::arrayValue);
-	try
-	{
-		// [from， to)
-		int64_t from = range["from"].asInt64();
-		int64_t to = range["to"].asInt64();
-
-		CMPool_Singleton &pool = CMPool_Singleton::Instance();
-		poolBlockNumber_t cbn = client()->number();
-
-		if (to <= 0)
-			to = (int64_t)pool.size(cbn);
-		else
-			to = min(to, (int64_t)pool.size(cbn));
-		//LOG(TRACE) << "pool size: " << pool.size(cbn) << std::endl;
-
-		ret["from"] = from;
-		ret["to"] = to;
-
-		//[from,to) error return [null]
-		if (from >= to || from < 0)
-		{
-			ret["cms"] = cms;
-			return ret;
-		}
-
-		for (; from < to; from++)
-		{
-			cms.append(pool.get(cbn, from));
-		}
-	}
-	catch (std::exception &e)
-	{
-		LOG(ERROR) << e.what() << endl;
-	}
-	ret["cms"] = cms;
-	return ret;
-}
-
-Json::Value Eth::eth_getGovDataByRange(Json::Value const &range)
-{
-	/*
-curl --data '{
-"jsonrpc":"2.0","method":"eth_getGovDataByRange","id":1,"params":[{"from":0,"to":-1}]
-}' localhost:8545
-*/
-	Json::Value ret;
-	ret["from"] = 0;
-	ret["to"] = 0;
-	Json::Value g_datas(Json::arrayValue);
-	try
-	{
-		// [from， to)
-		int64_t from = range["from"].asInt();
-		int64_t to = range["to"].asInt();
-
-		GovDataPool_Singleton &pool = GovDataPool_Singleton::Instance();
-		poolBlockNumber_t cbn = client()->number();
-
-		if (to <= 0)
-			to = (int64_t)pool.size(cbn);
-		else
-			to = min(to, (int64_t)pool.size(cbn));
-
-		ret["from"] = from;
-		ret["to"] = to;
-
-		//[from,to) error return [null]
-		if (from >= to || from < 0)
-		{
-			ret["G_datas"] = g_datas;
-			return ret;
-		}
-
-		for (; from < to; from++)
-		{
-			g_datas.append(pool.get(cbn, from));
-		}
-	}
-	catch (std::exception &e)
-	{
-		LOG(ERROR) << e.what() << endl;
-	}
-	ret["G_datas"] = g_datas;
-	return ret;
-}

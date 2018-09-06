@@ -326,11 +326,6 @@ public:
 	bool isBlockLimitOk(Transaction const&_ts) const ;
 	bool isNonceOk(Transaction const&_ts, bool _needinsert = false) const ;
 
-	// u256 filterCheck(const Transaction & _t, FilterCheckScene _checkscene = FilterCheckScene::None) const ;
-	//void    updateSystemContract(Transactions & _transcations);
-	// void    updateSystemContract(std::shared_ptr<Block> block);
-	// void updateCache(Address address)const;
-
 	static u256 maxBlockLimit;
 	
 	void checkBlockValid(h256 const& _head, bytes const& _block, Block & _outBlock) const;
