@@ -11,6 +11,9 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <libp2p/Common.h>
+#include <libp2p/Host.h>
+#include <libdevcore/FixedHash.h>
 
 using namespace dev;
 using namespace console;
@@ -92,6 +95,10 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
 		else if(func == "status") {
 			output = status(args);
 		}
+		else if(func == "p2p.peers")
+		{
+			output = peers(args);
+		}
 		else {
 			output = "Unknown command, enter 'help' for command list";
 		}
@@ -128,9 +135,9 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 			ss << "syncing block...";
 		}
 
-		ss << "\n";
+		ss << std::endl;
 
-		ss << "Block number:" << _interface->number() << " at view:" << dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->view() << "\n";
+		ss << "Block number:" << _interface->number() << " at view:" << dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->view() << std::endl;
 
 		output = ss.str();
 	}
@@ -142,3 +149,37 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 
 	return output;
 }
+
+std::string ConsoleServer::peers(const std::vector<std::string> args) {
+	std::string output;
+
+	try {
+		std::stringstream ss;
+
+		ss << "=============P2P Peers=============\n";
+		ss << "Node number: ";
+		size_t peerCount = _webThreeDirect->peerCount();
+		std::vector<p2p::PeerSessionInfo> peers = _webThreeDirect->peers();
+		ss << peers.size();
+		const dev::p2p::Host &host = _webThreeDirect->net();
+		for(size_t i = 0; i < peers.size(); i++)
+		{
+			const p2p::NodeID nodeid = peers[i].id;
+			ss << "nodeid: " << nodeid << std::endl;
+			ss << "ip: " << peers[i].host << std::endl;
+			ss << "port:" << peers[i].port << std::endl;
+			ss << "connected: " << host.isConnected(nodeid) << std::endl;
+		}
+		ss << std::endl;
+		output = ss.str();
+	}
+	catch(std::exception &e) {
+		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
+
+		output = "ERROR while p2p.peers";
+	}
+
+	return output;
+}
+
+
