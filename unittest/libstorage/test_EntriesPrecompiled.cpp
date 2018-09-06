@@ -5,8 +5,8 @@
 #include <libstorage/EntriesPrecompiled.h>
 #include <libstorage/EntryPrecompiled.h>
 #include <libstorage/StateDB.h>
-#include <unittest/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <unittest/Common.h>
 
 using namespace dev;
 using namespace dev::storage;

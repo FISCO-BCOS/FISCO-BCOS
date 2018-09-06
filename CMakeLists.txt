@@ -42,6 +42,7 @@ endif()
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
 
+include(CTest)
 include(EthOptions)
 include(EthCompilerSettings)
 include(EthExecutableHelper)
@@ -104,5 +105,4 @@ if (EVMJIT)
 endif()
 
 # TODO - split out json_spirit, libscrypt and sec256k1
-
 add_subdirectory(unittest)
