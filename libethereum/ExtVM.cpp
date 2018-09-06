@@ -22,6 +22,8 @@
 #include "ExtVM.h"
 #include <exception>
 #include <boost/thread.hpp>
+#include <libethereum/BlockChain.h>
+#include <libprecompiled/PrecompiledContext.h>
 
 using namespace dev;
 using namespace dev::eth;
@@ -110,6 +112,13 @@ bool ExtVM::call(CallParameters& _p)
 
 size_t ExtVM::codeSizeAt(dev::Address _a)
 {
+	LOG(DEBUG) << "代码大小codeSizeAt:" << _a;
+
+	//判断是否是precompiled
+	if(m_envInfo.precompiledEngine()->isPrecompiled(_a)) {
+		LOG(DEBUG) << _a << " 内置合约 返回1";
+		return 1;
+	}
 	return m_s.codeSize(_a);
 }
 
