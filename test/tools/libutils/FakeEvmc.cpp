@@ -67,8 +67,6 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
     evmc_uint256be const* _key, evmc_uint256be const* _value) noexcept
 {
     evmc_uint256be oldValue = fakeState.get(*_addr, *_key);
-    fakeState.set(*_addr, *_key, *_value);
-
     evmc_uint256be value = *_value;
 
     if (value == oldValue)
