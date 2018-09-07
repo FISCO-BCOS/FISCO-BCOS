@@ -28,25 +28,25 @@ using namespace dev::eth;
 
 void CertificateServer::loadEcdsaFile()
 {
-    auto cacrt = contents(getDataDir().string() + "/ca.crt");
-    m_ca = asString(cacrt);
-    auto agencycrt = contents(getDataDir().string() + "/agency.crt");
-    m_agency = asString(agencycrt);
-    auto nodecrt = contents(getDataDir().string() + "/node.crt");
-    m_node = asString(nodecrt);
+    auto caCrt = contents(getDataDir().string() + "/ca.crt");
+    m_ca = asString(caCrt);
+    auto agencyCrt = contents(getDataDir().string() + "/agency.crt");
+    m_agency = asString(agencyCrt);
+    auto nodeCrt = contents(getDataDir().string() + "/node.crt");
+    m_node = asString(nodeCrt);
 
-    auto nodekey = contents(getDataDir().string() + "/node.key");
-    m_nodePri = asString(nodekey);
+    auto nodeKey = contents(getDataDir().string() + "/node.key");
+    m_nodePri = asString(nodeKey);
 
-    if (m_ca.empty() || m_agency.empty() || nodecrt.empty() || nodekey.empty())
+    if (m_ca.empty() || m_agency.empty() || nodeCrt.empty() || nodeKey.empty())
     {
         LOG(ERROR)
             << "CertificateServer Init Fail! ca.crt or agency.crt or node.crt or node.key File !";
         exit(-1);
     }
 
-    auto nodeprivate = contents(getDataDir().string() + "/node.private");
-    string pri = asString(nodeprivate);
+    auto nodePrivate = contents(getDataDir().string() + "/node.private");
+    string pri = asString(nodePrivate);
     if (pri.size() >= 64)
     {
         m_keyPair = KeyPair(Secret(fromHex(pri.substr(0, 64))));
@@ -54,7 +54,7 @@ void CertificateServer::loadEcdsaFile()
     }
     else
     {
-        LOG(INFO) << "CertificateServer Load KeyPair Fail! Please Check node.private File.";
+        LOG(ERROR) << "CertificateServer Load KeyPair Fail! Please Check node.private File.";
         exit(-1);
     }
 }
@@ -63,16 +63,25 @@ CertificateServer::CertificateServer()
     loadEcdsaFile();
 }
 
+/**
+ * @brief : get CA/agency/node certificates
+ * @param certificates: vector that stores certificate information
+ *        element 0: information of CA certificate
+ *        element 1: information of agency certificate
+ *        element 2: information of node certificate
+ * @param nodepri: private key of the node
+ */
 void CertificateServer::getCertificateList(
-    vector<pair<string, Public> >& certificates /*[0]ca [1] agency  [2] node */, string& nodepri)
+    vector<pair<string, Public> >& certificates, string& nodePrivate)
 {
     certificates.clear();
     certificates.push_back(make_pair(m_ca, m_caPub));
     certificates.push_back(make_pair(m_agency, m_agencyPub));
     certificates.push_back(make_pair(m_node, m_nodePub));
 
-    nodepri = m_nodePri;
+    nodePrivate = m_nodePri;
 }
+
 Signature CertificateServer::sign(h256 const& data)
 {
     return dev::sign(m_keyPair.secret(), data);

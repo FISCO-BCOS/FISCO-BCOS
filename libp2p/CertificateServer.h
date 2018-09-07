@@ -35,9 +35,10 @@ class CertificateServer
 {
 public:
     CertificateServer();
-    void getCertificateList(
-        vector<pair<string, Public> >& certificates /*[0]ca [1] agency  [2] node */,
-        string& nodePri);
+    /// get CA/agency/node certificates into certificate vector
+    /// element 0: ca certificate;  element 1: agency certificate;
+    /// element 2: node certificate
+    void getCertificateList(vector<pair<string, Public> >& certificates, string& nodePrivate);
     void loadEcdsaFile();
 
     Signature sign(h256 const& data);
