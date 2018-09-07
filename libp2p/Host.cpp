@@ -71,51 +71,13 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
 {
     LOG(INFO) << "Id:" << id();
 }
-
-Host::Host(string const& _clientVersion, NetworkConfig const& _n, bytesConstRef _restoreNetwork)
-  : Host(_clientVersion, networkAlias(_restoreNetwork), _n)
-{
-    m_restoreNetwork = _restoreNetwork.toBytes();
-}
-
+/// destructor function
 Host::~Host()
 {
     stop();
 }
 
-KeyPair Host::networkAlias(bytesConstRef _b)
-{
-    RLP r(_b);
-    if (r.itemCount() == 3 && r[0].isInt() && r[0].toInt<unsigned>() >= 3)
-        return KeyPair(Secret(r[1].toBytes()));
-    else
-    {
-        KeyPair kp = KeyPair::create();
-        RLPStream netData(3);
-        netData << dev::p2p::c_protocolVersion << kp.secret().ref();
-        int count = 0;
-        netData.appendList(count);
-
-        writeFile(getDataDir().string() + "/network.rlp", netData.out());
-        return kp;
-    }
-}
-
-///===========
-void Host::start()
-{
-    DEV_TIMED_FUNCTION_ABOVE(500);
-    startWorking();
-    while (isWorking() && !haveNetwork())
-        this_thread::sleep_for(chrono::milliseconds(10));
-    // network start failed!
-    if (isWorking())
-        return;
-
-    LOG(WARNING) << "Network start failed!";
-    doneWorking();
-}
-
+/// stop the network
 void Host::stop()
 {
     // called to force io_service to kill any remaining tasks it might have -
@@ -133,14 +95,27 @@ void Host::stop()
         // signal run() to prepare for shutdown and reset m_timer
         m_run = false;
     }
-
     // wait for m_timer to reset (indicating network scheduler has stopped)
     while (!!m_timer)
         this_thread::sleep_for(chrono::milliseconds(50));
-
     // stop worker thread
     if (isWorking())
         stopWorking();
+}
+
+///===========
+void Host::start()
+{
+    DEV_TIMED_FUNCTION_ABOVE(500);
+    startWorking();
+    while (isWorking() && !haveNetwork())
+        this_thread::sleep_for(chrono::milliseconds(10));
+    // network start failed!
+    if (isWorking())
+        return;
+
+    LOG(WARNING) << "Network start failed!";
+    doneWorking();
 }
 
 void Host::doneWorking()
@@ -206,10 +181,8 @@ void Host::doneWorking()
     RecursiveGuard l(x_sessions);
     m_sessions.clear();
 }
-///===========
 
 ///----Peer related informations
-
 PeerSessionInfos Host::peerSessionInfo() const
 {
     if (!m_run)
@@ -456,8 +429,8 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint)
             else
             {
                 socket->sslref().async_handshake(ba::ssl::stream_base::client,
-                    m_strand.wrap(boost::bind(&Host::sslHandshakeClient, this,
-                        ba::placeholders::error, socket, NodeID(), _nodeIPEndpoint)));
+                    m_strand.wrap(boost::bind(&Host::handshakeClient, this, ba::placeholders::error,
+                        socket, NodeID(), _nodeIPEndpoint)));
             }
         }));
 }
@@ -491,7 +464,7 @@ void Host::disconnectByNodeId(const std::string& sNodeId)
     }
 }*/
 
-void Host::sslHandshakeServer(
+void Host::handshakeServer(
     const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket)
 {
     if (error)
@@ -521,13 +494,13 @@ void Host::sslHandshakeServer(
     runAcceptor();
 }
 
-void Host::sslHandshakeClient(const boost::system::error_code& error,
+void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<RLPXSocket> socket, NodeID id, NodeIPEndpoint& _nodeIPEndpoint)
 {
     if (error)
     {
         m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-        LOG(DEBUG) << "Host::sslHandshakeClient Err:" << error.message();
+        LOG(DEBUG) << "Host::handshakeClient Err:" << error.message();
         return;
     }
 
@@ -592,40 +565,6 @@ void Host::startedWorking()
     }
     LOG(INFO) << "p2p.started id:" << id();
     run(boost::system::error_code());
-}
-
-
-void Host::determinePublic()
-{
-    auto ifAddresses = Network::getInterfaceAddresses();
-    auto laddr = m_netConfigs.listenIPAddress.empty() ?
-                     bi::address() :
-                     bi::address::from_string(m_netConfigs.listenIPAddress);
-    auto lset = !laddr.is_unspecified();
-    auto paddr = m_netConfigs.publicIPAddress.empty() ?
-                     bi::address() :
-                     bi::address::from_string(m_netConfigs.publicIPAddress);
-    auto pset = !paddr.is_unspecified();
-
-    bool listenIsPublic = lset && isPublicAddress(laddr);
-    bool publicIsHost = !lset && pset && ifAddresses.count(paddr);
-
-    bi::tcp::endpoint ep(bi::address(), m_listenPort);
-    if (listenIsPublic)
-    {
-        LOG(INFO) << "Listen address set to Public address:" << laddr << ". UPnP disabled.";
-        ep.address(laddr);
-    }
-    else if (publicIsHost)
-    {
-        LOG(INFO) << "Public address set to Host configured address:" << paddr
-                  << ". UPnP disabled.";
-        ep.address(paddr);
-    }
-    else if (pset)
-        ep.address(paddr);
-
-    m_tcpPublic = ep;
 }
 
 void Host::keepAlivePeers()
@@ -814,7 +753,7 @@ void Host::runAcceptor()
 
             socket->sslref().async_handshake(ba::ssl::stream_base::server,
                 m_strand.wrap(
-                    boost::bind(&Host::sslHandshakeServer, this, ba::placeholders::error, socket)));
+                    boost::bind(&Host::handshakeServer, this, ba::placeholders::error, socket)));
         }));
     }
 }

@@ -174,3 +174,36 @@ bi::tcp::endpoint Network::resolveHost(string const& _addr)
     }
     return ep;
 }
+
+bi::tcp::endpoint Network::determinePublic(
+    NetworkConfig const& network_config, int const& listen_port)
+{
+    auto ifAddresses = Network::getInterfaceAddresses();
+    auto laddr = network_config.listenIPAddress.empty() ?
+                     bi::address() :
+                     bi::address::from_string(network_config.listenIPAddress);
+    auto lset = !laddr.is_unspecified();
+    auto paddr = network_config.publicIPAddress.empty() ?
+                     bi::address() :
+                     bi::address::from_string(network_config.publicIPAddress);
+    auto pset = !paddr.is_unspecified();
+
+    bool listenIsPublic = lset && isPublicAddress(laddr);
+    bool publicIsHost = !lset && pset && ifAddresses.count(paddr);
+
+    bi::tcp::endpoint ep(bi::address(), listen_port);
+    if (listenIsPublic)
+    {
+        LOG(INFO) << "Listen address set to Public address:" << laddr << ". UPnP disabled.";
+        ep.address(laddr);
+    }
+    else if (publicIsHost)
+    {
+        LOG(INFO) << "Public address set to Host configured address:" << paddr
+                  << ". UPnP disabled.";
+        ep.address(paddr);
+    }
+    else if (pset)
+        ep.address(paddr);
+    return ep;
+}

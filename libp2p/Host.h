@@ -51,16 +51,29 @@ namespace dev
 namespace p2p
 {
 class RLPXHandshake;
-
 class Host : public Worker
 {
 public:
+    ///--------------- constructor functions---------------
     Host(std::string const& _clientVersion, NetworkConfig const& _n = NetworkConfig(),
         bytesConstRef _restoreNetwork = bytesConstRef());
-
     Host(std::string const& _clientVersion, KeyPair const& _alias,
         NetworkConfig const& _n = NetworkConfig());
     ~Host();
+    ///------------ Network and worker threads related ---------------
+    /// stop the network
+    void stop();
+    void start();
+
+    void doneWorking();
+    void startedWorking();
+    void run(boost::system::error_code const& error);
+    bool haveNetwork() const
+    {
+        Guard l(x_runTimer);
+        return m_run;
+    }
+    ///------------ Network related ---------------
 
     template <class T>
     std::shared_ptr<T> registerCapability(std::shared_ptr<T> const& _t)
@@ -102,18 +115,6 @@ public:
             return nullptr;
         }
     }
-    ///===========
-    void start();
-    void stop();
-    void doneWorking();
-    void startedWorking();
-    void run(boost::system::error_code const& error);
-    bool haveNetwork() const
-    {
-        Guard l(x_runTimer);
-        return m_run;
-    }
-    ///===========
 
     ///-----Peer releated Informations
     size_t peerCount() const;
@@ -149,11 +150,10 @@ public:
         RecursiveGuard l(x_sessions);
         return m_sessions.count(_id) ? m_sessions[_id].lock() : std::shared_ptr<SessionFace>();
     }
-    /// -----------------------------------
+
     NodeID id() const { return m_alias.pub(); }
     Secret sec() const { return m_alias.secret(); }
     KeyPair keyPair() const { return m_alias; }
-    /// -----------------------------------
 
     void startPeerSession(RLP const& _rlp, std::shared_ptr<RLPXSocket> const& _s);
     /*void disconnectByNodeId(const std::string& sNodeId);*/
@@ -198,13 +198,15 @@ public:
     // virtual std::function<bool(bool, boost::asio::ssl::verify_context&)>
     // newVerifyCallback(std::shared_ptr<std::string> nodeIDOut);
 private:
-    KeyPair networkAlias(bytesConstRef _b);
-    void sslHandshakeServer(
+    void handshakeServer(
         const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket);
-    void sslHandshakeClient(const boost::system::error_code& error,
-        std::shared_ptr<RLPXSocket> socket, NodeID id, NodeIPEndpoint& _nodeIPEndpoint);
+    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket,
+        NodeID id, NodeIPEndpoint& _nodeIPEndpoint);
     // bool sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx);
-    void determinePublic();
+    inline void determinePublic()
+    {
+        m_tcpPublic = Network::determinePublic(m_netConfigs, m_listenPort);
+    }
 
     void keepAlivePeers();
     // void reconnectAllNodes();
@@ -227,28 +229,33 @@ private:
     unsigned stretchPeers() { return m_stretchPeers; }
 
 private:
-    Mutex x_timers;
-    std::list<std::shared_ptr<boost::asio::deadline_timer>> m_timers;
-    std::unique_ptr<boost::asio::deadline_timer> m_timer;
-    bool m_accepting = false;
-
-    std::string m_clientVersion;          ///< Our version string.
-    NetworkConfig m_netConfigs;           ///< Network settings.
-    std::set<bi::address> m_ifAddresses;  ///< Interface addresses.
-    ba::io_service m_ioService;
-    bi::tcp::acceptor m_tcp4Acceptor;  ///< Listening acceptor.
-    KeyPair m_alias;  ///< Alias for network communication. Network address is k*G. k is key
-                      ///< material. TODO: Replace KeyPair.
+    /// ---- values inited by contructor------
+    std::string m_clientVersion;          /// Our version string.
+    NetworkConfig m_netConfigs;           /// Network settings.
+    std::set<bi::address> m_ifAddresses;  /// Interface addresses.
+    ba::io_service m_ioService;           /// I/O handler
+    bi::tcp::acceptor m_tcp4Acceptor;     /// Listening acceptor.
+    KeyPair m_alias;  /// Alias for network communication, namely (public key, private key) of the
+                      /// node
     std::chrono::steady_clock::time_point m_lastPing;  ///< Time we sent the last ping to all peers.
     std::chrono::steady_clock::time_point m_lastReconnect;  ///< Time we sent the last ping to all
                                                             ///< peers.
     boost::asio::io_service::strand m_strand;
+    ////// ---- values inited by contructor END------
+
+    Mutex x_timers;      /// mutex for network start/stop
+    bool m_run = false;  /// representing to the network state
+
+
+    std::list<std::shared_ptr<boost::asio::deadline_timer>> m_timers;
+    std::unique_ptr<boost::asio::deadline_timer> m_timer;
+    bool m_accepting = false;
+
+
     std::map<CapDesc, std::shared_ptr<HostCapabilityFace>> m_capabilities;  ///< Each of the
                                                                             ///< capabilities we
                                                                             ///< support.
-    bytes m_restoreNetwork;  ///< Set by constructor and used to set Host key and restore network
-                             ///< peers & nodes.
-    bool m_run = false;
+
     mutable std::mutex x_runTimer;  ///< Start/stop mutex.
 
     mutable std::unordered_map<NodeID, std::weak_ptr<SessionFace>> m_sessions;

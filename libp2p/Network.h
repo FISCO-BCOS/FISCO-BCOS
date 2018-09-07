@@ -56,9 +56,7 @@ struct NetworkConfig
         if (!publicIPAddress.empty() && !isPublicAddress(publicIPAddress))
             BOOST_THROW_EXCEPTION(InvalidPublicIPAddress());
     }
-
     /// Addressing
-
     std::string publicIPAddress;
     std::string listenIPAddress;
     unsigned short listenPort = c_defaultListenPort;
@@ -79,6 +77,8 @@ public:
 
     /// Resolve "host:port" string as TCP endpoint. Returns unspecified endpoint on failure.
     static bi::tcp::endpoint resolveHost(std::string const& _host);
+    static bi::tcp::endpoint determinePublic(
+        NetworkConfig const& network_config, int const& listen_port);
 };
 
 }  // namespace p2p
