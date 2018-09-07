@@ -57,7 +57,6 @@ public:
     virtual std::shared_ptr<Peer> peer() const = 0;
 
     virtual std::chrono::steady_clock::time_point lastReceived() const = 0;
-
 };
 
 }  // namespace p2p
