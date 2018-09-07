@@ -23,7 +23,6 @@
 
 #include "CertificateServer.h"
 #include "Common.h"
-#include "RLPXSocketApi.h"
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
 #include <openssl/ec.h>
@@ -37,17 +36,17 @@ namespace dev
 {
 namespace p2p
 {
-class RLPXSocketSSL : public RLPXSocketApi, public std::enable_shared_from_this<RLPXSocketSSL>
+class RLPXSocket : public std::enable_shared_from_this<RLPXSocket>
 {
 public:
-    RLPXSocketSSL(ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint)
+    RLPXSocket(ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint)
       : m_nodeIPEndpoint(_nodeIPEndpoint)
     {
         try
         {
-            RLPXSocketSSL::initContext();
+            RLPXSocket::initContext();
             m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket> >(
-                _ioService, RLPXSocketSSL::sslContext);
+                _ioService, RLPXSocket::sslContext);
         }
         catch (Exception const& _e)
         {
@@ -56,7 +55,7 @@ public:
         }
         LOG(INFO) << "CERTIFICATE LOAD SUC!";
     }
-    ~RLPXSocketSSL() { close(); }
+    ~RLPXSocket() { close(); }
 
     bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
     void close()
@@ -85,7 +84,7 @@ public:
 
     static void initContext()
     {
-        if (!RLPXSocketSSL::isInit)
+        if (!RLPXSocket::isInit)
         {
             vector<pair<string, Public> > certificates;
             string nodepri;
@@ -153,7 +152,7 @@ public:
                 exit(-1);
             }
 
-            RLPXSocketSSL::isInit = true;
+            RLPXSocket::isInit = true;
         }
     }
 
