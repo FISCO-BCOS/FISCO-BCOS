@@ -46,7 +46,7 @@ public:
         {
             RLPXSocket::initContext();
             m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket> >(
-                _ioService, RLPXSocket::sslContext);
+                _ioService, RLPXSocket::m_sslContext);
         }
         catch (Exception const& _e)
         {
@@ -84,24 +84,24 @@ public:
 
     static void initContext()
     {
-        if (!RLPXSocket::isInit)
+        if (!RLPXSocket::m_isInit)
         {
             vector<pair<string, Public> > certificates;
-            string nodepri;
+            string nodePrivateKey;
 
-            sslContext.set_options(boost::asio::ssl::context::default_workarounds |
-                                   boost::asio::ssl::context::no_sslv2 |
-                                   boost::asio::ssl::context::no_sslv3 |
-                                   boost::asio::ssl::context::no_tlsv1);
+            m_sslContext.set_options(boost::asio::ssl::context::default_workarounds |
+                                     boost::asio::ssl::context::no_sslv2 |
+                                     boost::asio::ssl::context::no_sslv3 |
+                                     boost::asio::ssl::context::no_tlsv1);
 
-            CertificateServer::GetInstance().getCertificateList(certificates, nodepri);
+            CertificateServer::GetInstance().getCertificateList(certificates, nodePrivateKey);
 
             EC_KEY* ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-            SSL_CTX_set_tmp_ecdh(sslContext.native_handle(), ecdh);
+            SSL_CTX_set_tmp_ecdh(m_sslContext.native_handle(), ecdh);
             EC_KEY_free(ecdh);
 
-            sslContext.set_verify_depth(3);
-            sslContext.set_verify_mode(ba::ssl::verify_peer);
+            m_sslContext.set_verify_depth(3);
+            m_sslContext.set_verify_mode(ba::ssl::verify_peer);
 
             //-------------------------------------------
             // certificates[0]: root certificate
@@ -111,7 +111,7 @@ public:
             //==== add root certificate to authority
             if (certificates[0].first != "")
             {
-                sslContext.add_certificate_authority(boost::asio::const_buffer(
+                m_sslContext.add_certificate_authority(boost::asio::const_buffer(
                     certificates[0].first.c_str(), certificates[0].first.size()));
             }
             else
@@ -132,18 +132,18 @@ public:
             //===== set certificates chain:
             // root certificate <--- sign certificate of agency
             string chain = certificates[0].first + certificates[1].first;
-            sslContext.use_certificate_chain(
+            m_sslContext.use_certificate_chain(
                 boost::asio::const_buffer(chain.c_str(), chain.size()));
             //==== load sign certificate of node
-            sslContext.use_certificate(boost::asio::const_buffer(certificates[2].first.c_str(),
-                                           certificates[2].first.size()),
+            m_sslContext.use_certificate(boost::asio::const_buffer(certificates[2].first.c_str(),
+                                             certificates[2].first.size()),
                 ba::ssl::context::file_format::pem);
 
-            if (nodepri != "")
+            if (nodePrivateKey != "")
             {
                 //=== load private key of node certificate
-                sslContext.use_private_key(
-                    boost::asio::const_buffer(nodepri.c_str(), nodepri.size()),
+                m_sslContext.use_private_key(
+                    boost::asio::const_buffer(nodePrivateKey.c_str(), nodePrivateKey.size()),
                     ba::ssl::context_base::pem);
             }
             else
@@ -152,7 +152,7 @@ public:
                 exit(-1);
             }
 
-            RLPXSocket::isInit = true;
+            RLPXSocket::m_isInit = true;
         }
     }
 
@@ -161,8 +161,8 @@ public:
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;
-    static ba::ssl::context sslContext;
-    static bool isInit;
+    static ba::ssl::context m_sslContext;
+    static bool m_isInit;
     std::shared_ptr<ba::ssl::stream<bi::tcp::socket> > m_sslSocket;
 };
 

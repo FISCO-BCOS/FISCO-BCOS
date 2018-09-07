@@ -21,5 +21,5 @@
  */
 #include "RLPXSocket.h"
 
-ba::ssl::context RLPXSocket::sslContext(ba::ssl::context::tlsv12);
-bool RLPXSocket::isInit = false;
+ba::ssl::context RLPXSocket::m_sslContext(ba::ssl::context::tlsv12);
+bool RLPXSocket::m_isInit = false;
