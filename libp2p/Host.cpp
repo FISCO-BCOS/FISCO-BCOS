@@ -315,7 +315,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, std::shared_ptr<
 	LOG(INFO) << "p2p.host.peer.register: " << id;
 }
 
-bool Host::isConnected(const NodeID &nodeID) {
+bool Host::isConnected(const NodeID &nodeID) const {
 	auto session = peerSession(nodeID);
 	if(session && session->isConnected()) {
 		return true;
