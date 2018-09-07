@@ -22,7 +22,7 @@
  */
 
 #pragma once
-
+#include "SessionFace.h"
 namespace dev
 {
 namespace p2p
