@@ -38,20 +38,20 @@ namespace p2p
 {
 static unsigned short c_defaultListenPort = 16789;
 
-struct NetworkPreferences
+struct NetworkConfig
 {
     // Default Network Preferences
-    NetworkPreferences(unsigned short lp = c_defaultListenPort) : listenPort(lp) {}
+    NetworkConfig(unsigned short lp = c_defaultListenPort) : listenPort(lp) {}
 
     // Network Preferences with specific Listen IP
-    NetworkPreferences(std::string const& l, unsigned short lp = c_defaultListenPort, bool u = true)
-      : publicIPAddress(), listenIPAddress(l), listenPort(lp), traverseNAT(u)
+    NetworkConfig(std::string const& l, unsigned short lp = c_defaultListenPort, bool u = true)
+      : publicIPAddress(), listenIPAddress(l), listenPort(lp)
     {}
 
     // Network Preferences with intended Public IP
-    NetworkPreferences(std::string const& publicIP, std::string const& l = std::string(),
+    NetworkConfig(std::string const& publicIP, std::string const& l = std::string(),
         unsigned short lp = c_defaultListenPort, bool u = true)
-      : publicIPAddress(publicIP), listenIPAddress(l), listenPort(lp), traverseNAT(u)
+      : publicIPAddress(publicIP), listenIPAddress(l), listenPort(lp)
     {
         if (!publicIPAddress.empty() && !isPublicAddress(publicIPAddress))
             BOOST_THROW_EXCEPTION(InvalidPublicIPAddress());
@@ -62,13 +62,6 @@ struct NetworkPreferences
     std::string publicIPAddress;
     std::string listenIPAddress;
     unsigned short listenPort = c_defaultListenPort;
-
-
-    /// Preferences
-
-    bool traverseNAT = true;
-    bool discovery = true;  // Discovery is activated with network.
-    bool pin = false;       // Only accept or connect to trusted peers.
 };
 
 /**
@@ -82,7 +75,7 @@ public:
     static std::set<bi::address> getInterfaceAddresses();
 
     /// Try to bind and listen on _listenPort, else attempt net-allocated port.
-    static int tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkPreferences const& _netPrefs);
+    static int tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkConfig const& _netPrefs);
 
     /// Resolve "host:port" string as TCP endpoint. Returns unspecified endpoint on failure.
     static bi::tcp::endpoint resolveHost(std::string const& _host);
