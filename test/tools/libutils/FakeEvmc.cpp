@@ -38,16 +38,6 @@ bool operator==(evmc_uint256be const& a, evmc_uint256be const& b)
     return is;
 }
 
-bool isZero(evmc_uint256be const& x)
-{
-    for (size_t i = 0; i < 32; i++)
-    {
-        if (x.bytes[i] != 0)
-            return false;
-    }
-    return true;
-}
-
 FakeState fakeState;
 
 int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
@@ -66,16 +56,16 @@ void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address c
 evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr,
     evmc_uint256be const* _key, evmc_uint256be const* _value) noexcept
 {
-    evmc_uint256be oldValue = fakeState.get(*_addr, *_key);
-    evmc_uint256be value = *_value;
+    u256 oldValue = fromEvmC(fakeState.get(*_addr, *_key));
+    u256 value = fromEvmC(*_value);
 
     if (value == oldValue)
         return EVMC_STORAGE_UNCHANGED;
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (isZero(oldValue))
+    if (0 == oldValue)
         status = EVMC_STORAGE_ADDED;
-    else if (isZero(value))
+    else if (0 == value)
     {
         status = EVMC_STORAGE_DELETED;
     }
@@ -138,14 +128,13 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
 
 void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
 {
-    h256 gasPrice(1);
-    result->tx_gas_price = reinterpret_cast<evmc_uint256be const&>(gasPrice);
-    result->tx_origin = evmc_address();
-    result->block_coinbase = evmc_address();
-    result->block_number = 100;
-    result->block_timestamp = 123456;
-    result->block_gas_limit = 0x13880000000000;
-    result->block_difficulty = evmc_uint256be();  // We don't need it at all
+    result->tx_gas_price = reinterpret_cast<evmc_uint256be const&>(FAKE_GAS_PRICE);
+    result->tx_origin = reinterpret_cast<evmc_address const&>(FAKE_ORIGIN);
+    result->block_coinbase = reinterpret_cast<evmc_address const&>(FAKE_COINBASE);
+    result->block_number = FAKE_BLOCK_NUMBER;
+    result->block_timestamp = FAKE_TIMESTAMP;
+    result->block_gas_limit = FAKE_GAS_LIMIT;
+    result->block_difficulty = reinterpret_cast<evmc_uint256be const&>(FAKE_DIFFICULTY);
 }
 
 void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number)
