@@ -38,6 +38,14 @@ namespace dev
 {
 namespace test
 {
+const h256 FAKE_GAS_PRICE = h256(1);
+const Address FAKE_ORIGIN = Address("1000000000000000000000000000000000000000");
+const Address FAKE_COINBASE = Address("2000000000000000000000000000000000000000");
+const int64_t FAKE_BLOCK_NUMBER = 100;
+const int64_t FAKE_TIMESTAMP = 123456;
+const int64_t FAKE_GAS_LIMIT = 0x13880000000000;
+const h256 FAKE_DIFFICULTY = h256(20);
+
 inline evmc_address toEvmC(Address const& _addr)
 {
     return reinterpret_cast<evmc_address const&>(_addr);
