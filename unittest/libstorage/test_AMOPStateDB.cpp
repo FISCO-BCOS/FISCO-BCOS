@@ -1,4 +1,3 @@
-#include "Common.h"
 #include <json/json.h>
 #include <libchannelserver/ChannelMessage.h>
 #include <libdevcore/FixedHash.h>
@@ -6,6 +5,7 @@
 #include <libstorage/StateDB.h>
 #include <libstorage/StorageException.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
+#include "libstorage/Common.h"
 #include <unittest/Common.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev;
