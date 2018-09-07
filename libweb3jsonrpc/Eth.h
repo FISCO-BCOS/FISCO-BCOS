@@ -159,6 +159,9 @@ public:
 	virtual std::string eth_getStorageAtCNS(std::string const& strContractName, std::string const& _position, std::string const& _blockNumber) override;
 	virtual std::string eth_getTransactionCountCNS(std::string const& strContractName, std::string const& _blockNumber) override;
 
+	//ZKG
+	virtual Json::Value eth_getCmByRange(Json::Value const& range) override;
+	virtual Json::Value eth_getGovDataByRange(Json::Value const& range) override;
 protected:
 
 	eth::Interface* client() { return &m_eth; }

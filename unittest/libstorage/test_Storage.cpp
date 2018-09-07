@@ -36,7 +36,7 @@ BOOST_FIXTURE_TEST_SUITE(Storage, StorageFixture)
 
 BOOST_AUTO_TEST_CASE(entryTest) {
   entry->setStatus(1);
-  BOOST_TEST(entry->getStatus() == 1);
+  BOOST_TEST(entry->getStatus() == 1u);
 
   BOOST_TEST(entry->dirty() == true);
 
@@ -53,12 +53,12 @@ BOOST_AUTO_TEST_CASE(entryTest) {
 }
 
 BOOST_AUTO_TEST_CASE(entriesTest) {
-  BOOST_TEST(entries->size() == 0);
+  BOOST_TEST(entries->size() == 0u);
   BOOST_TEST(entries->dirty() == false);
 
   entries->addEntry(entry);
 
-  BOOST_TEST(entries->size() == 1);
+  BOOST_TEST(entries->size() == 1u);
   BOOST_TEST(entries->get(0) == entry);
   BOOST_CHECK_THROW(entries->get(5), dev::storage::StorageException);
   BOOST_TEST(entries->dirty() == true);
