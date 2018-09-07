@@ -235,15 +235,8 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
 			h256 hash = _interface->hashFromNumber(number);
 			ss << "number: " << number << std::endl;
 			ss << "hash: " << hash << std::endl;
-			dev::storage::Entries entries = _stateStorage->select(
+			dev::storage::Entries::Ptr entries = _stateStorage->select(
 					_interface->hashFromNumber(number), number, tableName, key);
-//			storage::Entries::Ptr entries = std::make_shared<storage::Entries>();
-//			storage::Entry::Ptr entry = std::make_shared<storage::Entry>();
-//			entry->setField("key1", "hello1");
-//			entry->setField("key2", "hello2");
-//			entry->setField("key3", "hello3");
-//			entry->setField("key4", "hello4");
-//			entries->addEntry(entry);
       size_t size = entries->size();
       ss << "Number of entries: " << size << std::endl;
       for (size_t i = 0; i < size; ++i)
