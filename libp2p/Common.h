@@ -46,9 +46,6 @@ namespace bi = boost::asio::ip;
 
 namespace dev
 {
-class RLP;
-class RLPStream;
-
 namespace p2p
 {
 /// Peer network protocol version.
@@ -68,12 +65,9 @@ bool isLocalHostAddress(bi::address const& _addressToCheck);
 bool isLocalHostAddress(std::string const& _addressToCheck);
 bool isPublicAddress(bi::address const& _addressToCheck);
 bool isPublicAddress(std::string const& _addressToCheck);
-
-class UPnP;
-class Capability;
-class HostApi;
-class Host;
-class Session;
+// class Capability;
+// class Host;
+// class Session;
 
 
 struct NetworkStartRequired : virtual dev::Exception
@@ -148,6 +142,29 @@ class HostResolver
 {
 public:
     static boost::asio::ip::address query(std::string);
+};
+enum PeerSlotType
+{
+    Egress,
+    Ingress
+};
+struct NodeInfo
+{
+    NodeInfo() = default;
+    NodeInfo(
+        NodeID const& _id, std::string const& _address, unsigned _port, std::string const& _version)
+      : id(_id), address(_address), port(_port), version(_version)
+    {}
+
+    std::string enode() const
+    {
+        return "enode://" + id.hex() + "@" + address + ":" + toString(port);
+    }
+
+    NodeID id;
+    std::string address;
+    unsigned port;
+    std::string version;
 };
 
 /**
