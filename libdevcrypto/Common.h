@@ -155,6 +155,7 @@ public:
     /// If the secret key is invalid the constructor succeeds, but public key
     /// and address stay "null".
     KeyPair(Secret const& _sec);
+    KeyPair() {}
 
     /// Create a new, randomly generated object.
     static KeyPair create();

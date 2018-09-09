@@ -34,6 +34,7 @@ set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
 # basic setting
 include(EthOptions)
 include(EthCompilerSettings)
+include(EthDependencies)
 
 # install dependencies
 include(ProjectCryptopp)
@@ -54,6 +55,7 @@ add_subdirectory(libethcore)
 add_subdirectory(evmc)
 add_subdirectory(libinterpreter)
 add_subdirectory(libevm)
+add_subdirectory(libp2p)
 
 if (TESTS)
         enable_testing()
