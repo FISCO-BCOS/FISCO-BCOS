@@ -556,6 +556,9 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
         return execUTXOInBlock(_bc, _tq, lh, parallelUTXOTx, parallelUTXOTxCnt);
     }
 
+	_bc.precompiledEngineFactory()->initPrecompiledContext(blockInfo, _precompiledContext);
+
+	_precompiledContext->beforeBlock();
     unsigned i = 0;
     DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()), 500)
     for (Transaction const& tr : m_transactions)

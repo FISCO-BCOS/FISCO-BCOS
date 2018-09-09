@@ -1,10 +1,15 @@
 // "Copyright [2018] <fisco-dev>"
 #include <boost/test/unit_test.hpp>
 #include "libstorage/LevelDBStateStorage.h"
+#include <leveldb/db.h>
 
 using namespace dev;
 using namespace dev::storage;
 using namespace leveldb;
+
+namespace leveldb {
+	class Value;
+};
 
 namespace test_LevelDBStateStorage {
 
@@ -137,6 +142,10 @@ class MockLevelDB : public leveldb::DB {
   }
 
   virtual void CompactRange(const Slice* begin, const Slice* end) {}
+
+  virtual Status Get(const leveldb::ReadOptions&, const leveldb::Slice&, leveldb::Value*) {};
+  virtual void SuspendCompactions() {};
+  virtual void ResumeCompactions() {};
 
  private:
   // No copying allowed
