@@ -54,10 +54,10 @@ help() {
     echo "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6"
 
     echo "GUOMI Example:"
-    echo "    bash $this_script -d /mydata/node0 -o /mydata/node1" -g
-    echo "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1" -g
-    echo "    bash $this_script -d /mydata/node0 -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
-    echo "    bash $this_script -i xxxxxxxxxxxxx -o /mydata/node1 -r 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" -g
+    echo "    bash $this_script -d ~/mydata/node0 -o ~/mydata/node0 -g"
+    echo "    bash $this_script -i xxxxxxxxxxxxx -o ~/mydata/node0 -g"
+    echo "    bash $this_script -d ~/mydata/node0 -o ~/mydata/node0 -r 0x3b5b68db7502424007c6e6567fa690c5afd71721 -g"
+    echo "    bash $this_script -i xxxxxxxxxxxxx -o ~/mydata/node0 -r 0x3b5b68db7502424007c6e6567fa690c5afd71721 -g"
 exit -1
 }
 goumi_support=0
@@ -79,7 +79,7 @@ done
 
 if [ $genesis_node_dir ]; then
     data_dir=$genesis_node_dir/data
-    if [ ${goumi_support} -eq 0 ];then
+    if [ ${guomi_support} -eq 0 ];then
         nodeid_file=$data_dir/node.nodeid
     else
         nodeid_file=$data_dir/gmnode.nodeid

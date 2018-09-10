@@ -80,8 +80,8 @@ help() {
     echo "    bash $this_script -d /mydata/node0 "
     echo "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
     echo "Guomi Example:"
-    echo "    bash $this_script -d /mydata/node0 -g"
-    echo "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
+    echo "    bash $this_script -d ~/mydata/node0 -g"
+    echo "    bash $this_script -d ~/mydata/node0 -w ../web3lib/ -s ../systemcontract/ -g"
 exit -1
 }
 while getopts "d:w:s:gh" option;do
