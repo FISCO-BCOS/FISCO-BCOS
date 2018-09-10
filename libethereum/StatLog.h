@@ -236,6 +236,8 @@ public:
 
     StatLog& logContext(const u256& hash) 
     {
+        Guard l(m_mutex);
+
         auto it = m_map.find(hash);
         if (it != m_map.end())
             return *it->second;
@@ -244,13 +246,14 @@ public:
 
     void log(const u256& hash, const std::string& str, void* ext=0, bool init = false) 
     {
+        Guard l(m_mutex);
+
         auto it = m_map.find(hash);
         if (it == m_map.end())
         {
             if (!init)
                 return;
             // 开始初始统计
-            Guard l(m_mutex);
             auto ret = m_map.insert(make_pair(hash, std::make_unique<StatLog>(hash)));
             if (!ret.second) return;
             it = ret.first;
@@ -265,7 +268,7 @@ public:
         clearCache(hash);
     }
 
-    void setCapacity(size_t c) { m_capacity = c; } 
+    void setCapacity(size_t c) { Guard l(m_mutex); m_capacity = c; } 
 
 private:
     void clearCache(const u256& hash) 
