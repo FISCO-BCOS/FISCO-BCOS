@@ -43,6 +43,9 @@ help() {
     echo "Example:"
     echo "    bash $this_script -d /mydata/node0 "
     echo "    bash $this_script -d /mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
+    echo "GUOMI Example:"
+    echo "    bash $this_script -d ~/mydata/node0 "
+    echo "    bash $this_script -d ~/mydata/node0 -w ../web3lib/ -s ../systemcontract/ "
 exit -1
 }
 while getopts "d:w:s:h" option;do

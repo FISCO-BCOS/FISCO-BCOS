@@ -77,7 +77,7 @@ help() {
     echo "Example:"
     echo "    bash $this_script -d /mydata/node0 "
     echo "Guomi Example:"
-    echo "    bash $this_script -d /mydata/node0 -g"
+    echo "    bash $this_script -d ~/mydata/node0 -g"
 exit -1
 }
 while getopts "d:gh" option;do

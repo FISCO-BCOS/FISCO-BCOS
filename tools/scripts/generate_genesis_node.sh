@@ -78,7 +78,7 @@ help() {
     echo "Example:"
     echo "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -d /mydata/test_agency -a test_agency "
     echo "guomi Example:"
-    echo "    bash $this_script -o /mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -g"
+    echo "    bash $this_script -o ~/mydata -n node0 -l 127.0.0.1 -r 8545 -p 30303 -c 8891 -g"
 
 exit -1
 }
