@@ -69,20 +69,20 @@ help() {
     echo "    -r  <RPC port>              Node's RPC port"
     echo "    -p  <P2P port>              Node's P2P port"
     echo "    -c  <channel port>          Node's channel port"
-    echo "    -e  <bootstrapnodes>      Node's bootstrap nodes"
+    echo "    -e  <bootstrapnodes>        The list of running nodes' P2P url on blockchain(separate by \",\")"
     echo "    -a  <agency name>           The agency name that the node belongs to"
     echo "    -d  <agency dir>            The agency cert dir that the node belongs to"
     echo "    -i  <genesis node id>       Genesis node id"
-    echo "    -s  <god address>	      God address"
+    echo "    -s  <god address>           God address"
     echo "    -x  <system proxy address>  System proxy address of the blockchain"
     echo "Optional:"
     echo "    -m                          Input agency information manually"
     echo "    -g                          Create guomi node"
     echo "    -h                          This help"
     echo "Example:"
-    echo "    bash $this_script -o /mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -d /mydata/test_agency -a test_agency -x 0x919868496524eedc26dbb81915fa1547a20f8998 -i xxxxxx -s xxxxxx"
+    echo "    bash $this_script -o /mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -d /mydata/test_agency -a test_agency -x 0x919868496524eedc26dbb81915fa1547a20f8998 -s 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6 -i xxxxxx"
     echo "GuomiExample:"
-    echo "    bash $this_script -o ~/mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -x xxxxxx -i xxxxxx -s xxxxxx -g"
+    echo "    bash $this_script -o /mydata -n node1 -l 127.0.0.1 -r 8546 -p 30304 -c 8892 -e 127.0.0.1:30303,127.0.0.1:30304 -x 0x919868496524eedc26dbb81915fa1547a20f8998 -s 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6 -i xxxxxx -g"
 
 exit -1
 }
@@ -132,7 +132,7 @@ if [ ${enable_guomi} -eq 0 ];then
     echo
 
     echo "---------- Generate node genesis file ----------" && sleep 1
-    execute_cmd "sh generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -r ${god_address}"
+    execute_cmd "sh generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -s ${god_address}"
 
     echo
     echo  "Node generate success!" && sleep 1
