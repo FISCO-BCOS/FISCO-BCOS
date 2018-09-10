@@ -43,7 +43,7 @@ struct ChainParams: public ChainOperationParams
 	ChainParams(std::string const& _json, bytes const& _genesisRLP, AccountMap const& _state): ChainParams(_json) { populateFromGenesis(_genesisRLP, _state); }
 
 	SealEngineFace* createSealEngine();
-
+	
 	/// Genesis params.
 	h256 parentHash = h256();
 	Address author = Address();
@@ -68,9 +68,11 @@ struct ChainParams: public ChainOperationParams
 	ChainParams loadGenesisState(std::string const& _json,  h256 const& _stateRoot = h256()) const;
 	ChainParams loadGenesis(std::string const& _json, h256 const& _stateRoot = h256()) const;
 	ChainParams loadGodMiner(std::string const& _json) const;
+	
 
 private:
 	void populateFromGenesis(bytes const& _genesisRLP, AccountMap const& _state);
+	void initPrecompiled();
 };
 
 }
