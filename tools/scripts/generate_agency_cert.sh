@@ -64,8 +64,8 @@ help() {
     echo "    bash $this_script -c /mydata -o /mydata -n test_agency"
     echo "    bash $this_script -c /mydata -o /mydata -n test_agency -m"
     echo "guomi Example:"
-    echo "    bash $this_script -c /mydata -o /mydata -n test_agency -g"
-    echo "    bash $this_script -c /mydata -o /mydata -n test_agency -m -g" 
+    echo "    bash $this_script -c ~/mydata -o ~/mydata -n test_agency -g"
+    echo "    bash $this_script -c ~/mydata -o ~/mydata -n test_agency -m -g" 
 exit -1
 }
 
