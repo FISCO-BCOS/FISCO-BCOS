@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
     struct timeval end;
     gettimeofday(&end, NULL);
 
-    BOOST_CHECK((end.tv_usec - begin.tv_usec) > (max * 1000));
+    BOOST_CHECK((end.tv_usec - begin.tv_usec) >= (max * 1000));
     BOOST_CHECK(count == 2 * max);
 }
 

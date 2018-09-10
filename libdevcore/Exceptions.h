@@ -81,6 +81,7 @@ DEV_SIMPLE_EXCEPTION(MissingField);
 DEV_SIMPLE_EXCEPTION(WrongFieldType);
 DEV_SIMPLE_EXCEPTION(InterfaceNotSupported);
 DEV_SIMPLE_EXCEPTION(ExternalFunctionFailure);
+DEV_SIMPLE_EXCEPTION(ConnectionToSelfException);
 
 
 /**
