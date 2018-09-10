@@ -31,7 +31,7 @@ using namespace boost::unit_test;
 using namespace std;
 using namespace boost;
 using namespace dev::test;
-
+using namespace dev::eth;
 namespace dev
 {
 namespace test
@@ -48,8 +48,7 @@ Options::Options(int argc, char** argv)
     po::variables_map vm;
     try
     {
-        boost::program_options::store(
-            boost::program_options::parse_command_line(argc, argv, test_options), vm);
+        po::store(boost::program_options::parse_command_line(argc, argv, test_options), vm);
     }
     catch (...)
     {
@@ -64,14 +63,48 @@ Options::Options(int argc, char** argv)
         all = true;
     else if (vm.count("testpath") || vm.count("t"))
         testpath = vm["testpath"].as<std::string>();
+    /// set VM related options
+    setVmOptions(argc, argv);
+}
+
+/// set vm related options (for test libevm/VMFactory.cpp)
+void Options::setVmOptions(int argc, char** argv)
+{
+    namespace po = boost::program_options;
+    po::options_description vm_options = vmProgramOptions();
+    po::variables_map vm;
+    try
+    {
+        po::store(boost::program_options::parse_command_line(argc, argv, vm_options), vm);
+    }
+    catch (...)
+    {
+        std::cout << "invalid input in setVmOptions" << std::endl;
+    }
+    /// get evm name
+    if (vm.count("vm"))
+    {
+        vm_name = vm["vm"].as<std::string>();
+        std::cout << "vm:" << vm["vm"].as<std::string>() << "\n";
+    }
+    std::vector<std::string> evmc_option_vec;
+    /// get evmc options
+    if (vm.count("evmc "))
+    {
+        evmc_option_vec = vm["evmc "].as<std::vector<std::string>>();
+        std::cout << "evmc_option_vec size:" << evmc_option_vec.size() << "\n";
+    }
+}
+
+Options const& Options::get(int argc, char** argv)
+{
+    static Options instance(argc, argv);
+    return instance;
 }
 
 Options const& Options::get()
 {
-    static Options instance(
-        framework::master_test_suite().argc, framework::master_test_suite().argv);
-
-    return instance;
+    return get(framework::master_test_suite().argc, framework::master_test_suite().argv);
 }
 }  // namespace test
 }  // namespace dev
