@@ -468,6 +468,8 @@ void PBFT::checkTimeout() {
 				STAT_ERROR_MSG_LOGGUARD(STAT_PBFT_VIEWCHANGE_TAG) << "Timeout and ViewChanged!" 
 					<< " m_view=" << m_view << ", m_to_view=" << m_to_view << ", m_change_cycle=" << m_change_cycle;
 			}
+			
+			LOG(INFO) << "Ready to broadcastViewChangeReq, blk=" << m_highest_block.number() << ",view=" << m_view << ",to_view=" << m_to_view << ",m_change_cycle=" << m_change_cycle;
 
 			if (!broadcastViewChangeReq()) {
 				LOG(WARNING) << "broadcastViewChangeReq failed";
@@ -523,8 +525,6 @@ bool PBFT::checkSign(PBFTMsg const& _req) const {
 }
 
 bool PBFT::broadcastViewChangeReq() {
-	LOG(INFO) << "Ready to broadcastViewChangeReq, blk=" << m_highest_block.number() << ",view=" << m_view << ",to_view=" << m_to_view << ",m_change_cycle=" << m_change_cycle;
-
 	if (m_account_type != EN_ACCOUNT_TYPE_MINER) {
 		LOG(INFO) << "broadcastViewChangeReq give up for not miner";
 		return true;
@@ -982,7 +982,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	// other node receive the low view viewchange, would trigger follow code to motivate the node. +1 is to prevent the case that the view just change, for the reason
 	// which the new started node' view must fall behind(>2) the excited node
 	if (_req.view + 1 < m_to_view) {
-		LOG(INFO) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
+		LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
 		broadcastViewChangeReq();
 	}
 
