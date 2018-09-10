@@ -146,7 +146,7 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig) const
 
     // 3 means r/s/v 3 fields, may not be serialized.
     // 7 means other fields in the transaction, except r/s/v.
-    _s.appendList((_sig ? 3 : 0) + 7);      
+    _s.appendList((_sig ? 3 : 0) + 7);
     _s << m_nonce << m_gasPrice << m_gas;
     if (m_type == MessageCall)
         _s << m_receiveAddress;
