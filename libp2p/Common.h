@@ -65,10 +65,6 @@ bool isLocalHostAddress(bi::address const& _addressToCheck);
 bool isLocalHostAddress(std::string const& _addressToCheck);
 bool isPublicAddress(bi::address const& _addressToCheck);
 bool isPublicAddress(std::string const& _addressToCheck);
-// class Capability;
-// class Host;
-// class Session;
-
 
 struct NetworkStartRequired : virtual dev::Exception
 {
@@ -131,12 +127,6 @@ using CapDesc = std::pair<std::string, u256>;
 using CapDescSet = std::set<CapDesc>;
 using CapDescs = std::vector<CapDesc>;
 
-
-enum class PeerType
-{
-    Optional,
-    Required
-};
 
 class HostResolver
 {
@@ -284,33 +274,6 @@ private:
     uint16_t m_udpPort = 0;
     NodeID m_id;
 };
-
-class Node
-{
-public:
-    Node() = default;
-    Node(Node const&) = default;
-    Node(Public _publicKey, NodeIPEndpoint const& _ip, PeerType _peerType = PeerType::Optional)
-      : id(_publicKey), endpoint(_ip), peerType(_peerType)
-    {}
-    Node(NodeSpec const& _s, PeerType _peerType = PeerType::Optional);
-
-    virtual NodeID const& address() const { return id; }
-    virtual Public const& publicKey() const { return id; }
-
-    virtual operator bool() const { return (bool)id; }
-
-    // TODO: make private, give accessors and rename m_...
-    NodeID id;
-
-    /// Endpoints by which we expect to reach node.
-    // TODO: make private, give accessors and rename m_...
-    NodeIPEndpoint endpoint;
-
-    // TODO: p2p implement
-    PeerType peerType = PeerType::Optional;
-};
-
 class DeadlineOps
 {
     class DeadlineOp

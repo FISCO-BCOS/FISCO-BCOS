@@ -28,18 +28,13 @@ using namespace dev;
 using namespace dev::p2p;
 
 const unsigned dev::p2p::c_protocolVersion = 4;
+// const unsigned dev::p2p::c_protocolVersion = 4;
 unsigned dev::p2p::c_defaultIPPort = 16789;
 static_assert(dev::p2p::c_protocolVersion == 4,
     "Replace v3 compatbility with v4 compatibility before updating network version.");
-
-const dev::p2p::NodeIPEndpoint dev::p2p::UnspecifiedNodeIPEndpoint =
-    NodeIPEndpoint(bi::address(), 0, 0);
-const dev::p2p::Node dev::p2p::UnspecifiedNode =
-    dev::p2p::Node(NodeID(), UnspecifiedNodeIPEndpoint);
-
+/*static_assert(dev::p2p::c_protocolVersion == 4,
+    "Replace v3 compatbility with v4 compatibility before updating network version.");*/
 bool dev::p2p::NodeIPEndpoint::test_allowLocal = false;
-
-
 bool p2p::isPublicAddress(std::string const& _addressToCheck)
 {
     return _addressToCheck.empty() ? false :
@@ -190,10 +185,6 @@ void DeadlineOps::reap()
             reap();
     });
 }
-
-Node::Node(NodeSpec const& _s, PeerType _p)
-  : id(_s.id()), endpoint(_s.nodeIPEndpoint()), peerType(_p)
-{}
 
 NodeSpec::NodeSpec(string const& _user)
 {

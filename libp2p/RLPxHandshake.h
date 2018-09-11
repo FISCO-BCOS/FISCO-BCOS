@@ -40,6 +40,7 @@ class RLPXHandshake : public std::enable_shared_from_this<RLPXHandshake>
 {
 public:
     /// Setup incoming connection.
+    /*
     RLPXHandshake(Host* _host, std::shared_ptr<RLPXSocket> const& _socket)
       : m_host(_host),
         m_originated(false),
@@ -48,7 +49,7 @@ public:
     {
         crypto::Nonce::get().ref().copyTo(m_nonce.ref());
         m_strand = _host->getStrand();
-    }
+    }*/
     /// Setup outbound connection.
     RLPXHandshake(Host* _host, std::shared_ptr<RLPXSocket> const& _socket, NodeID _remote)
       : m_host(_host),
