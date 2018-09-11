@@ -90,11 +90,11 @@ class Condition : public std::enable_shared_from_this<Condition> {
 };
 
 //交易执行时构建
-class StateDB : public std::enable_shared_from_this<StateDB> {
+class DB : public std::enable_shared_from_this<DB> {
  public:
-  typedef std::shared_ptr<StateDB> Ptr;
+  typedef std::shared_ptr<DB> Ptr;
 
-  virtual ~StateDB() {}
+  virtual ~DB() {}
 
   virtual Entries::Ptr select(const std::string &key,
                               Condition::Ptr condition) = 0;
@@ -118,9 +118,9 @@ class StateDBFactory : public std::enable_shared_from_this<StateDBFactory> {
 
   virtual ~StateDBFactory() {}
 
-  virtual StateDB::Ptr openTable(h256 blockHash, int num,
+  virtual DB::Ptr openTable(h256 blockHash, int num,
                                  const std::string &table) = 0;
-  virtual StateDB::Ptr createTable(
+  virtual DB::Ptr createTable(
       h256 blockHash, int num, const std::string &tableName,
       const std::string &keyField,
       const std::vector<std::string> &valueField) = 0;

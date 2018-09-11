@@ -207,3 +207,49 @@ void SecureInitializer::setDataPath(std::string dataPath) {
 void SecureInitializer::completePath(std::string &path) {
 	boost::algorithm::replace_first(path, "${DATAPATH}", _dataPath + "/");
 }
+
+
+void SecureInitializer::loadGmFile()
+{
+	
+	// EncryptFile _encryptFile = getEncryptFile();
+
+	// auto cacrt = contents(getDataDir() + "/gmca.crt");
+	// m_ca=asString(cacrt);   
+	// auto agencycrt = contents(getDataDir() + "/gmagency.crt");
+	// m_agency = asString(agencycrt);  
+	// auto nodecrt = contents(getDataDir() + "/gmnode.crt");
+	// m_node = asString(nodecrt);  
+
+	// //auto nodekey = contents(getDataDir() + "/gmnode.key");
+	// auto nodekey = _encryptFile.getNodeCrtKey();
+	// m_nodePri = asString(nodekey); 
+
+	// auto ennodecrt = contents(getDataDir() + "/gmennode.crt");
+	// m_enNode = asString(ennodecrt);  
+
+	// //auto ennodekey = contents(getDataDir() + "/gmennode.key");
+	// auto ennodekey = _encryptFile.getEnNodeCrtKey();
+	// m_enNodePri = asString(ennodekey);
+
+	// if( m_ca.empty() || m_agency.empty() || nodecrt.empty() || nodekey.empty() || ennodecrt.empty() || ennodekey.empty())
+	// {
+	// 	LOG(ERROR) << "CertificateServer Init Fail! gmca.crt or gmagency.crt or gmnode.crt or gmnode.key or gmennode.crt or gmennode.key File !";
+	// 	exit(-1);
+	// }
+
+	// //auto  nodeprivate = contents(getDataDir() + "/gmnode.private");
+	// auto  nodeprivate = _encryptFile.getNodePrivateKey();
+	// string pri = asString(nodeprivate); 
+	
+	// if( pri.size() >= 64 )
+	// {
+	// 	m_keyPair = KeyPair(Secret(fromHex(pri.substr(0,64))) );
+	// 	LOG(INFO) << " CertificateServer Load KeyPair " << toPublic(m_keyPair.sec());
+	// }
+	// else
+	// {
+	// 	LOG(ERROR) << "CertificateServer Load KeyPair Fail! Please Check gmnode.private File.";
+	// 	exit(-1);
+	// }
+}

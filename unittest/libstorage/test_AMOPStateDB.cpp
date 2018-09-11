@@ -1,8 +1,8 @@
 #include <json/json.h>
 #include <libchannelserver/ChannelMessage.h>
 #include <libdevcore/FixedHash.h>
-#include <libstorage/AMOPStateStorage.h>
-#include <libstorage/StateDB.h>
+#include <libstorage/AMOPStorage.h>
+#include <libstorage/DB.h>
 #include <libstorage/StorageException.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
 #include "libstorage/Common.h"
@@ -367,7 +367,7 @@ struct AMOPDBFixture
 {
     AMOPDBFixture()
     {
-        amopDB = std::make_shared<dev::storage::AMOPStateStorage>();
+        amopDB = std::make_shared<dev::storage::AMOPStorage>();
 
         // amopDB->setBlockHash(dev::h256(0x12345));
         // amopDB->setNum(1000);
@@ -380,7 +380,7 @@ struct AMOPDBFixture
         //什么也不做
     }
 
-    dev::storage::AMOPStateStorage::Ptr amopDB;
+    dev::storage::AMOPStorage::Ptr amopDB;
     h256 hash = dev::h256(0x12345);
     int num = 1000;
 };
