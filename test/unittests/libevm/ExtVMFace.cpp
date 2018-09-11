@@ -18,7 +18,7 @@
  *
  * @file ExtVMFace.cpp
  * @author: yujiechen
- * @date 2018-0""9-03
+ * @date 2018-09-03
  */
 #include <evmc/helpers.h>
 #include <libevm/ExtVMFace.h>
