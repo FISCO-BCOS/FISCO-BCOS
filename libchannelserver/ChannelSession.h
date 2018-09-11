@@ -90,6 +90,8 @@ public:
 
 	void setIdleTime(size_t idleTime) { _idleTime = idleTime; }
 
+  void disconnectByQuit(){disconnect(ChannelException(-1, "quit"));}
+
 private:
 	void startRead();
 	void onRead(const boost::system::error_code& error, size_t bytesTransferred);
@@ -141,7 +143,7 @@ private:
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
 
-	size_t _idleTime = 30;
+	size_t _idleTime = 30000;
 };
 
 }
