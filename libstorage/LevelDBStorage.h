@@ -4,18 +4,18 @@
 #include <leveldb/db.h>
 #include <libdevcore/FixedHash.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
-#include "StateDB.h"
-#include "StateStorage.h"
+#include "DB.h"
+#include "Storage.h"
 
 namespace dev {
  
 namespace storage {
 
-class LevelDBStateStorage : public StateStorage {
+class LevelDBStorage : public Storage {
  public:
-  typedef std::shared_ptr<LevelDBStateStorage> Ptr;
+  typedef std::shared_ptr<LevelDBStorage> Ptr;
 
-  virtual ~LevelDBStateStorage(){};
+  virtual ~LevelDBStorage(){};
 
   virtual TableInfo::Ptr info(const std::string &table) override;
   virtual Entries::Ptr select(h256 hash, int num, const std::string &table,

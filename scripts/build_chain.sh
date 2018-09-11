@@ -141,7 +141,7 @@ while read line;do
 	[statedb]
 		type=leveldb
 		path=data/statedb
-	
+		topic=DB
 	[pbft]
 		block_interval=1000
 		
@@ -226,8 +226,8 @@ EOF
 
 	cat << EOF > "$node_dir/stop.sh"
 	#!/bin/bash
-	weth_pid=`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print $2}'`
-    kill -9 ${weth_pid}
+	weth_pid=\`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print $2}'\`
+    kill -9 \${weth_pid}
 EOF
 	
 		chmod +x "$node_dir/start.sh"

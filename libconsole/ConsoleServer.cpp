@@ -14,8 +14,8 @@
 #include <libp2p/Common.h>
 #include <libp2p/Host.h>
 #include <libdevcore/FixedHash.h>
-#include <libstorage/StateDB.h>
 #include <libchannelserver/ChannelSession.h>
+#include <libstorage/DB.h>
 
 using namespace dev;
 using namespace console;

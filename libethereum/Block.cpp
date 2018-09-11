@@ -1202,16 +1202,7 @@ void Block::commitToSeal(BlockChain const& _bc, u256 genIndex, bytes const& _ext
     m_currentBlock.setRoots(hash256(transactionsMap), hash256(receiptsMap), sha3(m_currentUncles), m_state.rootHash());
     LOG(TRACE) << "Block::commitToSeal() number:" << m_currentBlock.number();
     h256 UTXOHash = m_utxoMgr.getHash();
-    h256s hashList = m_currentBlock.hashList();
-    if (hashList.size() == 0)
-    {
-        hashList.push_back(UTXOHash);
-    }
-    else if (hashList.size() >= 1)
-    {
-        hashList[0] = UTXOHash;
-    }
-    m_currentBlock.setHashList(hashList);
+    m_currentBlock.setUTXOHash(UTXOHash);
 
     m_currentBlock.setParentHash(m_previousBlock.hash());
     m_currentBlock.setExtraData(_extraData);
@@ -1250,16 +1241,7 @@ void Block::commitToSealAfterExecTx(BlockChain const&) {
     m_currentBlock.setRoots(m_currentBlock.transactionsRoot(), hash256(receiptsMap), m_currentBlock.sha3Uncles(), m_state.rootHash());
     LOG(TRACE) << "Block::commitToSealAfterExecTx() number:" << m_currentBlock.number();
     h256 UTXOHash = m_utxoMgr.getHash();
-    h256s hashList = m_currentBlock.hashList();
-    if (hashList.size() == 0)
-    {
-        hashList.push_back(UTXOHash);
-    }
-    else if (hashList.size() >= 1)
-    {
-        hashList[0] = UTXOHash;
-    }
-    m_currentBlock.setHashList(hashList);
+    m_currentBlock.setUTXOHash(UTXOHash);
 
     m_committedToSeal = true;
 	m_currentBlock.setDBHash(dbHash());

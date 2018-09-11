@@ -1,9 +1,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
-#include <libstorage/MemoryStateDB.h>
+#include <libstorage/MemoryDB.h>
 #include <libstorage/MemoryStateDBFactory.h>
-#include <libstorage/StateDB.h>
-#include <libstorage/StateStorage.h>
+#include <libstorage/DB.h>
+#include <libstorage/Storage.h>
 #include <boost/test/unit_test.hpp>
 #include <unittest/Common.h>
 
@@ -12,7 +12,7 @@ using namespace dev::storage;
 
 namespace test_MemoryDBFactory {
 
-class MockAMOPDB : public dev::storage::StateStorage {
+class MockAMOPDB : public dev::storage::Storage {
  public:
   virtual ~MockAMOPDB() {}
 
@@ -66,7 +66,7 @@ struct MemoryDBFactoryFixture {
 BOOST_FIXTURE_TEST_SUITE(MemoryDBFactory, MemoryDBFactoryFixture)
 
 BOOST_AUTO_TEST_CASE(openDB) {
-  MemoryStateDB::Ptr db = std::dynamic_pointer_cast<MemoryStateDB>(
+  MemoryDB::Ptr db = std::dynamic_pointer_cast<MemoryDB>(
       memoryDBFactory->openTable(h256(0x12345), 1, "t_test"));
 }
 

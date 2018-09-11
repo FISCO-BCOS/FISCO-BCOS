@@ -2,20 +2,20 @@
 
 #include <libdevcore/easylog.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
-#include "AMOPStateStorage.h"
+#include "AMOPStorage.h"
 
 #include <libchannelserver/ChannelMessage.h>
-#include "StateDB.h"
+#include "DB.h"
 #include "Common.h"
 
 using namespace dev;
 using namespace dev::storage;
 
-AMOPStateStorage::AMOPStateStorage() {
+AMOPStorage::AMOPStorage() {
   _fatalHandler = [](std::exception &e) { exit(-1); };
 }
 
-TableInfo::Ptr AMOPStateStorage::info(const std::string &table) {
+TableInfo::Ptr AMOPStorage::info(const std::string &table) {
   try {
 #if 0
 		LOG(DEBUG) << "获取AMOPDB info:" << table;
@@ -59,7 +59,7 @@ TableInfo::Ptr AMOPStateStorage::info(const std::string &table) {
   return TableInfo::Ptr();
 }
 
-Entries::Ptr AMOPStateStorage::select(h256 hash, int num,
+Entries::Ptr AMOPStorage::select(h256 hash, int num,
                                       const std::string &table,
                                       const std::string &key) {
   try {
@@ -121,7 +121,7 @@ Entries::Ptr AMOPStateStorage::select(h256 hash, int num,
   return Entries::Ptr();
 }
 
-size_t AMOPStateStorage::commit(h256 hash, int num,
+size_t AMOPStorage::commit(h256 hash, int num,
                                 const std::vector<TableData::Ptr> &datas,
                                 h256 blockHash) {
   try {
@@ -189,9 +189,9 @@ size_t AMOPStateStorage::commit(h256 hash, int num,
   return 0;
 }
 
-bool AMOPStateStorage::onlyDirty() { return true; }
+bool AMOPStorage::onlyDirty() { return true; }
 
-Json::Value AMOPStateStorage::requestDB(const Json::Value &value) {
+Json::Value AMOPStorage::requestDB(const Json::Value &value) {
 
   int retry = 0;
 
@@ -270,21 +270,21 @@ Json::Value AMOPStateStorage::requestDB(const Json::Value &value) {
   }
 }
 
-void AMOPStateStorage::setTopic(const std::string &topic) { _topic = topic; }
+void AMOPStorage::setTopic(const std::string &topic) { _topic = topic; }
 
 #if 0
-void AMOPStateStorage::setBlockHash(h256 blockHash) {
+void AMOPStorage::setBlockHash(h256 blockHash) {
 	_blockHash = blockHash;
 }
 
-void AMOPStateStorage::setNum(int num) {
+void AMOPStorage::setNum(int num) {
 	_num = num;
 }
 #endif
 
-void AMOPStateStorage::setChannelRPCServer(
+void AMOPStorage::setChannelRPCServer(
     dev::ChannelRPCServer::Ptr channelRPCServer) {
   _channelRPCServer = channelRPCServer;
 }
 
-void AMOPStateStorage::setMaxRetry(int maxRetry) { _maxRetry = maxRetry; }
+void AMOPStorage::setMaxRetry(int maxRetry) { _maxRetry = maxRetry; }

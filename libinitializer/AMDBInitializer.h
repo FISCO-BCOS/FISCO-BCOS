@@ -24,7 +24,7 @@ public:
 	typedef std::shared_ptr<AMDBInitializer> Ptr;
 
 	void initConfig(const boost::property_tree::ptree &pt);
-	dev::storage::StateStorage::Ptr stateStorage();
+	dev::storage::Storage::Ptr stateStorage();
 
 	void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer);
 	dev::precompiled::PrecompiledContextFactory::Ptr precompiledContextFactory();
@@ -54,7 +54,7 @@ private:
 
 	ChannelRPCServer::Ptr _channelRPCServer;
 	dev::precompiled::PrecompiledContextFactory::Ptr _precompiledContextFactory;
-	dev::storage::StateStorage::Ptr _stateStorage;
+	dev::storage::Storage::Ptr _stateStorage;
 	std::string _dataPath;
 };
 

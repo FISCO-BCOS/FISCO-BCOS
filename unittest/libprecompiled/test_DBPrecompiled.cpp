@@ -7,8 +7,8 @@
 #include <libstorage/DBPrecompiled.h>
 #include <libstorage/EntriesPrecompiled.h>
 #include <libstorage/EntryPrecompiled.h>
-#include <libstorage/MemoryStateDB.h>
-#include <libstorage/StateDB.h>
+#include <libstorage/MemoryDB.h>
+#include <libstorage/DB.h>
 #include <boost/test/unit_test.hpp>
 #include <unittest/Common.h>
 
@@ -39,7 +39,7 @@ class MockStringFactoryPrecompiled : public StringFactoryPrecompiled {
   }
 };
 
-class MockMemoryDB : public dev::storage::MemoryStateDB {
+class MockMemoryDB : public dev::storage::MemoryDB {
  public:
   virtual ~MockMemoryDB() {}
 };
