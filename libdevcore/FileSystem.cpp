@@ -22,9 +22,9 @@
  */
 
 #include "FileSystem.h"
-
 #include <pwd.h>
 #include <boost/filesystem.hpp>
+#include <iostream>
 using namespace std;
 using namespace dev;
 
@@ -32,57 +32,44 @@ namespace fs = boost::filesystem;
 // static_assert(BOOST_VERSION >= 106400, "Wrong boost headers version");
 
 // Should be written to only once during startup
-static fs::path s_ethereumDatadir;
-static fs::path s_ethereumIpcPath;
+static fs::path s_fiscoBcosDir;
+static fs::path s_fiscoBcosIpcDir;
 
 void dev::setDataDir(fs::path const& _dataDir)
 {
-    s_ethereumDatadir = _dataDir;
+    s_fiscoBcosDir = _dataDir;
 }
 
 void dev::setIpcPath(fs::path const& _ipcDir)
 {
-    s_ethereumIpcPath = _ipcDir;
+    s_fiscoBcosIpcDir = _ipcDir;
 }
 
 fs::path dev::getIpcPath()
 {
     // Strip "geth.ipc" suffix if provided.
-    if (s_ethereumIpcPath.filename() == "geth.ipc")
-        return s_ethereumIpcPath.parent_path();
+    if (s_fiscoBcosIpcDir.filename() == "geth.ipc")
+        return s_fiscoBcosIpcDir.parent_path();
     else
-        return s_ethereumIpcPath;
+        return s_fiscoBcosIpcDir;
 }
 
 fs::path dev::getDataDir(string _prefix)
 {
     if (_prefix.empty())
-        _prefix = "ethereum";
-    if (_prefix == "ethereum" && !s_ethereumDatadir.empty())
-        return s_ethereumDatadir;
+        _prefix = "fisco-bcos-data";
+    if (_prefix == "fisco-bcos-data" && !s_fiscoBcosDir.empty())
+        return s_fiscoBcosDir;
     return getDefaultDataDir(_prefix);
 }
 
 fs::path dev::getDefaultDataDir(string _prefix)
 {
     if (_prefix.empty())
-        _prefix = "ethereum";
+        _prefix = "fisco-bcos-data";
 
-    fs::path dataDirPath;
-    char const* homeDir = getenv("HOME");
-    if (!homeDir || strlen(homeDir) == 0)
-    {
-        struct passwd* pwd = getpwuid(getuid());
-        if (pwd)
-            homeDir = pwd->pw_dir;
-    }
-
-    if (!homeDir || strlen(homeDir) == 0)
-        dataDirPath = fs::path("/");
-    else
-        dataDirPath = fs::path(homeDir);
-
-    return dataDirPath / ("." + _prefix);
+    fs::path dataDirPath = fs::path(".");
+    return dataDirPath / (_prefix);
 }
 
 fs::path dev::appendToFilename(fs::path const& _orig, string const& _suffix)

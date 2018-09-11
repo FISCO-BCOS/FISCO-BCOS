@@ -31,9 +31,9 @@ namespace dev
 /// Sets the data dir for the default ("ethereum") prefix.
 void setDataDir(boost::filesystem::path const& _dir);
 /// @returns the path for user data.
-boost::filesystem::path getDataDir(std::string _prefix = "ethereum");
+boost::filesystem::path getDataDir(std::string _prefix = "fisco-bcos-data");
 /// @returns the default path for user data, ignoring the one set by `setDataDir`.
-boost::filesystem::path getDefaultDataDir(std::string _prefix = "ethereum");
+boost::filesystem::path getDefaultDataDir(std::string _prefix = "fisco-bcos-data");
 /// Sets the ipc socket dir
 void setIpcPath(boost::filesystem::path const& _ipcPath);
 /// @returns the ipc path (default is DataDir)

@@ -29,8 +29,9 @@ BOOST_AUTO_TEST_SUITE(FileSystem)
 BOOST_AUTO_TEST_CASE(testFileSystem)
 {
     dev::setDataDir("./data");
-    BOOST_CHECK((dev::getDataDir("ethereum").string() == "./data") == true);
-    BOOST_CHECK((dev::getDataDir("test").filename() == ".test") == true);
+    BOOST_CHECK((dev::getDataDir("ethereum").string() == "./ethereum") == true);
+    BOOST_CHECK((dev::getDataDir("fisco-bcos-data").string() == "./data") == true);
+    BOOST_CHECK((dev::getDataDir("test").filename() == "test") == true);
     BOOST_CHECK((dev::getDataDir("").string() == "./data") == true);
 
     dev::setIpcPath("/xxx/geth.ipc");
