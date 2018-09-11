@@ -1,6 +1,6 @@
 #include <libdevcore/easylog.h>
-#include <libstorage/AMOPStateStorage.h>
-#include <libstorage/MemoryStateDB.h>
+#include <libstorage/AMOPStorage.h>
+#include <libstorage/MemoryDB.h>
 #include <boost/test/unit_test.hpp>
 #include <unittest/Common.h>
 
@@ -9,7 +9,7 @@ using namespace dev::storage;
 
 namespace test_MemoryDB {
 
-class MockAMOPDB : public dev::storage::AMOPStateStorage {
+class MockAMOPDB : public dev::storage::AMOPStorage {
  public:
   virtual ~MockAMOPDB() {}
 
@@ -62,7 +62,7 @@ class MockAMOPDBSelect : public MockAMOPDB {
     return entries;
   }
 
-  dev::storage::MemoryStateDB::Ptr memDB;
+  dev::storage::MemoryDB::Ptr memDB;
 };
 
 class MockAMOPDBCommit : public MockAMOPDBSelect {
@@ -80,7 +80,7 @@ class MockAMOPDBCommit : public MockAMOPDBSelect {
 
 struct MemoryDBFixture {
   MemoryDBFixture() {
-    memDB = std::make_shared<dev::storage::MemoryStateDB>();
+    memDB = std::make_shared<dev::storage::MemoryDB>();
 
     std::shared_ptr<MockAMOPDB> mockAMOPDB = std::make_shared<MockAMOPDB>();
 
@@ -131,7 +131,7 @@ struct MemoryDBFixture {
     memDB->insert("张三", entry);
   }
 
-  dev::storage::MemoryStateDB::Ptr memDB;
+  dev::storage::MemoryDB::Ptr memDB;
 };
 
 BOOST_FIXTURE_TEST_SUITE(MemoryDB, MemoryDBFixture)

@@ -127,8 +127,7 @@ struct ChainOperationParams
 	u256 godMinerStart = 0;
 	u256 godMinerEnd = 0;
 	std::map<std::string, NodeConnParams> godMinerList;
-	//for ssl 
-	std::map<std::string, NodeParams> godMinerListSSL;
+
 };
 
 }

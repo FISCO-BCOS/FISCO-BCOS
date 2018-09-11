@@ -1,17 +1,17 @@
 #pragma once
 
-#include "StateDB.h"
-#include "StateStorage.h"
+#include "DB.h"
+#include "Storage.h"
 
 namespace dev {
 
 namespace storage {
 
-class MemoryStateDB: public StateDB {
+class MemoryDB: public DB {
 public:
-	typedef std::shared_ptr<MemoryStateDB> Ptr;
+	typedef std::shared_ptr<MemoryDB> Ptr;
 
-	virtual ~MemoryStateDB() {};
+	virtual ~MemoryDB() {};
 
 	virtual void init(const std::string &tableName);
 	virtual Entries::Ptr select(const std::string &key, Condition::Ptr condition) override;
@@ -23,7 +23,7 @@ public:
 	virtual void clear();
 	virtual std::map<std::string, Entries::Ptr>* data() override;
 
-	void setStateStorage(StateStorage::Ptr amopDB);
+	void setStateStorage(Storage::Ptr amopDB);
 
 	void setBlockHash(h256 blockHash);
 	void setBlockNum(int blockNum);
@@ -32,7 +32,7 @@ private:
 	Entries::Ptr processEntries(Entries::Ptr entries, Condition::Ptr condition);
 	bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
 
-	StateStorage::Ptr _remoteDB;
+	Storage::Ptr _remoteDB;
 	TableInfo::Ptr _tableInfo;
 	std::map<std::string, Entries::Ptr> _cache;
 

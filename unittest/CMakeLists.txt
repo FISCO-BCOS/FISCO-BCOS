@@ -46,7 +46,7 @@ if (TESTS)
 
 	find_program(LCOV_TOOL lcov)
 	message(STATUS "lcov tool: ${LCOV_TOOL}")
-	add_test(unittest testeth --report_level=detailed)
+	add_test(unittest testeth)
 	if (LCOV_TOOL)
 		add_custom_target(coverage
 			COMMAND ${LCOV_TOOL} -q -o ${CMAKE_BINARY_DIR}/coverage.info -c -d ${CMAKE_BINARY_DIR}
