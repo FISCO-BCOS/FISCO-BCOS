@@ -1,21 +1,21 @@
-#include "MemoryStateDB.h"
+#include "MemoryDB.h"
 
 #include <json/json.h>
 #include <libdevcore/Hash.h>
 #include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
-#include "StateDB.h"
+#include "DB.h"
 
 using namespace dev;
 using namespace dev::storage;
 
-void dev::storage::MemoryStateDB::init(const std::string &tableName) {
+void dev::storage::MemoryDB::init(const std::string &tableName) {
   LOG(DEBUG) << "初始化MemoryDB:" << tableName;
 
   _tableInfo = _remoteDB->info(tableName);
 }
 
-Entries::Ptr dev::storage::MemoryStateDB::select(const std::string &key,
+Entries::Ptr dev::storage::MemoryDB::select(const std::string &key,
                                                  Condition::Ptr condition) {
   try {
     LOG(DEBUG) << "MemoryDB查询数据: " << key;
@@ -50,7 +50,7 @@ Entries::Ptr dev::storage::MemoryStateDB::select(const std::string &key,
   return Entries::Ptr();
 }
 
-size_t dev::storage::MemoryStateDB::update(const std::string &key,
+size_t dev::storage::MemoryDB::update(const std::string &key,
                                            Entry::Ptr entry,
                                            Condition::Ptr condition) {
   try {
@@ -97,7 +97,7 @@ size_t dev::storage::MemoryStateDB::update(const std::string &key,
   return 0;
 }
 
-size_t dev::storage::MemoryStateDB::insert(const std::string &key,
+size_t dev::storage::MemoryDB::insert(const std::string &key,
                                            Entry::Ptr entry) {
   try {
     LOG(DEBUG) << "MemoryDB插入数据: " << key;
@@ -137,7 +137,7 @@ size_t dev::storage::MemoryStateDB::insert(const std::string &key,
   return 1;
 }
 
-size_t dev::storage::MemoryStateDB::remove(const std::string &key,
+size_t dev::storage::MemoryDB::remove(const std::string &key,
                                            Condition::Ptr condition) {
   LOG(DEBUG) << "MemoryDB删除数据: " << key;
 
@@ -168,7 +168,7 @@ size_t dev::storage::MemoryStateDB::remove(const std::string &key,
   return 1;
 }
 
-h256 dev::storage::MemoryStateDB::hash() {
+h256 dev::storage::MemoryDB::hash() {
   bytes data;
   for (auto it : _cache) {
     if (it.second->dirty()) {
@@ -202,17 +202,17 @@ h256 dev::storage::MemoryStateDB::hash() {
   return hash;
 }
 
-void dev::storage::MemoryStateDB::clear() { _cache.clear(); }
+void dev::storage::MemoryDB::clear() { _cache.clear(); }
 
-std::map<std::string, Entries::Ptr> *dev::storage::MemoryStateDB::data() {
+std::map<std::string, Entries::Ptr> *dev::storage::MemoryDB::data() {
   return &_cache;
 }
 
-void dev::storage::MemoryStateDB::setStateStorage(StateStorage::Ptr amopDB) {
+void dev::storage::MemoryDB::setStateStorage(Storage::Ptr amopDB) {
   _remoteDB = amopDB;
 }
 
-Entries::Ptr MemoryStateDB::processEntries(Entries::Ptr entries,
+Entries::Ptr MemoryDB::processEntries(Entries::Ptr entries,
                                            Condition::Ptr condition) {
   if (condition->getConditions()->empty()) {
     return entries;
@@ -229,7 +229,7 @@ Entries::Ptr MemoryStateDB::processEntries(Entries::Ptr entries,
   return result;
 }
 
-bool dev::storage::MemoryStateDB::processCondition(Entry::Ptr entry,
+bool dev::storage::MemoryDB::processCondition(Entry::Ptr entry,
                                                    Condition::Ptr condition) {
   try {
     for (auto it : *condition->getConditions()) {
@@ -300,6 +300,6 @@ bool dev::storage::MemoryStateDB::processCondition(Entry::Ptr entry,
   return true;
 }
 
-void MemoryStateDB::setBlockHash(h256 blockHash) { _blockHash = blockHash; }
+void MemoryDB::setBlockHash(h256 blockHash) { _blockHash = blockHash; }
 
-void MemoryStateDB::setBlockNum(int blockNum) { _blockNum = blockNum; }
+void MemoryDB::setBlockNum(int blockNum) { _blockNum = blockNum; }

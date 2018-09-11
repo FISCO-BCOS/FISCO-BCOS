@@ -7,7 +7,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcore/Hash.h>
 #include "DBPrecompiled.h"
-#include "MemoryStateDB.h"
+#include "MemoryDB.h"
 
 using namespace dev;
 using namespace dev::precompiled;
@@ -96,7 +96,7 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
         {
             LOG(DEBUG) << "Open new table:" << tableName;
 
-            dev::storage::StateDB::Ptr db = _memoryDBFactory->openTable(
+            dev::storage::DB::Ptr db = _memoryDBFactory->openTable(
                 context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
 
             DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
@@ -155,7 +155,7 @@ DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr con
     auto it = _name2Table.find(tableName);
     if (it == _name2Table.end())
     {
-        dev::storage::StateDB::Ptr db = _memoryDBFactory->openTable(
+        dev::storage::DB::Ptr db = _memoryDBFactory->openTable(
             context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
 
         DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();

@@ -34,7 +34,7 @@ public:
 
 private:
 	void completePath(std::string &path);
-
+	void loadGmFile();
 	KeyPair _key;
 	std::shared_ptr<boost::asio::ssl::context> _sslContext;
 

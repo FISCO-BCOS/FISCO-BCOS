@@ -4,7 +4,7 @@
 #include <libprecompiled/StringFactoryPrecompiled.h>
 #include <libstorage/EntriesPrecompiled.h>
 #include <libstorage/EntryPrecompiled.h>
-#include <libstorage/StateDB.h>
+#include <libstorage/DB.h>
 #include <boost/test/unit_test.hpp>
 #include <unittest/Common.h>
 

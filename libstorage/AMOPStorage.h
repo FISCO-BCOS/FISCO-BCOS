@@ -2,19 +2,19 @@
 
 #include <json/json.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
-#include "StateDB.h"
-#include "StateStorage.h"
+#include "DB.h"
+#include "Storage.h"
 
 namespace dev {
 
 namespace storage {
 
-class AMOPStateStorage : public StateStorage {
+class AMOPStorage : public Storage {
  public:
-  typedef std::shared_ptr<AMOPStateStorage> Ptr;
+  typedef std::shared_ptr<AMOPStorage> Ptr;
 
-  AMOPStateStorage();
-  virtual ~AMOPStateStorage(){};
+  AMOPStorage();
+  virtual ~AMOPStorage(){};
 
   virtual TableInfo::Ptr info(const std::string &table) override;
   virtual Entries::Ptr select(h256 hash, int num, const std::string &table,
