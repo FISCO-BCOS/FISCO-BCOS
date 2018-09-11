@@ -1,3 +1,5 @@
+[![image for the blockchain contest][./doc/imgs/application_contest.png]][https://con.geekbang.org/]
+
 # 1.项目介绍
 
 ## 1.1 项目概况
