@@ -294,6 +294,10 @@ void PBFTClient::rejigSealing() {
 					left_time = static_cast<uint64_t>(sealEngine()->getIntervalBlockTime()) - passed_time;
 				}
 
+				//即时出块
+#ifdef REALTIME_PBFT
+				max_block_txs = m_maxBlockTranscations;
+#else
 				if (m_exec_time_per_tx != 0) {
 					max_block_txs = static_cast<uint64_t>(left_time / m_exec_time_per_tx);
 					if (left_time > 0 && left_time < m_exec_time_per_tx) {
@@ -303,6 +307,7 @@ void PBFTClient::rejigSealing() {
 						max_block_txs = m_maxBlockTranscations;
 					}
 				}
+#endif
 
 				VLOG(10) << "last_exec=" << last_exec_finish_time << ",passed_time=" << passed_time << ",left=" << left_time << ",max_block_txs=" << max_block_txs << ",tx_num=" << tx_num;
 
