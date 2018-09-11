@@ -128,106 +128,109 @@ while read line;do
 		echo "生成ip:${line} id:${index}的节点配置..."
 		node_dir="$output_dir/node_${line}_${index}"
 	cat << EOF > "$node_dir/config${i}.conf"
-	[common]
-		data_path=data/
-		log_config=log.conf
-		ext_header=0
-	[secure]
-		key=data/node.key
-		cert=data/node.crt
-		ca_cert=data/ca.crt
-		;ca_path=
-	
-	[statedb]
-		type=leveldb
-		path=data/statedb
-		topic=DB
-	[pbft]
-		block_interval=1000
-		
-		$nodeid_list
-	[rpc]
-		listen_ip=0.0.0.0
-		listen_port=$(( port_start + 1 + index * 4 ))
-		http_listen_port=$(( port_start + 2 + index * 4 ))
-		console_port=$(( port_start + 3 + index * 4 ))
-	
-	[p2p]
-		listen_ip=0.0.0.0
-		listen_port=$(( port_start + index * 4 ))
-		idle_connections=100
-		reconnect_interval=60
-	
-		$ip_list
+[common]
+	;\${DATAPATH} == data_path
+	data_path=data/
+	log_config=log.conf
+	ext_header=0
+[secure]
+	key=\${DATAPATH}/node.key
+	cert=\${DATAPATH}/node.crt
+	ca_cert=\${DATAPATH}/ca.crt
+	ca_path=
+
+[statedb]
+	;type : leveldb/amop
+	type=leveldb
+	path=\${DATAPATH}/statedb
+	retryInterval=1
+	maxRetry=0
+	topic=DB
+[pbft]
+	block_interval=1000
+
+	$nodeid_list
+[rpc]
+	listen_ip=0.0.0.0
+	listen_port=$(( port_start + 1 + index * 4 ))
+	http_listen_port=$(( port_start + 2 + index * 4 ))
+	console_port=$(( port_start + 3 + index * 4 ))
+
+[p2p]
+	listen_ip=0.0.0.0
+	listen_port=$(( port_start + index * 4 ))
+	idle_connections=100
+	reconnect_interval=60
+
+	$ip_list
 EOF
 	
 	cat << EOF > "$node_dir/log.conf"
-	* GLOBAL:
-	    ENABLED                 =   true
-	    TO_FILE                 =   true
-	    TO_STANDARD_OUTPUT      =   false
-	    FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"
-	    FILENAME                =   "log/log_%datetime{%Y%M%d%H}.log"
-	    MILLISECONDS_WIDTH      =   3
-	    PERFORMANCE_TRACKING    =   true
-	    MAX_LOG_FILE_SIZE       =   209715200 ## 200MB - Comment starts with two hashes (##)
-	    LOG_FLUSH_THRESHOLD     =   100  ## Flush after every 100 logs
-	
-	* TRACE:
-	    ENABLED                 =   true
-	    FILENAME                =   "log/trace_log_%datetime{%Y%M%d%H}.log"
-	
-	* DEBUG:
-	    ENABLED                 =   true
-	    FILENAME                =   "log/debug_log_%datetime{%Y%M%d%H}.log"
-	
-	* FATAL:
-	    ENABLED                 =   true
-	    FILENAME                =   "log/fatal_log_%datetime{%Y%M%d%H}.log"
-	
-	* ERROR:
-	    ENABLED                 =   true
-	    FILENAME                =   "log/error_log_%datetime{%Y%M%d%H}.log"
-	
-	* WARNING:
-	     ENABLED                 =   true
-	     FILENAME                =   "log/warn_log_%datetime{%Y%M%d%H}.log"
-	
-	* INFO:
-	    ENABLED                 =   true
-	    FILENAME                =   "log/info_log_%datetime{%Y%M%d%H}.log"
-	
-	* VERBOSE:
-	    ENABLED                 =   true
-	    FILENAME                =   "log/verbose_log_%datetime{%Y%M%d%H}.log"
+* GLOBAL:
+	ENABLED                 =   true
+	TO_FILE                 =   true
+	TO_STANDARD_OUTPUT      =   false
+	FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"
+	FILENAME                =   "log/log_%datetime{%Y%M%d%H}.log"
+	MILLISECONDS_WIDTH      =   3
+	PERFORMANCE_TRACKING    =   true
+	MAX_LOG_FILE_SIZE       =   209715200 ## 200MB - Comment starts with two hashes (##)
+	LOG_FLUSH_THRESHOLD     =   100  ## Flush after every 100 logs
+
+* TRACE:
+	ENABLED                 =   true
+	FILENAME                =   "log/trace_log_%datetime{%Y%M%d%H}.log"
+
+* DEBUG:
+	ENABLED                 =   true
+	FILENAME                =   "log/debug_log_%datetime{%Y%M%d%H}.log"
+
+* FATAL:
+	ENABLED                 =   true
+	FILENAME                =   "log/fatal_log_%datetime{%Y%M%d%H}.log"
+
+* ERROR:
+	ENABLED                 =   true
+	FILENAME                =   "log/error_log_%datetime{%Y%M%d%H}.log"
+
+* WARNING:
+		ENABLED                 =   true
+		FILENAME                =   "log/warn_log_%datetime{%Y%M%d%H}.log"
+
+* INFO:
+	ENABLED                 =   true
+	FILENAME                =   "log/info_log_%datetime{%Y%M%d%H}.log"
+
+* VERBOSE:
+	ENABLED                 =   true
+	FILENAME                =   "log/verbose_log_%datetime{%Y%M%d%H}.log"
 EOF
 	
 	cat << EOF > "$node_dir/genesis.json"
-	{
-	     "nonce": "0x0",
-	     "difficulty": "0x0",
-	     "mixhash": "0x0",
-	     "coinbase": "0x0",
-	     "timestamp": "0x0",
-	     "parentHash": "0x0",
-	     "extraData": "0x0",
-	     "gasLimit": "0x0",
-	     "god":"0x0",
-	     "alloc": {},
-	     "initMinerNodes":[]
-	}
+{
+	"nonce": "0x0",
+	"difficulty": "0x0",
+	"mixhash": "0x0",
+	"coinbase": "0x0",
+	"timestamp": "0x0",
+	"parentHash": "0x0",
+	"extraData": "0x0",
+	"gasLimit": "0x0",
+	"god":"0x0",
+	"alloc": {},
+	"initMinerNodes":[]
+}
 EOF
 	
 	cat << EOF > "$node_dir/start.sh"
-	#!/bin/bash
-	
-	nohup setsid ./fisco-bcos --config config${i}.conf --genesis genesis.json&
+#!/bin/bash
+nohup setsid ./fisco-bcos --config config${i}.conf --genesis genesis.json&
 EOF
 
 	cat << EOF > "$node_dir/stop.sh"
-	#!/bin/bash
-	weth_pid=\`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print $2}'\`
-    kill -9 \${weth_pid}
+#!/bin/bash
+weth_pid=\`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print $2}'\`
+kill -9 \${weth_pid}
 EOF
 	
 		chmod +x "$node_dir/start.sh"

@@ -1,6 +1,5 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libprecompiled/StringFactoryPrecompiled.h>
 #include <libstorage/ConditionPrecompiled.h>
 #include <boost/test/unit_test.hpp>
 #include "unittest/Common.h"
@@ -24,13 +23,11 @@ struct ConditionPrecompiledFixture {
     auto condition = std::make_shared<storage::Condition>();
     conditionPrecompiled->setPrecompiledEngine(context);
     conditionPrecompiled->setCondition(condition);
-    stringFactory = std::make_shared<StringFactoryPrecompiled>();
   }
 
   ~ConditionPrecompiledFixture() {}
   ConditionPrecompiled::Ptr conditionPrecompiled;
   PrecompiledContext::Ptr context;
-  StringFactoryPrecompiled::Ptr stringFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(ConditionPrecompiled, ConditionPrecompiledFixture)
@@ -49,12 +46,9 @@ BOOST_AUTO_TEST_CASE(toString) {
 BOOST_AUTO_TEST_CASE(getCondition) { conditionPrecompiled->getCondition(); }
 
 BOOST_AUTO_TEST_CASE(call) {
-  Address keyAddress = stringFactory->newString(context, std::string("WangWu"));
 
   eth::ContractABI abi;
-  bytes in = abi.abiIn("EQ(string,address)", "name", keyAddress);
-  conditionPrecompiled->call(context, bytesConstRef(&in));
-  in = abi.abiIn("EQ(string,int256)", "price", 256);
+  bytes in = abi.abiIn("EQ(string,int256)", "price", 256);
   conditionPrecompiled->call(context, bytesConstRef(&in));
   in = abi.abiIn("EQ(string,string)", "item", "spaceship");
   conditionPrecompiled->call(context, bytesConstRef(&in));
@@ -66,7 +60,6 @@ BOOST_AUTO_TEST_CASE(call) {
   conditionPrecompiled->call(context, bytesConstRef(&in));
   in = abi.abiIn("LT(string,int256)", "price", 256);
   conditionPrecompiled->call(context, bytesConstRef(&in));
-  in = abi.abiIn("NE(string,address)", "name", keyAddress);
   conditionPrecompiled->call(context, bytesConstRef(&in));
   in = abi.abiIn("NE(string,int256)", "price", 256);
   conditionPrecompiled->call(context, bytesConstRef(&in));

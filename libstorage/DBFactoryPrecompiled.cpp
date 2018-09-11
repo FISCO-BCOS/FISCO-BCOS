@@ -101,7 +101,6 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 
             DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
             dbPrecompiled->setDB(db);
-            dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
 
             Address address = context->registerPrecompiled(dbPrecompiled);
             _name2Table.insert(std::make_pair(tableName, address));
@@ -160,7 +159,6 @@ DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr con
 
         DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
         dbPrecompiled->setDB(db);
-        dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
 
         Address address = context->registerPrecompiled(dbPrecompiled);
         _name2Table.insert(std::make_pair(tableName, address));

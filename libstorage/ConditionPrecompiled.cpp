@@ -31,16 +31,6 @@ bytes ConditionPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 	bytes out;
 
 	switch (func) {
-	case 0xc559a73a: { //EQ(string,address)
-		std::string str;
-		Address address;
-		abi.abiOut(data, str, address);
-
-		StringPrecompiled::Ptr stringPrecompiled = std::dynamic_pointer_cast<StringPrecompiled>(context->getPrecompiled(address));
-		_condition->EQ(str, stringPrecompiled->toString(context));
-
-		break;
-	}
 	case 0xe44594b9: { //EQ(string,int256)
 		std::string str;
 		u256 num;
@@ -92,16 +82,6 @@ bytes ConditionPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 		abi.abiOut(data, str, value);
 
 		_condition->LT(str, boost::lexical_cast<std::string>(value));
-
-		break;
-	}
-	case 0x9e029900: { //NE(string,address)
-		std::string str;
-		Address address;
-		abi.abiOut(data, str, address);
-
-		StringPrecompiled::Ptr stringPrecompiled = std::dynamic_pointer_cast<StringPrecompiled>(context->getPrecompiled(address));
-		_condition->NE(str, stringPrecompiled->toString(context));
 
 		break;
 	}

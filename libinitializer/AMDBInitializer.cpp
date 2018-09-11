@@ -7,9 +7,8 @@
 
 #include "AMDBInitializer.h"
 
-#include <libstorage/MemoryStateDBFactory.h>
+#include <libstorage/MemoryDBFactory.h>
 #include <libstorage/DBFactoryPrecompiled.h>
-#include <libprecompiled/StringFactoryPrecompiled.h>
 #include <libstorage/AMOPStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <boost/algorithm/string/replace.hpp>
