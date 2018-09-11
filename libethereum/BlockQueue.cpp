@@ -259,7 +259,11 @@ ImportResult BlockQueue::import(bytesConstRef _block, bool _isOurs)
 	if (m_readySet.count(h) || m_drainingSet.count(h) || m_unknownSet.count(h) || m_knownBad.count(h))
 	{
 		// Already know about this one.
-		LOG(TRACE) << "Already known.";
+		LOG(TRACE) << "Already known. readySet:" << m_readySet.count(h)
+				<< ", drainingSet:" << m_drainingSet.count(h)
+				<< ", unknownSet:" << m_unknownSet.count(h)
+				<< ", knownBad:" << m_knownBad.count(h);
+
 		return ImportResult::AlreadyKnown;
 	}
 
@@ -456,7 +460,7 @@ BlockQueueStatus BlockQueue::status() const
 	ReadGuard l(m_lock);
 	Guard l2(m_verification);
 	return BlockQueueStatus{ m_drainingSet.size(), m_verified.count(), m_verifying.count(), m_unverified.count(),
-	                         m_future.count(), m_unknown.count(), m_knownBad.size() };
+	                         m_future.count(), m_unknown.count()/*, m_knownBad.size()*/ };
 }
 
 QueueStatus BlockQueue::blockStatus(h256 const& _h) const
@@ -469,8 +473,13 @@ QueueStatus BlockQueue::blockStatus(h256 const& _h) const
 	    QueueStatus::Importing :
 	    m_unknownSet.count(_h) ?
 	    QueueStatus::UnknownParent :
+
+#if 0
+		//暂时不判断knownBad 区块执行失败后可尝试再次执行
 	    m_knownBad.count(_h) ?
 	    QueueStatus::Bad :
+#endif
+
 	    QueueStatus::Unknown;
 }
 
