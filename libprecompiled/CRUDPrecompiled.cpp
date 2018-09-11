@@ -111,7 +111,6 @@ bytes CRUDPrecompiled::call(std::shared_ptr<PrecompiledContext> context, bytesCo
         auto entries = memoryDB->select(key, memoryDB->newCondition());
         auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
         entriesPrecompiled->setEntries(entries);
-        // entriesPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
         auto newAddress = context->registerPrecompiled(entriesPrecompiled);
         out = abi.abiIn("", newAddress);
         break;

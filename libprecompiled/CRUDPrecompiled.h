@@ -1,7 +1,7 @@
 #pragma once
 #include "Precompiled.h"
 #include "PrecompiledContext.h"
-#include "libstorage/MemoryStateDBFactory.h"
+#include "libstorage/MemoryDBFactory.h"
 #include <libdevcore/Common.h>
 
 namespace dev
@@ -22,7 +22,7 @@ public:
     virtual std::string toString(std::shared_ptr<PrecompiledContext>);
 
     virtual bytes call(std::shared_ptr<PrecompiledContext> context, bytesConstRef param);
-    void setMemoryDBFactory(dev::storage::MemoryStateDBFactory::Ptr memoryDBFactory)
+    void setMemoryDBFactory(dev::storage::MemoryDBFactory::Ptr memoryDBFactory)
     {
         _memoryDBFactory = memoryDBFactory;
     }
@@ -31,7 +31,7 @@ public:
 private:
     dev::storage::DB::Ptr openTable(std::shared_ptr<PrecompiledContext> context, const std::string& tableName);
 
-    dev::storage::MemoryStateDBFactory::Ptr _memoryDBFactory;
+    dev::storage::MemoryDBFactory::Ptr _memoryDBFactory;
     std::map<std::string, dev::storage::DB::Ptr> _name2Table;
     h256 _hash;
 };

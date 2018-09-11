@@ -38,10 +38,7 @@ bytes dev::precompiled::EntriesPrecompiled::call(std::shared_ptr<PrecompiledCont
 
 			auto entry = _entries->get(num.convert_to<size_t>());
 			EntryPrecompiled::Ptr entryPrecompiled = std::make_shared<EntryPrecompiled>();
-
 			entryPrecompiled->setEntry(entry);
-			entryPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
-
 			Address address = context->registerPrecompiled(entryPrecompiled);
 
 			out = abi.abiIn("", address);

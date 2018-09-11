@@ -1,7 +1,5 @@
 #pragma once
 
-#include <libprecompiled/StringFactoryPrecompiled.h>
-#include <libprecompiled/StringPrecompiled.h>
 #include "../libprecompiled/PrecompiledContext.h"
 #include "DB.h"
 
@@ -16,12 +14,9 @@ contract Entry {
 
     function set(string, int) public;
     function set(string, string) public;
-    function set(string, String) public;
 }
 {
     "fda69fae": "getInt(string)",
-    "9c981fcb": "getString(string)",
-    "a815ff15": "set(string,address)",
     "2ef8ba74": "set(string,int256)",
     "e942b516": "set(string,string)",
     "d52decd4": "getBytes64(string)",
@@ -46,14 +41,8 @@ class EntryPrecompiled : public Precompiled {
   void setEntry(dev::storage::Entry::Ptr entry) { _entry = entry; }
   dev::storage::Entry::Ptr getEntry() { return _entry; }
 
-  void setStringFactoryPrecompiled(
-      StringFactoryPrecompiled::Ptr stringFactoryPrecompiled) {
-    _stringFactoryPrecompiled = stringFactoryPrecompiled;
-  }
-
  private:
   dev::storage::Entry::Ptr _entry;
-  StringFactoryPrecompiled::Ptr _stringFactoryPrecompiled;
 };
 
 }  // namespace precompiled
