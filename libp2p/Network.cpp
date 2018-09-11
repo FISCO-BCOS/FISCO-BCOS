@@ -195,7 +195,10 @@ bi::tcp::endpoint Network::determinePublic(NetworkConfig const& network_config)
         for (auto address : ifAddresses)
         {
             if (address.is_v4())
+            {
                 paddr = address;
+                break;
+            }
         }
     }
     std::cout << "obtain paddr:" << paddr.to_string() << std::endl;

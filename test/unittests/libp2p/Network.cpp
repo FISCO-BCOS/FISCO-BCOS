@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(testDeterminPublic)
     /// test listen address 0.0.0.0 case
     m_netConfig.listenIPAddress = "0.0.0.0";
     m_endpoint = Network::determinePublic(m_netConfig);
-    BOOST_CHECK(m_endpoint.address().to_string() == addr.to_string());
+    BOOST_CHECK(m_endpoint.address().to_string() != m_netConfig.listenIPAddress);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
