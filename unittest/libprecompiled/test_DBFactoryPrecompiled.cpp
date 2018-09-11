@@ -2,9 +2,8 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/PrecompiledContext.h>
-#include <libprecompiled/StringPrecompiled.h>
 #include <libstorage/DBFactoryPrecompiled.h>
-#include <libstorage/MemoryStateDBFactory.h>
+#include <libstorage/MemoryDBFactory.h>
 #include <libstorage/DB.h>
 #include <libstorage/Storage.h>
 #include <boost/test/unit_test.hpp>
@@ -51,7 +50,7 @@ class MockAMOPDB : public dev::storage::Storage {
   virtual bool onlyDirty() override { return false; }
 };
 
-class MockMemoryDBFactory : public dev::storage::MemoryStateDBFactory {
+class MockMemoryDBFactory : public dev::storage::MemoryDBFactory {
  public:
   virtual ~MockMemoryDBFactory(){};
 
@@ -59,12 +58,6 @@ class MockMemoryDBFactory : public dev::storage::MemoryStateDBFactory {
                                             const std::string &table) {
     return dev::storage::DB::Ptr();
   }
-};
-
-class MockStringFactoryPrecompiled
-    : public precompiled::StringFactoryPrecompiled {
- public:
-  virtual ~MockStringFactoryPrecompiled(){};
 };
 
 class MockPrecompiledEngine : public PrecompiledContext {
@@ -83,8 +76,6 @@ struct DBFactoryPrecompiledFixture {
     auto mockMemoryDBFactory = std::make_shared<MockMemoryDBFactory>();
     mockMemoryDBFactory->setStateStorage(mockAMOPDB);
     dbFactoryPrecompiled->setMemoryDBFactory(mockMemoryDBFactory);
-    dbFactoryPrecompiled->setStringFactoryPrecompiled(
-        std::make_shared<MockStringFactoryPrecompiled>());
   }
 
   ~DBFactoryPrecompiledFixture() {
