@@ -18,6 +18,10 @@
  * @author Alex Leverington <nessence@gmail.com>
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
+ *
+ * @author:
+ * @date:
+ * @modify:
  */
 
 #pragma once
@@ -36,22 +40,16 @@ namespace dev
 {
 namespace p2p
 {
-static unsigned short c_defaultListenPort = 16789;
-
 struct NetworkConfig
 {
-    // Default Network Preferences
-    NetworkConfig(unsigned short lp = c_defaultListenPort) : listenPort(lp) {}
-
     // Network Preferences with specific Listen IP
-    NetworkConfig(std::string const& l, unsigned short lp = c_defaultListenPort, bool u = true)
+    NetworkConfig(std::string const& l, uint16_t lp, bool u = true)
       : publicIPAddress(), listenIPAddress(l), listenPort(lp)
     {}
-
     // Network Preferences with intended Public IP
-    NetworkConfig(std::string const& publicIP, std::string const& l = std::string(),
-        unsigned short lp = c_defaultListenPort, bool u = true)
-      : publicIPAddress(publicIP), listenIPAddress(l), listenPort(lp)
+    NetworkConfig(std::string const& _publicIP, std::string const& _listenAddr,
+        uint16_t _listenPort, bool u = true)
+      : publicIPAddress(_publicIP), listenIPAddress(_listenAddr), listenPort(_listenPort)
     {
         if (!publicIPAddress.empty() && !isPublicAddress(publicIPAddress))
             BOOST_THROW_EXCEPTION(InvalidPublicIPAddress());
@@ -59,7 +57,7 @@ struct NetworkConfig
     /// Addressing
     std::string publicIPAddress;
     std::string listenIPAddress;
-    unsigned short listenPort = c_defaultListenPort;
+    uint16_t listenPort;
 };
 
 /**
@@ -72,13 +70,12 @@ public:
     /// @returns public and private interface addresses
     static std::set<bi::address> getInterfaceAddresses();
 
-    /// Try to bind and listen on _listenPort, else attempt net-allocated port.
+    /// bind and listen on _listenPort
     static int tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkConfig const& _netPrefs);
 
     /// Resolve "host:port" string as TCP endpoint. Returns unspecified endpoint on failure.
     static bi::tcp::endpoint resolveHost(std::string const& _host);
-    static bi::tcp::endpoint determinePublic(
-        NetworkConfig const& network_config, int const& listen_port);
+    static bi::tcp::endpoint determinePublic(NetworkConfig const& network_config);
 };
 
 }  // namespace p2p

@@ -54,10 +54,18 @@ class RLPXHandshake;
 class Host : public Worker
 {
 public:
-    ///--------------- constructor functions---------------
-    Host(std::string const& _clientVersion, KeyPair const& _alias,
-        NetworkConfig const& _n = NetworkConfig());
+    /// constructor function : init Host with specified client version,
+    /// keypair and network config
+    Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n);
     ~Host();
+
+    /// ------get interfaces ------
+    /// get client version
+    std::string const& clientVersion() const { return m_clientVersion; }
+    /// get network configs
+    NetworkConfig const& networkConfig() const { return m_netConfigs; }
+
+
     ///------------ Network and worker threads related ---------------
     /// stop the network
     void stop();
@@ -167,11 +175,12 @@ public:
     // void startPeerSession(, std::shared_ptr<RLPXSocket> const& _s);
     /// TODO: implement 'disconnectByNodeId'
     void disconnectByNodeId(const std::string& sNodeId) {}
+
     ba::io_service* getIOService() { return &m_ioService; }
     std::unordered_map<NodeID, std::weak_ptr<SessionFace>>& mSessions() { return m_sessions; }
     RecursiveMutex& xSessions() { return x_sessions; }
     boost::asio::io_service::strand* getStrand() { return &m_strand; }
-    std::string getClientVersion() const { return m_clientVersion; }
+
     std::map<NodeIPEndpoint, NodeID>* staticNodes() { return &_staticNodes; }
     void setStaticNodes(const std::map<NodeIPEndpoint, NodeID>& staticNodes)
     {
@@ -180,7 +189,7 @@ public:
     bool isStarted() const { return isWorking(); }
 
     bi::tcp::endpoint const& tcpPublic() const { return m_tcpPublic; }
-    NetworkConfig const& networkConfig() const { return m_netConfigs; }
+
     std::string enode() const
     {
         return "enode://" + id().hex() + "@" +
@@ -214,10 +223,7 @@ private:
         std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<RLPXSocket> socket);
     void handshakeClient(const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket,
         std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint);
-    inline void determinePublic()
-    {
-        m_tcpPublic = Network::determinePublic(m_netConfigs, m_listenPort);
-    }
+    inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
 
     void keepAlivePeers();
     void reconnectAllNodes();

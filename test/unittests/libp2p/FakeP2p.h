@@ -14,9 +14,9 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief : main Fixtures of p2p module
+ * @brief : main Fakes of p2p module
  *
- * @file P2pFixtures.h
+ * @file FakeP2p.h
  * @author: yujiechen
  * @date 2018-09-10
  */
@@ -29,11 +29,11 @@ namespace dev
 {
 namespace test
 {
-/// Fixture of RLPXSocket
-class RLPXSocketFixture : public RLPXSocket
+/// Fake of RLPXSocket
+class FakeRLPXSocket : public RLPXSocket
 {
 public:
-    RLPXSocketFixture(ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint)
+    FakeRLPXSocket(ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint)
       : RLPXSocket(_ioService, _nodeIPEndpoint)
     {}
     virtual bool isConnected() const { return m_isConnected; }
@@ -43,16 +43,15 @@ private:
     bool m_isConnected;
 };
 
-/// Fixture of Host
-class HostFixture : public Host
+/// Fakes of Host
+class FakeHost : public Host
 {
 public:
-    HostFixture(std::string const& _clientVersion, KeyPair const& _alias,
-        NetworkConfig const& _n = NetworkConfig())
+    FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n)
       : Host(_clientVersion, _alias, _n)
     {}
 
-    ~HostFixture() {}
+    ~FakeHost() {}
 };
 
 /// class for construct Node
@@ -68,48 +67,48 @@ public:
     }
 };
 
-/// Peer Fixture
-class PeerFixture : public Peer
+/// Peer fake
+class FakePeer : public Peer
 {
 public:
-    PeerFixture(Node const& _node) : Peer(_node) {}
+    FakePeer(Node const& _node) : Peer(_node) {}
 };
 
-/// Session Fixture
-class SessionFixture : public Session
+/// Session fake
+class FakeSession : public Session
 {
 public:
-    SessionFixture(Host* _server, std::shared_ptr<RLPXSocket> const& _s,
+    FakeSession(Host* _server, std::shared_ptr<RLPXSocket> const& _s,
         std::shared_ptr<Peer> const& _n, PeerSessionInfo _info)
       : Session(_server, _s, _n, _info)
     {}
 };
 
 /// create Host
-static Host* creatHostFixture()
+static std::shared_ptr<Host> createFakeHost(
+    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
 {
-    std::string client_version = "libp2p-test";
     KeyPair key_pair = KeyPair::create();
-    NetworkConfig network_config(30304);
-    Host* m_host = new HostFixture(client_version, key_pair, network_config);
+    NetworkConfig network_config(listenIp, listenPort);
+    shared_ptr<Host> m_host = std::make_shared<FakeHost>(client_version, key_pair, network_config);
     return m_host;
 }
 
 /// create session
-static Session* createSessionFixture(
-    std::string const& _addr, uint16_t const& _udp, uint16_t const& _tcp)
+static Session* createFakeSession(std::string const& _clientVersion, std::string const& _addr,
+    uint16_t const& _udp, uint16_t const& _tcp)
 {
     /// init host
-    Host* m_host = creatHostFixture();
+    Host* m_host = createFakeHost(_clientVersion, _addr, _tcp).get();
     /// init endpoint
     NodeIPEndpoint m_endpoint(bi::address::from_string(_addr), _udp, _tcp);
-    /// init RLPXSocketFixture
+    /// init FakeRLPXSocket
     std::shared_ptr<RLPXSocket> m_socket =
-        std::make_shared<RLPXSocketFixture>(*(m_host->getIOService()), m_endpoint);
+        std::make_shared<FakeRLPXSocket>(*(m_host->getIOService()), m_endpoint);
 
     /// init Peers
     std::shared_ptr<Peer> m_peer =
-        std::make_shared<PeerFixture>(NodeFixture::getNode("127.0.0.1", 30305, 30305));
+        std::make_shared<FakePeer>(NodeFixture::getNode("127.0.0.1", 30305, 30305));
     /// init the endpoint of peers
     uint16_t m_peer_listenport = 30305;
     NodeIPEndpoint m_peer_endpoint(
@@ -117,14 +116,13 @@ static Session* createSessionFixture(
 
     /// init PeerSessionInfo
     std::set<CapDesc> caps = {};
-    PeerSessionInfo m_peerInfo = {m_host->id(), m_host->getClientVersion(),
+    PeerSessionInfo m_peerInfo = {m_host->id(), m_host->clientVersion(),
         m_peer->endpoint().address.to_string(), m_host->listenPort(),
         chrono::steady_clock::duration(), caps, 0, map<std::string, std::string>(),
         m_peer_endpoint};
 
-    Session* m_session = new SessionFixture(m_host, m_socket, m_peer, m_peerInfo);
+    Session* m_session = new FakeSession(m_host, m_socket, m_peer, m_peerInfo);
     return m_session;
 }
-
 }  // namespace test
 }  // namespace dev

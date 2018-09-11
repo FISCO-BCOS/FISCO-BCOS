@@ -20,7 +20,7 @@
  * @author: yujiechen
  * @date 2018-09-10
  */
-#include "P2PFixtures.h"
+#include "FakeP2p.h"
 #include <libp2p/Common.h>
 #include <libp2p/Peer.h>
 #include <test/tools/libutils/TestOutputHelper.h>

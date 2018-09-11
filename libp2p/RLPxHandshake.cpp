@@ -82,8 +82,8 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
                   << "sending capabilities handshake";
 
         RLPStream s;
-        s.appendList(4) << dev::p2p::c_protocolVersion << m_host->getClientVersion()
-                        << m_host->caps() << m_host->listenPort();
+        s.appendList(4) << dev::p2p::c_protocolVersion << m_host->clientVersion() << m_host->caps()
+                        << m_host->listenPort();
 
         bytes packet;
         s.swapOut(packet);

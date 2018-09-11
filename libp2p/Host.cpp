@@ -68,7 +68,8 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_alias(_alias),
     m_lastPing(chrono::steady_clock::time_point::min()),
     m_lastReconnect(chrono::steady_clock::time_point::min()),
-    m_strand(m_ioService)
+    m_strand(m_ioService),
+    m_listenPort(_n.listenPort)
 {
     LOG(INFO) << "Id:" << id();
 }
@@ -447,7 +448,6 @@ void Host::handshakeClient(const boost::system::error_code& error,
     {
         // connect to myself
         LOG(TRACE) << "Disconnect self" << _nodeIPEndpoint;
-
         Guard l(x_pendingNodeConns);
         m_pendingPeerConns.erase(_nodeIPEndpoint.name());
 
@@ -580,7 +580,6 @@ void Host::startedWorking()
     if (port > 0)
     {
         LOG(DEBUG) << "set m_listenPort to port:" << port;
-        m_listenPort = port;
         determinePublic();
         runAcceptor();
     }
