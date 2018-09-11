@@ -83,6 +83,7 @@ target_link_libraries(test-fisco-bcos ethcore)
 target_link_libraries(test-fisco-bcos evm)
 target_link_libraries(test-fisco-bcos evmc)
 target_link_libraries(test-fisco-bcos interpreter)
+target_link_libraries(test-fisco-bcos p2p)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 

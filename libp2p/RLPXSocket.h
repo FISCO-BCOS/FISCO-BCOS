@@ -56,8 +56,7 @@ public:
         LOG(INFO) << "CERTIFICATE LOAD SUC!";
     }
     ~RLPXSocket() { close(); }
-
-    bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
+    virtual bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
     void close()
     {
         try
