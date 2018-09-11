@@ -55,8 +55,6 @@ class Host : public Worker
 {
 public:
     ///--------------- constructor functions---------------
-    Host(std::string const& _clientVersion, NetworkConfig const& _n = NetworkConfig(),
-        bytesConstRef _restoreNetwork = bytesConstRef());
     Host(std::string const& _clientVersion, KeyPair const& _alias,
         NetworkConfig const& _n = NetworkConfig());
     ~Host();
@@ -64,9 +62,12 @@ public:
     /// stop the network
     void stop();
     void start();
+    void doWork();
+    /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
+    void startedWorking();
 
     void doneWorking();
-    void startedWorking();
+
     void run(boost::system::error_code const& error);
     bool haveNetwork() const
     {
@@ -119,7 +120,13 @@ public:
     ///-----Peer releated Informations
     size_t peerCount() const;
     PeerSessionInfos peerSessionInfo() const;
-
+    /// Get session by id
+    std::shared_ptr<SessionFace> peerSession(NodeID const& _id)
+    {
+        RecursiveGuard l(x_sessions);
+        return m_sessions.count(_id) ? m_sessions[_id].lock() : std::shared_ptr<SessionFace>();
+    }
+    bool isConnected(const NodeID& nodeID);
     bytes saveNetwork() const;
 
     std::string listenAddress() const
@@ -155,10 +162,11 @@ public:
     Secret sec() const { return m_alias.secret(); }
     KeyPair keyPair() const { return m_alias; }
 
-    void startPeerSession(RLP const& _rlp, std::shared_ptr<RLPXSocket> const& _s);
-    /*void disconnectByNodeId(const std::string& sNodeId);*/
-
-
+    void startPeerSession(
+        Public const& _pub, RLP const& _rlp, std::shared_ptr<RLPXSocket> const& _s);
+    // void startPeerSession(, std::shared_ptr<RLPXSocket> const& _s);
+    /// TODO: implement 'disconnectByNodeId'
+    void disconnectByNodeId(const std::string& sNodeId) {}
     ba::io_service* getIOService() { return &m_ioService; }
     std::unordered_map<NodeID, std::weak_ptr<SessionFace>>& mSessions() { return m_sessions; }
     RecursiveMutex& xSessions() { return x_sessions; }
@@ -195,23 +203,24 @@ public:
         m_reconnectnow = true;
     }
     void connect(NodeIPEndpoint const& _nodeIPEndpoint);
-    // virtual std::function<bool(bool, boost::asio::ssl::verify_context&)>
-    // newVerifyCallback(std::shared_ptr<std::string> nodeIDOut);
+    std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
+        std::shared_ptr<std::string> nodeIDOut);
+    static bool isExpired(ba::ssl::verify_context& ctx);
+
 private:
-    void handshakeServer(
-        const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket);
+    /// called by 'startedWorking' to
+    void runAcceptor();
+    void handshakeServer(const boost::system::error_code& error,
+        std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<RLPXSocket> socket);
     void handshakeClient(const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket,
-        NodeID id, NodeIPEndpoint& _nodeIPEndpoint);
-    // bool sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx);
+        std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint);
     inline void determinePublic()
     {
         m_tcpPublic = Network::determinePublic(m_netConfigs, m_listenPort);
     }
 
     void keepAlivePeers();
-    // void reconnectAllNodes();
-    // void disconnectLatePeers();
-    void runAcceptor();
+    void reconnectAllNodes();
 
     unsigned peerSlots(PeerSlotType _type)
     {
@@ -230,11 +239,12 @@ private:
 
 private:
     /// ---- values inited by contructor------
-    std::string m_clientVersion;          /// Our version string.
-    NetworkConfig m_netConfigs;           /// Network settings.
-    std::set<bi::address> m_ifAddresses;  /// Interface addresses.
-    ba::io_service m_ioService;           /// I/O handler
-    bi::tcp::acceptor m_tcp4Acceptor;     /// Listening acceptor.
+    std::string m_clientVersion;                           /// Our version string.
+    NetworkConfig m_netConfigs;                            /// Network settings.
+    std::set<bi::address> m_ifAddresses;                   /// Interface addresses.
+    ba::io_service m_ioService;                            /// I/O handler
+    bi::tcp::acceptor m_tcp4Acceptor;                      /// Listening acceptor.
+    std::list<std::weak_ptr<RLPXHandshake>> m_connecting;  ///< Pending connections.
     KeyPair m_alias;  /// Alias for network communication, namely (public key, private key) of the
                       /// node
     std::chrono::steady_clock::time_point m_lastPing;  ///< Time we sent the last ping to all peers.
@@ -273,9 +283,6 @@ private:
     std::set<std::string> m_pendingPeerConns;
     Mutex x_pendingNodeConns;
     std::unordered_map<std::string, std::shared_ptr<Peer>> m_peers;
-
-
-    std::list<std::weak_ptr<RLPXHandshake>> m_connecting;
     Mutex x_connecting;
     Mutex x_reconnectnow;
     std::chrono::steady_clock::time_point m_lastAnnouncementConnectNodes;

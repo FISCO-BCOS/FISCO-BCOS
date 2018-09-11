@@ -25,6 +25,7 @@
 #include "Capability.h"
 #include "Common.h"
 #include "HostCapability.h"
+#include "ParseCert.h"
 #include "RLPxHandshake.h"
 #include "Session.h"
 #include <libdevcore/Assertions.h>
@@ -62,7 +63,7 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_clientVersion(_clientVersion),
     m_netConfigs(_n),
     m_ifAddresses(Network::getInterfaceAddresses()),
-    m_ioService(1),
+    m_ioService(2),
     m_tcp4Acceptor(m_ioService),
     m_alias(_alias),
     m_lastPing(chrono::steady_clock::time_point::min()),
@@ -83,7 +84,6 @@ void Host::stop()
     // called to force io_service to kill any remaining tasks it might have -
     // such tasks may involve socket reads from Capabilities that maintain references
     // to resources we're about to free.
-
     {
         // Although m_run is set by stop() or start(), it effects m_runTimer so x_runTimer is used
         // instead of a mutex for m_run.
@@ -103,7 +103,6 @@ void Host::stop()
         stopWorking();
 }
 
-///===========
 void Host::start()
 {
     DEV_TIMED_FUNCTION_ABOVE(500);
@@ -137,7 +136,6 @@ void Host::doneWorking()
     // stop capabilities (eth: stops syncing or block/tx broadcast)
     for (auto const& h : m_capabilities)
         h.second->onStopping();
-
     // disconnect pending handshake, before peers, as a handshake may create a peer
     for (unsigned n = 0;; n = 0)
     {
@@ -152,7 +150,6 @@ void Host::doneWorking()
             break;
         m_ioService.poll();
     }
-
     // disconnect peers
     for (unsigned n = 0;; n = 0)
     {
@@ -219,15 +216,15 @@ bytes Host::saveNetwork() const
     return ret.out();
 }
 
-void Host::startPeerSession(RLP const& _rlp, std::shared_ptr<RLPXSocket> const& _s)
+void Host::startPeerSession(
+    Public const& _pub, RLP const& _rlp, std::shared_ptr<RLPXSocket> const& _s)
 {
     auto protocolVersion = _rlp[0].toInt<unsigned>();
     auto clientVersion = _rlp[1].toString();
     auto caps = _rlp[2].toVector<CapDesc>();
     auto listenPort = _rlp[3].toInt<unsigned short>();
-    auto pub = _rlp[4].toHash<Public>();
-    LOG(INFO) << "Host::startPeerSession! " << pub;
-    Public _id = pub;
+    LOG(INFO) << "Host::startPeerSession! " << _pub;
+    Public _id = _pub;
 
     // connection must be disconnect before the creation of session object and peer object -
     // morebtcg
@@ -260,9 +257,7 @@ void Host::startPeerSession(RLP const& _rlp, std::shared_ptr<RLPXSocket> const& 
             m_peers[_nodeIPEndpoint.name()] = p;
         }
     }
-    if (p->isOffline())
-        p->m_lastConnected = std::chrono::system_clock::now();
-    p->endpoint = _nodeIPEndpoint;
+    p->setEndpoint(_nodeIPEndpoint);
 
     stringstream capslog;
     caps.erase(remove_if(caps.begin(), caps.end(),
@@ -282,7 +277,7 @@ void Host::startPeerSession(RLP const& _rlp, std::shared_ptr<RLPXSocket> const& 
               << capslog.str() << dec << listenPort;
 
     shared_ptr<SessionFace> ps = make_shared<Session>(this, _s, p,
-        PeerSessionInfo({_id, clientVersion, p->endpoint.address.to_string(), listenPort,
+        PeerSessionInfo({_id, clientVersion, p->endpoint().address.to_string(), listenPort,
             chrono::steady_clock::duration(), _rlp[2].toSet<CapDesc>(), 0, map<string, string>(),
             _nodeIPEndpoint}));
 
@@ -296,7 +291,6 @@ void Host::startPeerSession(RLP const& _rlp, std::shared_ptr<RLPXSocket> const& 
         ps->disconnect(DisconnectReason::UselessPeer);
         return;
     }
-
     if (!m_requiredPeers.count(_id))
     {
         LOG(DEBUG) << "Unexpected identity from peer (got" << _id << ", must be one of "
@@ -319,7 +313,6 @@ void Host::startPeerSession(RLP const& _rlp, std::shared_ptr<RLPXSocket> const& 
                     return;
                 }
             }
-
             NodeIPEndpoint endpoint(_s->remoteEndpoint().address(), 0, _s->remoteEndpoint().port());
             auto it = _staticNodes.find(endpoint);
             if (it != _staticNodes.end())
@@ -357,55 +350,21 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 {
     if (!m_run)
         return;
-
-    if (((!m_netConfigs.listenIPAddress.empty() &&
-             _nodeIPEndpoint.address ==
-                 boost::asio::ip::address::from_string(m_netConfigs.listenIPAddress)) ||
-            (!m_netConfigs.publicIPAddress.empty() &&
-                _nodeIPEndpoint.address ==
-                    boost::asio::ip::address::from_string(m_netConfigs.publicIPAddress)) ||
-            m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end() ||
-            _nodeIPEndpoint.address == m_tcpPublic.address() ||
-            _nodeIPEndpoint.address == m_tcpClient.address()) &&
-        _nodeIPEndpoint.tcpPort == m_netConfigs.listenPort)
-    {
-        LOG(TRACE) << "Ignore connect self" << _nodeIPEndpoint;
-
-        return;
-    }
-
-    if (m_tcpPublic == _nodeIPEndpoint)
-    {
-        LOG(INFO) << "Abort Connect Self(" << _nodeIPEndpoint << ")";
-        return;
-    }
-    if (NodeIPEndpoint(bi::address::from_string(m_netConfigs.listenIPAddress), listenPort(),
-            listenPort()) == _nodeIPEndpoint)
-    {
-        LOG(INFO) << "Abort Connect Self(" << _nodeIPEndpoint << ")";
-        return;
-    }
+    /// in case of repeated connections
     if (m_peers.count(_nodeIPEndpoint.name()))
     {
         LOG(INFO) << "Don't Repeat Connect (" << _nodeIPEndpoint.name() << ","
                   << _nodeIPEndpoint.host << ")";
         if (!_nodeIPEndpoint.host.empty())
-            m_peers[_nodeIPEndpoint.name()]->endpoint.host = _nodeIPEndpoint.host;
+            m_peers[_nodeIPEndpoint.name()]->endpoint().host = _nodeIPEndpoint.host;
         return;
     }
-    if (_nodeIPEndpoint.address.to_string().empty())
-    {
-        LOG(INFO) << "Target Node Ip Is Empty  (" << _nodeIPEndpoint.name() << ")";
-        return;
-    }
-
     {
         Guard l(x_pendingNodeConns);
         if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
             return;
         m_pendingPeerConns.insert(_nodeIPEndpoint.name());
     }
-
     LOG(INFO) << "Attempting connection to node "
               << "@" << _nodeIPEndpoint.name() << "," << _nodeIPEndpoint.host << " from " << id();
     std::shared_ptr<RLPXSocket> socket;
@@ -414,8 +373,6 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint)
     m_tcpClient = socket->remoteEndpoint();
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
     socket->sslref().set_verify_depth(3);
-    /*socket->sslref().set_verify_callback(boost::bind(&Host::sslVerifyCert, this, _1, _2));*/
-
     socket->ref().async_connect(
         _nodeIPEndpoint, m_strand.wrap([=](boost::system::error_code const& ec) {
             if (ec)
@@ -428,55 +385,36 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint)
             }
             else
             {
+                std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
+                socket->sslref().set_verify_callback(newVerifyCallback(endpointPublicKey));
                 socket->sslref().async_handshake(ba::ssl::stream_base::client,
                     m_strand.wrap(boost::bind(&Host::handshakeClient, this, ba::placeholders::error,
-                        socket, NodeID(), _nodeIPEndpoint)));
+                        socket, endpointPublicKey, _nodeIPEndpoint)));
             }
         }));
 }
 
-
-/*
-void Host::disconnectByNodeId(const std::string& sNodeId)
+void Host::handshakeServer(const boost::system::error_code& error,
+    std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<RLPXSocket> socket)
 {
-    if (id().hex() == sNodeId)
-    {
-        LOG(ERROR) << "disconnectByNodeId  self " << id().hex() << "|" << sNodeId << "\n";
-
-        return;
-    }
-
-    RecursiveGuard l(x_sessions);
-    if (m_sessions.find(dev::jsToPublic(dev::toJS(sNodeId))) != m_sessions.end())
-    {
-        auto pp = m_sessions[jsToPublic(toJS(sNodeId))].lock();
-        if (pp && pp->isConnected())
-        {
-            if (pp->isConnected())
-            {
-                pp->disconnect(UserReason);
-            }
-        }
-    }
-    else
-    {
-        LOG(ERROR) << "disconnectByNodeId  can not find " << sNodeId << "\n";
-    }
-}*/
-
-void Host::handshakeServer(
-    const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket)
-{
+    NodeID node_id = NodeID(*endpointPublicKey);
     if (error)
     {
         LOG(ERROR) << "Host::async_handshake err:" << error.message();
+    }
+    if (node_id == id())
+    {
+        // connect to myself
+        LOG(TRACE) << "Disconnect self" << node_id;
+        socket->close();
+        return;
     }
 
     bool success = false;
     try
     {
         // incoming connection; we don't yet know nodeid
-        auto handshake = make_shared<RLPXHandshake>(this, socket);
+        auto handshake = make_shared<RLPXHandshake>(this, socket, node_id);
         m_connecting.push_back(handshake);
         handshake->start();
         success = true;
@@ -495,16 +433,34 @@ void Host::handshakeServer(
 }
 
 void Host::handshakeClient(const boost::system::error_code& error,
-    std::shared_ptr<RLPXSocket> socket, NodeID id, NodeIPEndpoint& _nodeIPEndpoint)
+    std::shared_ptr<RLPXSocket> socket, std::shared_ptr<std::string>& endpointPublicKey,
+    NodeIPEndpoint& _nodeIPEndpoint)
 {
+    dev::p2p::NodeID node_id(*endpointPublicKey);
     if (error)
     {
         m_pendingPeerConns.erase(_nodeIPEndpoint.name());
         LOG(DEBUG) << "Host::handshakeClient Err:" << error.message();
         return;
     }
+    if (node_id == id())
+    {
+        // connect to myself
+        LOG(TRACE) << "Disconnect self" << _nodeIPEndpoint;
 
-    auto handshake = make_shared<RLPXHandshake>(this, socket, id);
+        Guard l(x_pendingNodeConns);
+        m_pendingPeerConns.erase(_nodeIPEndpoint.name());
+
+        RecursiveGuard m(x_sessions);
+        auto it = _staticNodes.find(_nodeIPEndpoint);
+        if (it != _staticNodes.end())
+        {
+            it->second = node_id;  // modify node ID
+        }
+        socket->close();
+        return;
+    }
+    auto handshake = make_shared<RLPXHandshake>(this, socket, node_id);
     {
         Guard l(x_connecting);
         m_connecting.push_back(handshake);
@@ -514,44 +470,116 @@ void Host::handshakeClient(const boost::system::error_code& error,
     Guard l(x_pendingNodeConns);
     m_pendingPeerConns.erase(_nodeIPEndpoint.name());
 }
-/*bool Host::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
+
+bool Host::isExpired(ba::ssl::verify_context& ctx)
 {
-    ParseCert parseCert;
-    parseCert.ParseInfo(ctx);
-    string subjectName = parseCert.getSubjectName();
-    int certType = parseCert.getCertType();
-    bool isExpire = parseCert.getExpire();
-    string serialNumber = parseCert.getSerialNumber();
-    LOG(DEBUG) << "subjectName:" << subjectName;
-    LOG(DEBUG) << "serialNumber:" << serialNumber;
-    LOG(DEBUG) << "preverified:" << preverified;
-    LOG(DEBUG) << "certType:" << certType;
+    ParseCert certParser;
+    certParser.ParseInfo(ctx);
+    return certParser.getExpire();
+}
 
-    if (isExpire)
-    {
-        LOG(ERROR) << "Verify Certificate Expire Data Error!";
-        return false;
-    }
-    return preverified;
-}*/
+std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCallback(
+    std::shared_ptr<std::string> nodeIDOut)
+{
+    return [nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
+        try
+        {
+            /// check certificate expiration
+            if (Host::isExpired(ctx))
+            {
+                LOG(ERROR) << "The Certificate has been expired";
+                return false;
+            }
+            /// get node id
+            X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+            if (!cert)
+            {
+                LOG(ERROR) << "Get cert failed";
+                return preverified;
+            }
 
+            int crit = 0;
+            BASIC_CONSTRAINTS* basic =
+                (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
+            if (!basic)
+            {
+                LOG(ERROR) << "Get ca casic failed";
+                return preverified;
+            }
 
+            if (basic->ca)
+            {
+                // ca or agency certificate
+                LOG(TRACE) << "Ignore CA certificate";
+                return preverified;
+            }
+
+            EVP_PKEY* evpPublicKey = X509_get_pubkey(cert);
+            if (!evpPublicKey)
+            {
+                LOG(ERROR) << "Get evpPublicKey failed";
+                return preverified;
+            }
+
+            ec_key_st* ecPublicKey = EVP_PKEY_get1_EC_KEY(evpPublicKey);
+            if (!ecPublicKey)
+            {
+                LOG(ERROR) << "Get ecPublicKey failed";
+                return preverified;
+            }
+
+            const EC_POINT* ecPoint = EC_KEY_get0_public_key(ecPublicKey);
+            if (!ecPoint)
+            {
+                LOG(ERROR) << "Get ecPoint failed";
+                return preverified;
+            }
+
+            std::shared_ptr<char> hex =
+                std::shared_ptr<char>(EC_POINT_point2hex(EC_KEY_get0_group(ecPublicKey), ecPoint,
+                                          EC_KEY_get_conv_form(ecPublicKey), NULL),
+                    [](char* p) { OPENSSL_free(p); });
+
+            if (hex)
+            {
+                nodeIDOut->assign(hex.get());
+                if (nodeIDOut->find("04") == 0)
+                {
+                    /// remove 04
+                    nodeIDOut->erase(0, 2);
+                }
+                LOG(DEBUG) << "Get endpoint publickey:" << *nodeIDOut;
+            }
+            return preverified;
+        }
+        catch (std::exception& e)
+        {
+            LOG(ERROR) << "Cert verify failed: " << boost::diagnostic_information(e);
+            return preverified;
+        }
+    };
+}
+
+/**
+ * @brief
+ *
+ */
 void Host::startedWorking()
 {
     asserts(!m_timer);
-
     {
         Guard l(x_runTimer);
         m_timer.reset(new boost::asio::deadline_timer(m_ioService));
         m_run = true;
     }
-
+    /// start capabilities
     for (auto const& h : m_capabilities)
         h.second->onStarting();
-
+    /// start listen and get the listen port
     int port = Network::tcp4Listen(m_tcp4Acceptor, m_netConfigs);
     if (port > 0)
     {
+        LOG(DEBUG) << "set m_listenPort to port:" << port;
         m_listenPort = port;
         determinePublic();
         runAcceptor();
@@ -565,6 +593,25 @@ void Host::startedWorking()
     }
     LOG(INFO) << "p2p.started id:" << id();
     run(boost::system::error_code());
+}
+
+void Host::doWork()
+{
+    try
+    {
+        if (m_run)
+            m_ioService.run();
+    }
+    catch (std::exception const& _e)
+    {
+        LOG(WARNING) << "Exception in Network Thread:" << _e.what();
+        LOG(WARNING) << "Network Restart is Recommended.";
+    }
+
+    if (m_ioService.stopped())
+    {
+        m_ioService.reset();
+    }
 }
 
 void Host::keepAlivePeers()
@@ -609,10 +656,10 @@ void Host::keepAlivePeers()
 
     for (auto it = m_peers.begin(); it != m_peers.end();)
     {
-        if (!havePeerSession(it->second->id))
+        if (!havePeerSession(it->second->id()))
         {
-            LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << it->second->id << ","
-                         << it->second->endpoint.name();
+            LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << it->second->id() << ","
+                         << it->second->endpoint().name();
             it = m_peers.erase(it);
         }
         else
@@ -621,94 +668,76 @@ void Host::keepAlivePeers()
 
     m_lastPing = chrono::steady_clock::now();
 }
-/*
+
+bool Host::isConnected(const NodeID& nodeID)
+{
+    auto session = peerSession(nodeID);
+    if (session && session->isConnected())
+    {
+        return true;
+    }
+
+    return false;
+}
+
 void Host::reconnectAllNodes()
 {
-    Guard rl(x_reconnectnow);
-    if ((chrono::steady_clock::now() - c_reconnectNodesInterval < m_lastReconnect) &&
-        (!m_reconnectnow))
+    if (chrono::steady_clock::now() - c_reconnectNodesInterval < m_lastReconnect)
         return;
 
-
-    std::map<std::string, NodeIPEndpoint> mConnectParams;
-    //NodeConnManagerSingleton::GetInstance().getAllConnect(mConnectParams);
-    std::map<std::string, NodeIPEndpoint> mMergeConnectParams;  // merge
-
-
     RecursiveGuard l(x_sessions);
-    for (auto stNode : mConnectParams)
+
+    LOG(TRACE) << "Try reconnect all node: " << _staticNodes.size();
+
+    /// try to connect to nodes recorded in configurations
+    for (auto it : _staticNodes)
     {
-        bool hasPeer = false;
-        for (auto const& p : m_peers)
+        LOG(DEBUG) << "try connect: " << it.first.address.to_string() << ":" << it.first.tcpPort;
+        /// exclude myself
+        if (((!m_netConfigs.listenIPAddress.empty() &&
+                 it.first.address ==
+                     boost::asio::ip::address::from_string(m_netConfigs.listenIPAddress)) ||
+                (!m_netConfigs.publicIPAddress.empty() &&
+                    it.first.address ==
+                        boost::asio::ip::address::from_string(m_netConfigs.publicIPAddress)) ||
+                m_ifAddresses.find(it.first.address) != m_ifAddresses.end() ||
+                it.first.address == m_tcpPublic.address() ||
+                it.first.address == m_tcpClient.address()) &&
+            it.first.tcpPort == m_netConfigs.listenPort)
         {
-            if (!mMergeConnectParams.count(p.second->endpoint.name()))
-                mMergeConnectParams[p.second->endpoint.name()] = p.second->endpoint;
-
-            if (!p.second->endpoint.host.empty())
-                mMergeConnectParams[p.second->endpoint.name()].host = p.second->endpoint.host;
-
-            if (p.second->endpoint == stNode.second)
-            {
-                if (!havePeerSession(p.second->id))
-                {
-                    LOG(TRACE) << "Host::reconnectAllNodes try to reconnect " << p.second->id
-                               << ":" << stNode.second.name();
-                    connect(p.second->endpoint);
-                }
-                hasPeer = true;
-                break;
-            }
+            LOG(INFO) << "Ignore connect self" << it.first;
+            continue;
         }
 
-        if (!hasPeer && (m_tcpPublic != stNode.second) &&
-            (NodeIPEndpoint(bi::address::from_string(m_netConfigs.listenIPAddress), listenPort(),
-                 listenPort()) != stNode.second))
+        if (it.second == id())
         {
-            LOG(TRACE) << "Host::reconnectAllNodes try to connect " << stNode.second.name();
-            connect(stNode.second);
+            LOG(INFO) << "Ignore connect self: " << it.first;
+            continue;
         }
-        if (!mMergeConnectParams.count(stNode.second.name()))
-            mMergeConnectParams[stNode.second.name()] = stNode.second;
 
-    }  // for
+        if (it.second != NodeID() && isConnected(it.second))
+        {
+            LOG(INFO) << "Ignore connected node: " << it.second;
+            continue;
+        }
+        if (it.first.address.to_string().empty())
+        {
+            LOG(INFO) << "Target Node Ip Is Empty  (" << it.first.name() << ")";
+            continue;
+        }
+        connect(it.first);
+    }
 
-    NodeConnManagerSingleton::GetInstance().updateAllConnect(mMergeConnectParams);
     m_lastReconnect = chrono::steady_clock::now();
-    m_reconnectnow = false;
+}
 
-    if ((chrono::steady_clock::now() - c_AnnouncementConnectNodesIntervalSSL <
-            m_lastAnnouncementConnectNodes))
-        return;
-    // broad to other nodes
-    std::vector<Node> peerNodes;
-    h256 allPeerHash;
-    getAnnouncementNodeList(allPeerHash, peerNodes);
-    for (auto& i : m_sessions)
-        if (auto j = i.second.lock())
-            if (j->isConnected())
-                j->announcement(allPeerHash);
-
-    m_lastAnnouncementConnectNodes = chrono::steady_clock::now();
-}*/
-
-/*
-void Host::disconnectLatePeers()
-{
-    auto now = chrono::steady_clock::now();
-    if (now - c_keepAliveTimeOut < m_lastPing)
-        return;
-
-    RecursiveGuard l(x_sessions);
-    for (auto p : m_sessions)
-        if (auto pp = p.second.lock())
-            if (now - c_keepAliveTimeOutSSL > m_lastPing && pp->lastReceived() < m_lastPing)
-                pp->disconnect(PingTimeout);
-}*/
-
+/**
+ * @brief:
+ *
+ */
 void Host::runAcceptor()
 {
     assert(m_listenPort > 0);
-
     if (m_run && !m_accepting)
     {
         LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_tcpPublic
@@ -718,10 +747,6 @@ void Host::runAcceptor()
         LOG(INFO) << "P2P Start Accept";
         std::shared_ptr<RLPXSocket> socket;
         socket.reset(new RLPXSocket(m_ioService, NodeIPEndpoint()));
-
-        /*socket->sslref().set_verify_callback(
-            boost::bind(&Host::sslVerifyCert, this, _1, _2));*/
-
         m_tcp4Acceptor.async_accept(socket->ref(), m_strand.wrap([=](boost::system::error_code ec) {
             auto remoteEndpoint = socket->ref().remote_endpoint();
             LOG(INFO) << "P2P Recv Connect: " << remoteEndpoint.address().to_string() << ":"
@@ -750,10 +775,12 @@ void Host::runAcceptor()
                        << "|ip:" << m_tcpClient.address().to_string();
             LOG(DEBUG) << "server port:" << m_listenPort
                        << "|ip:" << m_tcpPublic.address().to_string();
-
+            /// register ssl callback to get the NodeID of peers
+            std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
+            socket->sslref().set_verify_callback(newVerifyCallback(endpointPublicKey));
             socket->sslref().async_handshake(ba::ssl::stream_base::server,
-                m_strand.wrap(
-                    boost::bind(&Host::handshakeServer, this, ba::placeholders::error, socket)));
+                m_strand.wrap(boost::bind(&Host::handshakeServer, this, ba::placeholders::error,
+                    endpointPublicKey, socket)));
         }));
     }
 }
@@ -767,7 +794,6 @@ void Host::run(boost::system::error_code const&)
         m_timer.reset();
         return;
     }
-
     DEV_GUARDED(x_connecting)
     m_connecting.remove_if([](std::weak_ptr<RLPXHandshake> h) { return h.expired(); });
     DEV_GUARDED(x_timers)
@@ -776,7 +802,7 @@ void Host::run(boost::system::error_code const&)
     });
 
     keepAlivePeers();
-    // reconnectAllNodes();
+    reconnectAllNodes();
 
     auto runcb = [this](boost::system::error_code const& error) { run(error); };
     m_timer->expires_from_now(boost::posix_time::milliseconds(c_timerInterval));
