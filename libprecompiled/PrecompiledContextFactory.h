@@ -2,7 +2,7 @@
 
 #include "PrecompiledContext.h"
 #include <libweb3jsonrpc/ChannelRPCServer.h>
-#include <libstorage/StateStorage.h>
+#include <libstorage/Storage.h>
 
 namespace dev {
 
@@ -16,13 +16,13 @@ public:
 
 	virtual void initPrecompiledContext(BlockInfo blockInfo, PrecompiledContext::Ptr context);
 
-	virtual void setStateStorage(dev::storage::StateStorage::Ptr stateStorage);
+	virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
 	//void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { _channelRPCServer = channelRPCServer; }
 	//void setAMOPDBTopic(const std::string &AMOPDBTopic) { _AMOPDBTopic = AMOPDBTopic; }
 	//void setMaxRetry(int maxRetry) { _maxRetry = maxRetry; }
 
 private:
-	dev::storage::StateStorage::Ptr _stateStorage;
+	dev::storage::Storage::Ptr _stateStorage;
 	//ChannelRPCServer::Ptr _channelRPCServer;
 	//std::string _AMOPDBTopic;
 	//int _

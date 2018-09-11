@@ -90,7 +90,6 @@ ChainParams ChainParams::loadGodMiner(std::string const& _json) const
             nodeConnParam._iIdx = u256(node.get_obj()["Idx"].get_int());
 
             cp.godMinerList[nodeConnParam._sNodeId] = nodeConnParam;
-            cp.godMinerListSSL[nodeConnParam._sNodeId] = nodeConnParam;
         }
     }
 
@@ -195,6 +194,8 @@ ChainParams ChainParams::loadGenesis(string const& _json, h256 const& _stateRoot
     cp.timestamp = u256(fromBigEndian<u256>(fromHex(genesis["timestamp"].get_str())));
     cp.extraData = bytes(fromHex(genesis["extraData"].get_str()));
 
+	//从创世块读取上帝帐号，按理说下面的genesisBlock 也要加上这个字段
+	cp.god = genesis.count("god") ? h160(genesis["god"].get_str()) : h160();
 
     cp.god = genesis.count("god") ? h160(genesis["god"].get_str()) : h160();
 

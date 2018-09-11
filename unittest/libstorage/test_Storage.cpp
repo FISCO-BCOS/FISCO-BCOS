@@ -5,7 +5,7 @@
  *      Author: mo nan
  */
 
-#include <libstorage/StateDB.h>
+#include <libstorage/DB.h>
 #include <libstorage/StorageException.h>
 #include <boost/test/unit_test.hpp>
 #include <unittest/Common.h>
@@ -29,7 +29,7 @@ struct StorageFixture {
   dev::storage::Entry::Ptr entry;
   dev::storage::Entries::Ptr entries;
   dev::storage::Condition::Ptr condition;
-  dev::storage::StateDB::Ptr stateDB;
+  dev::storage::DB::Ptr stateDB;
 };
 
 BOOST_FIXTURE_TEST_SUITE(Storage, StorageFixture)

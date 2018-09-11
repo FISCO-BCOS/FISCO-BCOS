@@ -9,7 +9,7 @@
 
 #include <boost/lexical_cast.hpp>
 #include <map>
-#include "StateDB.h"
+#include "DB.h"
 #include "Common.h"
 
 using namespace dev::storage;
@@ -128,5 +128,5 @@ std::map<std::string, std::pair<Condition::Op, std::string> >
   return &_conditions;
 }
 
-Entry::Ptr StateDB::newEntry() { return std::make_shared<Entry>(); }
-Condition::Ptr StateDB::newCondition() { return std::make_shared<Condition>(); }
+Entry::Ptr DB::newEntry() { return std::make_shared<Entry>(); }
+Condition::Ptr DB::newCondition() { return std::make_shared<Condition>(); }

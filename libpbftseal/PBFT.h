@@ -33,7 +33,7 @@
 #include <libethereum/CommonNet.h>
 #include <libethereum/BlockQueue.h>
 #include <libdevcore/FixedHash.h>
-#include <libstorage/StateStorage.h>
+#include <libstorage/Storage.h>
 #include "Common.h"
 #include "PBFTHost.h"
 
@@ -106,7 +106,7 @@ public:
 	u256 quorum() { return getMinerNodeList().size() - m_f; }
 	uint64_t lastExecFinishTime() const { return m_last_exec_finish_time; }
 
-	void setStorage(dev::storage::StateStorage::Ptr storage);
+	void setStorage(dev::storage::Storage::Ptr storage);
 private:
 	void initBackupDB();
 	void resetConfig();
@@ -220,7 +220,7 @@ private:
 	u256 m_consensus_block_number; // 在等待共识的块
 
 	h512s m_miner_list; //static miner list
-	dev::storage::StateStorage::Ptr _storage;
+	dev::storage::Storage::Ptr _storage;
 
 	Mutex _current_miner_mutex; //miner list mutex
 	u256 _current_miner_num = u256(0); //cached miners block num

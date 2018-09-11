@@ -4,7 +4,7 @@
 #include "ConditionPrecompiled.h"
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
-#include "StateDB.h"
+#include "DB.h"
 
 using namespace dev;
 using namespace dev::precompiled;
