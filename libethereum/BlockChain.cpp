@@ -513,20 +513,19 @@ LastHashes BlockChain::lastHashes(h256 const& _parent) const
 void BlockChain::addBlockCache(Block block, u256 td) const {
 	DEV_WRITE_GUARDED(x_blockcache)
 	{
-		if ( m_blockCache.size() > kBlockCacheSize ) {
-			// m_blockCache.clear();
-			auto first_hash = m_blockCacheFIFO.front();
-			m_blockCacheFIFO.pop_front();
-			m_blockCache.erase(first_hash);
-			// in case something unexcept error
-			if (m_blockCache.size() > kBlockCacheSize) {  // meet error, cache and cacheFIFO not sync, clear the cache
-				m_blockCache.clear();
-				m_blockCacheFIFO.clear();
-			}
+		if ( m_blockCache.size() > kBlockCacheSize )
+			m_blockCache.clear();
+
+		auto hash = block.info().hash();
+		auto it = m_blockCache.find(hash);
+		if(it != m_blockCache.end()) {
+			//如果该hash已存在，删除掉
+			//不删的话，resetCurrent后，viewchange时块hash大概率是一样的，会导致无法写入新view的区块
+			m_blockCache.erase(it);
 		}
 
-		m_blockCache.insert(std::make_pair(block.info().hash(), std::make_pair(block, td)));
-		m_blockCacheFIFO.push_back(block.info().hash());  // add hashindex to the blockCache queue, use to remove first element when the cache is full
+		m_blockCache.insert(std::make_pair(hash, std::make_pair(block, td)));
+
 	}
 
 }

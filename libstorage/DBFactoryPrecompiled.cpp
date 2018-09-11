@@ -81,33 +81,34 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 	switch (func) {
 	case 0xc184e0ff: //openDB(string)
 	case 0xf23f63c9: { //openTable(string)
-		std::string str;
-		abi.abiOut(data, str);
+		std::string tableName;
+		abi.abiOut(data, tableName);
 
-		LOG(DEBUG) << "DBFactory open table:" << str;
+		LOG(DEBUG) << "DBFactory open table:" << tableName;
 
-		auto it = _name2Table.find(str);
+		auto it = _name2Table.find(tableName);
 		if(it != _name2Table.end()) {
 			LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
 			out = abi.abiIn("", it->second);
-
 			break;
 		}
+        if (isTabelCreated(context, tableName))
+        {
+            LOG(DEBUG) << "Open new table:" << tableName;
 
-		LOG(DEBUG) << "Open new table:" << str;
+            dev::storage::StateDB::Ptr db = _memoryDBFactory->openTable(
+                context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
 
-		dev::storage::StateDB::Ptr db = _memoryDBFactory->openTable(context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), str);
+            DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
+            dbPrecompiled->setDB(db);
+            dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
 
-		DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
-		dbPrecompiled->setDB(db);
-		dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
+            Address address = context->registerPrecompiled(dbPrecompiled);
+            _name2Table.insert(std::make_pair(tableName, address));
 
-		Address address = context->registerPrecompiled(dbPrecompiled);
-		_name2Table.insert(std::make_pair(str, address));
-
-		out = abi.abiIn("", address);
-
-		break;
+            out = abi.abiIn("", address);
+        }
+        break;
 	}
 	case 0x56004b6a: { //createTable(string,string,string)
 		std::string tableName;
@@ -118,29 +119,14 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 		std::vector<std::string> fieldNameList;
 		boost::split(fieldNameList, fieldNames, boost::is_any_of(","));
 
-		DBPrecompiled::Ptr sysTable;
-
-		std::string str = "_sys_tables_";
-		auto it = _name2Table.find(str);
+		//_name2Table find tableName => return
+        auto it = _name2Table.find(tableName);
 		if(it != _name2Table.end()) {
 			LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
-			sysTable = std::dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(it->second));
-
 			break;
 		}
-		else {
 
-			dev::storage::StateDB::Ptr db = _memoryDBFactory->openTable(context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), str);
-
-			DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
-			dbPrecompiled->setDB(db);
-			dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
-
-			Address address = context->registerPrecompiled(dbPrecompiled);
-			_name2Table.insert(std::make_pair(str, address));
-
-			sysTable = dbPrecompiled;
-		}
+		DBPrecompiled::Ptr sysTable = getSysTable(context);
 
 		 //确认表是否存在
 		auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
@@ -152,21 +138,7 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 			tableEntry->setField("value_field", boost::join(fieldNameList, ","));
 			sysTable->getDB()->insert(tableName, tableEntry);
 		}
-
 		out = abi.abiIn("");
-
-#if 0
-		auto table = _memoryDBFactory->createTable(context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName, keyName, fieldNameList);
-
-		DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
-		dbPrecompiled->setDB(table);
-		dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
-
-		Address address = context->registerPrecompiled(dbPrecompiled);
-		_name2Table.insert(std::make_pair(tableName, address));
-
-		out = abi.abiIn("", address);
-#endif
 		break;
 	}
 	default: {
@@ -175,6 +147,35 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 	}
 
 	return out;
+}
+
+DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr context)
+{
+    std::string tableName = "_sys_tables_";
+    auto it = _name2Table.find(tableName);
+    if (it == _name2Table.end())
+    {
+        dev::storage::StateDB::Ptr db = _memoryDBFactory->openTable(
+            context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
+
+        DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
+        dbPrecompiled->setDB(db);
+        dbPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
+
+        Address address = context->registerPrecompiled(dbPrecompiled);
+        _name2Table.insert(std::make_pair(tableName, address));
+
+        return dbPrecompiled;
+    }
+    LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
+    return std::dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(it->second));
+}
+
+bool DBFactoryPrecompiled::isTabelCreated(PrecompiledContext::Ptr context, const std::string & tableName)
+{
+    auto sysTable = getSysTable(context);
+    auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
+    return (tableEntries->size() != 0u);
 }
 
 h256 DBFactoryPrecompiled::hash(std::shared_ptr<PrecompiledContext> context) {
