@@ -1,5 +1,6 @@
 #include "PrecompiledContextFactory.h"
 #include <libprecompiled/StringFactoryPrecompiled.h>
+#include <libprecompiled/CRUDPrecompiled.h>
 #include <libstorage/DBFactoryPrecompiled.h>
 #include <libdevcore/Common.h>
 #include <libstorage/MemoryStateDBFactory.h>
@@ -12,7 +13,7 @@ void PrecompiledContextFactory::initPrecompiledContext(BlockInfo blockInfo, Prec
 	auto stringFactoryPrecompiled = std::make_shared<dev::precompiled::StringFactoryPrecompiled>();
 
 #if 0
-	dev::storage::AMOPStateStorage::Ptr stateStorage = std::make_shared<dev::storage::AMOPStateStorage>();
+	dev::storage::AMOPStorage::Ptr stateStorage = std::make_shared<dev::storage::AMOPStorage>();
 	stateStorage->setChannelRPCServer(_channelRPCServer);
 	//stateStorage->setBlockHash(blockInfo.hash);
 	//stateStorage->setNum(blockInfo.number.convert_to<int>());
@@ -30,12 +31,16 @@ void PrecompiledContextFactory::initPrecompiledContext(BlockInfo blockInfo, Prec
 	dbFactoryPrecompiled->setMemoryDBFactory(memoryDBFactory);
 	dbFactoryPrecompiled->setStringFactoryPrecompiled(stringFactoryPrecompiled);
 
+	auto crudPrecompiled = std::make_shared<dev::precompiled::CRUDPrecompiled>();
+	crudPrecompiled->setMemoryDBFactory(memoryDBFactory);
+
 	context->setAddress2Precompiled(Address(0x1000), stringFactoryPrecompiled);
 	context->setAddress2Precompiled(Address(0x1001), dbFactoryPrecompiled);
+	context->setAddress2Precompiled(Address(0x1002), crudPrecompiled);
 
 	context->setBlockInfo(blockInfo);
 }
 
-void PrecompiledContextFactory::setStateStorage(dev::storage::StateStorage::Ptr stateStorage) {
+void PrecompiledContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage) {
 	_stateStorage = stateStorage;
 }

@@ -3,7 +3,7 @@
 #include <libprecompiled/StringPrecompiled.h>
 #include <libprecompiled/PrecompiledContext.h>
 #include <libdevcore/Common.h>
-#include "StateDB.h"
+#include "DB.h"
 
 namespace dev {
 
