@@ -19,13 +19,13 @@ public:
 
 	void initConfig(const boost::property_tree::ptree &pt);
 
-	void setStateStorage(dev::storage::StateStorage::Ptr stateStorage);
+	void setStateStorage(dev::storage::Storage::Ptr stateStorage);
 
 	PBFT::Ptr pbft();
 
 private:
 	PBFT::Ptr _pbft;
-	dev::storage::StateStorage::Ptr _stateStorage;
+	dev::storage::Storage::Ptr _stateStorage;
 };
 
 }

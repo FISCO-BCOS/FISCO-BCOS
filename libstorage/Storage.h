@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StateDB.h"
+#include "DB.h"
 
 namespace dev {
 
@@ -14,11 +14,11 @@ public:
 	std::map<std::string, Entries::Ptr> data;
 };
 
-class StateStorage: public std::enable_shared_from_this<StateStorage> {
+class Storage: public std::enable_shared_from_this<Storage> {
 public:
-	typedef std::shared_ptr<StateStorage> Ptr;
+	typedef std::shared_ptr<Storage> Ptr;
 
-	virtual ~StateStorage() {};
+	virtual ~Storage() {};
 
 	virtual TableInfo::Ptr info(const std::string &table) = 0;
 	virtual Entries::Ptr select(h256 hash, int num, const std::string &table, const std::string &key) = 0;

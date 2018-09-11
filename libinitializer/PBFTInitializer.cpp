@@ -36,7 +36,7 @@ void PBFTInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	_pbft->init();
 }
 
-void PBFTInitializer::setStateStorage(dev::storage::StateStorage::Ptr stateStorage) {
+void PBFTInitializer::setStateStorage(dev::storage::Storage::Ptr stateStorage) {
 	_stateStorage = stateStorage;
 }
 
