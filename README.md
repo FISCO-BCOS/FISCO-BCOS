@@ -1,4 +1,4 @@
-[![image for the blockchain contest][./doc/imgs/application_contest.png]][https://con.geekbang.org/]
+[![image for the blockchain contest](https://github.com/FISCO-BCOS/FISCO-BCOS/doc/imgs/application_contest.png)](https://con.geekbang.org/)
 
 # 1.项目介绍
 
