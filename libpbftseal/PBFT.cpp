@@ -440,7 +440,7 @@ void PBFT::changeViewForEmptyBlockWithLock() {
 	m_signalled.notify_all();
 }
 
-void PBFT::setStorage(dev::storage::StateStorage::Ptr storage) {
+void PBFT::setStorage(dev::storage::Storage::Ptr storage) {
 	_storage = storage;
 }
 

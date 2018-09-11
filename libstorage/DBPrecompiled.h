@@ -4,7 +4,7 @@
 #include <libprecompiled/PrecompiledContext.h>
 #include <libprecompiled/StringFactoryPrecompiled.h>
 #include <libprecompiled/StringPrecompiled.h>
-#include "StateDB.h"
+#include "DB.h"
 
 namespace dev {
 
@@ -56,8 +56,8 @@ class DBPrecompiled : public Precompiled {
   virtual bytes call(std::shared_ptr<PrecompiledContext> context,
                      bytesConstRef param) override;
 
-  dev::storage::StateDB::Ptr getDB() { return _DB; }
-  void setDB(dev::storage::StateDB::Ptr DB) { _DB = DB; }
+  dev::storage::DB::Ptr getDB() { return _DB; }
+  void setDB(dev::storage::DB::Ptr DB) { _DB = DB; }
 
   void setStringFactoryPrecompiled(
       StringFactoryPrecompiled::Ptr stringFactoryPrecompiled) {
@@ -67,7 +67,7 @@ class DBPrecompiled : public Precompiled {
   h256 hash();
 
  private:
-  dev::storage::StateDB::Ptr _DB;
+  dev::storage::DB::Ptr _DB;
   StringFactoryPrecompiled::Ptr _stringFactoryPrecompiled;
 };
 

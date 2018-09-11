@@ -1,6 +1,6 @@
 // "Copyright [2018] <fisco-dev>"
 #include <boost/test/unit_test.hpp>
-#include "libstorage/LevelDBStateStorage.h"
+#include "libstorage/LevelDBStorage.h"
 #include <leveldb/db.h>
 
 using namespace dev;
@@ -143,7 +143,7 @@ class MockLevelDB : public leveldb::DB {
 
   virtual void CompactRange(const Slice* begin, const Slice* end) {}
 
-  virtual Status Get(const leveldb::ReadOptions&, const leveldb::Slice&, leveldb::Value*) {};
+  virtual Status Get(const leveldb::ReadOptions&, const leveldb::Slice&, leveldb::Value*) { return Status::OK();};
   virtual void SuspendCompactions() {};
   virtual void ResumeCompactions() {};
 
@@ -156,7 +156,7 @@ class MockLevelDB : public leveldb::DB {
 
 struct LevelDBFixture {
   LevelDBFixture() {
-    levelDB = std::make_shared<dev::storage::LevelDBStateStorage>();
+    levelDB = std::make_shared<dev::storage::LevelDBStorage>();
     std::shared_ptr<MockLevelDB> mockLevelDB = std::make_shared<MockLevelDB>();
     levelDB->setDB(mockLevelDB);
   }
@@ -168,7 +168,7 @@ struct LevelDBFixture {
     entries->addEntry(entry);
     return entries;
   }
-  dev::storage::LevelDBStateStorage::Ptr levelDB;
+  dev::storage::LevelDBStorage::Ptr levelDB;
 };
 
 BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture);

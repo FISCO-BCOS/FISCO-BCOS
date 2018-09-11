@@ -10,8 +10,8 @@
 #include <libstorage/MemoryStateDBFactory.h>
 #include <libstorage/DBFactoryPrecompiled.h>
 #include <libprecompiled/StringFactoryPrecompiled.h>
-#include <libstorage/AMOPStateStorage.h>
-#include <libstorage/LevelDBStateStorage.h>
+#include <libstorage/AMOPStorage.h>
+#include <libstorage/LevelDBStorage.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/filesystem.hpp>
 
@@ -28,7 +28,7 @@ void AMDBInitializer::initConfig(const boost::property_tree::ptree &pt) {
 			_amopDBConfig.retryInterval = pt.get<int>("statedb.retryInterval", 1);
 			_amopDBConfig.maxRetry = pt.get<int>("statedb.maxRetry", 0);
 
-			dev::storage::AMOPStateStorage::Ptr stateStorage = std::make_shared<dev::storage::AMOPStateStorage>();
+			dev::storage::AMOPStorage::Ptr stateStorage = std::make_shared<dev::storage::AMOPStorage>();
 			stateStorage->setChannelRPCServer(_channelRPCServer);
 			stateStorage->setTopic(_amopDBConfig.topic);
 			stateStorage->setMaxRetry(_amopDBConfig.maxRetry);
@@ -61,7 +61,7 @@ void AMDBInitializer::initConfig(const boost::property_tree::ptree &pt) {
 
 			auto db = std::shared_ptr<leveldb::DB>(dbPtr);
 
-			auto stateStorage = std::make_shared<dev::storage::LevelDBStateStorage>();
+			auto stateStorage = std::make_shared<dev::storage::LevelDBStorage>();
 			stateStorage->setDB(db);
 
 			_stateStorage = stateStorage;
@@ -85,7 +85,7 @@ void AMDBInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	}
 }
 
-dev::storage::StateStorage::Ptr AMDBInitializer::stateStorage() {
+dev::storage::Storage::Ptr AMDBInitializer::stateStorage() {
 	return _stateStorage;
 }
 

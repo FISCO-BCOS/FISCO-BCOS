@@ -3,20 +3,20 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/easylog.h>
-#include "LevelDBStateStorage.h"
-#include "StateDB.h"
+#include "LevelDBStorage.h"
+#include "DB.h"
 
 using namespace dev;
 using namespace dev::storage;
 
-TableInfo::Ptr LevelDBStateStorage::info(const std::string &table) {
+TableInfo::Ptr LevelDBStorage::info(const std::string &table) {
   TableInfo::Ptr tableInfo = std::make_shared<TableInfo>();
   tableInfo->name = table;
 
   return tableInfo;
 }
 
-Entries::Ptr LevelDBStateStorage::select(h256 hash, int num,
+Entries::Ptr LevelDBStorage::select(h256 hash, int num,
                                          const std::string &table,
                                          const std::string &key) {
   try {
@@ -68,7 +68,7 @@ Entries::Ptr LevelDBStateStorage::select(h256 hash, int num,
   return Entries::Ptr();
 }
 
-size_t LevelDBStateStorage::commit(h256 hash, int num,
+size_t LevelDBStorage::commit(h256 hash, int num,
                                    const std::vector<TableData::Ptr> &datas,
                                    h256 blockHash) {
   try {
@@ -122,6 +122,6 @@ size_t LevelDBStateStorage::commit(h256 hash, int num,
   return 0;
 }
 
-bool LevelDBStateStorage::onlyDirty() { return false; }
+bool LevelDBStorage::onlyDirty() { return false; }
 
-void LevelDBStateStorage::setDB(std::shared_ptr<leveldb::DB> db) { _db = db; }
+void LevelDBStorage::setDB(std::shared_ptr<leveldb::DB> db) { _db = db; }
