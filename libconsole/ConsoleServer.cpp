@@ -280,7 +280,7 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
       ss << "------------------------------------------------------------------"
             "------"
          << std::endl;
-      ss << "Number of entries: " << size << std::endl;
+      ss << "Number of entry: " << size << std::endl;
       ss << "------------------------------------------------------------------"
             "------"
          << std::endl;
