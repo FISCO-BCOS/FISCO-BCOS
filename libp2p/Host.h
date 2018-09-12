@@ -221,7 +221,7 @@ public:
     std::shared_ptr<SessionFace> peerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
-        return m_sessions.count(_id) ? m_sessions[_id].lock() : std::shared_ptr<SessionFace>();
+        return m_sessions.count(_id) ? m_sessions[_id].lock() : nullptr;
     }
     bytes saveNetwork() const;
 
@@ -266,7 +266,7 @@ protected:  /// protected functions
         std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint);
     inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
 
-private:  /// private members
+protected:  /// protected members(for unit testing)
     /// values inited by contructor
     /// Our version string
     std::string m_clientVersion;
