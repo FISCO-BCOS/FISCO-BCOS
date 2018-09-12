@@ -19,6 +19,12 @@
  *	 Eric Lombrozo <elombrozo@gmail.com>
  *	 Gav Wood <i@gavwood.com>
  * @date 2014
+ *
+ * @author: yujiechen
+ * @date: 2018-09-12
+ * @modifications:
+ *  1. modify implementation of getDataDir to adapt to fisco-bcos
+ *  2. add getLedgerDir for multiple-ledgers support
  */
 
 #pragma once
@@ -32,6 +38,8 @@ namespace dev
 void setDataDir(boost::filesystem::path const& _dir);
 /// @returns the path for user data.
 boost::filesystem::path getDataDir(std::string _prefix = "fisco-bcos-data");
+boost::filesystem::path getLedgerDir(
+    std::string ledger_name, std::string data_dir = "fisco-bcos-data");
 /// @returns the default path for user data, ignoring the one set by `setDataDir`.
 boost::filesystem::path getDefaultDataDir(std::string _prefix = "fisco-bcos-data");
 /// Sets the ipc socket dir

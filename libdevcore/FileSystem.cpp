@@ -63,11 +63,19 @@ fs::path dev::getDataDir(string _prefix)
     return getDefaultDataDir(_prefix);
 }
 
+/// get ledger dir
+fs::path dev::getLedgerDir(std::string ledger_name, std::string data_dir)
+{
+    fs::path rootDir = getDataDir(data_dir);
+    return rootDir / (ledger_name);
+}
+
 fs::path dev::getDefaultDataDir(string _prefix)
 {
     if (_prefix.empty())
         _prefix = "fisco-bcos-data";
-
+    if (_prefix[0] == '/')
+        return _prefix;
     fs::path dataDirPath = fs::path(".");
     return dataDirPath / (_prefix);
 }
