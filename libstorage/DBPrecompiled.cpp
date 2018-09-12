@@ -39,32 +39,6 @@ bytes DBPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
   bytes out;
 
   switch (func) {
-    case 0x59839041: {  // select(address,address)
-      Address keyAddress;
-      Address conditionAddress;
-      abi.abiOut(data, keyAddress, conditionAddress);
-
-      StringPrecompiled::Ptr stringPrecompiled =
-          std::dynamic_pointer_cast<StringPrecompiled>(
-              context->getPrecompiled(keyAddress));
-      auto key = stringPrecompiled->toString(context);
-
-      ConditionPrecompiled::Ptr conditionPrecompiled =
-          std::dynamic_pointer_cast<ConditionPrecompiled>(
-              context->getPrecompiled(conditionAddress));
-      auto condition = conditionPrecompiled->getCondition();
-
-      auto entries = _DB->select(key, condition);
-      auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
-      entriesPrecompiled->setEntries(entries);
-      entriesPrecompiled->setStringFactoryPrecompiled(
-          _stringFactoryPrecompiled);
-
-      auto newAddress = context->registerPrecompiled(entriesPrecompiled);
-      out = abi.abiIn("", newAddress);
-
-      break;
-    }
     case 0xe8434e39: {  // select(string,address)
       std::string key;
       Address conditionAddress;
@@ -78,31 +52,9 @@ bytes DBPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
       auto entries = _DB->select(key, condition);
       auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
       entriesPrecompiled->setEntries(entries);
-      entriesPrecompiled->setStringFactoryPrecompiled(
-          _stringFactoryPrecompiled);
 
       auto newAddress = context->registerPrecompiled(entriesPrecompiled);
       out = abi.abiIn("", newAddress);
-
-      break;
-    }
-    case 0xc0a2203e: {  // insert(address,address)
-      Address keyAddress;
-      Address entryAddress;
-      abi.abiOut(data, keyAddress, entryAddress);
-
-      StringPrecompiled::Ptr stringPrecompiled =
-          std::dynamic_pointer_cast<StringPrecompiled>(
-              context->getPrecompiled(keyAddress));
-      auto key = stringPrecompiled->toString(context);
-
-      EntryPrecompiled::Ptr entryPrecompiled =
-          std::dynamic_pointer_cast<EntryPrecompiled>(
-              context->getPrecompiled(entryAddress));
-      auto entry = entryPrecompiled->getEntry();
-
-      size_t count = _DB->insert(key, entry);
-      out = abi.abiIn("", u256(count));
 
       break;
     }
@@ -135,30 +87,9 @@ bytes DBPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
       auto entry = _DB->newEntry();
       auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
       entryPrecompiled->setEntry(entry);
-      entryPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
 
       auto newAddress = context->registerPrecompiled(entryPrecompiled);
       out = abi.abiIn("", newAddress);
-
-      break;
-    }
-    case 0x7f7c1491: {  // remove(address,address)
-      Address keyAddress;
-      Address conditionAddress;
-      abi.abiOut(data, keyAddress, conditionAddress);
-
-      StringPrecompiled::Ptr stringPrecompiled =
-          std::dynamic_pointer_cast<StringPrecompiled>(
-              context->getPrecompiled(keyAddress));
-      auto key = stringPrecompiled->toString(context);
-
-      ConditionPrecompiled::Ptr conditionPrecompiled =
-          std::dynamic_pointer_cast<ConditionPrecompiled>(
-              context->getPrecompiled(conditionAddress));
-      auto condition = conditionPrecompiled->getCondition();
-
-      size_t count = _DB->remove(key, condition);
-      out = abi.abiIn("", u256(count));
 
       break;
     }
@@ -173,31 +104,6 @@ bytes DBPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
       auto condition = conditionPrecompiled->getCondition();
 
       size_t count = _DB->remove(key, condition);
-      out = abi.abiIn("", u256(count));
-
-      break;
-    }
-    case 0x1eb42523: {  // update(address,address,address)
-      Address keyAddress;
-      Address entryAddress;
-      Address conditionAddress;
-      abi.abiOut(data, keyAddress, entryAddress, conditionAddress);
-
-      StringPrecompiled::Ptr stringPrecompiled =
-          std::dynamic_pointer_cast<StringPrecompiled>(
-              context->getPrecompiled(keyAddress));
-      auto key = stringPrecompiled->toString(context);
-
-      EntryPrecompiled::Ptr entryPrecompiled =
-          std::dynamic_pointer_cast<EntryPrecompiled>(
-              context->getPrecompiled(entryAddress));
-      ConditionPrecompiled::Ptr conditionPrecompiled =
-          std::dynamic_pointer_cast<ConditionPrecompiled>(
-              context->getPrecompiled(conditionAddress));
-      auto entry = entryPrecompiled->getEntry();
-      auto condition = conditionPrecompiled->getCondition();
-
-      size_t count = _DB->update(key, entry, condition);
       out = abi.abiIn("", u256(count));
 
       break;
@@ -249,7 +155,6 @@ bytes DBPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
 		auto entry = _DB->newEntry();
 		auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
 		entryPrecompiled->setEntry(entry);
-		entryPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
 
 		auto newAddress = context->registerPrecompiled(entryPrecompiled);
 		out = abi.abiIn("", newAddress);
@@ -278,7 +183,6 @@ bytes DBPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
 		auto entries = _DB->select(condition);
 		auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
 		entriesPrecompiled->setEntries(entries);
-		entriesPrecompiled->setStringFactoryPrecompiled(_stringFactoryPrecompiled);
 
 		auto newAddress = context->registerPrecompiled(entriesPrecompiled);
 		out = abi.abiIn("", newAddress);
