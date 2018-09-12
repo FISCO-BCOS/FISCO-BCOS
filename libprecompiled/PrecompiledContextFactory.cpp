@@ -1,5 +1,5 @@
 #include "PrecompiledContextFactory.h"
-#include <libprecompiled/CRUDPrecompiled.h>
+#include <libstorage/CRUDPrecompiled.h>
 #include <libstorage/DBFactoryPrecompiled.h>
 #include <libdevcore/Common.h>
 #include <libstorage/MemoryDBFactory.h>
@@ -27,11 +27,8 @@ void PrecompiledContextFactory::initPrecompiledContext(BlockInfo blockInfo, Prec
 	auto dbFactoryPrecompiled = std::make_shared<dev::precompiled::DBFactoryPrecompiled>();
 	dbFactoryPrecompiled->setMemoryDBFactory(memoryDBFactory);
 
-	auto crudPrecompiled = std::make_shared<dev::precompiled::CRUDPrecompiled>();
-	crudPrecompiled->setMemoryDBFactory(memoryDBFactory);
-
 	context->setAddress2Precompiled(Address(0x1001), dbFactoryPrecompiled);
-	context->setAddress2Precompiled(Address(0x1002), crudPrecompiled);
+	context->setAddress2Precompiled(Address(0x1002), std::make_shared<dev::precompiled::CRUDPrecompiled>());
 
 	context->setBlockInfo(blockInfo);
 }
