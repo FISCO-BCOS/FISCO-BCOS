@@ -1,18 +1,18 @@
 /*
-    This file is part of cpp-ethereum.
+    This file is part of FISCO-BCOS.
 
-    cpp-ethereum is free software: you can redistribute it and/or modify
+    FISCO-BCOS is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    cpp-ethereum is distributed in the hope that it will be useful,
+    FISCO-BCOS is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Service.h
  *  @author molan
@@ -47,7 +47,7 @@ public:
     const static size_t HEADER_LENGTH = sizeof(uint32_t) + sizeof(uint32_t) +
                                         sizeof(uint32_t);  ///< HEADER_LENGTH = length(m_length) +
                                                            ///< length(m_protocolID) + length(m_seq)
-    const static size_t MAX_LENGTH = 1024 * 1024 * 1024;   ///< The maximum length of data is 1M.
+    const static size_t MAX_LENGTH = 1024 * 1024;          ///< The maximum length of data is 1M.
 
     Message() { m_buffer = std::make_shared<bytes>(); }
 
@@ -67,6 +67,7 @@ public:
 
     void encode(bytes& buffer)
     {
+        buffer.clear();  ///< It is not allowed to be assembled outside.
         uint32_t length = htonl(m_length);
         uint32_t protocolID = htonl(m_protocolID);
         uint32_t seq = htonl(m_seq);
@@ -77,6 +78,8 @@ public:
         buffer.insert(buffer.end(), m_buffer->begin(), m_buffer->end());
     }
 
+    /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
+    /// returned.
     ssize_t decode(const byte* buffer, size_t size)
     {
         if (size < HEADER_LENGTH)
@@ -86,12 +89,7 @@ public:
 
         m_length = ntohl(*((uint32_t*)&buffer[0]));
 
-        if (m_length > MAX_LENGTH)
-        {
-            return -1;
-        }
-
-        if (size != m_length)
+        if (m_length > MAX_LENGTH || size != m_length)
         {
             return 0;
         }
@@ -118,22 +116,27 @@ struct Options
 class Service
 {
 public:
-    Message::Ptr sendMessageByNodeID(dev::h256 nodeID, uint32_t protocolID, Message::Ptr message);
-    void asyncSendMessageByNodeID(dev::h256 nodeID, uint32_t protocolID, Message::Ptr message,
-        std::function<void(dev::Exception, Message::Ptr)> callback, Options options);
+    Message::Ptr sendMessageByNodeID(
+        dev::h256 const& nodeID, uint32_t protocolID, Message::Ptr message);
+    void asyncSendMessageByNodeID(dev::h256 const& nodeID, uint32_t protocolID,
+        Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
+        Options options);
 
-    Message::Ptr sendMessageByTopic(std::string topic, uint32_t protocolID, Message::Ptr message);
-    void asyncSendMessageByTopic(std::string topic, uint32_t protocolID, Message::Ptr message,
-        std::function<void(dev::Exception, Message::Ptr)> callback, Options options);
+    Message::Ptr sendMessageByTopic(
+        std::string const& topic, uint32_t protocolID, Message::Ptr message);
+    void asyncSendMessageByTopic(std::string const& topic, uint32_t protocolID,
+        Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
+        Options options);
 
-    void asyncMulticastMessageByTopic(std::string topic, uint32_t protocolID, Message::Ptr message);
+    void asyncMulticastMessageByTopic(
+        std::string const& topic, uint32_t protocolID, Message::Ptr message);
     void asyncBroadcastMessage(uint32_t protocolID, Message::Ptr message, Options options);
 
     void registerHandlerByProtoclID(uint32_t protocolID,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler);
-    void registerHandlerByTopic(std::string topic,
+    void registerHandlerByTopic(std::string const& topic,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler,
-        Options options){};
+        Options options);
 
 private:
     std::shared_ptr<Host> m_host;
