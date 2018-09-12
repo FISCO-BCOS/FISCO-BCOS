@@ -17,6 +17,11 @@
 /** @file RLPXHandshake.h
  * @author toxotguo
  * @date 2018
+ *
+ * @author: yujiechen
+ * @date: 2018-09-12
+ * @modifications: trans direct-rlp-encode to 'encode()' function
+ *                 in transition() function when write hello
  */
 
 
@@ -39,18 +44,6 @@ namespace p2p
 class RLPXHandshake : public std::enable_shared_from_this<RLPXHandshake>
 {
 public:
-    /// Setup incoming connection.
-    /*
-    RLPXHandshake(Host* _host, std::shared_ptr<RLPXSocket> const& _socket)
-      : m_host(_host),
-        m_originated(false),
-        m_socket(_socket),
-        m_idleTimer(m_socket->ref().get_io_service())
-    {
-        crypto::Nonce::get().ref().copyTo(m_nonce.ref());
-        m_strand = _host->getStrand();
-    }*/
-    /// Setup outbound connection.
     RLPXHandshake(Host* _host, std::shared_ptr<RLPXSocket> const& _socket, NodeID _remote)
       : m_host(_host),
         m_remote(_remote),
@@ -59,14 +52,13 @@ public:
         m_idleTimer(m_socket->ref().get_io_service())
     {
         crypto::Nonce::get().ref().copyTo(m_nonce.ref());
-        m_strand = _host->getStrand();
+        m_strand = _host->strand();
     }
 
     ~RLPXHandshake() {}
 
     /// Start handshake.
     void start() { transition(); }
-
     /// Aborts the handshake.
     void cancel();
 
@@ -79,8 +71,23 @@ protected:
         ReadHello,
         StartSession
     };
-
-
+    /// encode the rlp to send to server
+    bool encode(RLPStream& encoded_rlp)
+    {
+        try
+        {
+            encoded_rlp.appendList(4) << dev::p2p::c_protocolVersion << m_host->clientVersion()
+                                      << m_host->caps() << m_host->listenPort();
+            return true;
+        }
+        catch (std::exception& err)
+        {
+            LOG(ERROR) << "encode RLPStream from (" << dev::p2p::c_protocolVersion << ","
+                       << m_host->clientVersion() << "," << m_host->listenPort()
+                       << ") failed, error message:" << err.what();
+            return false;
+        }
+    }
     /// Closes connection and ends transitions.
     void error();
 
