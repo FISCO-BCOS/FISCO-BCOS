@@ -1,7 +1,6 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/PrecompiledContext.h>
-#include <libprecompiled/StringFactoryPrecompiled.h>
 #include <libstorage/EntryPrecompiled.h>
 #include <libstorage/DB.h>
 #include <boost/test/unit_test.hpp>
@@ -17,18 +16,15 @@ namespace test_precompiled {
 struct EntryPrecompiledFixture {
   EntryPrecompiledFixture() {
     entry = std::make_shared<Entry>();
-    stringFactoryPrecompiled = std::make_shared<StringFactoryPrecompiled>();
     precompiledContext =
         std::make_shared<dev::precompiled::PrecompiledContext>();
     entryPrecompiled = std::make_shared<dev::precompiled::EntryPrecompiled>();
 
     entryPrecompiled->setEntry(entry);
-    entryPrecompiled->setStringFactoryPrecompiled(stringFactoryPrecompiled);
   }
   ~EntryPrecompiledFixture() {}
 
   dev::storage::Entry::Ptr entry;
-  StringFactoryPrecompiled::Ptr stringFactoryPrecompiled;
   dev::precompiled::PrecompiledContext::Ptr precompiledContext;
   dev::precompiled::EntryPrecompiled::Ptr entryPrecompiled;
 };
@@ -56,29 +52,6 @@ BOOST_AUTO_TEST_CASE(testGetInt) {
   u256 num;
   abi.abiOut(bytesConstRef(&out), num);
   BOOST_TEST(num == u256(100));
-}
-
-BOOST_AUTO_TEST_CASE(testGetString) {
-  entry->setField("keyString", "hello");
-  ContractABI abi;
-
-  bytes bstr = abi.abiIn("getString(string)", "keyString");
-  bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&bstr));
-  Address address;
-  abi.abiOut(bytesConstRef(&out), address);
-  auto stringPrecompiled = precompiledContext->getPrecompiled(address);
-  std::string outstr = stringPrecompiled->toString(precompiledContext);
-  BOOST_TEST(outstr == "hello");
-}
-
-BOOST_AUTO_TEST_CASE(testSetAddress) {
-  ContractABI abi;
-  Address address =
-      stringFactoryPrecompiled->newString(precompiledContext, "world");
-  bytes sstr = abi.abiIn("set(string,address)", "keyAddress", address);
-  entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
-
-  entryPrecompiled->getEntry()->getField("keyAddress") == "world";
 }
 
 BOOST_AUTO_TEST_CASE(testGetAddress) {

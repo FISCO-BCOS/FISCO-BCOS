@@ -25,7 +25,6 @@ private:
 	dev::storage::Storage::Ptr _stateStorage;
 	//ChannelRPCServer::Ptr _channelRPCServer;
 	//std::string _AMOPDBTopic;
-	//int _
 	//int _maxRetry = 0;
 };
 
