@@ -36,7 +36,7 @@ EOF
     openssl ecparam -out server.param -name secp256k1 
     openssl genpkey -paramfile server.param -out node.key 
     openssl req -new -key node.key -config cert.cnf -out node.csr 
-    openssl x509 -req  -in node.csr -CAkey ca/ca.key -CA ca/ca.crt -out node.crt -CAcreateserial -extensions v3_req -extfile cert.cnf 
+    openssl x509 -req  -in node.csr -CAkey ca.key -CA ca.crt -out node.crt -CAcreateserial -extensions v3_req -extfile cert.cnf 
     openssl ec -in node.key -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"' > node.nodeid
     mkdir $name
 	
