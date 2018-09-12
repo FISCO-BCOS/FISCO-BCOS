@@ -40,9 +40,9 @@ public:
 
 	h256 hash(std::shared_ptr<PrecompiledContext> context);
 
+	Address openTable(PrecompiledContext::Ptr context, const std::string & tableName);
 private:
 	DBPrecompiled::Ptr getSysTable(PrecompiledContext::Ptr context);
-	bool isTabelCreated(PrecompiledContext::Ptr context, const std::string & tableName);
 	dev::storage::MemoryDBFactory::Ptr _memoryDBFactory;
 	std::map<std::string, Address> _name2Table;
 	h256 _hash;

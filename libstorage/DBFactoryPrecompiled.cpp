@@ -86,27 +86,9 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 
 		LOG(DEBUG) << "DBFactory open table:" << tableName;
 
-		auto it = _name2Table.find(tableName);
-		if(it != _name2Table.end()) {
-			LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
-			out = abi.abiIn("", it->second);
-			break;
-		}
-        if (isTabelCreated(context, tableName))
-        {
-            LOG(DEBUG) << "Open new table:" << tableName;
-
-            dev::storage::DB::Ptr db = _memoryDBFactory->openTable(
-                context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
-
-            DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
-            dbPrecompiled->setDB(db);
-
-            Address address = context->registerPrecompiled(dbPrecompiled);
-            _name2Table.insert(std::make_pair(tableName, address));
-
-            out = abi.abiIn("", address);
-        }
+	
+		Address address = openTable(context, tableName);
+        out = abi.abiIn("", address);
         break;
 	}
 	case 0x56004b6a: { //createTable(string,string,string)
@@ -118,19 +100,12 @@ bytes DBFactoryPrecompiled::call(std::shared_ptr<PrecompiledContext> context, by
 		std::vector<std::string> fieldNameList;
 		boost::split(fieldNameList, fieldNames, boost::is_any_of(","));
 
-		//_name2Table find tableName => return
-        auto it = _name2Table.find(tableName);
-		if(it != _name2Table.end()) {
-			LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
-			break;
-		}
-
-		DBPrecompiled::Ptr sysTable = getSysTable(context);
+		auto address = openTable(context, tableName);
 
 		 //确认表是否存在
-		auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
-		if (tableEntries->size() == 0) {
+		if (address == Address()) {
 			//写入表信息
+            auto sysTable = getSysTable(context);
 			auto tableEntry = sysTable->getDB()->newEntry();
 			tableEntry->setField("table_name", tableName);
 			tableEntry->setField("key_field", keyName);
@@ -165,21 +140,37 @@ DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr con
 
         return dbPrecompiled;
     }
-    LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
+    LOG(DEBUG) << "Table _sys_tables_:" << context->blockInfo().hash << " already opened:" << it->second;
     return std::dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(it->second));
 }
 
-bool DBFactoryPrecompiled::isTabelCreated(PrecompiledContext::Ptr context, const std::string & tableName)
+Address DBFactoryPrecompiled::openTable(
+    PrecompiledContext::Ptr context, const std::string& tableName)
 {
+    auto it = _name2Table.find(tableName);
+    if (it != _name2Table.end())
+    {
+        LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
+        return it->second;
+    }
     auto sysTable = getSysTable(context);
     auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
-    return (tableEntries->size() != 0u);
+    if (tableEntries->size() == 0u)
+        return Address();
+
+    LOG(DEBUG) << "Open new table:" << tableName;
+    dev::storage::DB::Ptr db = _memoryDBFactory->openTable(
+        context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
+    DBPrecompiled::Ptr dbPrecompiled = std::make_shared<DBPrecompiled>();
+    dbPrecompiled->setDB(db);
+    Address address = context->registerPrecompiled(dbPrecompiled);
+    _name2Table.insert(std::make_pair(tableName, address));
+    return address;
 }
 
 h256 DBFactoryPrecompiled::hash(std::shared_ptr<PrecompiledContext> context) {
 	bytes data;
 
-	//汇总所有表的hash，算一个hash
 	LOG(DEBUG) << "this: " << this << " 总计表:" << _name2Table.size();
 	for(auto dbAddress: _name2Table) {
 		DBPrecompiled::Ptr db = std::dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(dbAddress.second));
@@ -190,7 +181,6 @@ h256 DBFactoryPrecompiled::hash(std::shared_ptr<PrecompiledContext> context) {
 		}
 
 		bytes dbHash = db->hash().asBytes();
-
 		data.insert(data.end(), dbHash.begin(), dbHash.end());
 	}
 
