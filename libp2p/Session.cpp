@@ -48,7 +48,7 @@ Session::Session(Host* _server, std::shared_ptr<RLPXSocket> const& _s,
     m_info.socketId = m_socket->ref().native_handle();
 
 
-    m_strand = _server->getStrand();
+    m_strand = _server->strand();
 }
 
 Session::~Session()
@@ -207,7 +207,7 @@ void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
     if (!checkPacket(msg))
         LOG(WARNING) << "INVALID PACKET CONSTRUCTED!";
 
-    if (!m_socket->ref().lowest_layer().is_open())
+    if (!m_socket->isConnected())
         return;
 
     bool doWrite = false;
@@ -287,7 +287,7 @@ void Session::write()
 
         if (m_socket->isConnected())
         {
-            m_server->getIOService()->post([=] {
+            m_server->ioService()->post([=] {
                 boost::asio::async_write(m_socket->sslref(),
                     boost::asio::buffer(*(boost::get<0>(task))),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,

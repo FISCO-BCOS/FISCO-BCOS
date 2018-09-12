@@ -104,7 +104,7 @@ static Session* createFakeSession(std::string const& _clientVersion, std::string
     NodeIPEndpoint m_endpoint(bi::address::from_string(_addr), _udp, _tcp);
     /// init FakeRLPXSocket
     std::shared_ptr<RLPXSocket> m_socket =
-        std::make_shared<FakeRLPXSocket>(*(m_host->getIOService()), m_endpoint);
+        std::make_shared<FakeRLPXSocket>(*(m_host->ioService()), m_endpoint);
 
     /// init Peers
     std::shared_ptr<Peer> m_peer =
