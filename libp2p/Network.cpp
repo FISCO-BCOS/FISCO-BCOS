@@ -201,7 +201,6 @@ bi::tcp::endpoint Network::determinePublic(NetworkConfig const& network_config)
             }
         }
     }
-    std::cout << "obtain paddr:" << paddr.to_string() << std::endl;
     pset = !paddr.is_unspecified();
 
     bool listenIsPublic = lset && isPublicAddress(laddr);
@@ -211,14 +210,12 @@ bi::tcp::endpoint Network::determinePublic(NetworkConfig const& network_config)
     /// set listen address as public address
     if (listenIsPublic)
     {
-        std::cout << "Listen address set to Public address:" << laddr << std::endl;
         LOG(INFO) << "Listen address set to Public address:" << laddr;
         ep.address(laddr);
     }
     /// set address obtained from interfaces as public address
     else if (publicIsHost)
     {
-        std::cout << "Listen address set to Public address:" << paddr << std::endl;
         LOG(INFO) << "Public address set to Host configured address:" << paddr;
         ep.address(paddr);
     }

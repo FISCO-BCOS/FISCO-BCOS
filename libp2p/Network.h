@@ -19,9 +19,11 @@
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
  *
- * @author:
- * @date:
- * @modify:
+ * @author: yujiechen
+ * @date: 2018-09-12
+ * @modify: 1. rename NetworkPreferences to NetworkConfig
+ *          2. remove traverNAT and confusing constructor of NetworkConfig
+ *          3. modify the implementation of determinePublic to add exception catch
  */
 
 #pragma once
