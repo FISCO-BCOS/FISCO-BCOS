@@ -1,7 +1,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libstorage/MemoryDB.h>
-#include <libstorage/MemoryStateDBFactory.h>
+#include <libstorage/MemoryDBFactory.h>
 #include <libstorage/DB.h>
 #include <libstorage/Storage.h>
 #include <boost/test/unit_test.hpp>
@@ -54,13 +54,13 @@ struct MemoryDBFactoryFixture {
   MemoryDBFactoryFixture() {
     std::shared_ptr<MockAMOPDB> mockAMOPDB = std::make_shared<MockAMOPDB>();
 
-    memoryDBFactory = std::make_shared<dev::storage::MemoryStateDBFactory>();
+    memoryDBFactory = std::make_shared<dev::storage::MemoryDBFactory>();
     memoryDBFactory->setStateStorage(mockAMOPDB);
 
     BOOST_TEST(memoryDBFactory->stateStorage() == mockAMOPDB);
   }
 
-  dev::storage::MemoryStateDBFactory::Ptr memoryDBFactory;
+  dev::storage::MemoryDBFactory::Ptr memoryDBFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(MemoryDBFactory, MemoryDBFactoryFixture)
