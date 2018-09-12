@@ -25,18 +25,18 @@ file(GLOB HEADERS "*.h")
 
 include(EthDependencies)
 
-add_executable(p2p-fisco-bcos ${SRC_LIST} ${HEADERS})
+add_executable(mini-p2p ${SRC_LIST} ${HEADERS})
 
-target_include_directories(p2p-fisco-bcos PRIVATE ${BOOST_INCLUDE_DIR})
-target_link_libraries(p2p-fisco-bcos Boost::program_options)
+target_include_directories(mini-p2p PRIVATE ${BOOST_INCLUDE_DIR})
+target_link_libraries(mini-p2p Boost::program_options)
 
-target_link_libraries(p2p-fisco-bcos devcore)
-target_link_libraries(p2p-fisco-bcos devcrypto)
-target_link_libraries(p2p-fisco-bcos ethcore)
-target_link_libraries(p2p-fisco-bcos p2p)
+target_link_libraries(mini-p2p devcore)
+target_link_libraries(mini-p2p devcrypto)
+target_link_libraries(mini-p2p ethcore)
+target_link_libraries(mini-p2p p2p)
 
 if (UNIX)
-target_link_libraries(p2p-fisco-bcos pthread)
+target_link_libraries(mini-p2p pthread)
 endif()
 
-install(TARGETS p2p-fisco-bcos DESTINATION bin)
+install(TARGETS mini-p2p DESTINATION bin)
