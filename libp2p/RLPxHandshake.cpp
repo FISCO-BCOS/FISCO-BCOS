@@ -80,23 +80,28 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
         m_nextState = ReadHello;
         LOG(INFO) << (m_originated ? "p2p.connect.egress " : "p2p.connect.ingress ")
                   << "sending capabilities handshake";
-
         RLPStream s;
-        s.append((unsigned)HelloPacket).appendList(5)
-            << dev::p2p::c_protocolVersion << m_host->getClientVersion() << m_host->caps()
-            << m_host->listenPort() << m_host->id();
-
-        bytes packet;
-        s.swapOut(packet);
-        auto asyncWrite = [this, self](
-                              boost::system::error_code ec, std::size_t) { transition(ec); };
-        /// add package length
-        uint32_t length = htonl(packet.size() + sizeof(uint32_t));
-        packet.insert(packet.begin(), (byte*)&length, (byte*)(&length) + sizeof(uint32_t));
-        m_handshakeOutBuffer = packet;
-        ba::async_write(
-            m_socket->sslref(), ba::buffer(m_handshakeOutBuffer), m_strand->wrap(asyncWrite));
-        LOG(DEBUG) << "Write hello packet length: " << ntohl(length);
+        bool succ = encode(s);
+        if (succ)
+        {
+            bytes packet;
+            s.swapOut(packet);
+            auto asyncWrite = [this, self](
+                                  boost::system::error_code ec, std::size_t) { transition(ec); };
+            /// add package length
+            uint32_t length = htonl(packet.size() + sizeof(uint32_t));
+            packet.insert(packet.begin(), (byte*)&length, (byte*)(&length) + sizeof(uint32_t));
+            m_handshakeOutBuffer = packet;
+            ba::async_write(
+                m_socket->sslref(), ba::buffer(m_handshakeOutBuffer), m_strand->wrap(asyncWrite));
+            LOG(DEBUG) << "Write hello packet length: " << ntohl(length);
+        }
+        else
+        {
+            LOG(ERROR) << "writehello failed for encode failed";
+            m_nextState = Error;
+            transition();
+        }
     }
     else if (m_nextState == ReadHello)
     {
@@ -115,7 +120,6 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
                 uint32_t length = ntohl(*((uint32_t*)m_handshakeInBuffer.data()));
 
                 LOG(DEBUG) << "Read hello packet length: " << length;
-
                 /// read padded frame and mac
                 m_handshakeInBuffer.clear();
                 m_handshakeInBuffer.resize(length - sizeof(uint32_t));
@@ -127,7 +131,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
                     else
                     {
                         LOG(INFO) << (m_originated ? "p2p.connect.egress" : "p2p.connect.ingress")
-                                  << "hello frame: success. starting session.";
+                                  << " hello frame: success. starting session.";
                         try
                         {
                             // bytesConstRef buffer(m_handshakeInBuffer.data(),
@@ -139,8 +143,7 @@ void RLPXHandshake::transition(boost::system::error_code _ech)
 
                             LOG(DEBUG)
                                 << "Handshake successed, startPeerSession: " << m_remote.hex();
-
-                            m_host->startPeerSession(rlp, m_socket);
+                            m_host->startPeerSession(m_remote, rlp, m_socket);
                         }
                         catch (std::exception const& _e)
                         {

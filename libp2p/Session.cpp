@@ -48,7 +48,7 @@ Session::Session(Host* _server, std::shared_ptr<RLPXSocket> const& _s,
     m_info.socketId = m_socket->ref().native_handle();
 
 
-    m_strand = _server->getStrand();
+    m_strand = _server->strand();
 }
 
 Session::~Session()
@@ -81,7 +81,7 @@ Session::~Session()
 
 NodeID Session::id() const
 {
-    return m_peer ? m_peer->id : NodeID();
+    return m_peer ? m_peer->id() : NodeID();
 }
 
 template <class T>
@@ -186,11 +186,6 @@ RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
 
 void Session::sealAndSend(RLPStream& _s, uint16_t _protocolID)
 {
-#if 0
-	bytes b;
-	_s.swapOut(b);
-	send(move(b), _protocolID);
-#endif
     std::shared_ptr<bytes> b = std::make_shared<bytes>();
     _s.swapOut(*b);
     send(b, _protocolID);
@@ -207,10 +202,8 @@ bool Session::checkPacket(bytesConstRef _msg)
 
 void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
 {
-    if (m_dropped)
-        return;
-
     bytesConstRef msg(_msg.get());
+    // LOG(TRACE) << RLP(msg.cropped(1));
     if (!checkPacket(msg))
         LOG(WARNING) << "INVALID PACKET CONSTRUCTED!";
 
@@ -222,24 +215,15 @@ void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
     {
         _writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
         doWrite = (_writeQueue.size() == 1);
-#if 0
-			m_writeQueue.push_back(std::move(_msg));
-			_protocolIDQueue.push_back(_protocolID);
-			m_writeTimeQueue.push_back(utcTime());
-			doWrite = (m_writeQueue.size() == 1);
-#endif
-        if (doWrite)
-            write();
     }
+    if (doWrite)
+        write();
 }
 
 void Session::onWrite(boost::system::error_code ec, std::size_t length)
 {
     try
     {
-        if (m_dropped)
-            return;
-
         unsigned elapsed = (unsigned)(utcTime() - m_start_t);
         if (elapsed >= 10)
         {
@@ -255,15 +239,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
             drop(TCPError);
             return;
         }
-
         DEV_GUARDED(x_framing)
         {
-#if 0
-			m_writeQueue.pop_front();
-			m_writeTimeQueue.pop_front();
-			if (m_writeQueue.empty())
-				return;
-#endif
             _writeQueue.pop();
             if (_writeQueue.empty())
             {
@@ -284,23 +261,17 @@ void Session::write()
 {
     try
     {
-        if (m_dropped)
-            return;
         boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
-
         u256 enter_time = 0;
         DEV_GUARDED(x_framing)
         {
             task = _writeQueue.top();
-
             Header header;
             uint32_t length = sizeof(Header) + boost::get<0>(task)->size();
             header.length = htonl(length);
             header.protocolID = htonl(boost::get<1>(task));
-
             std::shared_ptr<bytes> out = boost::get<0>(task);
             out->insert(out->begin(), (byte*)&header, ((byte*)&header) + sizeof(Header));
-
             enter_time = boost::get<2>(task);
         }
 
@@ -316,9 +287,8 @@ void Session::write()
 
         if (m_socket->isConnected())
         {
-            m_server->getIOService()->post([=] {
+            m_server->ioService()->post([=] {
                 boost::asio::async_write(m_socket->sslref(),
-                    // boost::asio::buffer(*out),
                     boost::asio::buffer(*(boost::get<0>(task))),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
                         boost::asio::placeholders::bytes_transferred));
@@ -361,7 +331,6 @@ void Session::drop(DisconnectReason _reason)
         catch (...)
         {
         }
-
     m_peer->m_lastDisconnect = _reason;
     if (TCPError == _reason)
         m_server->reconnectNow();

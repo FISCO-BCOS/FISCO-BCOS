@@ -31,14 +31,12 @@ namespace p2p
 {
 bool Peer::shouldReconnect() const
 {
-    return id && endpoint &&
+    return m_id && m_endpoint &&
            chrono::system_clock::now() > m_lastAttempted + chrono::seconds(fallbackSeconds());
 }
 
 unsigned Peer::fallbackSeconds() const
 {
-    if (peerType == PeerType::Required)
-        return 5;
     switch (m_lastDisconnect)
     {
     case BadProtocol:
@@ -61,22 +59,21 @@ unsigned Peer::fallbackSeconds() const
 
 bool Peer::operator<(Peer const& _p) const
 {
-    if (isOffline() != _p.isOffline())
-        return isOffline();
-    else if (isOffline())
+    /// 1. compare lastAttemptions to connect
+    if (m_lastAttempted == _p.lastAttempted())
     {
-        if (m_lastAttempted == _p.m_lastAttempted)
-            return m_failedAttempts < _p.m_failedAttempts;
+        /// 2. compare failed Attemptions to connection
+        if (m_failedAttempts == _p.failedAttempts())
+        {
+            /// 3. compare node id
+            return m_id < _p.id();
+        }
+
         else
-            return m_lastAttempted < _p.m_lastAttempted;
+            return m_failedAttempts < _p.failedAttempts();
     }
     else
-    {
-        if (m_failedAttempts == _p.m_failedAttempts)
-            return id < _p.id;
-        else
-            return m_failedAttempts < _p.m_failedAttempts;
-    }
+        return m_lastAttempted < _p.lastAttempted();
 }
 
 }  // namespace p2p

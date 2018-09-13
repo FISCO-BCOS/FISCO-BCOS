@@ -49,6 +49,7 @@ include_directories("${CMAKE_SOURCE_DIR}" "utils")
 configure_project(TESTS)
 # generate executable binary fisco-bcos
 add_subdirectory(fisco-bcos)
+add_subdirectory(fisco-bcos/p2p)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)
 add_subdirectory(libethcore)

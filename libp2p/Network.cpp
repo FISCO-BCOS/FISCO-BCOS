@@ -35,19 +35,21 @@
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
-
+/// @returns public and private interface addresses
 std::set<bi::address> Network::getInterfaceAddresses()
 {
     std::set<bi::address> addresses;
     ifaddrs* ifaddr;
+    /// creates a linked list of structures describing the network interfaces of the local system
     if (getifaddrs(&ifaddr) == -1)
         BOOST_THROW_EXCEPTION(NoNetworking());
 
     for (auto ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
     {
+        /// filter local loop interface and interfaces down
         if (!ifa->ifa_addr || string(ifa->ifa_name) == "lo0" || !(ifa->ifa_flags & IFF_UP))
             continue;
-
+        /// ipv4 addresses
         if (ifa->ifa_addr->sa_family == AF_INET)
         {
             in_addr addr = ((struct sockaddr_in*)ifa->ifa_addr)->sin_addr;
@@ -56,6 +58,7 @@ std::set<bi::address> Network::getInterfaceAddresses()
             if (!isLocalHostAddress(address))
                 addresses.insert(address);
         }
+        /// get ipv6 addresses
         else if (ifa->ifa_addr->sa_family == AF_INET6)
         {
             sockaddr_in6* sockaddr = ((struct sockaddr_in6*)ifa->ifa_addr);
@@ -74,22 +77,13 @@ std::set<bi::address> Network::getInterfaceAddresses()
     return addresses;
 }
 
+/// Try to bind and listen on _listenPort, else attempt net-allocated port.
 int Network::tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkConfig const& _netPrefs)
 {
-    // Due to the complexities of NAT and network environments (multiple NICs, tunnels, etc)
-    // and security concerns automation is the enemy of network configuration.
-    // If a preference cannot be accommodate the network must fail to start.
-    //
-    // Preferred IP: Attempt if set, else, try 0.0.0.0 (all interfaces)
-    // Preferred Port: Attempt if set, else, try c_defaultListenPort or 0 (random)
-    // TODO: throw instead of returning -1 and rename NetworkConfig to NetworkConfig
-
     bi::address listenIP;
     try
     {
-        listenIP = _netPrefs.listenIPAddress.empty() ?
-                       bi::address_v4() :
-                       bi::address::from_string(_netPrefs.listenIPAddress);
+        listenIP = bi::address::from_string(_netPrefs.listenIPAddress);
     }
     catch (...)
     {
@@ -98,62 +92,49 @@ int Network::tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkConfig const& _netP
                      << boost::current_exception_diagnostic_information();
         return -1;
     }
-    bool requirePort = (bool)_netPrefs.listenPort;
-
-    for (unsigned i = 0; i < 2; ++i)
+    bi::tcp::endpoint endpoint(listenIP, _netPrefs.listenPort);
+    try
     {
-        bi::tcp::endpoint endpoint(
-            listenIP, requirePort ? _netPrefs.listenPort : (i ? 0 : c_defaultListenPort));
-        try
-        {
-            bool reuse = true;
-            _acceptor.open(endpoint.protocol());
-            _acceptor.set_option(ba::socket_base::reuse_address(reuse));
-            _acceptor.bind(endpoint);
-            _acceptor.listen();
-            return _acceptor.local_endpoint().port();
-        }
-        catch (...)
-        {
-            // bail if this is first attempt && port was specificed, or second attempt failed
-            // (random port)
-            if (i || requirePort)
-            {
-                // both attempts failed
-                LOG(WARNING)
-                    << "Couldn't start accepting connections on host. Failed to accept socket on "
-                    << listenIP << ":" << _netPrefs.listenPort << ".\n"
-                    << boost::current_exception_diagnostic_information();
-                _acceptor.close();
-                return -1;
-            }
-
-            _acceptor.close();
-            continue;
-        }
+        bool reuse = true;
+        _acceptor.open(endpoint.protocol());
+        _acceptor.set_option(ba::socket_base::reuse_address(reuse));
+        _acceptor.bind(endpoint);
+        _acceptor.listen();
+        return _acceptor.local_endpoint().port();
     }
-
-    return -1;
+    catch (...)
+    {
+        // bind failed
+        LOG(WARNING) << "Couldn't start accepting connections on host. Failed to accept socket on "
+                     << listenIP << ":" << _netPrefs.listenPort << ".\n"
+                     << boost::current_exception_diagnostic_information();
+        _acceptor.close();
+        return -1;
+        _acceptor.close();
+        return -1;
+    }
 }
 
+/// resolve host string with {ip:port} format to tcp endpoint
 bi::tcp::endpoint Network::resolveHost(string const& _addr)
 {
+    /// singleton
     static boost::asio::io_service s_resolverIoService;
-
     vector<string> split;
     boost::split(split, _addr, boost::is_any_of(":"));
     unsigned port = dev::p2p::c_defaultIPPort;
-
     try
     {
+        /// get port
         if (split.size() > 1)
             port = static_cast<unsigned>(stoi(split.at(1)));
     }
     catch (...)
     {
+        LOG(WARNING) << "Obtain Port from " << _addr << " Failed!";
     }
-
     boost::system::error_code ec;
+    /// get ip address
     bi::address address = bi::address::from_string(split[0], ec);
     bi::tcp::endpoint ep(bi::address(), port);
     if (!ec)
@@ -161,7 +142,8 @@ bi::tcp::endpoint Network::resolveHost(string const& _addr)
     else
     {
         boost::system::error_code ec;
-        // resolve returns an iterator (host can resolve to multiple addresses)
+        /// resolve returns an iterator (host can resolve to multiple addresses)
+        /// TODO(Problem): always stucks here
         bi::tcp::resolver r(s_resolverIoService);
         auto it = r.resolve({bi::tcp::v4(), split[0], toString(port)}, ec);
         if (ec)
@@ -175,32 +157,66 @@ bi::tcp::endpoint Network::resolveHost(string const& _addr)
     return ep;
 }
 
-bi::tcp::endpoint Network::determinePublic(
-    NetworkConfig const& network_config, int const& listen_port)
+/// obtain public address from specified network config
+/// case1: the listen ip is public address, then public address equals to listen address
+/// case2: the listen ip is a private address && public address has been setted,
+///        then the public address is the setted address
+/// case3: the listen ip is a private address && the public address has not been setted,
+///        obtain the interface address as the public address
+bi::tcp::endpoint Network::determinePublic(NetworkConfig const& network_config)
 {
     auto ifAddresses = Network::getInterfaceAddresses();
-    auto laddr = network_config.listenIPAddress.empty() ?
-                     bi::address() :
-                     bi::address::from_string(network_config.listenIPAddress);
+    /// listen address is obtained from networkConfig(listen ip address must be set)
+    bi::address laddr;
+    try
+    {
+        laddr = bi::address::from_string(network_config.listenIPAddress);
+    }
+    catch (...)
+    {
+        LOG(ERROR) << "MUST SET LISTEN IP Address!";
+        return bi::tcp::endpoint();
+    }
     auto lset = !laddr.is_unspecified();
-    auto paddr = network_config.publicIPAddress.empty() ?
-                     bi::address() :
-                     bi::address::from_string(network_config.publicIPAddress);
+    bi::address paddr;
+    /// obtain public address
+    try
+    {
+        paddr = bi::address::from_string(network_config.publicIPAddress);
+    }
+    catch (...)
+    {
+        LOG(WARNING) << "public address has not been setted, obtain from interfaces now";
+    }
     auto pset = !paddr.is_unspecified();
+    /// add paddr obtain function
+    if (!pset)
+    {
+        for (auto address : ifAddresses)
+        {
+            if (address.is_v4())
+            {
+                paddr = address;
+                break;
+            }
+        }
+    }
+    pset = !paddr.is_unspecified();
 
     bool listenIsPublic = lset && isPublicAddress(laddr);
     bool publicIsHost = !lset && pset && ifAddresses.count(paddr);
 
-    bi::tcp::endpoint ep(bi::address(), listen_port);
+    bi::tcp::endpoint ep(bi::address(), network_config.listenPort);
+    /// set listen address as public address
     if (listenIsPublic)
     {
-        LOG(INFO) << "Listen address set to Public address:" << laddr << ". UPnP disabled.";
+        LOG(INFO) << "Listen address set to Public address:" << laddr;
         ep.address(laddr);
     }
+    /// set address obtained from interfaces as public address
     else if (publicIsHost)
     {
-        LOG(INFO) << "Public address set to Host configured address:" << paddr
-                  << ". UPnP disabled.";
+        LOG(INFO) << "Public address set to Host configured address:" << paddr;
         ep.address(paddr);
     }
     else if (pset)

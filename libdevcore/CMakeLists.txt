@@ -8,4 +8,4 @@ add_dependencies(devcore BuildInfo.h)
 
 find_package(LevelDB)
 target_include_directories(devcore SYSTEM PUBLIC ${LEVELDB_INCLUDE_DIRS})
-target_link_libraries(devcore PRIVATE Boost::Filesystem ${LEVELDB_LIBRARIES})
+target_link_libraries(devcore PRIVATE Boost::Filesystem Boost::Thread ${LEVELDB_LIBRARIES})

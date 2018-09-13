@@ -28,8 +28,6 @@ namespace dev
 {
 namespace p2p
 {
-class ReputationManager;
-
 class Capability : public std::enable_shared_from_this<Capability>
 {
     friend class Session;
