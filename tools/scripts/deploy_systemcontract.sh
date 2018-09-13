@@ -126,8 +126,8 @@ deploy_systemcontract_using_nodejs() {
     echo "Start depoly system contract"
     rm -f $systemcontract_dir/output/SystemProxy.address
     cd $systemcontract_dir
-    execute_cmd "babel-node deploy_systemcontract.js $config_file" & \
-    (sleep 7 && rm $config_file)
+    execute_cmd "babel-node deploy_systemcontract.js $config_file" #& \
+    #(sleep 7 && rm $config_file)
     wait
     cd -
 }
