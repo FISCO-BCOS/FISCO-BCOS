@@ -16,8 +16,14 @@
 #include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelSession.h>
 #include <libstorage/DB.h>
+#include <libdevcore/FileSystem.h>
+#include <libinitializer/P2PInitializer.h>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+#include <map>
 
 using namespace dev;
+using namespace dev::p2p;
 using namespace console;
 
 ConsoleServer::ConsoleServer() {
@@ -105,6 +111,10 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
 		{
 			output = p2pMiners(args);
 		}
+		else if(func == "p2p.update")
+		{
+			output = p2pUpdate(args);
+		}
 		else if(func == "amdb.select")
 		{
 			output = amdbSelect(args);
@@ -114,7 +124,7 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
 	    session->disconnectByQuit();
 		}
 		else {
-			output = "Unknown command, enter 'help' for command list";
+			output = "Unknown command, enter 'help' for command list.\n";
 		}
 	}
 	catch(std::exception &e) {
@@ -132,18 +142,15 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
   std::string output;
   std::stringstream ss;
 
-  ss << "------------------------------------------------------------------"
-             "------"
-          << std::endl;
+  printDoubleLine(ss);
 	ss << "status                 Show the blockchain status." << std::endl;
 	ss << "p2p.peers              Show the peers information." << std::endl;
+	ss << "p2p.update             Update static nodes." << std::endl;
 	ss << "p2p.miners             Show the miners information." << std::endl;
 	ss << "amdb.select            Query the table data." << std::endl;
 	ss << "quit                   Quit the blockchain console." << std::endl;
 	ss << "help                   Provide help information for blockchain console." << std::endl;
-	ss << "------------------------------------------------------------------"
-	            "------"
-	         << std::endl;
+	printDoubleLine(ss);
 	ss << std::endl;
 	output = ss.str();
 	return output;
@@ -155,10 +162,7 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 	try {
 		std::stringstream ss;
 
-//		ss << "=============Node status=============\n";
-	  ss << "------------------------------------------------------------------"
-	              "------"
-	           << std::endl;
+		printDoubleLine(ss);
 		ss << "Status: ";
 		if(_interface->wouldSeal()) {
 			ss << "sealing";
@@ -170,9 +174,8 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 		ss << std::endl;
 
 		ss << "Block number:" << _interface->number() << " at view:" << dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->view();
-	  ss << std::endl << "------------------------------------------------------------------"
-	              "------"
-	           << std::endl;
+	  ss << std::endl;
+	  printSingleLine(ss);
 		ss << std::endl;
 		output = ss.str();
 	}
@@ -191,29 +194,20 @@ std::string ConsoleServer::p2pPeers(const std::vector<std::string> args) {
 	try {
 		std::stringstream ss;
 
-//		ss << "=============P2P Peers=============\n";
-	  ss << "------------------------------------------------------------------"
-	              "------"
-	           << std::endl;
+		printDoubleLine(ss);
 		ss << "Peers number: ";
-		std::vector<p2p::PeerSessionInfo> peers = _webThreeDirect->peers();
+		std::vector<p2p::PeerSessionInfo> peers = _host->peerSessionInfo();
 		ss << peers.size() << std::endl;
-		const dev::p2p::Host &host = _webThreeDirect->net();
 		for(size_t i = 0; i < peers.size(); i++)
 		{
-	    ss << "------------------------------------------------------------------"
-	                "------"
-	             << std::endl;
+		  printSingleLine(ss);
 		  const p2p::NodeID nodeid = peers[i].id;
 			ss << "Nodeid: " << nodeid << std::endl;
 			ss << "Ip: " << peers[i].host << std::endl;
 			ss << "Port:" << peers[i].port << std::endl;
-			ss << "Connected: " << host.isConnected(nodeid) << std::endl;
-			ss << "------------------------------------------------------------------"
-			                "------"
-			             << std::endl;
+			ss << "Connected: " << _host->isConnected(nodeid) << std::endl;
+			printSingleLine(ss);
 		}
-
 		ss << std::endl;
 		output = ss.str();
 	}
@@ -232,26 +226,18 @@ std::string ConsoleServer::p2pMiners(const std::vector<std::string> args) {
 	try {
 		std::stringstream ss;
 
-//		ss << "=============P2P Miners=============\n";
-	  ss << "------------------------------------------------------------------"
-	              "------"
-	           << std::endl;
+		printDoubleLine(ss);
 		ss << "Miners number: ";
 		dev::h512s minerNodeList =
 				dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->getMinerNodeList();
 		ss << minerNodeList.size() << std::endl;
-    ss << "------------------------------------------------------------------"
-                "------"
-             << std::endl;
-		const dev::p2p::Host &host = _webThreeDirect->net();
+		printSingleLine(ss);
 		for(size_t i = 0; i < minerNodeList.size(); i++)
 		{
 			const p2p::NodeID nodeid = minerNodeList[i];
 			ss << "Nodeid: " << nodeid << std::endl;
 		}
-	  ss << "------------------------------------------------------------------"
-	              "------"
-	           << std::endl;
+		printSingleLine(ss);
 		ss << std::endl;
 		output = ss.str();
 	}
@@ -263,6 +249,60 @@ std::string ConsoleServer::p2pMiners(const std::vector<std::string> args) {
 
 	return output;
 }
+
+std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
+  std::string output;
+
+  try {
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(getConfigPath(), pt);
+    std::map<NodeIPEndpoint, NodeID> nodes;
+    std::stringstream ss;
+    printDoubleLine(ss);
+    ss << "Add staticNode: " << std::endl;
+    printSingleLine(ss);
+    for(auto it: pt.get_child("p2p")) {
+      if(it.first.find("node.") == 0) {
+            ss << it.first << " : " << it.second.data() << std::endl;
+
+        std::vector<std::string> s;
+        try {
+          boost::split(s, it.second.data(), boost::is_any_of(":"), boost::token_compress_on);
+
+          if(s.size() != 2) {
+            LOG(ERROR) << "parse address failed:" << it.second.data();
+            continue;
+          }
+
+          NodeIPEndpoint endpoint;
+          endpoint.address = boost::asio::ip::address::from_string(s[0]);
+          endpoint.tcpPort = boost::lexical_cast<uint16_t>(s[1]);
+
+          nodes.insert(std::make_pair(endpoint, NodeID()));
+        }
+        catch(std::exception &e) {
+          LOG(ERROR) << "Parse address faield:" << it.second.data() << ", " << e.what();
+          continue;
+        }
+      }
+    }
+    _host->setStaticNodes(nodes);
+    printSingleLine(ss);
+    ss << "update successfully！" << std::endl;
+    printSingleLine(ss);
+    ss << std::endl;
+    output = ss.str();
+  }
+  catch(std::exception &e) {
+    LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
+
+    output = "ERROR while p2p.update";
+  }
+
+  return output;
+}
+
+
 
 std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
   std::string output;
@@ -277,13 +317,9 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
       dev::storage::Entries::Ptr entries =
           _stateStorage->select(hash, number, tableName, key);
       size_t size = entries->size();
-      ss << "------------------------------------------------------------------"
-            "------"
-         << std::endl;
+      printDoubleLine(ss);
       ss << "Number of entry: " << size << std::endl;
-      ss << "------------------------------------------------------------------"
-            "------"
-         << std::endl;
+      printSingleLine(ss);
       for (size_t i = 0; i < size; ++i) {
         storage::Entry::Ptr entry = entries->get(i);
         std::map<std::string, std::string> *fields = entry->fields();
@@ -291,9 +327,7 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
         for (it = fields->begin(); it != fields->end(); it++) {
           ss << it->first << ": " << it->second << std::endl;
         }
-        ss << "----------------------------------------------------------------"
-              "--------"
-           << std::endl;
+        printSingleLine(ss);
       }
       output = ss.str();
     } else {
@@ -310,4 +344,13 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
   }
 
   return output;
+}
+
+void ConsoleServer::printSingleLine(std::stringstream &ss)
+{
+  ss << "----------------------------------------------------------------------" << std::endl;
+}
+void ConsoleServer::printDoubleLine(std::stringstream &ss)
+{
+  ss << "======================================================================" << std::endl;
 }
