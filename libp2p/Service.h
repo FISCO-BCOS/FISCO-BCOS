@@ -65,41 +65,7 @@ public:
     std::shared_ptr<bytes> buffer() { return m_buffer; }
     void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
 
-    void encode(bytes& buffer)
-    {
-        buffer.clear();  ///< It is not allowed to be assembled outside.
-        uint32_t length = htonl(m_length);
-        uint32_t protocolID = htonl(m_protocolID);
-        uint32_t seq = htonl(m_seq);
-
-        buffer.insert(buffer.end(), (byte*)&length, (byte*)&length + sizeof(length));
-        buffer.insert(buffer.end(), (byte*)&protocolID, (byte*)&protocolID + sizeof(protocolID));
-        buffer.insert(buffer.end(), (byte*)&seq, (byte*)&seq + sizeof(seq));
-        buffer.insert(buffer.end(), m_buffer->begin(), m_buffer->end());
-    }
-
-    /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
-    /// returned.
-    ssize_t decode(const byte* buffer, size_t size)
-    {
-        if (size < HEADER_LENGTH)
-        {
-            return 0;
-        }
-
-        m_length = ntohl(*((uint32_t*)&buffer[0]));
-
-        if (m_length > MAX_LENGTH || size != m_length)
-        {
-            return 0;
-        }
-
-        m_protocolID = ntohl(*((uint32_t*)&buffer[4]));
-        m_seq = ntohl(*((uint32_t*)&buffer[8]));
-        m_buffer->assign(&buffer[HEADER_LENGTH], &buffer[HEADER_LENGTH] + m_length - HEADER_LENGTH);
-
-        return m_length;
-    }
+    ///< encoding and decoding logic implemented in send() and doRead() of session.cpp
 
 private:
     uint32_t m_length = 0;      ///< m_length = HEADER_LENGTH + length(m_buffer)
