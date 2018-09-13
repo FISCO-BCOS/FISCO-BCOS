@@ -21,9 +21,7 @@
  * @author toxotguo
  * @date 2018
  */
-
 #pragma once
-
 #include <chrono>
 #include <map>
 #include <memory>
@@ -38,6 +36,7 @@
 #include "Network.h"
 #include "Peer.h"
 #include "RLPXSocket.h"
+#include <libdevcore/AsioInterface.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
@@ -56,7 +55,8 @@ class Host : public Worker
 public:
     /// constructor function : init Host with specified client version,
     /// keypair and network config
-    Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n);
+    Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
+        shared_ptr<AsioInterface>& m_asioInterface);
     ~Host();
 
     /// ------get interfaces ------
@@ -144,7 +144,7 @@ public:
     /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
     void start();
     /// called by start() to start the network
-    void startedWorking();
+    virtual void startedWorking();
     /// start peer sessions after handshake succeed(called by RLPxHandshake), mainly include four
     /// functions:
     /// 1. disconnect connecting host with invalid capability
@@ -230,7 +230,7 @@ public:
 
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
-    void runAcceptor();
+    virtual void runAcceptor();
     /// functions called after openssl handshake,
     /// maily to get node id and verify whether the certificate has been expired
     /// @return: node id of the connected peer
@@ -327,6 +327,8 @@ protected:  /// protected members(for unit testing)
     /// peer count limit
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
+
+    shared_ptr<AsioInterface> m_asioInterface;
 };
 }  // namespace p2p
 
