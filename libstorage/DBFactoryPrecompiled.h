@@ -4,7 +4,7 @@
 #include <libdevcrypto/Common.h>
 #include <map>
 #include "DBPrecompiled.h"
-#include "MemoryStateDBFactory.h"
+#include "MemoryDBFactory.h"
 
 namespace dev {
 
@@ -36,16 +36,14 @@ public:
 
 	virtual bytes call(std::shared_ptr<PrecompiledContext> context, bytesConstRef param);
 
-	void setMemoryDBFactory(dev::storage::MemoryStateDBFactory::Ptr memoryDBFactory) { _memoryDBFactory = memoryDBFactory; }
-	void setStringFactoryPrecompiled(StringFactoryPrecompiled::Ptr stringFactoryPrecompiled) { _stringFactoryPrecompiled = stringFactoryPrecompiled; }
+	void setMemoryDBFactory(dev::storage::MemoryDBFactory::Ptr memoryDBFactory) { _memoryDBFactory = memoryDBFactory; }
 
 	h256 hash(std::shared_ptr<PrecompiledContext> context);
 
+	Address openTable(PrecompiledContext::Ptr context, const std::string & tableName);
 private:
 	DBPrecompiled::Ptr getSysTable(PrecompiledContext::Ptr context);
-	bool isTabelCreated(PrecompiledContext::Ptr context, const std::string & tableName);
-	dev::storage::MemoryStateDBFactory::Ptr _memoryDBFactory;
-	StringFactoryPrecompiled::Ptr _stringFactoryPrecompiled;
+	dev::storage::MemoryDBFactory::Ptr _memoryDBFactory;
 	std::map<std::string, Address> _name2Table;
 	h256 _hash;
 };

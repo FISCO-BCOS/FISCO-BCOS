@@ -1,7 +1,5 @@
 #pragma once
 
-#include <libprecompiled/StringPrecompiled.h>
-#include <libprecompiled/StringFactoryPrecompiled.h>
 #include "../libprecompiled/PrecompiledContext.h"
 #include "DB.h"
 
@@ -33,14 +31,11 @@ public:
 
 	virtual bytes call(std::shared_ptr<PrecompiledContext> context, bytesConstRef param);
 
-	void setStringFactoryPrecompiled(StringFactoryPrecompiled::Ptr stringFactoryPrecompiled) { _stringFactoryPrecompiled = stringFactoryPrecompiled; }
-
 	void setEntries(dev::storage::Entries::Ptr entries) { _entries = entries; }
 	dev::storage::Entries::Ptr getEntries() { return _entries; }
 
 private:
 	dev::storage::Entries::Ptr _entries;
-	StringFactoryPrecompiled::Ptr _stringFactoryPrecompiled;
 };
 
 }

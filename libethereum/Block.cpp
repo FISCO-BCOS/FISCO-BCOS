@@ -837,7 +837,7 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
                            << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value()
                            << toString(tr.sha3());
                 // 区分从enactOn和populateFromChain
-                execute(lh, tr, Permanence::Committed, OnOpFunc(), (_filtercheck ? (&_bc) : nullptr));
+                execute(lh, tr, Permanence::Committed, OnOpFunc(), &_bc);
 
                 // LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
                 // LOG(TRACE) << m_state;
