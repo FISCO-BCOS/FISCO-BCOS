@@ -1,6 +1,7 @@
 #/bin/bash
 set -e
 node_dir=
+to_file=
 enable_guomi=0
 web3lib_dir=`readlink -f ../web3lib`
 systemcontract_dir=`readlink -f ../systemcontract`
@@ -70,19 +71,22 @@ yes_go_other_exit()
 help() {
     LOG_ERROR "${1}"
     echo "Usage:"
-    echo "    -d  <node dir>  Node dir you want to see"
+    echo "    -d  <node dir>             Node dir you want to see"
     echo "Optional:"
-    echo "    -g              Guomi Info"
-    echo "    -h              This help"
+    echo "    -o  <node info file name>  Dump info to <info_file_name>"
+    echo "    -g                         Guomi Info"
+    echo "    -h                         This help"
     echo "Example:"
     echo "    bash $this_script -d /mydata/node0 "
+    echo "    bash $this_script -d /mydata/node0 -o node0.info"
     echo "Guomi Example:"
     echo "    bash $this_script -d ~/mydata/node0 -g"
 exit -1
 }
-while getopts "d:gh" option;do
+while getopts "d:o:gh" option;do
 	case $option in
     d) node_dir=$OPTARG;;
+    o) to_file=$OPTARG;;
     g) enable_guomi=1;;
 	h) help;;
 	esac
@@ -109,8 +113,19 @@ node_state() {
 get_key_value() {
     file=$1
     key=$2
-    LOG_INFO `cat $file |jq .$key |sed 's/\"//g' `
+    cat $file |jq .$key |sed 's/\"//g'
 }
+
+listenip=
+rpcport=
+p2pport=
+channelPort=
+systemproxyaddress=
+god_address=
+id=
+node_name=
+agency=
+caHash=
 
 node_config_info() {
     file=$1
@@ -136,12 +151,12 @@ node_genesis_info() {
 node_basic() {
     file=$1
     id=`get_key_value $file id`
-    name=`get_key_value $file name`
+    node_name=`get_key_value $file name`
     agency=`get_key_value $file agency`
     caHash=`get_key_value $file caHash`
  
     
-    LOG_INFO "Name:\t\t\t$name"
+    LOG_INFO "Name:\t\t\t$node_name"
     LOG_INFO "Node dir:\t\t$node_dir"
     LOG_INFO "Agency:\t\t\t$agency"
     LOG_INFO "CA hash:\t\t$caHash"
@@ -149,15 +164,33 @@ node_basic() {
 
 }
 
+generate_info_json() {
+    echo '{
+    "listenip" : "'$listenip'",
+    "rpcport" : '$rpcport',
+    "p2pport" : '$p2pport',
+    "channelPort" : '$channelPort',
+    "systemproxyaddress" : "'$systemproxyaddress'",
+    "god" : "'$god_address'",
+    "id" : "'$id'",
+    "name" : "'$node_name'",
+    "agency" : "'$agency'",
+    "caHash" : "'$caHash'"
+}'
+}
+
 LOG_INFO "-----------------------------------------------------------------"
 if [ ${enable_guomi} -eq 1 ];then
     node_basic ${node_dir}/data/gmnode.json
     node_config_info ${node_dir}/config.json
 else
-node_basic $node_dir/data/node.json
-node_config_info $node_dir/config.json
+    node_basic $node_dir/data/node.json
+    node_config_info $node_dir/config.json
 fi
 node_genesis_info ${node_dir}/genesis.json
 node_state $node_dir
+if [ "$to_file" ]; then
+    generate_info_json > $to_file
+fi
 LOG_INFO "-----------------------------------------------------------------"
 
