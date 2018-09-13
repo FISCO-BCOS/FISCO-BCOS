@@ -132,9 +132,8 @@ void Host::startedWorking()
     }
     else
     {
-        LOG(INFO) << "p2p.start.notice id:" << id() << "TCP Listen port is invalid or unavailable.";
-        LOG(ERROR) << "P2pPort Bind Fail！"
-                   << "\n";
+        LOG(ERROR) << "p2p.start.notice id:" << id()
+                   << "TCP Listen port is invalid or unavailable. P2pPort Bind Fail!";
         exit(-1);
     }
     LOG(INFO) << "p2p.started id:" << id();
@@ -394,25 +393,25 @@ void Host::startPeerSession(
         _s->close();
         return;
     }
-    NodeIPEndpoint _nodeIPEndpoint;
-    _nodeIPEndpoint.address = _s->remoteEndpoint().address();
-    _nodeIPEndpoint.tcpPort = listenPort;
-    _nodeIPEndpoint.udpPort = listenPort;
-    _nodeIPEndpoint.host = _s->nodeIPEndpoint().host;
+    NodeIPEndpoint nodeIPEndpoint;
+    nodeIPEndpoint.address = _s->remoteEndpoint().address();
+    nodeIPEndpoint.tcpPort = listenPort;
+    nodeIPEndpoint.udpPort = listenPort;
+    nodeIPEndpoint.host = _s->nodeIPEndpoint().host;
     shared_ptr<Peer> p;
     DEV_RECURSIVE_GUARDED(x_sessions)
     {
         /// existed peer: obtain peer object from m_peers
-        if (m_peers.count(_nodeIPEndpoint.name()))
-            p = m_peers[_nodeIPEndpoint.name()];
+        if (m_peers.count(nodeIPEndpoint.name()))
+            p = m_peers[nodeIPEndpoint.name()];
         /// non-existed peer: new peer object and update m_peers
         else
         {
-            p = make_shared<Peer>(Node(node_id, _nodeIPEndpoint));
-            m_peers[_nodeIPEndpoint.name()] = p;
+            p = make_shared<Peer>(Node(node_id, nodeIPEndpoint));
+            m_peers[nodeIPEndpoint.name()] = p;
         }
     }
-    p->setEndpoint(_nodeIPEndpoint);
+    p->setEndpoint(nodeIPEndpoint);
 
     stringstream capslog;
     /// remove lower-version existed capabilities from received caps
@@ -435,7 +434,7 @@ void Host::startPeerSession(
     shared_ptr<SessionFace> ps = make_shared<Session>(this, _s, p,
         PeerSessionInfo({node_id, clientVersion, p->endpoint().address.to_string(), listenPort,
             chrono::steady_clock::duration(), _rlp[2].toSet<CapDesc>(), 0, map<string, string>(),
-            _nodeIPEndpoint}));
+            nodeIPEndpoint}));
     /*
     if (protocolVersion < dev::p2p::c_protocolVersion - 1)
     {
