@@ -203,45 +203,6 @@ void Host::runAcceptor()
                     m_strand.wrap(boost::bind(&Host::handshakeServer, this, ba::placeholders::error,
                         endpointPublicKey, socket)));
             }));
-        /*
-        m_tcp4Acceptor.async_accept(socket->ref(), m_strand.wrap([=](boost::system::error_code ec) {
-            /// get the endpoint information of remote client after accept the connections
-            auto remoteEndpoint = socket->ref().remote_endpoint();
-            LOG(INFO) << "P2P Recv Connect: " << remoteEndpoint.address().to_string() << ":"
-                      << remoteEndpoint.port();
-            /// reset accepting status
-            m_accepting = false;
-            /// network acception failed
-            if (ec || !m_run)
-            {
-                socket->close();
-                return;
-            }
-            /// if the connected peer over the limitation, drop socket
-            if (peerCount() > peerSlots(Ingress))
-            {
-                LOG(INFO) << "Dropping incoming connect due to maximum peer count (" << Ingress
-                          << " * ideal peer count): " << socket->remoteEndpoint();
-                socket->close();
-                if (ec.value() < 1)
-                    runAcceptor();
-                return;
-            }
-            /// get and set the accepted endpoint to socket(client endpoint)
-            m_tcpClient = socket->remoteEndpoint();
-            socket->setNodeIPEndpoint(
-                NodeIPEndpoint(m_tcpClient.address(), m_tcpClient.port(), m_tcpClient.port()));
-            LOG(DEBUG) << "client port:" << m_tcpClient.port()
-                       << "|ip:" << m_tcpClient.address().to_string();
-            LOG(DEBUG) << "server port:" << m_listenPort
-                       << "|ip:" << m_tcpPublic.address().to_string();
-            /// register ssl callback to get the NodeID of peers
-            std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-            socket->sslref().set_verify_callback(newVerifyCallback(endpointPublicKey));
-            socket->sslref().async_handshake(ba::ssl::stream_base::server,
-                m_strand.wrap(boost::bind(&Host::handshakeServer, this, ba::placeholders::error,
-                    endpointPublicKey, socket)));
-        }));*/
     }
 }
 
@@ -733,29 +694,6 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint)
                         socket, endpointPublicKey, _nodeIPEndpoint)));
             }
         }));
-    /*
-    socket->ref().async_connect(
-        _nodeIPEndpoint, m_strand.wrap([=](boost::system::error_code const& ec) {
-            if (ec)
-            {
-                LOG(ERROR) << "Connection refused to node"
-                           << "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
-                Guard l(x_pendingNodeConns);
-                m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-                socket->close();
-                return;
-            }
-            else
-            {
-                /// get the public key of the server during handshake
-                std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-                socket->sslref().set_verify_callback(newVerifyCallback(endpointPublicKey));
-                /// call handshakeClient after handshake succeed
-                socket->sslref().async_handshake(ba::ssl::stream_base::client,
-                    m_strand.wrap(boost::bind(&Host::handshakeClient, this, ba::placeholders::error,
-                        socket, endpointPublicKey, _nodeIPEndpoint)));
-            }
-        }));*/
 }
 
 /**
