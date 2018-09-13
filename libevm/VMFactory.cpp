@@ -86,9 +86,7 @@ void setVMKind(const std::string& _name)
             return;
         }
     }
-
     // If not match for predefined VM names, try loading it as an EVMC DLL.
-
     evmc_loader_error_code ec;
     g_evmcCreateFn = evmc_load(_name.c_str(), &ec);
     switch (ec)
@@ -163,7 +161,7 @@ po::options_description vmProgramOptions(unsigned _lineLength)
     add("vm",
         po::value<std::string>()
             ->value_name("<name>|<path>")
-            ->default_value("legacy")
+            ->default_value("interpreter")  // we first user interpreter evm
             ->notifier(setVMKind),
         description.data());
 

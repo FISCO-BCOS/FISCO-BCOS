@@ -25,6 +25,7 @@
 #pragma once
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/Exceptions.h>
+#include <libevm/VMFactory.h>
 namespace dev
 {
 namespace test
@@ -40,12 +41,17 @@ public:
     /// @{
     bool all = false;  ///< Running every test, including time consuming ones.
     /// @}
+    /// vm related setting
+    std::string vm_name = "interpreter";
+    std::vector<std::pair<std::string, std::string>> evmc_options;
 
     /// The first time used, options are parsed with argc, argv
-    // static Options const& get(int argc = 0, const char** argv = 0);
+    /// static Options const& get(int argc = 0, const char** argv = 0);
     static Options const& get();
+    static Options const& get(int argc, char** argv);
 
 private:
+    void setVmOptions(int argc, char** argv);
     // Options(int argc = 0, const char** argv = 0);
     Options(int argc = 0, char** argv = 0);
     Options(Options const&) = delete;
