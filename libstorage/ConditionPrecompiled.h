@@ -1,6 +1,5 @@
 #pragma once
 
-#include <libprecompiled/StringPrecompiled.h>
 #include <libprecompiled/PrecompiledContext.h>
 #include <libdevcore/Common.h>
 #include "DB.h"
@@ -13,11 +12,9 @@ namespace precompiled {
 contract Condition {
     function EQ(string, int);
     function EQ(string, string);
-    function EQ(string, String);
 
     function NE(string, int);
     function NE(string, string);
-    function NE(string, String);
 
     function GT(string, int);
     function GE(string, int);
@@ -29,14 +26,12 @@ contract Condition {
     function limit(int, int);
 }
 {
-    "c559a73a": "EQ(string,address)",
     "e44594b9": "EQ(string,int256)",
     "cd30a1d1": "EQ(string,string)",
     "42f8dd31": "GE(string,int256)",
     "08ad6333": "GT(string,int256)",
     "b6f23857": "LE(string,int256)",
     "c31c9b65": "LT(string,int256)",
-    "9e029900": "NE(string,address)",
     "39aef024": "NE(string,int256)",
     "2783acf5": "NE(string,string)",
     "2e0d738a": "limit(int256)",

@@ -1,12 +1,12 @@
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
 #include "MemoryDB.h"
-#include "MemoryStateDBFactory.h"
+#include "MemoryDBFactory.h"
 
 using namespace dev;
 using namespace dev::storage;
 
-DB::Ptr MemoryStateDBFactory::openTable(h256 blockHash, int num,
+DB::Ptr MemoryDBFactory::openTable(h256 blockHash, int num,
                                              const std::string &table) {
   LOG(DEBUG) << "Open table:" << blockHash << " num:" << num
              << " table:" << table;
@@ -21,7 +21,7 @@ DB::Ptr MemoryStateDBFactory::openTable(h256 blockHash, int num,
   return memoryDB;
 }
 
-DB::Ptr MemoryStateDBFactory::createTable(
+DB::Ptr MemoryDBFactory::createTable(
     h256 blockHash, int num, const std::string &tableName,
     const std::string &keyField, const std::vector<std::string> &valueField) {
   LOG(DEBUG) << "Create Table:" << blockHash << " num:" << num
@@ -43,8 +43,8 @@ DB::Ptr MemoryStateDBFactory::createTable(
   return openTable(blockHash, num, tableName);
 }
 
-void MemoryStateDBFactory::setBlockHash(h256 blockHash) {
+void MemoryDBFactory::setBlockHash(h256 blockHash) {
   _blockHash = blockHash;
 }
 
-void MemoryStateDBFactory::setBlockNum(int blockNum) { _blockNum = blockNum; }
+void MemoryDBFactory::setBlockNum(int blockNum) { _blockNum = blockNum; }

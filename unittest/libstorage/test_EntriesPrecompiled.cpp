@@ -1,7 +1,6 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/PrecompiledContext.h>
-#include <libprecompiled/StringFactoryPrecompiled.h>
 #include <libstorage/EntriesPrecompiled.h>
 #include <libstorage/EntryPrecompiled.h>
 #include <libstorage/DB.h>
@@ -19,20 +18,17 @@ struct EntriesPrecompiledFixture {
   EntriesPrecompiledFixture() {
     entry = std::make_shared<Entry>();
     entries = std::make_shared<Entries>();
-    stringFactoryPrecompiled = std::make_shared<StringFactoryPrecompiled>();
     precompiledContext =
         std::make_shared<dev::precompiled::PrecompiledContext>();
     entriesPrecompiled =
         std::make_shared<dev::precompiled::EntriesPrecompiled>();
 
     entriesPrecompiled->setEntries(entries);
-    entriesPrecompiled->setStringFactoryPrecompiled(stringFactoryPrecompiled);
   }
   ~EntriesPrecompiledFixture() {}
 
   dev::storage::Entry::Ptr entry;
   dev::storage::Entries::Ptr entries;
-  StringFactoryPrecompiled::Ptr stringFactoryPrecompiled;
   dev::precompiled::PrecompiledContext::Ptr precompiledContext;
   dev::precompiled::EntriesPrecompiled::Ptr entriesPrecompiled;
 };
@@ -63,14 +59,7 @@ BOOST_AUTO_TEST_CASE(testGet) {
   Address address;
   abi.abiOut(bytesConstRef(&out), address);
   auto entryPrecompiled = precompiledContext->getPrecompiled(address);
-
-  bytes bstr = abi.abiIn("getString(string)", "key");
-  bytes out2 = entryPrecompiled->call(precompiledContext, bytesConstRef(&bstr));
-  Address address2;
-  abi.abiOut(bytesConstRef(&out2), address2);
-  auto stringPrecompiled = precompiledContext->getPrecompiled(address2);
-  std::string outstr = stringPrecompiled->toString(precompiledContext);
-  BOOST_TEST(entry->getField("key") == outstr);
+  BOOST_TEST(entryPrecompiled.get());
 }
 
 BOOST_AUTO_TEST_CASE(testSize){
