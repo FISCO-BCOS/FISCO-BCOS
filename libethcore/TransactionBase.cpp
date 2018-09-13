@@ -73,10 +73,10 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
 
         m_blockLimit = rlp[9].toInt<u256>();
 
-        if ((v != 27) && (v != 28))
+        if ((v != VBase) && (v != VBase + 1))
             BOOST_THROW_EXCEPTION(InvalidSignature());
 
-        m_vrs = SignatureStruct{r, s, static_cast<byte>(v - 27)};
+        m_vrs = SignatureStruct{r, s, static_cast<byte>(v - VBase)};
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
@@ -144,6 +144,8 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig) const
     if (m_type == NullTransaction)
         return;
 
+    // 3 means r/s/v 3 fields, may not be serialized.
+    // 7 means other fields in the transaction, except r/s/v.
     _s.appendList((_sig ? 3 : 0) + 7);
     _s << m_nonce << m_gasPrice << m_gas;
     if (m_type == MessageCall)
@@ -157,7 +159,7 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig) const
         if (!m_vrs)
             BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
-        _s << (int)(m_vrs->v + 27) << (u256)m_vrs->r << (u256)m_vrs->s;
+        _s << (int)(m_vrs->v + VBase) << (u256)m_vrs->r << (u256)m_vrs->s;
     }
 
     _s << m_blockLimit;

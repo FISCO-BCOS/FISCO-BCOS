@@ -18,10 +18,13 @@
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
  *
- * @author wheatli, chaychen
+ * @author wheatli
  * @date 2018.8.27
  * @modify add asAddress and fromAddress
- *         remove the special contract for block hash storage defined in EIP96
+ *
+ * @author chaychen
+ * @date 2018.9.4
+ * @modify remove the special contract for block hash storage defined in EIP96
  *
  * Ethereum-specific data structures & algorithms.
  */
