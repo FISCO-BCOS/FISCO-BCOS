@@ -12,15 +12,15 @@ help() {
 	echo $1
 	echo
 	cat << EOF
-参数:
-	-f <IP列表文件> IP列表，必填
-	-e <FISCO-BCOS程序路径> FISCO-BCOS程序路径, 必填
-	-n <节点数量> 每个IP节点数量, 默认为1
-	-a <CA密钥文件> CA密钥文件, 选填, 默认为自动生成
-	-o <输出目录> 输出目录, 选填, 默认为./output/
-	-p <起始端口> 起始端口, 选填, 默认为30300
-	-z 生成压缩包
-	-h 查看本帮助
+Usage:
+	-f <IP list file> [Required]
+	-e <FISCO-BCOS program path> [Required]
+	-n <Nodes per IP> Default 1
+	-a <CA Key> Default Generate a new CA
+	-o <Output Dir> Default ./output/
+	-p <Start Port> Default 30300
+	-z Generate tar packet
+	-h Help
 EOF
 
 exit
@@ -39,15 +39,15 @@ while getopts "a:n:o:p:e:f:hz" option;do
 	esac
 done
 
-[ -z $ip_file ] && help '错误: 请指定节点列表文件'
-[ -z $eth_path ] && help '错误: 请指定FISCO-BCOS程序路径'
+[ -z $ip_file ] && help 'ERROR: Please specify the IP list file.'
+[ -z $eth_path ] && help 'ERROR: Please specify the fisco-bcos path.'
 
-echo "FISCO-BCOS程序: $eth_path"
-echo "IP列表文件:  $ip_file"
-echo "CA密钥: $ca_file"
-echo "每IP节点数量: $node_num"
-echo "输出路径: $output_dir"
-echo "端口起始: $port_start"
+echo "FISCO-BCOS Path: $eth_path"
+echo "IP List File:    $ip_file"
+echo "CA Key:          $ca_file"
+echo "Nodes per IP:    $node_num"
+echo "Output Dir:      $output_dir"
+echo "Start Port:      $port_start"
 
 [ -d "$output_dir" ] || mkdir -p "$output_dir"
 
@@ -92,7 +92,7 @@ basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 EOF
 
-echo "生成密钥证书..."
+echo "Generating node key certificate..."
 nodeid_list=""
 ip_list=""
 #生成每个节点的密钥和ip列表
@@ -120,7 +120,7 @@ done < $ip_file
 
 echo "#!/bin/bash" > "$output_dir/start_all.sh"
 echo "PPath=\`pwd\`" >> "$output_dir/start_all.sh"
-echo "生成节点配置..."
+echo "Generating node configuration..."
 #生成每个节点的配置、创世块文件和启动脚本
 index=0
 while read line;do
