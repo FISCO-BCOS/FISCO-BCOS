@@ -198,7 +198,12 @@ Linux)
             fi
             $SUDO apt-get -q update
             $SUDO apt-get install -qy --no-install-recommends --allow-unauthenticated \
+                git \
+                openssl \
+                libssl-dev \
                 build-essential \
+                libkrb5-dev \
+                cmake \
                 libboost-all-dev \
                 libcurl4-openssl-dev \
                 libgmp-dev \
@@ -214,6 +219,11 @@ Linux)
             # Enable EPEL repo that contains leveldb-devel
             $SUDO yum -y -q install epel-release
             $SUDO yum -y -q install \
+                git \
+                openssl \
+                openssl-devel \
+                deltarpm \
+                cmake3 \
                 make \
                 gcc-c++ \
                 boost-devel \

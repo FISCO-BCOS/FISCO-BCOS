@@ -8,11 +8,11 @@ namespace dev {
 
 namespace storage {
 
-class MemoryStateDBFactory : public StateDBFactory {
+class MemoryDBFactory : public StateDBFactory {
  public:
-  typedef std::shared_ptr<MemoryStateDBFactory> Ptr;
+  typedef std::shared_ptr<MemoryDBFactory> Ptr;
 
-  virtual ~MemoryStateDBFactory() {}
+  virtual ~MemoryDBFactory() {}
 
   DB::Ptr openTable(h256 blockHash, int num,
                          const std::string &table) override;
