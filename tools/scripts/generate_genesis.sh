@@ -60,14 +60,14 @@ help() {
     echo "    bash $this_script -i xxxxxxxxxxxxx -o ~/mydata/node0 -r 0x3b5b68db7502424007c6e6567fa690c5afd71721 -g"
 exit -1
 }
-goumi_support=0
+guomi_support=0
 while getopts "d:o:i:s:gh" option;do
 	case $option in
 	o) output_dirs=$OPTARG;;
     d) genesis_node_dir=$OPTARG;;
     i) init_miners=$OPTARG;;
     s) god_address=$OPTARG;;
-    g) goumi_support=1;;
+    g) guomi_support=1;;
 	h) help;;
 	esac
 done
