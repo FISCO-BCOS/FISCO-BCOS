@@ -34,7 +34,7 @@ public:
     virtual ~SessionFace() {}
 
     virtual void start() = 0;
-    
+
     virtual void disconnect(DisconnectReason _reason) = 0;
 
     virtual void ping() = 0;

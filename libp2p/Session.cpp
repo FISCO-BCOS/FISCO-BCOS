@@ -96,14 +96,16 @@ vector<T> randomSelection(vector<T> const& _t, unsigned _n)
 }
 
 // read package after receive the packae
-// @param: _protocolID indicates message type, such as connection msg, sync msg, pbft msg, and so on.
+// @param: _protocolID indicates message type, such as connection msg, sync msg, pbft msg, and so
+// on.
 bool Session::readPacket(uint16_t _protocolID, PacketType _t, RLP const& _r)
 {
     m_lastReceived = chrono::steady_clock::now();
     try  // Generic try-catch block designed to capture RLP format errors - TODO: give decent
          // diagnostics, make a bit more specific over what is caught.
     {
-        if (_protocolID == 0 && _t < UserPacket) {
+        if (_protocolID == 0 && _t < UserPacket)
+        {
             return interpret(_t, _r);
         }
 
@@ -233,7 +235,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
         }
         DEV_GUARDED(x_framing)
         {
-             m_writeQueue.pop();
+            m_writeQueue.pop();
             if (m_writeQueue.empty())
             {
                 return;

@@ -103,7 +103,7 @@ public:
 
     void registerHandlerByProtoclID(uint32_t protocolID,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler);
-        
+
     void registerHandlerByTopic(std::string const& topic,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler,
         Options options);
@@ -116,7 +116,7 @@ private:
     std::unordered_map<uint32_t,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> >
         m_protocolID2Handler;
-        
+
     std::unordered_map<std::string,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> >
         m_topic2Handler;

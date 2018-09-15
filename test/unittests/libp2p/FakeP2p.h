@@ -117,8 +117,7 @@ static Session* createFakeSession(std::string const& _clientVersion, std::string
     /// init PeerSessionInfo
     PeerSessionInfo m_peerInfo = {m_host->id(), m_host->clientVersion(),
         m_peer->endpoint().address.to_string(), m_host->listenPort(),
-        chrono::steady_clock::duration(), 0, map<std::string, std::string>(),
-        m_peer_endpoint};
+        chrono::steady_clock::duration(), 0, map<std::string, std::string>(), m_peer_endpoint};
 
     Session* m_session = new FakeSession(m_host, m_socket, m_peer, m_peerInfo);
     return m_session;
