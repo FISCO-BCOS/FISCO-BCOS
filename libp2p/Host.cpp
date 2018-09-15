@@ -22,9 +22,7 @@
  * @date 2018
  */
 #include "Host.h"
-#include "Capability.h"
 #include "Common.h"
-#include "HostCapability.h"
 #include "ParseCert.h"
 #include "RLPxHandshake.h"
 #include "Session.h"
@@ -118,9 +116,7 @@ void Host::startedWorking()
         m_timer.reset(new boost::asio::deadline_timer(m_ioService));
         m_run = true;
     }
-    /// start capabilities by calling onStarting
-    for (auto const& h : m_capabilities)
-        h.second->onStarting();
+
     /// listen and bind listen port
     int port = Network::tcp4Listen(m_tcp4Acceptor, m_netConfigs);
     if (port != -1)
@@ -382,8 +378,7 @@ void Host::startPeerSession(
     /// information obtained during RLPxHandshake
     auto protocolVersion = _rlp[0].toInt<unsigned>();
     auto clientVersion = _rlp[1].toString();
-    auto caps = _rlp[2].toVector<CapDesc>();
-    auto listenPort = _rlp[3].toInt<unsigned short>();
+    auto listenPort = _rlp[2].toInt<unsigned short>();
     LOG(INFO) << "Host::startPeerSession! " << _pub;
     Public node_id = _pub;
 
@@ -413,39 +408,13 @@ void Host::startPeerSession(
     }
     p->setEndpoint(nodeIPEndpoint);
 
-    stringstream capslog;
-    /// remove lower-version existed capabilities from received caps
-    caps.erase(remove_if(caps.begin(), caps.end(),
-                   [&](CapDesc const& _r) {
-                       return !haveCapability(_r) ||
-                              any_of(caps.begin(), caps.end(), [&](CapDesc const& _o) {
-                                  return _r.first == _o.first && _o.second > _r.second &&
-                                         haveCapability(_o);
-                              });
-                   }),
-        caps.end());
-
-    for (auto cap : caps)
-        capslog << "(" << cap.first << "," << dec << cap.second << ")";
-
     LOG(INFO) << "Hello: " << clientVersion << "V[" << protocolVersion << "]" << node_id << showbase
-              << capslog.str() << dec << listenPort;
+              << dec << listenPort;
 
     shared_ptr<SessionFace> ps = make_shared<Session>(this, _s, p,
         PeerSessionInfo({node_id, clientVersion, p->endpoint().address.to_string(), listenPort,
-            chrono::steady_clock::duration(), _rlp[2].toSet<CapDesc>(), 0, map<string, string>(),
-            nodeIPEndpoint}));
-    /*
-    if (protocolVersion < dev::p2p::c_protocolVersion - 1)
-    {
-        ps->disconnect(DisconnectReason::IncompatibleProtocol);
-        return;
-    }*/
-    if (caps.empty())
-    {
-        ps->disconnect(DisconnectReason::UselessPeer);
-        return;
-    }
+            chrono::steady_clock::duration(), 0, map<string, string>(), nodeIPEndpoint}));
+
     {
         RecursiveGuard l(x_sessions);
         if (m_sessions.count(node_id) && !!m_sessions[node_id].lock())
@@ -475,22 +444,11 @@ void Host::startPeerSession(
             ps->disconnect(TooManyPeers);
             return;
         }
-        unsigned offset = (unsigned)UserPacket;
-        uint16_t cnt = 1;
-        /// get capability object according to capability description
-        for (auto const& i : caps)
-        {
-            auto pcap = m_capabilities[i];
-            if (!pcap)
-                return ps->disconnect(IncompatibleProtocol);
-            pcap->newPeerCapability(ps, offset, i, 0);
-            offset += pcap->messageCount();
-        }
         /// start session and modify m_sessions
         ps->start();
         m_sessions[node_id] = ps;
     }
-    LOG(INFO) << "p2p.host.peer.register: " << node_id;
+    LOG(INFO) << "start a new peer: " << node_id;
 }
 
 /**
@@ -781,9 +739,6 @@ void Host::doneWorking()
     while (m_accepting)
         m_ioService.poll();
 
-    // stop capabilities (eth: stops syncing or block/tx broadcast)
-    for (auto const& h : m_capabilities)
-        h.second->onStopping();
     // disconnect pending handshake, before peers, as a handshake may create a peer
     for (unsigned n = 0;; n = 0)
     {

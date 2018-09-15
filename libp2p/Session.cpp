@@ -24,7 +24,6 @@
 
 #include "Session.h"
 
-#include "Capability.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Exceptions.h>
@@ -58,10 +57,6 @@ Session::~Session()
     LOG(INFO) << "Closing peer session :-(";
     m_peer->m_lastConnected = m_peer->m_lastAttempted - chrono::seconds(1);
 
-    // Read-chain finished for one reason or another.
-    for (auto& i : m_capabilities)
-        i.second.reset();
-
     try
     {
         bi::tcp::socket& socket = m_socket->ref();
@@ -76,6 +71,7 @@ Session::~Session()
     }
     catch (...)
     {
+        LOG(ERROR) << "Deconstruct Session exception";
     }
 }
 
@@ -100,22 +96,18 @@ vector<T> randomSelection(vector<T> const& _t, unsigned _n)
 }
 
 // read package after receive the packae
-bool Session::readPacket(uint16_t _capId, PacketType _t, RLP const& _r)
+// @param: _protocolID indicates message type, such as connection msg, sync msg, pbft msg, and so on.
+bool Session::readPacket(uint16_t _protocolID, PacketType _t, RLP const& _r)
 {
     m_lastReceived = chrono::steady_clock::now();
     try  // Generic try-catch block designed to capture RLP format errors - TODO: give decent
          // diagnostics, make a bit more specific over what is caught.
     {
-        // v4 frame headers are useless, offset packet type used
-        // v5 protocol type is in header, packet type not offset
-        if (_capId == 0 && _t < UserPacket)
+        if (_protocolID == 0 && _t < UserPacket) {
             return interpret(_t, _r);
+        }
 
-        for (auto const& i : m_capabilities)
-            if (_t >= (int)i.second->m_idOffset &&
-                _t - i.second->m_idOffset < i.second->hostCapability()->messageCount())
-                return i.second->m_enabled ? i.second->interpret(_t - i.second->m_idOffset, _r) :
-                                             true;
+        // TODO(wheatli): process the other message
 
         return false;
     }
@@ -213,8 +205,8 @@ void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
     bool doWrite = false;
     DEV_GUARDED(x_framing)
     {
-        _writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
-        doWrite = (_writeQueue.size() == 1);
+        m_writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
+        doWrite = (m_writeQueue.size() == 1);
     }
     if (doWrite)
         write();
@@ -241,8 +233,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
         }
         DEV_GUARDED(x_framing)
         {
-            _writeQueue.pop();
-            if (_writeQueue.empty())
+             m_writeQueue.pop();
+            if (m_writeQueue.empty())
             {
                 return;
             }
@@ -265,7 +257,7 @@ void Session::write()
         u256 enter_time = 0;
         DEV_GUARDED(x_framing)
         {
-            task = _writeQueue.top();
+            task = m_writeQueue.top();
             Header header;
             uint32_t length = sizeof(Header) + boost::get<0>(task)->size();
             header.length = htonl(length);
@@ -441,9 +433,4 @@ bool Session::checkRead(std::size_t _expected, boost::system::error_code _ec, st
     }
 
     return true;
-}
-
-void Session::registerCapability(CapDesc const& _desc, std::shared_ptr<Capability> _p)
-{
-    DEV_GUARDED(x_framing) { m_capabilities[_desc] = _p; }
 }

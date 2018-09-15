@@ -84,32 +84,39 @@ class Service
 public:
     Message::Ptr sendMessageByNodeID(
         dev::h256 const& nodeID, uint32_t protocolID, Message::Ptr message);
+
     void asyncSendMessageByNodeID(dev::h256 const& nodeID, uint32_t protocolID,
         Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
         Options options);
 
     Message::Ptr sendMessageByTopic(
         std::string const& topic, uint32_t protocolID, Message::Ptr message);
+
     void asyncSendMessageByTopic(std::string const& topic, uint32_t protocolID,
         Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
         Options options);
 
     void asyncMulticastMessageByTopic(
         std::string const& topic, uint32_t protocolID, Message::Ptr message);
+
     void asyncBroadcastMessage(uint32_t protocolID, Message::Ptr message, Options options);
 
     void registerHandlerByProtoclID(uint32_t protocolID,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler);
+        
     void registerHandlerByTopic(std::string const& topic,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler,
         Options options);
 
 private:
     std::shared_ptr<Host> m_host;
+
     std::unordered_map<uint32_t, std::function<void(dev::Exception, Message::Ptr)> > m_seq2Callback;
+
     std::unordered_map<uint32_t,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> >
         m_protocolID2Handler;
+        
     std::unordered_map<std::string,
         std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> >
         m_topic2Handler;

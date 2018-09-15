@@ -24,7 +24,6 @@
 #include <libdevcore/easylog.h>
 #include <libp2p/CertificateServer.h>
 #include <libp2p/Host.h>
-#include <libp2p/HostCapability.h>
 #include <libp2p/Network.h>
 #include <boost/program_options.hpp>
 #include <memory>

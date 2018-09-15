@@ -82,13 +82,6 @@ public:
     }
     std::chrono::steady_clock::time_point connectionTime() override { return m_connect; }
 
-    void registerCapability(CapDesc const& _desc, std::shared_ptr<Capability> _p) override;
-
-    std::map<CapDesc, std::shared_ptr<Capability>> const& capabilities() const override
-    {
-        return m_capabilities;
-    }
-
     std::shared_ptr<Peer> peer() const override { return m_peer; }
 
     std::chrono::steady_clock::time_point lastReceived() const override { return m_lastReceived; }
@@ -152,7 +145,7 @@ private:
 
     boost::heap::priority_queue<boost::tuple<std::shared_ptr<bytes>, uint16_t, u256>,
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
-        _writeQueue;
+        m_writeQueue;
 
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
 
@@ -170,27 +163,10 @@ private:
     std::chrono::steady_clock::time_point m_ping;          ///< Time point of last ping.
     std::chrono::steady_clock::time_point m_lastReceived;  ///< Time point of last message.
 
-    std::map<CapDesc, std::shared_ptr<Capability>> m_capabilities;  ///< The peer's capability set.
-
     unsigned m_start_t;
 
     boost::asio::io_service::strand* m_strand;
 };
-
-template <class PeerCap>
-std::shared_ptr<PeerCap> capabilityFromSession(
-    SessionFace const& _session, u256 const& _version = PeerCap::version())
-{
-    try
-    {
-        return std::static_pointer_cast<PeerCap>(
-            _session.capabilities().at(std::make_pair(PeerCap::name(), _version)));
-    }
-    catch (...)
-    {
-        return nullptr;
-    }
-}
 
 }  // namespace p2p
 }  // namespace dev

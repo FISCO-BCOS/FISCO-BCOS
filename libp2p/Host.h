@@ -24,6 +24,15 @@
 
 #pragma once
 
+#include "Common.h"
+#include "Network.h"
+#include "Peer.h"
+#include "RLPXSocket.h"
+#include "SessionFace.h"
+#include <libdevcore/Guards.h>
+#include <libdevcore/Worker.h>
+#include <libdevcrypto/Common.h>
+#include <libdevcrypto/ECDHE.h>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -32,16 +41,6 @@
 #include <thread>
 #include <utility>
 #include <vector>
-
-#include "Common.h"
-#include "HostCapabilityFace.h"
-#include "Network.h"
-#include "Peer.h"
-#include "RLPXSocket.h"
-#include <libdevcore/Guards.h>
-#include <libdevcore/Worker.h>
-#include <libdevcrypto/Common.h>
-#include <libdevcrypto/ECDHE.h>
 
 namespace ba = boost::asio;
 namespace bi = ba::ip;
@@ -174,49 +173,6 @@ public:
         return m_run;
     }
 
-    /// @return: whether specified capabilities exists
-    virtual bool haveCapability(CapDesc const& _name) const
-    {
-        return m_capabilities.count(_name) != 0;
-    }
-
-    /// register capability
-    template <class T>
-    std::shared_ptr<T> registerCapability(std::shared_ptr<T> const& _t)
-    {
-        _t->m_host = this;
-        m_capabilities[std::make_pair(T::staticName(), T::staticVersion())] = _t;
-        return _t;
-    }
-    /// add capability
-    template <class T>
-    void addCapability(std::shared_ptr<T> const& _p, std::string const& _name, u256 const& _version)
-    {
-        m_capabilities[std::make_pair(_name, _version)] = _p;
-    }
-    /// get all cap descriptions
-    virtual CapDescs caps() const
-    {
-        CapDescs ret;
-        for (auto const& i : m_capabilities)
-            ret.push_back(i.first);
-        return ret;
-    }
-
-    template <class T>
-    std::shared_ptr<T> cap() const
-    {
-        try
-        {
-            return std::static_pointer_cast<T>(
-                m_capabilities.at(std::make_pair(T::staticName(), T::staticVersion())));
-        }
-        catch (...)
-        {
-            return nullptr;
-        }
-    }
-
     /// Get session by id
     std::shared_ptr<SessionFace> peerSession(NodeID const& _id)
     {
@@ -312,8 +268,7 @@ protected:  /// protected members(for unit testing)
     /// mutex for m_reconnectnow
     Mutex x_reconnectnow;
     std::unique_ptr<boost::asio::deadline_timer> m_timer;
-    /// Each of the capabilities we support
-    std::map<CapDesc, std::shared_ptr<HostCapabilityFace>> m_capabilities;
+
     /// static nodes recording maps between endpoints of peers and node id
     std::map<NodeIPEndpoint, NodeID> m_staticNodes;
     /// public listening endpoint.
