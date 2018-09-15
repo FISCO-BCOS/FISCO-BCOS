@@ -193,9 +193,10 @@ static Params initCommandLine(int argc, const char* argv[])
 
 static void InitNetwork(Params& m_params)
 {
+    std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioInterface>();
     std::shared_ptr<NetworkConfig> m_netConfig = m_params.creatNetworkConfig();
-    std::shared_ptr<Host> m_host = std::make_shared<Host>(
-        m_params.clientVersion(), CertificateServer::GetInstance().keypair(), *m_netConfig.get());
+    std::shared_ptr<Host> m_host = std::make_shared<Host>(m_params.clientVersion(),
+        CertificateServer::GetInstance().keypair(), *m_netConfig.get(), m_asioInterface);
     m_host->setStaticNodes(m_params.staticNodes());
     /// begin working
     m_host->start();
