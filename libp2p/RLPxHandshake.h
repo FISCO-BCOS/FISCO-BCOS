@@ -76,8 +76,8 @@ protected:
     {
         try
         {
-            encoded_rlp.appendList(4) << dev::p2p::c_protocolVersion << m_host->clientVersion()
-                                      << m_host->listenPort();
+            encoded_rlp.appendList(4)
+                << dev::p2p::c_protocolVersion << m_host->clientVersion() << m_host->listenPort();
             return true;
         }
         catch (std::exception& err)
