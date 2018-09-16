@@ -242,7 +242,6 @@ struct PeerSessionInfo
     std::string const host;
     unsigned short const port;
     std::chrono::steady_clock::duration lastPing;
-    std::set<CapDesc> const caps;
     unsigned socketId;
     std::map<std::string, std::string> notes;
     unsigned const protocolVersion;

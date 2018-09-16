@@ -27,7 +27,6 @@ namespace dev
 {
 namespace p2p
 {
-class Capability;
 class Peer;
 class SessionFace
 {
@@ -35,6 +34,7 @@ public:
     virtual ~SessionFace() {}
 
     virtual void start() = 0;
+
     virtual void disconnect(DisconnectReason _reason) = 0;
 
     virtual void ping() = 0;
@@ -48,11 +48,8 @@ public:
     virtual void addNote(std::string const& _k, std::string const& _v) = 0;
 
     virtual PeerSessionInfo info() const = 0;
+
     virtual std::chrono::steady_clock::time_point connectionTime() = 0;
-
-    virtual void registerCapability(CapDesc const& _desc, std::shared_ptr<Capability> _p) = 0;
-
-    virtual std::map<CapDesc, std::shared_ptr<Capability>> const& capabilities() const = 0;
 
     virtual std::shared_ptr<Peer> peer() const = 0;
 
