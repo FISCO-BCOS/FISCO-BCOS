@@ -402,14 +402,12 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> cons
         }
         NodeIPEndpoint remote_endpoint(_s->remoteEndpoint().address(), _s->remoteEndpoint().port(),
             _s->remoteEndpoint().port());
-        auto it = m_staticNodes.find(remote_endpoint);
+        auto it = m_staticNodes.find(NodeIPEndpoint(remote_endpoint));
         if (it != m_staticNodes.end())
         {
-            std::cout << "m_staticNodes Config:" << (it->first.tcpPort) << std::endl;
-            // remote_endpoint.tcpPort = it->first.tcpPort;
-            // remote_endpoint.udpPort = it->first.udpPort;
+            remote_endpoint.tcpPort = it->first.tcpPort;
+            remote_endpoint.udpPort = it->first.udpPort;
             p->setEndpoint(remote_endpoint);
-            std::cout << "#### UPDATE TO listen port:" << p->endpoint().tcpPort << std::endl;
         }
     }
 
@@ -436,8 +434,6 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> cons
             /// modify m_staticNodes(including accept cases, namely the client endpoint)
             if (it != m_staticNodes.end())
             {
-                std::cout << "### remote endpoint port:" << _s->remoteEndpoint().port()
-                          << std::endl;
                 it->second = node_id;
             }
         }
@@ -450,7 +446,6 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> cons
         /// start session and modify m_sessions
         ps->start();
         m_sessions[node_id] = ps;
-        LOG(DEBUG) << "#### start peer session from " << node_id << " succeed";
     }
     LOG(INFO) << "start a new peer: " << node_id;
 }

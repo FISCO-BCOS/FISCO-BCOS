@@ -204,6 +204,15 @@ public:
         return address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort;
     }
     bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
+    bool operator<(const dev::p2p::NodeIPEndpoint& rhs) const
+    {
+        if (address < rhs.address)
+        {
+            return true;
+        }
+
+        return tcpPort < rhs.tcpPort;
+    }
     void streamRLP(RLPStream& _s, RLPAppend _append = StreamList) const;
     void interpretRLP(RLP const& _r);
     std::string name() const
