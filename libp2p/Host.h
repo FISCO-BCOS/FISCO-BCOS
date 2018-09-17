@@ -151,8 +151,7 @@ public:
     /// 2. modify m_peers && disconnect already-connected session
     /// 3. modify m_sessions and m_staticNodes
     /// 4. start new session (session->start())
-    void startPeerSession(
-        Public const& _pub, RLP const& _rlp, std::shared_ptr<RLPXSocket> const& _s);
+    void startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> const& _s);
     /// remove invalid RLPXHandshake object from m_connecting
     /// remove expired timer
     /// modify alived peers to m_peers
@@ -257,13 +256,9 @@ protected:  /// protected members(for unit testing)
     /// maps between peer name and peeer object
     /// attention: (endpoint recorded in m_peers always (listenIp, listenAddress))
     ///           (client endpoint of (connectIp, connectAddress) has no record)
-    std::unordered_map<std::string, std::shared_ptr<Peer>> m_peers;
+    std::unordered_map<NodeID, std::shared_ptr<Peer>> m_peers;
     /// mutex for accepting session information m_sessions and m_peers
     mutable RecursiveMutex x_sessions;
-    /// Pending connections.
-    std::list<std::weak_ptr<RLPXHandshake>> m_connecting;
-    /// mutex for m_connecting
-    Mutex x_connecting;
     /// control reconnecting, if set to be true, will reconnect peers immediately
     bool m_reconnectnow = true;
     /// mutex for m_reconnectnow

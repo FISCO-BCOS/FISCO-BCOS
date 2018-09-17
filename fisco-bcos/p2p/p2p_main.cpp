@@ -113,6 +113,7 @@ private:
             js::mValue val;
             js::read_string(json, val);
             js::mObject jsObj = val.get_obj();
+            NodeIPEndpoint m_endpoint;
             if (jsObj.count("nodes"))
             {
                 for (auto node : jsObj["nodes"].get_array())
@@ -127,11 +128,13 @@ private:
                     p2pport = uint16_t(std::stoi(node.get_obj()["p2pport"].get_str()));
 
                     LOG(INFO) << "bootstrapnodes host :" << host << ",p2pport :" << p2pport;
-                    // NodeIPEndpoint nodeendpoint=NodeIPEndpoint(bi::address::from_string(host),
-                    // p2pport,p2pport);
-                    NodeIPEndpoint nodeEndpoint(host, p2pport, p2pport);
-                    if (nodeEndpoint.address.to_string() != "0.0.0.0")
-                        m_staticNodes[nodeEndpoint] = Public(0);
+                    m_endpoint.address = bi::address::from_string(host);
+                    m_endpoint.tcpPort = p2pport;
+                    m_endpoint.udpPort = p2pport;
+                    if (m_endpoint.address.to_string() != "0.0.0.0")
+                    {
+                        m_staticNodes.insert(std::make_pair(NodeIPEndpoint(m_endpoint), NodeID()));
+                    }
                 }
             }
         }

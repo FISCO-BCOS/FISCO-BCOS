@@ -53,7 +53,7 @@ Session::Session(Host* _server, std::shared_ptr<RLPXSocket> const& _s,
 Session::~Session()
 {
     ThreadContext tc(info().id.abridged());
-    ThreadContext tc2(info().clientVersion);
+    ThreadContext tc2(info().host);
     LOG(INFO) << "Closing peer session :-(";
     m_peer->m_lastConnected = m_peer->m_lastAttempted - chrono::seconds(1);
 
@@ -225,7 +225,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
                          << ",id=" << id();
         }
         ThreadContext tc(info().id.abridged());
-        ThreadContext tc2(info().clientVersion);
+        ThreadContext tc2(info().host);
         // must check queue, as write callback can occur following dropped()
         if (ec)
         {
@@ -371,7 +371,7 @@ void Session::doRead()
         auto _asyncRead = [this, self, hLength, protocolID](
                               boost::system::error_code ec, std::size_t length) {
             ThreadContext tc(info().id.abridged());
-            ThreadContext tc2(info().clientVersion);
+            ThreadContext tc2(info().host);
             if (!checkRead(hLength - sizeof(Header), ec, length))
                 return;
 

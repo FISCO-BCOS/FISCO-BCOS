@@ -199,21 +199,20 @@ public:
         return NodeIPEndpoint::test_allowLocal ? !address.is_unspecified() :
                                                  isPublicAddress(address);
     }
-
     bool operator==(NodeIPEndpoint const& _cmp) const
     {
-        if (address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort)
-            return true;
-        if (udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort)
-        {
-            if ((address.to_string() == "0.0.0.0" && _cmp.address.to_string() == "127.0.0.1") ||
-                (address.to_string() == "127.0.0.1" && _cmp.address.to_string() == "0.0.0.0"))
-                return true;
-        }
-        return false;
+        return address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort;
     }
     bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
+    bool operator<(const dev::p2p::NodeIPEndpoint& rhs) const
+    {
+        if (address < rhs.address)
+        {
+            return true;
+        }
 
+        return tcpPort < rhs.tcpPort;
+    }
     void streamRLP(RLPStream& _s, RLPAppend _append = StreamList) const;
     void interpretRLP(RLP const& _r);
     std::string name() const
@@ -238,14 +237,10 @@ public:
 struct PeerSessionInfo
 {
     NodeID const id;
-    std::string const clientVersion;
     std::string const host;
-    unsigned short const port;
     std::chrono::steady_clock::duration lastPing;
     unsigned socketId;
     std::map<std::string, std::string> notes;
-    unsigned const protocolVersion;
-    NodeIPEndpoint nodeIPEndpoint;
 };
 
 using PeerSessionInfos = std::vector<PeerSessionInfo>;

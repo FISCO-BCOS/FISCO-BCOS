@@ -74,6 +74,8 @@ class Peer : public Node
 public:
     /// Construct Peer from Node.
     Peer(Node const& _node) : Node(_node) {}
+    Peer(NodeID const& _node, NodeIPEndpoint const& _ip) : Node(_node, _ip) {}
+    Peer(NodeSpec const& _s) : Node(_s) {}
 
     // bool isOffline() const { return !m_session.lock(); }
     virtual bool operator<(Peer const& _p) const;
