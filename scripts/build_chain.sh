@@ -128,28 +128,6 @@ while read line;do
 		echo "生成ip:${line} id:${index}的节点配置..."
 		node_dir="$output_dir/node_${line}_${index}"
 	cat << EOF > "$node_dir/config${i}.conf"
-[common]
-	;\${DATAPATH} == data_path
-	data_path=data/
-	log_config=log.conf
-	ext_header=0
-[secure]
-	key=\${DATAPATH}/node.key
-	cert=\${DATAPATH}/node.crt
-	ca_cert=\${DATAPATH}/ca.crt
-	ca_path=
-
-[statedb]
-	;type : leveldb/amop
-	type=leveldb
-	path=\${DATAPATH}/statedb
-	retryInterval=1
-	maxRetry=0
-	topic=DB
-[pbft]
-	block_interval=1000
-
-	$nodeid_list
 [rpc]
 	listen_ip=0.0.0.0
 	listen_port=$(( port_start + 1 + index * 4 ))
@@ -163,6 +141,27 @@ while read line;do
 	reconnect_interval=60
 
 	$ip_list
+[pbft]
+	block_interval=1000
+
+	$nodeid_list
+[common]
+	;\${DATAPATH} == data_path
+	data_path=data/
+	log_config=log.conf
+	ext_header=0
+[secure]
+	key=\${DATAPATH}/node.key
+	cert=\${DATAPATH}/node.crt
+	ca_cert=\${DATAPATH}/ca.crt
+	ca_path=
+[statedb]
+	;type : leveldb/amop
+	type=leveldb
+	path=\${DATAPATH}/statedb
+	retryInterval=1
+	maxRetry=0
+	topic=DB
 EOF
 	
 	cat << EOF > "$node_dir/log.conf"
