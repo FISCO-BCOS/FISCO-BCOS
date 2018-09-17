@@ -39,6 +39,7 @@ bool operator==(evmc_uint256be const& a, evmc_uint256be const& b)
 }
 
 FakeState fakeState;
+eth::LogEntries fakeLogs;
 
 int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
 {
@@ -128,31 +129,32 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
 
 void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
 {
-    result->tx_gas_price = reinterpret_cast<evmc_uint256be const&>(FAKE_GAS_PRICE);
+    result->tx_gas_price = toEvmC(FAKE_GAS_PRICE);
     result->tx_origin = reinterpret_cast<evmc_address const&>(FAKE_ORIGIN);
     result->block_coinbase = reinterpret_cast<evmc_address const&>(FAKE_COINBASE);
     result->block_number = FAKE_BLOCK_NUMBER;
     result->block_timestamp = FAKE_TIMESTAMP;
     result->block_gas_limit = FAKE_GAS_LIMIT;
-    result->block_difficulty = reinterpret_cast<evmc_uint256be const&>(FAKE_DIFFICULTY);
+    result->block_difficulty = toEvmC(FAKE_DIFFICULTY);
 }
 
 void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number)
 {
     bytes const& fakeBlock = bytes();
     h256 blockHash = sha3(fakeBlock);
-    *o_hash = reinterpret_cast<evmc_uint256be const&>(blockHash);
+    cout << "block hash: " << blockHash.hex() << endl;
+    *o_hash = reinterpret_cast<evmc_uint256be const&>(FAKE_BLOCK_HASH);
 }
 
 void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data, size_t _dataSize,
     evmc_uint256be const _topics[], size_t _numTopics) noexcept
 {
     (void)_context;
-    (void)_addr;
-    (void)_data;
-    (void)_dataSize;
-    (void)_topics;
-    (void)_numTopics;
+    Address myAddress = fromEvmC(*_addr);
+    h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
+    h256s topics = h256s{pTopics, pTopics + _numTopics};
+    bytes data = bytesConstRef{_data, _dataSize}.toBytes();
+    fakeLogs.push_back(eth::LogEntry(myAddress, topics, data));
 }
 
 
