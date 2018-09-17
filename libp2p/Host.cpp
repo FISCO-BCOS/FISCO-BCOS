@@ -56,7 +56,8 @@ std::chrono::seconds const c_reconnectNodesInterval = std::chrono::seconds(60);
 std::chrono::milliseconds const c_keepAliveTimeOut = std::chrono::milliseconds(1000);
 
 Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
-    shared_ptr<AsioInterface>& _asioInterface)
+    shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
+    shared_ptr<SessionFactory>& _sessionFactory)
   : Worker("p2p", 0),
     m_clientVersion(_clientVersion),
     m_netConfigs(_n),
@@ -68,7 +69,9 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_lastReconnect(chrono::steady_clock::time_point::min()),
     m_strand(m_ioService),
     m_listenPort(_n.listenPort),
-    m_asioInterface(_asioInterface)
+    m_asioInterface(_asioInterface),
+    m_socketFactory(_socketFactory),
+    m_sessionFactory(_sessionFactory)
 {
     LOG(INFO) << "Id:" << id();
 }
@@ -156,8 +159,9 @@ void Host::runAcceptor()
         m_accepting = true;
         LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_tcpPublic
                   << "), P2P Start Accept";
-        std::shared_ptr<RLPXSocket> socket;
-        socket.reset(new RLPXSocket(m_ioService, NodeIPEndpoint()));
+        std::shared_ptr<SocketFace> socket =
+            m_socketFactory->create_socket(m_ioService, NodeIPEndpoint());
+        // socket.reset(socket);
         /// define callback after accept connections
         m_asioInterface->async_accept(
             m_tcp4Acceptor, socket->ref(), m_strand.wrap([=](boost::system::error_code ec) {
@@ -320,7 +324,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
  * @param socket: socket related to the endpoint of the connected client
  */
 void Host::handshakeServer(const boost::system::error_code& error,
-    std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<RLPXSocket> socket)
+    std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket)
 {
     NodeID node_id = NodeID(*endpointPublicKey);
     /// handshake failed
@@ -369,7 +373,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
  *              now include protocolVersion, clientVersion, caps and listenPort
  * @param _s : connected socket(used to init session object)
  */
-void Host::startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> const& _s)
+void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> const& _s)
 {
     /// information obtained during RLPxHandshake
     // auto protocolVersion = _rlp[0].toInt<unsigned>();
@@ -380,6 +384,12 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> cons
     if (node_id == NodeID())
     {
         LOG(ERROR) << "No nodeid! disconnect";
+        _s->close();
+        return;
+    }
+    if (node_id == id())
+    {
+        LOG(DEBUG) << "Ignore Connect to self! disconnect";
         _s->close();
         return;
     }
@@ -410,8 +420,7 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> cons
             p->setEndpoint(remote_endpoint);
         }
     }
-
-    shared_ptr<SessionFace> ps = make_shared<Session>(this, _s, p,
+    shared_ptr<SessionFace> ps = m_sessionFactory->create_session(this, _s, p,
         PeerSessionInfo({node_id, p->endpoint().address.to_string(),
             chrono::steady_clock::duration(), 0, map<string, string>()}));
     {
@@ -499,8 +508,6 @@ void Host::keepAlivePeers()
                     LOG(WARNING) << "Host::keepAlivePeers timeout disconnect " << p->id();
                     p->disconnect(PingTimeout);
                 }
-                else
-                    p->ping();
                 ++it;
             }
             /// erase unconnected sessions
@@ -605,9 +612,9 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint)
     }
     LOG(INFO) << "Attempting connection to node "
               << "@" << _nodeIPEndpoint.name() << "," << _nodeIPEndpoint.host << " from " << id();
-    std::shared_ptr<RLPXSocket> socket;
-    socket.reset(new RLPXSocket(m_ioService, _nodeIPEndpoint));
-
+    std::shared_ptr<SocketFace> socket =
+        m_socketFactory->create_socket(m_ioService, _nodeIPEndpoint);
+    // socket.reset(socket);
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
     socket->sslref().set_verify_depth(3);
     m_tcpClient = socket->remoteEndpoint();
@@ -644,7 +651,7 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint)
  * @param _nodeIPEndpoint : endpoint of the server to connect
  */
 void Host::handshakeClient(const boost::system::error_code& error,
-    std::shared_ptr<RLPXSocket> socket, std::shared_ptr<std::string>& endpointPublicKey,
+    std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
     NodeIPEndpoint& _nodeIPEndpoint)
 {
     /// get the node id of the server
@@ -745,7 +752,7 @@ void Host::doneWorking()
 bytes Host::saveNetwork() const
 {
     RLPStream ret(3);
-    ret << dev::p2p::c_protocolVersion << m_alias.secret().ref();
+    ret << m_alias.secret().ref();
     int count = 0;
     ret.appendList(count);
     /*if (!!count)

@@ -23,7 +23,7 @@
  */
 
 #include "Session.h"
-
+#include "Host.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Exceptions.h>
@@ -33,8 +33,8 @@ using namespace std;
 using namespace dev;
 using namespace dev::p2p;
 
-Session::Session(Host* _server, std::shared_ptr<RLPXSocket> const& _s,
-    std::shared_ptr<Peer> const& _n, PeerSessionInfo _info)
+Session::Session(Host* _server, std::shared_ptr<SocketFace> const& _s,
+    std::shared_ptr<Peer> const& _n, PeerSessionInfo const& _info)
   : m_server(_server),
     m_socket(_s),
     m_peer(_n),

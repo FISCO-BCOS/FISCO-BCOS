@@ -19,7 +19,7 @@
  * @author toxotguo
  * @date 2018
  */
-#include "RLPXSocket.h"
+#include "Socket.h"
 
-ba::ssl::context RLPXSocket::m_sslContext(ba::ssl::context::tlsv12);
-bool RLPXSocket::m_isInit = false;
+ba::ssl::context Socket::m_sslContext(ba::ssl::context::tlsv12);
+bool Socket::m_isInit = false;
