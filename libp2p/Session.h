@@ -25,9 +25,8 @@
 #pragma once
 
 #include "Common.h"
-#include "Host.h"
-#include "RLPXSocket.h"
 #include "SessionFace.h"
+#include "SocketFace.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
@@ -38,14 +37,12 @@
 #include <mutex>
 #include <set>
 #include <utility>
-
-
 namespace dev
 {
 namespace p2p
 {
 class Peer;
-
+class Host;
 /**
  * @brief The Session class
  * @todo Document fully.
@@ -53,8 +50,8 @@ class Peer;
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
-    Session(Host* _server, std::shared_ptr<RLPXSocket> const& _s, std::shared_ptr<Peer> const& _n,
-        PeerSessionInfo _info);
+    Session(Host* _server, std::shared_ptr<SocketFace> const& _s, std::shared_ptr<Peer> const& _n,
+        PeerSessionInfo const& _info);
 
     virtual ~Session();
 
@@ -111,7 +108,7 @@ private:
     void onWrite(boost::system::error_code ec, std::size_t length);
     void write();
 
-    /// Deliver RLPX packet to Session or Capability for interpretation.
+    /// Deliver packet to Session or Capability for interpretation.
     bool readPacket(uint16_t _capId, PacketType _t, RLP const& _r);
 
     /// Interpret an incoming Session packet.
@@ -121,7 +118,7 @@ private:
     static bool checkPacket(bytesConstRef _msg);
 
     Host* m_server;                        ///< The host that owns us. Never null.
-    std::shared_ptr<RLPXSocket> m_socket;  ///< Socket of peer's connection.
+    std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
     Mutex x_framing;                       ///< Mutex for the write queue.
 
 #if 0

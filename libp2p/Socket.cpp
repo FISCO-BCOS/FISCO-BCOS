@@ -18,8 +18,12 @@
 /** @file RLPXSocket.cpp
  * @author toxotguo
  * @date 2018
+ *
+ * * @ author: yujiechen
+ * @ date: 2018-09-17
+ * @ modification: rename RLPXSocket.cpp to Socket.cpp
  */
-#include "RLPXSocket.h"
+#include "Socket.h"
 
-ba::ssl::context RLPXSocket::m_sslContext(ba::ssl::context::tlsv12);
-bool RLPXSocket::m_isInit = false;
+ba::ssl::context Socket::m_sslContext(ba::ssl::context::tlsv12);
+bool Socket::m_isInit = false;

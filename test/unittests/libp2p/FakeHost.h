@@ -22,39 +22,125 @@
  */
 #pragma once
 #include <libp2p/Host.h>
+#include <libp2p/P2pFactory.h>
+#include <libp2p/SessionFace.h>
+#include <test/tools/libutils/TestOutputHelper.h>
+#include <boost/test/unit_test.hpp>
 using namespace dev;
 using namespace dev::p2p;
 namespace dev
 {
 namespace test
 {
-class AsioTest : public AsioInterface
+class FakeSessionForHost : public SessionFace,
+                           public std::enable_shared_from_this<FakeSessionForHost>
 {
 public:
-    virtual void async_accept(
-        bi::tcp::acceptor& tcp_acceptor, bi::tcp::socket& socket_ref, Handler_Type handler)
+    FakeSessionForHost(Host* _server, std::shared_ptr<Peer> const& _n, PeerSessionInfo _info,
+        std::shared_ptr<SocketFace> const& _socket = nullptr)
+      : m_host(_server), m_peer(_n), m_info(_info)
     {
-        std::cout << "#########test module" << std::endl;
+        m_ping = m_lastReceived = m_connectionTime = chrono::steady_clock::now();
+        m_disconnect = false;
+    }
+    void start() override
+    {
+        m_connectionTime = chrono::steady_clock::now();
+        m_start = true;
+        m_disconnect = false;
+    }
+    void disconnect(DisconnectReason _reason) { m_disconnect = true; }
+    void ping() { m_ping = chrono::steady_clock::now(); }
+    bool isConnected() const { return !m_disconnect; }
+    NodeID id() const { return NodeID(m_peer->id()); }
+    void sealAndSend(RLPStream& _s, uint16_t _protocolID) {}
+    void addNote(std::string const& _k, std::string const& _v) {}
+    PeerSessionInfo info() const { return m_info; }
+    std::chrono::steady_clock::time_point connectionTime() { return m_connectionTime; }
+    std::shared_ptr<Peer> peer() const { return m_peer; }
+    std::chrono::steady_clock::time_point lastReceived() const { return m_lastReceived; }
+
+public:
+    bool m_start = false;
+    bool m_disconnect = false;
+    Host* m_host;
+    std::shared_ptr<Peer> m_peer;
+    PeerSessionInfo m_info;
+    std::chrono::steady_clock::time_point m_connectionTime;
+    std::chrono::steady_clock::time_point m_lastReceived;
+    std::chrono::steady_clock::time_point m_ping;
+};
+
+class FakeSessionFactory : public SessionFactory
+{
+public:
+    virtual std::shared_ptr<SessionFace> create_session(Host* _server,
+        std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
+        PeerSessionInfo _info)
+    {
+        std::shared_ptr<SessionFace> m_session =
+            std::make_shared<FakeSessionForHost>(_server, _peer, _info, _socket);
+        return m_session;
     }
 };
+
 /// Fakes of Host
 class FakeHost : public Host
 {
 public:
     FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
-        std::shared_ptr<AsioInterface>& m_asioInterface)
-      : Host(_clientVersion, _alias, _n, m_asioInterface)
-    {}
+        std::shared_ptr<AsioInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
+        shared_ptr<SessionFactory>& _sessionFactory)
+      : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory)
+    {
+        setLastPing(chrono::steady_clock::now());
+        m_run = true;
+    }
+
     bi::tcp::endpoint tcpClient() { return m_tcpClient; }
     bi::tcp::endpoint tcpPublic() { return m_tcpPublic; }
-    virtual void startedWorking()
+    void setSessions(std::shared_ptr<SessionFace> session)
     {
-        m_ioService.run();
-        Host::startedWorking();
+        RecursiveGuard l(x_sessions);
+        m_sessions[session->id()] = std::weak_ptr<SessionFace>(session);
+        // m_peers[session->id()] = session->peer();
     }
-    virtual void runAcceptor() { Host::runAcceptor(); }
-    void PostIoService() { m_ioService.run(); }
+
+    void keepAlivePeers() { Host::keepAlivePeers(); }
+
+    std::shared_ptr<SessionFace> FakeSession(NodeIPEndpoint const& _nodeIPEndpoint)
+    {
+        KeyPair key_pair = KeyPair::create();
+        std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), _nodeIPEndpoint);
+        ;
+        PeerSessionInfo peer_info({key_pair.pub(), _nodeIPEndpoint.address.to_string(),
+            chrono::steady_clock::duration(), 0, map<string, string>()});
+        std::shared_ptr<SessionFace> session =
+            std::make_shared<FakeSessionForHost>(this, peer, peer_info);
+        session->start();
+        return session;
+    }
+
+    void setStaticNodes(const std::map<NodeIPEndpoint, NodeID>& staticNodes)
+    {
+        Host::setStaticNodes(staticNodes);
+    }
+    void connect(NodeIPEndpoint const& _nodeIPEndpoint)
+    {
+        std::cout << "Fake connect" << std::endl;
+        /// fake session
+        std::shared_ptr<SessionFace> session = FakeSession(_nodeIPEndpoint);
+        session->start();
+        setSessions(session);
+        std::cout << "###Set sessions, size:" << m_sessions.size() << std::endl;
+    }
+    bool havePeerSession(NodeID const& _id) { return Host::havePeerSession(_id); }
+    void reconnectAllNodes() { return Host::reconnectAllNodes(); }
+
+
     bool accepting() { return m_accepting; }
+    void setAccepting(bool isAccept) { m_accepting = isAccept; }
+    void setLastPing(std::chrono::steady_clock::time_point time_point) { m_lastPing = time_point; }
     ~FakeHost() {}
 };
 
@@ -70,15 +156,81 @@ public:
         return m_node;
     }
 };
+
+/// fake RLPXSocket
+class FakeSocket : public SocketFace
+{
+public:
+    FakeSocket(ba::io_service& _ioService, NodeIPEndpoint const& remote_endpoint)
+      : m_sslContext(ba::ssl::context::tlsv12)
+    {
+        m_remote =
+            std::make_shared<bi::tcp::endpoint>(remote_endpoint.address, remote_endpoint.tcpPort);
+        m_nodeIPEndpoint = remote_endpoint;
+        m_close = false;
+        m_sslContext.set_options(
+            boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 |
+            boost::asio::ssl::context::no_sslv3 | boost::asio::ssl::context::no_tlsv1);
+        m_sslContext.set_verify_depth(3);
+        m_sslContext.set_verify_mode(ba::ssl::verify_peer);
+        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket> >(_ioService, m_sslContext);
+    }
+    virtual bool isConnected() const { return !m_close; }
+    virtual void close() { m_close = true; }
+    virtual bi::tcp::endpoint remoteEndpoint() { return *m_remote; }
+    virtual bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
+    virtual const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
+    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint)
+    {
+        m_nodeIPEndpoint = _nodeIPEndpoint;
+    }
+
+    virtual ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    ~FakeSocket() {}
+
+    bool m_close;
+    NodeIPEndpoint m_nodeIPEndpoint;
+    std::shared_ptr<bi::tcp::endpoint> m_remote;
+    std::shared_ptr<ba::ssl::stream<bi::tcp::socket> > m_sslSocket;
+    ba::ssl::context m_sslContext;
+};
+
+class FakeSocketFactory : public SocketFactory
+{
+public:
+    virtual std::shared_ptr<SocketFace> create_socket(
+        ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
+    {
+        std::shared_ptr<SocketFace> m_socket =
+            std::make_shared<FakeSocket>(_ioService, _nodeIPEndpoint);
+        return m_socket;
+    }
+};
+
+class AsioTest : public AsioInterface
+{
+public:
+    virtual void async_accept(
+        bi::tcp::acceptor& tcp_acceptor, bi::tcp::socket& socket_ref, Handler_Type handler)
+    {
+        /// execute handlers
+        boost::system::error_code ec = boost::asio::error::broken_pipe;
+        handler(ec);
+    }
+};
 /// create Host
-static std::shared_ptr<FakeHost> createFakeHost(
+static FakeHost* createFakeHost(
     std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
 {
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
-    shared_ptr<FakeHost> m_host =
-        std::make_shared<FakeHost>(client_version, key_pair, network_config, m_asioInterface);
+    /// create m_socketFactory
+    std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<FakeSocketFactory>();
+    /// create m_sessionFactory
+    std::shared_ptr<SessionFactory> m_sessionFactory = std::make_shared<FakeSessionFactory>();
+    FakeHost* m_host = new FakeHost(client_version, key_pair, network_config, m_asioInterface,
+        m_socketFactory, m_sessionFactory);
     return m_host;
 }
 }  // namespace test

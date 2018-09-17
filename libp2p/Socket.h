@@ -14,15 +14,20 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file RLPXSocket.h
+/** @file Socket.h
  * @author toxotguo
  * @date 2018
+ *
+ * @ author: yujiechen
+ * @ date: 2018-09-17
+ * @ modification: rename RLPXSocket.h to Socket.h
  */
 
 #pragma once
 
 #include "CertificateServer.h"
 #include "Common.h"
+#include "SocketFace.h"
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
 #include <openssl/ec.h>
@@ -36,17 +41,18 @@ namespace dev
 {
 namespace p2p
 {
-class RLPXSocket : public std::enable_shared_from_this<RLPXSocket>
+class Socket : public SocketFace, public std::enable_shared_from_this<Socket>
 {
 public:
-    RLPXSocket(ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint)
+    Socket() = default;
+    Socket(ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint)
       : m_nodeIPEndpoint(_nodeIPEndpoint)
     {
         try
         {
-            RLPXSocket::initContext();
+            Socket::initContext();
             m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket> >(
-                _ioService, RLPXSocket::m_sslContext);
+                _ioService, Socket::m_sslContext);
         }
         catch (Exception const& _e)
         {
@@ -55,9 +61,9 @@ public:
         }
         LOG(INFO) << "CERTIFICATE LOAD SUC!";
     }
-    ~RLPXSocket() { close(); }
-    virtual bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
-    void close()
+    ~Socket() { close(); }
+    bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
+    virtual void close()
     {
         try
         {
@@ -71,6 +77,7 @@ public:
         {
         }
     }
+
     bi::tcp::endpoint remoteEndpoint()
     {
         boost::system::error_code ec;
@@ -83,7 +90,7 @@ public:
 
     static void initContext()
     {
-        if (!RLPXSocket::m_isInit)
+        if (!Socket::m_isInit)
         {
             vector<pair<string, Public> > certificates;
             string nodePrivateKey;
@@ -151,7 +158,7 @@ public:
                 exit(-1);
             }
 
-            RLPXSocket::m_isInit = true;
+            Socket::m_isInit = true;
         }
     }
 

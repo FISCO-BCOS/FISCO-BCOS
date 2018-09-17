@@ -25,9 +25,10 @@
 
 #include "Common.h"
 #include "Network.h"
+#include "P2pFactory.h"
 #include "Peer.h"
-#include "RLPXSocket.h"
 #include "SessionFace.h"
+#include "Socket.h"
 #include <libdevcore/AsioInterface.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/Worker.h>
@@ -56,7 +57,8 @@ public:
     /// constructor function : init Host with specified client version,
     /// keypair and network config
     Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
-        shared_ptr<AsioInterface>& m_asioInterface);
+        shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
+        shared_ptr<SessionFactory>& _sessionFactory);
     ~Host();
 
     /// ------get interfaces ------
@@ -125,7 +127,6 @@ public:
         }
         return ret;
     }
-
     /// ------set interfaces ------
     /// set m_reconnectnow to be true, reconnect all peers when callback keepAlivePeers
     void reconnectNow()
@@ -151,7 +152,7 @@ public:
     /// 2. modify m_peers && disconnect already-connected session
     /// 3. modify m_sessions and m_staticNodes
     /// 4. start new session (session->start())
-    void startPeerSession(Public const& _pub, std::shared_ptr<RLPXSocket> const& _s);
+    void startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> const& _s);
     /// remove invalid RLPXHandshake object from m_connecting
     /// remove expired timer
     /// modify alived peers to m_peers
@@ -181,8 +182,25 @@ public:
     }
     bytes saveNetwork() const;
 
-    /// TODO: implement 'disconnectByNodeId'
-    void disconnectByNodeId(const std::string& sNodeId) {}
+    /// implement 'disconnectByNodeId'
+    bool disconnectByNodeId(const NodeID& sNodeId)
+    {
+        RecursiveGuard l(x_sessions);
+        for (auto it = m_sessions.begin(); it != m_sessions.end(); it++)
+        {
+            if (auto p = it->second.lock())
+            {
+                if (p->id() == sNodeId)
+                {
+                    p->disconnect(DisconnectReason::UserReason);
+                    m_sessions.erase(it);
+                    m_peers.erase(p->id());
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
@@ -199,7 +217,7 @@ protected:  /// protected functions
     /// informations(client version, caps, etc),start peer session and start accepting procedure
     /// repeatedly
     void handshakeServer(const boost::system::error_code& error,
-        std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<RLPXSocket> socket);
+        std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
     /// update m_sessions and m_peers periodically
     /// drop the unconnected/invalid sessions periodically
@@ -216,9 +234,9 @@ protected:  /// protected functions
     /// reconnect to all unconnected peers recorded in m_staticNodes
     void reconnectAllNodes();
     /// connect to the server
-    void connect(NodeIPEndpoint const& _nodeIPEndpoint);
+    virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint);
     /// start RLPxHandshake procedure after ssl handshake succeed
-    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<RLPXSocket> socket,
+    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint);
     inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
 
@@ -246,6 +264,10 @@ protected:  /// protected members(for unit testing)
     /// means binding failed or acceptor hasn't been initialized.
     uint16_t m_listenPort = uint16_t(-1);
     /// representing to the network state
+    shared_ptr<AsioInterface> m_asioInterface;
+    shared_ptr<SocketFactory> m_socketFactory;
+    shared_ptr<SessionFactory> m_sessionFactory;
+
     bool m_run = false;
     ///< Start/stop mutex.(mutex for m_run)
     mutable std::mutex x_runTimer;
@@ -278,8 +300,6 @@ protected:  /// protected members(for unit testing)
     /// peer count limit
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
-
-    shared_ptr<AsioInterface> m_asioInterface;
 };
 }  // namespace p2p
 

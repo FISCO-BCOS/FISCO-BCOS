@@ -31,7 +31,7 @@ class Peer;
 class SessionFace
 {
 public:
-    virtual ~SessionFace() {}
+    virtual ~SessionFace(){};
 
     virtual void start() = 0;
 
