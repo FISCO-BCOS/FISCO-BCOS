@@ -8,9 +8,9 @@
 #pragma once
 
 #include <libchannelserver/ChannelServer.h>
-#include <libwebthree/WebThree.h>
 #include <libethereum/Interface.h>
 #include <libstorage/Storage.h>
+#include <libp2p/Host.h>
 
 namespace dev {
 
@@ -28,7 +28,7 @@ public:
 
 	void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server) { _server = server; }
 	void setInterface(dev::eth::Interface *interface) { _interface = interface; }
-	void setWebThreeDirect(dev::WebThreeDirect *webThreeDirect) { _webThreeDirect = webThreeDirect; }
+	void setHost(dev::p2p::Host::Ptr host) { _host = host; }
 	void setStateStorage(dev::storage::Storage::Ptr stateStorage) { _stateStorage = stateStorage; }
 	void onConnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 	void onRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message);
@@ -37,14 +37,18 @@ public:
 	std::string status(const std::vector<std::string> args);
 	std::string p2pPeers(const std::vector<std::string> args);
 	std::string p2pMiners(const std::vector<std::string> args);
+	std::string p2pUpdate(const std::vector<std::string> args);
 	std::string amdbSelect(const std::vector<std::string> args);
 
 private:
 	std::shared_ptr<dev::channel::ChannelServer> _server;
 	dev::eth::Interface *_interface = nullptr;
-	dev::WebThreeDirect *_webThreeDirect = nullptr;
+	dev::p2p::Host::Ptr _host = nullptr;
 	dev::storage::Storage::Ptr _stateStorage = nullptr;
 	bool _running = false;
+
+	void printSingleLine(std::stringstream &ss);
+	void printDoubleLine(std::stringstream &ss);
 };
 
 }
