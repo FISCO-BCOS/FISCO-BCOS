@@ -17,6 +17,10 @@
 /** @file Socket.h
  * @author toxotguo
  * @date 2018
+ *
+ * @ author: yujiechen
+ * @ date: 2018-09-17
+ * @ modification: rename RLPXSocket.h to Socket.h
  */
 
 #pragma once

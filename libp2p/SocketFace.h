@@ -14,9 +14,11 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file SocketFace.h
- * @author toxotguo
- * @date 2018
+/**
+ * @brief: Socket inteface
+ * @file SocketFace.h
+ * @author yujiechen
+ * @date 2018-09-17
  */
 
 #pragma once
