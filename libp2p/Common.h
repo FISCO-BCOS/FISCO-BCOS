@@ -48,8 +48,6 @@ namespace dev
 {
 namespace p2p
 {
-/// Peer network protocol version.
-extern const unsigned c_protocolVersion;
 extern unsigned c_defaultIPPort;
 
 class NodeIPEndpoint;
