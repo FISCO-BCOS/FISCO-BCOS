@@ -389,7 +389,7 @@ h512s PBFT::getMinerNodeList() {
 	if(m_highest_block.number() != _current_miner_num) {
 		auto minerList = m_miner_list;
 
-		auto miners = _storage->select(m_highest_block.hash(), m_highest_block.number().convert_to<int>(), "_sys_miners_", "list");
+		auto miners = _storage->select(m_highest_block.hash(), m_highest_block.number().convert_to<int>(), "_sys_miners_", "miner");
 		for(size_t i=0; i<miners->size(); ++i) {
 			auto miner = miners->get(i);
 			if(boost::lexical_cast<int>(miner->getField("enable_num")) >= m_highest_block.number().convert_to<int>()) {

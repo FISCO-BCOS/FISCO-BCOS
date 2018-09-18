@@ -47,11 +47,11 @@ cd FISCO-BCOS
 git checkout dev-1.5
 ```
 
-源码目录说明请参考<u>附录：9.1 源码目录结构说明</u>
+源码目录说明请参考[附录：9.1 源码目录结构说明](#91-源码目录结构说明)
 
 #### 1.2.2 安装编译依赖
 
-> 根目录下执行（若执行出错，请参考常见问题1）：
+> 根目录下执行（若执行出错，请参考[常见问题1](#常见问题)）：
 
 ```shell
 bash ./scripts/install_deps.sh
@@ -87,9 +87,10 @@ echo 127.0.0.1 > IPList.txt
 #	-f <IP list file> [Required]
 #	-e <FISCO-BCOS program path> [Required]
 #	-n <Nodes per IP> Default 1
-#	-a <CA Key> Default Generate a new CA
-#	-o <Output Dir> Default ./output/
-#	-p <Start Port> Default 30300
+#	-a <CA Key>       Default Generate a new CA
+#	-o <Output Dir>   Default ./output/
+#	-p <Start Port>   Default 30300
+#   -s <StateDB type> Default leveldb. if set -s, use amop
 #	-z Generate tar packet
 #	-h Help
 

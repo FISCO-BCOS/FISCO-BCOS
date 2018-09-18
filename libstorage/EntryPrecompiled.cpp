@@ -44,16 +44,6 @@ bytes EntryPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
 
       break;
     }
-    case 0xa815ff15: {  // set(string,address)
-      std::string str;
-      Address address;
-      abi.abiOut(data, str, address);
-
-      auto stringPrecompiled = context->getPrecompiled(address);
-      _entry->setField(str, stringPrecompiled->toString(context));
-
-      break;
-    }
     case 0x2ef8ba74: {  // set(string,int256)
       std::string str;
       u256 value;
