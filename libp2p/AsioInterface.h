@@ -82,6 +82,14 @@ public:
         socket->sslref().async_handshake(type, m_strand.wrap(handler));
     }
 
+    virtual void async_wait(boost::asio::deadline_timer* m_timer,
+        boost::asio::io_service::strand& m_strand, Handler_Type handler,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        if (m_timer)
+            return m_timer->async_wait(m_strand.wrap(handler));
+    }
+
     virtual void set_verify_callback(
         std::shared_ptr<SocketFace> const& socket, VerifyCallback callback, bool verify_succ = true)
     {
