@@ -28,7 +28,7 @@ EOF
 exit
 }
 
-while getopts "a:n:o:p:e:f:hz" option;do
+while getopts "a:n:o:p:e:f:szh" option;do
 	case $option in
 	a) ca_file=$OPTARG;;
 	n) node_num=$OPTARG;;
@@ -36,7 +36,7 @@ while getopts "a:n:o:p:e:f:hz" option;do
 	o) output_dir=$OPTARG;;
 	p) port_start=$OPTARG;;
 	e) eth_path=$OPTARG;;
-	s) statedb_type="amop";;
+	s) statedb_type=amop;;
 	z) make_tar="yes";;
 	h) help;;
 	esac
@@ -74,24 +74,24 @@ default_ca=default_ca
 [default_ca]
 default_days = 365
 default_md = sha256
-[req] 
-distinguished_name = req_distinguished_name 
+[req]
+distinguished_name = req_distinguished_name
 req_extensions = v3_req
-[req_distinguished_name] 
+[req_distinguished_name]
 countryName = CN
-countryName_default = CN 
-stateOrProvinceName = State or Province Name (full name) 
-stateOrProvinceName_default =GuangDong 
-localityName = Locality Name (eg, city) 
-localityName_default = ShenZhen 
-organizationalUnitName = Organizational Unit Name (eg, section) 
+countryName_default = CN
+stateOrProvinceName = State or Province Name (full name)
+stateOrProvinceName_default =GuangDong
+localityName = Locality Name (eg, city)
+localityName_default = ShenZhen
+organizationalUnitName = Organizational Unit Name (eg, section)
 organizationalUnitName_default = webank
 commonName =  Organizational  commonName (eg, webank)
 commonName_default = webank
-commonName_max = 64 
-[ v3_req ] 
-# Extensions to add to a certificate request 
-basicConstraints = CA:FALSE 
+commonName_max = 64
+[ v3_req ]
+# Extensions to add to a certificate request
+basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 EOF
 
@@ -104,14 +104,14 @@ while read line;do
 	for ((i=0;i<node_num;++i));do
 		node_dir="$output_dir/node_${line}_${index}/"
 		mkdir -p "$node_dir/data"
-		
+
 		openssl genpkey -paramfile "$output_dir/node.param" -out "$node_dir/data/node.key"
 		openssl req -new -key "$node_dir/data/node.key" -config "$output_dir/cerf.cnf" -out "$node_dir/data/node.csr" -batch
 		openssl x509 -req -in "$node_dir/data/node.csr" -CAkey "$ca_file" -CA "$output_dir/ca.crt" -out "$node_dir/data/node.crt" -CAcreateserial -extensions v3_req -extfile "$output_dir/cerf.cnf" &> /dev/null
-		
+
 		#openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/keystore.p12"
 		#keytool -importkeystore -destkeystore "$node_dir/client.keystore" -srckeystore "$node_dir/keystore.p12" -srcstoretype pkcs12 -alias client
-		
+
 		nodeid=$(openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
 		nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
 		"
@@ -166,7 +166,7 @@ while read line;do
 	maxRetry=0
 	topic=DB
 EOF
-	
+
 	cat << EOF > "$node_dir/log.conf"
 * GLOBAL:
 	ENABLED                 =   true
@@ -207,7 +207,7 @@ EOF
 	ENABLED                 =   true
 	FILENAME                =   "log/verbose_log_%datetime{%Y%M%d%H}.log"
 EOF
-	
+
 	cat << EOF > "$node_dir/genesis.json"
 {
 	"nonce": "0x0",
@@ -223,7 +223,7 @@ EOF
 	"initMinerNodes":[]
 }
 EOF
-	
+
 	cat << EOF > "$node_dir/start.sh"
 #!/bin/bash
 nohup setsid ./fisco-bcos --config config${i}.conf --genesis genesis.json&
@@ -234,9 +234,9 @@ EOF
 weth_pid=\`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print \$2}'\`
 kill -9 \${weth_pid}
 EOF
-	
+
 		chmod +x "$node_dir/start.sh"
-	
+
 		cp "$output_dir/ca.crt" "$node_dir/data/"
 		cp "$eth_path" "$node_dir/fisco-bcos"
 		echo "cd \${PPath}/node_${line}_${index} && ./start.sh" >> "$output_dir/start_all.sh"
