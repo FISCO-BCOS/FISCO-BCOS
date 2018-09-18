@@ -59,7 +59,7 @@ public:
     Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
         shared_ptr<SessionFactory>& _sessionFactory);
-    ~Host();
+    virtual ~Host();
 
     /// ------get interfaces ------
     /// get client version
@@ -162,11 +162,11 @@ public:
     /// remove expired timer
     /// modify alived peers to m_peers
     /// reconnect all nodes recorded in m_staticNodes periodically
-    void run(boost::system::error_code const& error);
+    virtual void run(boost::system::error_code const& error);
     /// start the network by callback io_serivce.run
     void doWork();
     /// stop the network and worker thread
-    void stop();
+    virtual void stop();
     /// clean resources (include both network, socket resources) when stop working
     void doneWorking();
 

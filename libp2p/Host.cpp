@@ -120,7 +120,6 @@ void Host::startedWorking()
         m_timer.reset(new boost::asio::deadline_timer(m_ioService));
         m_run = true;
     }
-
     /// listen and bind listen port
     int port = Network::tcp4Listen(m_tcp4Acceptor, m_netConfigs);
     if (port != -1)
@@ -341,7 +340,6 @@ void Host::handshakeServer(const boost::system::error_code& error,
         socket->close();
         return;
     }
-    std::cout << "Host::asyc_handshake succ:" << std::endl;
     /// forbid connect to node-self
     if (node_id == id())
     {
@@ -484,10 +482,9 @@ void Host::run(boost::system::error_code const&)
     keepAlivePeers();
     /// reconnect all nodes recorded in m_staticNodes periodically
     reconnectAllNodes();
-
     auto runcb = [this](boost::system::error_code const& error) { run(error); };
     m_timer->expires_from_now(boost::posix_time::milliseconds(c_timerInterval));
-    m_timer->async_wait(m_strand.wrap(runcb));
+    m_asioInterface->async_wait(m_timer.get(), m_strand, runcb);
 }
 
 /**
@@ -714,37 +711,46 @@ void Host::stop()
 /// clean resources (include both network, socket resources) when stop working
 void Host::doneWorking()
 {
-    // reset ioservice (cancels all timers and allows manually polling network, below)
-    m_ioService.reset();
-    // shutdown acceptor
-    m_tcp4Acceptor.cancel();
-    if (m_tcp4Acceptor.is_open())
-        m_tcp4Acceptor.close();
-    while (m_accepting)
-        m_ioService.poll();
-    // disconnect peers
-    for (unsigned n = 0;; n = 0)
+    try
     {
-        DEV_RECURSIVE_GUARDED(x_sessions)
-        for (auto i : m_sessions)
-            if (auto p = i.second)
-                if (p->isConnected())
-                {
-                    p->disconnect(ClientQuit);
-                    n++;
-                }
-        if (!n)
-            break;
-        // poll so that peers send out disconnect packets
-        m_ioService.poll();
+        // reset ioservice (cancels all timers and allows manually polling network, below)
+        m_ioService.reset();
+        // shutdown acceptor
+        if (m_tcp4Acceptor.is_open())
+        {
+            m_tcp4Acceptor.cancel();
+            m_tcp4Acceptor.close();
+        }
+        while (m_accepting)
+            m_ioService.poll();
+        // disconnect peers
+        for (unsigned n = 0;; n = 0)
+        {
+            DEV_RECURSIVE_GUARDED(x_sessions)
+            for (auto i : m_sessions)
+                if (auto p = i.second)
+                    if (p->isConnected())
+                    {
+                        p->disconnect(ClientQuit);
+                        n++;
+                    }
+            if (!n)
+                break;
+            // poll so that peers send out disconnect packets
+            m_ioService.poll();
+        }
+        // stop network (again; helpful to call before subsequent reset())
+        m_ioService.stop();
+        // reset network (allows reusing ioservice in future)
+        m_ioService.reset();
+        /// disconnect all sessions by callback keepAlivePeers
+        reconnectNow();
+        keepAlivePeers();
     }
-    // stop network (again; helpful to call before subsequent reset())
-    m_ioService.stop();
-    // reset network (allows reusing ioservice in future)
-    m_ioService.reset();
-    // finally, clear out peers (in case they're lingering)
-    RecursiveGuard l(x_sessions);
-    m_sessions.clear();
+    catch (std::exception& err)
+    {
+        LOG(ERROR) << "callback doneWorking failed, error message:" << err.what();
+    }
 }
 
 bytes Host::saveNetwork() const
