@@ -162,11 +162,8 @@ void Host::runAcceptor(boost::system::error_code boost_error)
         std::shared_ptr<SocketFace> socket =
             m_socketFactory->create_socket(m_ioService, NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
-        // socket.reset(socket);
         /// define callback after accept connections
         m_asioInterface->async_accept(m_tcp4Acceptor, socket, m_strand,
-            /// m_tcp4Acceptor.async_accept(socket->ref(),
-            /// m_strand.wrap([=](boost::system::error_code ec) {
             [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
                 auto remoteEndpoint = socket->remote_endpoint();
@@ -201,14 +198,10 @@ void Host::runAcceptor(boost::system::error_code boost_error)
                            << "|ip:" << m_tcpPublic.address().to_string();
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-                /// socket->sslref().set_verify_callback(newVerifyCallback(endpointPublicKey));
                 m_asioInterface->set_verify_callback(socket, newVerifyCallback(endpointPublicKey));
                 m_asioInterface->async_handshake(socket, m_strand, ba::ssl::stream_base::server,
                     boost::bind(&Host::handshakeServer, this, ba::placeholders::error,
                         endpointPublicKey, socket));
-                /*socket->sslref().async_handshake(ba::ssl::stream_base::server,
-                    m_strand.wrap(boost::bind(&Host::handshakeServer, this, ba::placeholders::error,
-                        endpointPublicKey, socket)));*/
             },
             boost_error);
     }
@@ -317,7 +310,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                     nodeIDOut->erase(0, 2);
                 }
                 LOG(DEBUG) << "Get endpoint publickey:" << *nodeIDOut;
-                std::cout << "#### preverified:" << preverified << std::endl;
             }
             return preverified;
         }
@@ -625,12 +617,9 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
     std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
     socket->sslref().set_verify_depth(3);
-    /// socket->sslref().set_verify_callback(newVerifyCallback(endpointPublicKey));
     /// connect to the server
     m_asioInterface->async_connect(socket, m_strand, _nodeIPEndpoint,
         [=](boost::system::error_code const& ec) {
-            // socket->ref().async_connect(
-            // _nodeIPEndpoint, m_strand.wrap([=](boost::system::error_code const& ec) {
             if (ec)
             {
                 LOG(ERROR) << "Connection refused to node"
@@ -647,9 +636,6 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
                 m_asioInterface->async_handshake(socket, m_strand, ba::ssl::stream_base::client,
                     boost::bind(&Host::handshakeClient, this, ba::placeholders::error, socket,
                         endpointPublicKey, _nodeIPEndpoint));
-                /*socket->sslref().async_handshake(ba::ssl::stream_base::client,
-                    m_strand.wrap(boost::bind(&Host::handshakeClient, this, ba::placeholders::error,
-                        socket, endpointPublicKey, _nodeIPEndpoint)));*/
             }
         },
         boost_error);
@@ -713,7 +699,6 @@ void Host::stop()
         // ignore if already stopped/stopping
         if (!m_run)
             return;
-
         // signal run() to prepare for shutdown and reset m_timer
         m_run = false;
     }
@@ -787,6 +772,5 @@ void Host::doWork()
     if (m_ioService.stopped())
         m_ioService.reset();
 }
-
 }  // namespace p2p
 }  // namespace dev

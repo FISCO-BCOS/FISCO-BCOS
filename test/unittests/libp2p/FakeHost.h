@@ -115,7 +115,6 @@ public:
             return;
         }
         m_loop = 1;
-        std::cout << "#### test runAcceptor" << std::endl;
         Host::runAcceptor(boost_error);
     }
     std::shared_ptr<SessionFace> FakeSession(NodeIPEndpoint const& _nodeIPEndpoint)
@@ -150,11 +149,9 @@ public:
     std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut)
     {
-        std::cout << "#### Fake newVerifyCallback, node id:" << toHex(m_node_id) << std::endl;
         return [this, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
             std::string node_id = toHex(m_node_id);
             nodeIDOut->assign(node_id.c_str());
-            std::cout << " #### nodeIDOut:" << (*nodeIDOut) << std::endl;
             return m_verify;
         };
     }
@@ -284,10 +281,8 @@ public:
     virtual void set_verify_callback(
         std::shared_ptr<SocketFace> const& socket, VerifyCallback callback, bool verify_succ = true)
     {
-        std::cout << "### Fake set_verify_callback" << std::endl;
         boost::asio::ssl::verify_context context(nullptr);
         callback(verify_succ, context);
-        std::cout << "### Fake set_verify_callback end" << std::endl;
     }
 };
 /// create Host
