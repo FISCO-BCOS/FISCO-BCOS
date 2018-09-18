@@ -96,6 +96,7 @@ public:
         setLastPing(chrono::steady_clock::now());
         m_run = true;
     }
+    ~FakeHost() {}
     bi::tcp::endpoint tcpClient() { return m_tcpClient; }
     bi::tcp::endpoint tcpPublic() { return m_tcpPublic; }
     void setSessions(std::shared_ptr<SessionFace> session)
@@ -117,6 +118,9 @@ public:
         m_loop = 1;
         Host::runAcceptor(boost_error);
     }
+
+    void run(boost::system::error_code const& error) { Host::run(error); }
+
     std::shared_ptr<SessionFace> FakeSession(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         KeyPair key_pair = KeyPair::create();
@@ -166,14 +170,14 @@ public:
     {
         Host::handshakeServer(error, endpointPublicKey, socket);
     }
-
+    void disableReconnect() { m_reconnectnow = false; }
     void setNodeId(NodeID const& _nodeid) { m_node_id = _nodeid; }
     void setVerifyResult(bool _verify) { m_verify = _verify; }
     bool hasPendingConn(std::string const& name) { return m_pendingPeerConns.count(name); }
+    bi::tcp::acceptor const& getAcceptor() const { return m_tcp4Acceptor; }
     NodeID m_node_id;
     bool m_verify;
     int m_loop = 0;
-    ~FakeHost() {}
 };
 
 /// class for construct Node
@@ -231,9 +235,9 @@ public:
     {
         m_nodeIPEndpoint = _nodeIPEndpoint;
     }
-
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
     bi::tcp::endpoint remote_endpoint() { return *m_remote; }
+
     ~FakeSocket() {}
 
     bool m_close;
@@ -276,7 +280,6 @@ public:
         boost::asio::io_service::strand& m_strand, ba::ssl::stream_base::handshake_type const& type,
         Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
     {
-        std::cout << "### fake async_handshake" << std::endl;
         handler(ec);
     }
 
@@ -296,6 +299,13 @@ public:
     {
         boost::asio::ssl::verify_context context(nullptr);
         callback(verify_succ, context);
+    }
+
+    virtual void async_wait(boost::asio::deadline_timer* m_timer,
+        boost::asio::io_service::strand& m_strand, Handler_Type handler,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        m_timer->cancel();
     }
 };
 /// create Host

@@ -37,6 +37,7 @@ public:
         m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
         FakeRemoteEndpoint();
     }
+
     FakeHost* getHost() { return m_host; }
     std::string const& listenIp() const { return m_listenIp; }
     std::string const& clientVersion() const { return m_clientVersion; }
@@ -89,6 +90,7 @@ BOOST_AUTO_TEST_CASE(testHostConstruct)
     BOOST_CHECK(getHost()->strand() != nullptr);
 }
 
+/// test runAcceptor
 BOOST_AUTO_TEST_CASE(testRunAcceptor)
 {
     getHost()->setAccepting(false);
@@ -120,6 +122,15 @@ BOOST_AUTO_TEST_CASE(testRunAcceptor)
     getHost()->runAcceptor(boost_error);  // return directly
     BOOST_CHECK(getHost()->tcpClient().port() == 0);
 
+    /// --- test too many peers && boost error => return directly
+    getHost()->m_loop = 0;
+    getHost()->runAcceptor(boost_error);
+    BOOST_CHECK(getHost()->tcpClient().port() == 0);
+    /// --- test too many peers && no error => call runAcceptor
+    getHost()->m_loop = 0;
+    getHost()->runAcceptor(boost_error);
+    BOOST_CHECK(getHost()->tcpClient().port() == 0);
+
     /// get m_tcpClient
     getHost()->setMaxPeerCount(100);
     getHost()->setNodeId(session1->id());
@@ -132,7 +143,8 @@ BOOST_AUTO_TEST_CASE(testRunAcceptor)
     BOOST_CHECK(getHost()->tcpClient().port() == 30314);
 }
 
-BOOST_AUTO_TEST_CASE(testStartPeerSessions)
+// test startPeerSessions and doneWorking
+BOOST_AUTO_TEST_CASE(testStartPeerSessionsAndDoneWorking)
 {
     ba::io_service m_ioservice(2);
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
@@ -177,6 +189,15 @@ BOOST_AUTO_TEST_CASE(testStartPeerSessions)
     getHost()->startPeerSession(session2->id(), fake_socket);
     BOOST_CHECK(getHost()->sessions().size() == 2);
     BOOST_CHECK(getHost()->peerCount() == 2);
+
+    /// test doneWorking
+    getHost()->doWork();
+    getHost()->doneWorking();
+    BOOST_CHECK(getHost()->ioService()->stopped() == false);
+    BOOST_CHECK(getHost()->getAcceptor().is_open() == false);
+    BOOST_CHECK(getHost()->sessions().size() == 0);
+    BOOST_CHECK(getHost()->peerCount() == 0);
+    BOOST_CHECK(getHost()->getPeers().size() == 0);
 }
 
 /// test reconnectAllNodes && keepAlivePeers
@@ -246,13 +267,17 @@ BOOST_AUTO_TEST_CASE(testkeepAlivePeers)
     BOOST_CHECK(getHost()->peerCount() == 2);
     for (auto session : getHost()->sessions())
         session.second->disconnect(DisconnectReason::UselessPeer);
+    getHost()->disableReconnect();
+    getHost()->keepAlivePeers();
+
+    getHost()->reconnectNow();
     getHost()->keepAlivePeers();
     BOOST_CHECK(getHost()->sessions().size() == 0);
     BOOST_CHECK(getHost()->getPeers().size() == 0);
     BOOST_CHECK(getHost()->peerCount() == 0);
 }
 
-/// test handshake client
+/// test exception cases of handshake client and handshake server
 BOOST_AUTO_TEST_CASE(testHandshakeClientAndServerException)
 {
     ba::io_service m_ioservice(2);
@@ -290,18 +315,63 @@ BOOST_AUTO_TEST_CASE(testHandshakeClientAndServerException)
     BOOST_CHECK(fake_socket->isConnected() == false);
 }
 
-/// test handshake server
-BOOST_AUTO_TEST_CASE(testHandshakeServer) {}
-
-/// test run
-BOOST_AUTO_TEST_CASE(testRun)
+/// test startedWorking
+BOOST_AUTO_TEST_CASE(testRunAndStartedWorking)
 {
+    /// test run exception
+    boost::system::error_code err = boost::asio::error::timed_out;
     getHost()->setRun(false);
+    getHost()->run(err);
+    BOOST_CHECK(getHost()->ioService()->stopped());
+    /// test connect to node-self(handshake client)
+    std::map<NodeIPEndpoint, NodeID> m_staticNodes;
+    ba::io_service m_ioservice(2);
+    NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+    m_staticNodes[m_endpoint] = KeyPair::create().pub();
+    getHost()->setStaticNodes(m_staticNodes);
+    getHost()->setNodeId(m_staticNodes[m_endpoint]);
+
+    getHost()->m_loop = 0;
+    getHost()->startedWorking();
+    BOOST_CHECK(getHost()->haveNetwork() == true);
+    /// test determinePublic
+    BOOST_CHECK(getHost()->tcpPublic() == Network::determinePublic(getHost()->networkConfig()));
+    BOOST_CHECK(getHost()->tcpPublic().address().to_string() == "127.0.0.1");
+    BOOST_CHECK(getHost()->tcpPublic().port() == listenPort());
+    BOOST_CHECK(getHost()->sessions().size() == 1);
+    BOOST_CHECK(getHost()->getPeers().size() == 1);
+}
+
+/// test doWork
+BOOST_AUTO_TEST_CASE(testDoWork)
+{
+    /// run ioservice
+    getHost()->setRun(true);
+    getHost()->ioService()->stop();
+    BOOST_CHECK(getHost()->ioService()->stopped() == true);
+    getHost()->doWork();
+    BOOST_CHECK(getHost()->ioService()->stopped() == false);
+    /// return directly
+    boost::system::error_code ec;
+    getHost()->setRun(false);
+    getHost()->ioService()->run();
+    getHost()->doWork();
+    BOOST_CHECK(getHost()->ioService()->stopped() == false);
+    /// reset io_service
+    getHost()->ioService()->stop();
+    BOOST_CHECK(getHost()->ioService()->stopped() == true);
+    getHost()->doWork();
+    BOOST_CHECK(getHost()->ioService()->stopped() == false);
 }
 
 /// test stop
-BOOST_AUTO_TEST_CASE(testStop) {}
 
+BOOST_AUTO_TEST_CASE(testStop)
+{
+    getHost()->setRun(false);
+    getHost()->stop();
+    BOOST_CHECK(getHost()->haveNetwork() == false);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
