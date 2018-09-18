@@ -71,6 +71,8 @@ public:
         return reinterpret_cast<Address const&>(addr);
     }
 
+    bytes& getContractCode(Address addr) { return state.accountCode(toEvmC(addr)); }
+
     void setStateAccountBalance(Address account, u256 balance)
     {
         state.accountBalance(toEvmC(account)) = toEvmC(balance);
@@ -636,20 +638,20 @@ BOOST_AUTO_TEST_CASE(contextTest)
     printAccount(destination);
 
     /*
-        address orig;
-        address dest;
-        address caller;
-        address cbase;
-        uint bn;
-        uint diff;
-        uint lmt;
-        uint stp;
-        uint256 gs;
-        uint vle;
-        uint gpris;
-        bytes4 msig;
-        bytes dta;
-        bytes32 bh;
+            address orig;
+            address dest;
+            address caller;
+            address cbase;
+            uint bn;
+            uint diff;
+            uint lmt;
+            uint stp;
+            uint256 gs;
+            uint vle;
+            uint gpris;
+            bytes4 msig;
+            bytes dta;
+            bytes32 bh;
     */
 
     Address originResult = getStateValueAddress(
@@ -837,12 +839,7 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
     BOOST_CHECK(0 == result.status_code);
 
     // call function get()
-    code = fromHex(
-        "6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000"
-        "900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b"
-        "5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a"
-        "60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600"
-        "a165627a7a723058206ed282a30254e86080aeca513abfda612e925676970bdf4f17a8e5d36bcd8d230029");
+    code = getContractCode(destination);
     data = fromHex("0x6d4ce63c");
     isCreate = false;
     isStaticCall = true;
@@ -854,12 +851,7 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
     BOOST_CHECK(0 == result.status_code);
 
     // call function set(456)
-    code = fromHex(
-        "6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000"
-        "900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b"
-        "5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a"
-        "60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600"
-        "a165627a7a723058206ed282a30254e86080aeca513abfda612e925676970bdf4f17a8e5d36bcd8d230029");
+    code = getContractCode(destination);
     data = fromHex("0x60fe47b100000000000000000000000000000000000000000000000000000000000001c8");
     isCreate = false;
     isStaticCall = false;
@@ -873,6 +865,367 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
     u256 xResult = getStateValueU256(
         destination, "0000000000000000000000000000000000000000000000000000000000000000");
     BOOST_CHECK_EQUAL(u256(456), xResult);
+}
+
+
+BOOST_AUTO_TEST_CASE(createTest)
+{
+    /*
+    pragma solidity ^0.4.11;
+    contract Base {
+        address s;
+        function Base() {
+            s = new Son();
+        }
+    }
+    contract Son {
+        uint256 x;
+        function Son()
+        {
+            x = 100;
+        }
+    }
+    */
+    dev::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bytes code = fromHex(
+        string("6080604052348015600f57600080fd5b5060166075565b604051809103906000f0801580156031573d6"
+               "000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffffffffffffffffff02"
+               "1916908373ffffffffffffffffffffffffffffffffffffffff1602179055506084565b604051605a806"
+               "100c783390190565b6035806100926000396000f3006080604052600080fd00a165627a7a72305820e8"
+               "ce4b49e16e83ea77cf2167d880751880e0f582af51761e14ecc335ebff0030002960806040523480156"
+               "00f57600080fd5b50606460008190555060358060256000396000f3006080604052600080fd00a16562"
+               "7a7a723058204be97116cdf15dc1417911f0162644ac0d28eced5dcbdb48c32e813c6fbccf130029") +
+        string(""));
+    bytes data = fromHex("");
+    Address destination{KeyPair::create().address()};
+    Address caller = destination;
+    u256 value = 0;
+    int64_t gas = 1000000;
+    int32_t depth = evmc.depth();
+    bool isCreate = true;
+    bool isStaticCall = false;
+
+    evmc_result result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    printAccount(destination);
+
+    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+        destination, "0000000000000000000000000000000000000000000000000000000000000000")));
+
+    cout << "new addr: " << newContractAddr.hex() << endl;
+    u256 xResult = getStateValueU256(
+        newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
+
+    BOOST_CHECK_EQUAL(100, xResult);
+    BOOST_CHECK(0 == result.status_code);
+}
+
+BOOST_AUTO_TEST_CASE(callTest)
+{
+    /*
+    pragma solidity ^0.4.11;
+    contract Base {
+        address s;
+        uint x;
+        function Base() {
+            Son _s = new Son();
+            s = _s;
+            s.call(bytes4(sha3("set(uint256)")), 456);
+        }
+    }
+    contract Son {
+        uint256 x;
+        function Son()
+        {
+            x = 100;
+        }
+        function set(uint256 _x) public
+        {
+            x = _x;
+        }
+        function get() public constant returns(uint256 _x)
+        {
+            _x = x;
+        }
+    }
+    */
+    dev::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bytes code = fromHex(
+        string(
+            "608060405234801561001057600080fd5b50600061001b6100eb565b604051809103906000f08015801561"
+            "0037573d6000803e3d6000fd5b5060008054600160a060020a03808416600160a060020a03199092169190"
+            "9117808355604080517f7365742875696e7432353629000000000000000000000000000000000000000081"
+            "52815190819003600c01812063ffffffff7c01000000000000000000000000000000000000000000000000"
+            "000000009182900490811690910282526101c8600483015291519596509190921693919260248083019391"
+            "92829003018183875af19250505050506100fa565b60405160e38061013d83390190565b60358061010860"
+            "00396000f3006080604052600080fd00a165627a7a72305820cddcd5dde134b1146c29ff4cc96c1a1790e3"
+            "a036e2425a1def8e00617c17dee50029608060405234801561001057600080fd5b50606460005560bf8061"
+            "00246000396000f30060806040526004361060485763ffffffff7c01000000000000000000000000000000"
+            "0000000000000000000000000060003504166360fe47b18114604d5780636d4ce63c146064575b600080fd"
+            "5b348015605857600080fd5b5060626004356088565b005b348015606f57600080fd5b506076608d565b60"
+            "408051918252519081900360200190f35b600055565b600054905600a165627a7a7230582061f8c02f4a0f"
+            "53e2f4b173d7a8475ec61c5138d08bddb39b3d1ee308bd30d37d0029") +
+        string(""));
+    bytes data = fromHex("");
+    Address destination{KeyPair::create().address()};
+    Address caller = destination;
+    u256 value = 0;
+    int64_t gas = 1000000;
+    int32_t depth = evmc.depth();
+    bool isCreate = true;
+    bool isStaticCall = false;
+
+    evmc_result result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    printAccount(destination);
+
+    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+        destination, "0000000000000000000000000000000000000000000000000000000000000000")));
+    printAccount(newContractAddr);
+
+    cout << "old addr: " << destination.hex() << endl;
+    cout << "old code: " << evmc.getState().accountCode(toEvmC(destination)).size() << endl;
+    cout << "new addr: " << newContractAddr.hex() << endl;
+    cout << "new code: " << evmc.getState().accountCode(toEvmC(newContractAddr)).size() << endl;
+    u256 xResult = getStateValueU256(
+        newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
+
+    BOOST_CHECK_EQUAL(456, xResult);
+    BOOST_CHECK(0 == result.status_code);
+}
+
+BOOST_AUTO_TEST_CASE(internalStaticCallTest)
+{
+    /*
+    pragma solidity ^0.4.11;
+    contract Base {
+        Son s;
+        uint x;
+        function Base() {
+            s = new Son();
+        }
+        function getSon() public{
+            x = s.get();
+        }
+    }
+    contract Son {
+        uint256 x;
+        function Son()
+        {
+            x = 123;
+        }
+        function get() public constant returns(uint256 _x)
+        {
+            _x = x;
+        }
+    }
+    */
+    dev::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bytes code = fromHex(
+        string(
+            "608060405234801561001057600080fd5b5061001961005b565b604051809103906000f080158015610035"
+            "573d6000803e3d6000fd5b5060008054600160a060020a031916600160a060020a03929092169190911790"
+            "5561006a565b60405160bc806101b783390190565b61013e806100796000396000f3006080604052600436"
+            "106100405763ffffffff7c0100000000000000000000000000000000000000000000000000000000600035"
+            "041663d4ad860c8114610045575b600080fd5b34801561005157600080fd5b5061005a61005c565b005b60"
+            "00809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffff"
+            "ffffffffffffffffffffff16636d4ce63c6040518163ffffffff167c010000000000000000000000000000"
+            "0000000000000000000000000000028152600401602060405180830381600087803b1580156100e1576000"
+            "80fd5b505af11580156100f5573d6000803e3d6000fd5b505050506040513d602081101561010b57600080"
+            "fd5b50516001555600a165627a7a72305820972d33c46497dc67c3a7e90d61771a524edb8346bc306a3a71"
+            "72a3eb0f5fb2f900296080604052348015600f57600080fd5b50607b6000556099806100236000396000f3"
+            "00608060405260043610603e5763ffffffff7c010000000000000000000000000000000000000000000000"
+            "00000000006000350416636d4ce63c81146043575b600080fd5b348015604e57600080fd5b506055606756"
+            "5b60408051918252519081900360200190f35b600054905600a165627a7a7230582047b02b4d358706093f"
+            "734a13695269576b9df6caaa576fa6a8b7c6cd8465bee90029") +
+        string(""));
+    bytes data = fromHex("");
+    Address destination{KeyPair::create().address()};
+    Address caller = destination;
+    u256 value = 0;
+    int64_t gas = 1000000;
+    int32_t depth = evmc.depth();
+    bool isCreate = true;
+    bool isStaticCall = false;
+
+    evmc_result result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    BOOST_CHECK(0 == result.status_code);
+    printResult(result);
+    printAccount(destination);
+
+    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+        destination, "0000000000000000000000000000000000000000000000000000000000000000")));
+    printAccount(newContractAddr);
+
+    u256 xResult = getStateValueU256(
+        newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
+
+    BOOST_CHECK_EQUAL(123, xResult);
+
+    code = getContractCode(destination);
+    data = fromHex("0xd4ad860c");
+    value = 0;
+    gas = 1000000;
+    depth = evmc.depth();
+    isCreate = false;
+    isStaticCall = false;
+
+    result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    BOOST_CHECK(0 == result.status_code);
+    printResult(result);
+    printAccount(destination);
+
+    xResult = getStateValueU256(
+        newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
+
+    BOOST_CHECK_EQUAL(123, xResult);
+
+    BOOST_CHECK(0 == result.status_code);
+}
+
+BOOST_AUTO_TEST_CASE(internalCallTest)
+{
+    /*
+    pragma solidity ^0.4.11;
+    contract Base {
+        Son s;
+        uint x;
+        function Base() {
+            s = new Son();
+        }
+        function setSon() public{
+            s.set(456);
+        }
+    }
+    contract Son {
+        uint256 x;
+        function Son()
+        {
+            x = 123;
+        }
+        function set(uint256 _x) public
+        {
+            x = _x;
+        }
+    }
+    */
+    dev::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bytes code = fromHex(
+        string("608060405234801561001057600080fd5b5061001961005b565b604051809103906000f080158015610"
+               "035573d6000803e3d6000fd5b5060008054600160a060020a031916600160a060020a03929092169190"
+               "9117905561006a565b60405160ae8061018383390190565b61010a806100796000396000f3006080604"
+               "05260043610603e5763ffffffff7c010000000000000000000000000000000000000000000000000000"
+               "0000600035041663f306c05c81146043575b600080fd5b348015604e57600080fd5b5060556057565b0"
+               "05b60008054604080517f60fe47b1000000000000000000000000000000000000000000000000000000"
+               "0081526101c86004820152905173ffffffffffffffffffffffffffffffffffffffff909216926360fe4"
+               "7b19260248084019382900301818387803b15801560c557600080fd5b505af115801560d8573d600080"
+               "3e3d6000fd5b505050505600a165627a7a72305820d4c11b5c93586159b71d8b5fb8ed6ccdda63861bd"
+               "3458c759ffdd304b839373200296080604052348015600f57600080fd5b50607b600055608b80610023"
+               "6000396000f300608060405260043610603e5763ffffffff7c010000000000000000000000000000000"
+               "000000000000000000000000060003504166360fe47b181146043575b600080fd5b348015604e576000"
+               "80fd5b506058600435605a565b005b6000555600a165627a7a72305820676d280cb50f611a551dba463"
+               "5b1eca2d393a69238156d9ad799423989f581180029") +
+        string(""));
+    bytes data = fromHex("");
+    Address destination{KeyPair::create().address()};
+    Address caller = destination;
+    u256 value = 0;
+    int64_t gas = 1000000;
+    int32_t depth = evmc.depth();
+    bool isCreate = true;
+    bool isStaticCall = false;
+
+    evmc_result result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    printAccount(destination);
+
+    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+        destination, "0000000000000000000000000000000000000000000000000000000000000000")));
+    printAccount(newContractAddr);
+
+    u256 xResult = getStateValueU256(
+        newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
+    BOOST_CHECK_EQUAL(123, xResult);
+
+    code = getContractCode(destination);
+    data = fromHex("0xf306c05c");
+    value = 0;
+    gas = 1000000;
+    depth = evmc.depth();
+    isCreate = false;
+    isStaticCall = false;
+
+    result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    BOOST_CHECK(0 == result.status_code);
+    printResult(result);
+    printAccount(destination);
+
+    xResult = getStateValueU256(
+        newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
+    BOOST_CHECK_EQUAL(456, xResult);
+}
+
+BOOST_AUTO_TEST_CASE(errorCodeTest)
+{
+    dev::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bytes code = fromHex("");
+    bytes data = fromHex("");
+    Address destination{KeyPair::create().address()};
+    Address caller = destination;
+    u256 value = 0;
+    int64_t gas = 1000000;
+    int32_t depth = 0;
+    bool isCreate = false;
+    bool isStaticCall = false;
+    evmc_result result;
+
+    // RevertInstruction
+    // PUSH 0
+    // PUSH 0
+    // REVERT
+    code = fromHex("60006000fd");
+    result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    BOOST_CHECK(result.status_code == EVMC_REVERT);
+
+    // BadInstruction
+    code = fromHex("4f");
+    result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    BOOST_CHECK(result.status_code == EVMC_UNDEFINED_INSTRUCTION);
+
+    // OutOfStack
+    // PUSH 0
+    // PUSH 0
+    // JUMP
+    // code = fromHex("5600560056");
+    // result = evmc.execute(schedule, code, data, destination, caller, value, gas, depth, isCreate,
+    // isStaticCall); printResult(result); BOOST_CHECK(result.status_code == EVMC_STACK_OVERFLOW);
+
+    // StackUnderflow
+    // JUMP
+    code = fromHex("56");
+    result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    BOOST_CHECK(result.status_code == EVMC_STACK_UNDERFLOW);
+
+    // Bad jump destination
+    // PUSH8 FFFFFFFFFFFFFFFF
+    // JUMP
+    code = fromHex("67FFFFFFFFFFFFFFFF56");
+    result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    BOOST_CHECK(result.status_code == EVMC_BAD_JUMP_DESTINATION);
 }
 
 
