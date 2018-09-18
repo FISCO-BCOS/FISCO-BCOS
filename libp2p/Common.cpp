@@ -36,6 +36,8 @@ bool p2p::isPublicAddress(std::string const& _addressToCheck)
 
 bool p2p::isPublicAddress(bi::address const& _addressToCheck)
 {
+    if (_addressToCheck.to_string() == "0.0.0.0")
+        return false;
     return true;
     return !(isPrivateAddress(_addressToCheck) || isLocalHostAddress(_addressToCheck));
 }
