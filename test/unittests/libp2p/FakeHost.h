@@ -96,18 +96,28 @@ public:
         setLastPing(chrono::steady_clock::now());
         m_run = true;
     }
-
     bi::tcp::endpoint tcpClient() { return m_tcpClient; }
     bi::tcp::endpoint tcpPublic() { return m_tcpPublic; }
     void setSessions(std::shared_ptr<SessionFace> session)
     {
         RecursiveGuard l(x_sessions);
-        m_sessions[session->id()] = std::weak_ptr<SessionFace>(session);
-        // m_peers[session->id()] = session->peer();
+        m_sessions[session->id()] = session;
+        m_peers[session->id()] = session->peer();
     }
 
     void keepAlivePeers() { Host::keepAlivePeers(); }
-
+    virtual void runAcceptor(boost::system::error_code boost_error = boost::system::error_code())
+    {
+        /// to stop runAcceptor
+        if (m_loop == 1)
+        {
+            m_loop = 0;
+            return;
+        }
+        m_loop = 1;
+        std::cout << "#### test runAcceptor" << std::endl;
+        Host::runAcceptor(boost_error);
+    }
     std::shared_ptr<SessionFace> FakeSession(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         KeyPair key_pair = KeyPair::create();
@@ -125,22 +135,34 @@ public:
     {
         Host::setStaticNodes(staticNodes);
     }
-    void connect(NodeIPEndpoint const& _nodeIPEndpoint)
+    void connect(NodeIPEndpoint const& _nodeIPEndpoint,
+        boost::system::error_code ec = boost::system::error_code())
     {
-        std::cout << "Fake connect" << std::endl;
-        /// fake session
-        std::shared_ptr<SessionFace> session = FakeSession(_nodeIPEndpoint);
-        session->start();
-        setSessions(session);
-        std::cout << "###Set sessions, size:" << m_sessions.size() << std::endl;
+        Host::connect(_nodeIPEndpoint, ec);
     }
+
     bool havePeerSession(NodeID const& _id) { return Host::havePeerSession(_id); }
     void reconnectAllNodes() { return Host::reconnectAllNodes(); }
-
-
     bool accepting() { return m_accepting; }
+    void setRun(bool run) { m_run = run; }
     void setAccepting(bool isAccept) { m_accepting = isAccept; }
     void setLastPing(std::chrono::steady_clock::time_point time_point) { m_lastPing = time_point; }
+    std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
+        std::shared_ptr<std::string> nodeIDOut)
+    {
+        std::cout << "#### Fake newVerifyCallback, node id:" << toHex(m_node_id) << std::endl;
+        return [this, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
+            std::string node_id = toHex(m_node_id);
+            nodeIDOut->assign(node_id.c_str());
+            std::cout << " #### nodeIDOut:" << (*nodeIDOut) << std::endl;
+            return m_verify;
+        };
+    }
+    void setNodeId(NodeID const& _nodeid) { m_node_id = _nodeid; }
+    void setVerifyResult(bool _verify) { m_verify = _verify; }
+    NodeID m_node_id;
+    bool m_verify;
+    int m_loop = 0;
     ~FakeHost() {}
 };
 
@@ -164,9 +186,18 @@ public:
     FakeSocket(ba::io_service& _ioService, NodeIPEndpoint const& remote_endpoint)
       : m_sslContext(ba::ssl::context::tlsv12)
     {
-        m_remote =
-            std::make_shared<bi::tcp::endpoint>(remote_endpoint.address, remote_endpoint.tcpPort);
+        m_remote = std::make_shared<bi::tcp::endpoint>(
+            remote_endpoint.address, remote_endpoint.tcpPort + 10);
         m_nodeIPEndpoint = remote_endpoint;
+        if (remote_endpoint.tcpPort == 0)
+        {
+            std::cout << "####fake remote_point: 30314" << std::endl;
+            NodeIPEndpoint m_fake_endpoint = fakeEndPoint("127.0.0.1", 30304);
+            m_remote->address(m_fake_endpoint.address);
+            m_remote->port(30314);
+            m_nodeIPEndpoint = m_fake_endpoint;
+            m_nodeIPEndpoint.host = "127.0.0.1";
+        }
         m_close = false;
         m_sslContext.set_options(
             boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 |
@@ -174,6 +205,12 @@ public:
         m_sslContext.set_verify_depth(3);
         m_sslContext.set_verify_mode(ba::ssl::verify_peer);
         m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket> >(_ioService, m_sslContext);
+    }
+
+    NodeIPEndpoint fakeEndPoint(std::string const& addr, uint16_t port)
+    {
+        NodeIPEndpoint m_endpoint(bi::address::from_string(addr), port, port);
+        return m_endpoint;
     }
     virtual bool isConnected() const { return !m_close; }
     virtual void close() { m_close = true; }
@@ -186,6 +223,7 @@ public:
     }
 
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    bi::tcp::endpoint remote_endpoint() { return *m_remote; }
     ~FakeSocket() {}
 
     bool m_close;
@@ -210,12 +248,46 @@ public:
 class AsioTest : public AsioInterface
 {
 public:
-    virtual void async_accept(
-        bi::tcp::acceptor& tcp_acceptor, bi::tcp::socket& socket_ref, Handler_Type handler)
+    virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace>& socket,
+        boost::asio::io_service::strand& m_strand, Handler_Type handler,
+        boost::system::error_code ec = boost::system::error_code())
     {
         /// execute handlers
-        boost::system::error_code ec = boost::asio::error::broken_pipe;
+        // m_strand.dispatch(std::bind(handler, ec));
         handler(ec);
+        if (ec)
+            BOOST_CHECK(socket->isConnected() == false);
+        else
+            BOOST_CHECK(socket->isConnected() == true);
+    }
+
+    /// default implementation of async_handshake
+    virtual void async_handshake(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::io_service::strand& m_strand, ba::ssl::stream_base::handshake_type const& type,
+        Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
+    {
+        std::cout << "### fake async_handshake" << std::endl;
+        handler(ec);
+    }
+
+    virtual void async_connect(std::shared_ptr<SocketFace>& socket,
+        boost::asio::io_service::strand& m_strand, const bi::tcp::endpoint& peer_endpoint,
+        Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
+    {
+        handler(ec);
+        if (ec)
+            BOOST_CHECK(socket->isConnected() == false);
+        else
+            BOOST_CHECK(socket->isConnected() == true);
+    }
+
+    virtual void set_verify_callback(
+        std::shared_ptr<SocketFace> const& socket, VerifyCallback callback, bool verify_succ = true)
+    {
+        std::cout << "### Fake set_verify_callback" << std::endl;
+        boost::asio::ssl::verify_context context(nullptr);
+        callback(verify_succ, context);
+        std::cout << "### Fake set_verify_callback end" << std::endl;
     }
 };
 /// create Host
