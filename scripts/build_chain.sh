@@ -236,7 +236,7 @@ kill -9 \${weth_pid}
 EOF
 
 		chmod +x "$node_dir/start.sh"
-
+		chmod +x "$node_dir/stop.sh"
 		cp "$output_dir/ca.crt" "$node_dir/data/"
 		cp "$eth_path" "$node_dir/fisco-bcos"
 		echo "cd \${PPath}/node_${line}_${index} && ./start.sh" >> "$output_dir/start_all.sh"
