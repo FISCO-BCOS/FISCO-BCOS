@@ -221,7 +221,7 @@ protected:  /// protected functions
     /// server calls handshakeServer to after handshake, mainly calls RLPxHandshake to obtain
     /// informations(client version, caps, etc),start peer session and start accepting procedure
     /// repeatedly
-    void handshakeServer(const boost::system::error_code& error,
+    virtual void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
     /// update m_sessions and m_peers periodically
@@ -243,8 +243,9 @@ protected:  /// protected functions
         boost::system::error_code ec = boost::system::error_code());
 
     /// start RLPxHandshake procedure after ssl handshake succeed
-    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
-        std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint);
+    virtual void handshakeClient(const boost::system::error_code& error,
+        std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
+        NodeIPEndpoint& _nodeIPEndpoint);
     inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
 
 protected:  /// protected members(for unit testing)

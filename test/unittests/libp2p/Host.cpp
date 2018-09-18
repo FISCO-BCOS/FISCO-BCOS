@@ -251,6 +251,57 @@ BOOST_AUTO_TEST_CASE(testkeepAlivePeers)
     BOOST_CHECK(getHost()->getPeers().size() == 0);
     BOOST_CHECK(getHost()->peerCount() == 0);
 }
+
+/// test handshake client
+BOOST_AUTO_TEST_CASE(testHandshakeClientAndServerException)
+{
+    ba::io_service m_ioservice(2);
+    NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+    std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice, m_endpoint);
+    std::string node_id = toHex(KeyPair::create().pub());
+    std::shared_ptr<std::string> p_node_id = std::make_shared<std::string>(node_id.c_str());
+    boost::system::error_code err_code = boost::asio::error::timed_out;
+    /// test handshake client exception(connect error)
+    getHost()->handshakeClient(err_code, fake_socket, p_node_id, m_endpoint);
+    BOOST_CHECK(fake_socket->isConnected() == false);
+    /// test connect to node-self(handshake client)
+    std::map<NodeIPEndpoint, NodeID> m_staticNodes;
+    m_staticNodes[m_endpoint] = NodeID();
+    getHost()->setStaticNodes(m_staticNodes);
+    /// test modify node_id of m_staticNodes
+    p_node_id = std::make_shared<std::string>(toHex(getHost()->id()).c_str());
+    err_code = boost::system::error_code();
+    fake_socket->m_close = false;
+    getHost()->handshakeClient(err_code, fake_socket, p_node_id, m_endpoint);
+    BOOST_CHECK(fake_socket->isConnected() == false);
+    BOOST_CHECK((*(getHost()->staticNodes()))[m_endpoint] == getHost()->id());
+    BOOST_CHECK(getHost()->hasPendingConn(m_endpoint.name()) == false);
+
+    /// test handshakeserver exception: connect error
+    fake_socket->m_close = false;
+    err_code = boost::asio::error::timed_out;
+    /// test error_code
+    getHost()->handshakeServer(err_code, p_node_id, fake_socket);
+    BOOST_CHECK(fake_socket->isConnected() == false);
+    /// test connect to node-self
+    fake_socket->m_close = false;
+    err_code = boost::system::error_code();
+    getHost()->handshakeServer(err_code, p_node_id, fake_socket);
+    BOOST_CHECK(fake_socket->isConnected() == false);
+}
+
+/// test handshake server
+BOOST_AUTO_TEST_CASE(testHandshakeServer) {}
+
+/// test run
+BOOST_AUTO_TEST_CASE(testRun)
+{
+    getHost()->setRun(false);
+}
+
+/// test stop
+BOOST_AUTO_TEST_CASE(testStop) {}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

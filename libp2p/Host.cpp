@@ -338,6 +338,8 @@ void Host::handshakeServer(const boost::system::error_code& error,
     if (error)
     {
         LOG(ERROR) << "Host::async_handshake err:" << error.message();
+        socket->close();
+        return;
     }
     std::cout << "Host::asyc_handshake succ:" << std::endl;
     /// forbid connect to node-self
@@ -347,7 +349,6 @@ void Host::handshakeServer(const boost::system::error_code& error,
         socket->close();
         return;
     }
-
     bool success = false;
     try
     {

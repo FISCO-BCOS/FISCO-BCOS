@@ -155,8 +155,21 @@ public:
             return m_verify;
         };
     }
+    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
+        std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint)
+    {
+        Host::handshakeClient(error, socket, endpointPublicKey, _nodeIPEndpoint);
+    }
+
+    void handshakeServer(const boost::system::error_code& error,
+        std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket)
+    {
+        Host::handshakeServer(error, endpointPublicKey, socket);
+    }
+
     void setNodeId(NodeID const& _nodeid) { m_node_id = _nodeid; }
     void setVerifyResult(bool _verify) { m_verify = _verify; }
+    bool hasPendingConn(std::string const& name) { return m_pendingPeerConns.count(name); }
     NodeID m_node_id;
     bool m_verify;
     int m_loop = 0;
