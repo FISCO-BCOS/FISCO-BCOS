@@ -42,10 +42,8 @@ public:
     Service(std::shared_ptr<Host> _host) : m_host(_host)
     {
         m_p2pMsgHandler = std::make_shared<P2PMsgHandler>();
-        //m_ioService = _host->ioService();
         ///< Set m_p2pMsgHandler to host
         ///< When a new session created, host set handler to the new session.
-        //m_host->setP2PMsgHandler(m_p2pMsgHandler);
     }
 
     ~Service() { m_ioService = NULL; }
