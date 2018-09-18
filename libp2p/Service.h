@@ -25,90 +25,70 @@
 
 #pragma once
 #include "Host.h"
+#include "P2PInterface.h"
 #include "P2PMsgHandler.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <memory>
 
-namespace dev
-{
-namespace p2p
-{
-class P2PInterfase
-{
+namespace dev {
+namespace p2p {
+class Service : public P2PInterface,
+                public std::enable_shared_from_this<Service> {
 public:
-    virtual Message::Ptr sendMessageByNodeID(
-        dev::h256 const& nodeID, uint32_t protocolID, Message::Ptr message) = 0;
+  Service(std::shared_ptr<Host> _host) : m_host(_host) {
+    m_p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+    // m_ioService = _host->ioService();
+    ///< Set m_p2pMsgHandler to host
+    ///< When a new session created, host set handler to the new session.
+    // m_host->setP2PMsgHandler(m_p2pMsgHandler);
+  }
 
-    virtual void asyncSendMessageByNodeID(dev::h256 const& nodeID, uint32_t protocolID,
-        Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
-        Options options) = 0;
+  ~Service() { m_ioService = NULL; }
 
-    virtual Message::Ptr sendMessageByTopic(
-        std::string const& topic, uint32_t protocolID, Message::Ptr message) = 0;
+  Message::Ptr sendMessageByNodeID(NodeID const &nodeID,
+                                   Message::Ptr message) override;
 
-    virtual void asyncSendMessageByTopic(std::string const& topic, uint32_t protocolID,
-        Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
-        Options options) = 0;
+  void asyncSendMessageByNodeID(
+      NodeID const &nodeID, Message::Ptr message,
+      std::function<void(P2PException, Message::Ptr)> callback,
+      Options const &options) override;
 
-    virtual void asyncMulticastMessageByTopic(
-        std::string const& topic, uint32_t protocolID, Message::Ptr message) = 0;
+  Message::Ptr sendMessageByTopic(std::string const &topic,
+                                  Message::Ptr message) override;
 
-    virtual void asyncBroadcastMessage(
-        uint32_t protocolID, Message::Ptr message, Options options) = 0;
+  void asyncSendMessageByTopic(
+      std::string const &topic, Message::Ptr message,
+      std::function<void(P2PException, Message::Ptr)> callback,
+      Options const &options) override;
 
-    virtual void registerHandlerByProtoclID(uint32_t protocolID,
-        std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler) = 0;
+  void asyncMulticastMessageByTopic(std::string const &topic,
+                                    Message::Ptr message) override;
 
-    virtual void registerHandlerByTopic(std::string const& topic,
-        std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler,
-        Options options) = 0;
-};
+  void asyncBroadcastMessage(Message::Ptr message,
+                             Options const &options) override;
 
-class Service : public P2PInterfase
-{
-public:
-    Service(std::shared_ptr<Host> _host) : m_host(_host)
-    {
-        m_p2pMsgHandler = std::make_shared<P2PMsgHandler>();
-        // set m_p2pMsgHandler to session?
-    }
+  void registerHandlerByProtoclID(
+      int16_t protocolID,
+      std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>
+          handler) override;
 
-    Message::Ptr sendMessageByNodeID(
-        dev::h256 const& nodeID, uint32_t protocolID, Message::Ptr message) override;
-
-    void asyncSendMessageByNodeID(dev::h256 const& nodeID, uint32_t protocolID,
-        Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
-        Options options) override;
-
-    Message::Ptr sendMessageByTopic(
-        std::string const& topic, uint32_t protocolID, Message::Ptr message) override;
-
-    void asyncSendMessageByTopic(std::string const& topic, uint32_t protocolID,
-        Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
-        Options options) override;
-
-    void asyncMulticastMessageByTopic(
-        std::string const& topic, uint32_t protocolID, Message::Ptr message) override;
-
-    void asyncBroadcastMessage(uint32_t protocolID, Message::Ptr message, Options options) override;
-
-    void registerHandlerByProtoclID(uint32_t protocolID,
-        std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler)
-        override;
-
-    void registerHandlerByTopic(std::string const& topic,
-        std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> handler,
-        Options options) override;
+  void registerHandlerByTopic(
+      std::string const &topic,
+      std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>
+          handler,
+      Options const &options) override;
 
 private:
-    std::shared_ptr<Host> m_host;
+  std::shared_ptr<Host> m_host;
+  boost::asio::io_service *m_ioService;
 
-    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
-    std::atomic<uint32_t> m_seq = {0};
+  std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
+  std::atomic<uint32_t> m_seq = {0}; ///< The message identify is generated by
+                                     ///< the service by autoincrement.
 };
 
-}  // namespace p2p
+} // namespace p2p
 
-}  // namespace dev
+} // namespace dev

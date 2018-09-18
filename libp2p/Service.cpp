@@ -25,15 +25,13 @@ namespace dev
 {
 namespace p2p
 {
-Message::Ptr Service::sendMessageByNodeID(
-    dev::h256 const& nodeID, uint32_t protocolID, Message::Ptr message)
+Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message)
 {
     return Message::Ptr();
 }
 
-void Service::asyncSendMessageByNodeID(dev::h256 const& nodeID, uint32_t protocolID,
-    Message::Ptr message, std::function<void(dev::Exception, Message::Ptr)> callback,
-    Options options)
+void Service::asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+    std::function<void(P2PException, Message::Ptr)> callback, Options const& options)
 {}
 
 }  // namespace p2p

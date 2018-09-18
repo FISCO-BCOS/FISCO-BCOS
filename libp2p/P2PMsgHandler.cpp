@@ -25,8 +25,7 @@ namespace dev
 {
 namespace p2p
 {
-bool P2PMsgHandler::addSeq2Callback(
-    uint32_t seq, std::function<void(dev::Exception, Message::Ptr)> callback)
+bool P2PMsgHandler::addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback)
 {
     RecursiveGuard l(x_seq2Callback);
     if (m_seq2Callback->find(seq) == m_seq2Callback->end())
@@ -41,24 +40,22 @@ bool P2PMsgHandler::addSeq2Callback(
     }
 }
 
-bool P2PMsgHandler::getSeq2Callback(
-    uint32_t seq, std::function<void(dev::Exception, Message::Ptr)>& callback)
+ResponseCallback::Ptr P2PMsgHandler::getCallbackBySeq(uint32_t seq)
 {
     RecursiveGuard l(x_seq2Callback);
     auto it = m_seq2Callback->find(seq);
     if (it != m_seq2Callback->end())
     {
-        callback = it->second;
-        return true;
+        return it->second;
     }
     else
     {
         LOG(ERROR) << "Handler not found! SeqID = " << seq;
-        return false;
+        return NULL;
     }
 }
 
-bool P2PMsgHandler::eraseSeq2Callback(uint32_t seq)
+bool P2PMsgHandler::eraseCallbackBySeq(uint32_t seq)
 {
     RecursiveGuard l(x_seq2Callback);
     if (m_seq2Callback->find(seq) != m_seq2Callback->end())
@@ -73,8 +70,8 @@ bool P2PMsgHandler::eraseSeq2Callback(uint32_t seq)
     }
 }
 
-bool P2PMsgHandler::addProtocolID2Handler(uint32_t protocolID,
-    std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> callback)
+bool P2PMsgHandler::addProtocolID2Handler(int16_t protocolID,
+    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> const& callback)
 {
     RecursiveGuard l(x_protocolID2Handler);
     if (m_protocolID2Handler->find(protocolID) == m_protocolID2Handler->end())
@@ -89,8 +86,8 @@ bool P2PMsgHandler::addProtocolID2Handler(uint32_t protocolID,
     }
 }
 
-bool P2PMsgHandler::getProtocolID2Handler(uint32_t protocolID,
-    std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)>& callback)
+bool P2PMsgHandler::getHandlerByProtocolID(int16_t protocolID,
+    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>& callback)
 {
     RecursiveGuard l(x_protocolID2Handler);
     auto it = m_protocolID2Handler->find(protocolID);
@@ -106,7 +103,7 @@ bool P2PMsgHandler::getProtocolID2Handler(uint32_t protocolID,
     }
 }
 
-bool P2PMsgHandler::eraseProtocolID2Handler(uint32_t protocolID)
+bool P2PMsgHandler::eraseHandlerByProtocolID(int16_t protocolID)
 {
     RecursiveGuard l(x_protocolID2Handler);
     if (m_protocolID2Handler->find(protocolID) != m_protocolID2Handler->end())
@@ -122,7 +119,7 @@ bool P2PMsgHandler::eraseProtocolID2Handler(uint32_t protocolID)
 }
 
 bool P2PMsgHandler::addTopic2Handler(std::string const& topic,
-    std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)> callback)
+    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> const& callback)
 {
     RecursiveGuard l(x_topic2Handler);
     if (m_topic2Handler->find(topic) == m_topic2Handler->end())
@@ -137,8 +134,8 @@ bool P2PMsgHandler::addTopic2Handler(std::string const& topic,
     }
 }
 
-bool P2PMsgHandler::getTopic2Handler(std::string const& topic,
-    std::function<void(dev::Exception, std::shared_ptr<Session>, Message::Ptr)>& callback)
+bool P2PMsgHandler::getHandlerByTopic(std::string const& topic,
+    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>& callback)
 {
     RecursiveGuard l(x_topic2Handler);
     auto it = m_topic2Handler->find(topic);
@@ -154,7 +151,7 @@ bool P2PMsgHandler::getTopic2Handler(std::string const& topic,
     }
 }
 
-bool P2PMsgHandler::eraseTopic2Handler(std::string const& topic)
+bool P2PMsgHandler::eraseHandlerByTopic(std::string const& topic)
 {
     RecursiveGuard l(x_topic2Handler);
     if (m_topic2Handler->find(topic) != m_topic2Handler->end())

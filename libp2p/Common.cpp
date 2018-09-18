@@ -138,6 +138,51 @@ std::string p2p::reasonOf(DisconnectReason _r)
     }
 }
 
+void Message::encode(bytes& buffer)
+{
+    buffer.clear();  ///< It is not allowed to be assembled outside.
+    m_length = HEADER_LENGTH + m_buffer->size();
+
+    uint32_t length = htonl(m_length);
+    int16_t protocolID = htonl(m_protocolID);
+    uint16_t packetType = htonl(m_packetType);
+    uint32_t seq = htonl(m_seq);
+
+    buffer.insert(buffer.end(), (byte*)&length, (byte*)&length + sizeof(length));
+    buffer.insert(buffer.end(), (byte*)&protocolID, (byte*)&protocolID + sizeof(protocolID));
+    buffer.insert(buffer.end(), (byte*)&packetType, (byte*)&packetType + sizeof(packetType));
+    buffer.insert(buffer.end(), (byte*)&seq, (byte*)&seq + sizeof(seq));
+    buffer.insert(buffer.end(), m_buffer->begin(), m_buffer->end());
+}
+
+ssize_t Message::decode(const byte* buffer, size_t size)
+{
+    if (size < HEADER_LENGTH)
+    {
+        return PACKET_INCOMPLETE;
+    }
+
+    m_length = ntohl(*((uint32_t*)&buffer[0]));
+
+    if (m_length > MAX_LENGTH)
+    {
+        return PACKET_ERROR;
+    }
+
+    if (size < m_length)
+    {
+        return PACKET_INCOMPLETE;
+    }
+
+    m_protocolID = ntohl(*((int16_t*)&buffer[4]));
+    m_packetType = ntohl(*((uint16_t*)&buffer[6]));
+    m_seq = ntohl(*((uint32_t*)&buffer[8]));
+    ///< TODO: assign to std::move
+    m_buffer->assign(&buffer[HEADER_LENGTH], &buffer[HEADER_LENGTH] + m_length - HEADER_LENGTH);
+
+    return m_length;
+}
+
 void NodeIPEndpoint::streamRLP(RLPStream& _s, RLPAppend _append) const
 {
     if (_append == StreamList)
