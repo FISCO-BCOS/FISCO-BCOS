@@ -29,7 +29,7 @@ namespace p2p
 class P2PInterface
 {
 public:
-    /// <
+    /// < protocolID stored in Message struct
     virtual Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
 
     virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
