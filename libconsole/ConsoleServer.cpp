@@ -16,6 +16,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelSession.h>
 #include <libstorage/DB.h>
+#include <uuid/uuid.h>
 
 using namespace dev;
 using namespace console;
@@ -67,6 +68,10 @@ void ConsoleServer::onConnect(dev::channel::ChannelException e, dev::channel::Ch
 	session->run();
 }
 
+void ConsoleServer::setKey(KeyPair key) {
+	_key = key;
+}
+
 void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message) {
 	if(e.errorCode() != 0) {
 		LOG(ERROR) << "ConsoleServer onRequest error: " << boost::diagnostic_information(e);
@@ -105,9 +110,13 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
 		{
 			output = p2pMiners(args);
 		}
-		else if(func == "amdb.select")
+		else if(func == "miner.add")
 		{
-			output = amdbSelect(args);
+			output = addMiner(args);
+		}
+		else if(func == "miner.remove")
+		{
+			output = removeMiner(args);
 		}
 		else if(func == "quit")
 		{
@@ -139,6 +148,8 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
 	ss << "p2p.peers              Show the peers information." << std::endl;
 	ss << "p2p.miners             Show the miners information." << std::endl;
 	ss << "amdb.select            Query the table data." << std::endl;
+	ss << "miner.add              Add miner node." << std::endl;
+	ss << "miner.remove           Remove miner node." << std::endl;
 	ss << "quit                   Quit the blockchain console." << std::endl;
 	ss << "help                   Provide help information for blockchain console." << std::endl;
 	ss << "------------------------------------------------------------------"
@@ -310,4 +321,83 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
   }
 
   return output;
+}
+
+std::string ConsoleServer::addMiner(const std::vector<std::string> args)
+{
+    std::string output;
+    try
+    {
+        std::stringstream ss;
+        if (args.size() == 1)
+        {
+            std::string nodeID = args[0];
+            TransactionSkeleton t;
+            //   ret.from = _key.address();
+            t.to = Address(0x1003);
+            t.creation = false;
+            uuid_t uuid;
+            uuid_generate(uuid);
+            auto s = toHex(uuid, 2, HexPrefix::Add);
+            t.randomid = u256(toHex(uuid, 2, HexPrefix::Add));
+            t.blockLimit = u256(_interface->number() + 100);
+            dev::eth::ContractABI abi;
+            t.data = abi.abiIn("add(string)", nodeID);
+            _interface->submitTransaction(t, _key.secret());
+            ss << "add miner : " << nodeID << endl;
+        }
+        else
+        {
+            ss << "You must specify nodeID, for example" << std::endl;
+            ss << "miner.add 123456789..." << std::endl;
+        }
+        ss << "------------------------------------------------------------------------" << endl;
+        output = ss.str();
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
+        output += "ERROR while miner.add | ";
+        output += e.what();
+    }
+    return output;
+}
+
+std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
+{
+    std::string output;
+    try
+    {
+        std::stringstream ss;
+        if (args.size() == 1)
+        {
+            std::string nodeID = args[0];
+            TransactionSkeleton t;
+            t.to = Address(0x1003);
+            t.creation = false;
+            uuid_t uuid;
+            uuid_generate(uuid);
+            auto s = toHex(uuid, 2, HexPrefix::Add);
+            t.randomid = u256(toHex(uuid, 2, HexPrefix::Add));
+            t.blockLimit = u256(_interface->number() + 100);
+            dev::eth::ContractABI abi;
+            t.data = abi.abiIn("remove(string)", nodeID);
+            _interface->submitTransaction(t, _key.secret());
+            ss << "remove miner : " << nodeID << endl;
+        }
+        else
+        {
+            ss << "You must specify nodeID, for example" << std::endl;
+            ss << "miner.remove 123456789..." << std::endl;
+        }
+        ss << "------------------------------------------------------------------------" << endl;
+        output = ss.str();
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
+        output += "ERROR while miner.remove | ";
+        output += e.what();
+    }
+    return output;
 }
