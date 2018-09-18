@@ -6,8 +6,9 @@
 #include <libstorage/StorageException.h>
 #include <libweb3jsonrpc/ChannelRPCServer.h>
 #include "libstorage/Common.h"
-#include <unittest/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <unittest/Common.h>
+
 using namespace dev;
 using namespace dev::storage;
 
