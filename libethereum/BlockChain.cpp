@@ -169,13 +169,11 @@ BlockChain::~BlockChain()
 
 bool BlockChain::isBlockLimitOk(Transaction const&_ts) const
 {
-#if 0
 	if ( (_ts.blockLimit()  == Invalid256) || ( number() >= _ts.blockLimit() ) || (_ts.blockLimit() > (number() + BlockChain::maxBlockLimit)  ) )
 	{
 		LOG(WARNING) << "BlockChain::isBlockLimitOk Fail! t.sha3()=" << _ts.sha3() << ",t.blockLimit=" << _ts.blockLimit() << ",number()=" << number() << ",maxBlockLimit=" << BlockChain::maxBlockLimit;
 		return false;
 	}
-#endif
 
 	return true;
 }

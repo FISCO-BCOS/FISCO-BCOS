@@ -24,7 +24,7 @@ public:
     virtual std::string toString(PrecompiledContext::Ptr);
 
     virtual bytes call(PrecompiledContext::Ptr context, bytesConstRef param);
-private:
+protected:
     std::shared_ptr<storage::DB> openTable(PrecompiledContext::Ptr context, const std::string& tableName);
 };
 

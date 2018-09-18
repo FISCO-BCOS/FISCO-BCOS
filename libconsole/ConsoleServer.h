@@ -32,12 +32,15 @@ public:
 	void setStateStorage(dev::storage::Storage::Ptr stateStorage) { _stateStorage = stateStorage; }
 	void onConnect(dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
 	void onRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message);
+	void setKey(KeyPair key);
 
 	std::string help(const std::vector<std::string> args);
 	std::string status(const std::vector<std::string> args);
 	std::string p2pPeers(const std::vector<std::string> args);
 	std::string p2pMiners(const std::vector<std::string> args);
 	std::string amdbSelect(const std::vector<std::string> args);
+	std::string addMiner(const std::vector<std::string> args);
+	std::string removeMiner(const std::vector<std::string> args);
 
 private:
 	std::shared_ptr<dev::channel::ChannelServer> _server;
@@ -45,6 +48,7 @@ private:
 	dev::WebThreeDirect *_webThreeDirect = nullptr;
 	dev::storage::Storage::Ptr _stateStorage = nullptr;
 	bool _running = false;
+	KeyPair _key;
 };
 
 }
