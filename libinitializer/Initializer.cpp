@@ -26,6 +26,7 @@ void Initializer::init(const std::string &path) {
 	_consoleInitializer = std::make_shared<ConsoleInitializer>();
 	_consoleInitializer->setSSLContext(_secureInitializer->sslContext());
 	_consoleInitializer->initConfig(pt);
+	_consoleInitializer->consoleServer()->setKey(_secureInitializer->key());
 
 	_amdbInitializer = std::make_shared<AMDBInitializer>();
 	_amdbInitializer->setChannelRPCServer(_rpcInitializer->channelRPCServer());

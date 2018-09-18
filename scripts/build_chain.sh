@@ -5,6 +5,7 @@ node_num=1 #节点数量
 ip_file=
 output_dir=./output/ #输出目录
 port_start=30300 #起始端口
+statedb_type=leveldb #存储
 eth_path=
 make_tar=
 
@@ -16,9 +17,10 @@ Usage:
 	-f <IP list file> [Required]
 	-e <FISCO-BCOS program path> [Required]
 	-n <Nodes per IP> Default 1
-	-a <CA Key> Default Generate a new CA
-	-o <Output Dir> Default ./output/
-	-p <Start Port> Default 30300
+	-a <CA Key>       Default Generate a new CA
+	-o <Output Dir>   Default ./output/
+	-p <Start Port>   Default 30300
+	-s <StateDB type> Default leveldb. if set -s, use amop
 	-z Generate tar packet
 	-h Help
 EOF
@@ -34,6 +36,7 @@ while getopts "a:n:o:p:e:f:hz" option;do
 	o) output_dir=$OPTARG;;
 	p) port_start=$OPTARG;;
 	e) eth_path=$OPTARG;;
+	s) statedb_type="amop";;
 	z) make_tar="yes";;
 	h) help;;
 	esac
@@ -125,7 +128,7 @@ echo "Generating node configuration..."
 index=0
 while read line;do
 	for ((i=0;i<node_num;++i));do
-		echo "生成ip:${line} id:${index}的节点配置..."
+		echo "Generating IP:${line} ID:${index} config files..."
 		node_dir="$output_dir/node_${line}_${index}"
 	cat << EOF > "$node_dir/config${i}.conf"
 [rpc]
@@ -157,7 +160,7 @@ while read line;do
 	ca_path=
 [statedb]
 	;type : leveldb/amop
-	type=leveldb
+	type=${statedb_type}
 	path=\${DATAPATH}/statedb
 	retryInterval=1
 	maxRetry=0
@@ -228,7 +231,7 @@ EOF
 
 	cat << EOF > "$node_dir/stop.sh"
 #!/bin/bash
-weth_pid=\`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print $2}'\`
+weth_pid=\`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print \$2}'\`
 kill -9 \${weth_pid}
 EOF
 	
