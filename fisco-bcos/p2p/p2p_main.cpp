@@ -25,6 +25,7 @@
 #include <libp2p/CertificateServer.h>
 #include <libp2p/Host.h>
 #include <libp2p/Network.h>
+#include <libp2p/P2pFactory.h>
 #include <boost/program_options.hpp>
 #include <memory>
 
@@ -67,7 +68,6 @@ public:
         initParams(vm, option);
         updateBootstrapnodes();
     }
-
 
     void initParams(boost::program_options::variables_map const& vm,
         boost::program_options::options_description const& option)
@@ -113,6 +113,7 @@ private:
             js::mValue val;
             js::read_string(json, val);
             js::mObject jsObj = val.get_obj();
+            NodeIPEndpoint m_endpoint;
             if (jsObj.count("nodes"))
             {
                 for (auto node : jsObj["nodes"].get_array())
@@ -127,11 +128,13 @@ private:
                     p2pport = uint16_t(std::stoi(node.get_obj()["p2pport"].get_str()));
 
                     LOG(INFO) << "bootstrapnodes host :" << host << ",p2pport :" << p2pport;
-                    // NodeIPEndpoint nodeendpoint=NodeIPEndpoint(bi::address::from_string(host),
-                    // p2pport,p2pport);
-                    NodeIPEndpoint nodeEndpoint(host, p2pport, p2pport);
-                    if (nodeEndpoint.address.to_string() != "0.0.0.0")
-                        m_staticNodes[nodeEndpoint] = Public(0);
+                    m_endpoint.address = bi::address::from_string(host);
+                    m_endpoint.tcpPort = p2pport;
+                    m_endpoint.udpPort = p2pport;
+                    if (m_endpoint.address.to_string() != "0.0.0.0")
+                    {
+                        m_staticNodes.insert(std::make_pair(NodeIPEndpoint(m_endpoint), NodeID()));
+                    }
                 }
             }
         }
@@ -194,8 +197,13 @@ static void InitNetwork(Params& m_params)
 {
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioInterface>();
     std::shared_ptr<NetworkConfig> m_netConfig = m_params.creatNetworkConfig();
-    std::shared_ptr<Host> m_host = std::make_shared<Host>(m_params.clientVersion(),
-        CertificateServer::GetInstance().keypair(), *m_netConfig.get(), m_asioInterface);
+    /// create m_socketFactory
+    std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<SocketFactory>();
+    /// create m_sessionFactory
+    std::shared_ptr<SessionFactory> m_sessionFactory = std::make_shared<SessionFactory>();
+    std::shared_ptr<Host> m_host =
+        std::make_shared<Host>(m_params.clientVersion(), CertificateServer::GetInstance().keypair(),
+            *m_netConfig.get(), m_asioInterface, m_socketFactory, m_sessionFactory);
     m_host->setStaticNodes(m_params.staticNodes());
     /// begin working
     m_host->start();

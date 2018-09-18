@@ -26,14 +26,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
-
-const unsigned dev::p2p::c_protocolVersion = 4;
-// const unsigned dev::p2p::c_protocolVersion = 4;
 unsigned dev::p2p::c_defaultIPPort = 16789;
-static_assert(dev::p2p::c_protocolVersion == 4,
-    "Replace v3 compatbility with v4 compatibility before updating network version.");
-/*static_assert(dev::p2p::c_protocolVersion == 4,
-    "Replace v3 compatbility with v4 compatibility before updating network version.");*/
 bool dev::p2p::NodeIPEndpoint::test_allowLocal = false;
 bool p2p::isPublicAddress(std::string const& _addressToCheck)
 {

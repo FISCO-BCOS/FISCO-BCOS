@@ -26,6 +26,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/SHA3.h>
 #include <libethcore/EVMSchedule.h>
+#include <libethcore/LogEntry.h>
 #include <libinterpreter/interpreter.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -38,13 +39,14 @@ namespace dev
 {
 namespace test
 {
-const h256 FAKE_GAS_PRICE = h256(1);
+const u256 FAKE_GAS_PRICE = 123;
 const Address FAKE_ORIGIN = Address("1000000000000000000000000000000000000000");
 const Address FAKE_COINBASE = Address("2000000000000000000000000000000000000000");
 const int64_t FAKE_BLOCK_NUMBER = 100;
 const int64_t FAKE_TIMESTAMP = 123456;
 const int64_t FAKE_GAS_LIMIT = 0x13880000000000;
-const h256 FAKE_DIFFICULTY = h256(20);
+const u256 FAKE_DIFFICULTY = 456;
+const h256 FAKE_BLOCK_HASH = sha3(bytes());
 
 inline evmc_address toEvmC(Address const& _addr)
 {
@@ -54,6 +56,12 @@ inline evmc_address toEvmC(Address const& _addr)
 inline evmc_uint256be toEvmC(h256 const& _h)
 {
     return reinterpret_cast<evmc_uint256be const&>(_h);
+}
+
+inline evmc_uint256be toEvmC(u256 const& _u)
+{
+    h256 h = FixedHash<32>(_u);
+    return reinterpret_cast<evmc_uint256be const&>(h);
 }
 
 inline u256 fromEvmC(evmc_uint256be const& _n)
@@ -142,11 +150,17 @@ private:
     AccountCodeStateType codeState;
 };
 
+extern dev::eth::LogEntries fakeLogs;
+
 class FakeEvmc
 {
 public:
     explicit FakeEvmc(evmc_instance* _instance);
-    virtual ~FakeEvmc() { delete m_context; }
+    virtual ~FakeEvmc()
+    {
+        delete m_context;
+        fakeLogs.clear();
+    }
 
     evmc_result execute(dev::eth::EVMSchedule const& schedule, bytes code, bytes data,
         Address destination, Address caller, u256 value, int64_t gas, int32_t depth, bool isCreate,
