@@ -23,13 +23,13 @@
  */
 #pragma once
 
+#include "AsioInterface.h"
 #include "Common.h"
 #include "Network.h"
 #include "P2pFactory.h"
 #include "Peer.h"
 #include "SessionFace.h"
 #include "Socket.h"
-#include <libdevcore/AsioInterface.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
@@ -84,7 +84,7 @@ public:
     /// get the number of connected peers
     size_t peerCount() const;
     /// get session map
-    std::unordered_map<NodeID, std::weak_ptr<SessionFace>>& sessions() { return m_sessions; }
+    std::unordered_map<NodeID, std::shared_ptr<SessionFace>>& sessions() { return m_sessions; }
     /// get mutex of sessions
     RecursiveMutex& mutexSessions() { return x_sessions; }
     /// get m_staticNodes
@@ -127,6 +127,8 @@ public:
         }
         return ret;
     }
+    /// get m_tcpClient
+    bi::tcp::endpoint const& tcpClient() const { return m_tcpClient; }
     /// ------set interfaces ------
     /// set m_reconnectnow to be true, reconnect all peers when callback keepAlivePeers
     void reconnectNow()
@@ -140,6 +142,9 @@ public:
     {
         m_staticNodes = staticNodes;
     }
+
+    /// set max peer counts
+    void setMaxPeerCount(unsigned max_peer_count) { m_maxPeerCount = max_peer_count; }
 
     ///------ Network and worker threads related ------
     /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
@@ -178,7 +183,7 @@ public:
     std::shared_ptr<SessionFace> peerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
-        return m_sessions.count(_id) ? m_sessions[_id].lock() : nullptr;
+        return m_sessions.count(_id) ? m_sessions[_id] : nullptr;
     }
     bytes saveNetwork() const;
 
@@ -188,7 +193,7 @@ public:
         RecursiveGuard l(x_sessions);
         for (auto it = m_sessions.begin(); it != m_sessions.end(); it++)
         {
-            if (auto p = it->second.lock())
+            if (auto p = it->second)
             {
                 if (p->id() == sNodeId)
                 {
@@ -204,11 +209,11 @@ public:
 
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
-    virtual void runAcceptor();
+    virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());
     /// functions called after openssl handshake,
     /// maily to get node id and verify whether the certificate has been expired
     /// @return: node id of the connected peer
-    std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
+    virtual std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut);
     /// @return true: the given certificate has been expired
     /// @return false: the given certificate has not been expired
@@ -227,14 +232,16 @@ protected:  /// protected functions
     bool havePeerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
-        if (m_sessions.count(_id) && m_sessions[_id].lock())
+        if (m_sessions.count(_id) && m_sessions[_id])
             return true;
         return false;
     }
     /// reconnect to all unconnected peers recorded in m_staticNodes
     void reconnectAllNodes();
     /// connect to the server
-    virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint);
+    virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint,
+        boost::system::error_code ec = boost::system::error_code());
+
     /// start RLPxHandshake procedure after ssl handshake succeed
     void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint);
@@ -274,7 +281,7 @@ protected:  /// protected members(for unit testing)
     /// the network accepting status(false means p2p is not accepting connections)
     bool m_accepting = false;
     /// maps from node ids to the sessions
-    mutable std::unordered_map<NodeID, std::weak_ptr<SessionFace>> m_sessions;
+    mutable std::unordered_map<NodeID, std::shared_ptr<SessionFace>> m_sessions;
     /// maps between peer name and peeer object
     /// attention: (endpoint recorded in m_peers always (listenIp, listenAddress))
     ///           (client endpoint of (connectIp, connectAddress) has no record)
