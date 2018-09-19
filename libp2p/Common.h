@@ -20,6 +20,12 @@
  * @date 2014
  *
  * Miscellanea required for the Host/Session/NodeTable classes.
+ *
+ * @author yujiechen
+ * @date: 2018-09-19
+ * @modifications:
+ * 1. remove DeadlineOps(useless class)
+ * 2. remove isPrivateAddress method for logical imperfect
  */
 
 #pragma once
@@ -57,22 +63,15 @@ extern const Node UnspecifiedNode;
 
 using NodeID = h512;
 
-bool isPrivateAddress(bi::address const& _addressToCheck);
-bool isPrivateAddress(std::string const& _addressToCheck);
 bool isLocalHostAddress(bi::address const& _addressToCheck);
 bool isLocalHostAddress(std::string const& _addressToCheck);
 bool isPublicAddress(bi::address const& _addressToCheck);
 bool isPublicAddress(std::string const& _addressToCheck);
 
-struct NetworkStartRequired : virtual dev::Exception
-{
-};
-struct InvalidPublicIPAddress : virtual dev::Exception
-{
-};
-struct InvalidHostIPAddress : virtual dev::Exception
-{
-};
+/// define Exceptions
+DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
+DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
+DEV_SIMPLE_EXCEPTION(InvalidHostIPAddress);
 
 enum PacketType
 {
@@ -120,11 +119,6 @@ inline bool isPermanentProblem(DisconnectReason _r)
 
 /// @returns the string form of the given disconnection reason.
 std::string reasonOf(DisconnectReason _r);
-
-using CapDesc = std::pair<std::string, u256>;
-using CapDescSet = std::set<CapDesc>;
-using CapDescs = std::vector<CapDesc>;
-
 
 class HostResolver
 {
@@ -266,88 +260,7 @@ private:
     uint16_t m_udpPort = 0;
     NodeID m_id;
 };
-class DeadlineOps
-{
-    class DeadlineOp
-    {
-    public:
-        DeadlineOp(ba::io_service& _io, unsigned _msInFuture,
-            std::function<void(boost::system::error_code const&)> const& _f)
-          : m_timer(new ba::deadline_timer(_io))
-        {
-            m_timer->expires_from_now(boost::posix_time::milliseconds(_msInFuture));
-            m_timer->async_wait(_f);
-        }
-        ~DeadlineOp()
-        {
-            if (m_timer)
-                m_timer->cancel();
-        }
-
-        DeadlineOp(DeadlineOp&& _s) : m_timer(_s.m_timer.release()) {}
-        DeadlineOp& operator=(DeadlineOp&& _s)
-        {
-            assert(&_s != this);
-
-            m_timer.reset(_s.m_timer.release());
-            return *this;
-        }
-
-        bool expired()
-        {
-            Guard l(x_timer);
-            return m_timer->expires_from_now().total_nanoseconds() <= 0;
-        }
-        void wait()
-        {
-            Guard l(x_timer);
-            m_timer->wait();
-        }
-
-    private:
-        std::unique_ptr<ba::deadline_timer> m_timer;
-        Mutex x_timer;
-    };
-
-public:
-    DeadlineOps(ba::io_service& _io, unsigned _reapIntervalMs = 100)
-      : m_io(_io), m_reapIntervalMs(_reapIntervalMs), m_stopped(false)
-    {
-        reap();
-    }
-    ~DeadlineOps() { stop(); }
-
-    void schedule(
-        unsigned _msInFuture, std::function<void(boost::system::error_code const&)> const& _f)
-    {
-        if (m_stopped)
-            return;
-        DEV_GUARDED(x_timers) m_timers.emplace_back(m_io, _msInFuture, _f);
-    }
-
-    void stop()
-    {
-        m_stopped = true;
-        DEV_GUARDED(x_timers) m_timers.clear();
-    }
-
-    bool isStopped() const { return m_stopped; }
-
-protected:
-    void reap();
-
-private:
-    ba::io_service& m_io;
-    unsigned m_reapIntervalMs;
-
-    std::vector<DeadlineOp> m_timers;
-    Mutex x_timers;
-
-    std::atomic<bool> m_stopped;
-};
-
 }  // namespace p2p
-
 /// Simple stream output for a NodeIPEndpoint.
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep);
 }  // namespace dev
