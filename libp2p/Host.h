@@ -235,11 +235,8 @@ protected:  /// protected functions
     bool havePeerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
-<<<<<<< HEAD
-        if (m_sessions.count(_id) && m_sessions[_id])
-            == == == = if (m_sessions.count(_id))
->>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
-                         return true;
+        if (m_sessions.count(_id))
+            return true;
         return false;
     }
     /// reconnect to all unconnected peers recorded in m_staticNodes
@@ -314,14 +311,10 @@ protected:  /// protected members(for unit testing)
     /// peer count limit
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
-<<<<<<< HEAD
 
     ///< This handler will be sent to sessions before session start.
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
 };
-== == == =
-};  // namespace p2p
->>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
-}  // namespace dev
+}  // namespace p2p
 
 }  // namespace dev

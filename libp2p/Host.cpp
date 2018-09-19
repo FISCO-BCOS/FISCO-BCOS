@@ -220,18 +220,14 @@ size_t Host::peerCount() const
     unsigned retCount = 0;
     RecursiveGuard l(x_sessions);
     for (auto& i : m_sessions)
-<<<<<<< HEAD
-        if (std::shared_ptr<SessionFace> j = i.second)
-            if (j->isConnected())
-                retCount++;
-    == == == = { auto session = i.second;
-    if (session->isConnected())
     {
-        retCount++;
+        auto session = i.second;
+        if (session->isConnected())
+        {
+            retCount++;
+        }
     }
-}
->>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
-return retCount;
+    return retCount;
 }  // namespace p2p
 
 /// @return true: the given certificate has been expired
@@ -513,12 +509,9 @@ void Host::keepAlivePeers()
     /// update m_sessions by excluding unconnected/invalid sessions
     for (auto it = m_sessions.begin(); it != m_sessions.end();)
     {
-<<<<<<< HEAD
-        if (auto p = it->second)
-            == == == = auto p = it->second;
+        auto p = it->second;
         /// ping connected sessions
         if (p->isConnected())
->>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
         {
             ++it;
         }
@@ -723,14 +716,8 @@ void Host::doneWorking()
 {
     try
     {
-<<<<<<< HEAD
-        DEV_RECURSIVE_GUARDED(x_sessions)
-        for (auto i : m_sessions)
-            if (auto p = i.second)
-                == == == =
-                             // reset ioservice (cancels all timers and allows manually polling
-                             // network, below)
-                    m_ioService.reset();
+        // reset ioservice (cancels all timers and allows manually polling network, below)
+        m_ioService.reset();
         // shutdown acceptor
         if (m_tcp4Acceptor.is_open())
         {
@@ -746,7 +733,6 @@ void Host::doneWorking()
             for (auto i : m_sessions)
             {
                 auto p = i.second;
->>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
                 if (p->isConnected())
                 {
                     p->disconnect(ClientQuit);
@@ -798,5 +784,5 @@ void Host::doWork()
     if (m_ioService.stopped())
         m_ioService.reset();
 }
-}  // namespace dev
+}  // namespace p2p
 }  // namespace dev

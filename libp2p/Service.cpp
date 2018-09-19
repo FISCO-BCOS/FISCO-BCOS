@@ -33,7 +33,7 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         bool findNodeID = false;
         {
             RecursiveGuard l(m_host->mutexSessions());
-            std::unordered_map<NodeID, std::shared_ptr<SessionFace>> s = m_host->sessions();
+            auto s = m_host->sessions();
             for (auto const& i : s)
             {
                 if (i.first == nodeID)
@@ -92,34 +92,31 @@ void Service::asyncSendMessageByNodeID(
             LOG(INFO) << "Service::asyncSendMessageByNodeID traversed nodeID = " << toJS(i.first);
             if (i.first == nodeID)
             {
-                if (std::shared_ptr<SessionFace> p = i.second)
+                std::shared_ptr<SessionFace> p = i.second;
+                LOG(INFO) << "Service::asyncSendMessageByNodeID get session success.";
+                uint32_t seq = ++m_seq;
+                if (callback)
                 {
-                    LOG(INFO) << "Service::asyncSendMessageByNodeID get session success.";
-                    uint32_t seq = ++m_seq;
-                    if (callback)
+                    ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
+                    responseCallback->m_callbackFunc = callback;
+                    if (options.timeout > 0)
                     {
-                        ResponseCallback::Ptr responseCallback =
-                            std::make_shared<ResponseCallback>();
-                        responseCallback->m_callbackFunc = callback;
-                        if (options.timeout > 0)
-                        {
-                            std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
-                                std::make_shared<boost::asio::deadline_timer>(
-                                    *m_ioService, boost::posix_time::milliseconds(options.timeout));
-                            timeoutHandler->async_wait(boost::bind(&Service::onTimeout,
-                                shared_from_this(), boost::asio::placeholders::error, seq));
-                            responseCallback->m_timeoutHandler = timeoutHandler;
-                        }
-                        m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
+                        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
+                            std::make_shared<boost::asio::deadline_timer>(
+                                *m_ioService, boost::posix_time::milliseconds(options.timeout));
+                        timeoutHandler->async_wait(boost::bind(&Service::onTimeout,
+                            shared_from_this(), boost::asio::placeholders::error, seq));
+                        responseCallback->m_timeoutHandler = timeoutHandler;
                     }
-                    ///< update seq and length
-                    message->setSeq(seq);
-                    message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
-                    message->Print("Service::asyncSendMessageByNodeID msg sent:");
-                    std::shared_ptr<bytes> buf = std::make_shared<bytes>();
-                    message->encode(*buf);
-                    p->send(buf);
+                    m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
                 }
+                ///< update seq and length
+                message->setSeq(seq);
+                message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+                message->Print("Service::asyncSendMessageByNodeID msg sent:");
+                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+                message->encode(*buf);
+                p->send(buf);
                 return;
             }
         }

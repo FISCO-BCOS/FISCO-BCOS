@@ -52,11 +52,6 @@ public:
     void disconnect(DisconnectReason _reason) { m_disconnect = true; }
     bool isConnected() const { return !m_disconnect; }
     NodeID id() const { return NodeID(m_peer->id()); }
-<<<<<<< HEAD
-    void addNote(std::string const& _k, std::string const& _v){} == == ==
-        = void sealAndSend(RLPStream & _s, uint16_t _protocolID)
-    {}
->>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
     PeerSessionInfo info() const { return m_info; }
     std::chrono::steady_clock::time_point connectionTime() { return m_connectionTime; }
     std::shared_ptr<Peer> peer() const { return m_peer; }

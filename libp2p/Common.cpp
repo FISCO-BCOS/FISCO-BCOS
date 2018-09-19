@@ -140,54 +140,6 @@ ssize_t Message::decode(const byte* buffer, size_t size)
     return m_length;
 }
 
-void NodeIPEndpoint::streamRLP(RLPStream& _s, RLPAppend _append) const
-{
-    if (_append == StreamList)
-        _s.appendList(4);
-    if (address.is_v4())
-        _s << bytesConstRef(&address.to_v4().to_bytes()[0], 4);
-    else if (address.is_v6())
-        _s << bytesConstRef(&address.to_v6().to_bytes()[0], 16);
-    else
-        _s << bytes();
-    _s << udpPort << tcpPort << host;
-}
-
-void NodeIPEndpoint::interpretRLP(RLP const& _r)
-{
-    if (_r[0].size() == 4)
-        address = bi::address_v4(*(bi::address_v4::bytes_type*)_r[0].toBytes().data());
-    else if (_r[0].size() == 16)
-        address = bi::address_v6(*(bi::address_v6::bytes_type*)_r[0].toBytes().data());
-    else
-        address = bi::address();
-    udpPort = _r[1].toInt<uint16_t>();
-    tcpPort = _r[2].toInt<uint16_t>();
-    host = _r[3].toString();
-}
-
-void DeadlineOps::reap()
-{
-    if (m_stopped)
-        return;
-
-    Guard l(x_timers);
-    std::vector<DeadlineOp>::iterator t = m_timers.begin();
-    while (t != m_timers.end())
-        if (t->expired())
-        {
-            t->wait();
-            t = m_timers.erase(t);
-        }
-        else
-            t++;
-
-    m_timers.emplace_back(m_io, m_reapIntervalMs, [this](boost::system::error_code const& ec) {
-        if (!ec && !m_stopped)
-            reap();
-    });
-}
-
 NodeSpec::NodeSpec(string const& _user)
 {
     m_address = _user;
