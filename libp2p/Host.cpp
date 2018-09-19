@@ -214,7 +214,7 @@ size_t Host::peerCount() const
     for (auto& i : m_sessions)
     {
         auto session = i.second;
-        if (session && session->isConnected())
+        if (session->isConnected())
         {
             retCount++;
         }
@@ -425,6 +425,7 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             p->setEndpoint(remote_endpoint);
         }
     }
+
     shared_ptr<SessionFace> ps = m_sessionFactory->create_session(this, _s, p,
         PeerSessionInfo({node_id, p->endpoint().address.to_string(),
             chrono::steady_clock::duration(), 0, map<string, string>()}));
@@ -432,15 +433,13 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
         RecursiveGuard l(x_sessions);
         if (m_sessions.count(node_id))
         {
+            auto s = m_sessions[node_id];
             /// disconnect already-connected session
-            if (auto s = m_sessions[node_id])
+            if (s->isConnected())
             {
-                if (s->isConnected())
-                {
-                    LOG(WARNING) << "Session already exists for peer with id: " << node_id;
-                    ps->disconnect(DisconnectReason::DuplicatePeer);
-                    return;
-                }
+                LOG(WARNING) << "Session already exists for peer with id: " << node_id;
+                ps->disconnect(DisconnectReason::DuplicatePeer);
+                return;
             }
             NodeIPEndpoint endpoint(_s->remoteEndpoint().address(), _s->remoteEndpoint().port(),
                 _s->remoteEndpoint().port());
@@ -500,24 +499,18 @@ void Host::keepAlivePeers()
     /// update m_sessions by excluding unconnected/invalid sessions
     for (auto it = m_sessions.begin(); it != m_sessions.end();)
     {
-        if (auto p = it->second)
+        auto p = it->second;
+        /// ping connected sessions
+        if (p->isConnected())
         {
-            /// ping connected sessions
-            if (p->isConnected())
-                ++it;
-            /// erase unconnected sessions
-            else
-            {
-                if (m_peers.count(p->info().id))
-                    m_peers.erase(p->info().id);
-                LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << p->id();
-                it = m_sessions.erase(it);
-            }
+            ++it;
         }
+        /// erase unconnected sessions
         else
         {
-            /// erase expired sessions
-            LOG(WARNING) << "Host::keepAlivePeers erase Session " << it->first;
+            if (m_peers.count(p->info().id))
+                m_peers.erase(p->info().id);
+            LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << p->id();
             it = m_sessions.erase(it);
         }
     }
@@ -728,12 +721,14 @@ void Host::doneWorking()
         {
             DEV_RECURSIVE_GUARDED(x_sessions)
             for (auto i : m_sessions)
-                if (auto p = i.second)
-                    if (p->isConnected())
-                    {
-                        p->disconnect(ClientQuit);
-                        n++;
-                    }
+            {
+                auto p = i.second;
+                if (p->isConnected())
+                {
+                    p->disconnect(ClientQuit);
+                    n++;
+                }
+            }
             if (!n)
                 break;
             // poll so that peers send out disconnect packets

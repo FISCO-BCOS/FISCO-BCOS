@@ -193,15 +193,13 @@ public:
         RecursiveGuard l(x_sessions);
         for (auto it = m_sessions.begin(); it != m_sessions.end(); it++)
         {
-            if (auto p = it->second)
+            auto p = it->second;
+            if (p->id() == sNodeId)
             {
-                if (p->id() == sNodeId)
-                {
-                    p->disconnect(DisconnectReason::UserReason);
-                    m_sessions.erase(it);
-                    m_peers.erase(p->id());
-                    return true;
-                }
+                p->disconnect(DisconnectReason::UserReason);
+                m_sessions.erase(it);
+                m_peers.erase(p->id());
+                return true;
             }
         }
         return false;
@@ -232,7 +230,7 @@ protected:  /// protected functions
     bool havePeerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
-        if (m_sessions.count(_id) && m_sessions[_id])
+        if (m_sessions.count(_id))
             return true;
         return false;
     }
@@ -308,7 +306,7 @@ protected:  /// protected members(for unit testing)
     /// peer count limit
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
-};
+};  // namespace p2p
 }  // namespace p2p
 
 }  // namespace dev
