@@ -63,18 +63,25 @@ find_package(Web3)
 
 
 target_include_directories(web3jsonrpc PRIVATE ..)
+target_include_directories(web3jsonrpc PUBLIC ${MHD_INCLUDE_DIR})
 
-target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
-                                  ${Web3_WHISPER_LIBRARIES}
-                                  JsonRpcCpp::Server
-				        statistics
-                                  contract
-                                  curl
-                                  ${OPENSSL_SSL_LIBRARIE}
-                                  ${OPENSSL_CRYPTO_LIBRARIE}
-                                  krb5
-                                  uuid
-                                  z
-                                  dl
-                                  )
+#target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
+#                                  ${Web3_WHISPER_LIBRARIES}
+#                                  JsonRpcCpp::Server
+#                                  statistics
+#                                  contract
+#                                  ${OPENSSL_SSL_LIBRARIE}
+#                                  ${OPENSSL_CRYPTO_LIBRARIE}
+#                                  ${MHD_LIBRARY}
+#                                  uuid
+#                                  z
+#                                  dl
+#                                  )
+
+target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES})
+target_link_libraries(web3jsonrpc statistics)
+target_link_libraries(web3jsonrpc contract)
 target_link_libraries(web3jsonrpc channelserver)
+target_link_libraries(web3jsonrpc JsonRpcCpp::Server)
+target_link_libraries(web3jsonrpc ${MHD_LIBRARY})
+target_link_libraries(web3jsonrpc pthread)

@@ -18,9 +18,10 @@ if (NOT EMSCRIPTEN)
     
 	if(BUILD_BOOST)
 	target_include_directories(devcore PUBLIC ${BOOST_INCLUDE_DIR})
-	target_link_libraries(devcore Boost::Filesystem Boost::Random Boost::Thread ${LEVELDB_LIBRARIES})
+	target_link_libraries(devcore Boost::Filesystem Boost::Random Boost::Thread)
+	target_link_libraries(devcore ssl)
 	else()
-	target_link_libraries(devcore ${BOOST_LIBRARIES} ${LEVELDB_LIBRARIES})
+	#target_link_libraries(devcore ${BOOST_LIBRARIES} ${LEVELDB_LIBRARIES})
 	endif()
 
 endif()

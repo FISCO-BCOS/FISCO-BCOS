@@ -20,7 +20,7 @@
  * 
  * @date: 2017
  */
-#include <curl/curl.h>
+//#include <curl/curl.h>
 #include <libdevcore/FileSystem.h>
 #include <libdevcrypto/AES.h>
 #include <libdevcore/RLP.h>
@@ -93,6 +93,7 @@ void GenKey::setDataKeyPath(string datakeyPath)
 
 string GenKey::getKeycenterData(string const& b64data,string const& kcUrl,int keyType)
 {
+#if 0
 	CURL *curl;
 	CURLcode res;
 	curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -127,6 +128,8 @@ string GenKey::getKeycenterData(string const& b64data,string const& kcUrl,int ke
 	}
 	curl_global_cleanup();
 	return reqData;
+#endif
+	return "";
 }
 
 

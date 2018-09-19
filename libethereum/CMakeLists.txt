@@ -5,13 +5,8 @@ include(EthDependencies)
 
 add_library(ethereum ${SRC_LIST} ${HEADERS})
 
-if(BUILD_BOOST)
 target_include_directories(ethereum PRIVATE ${BOOST_INCLUDE_DIR})
-target_link_libraries(ethereum Boost::Regex JsonCpp)
-else()
-find_package(Boost QUIET REQUIRED COMPONENTS regex)
-target_link_libraries(ethereum ${BOOST_LIBRARIES})
-endif()
+#target_link_libraries(ethereum Boost::Regex JsonCpp)
 
 find_package(Dev)
 find_package(Eth)
