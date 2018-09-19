@@ -54,7 +54,6 @@ public:
     bool isConnected() const { return !m_disconnect; }
     NodeID id() const { return NodeID(m_peer->id()); }
     void sealAndSend(RLPStream& _s, uint16_t _protocolID) {}
-    void addNote(std::string const& _k, std::string const& _v) {}
     PeerSessionInfo info() const { return m_info; }
     std::chrono::steady_clock::time_point connectionTime() { return m_connectionTime; }
     std::shared_ptr<Peer> peer() const { return m_peer; }
@@ -126,8 +125,8 @@ public:
         KeyPair key_pair = KeyPair::create();
         std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), _nodeIPEndpoint);
         ;
-        PeerSessionInfo peer_info({key_pair.pub(), _nodeIPEndpoint.address.to_string(),
-            chrono::steady_clock::duration(), 0, map<string, string>()});
+        PeerSessionInfo peer_info = {key_pair.pub(), _nodeIPEndpoint.address.to_string(),
+            std::chrono::steady_clock::duration(), 0};
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(this, peer, peer_info);
         session->start();
