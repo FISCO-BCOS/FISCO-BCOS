@@ -26,11 +26,6 @@ target_link_libraries(fisco-bcos
 	storage
 	initializer
 	abi
-	Boost::Filesystem
-	Boost::Random
-	Boost::Thread
-	ssl
-	uuid
 	crypto
 	leveldb
 	snappy idn tasn1 nettle hogweed gmp z dl pthread
