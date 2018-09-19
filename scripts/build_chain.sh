@@ -140,30 +140,22 @@ while read line;do
 [p2p]
 	listen_ip=0.0.0.0
 	listen_port=$(( port_start + index * 4 ))
-	idle_connections=100
-	reconnect_interval=60
 
 	$ip_list
 [pbft]
-	block_interval=1000
-
 	$nodeid_list
 [common]
 	;\${DATAPATH} == data_path
 	data_path=data/
 	log_config=log.conf
-	ext_header=0
 [secure]
 	key=\${DATAPATH}/node.key
 	cert=\${DATAPATH}/node.crt
 	ca_cert=\${DATAPATH}/ca.crt
-	ca_path=
 [statedb]
 	;type : leveldb/amop
 	type=${statedb_type}
 	path=\${DATAPATH}/statedb
-	retryInterval=1
-	maxRetry=0
 	topic=DB
 EOF
 

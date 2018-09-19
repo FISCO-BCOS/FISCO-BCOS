@@ -19,7 +19,6 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
 
     dev::eth::ContractABI abi;
     bytes out;
-    const std::string key("miner");
     switch (func)
     {
     case 0xb0c8f9dc:
@@ -34,18 +33,26 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
         storage::DB::Ptr db = openTable(context, "_sys_miners_");
         if (db.get())
         {
+            LOG(DEBUG) << "MinerPrecompiled add miner nodeID : " << nodeID;
             auto condition = db->newCondition();
-            condition->EQ("node_id", nodeID);
-            auto entries = db->select(key, condition);
+            condition->EQ(MINER_KEY_NODEID, nodeID);
+            auto entries = db->select(MINER_TYPE_MINER, condition);
+            auto entry = db->newEntry();
+            entry->setField(MINER_PRIME_KEY, MINER_TYPE_MINER);
             if (entries->size() == 0u)
             {
-                auto entry = db->newEntry();
-                entry->setField("type", key);
-                entry->setField("node_id", nodeID);
-                entry->setField("enable_num", context->blockInfo().number.str());
-                db->insert(key, entry);
-                LOG(DEBUG) << "MinerPrecompiled add miner nodeID : " << nodeID;
+                entries = db->select(MINER_TYPE_OBSERVER, condition);
+                if (entries->size() == 0u)
+                {
+                    entry->setField(MINER_KEY_NODEID, nodeID);
+                    entry->setField(MINER_KEY_ENABLENUM, (context->blockInfo().number + 1).str());
+                    db->insert(MINER_TYPE_MINER, entry);
+                    break;
+                }
+                db->update(MINER_TYPE_OBSERVER, entry, condition);
+                break;
             }
+            db->update(MINER_TYPE_MINER, entry, condition);
         }
         break;
     }
@@ -62,11 +69,13 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
         if (db.get())
         {
             auto condition = db->newCondition();
-            condition->EQ("node_id", nodeID);
-            auto entries = db->select(key, condition);
+            condition->EQ(MINER_KEY_NODEID, nodeID);
+            auto entries = db->select(MINER_TYPE_MINER, condition);
             if (entries->size() == 0u)
                 break;
-            db->remove(key, condition);
+            auto entry = db->newEntry();
+            entry->setField(MINER_PRIME_KEY, MINER_TYPE_OBSERVER);
+            db->update(MINER_TYPE_MINER, entry, condition);
             LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
         }
         break;
