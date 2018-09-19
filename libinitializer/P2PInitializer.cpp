@@ -48,7 +48,7 @@ void P2PInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	}
 
 	auto netPrefs = NetworkPreferences(listenIP, listenPort, false);
-	_host = std::make_shared<p2p::Host>("FISCO-BCOS-PRO", _key, netPrefs);
+	_host = std::make_shared<p2p::Host>("FISCO-BCOS", _key, netPrefs);
 	_host->setStaticNodes(nodes);
 	_host->setSSLContext(_sslContext);
 	if(idleConnections > 0) {
