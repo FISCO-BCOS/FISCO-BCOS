@@ -27,3 +27,4 @@
 
 ba::ssl::context Socket::m_sslContext(ba::ssl::context::tlsv12);
 bool Socket::m_isInit = false;
+
