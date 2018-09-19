@@ -21,6 +21,7 @@ target_link_libraries(ethereum storage)
 target_link_libraries(ethereum initializer)
 target_link_libraries(ethereum ${Eth_DISKENCRYPTION_LIBRARIES})
 target_link_libraries(ethereum UTXO)
+target_link_libraries(ethereum leveldb)
 
 if (NOT EMSCRIPTEN)
 	target_link_libraries(ethereum ${Dev_P2P_LIBRARIES})
