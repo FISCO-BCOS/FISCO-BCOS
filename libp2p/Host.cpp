@@ -18,8 +18,16 @@
  * @author Alex Leverington <nessence@gmail.com>
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
- *  @author toxotguo
+ * @author toxotguo
  * @date 2018
+ *
+ * @ author: yujiechen
+ * @ date: 2018-09-19
+ * @ modifications:
+ *  1. modify io_service value from 1 to 2
+ * (construction of io_service is io_service(std::size_t concurrency_hint);)
+ * (currenncy_hint means that "A suggestion to the implementation on how many threads it should
+ * allow to run simultaneously.") (since ethereum use 2, we modify io_service from 1 to 2) 2.
  */
 #include "Host.h"
 #include "Common.h"
@@ -62,7 +70,7 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_clientVersion(_clientVersion),
     m_netConfigs(_n),
     m_ifAddresses(Network::getInterfaceAddresses()),
-    m_ioService(1),
+    m_ioService(2),
     m_tcp4Acceptor(m_ioService),
     m_alias(_alias),
     m_lastPing(chrono::steady_clock::time_point::min()),
@@ -604,8 +612,6 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
         m_socketFactory->create_socket(m_ioService, _nodeIPEndpoint);
     // socket.reset(socket);
     m_tcpClient = socket->remoteEndpoint();
-    /// get the public key of the server during handshake
-    std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
     socket->sslref().set_verify_depth(3);
     /// connect to the server
@@ -622,6 +628,8 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
             }
             else
             {
+                /// get the public key of the server during handshake
+                std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->set_verify_callback(socket, newVerifyCallback(endpointPublicKey));
                 /// call handshakeClient after handshake succeed
                 m_asioInterface->async_handshake(socket, m_strand, ba::ssl::stream_base::client,
