@@ -103,7 +103,7 @@ Entries::Ptr AMOPStorage::select(h256 hash, int num,
         entry->setField(columns[j], fieldValue);
       }
 
-      entry->setStatus(boost::lexical_cast<int>(entry->getField(STATUS)));
+      entry->setStatus(boost::lexical_cast<int>(entry->getField(STORAGE_STATUS)));
       if (entry->getStatus() == 0) {
         entry->setDirty(false);
         entries->addEntry(entry);

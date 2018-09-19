@@ -443,7 +443,7 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	cout << EthGrayBold "---------------FISCO-BCOS-PRO, a C++ BlockChain client--------------" EthReset << "\n";
+	cout << EthGrayBold "---------------FISCO-BCOS, a C++ BlockChain client--------------" EthReset << "\n";
 	VMFactory::setKind(VMKind::Interpreter);
 	cout << EthGrayBold "---------------------------------------------------------------" EthReset << "\n";
 
