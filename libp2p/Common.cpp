@@ -137,8 +137,8 @@ void Message::encode(bytes& buffer)
     m_length = HEADER_LENGTH + m_buffer->size();
 
     uint32_t length = htonl(m_length);
-    int16_t protocolID = htonl(m_protocolID);
-    uint16_t packetType = htonl(m_packetType);
+    int16_t protocolID = htons(m_protocolID);
+    uint16_t packetType = htons(m_packetType);
     uint32_t seq = htonl(m_seq);
 
     buffer.insert(buffer.end(), (byte*)&length, (byte*)&length + sizeof(length));
@@ -167,8 +167,8 @@ ssize_t Message::decode(const byte* buffer, size_t size)
         return PACKET_INCOMPLETE;
     }
 
-    m_protocolID = ntohl(*((int16_t*)&buffer[4]));
-    m_packetType = ntohl(*((uint16_t*)&buffer[6]));
+    m_protocolID = ntohs(*((int16_t*)&buffer[4]));
+    m_packetType = ntohs(*((uint16_t*)&buffer[6]));
     m_seq = ntohl(*((uint32_t*)&buffer[8]));
     ///< TODO: assign to std::move
     m_buffer->assign(&buffer[HEADER_LENGTH], &buffer[HEADER_LENGTH] + m_length - HEADER_LENGTH);

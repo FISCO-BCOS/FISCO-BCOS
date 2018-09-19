@@ -103,6 +103,10 @@ enum DisconnectReason
     NoDisconnect = 0xffff
 };
 
+///< The protocolID of synchronous Package, related to Service::sendMessageByNodeID
+static int16_t g_synchronousPackageProtocolID = 32767;
+
+///< P2PExceptionType and g_P2PExceptionMsg used in P2PException
 enum P2PExceptionType
 {
     Success = 0,
@@ -166,6 +170,13 @@ public:
     /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
     /// returned.
     ssize_t decode(const byte* buffer, size_t size);
+
+    void Print(std::string const& str)
+    {
+        LOG(INFO) << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
+                  << "," << m_seq << ","
+                  << std::string((const char*)m_buffer->data(), m_buffer->size()) << ")";
+    }
 
 private:
     uint32_t m_length = 0;      ///< m_length = HEADER_LENGTH + length(m_buffer)
