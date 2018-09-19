@@ -211,7 +211,7 @@ size_t Host::peerCount() const
     unsigned retCount = 0;
     RecursiveGuard l(x_sessions);
     for (auto& i : m_sessions)
-        if (std::shared_ptr<SessionFace> j = i.second.lock())
+        if (std::shared_ptr<SessionFace> j = i.second)
             if (j->isConnected())
                 retCount++;
     return retCount;
@@ -425,10 +425,10 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             chrono::steady_clock::duration(), 0, map<string, string>()}));
     {
         RecursiveGuard l(x_sessions);
-        if (m_sessions.count(node_id) && !!m_sessions[node_id].lock())
+        if (m_sessions.count(node_id))
         {
             /// disconnect already-connected session
-            if (auto s = m_sessions[node_id].lock())
+            if (auto s = m_sessions[node_id])
             {
                 if (s->isConnected())
                 {
@@ -452,6 +452,8 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             ps->disconnect(TooManyPeers);
             return;
         }
+        /// set P2PMsgHandler to session before start session
+        ps->setP2PMsgHandler(m_p2pMsgHandler);
         /// start session and modify m_sessions
         ps->start();
         m_sessions[node_id] = ps;
@@ -496,7 +498,7 @@ void Host::keepAlivePeers()
     /// update m_sessions by excluding unconnected/invalid sessions
     for (auto it = m_sessions.begin(); it != m_sessions.end();)
     {
-        if (auto p = it->second.lock())
+        if (auto p = it->second)
         {
             /// ping connected sessions
             if (p->isConnected())
@@ -729,7 +731,7 @@ void Host::doneWorking()
     {
         DEV_RECURSIVE_GUARDED(x_sessions)
         for (auto i : m_sessions)
-            if (auto p = i.second.lock())
+            if (auto p = i.second)
                 if (p->isConnected())
                 {
                     p->disconnect(ClientQuit);

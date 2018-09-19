@@ -84,7 +84,7 @@ public:
     /// get the number of connected peers
     size_t peerCount() const;
     /// get session map
-    std::unordered_map<NodeID, std::weak_ptr<SessionFace>>& sessions() { return m_sessions; }
+    std::unordered_map<NodeID, std::shared_ptr<SessionFace>>& sessions() { return m_sessions; }
     /// get mutex of sessions
     RecursiveMutex& mutexSessions() { return x_sessions; }
     /// get m_staticNodes
@@ -178,7 +178,7 @@ public:
     std::shared_ptr<SessionFace> peerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
-        return m_sessions.count(_id) ? m_sessions[_id].lock() : nullptr;
+        return m_sessions.count(_id) ? m_sessions[_id] : nullptr;
     }
     bytes saveNetwork() const;
 
@@ -188,7 +188,7 @@ public:
         RecursiveGuard l(x_sessions);
         for (auto it = m_sessions.begin(); it != m_sessions.end(); it++)
         {
-            if (auto p = it->second.lock())
+            if (auto p = it->second)
             {
                 if (p->id() == sNodeId)
                 {
@@ -200,6 +200,11 @@ public:
             }
         }
         return false;
+    }
+
+    void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
+    {
+        m_p2pMsgHandler = _p2pMsgHandler;
     }
 
 protected:  /// protected functions
@@ -227,7 +232,7 @@ protected:  /// protected functions
     bool havePeerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
-        if (m_sessions.count(_id) && m_sessions[_id].lock())
+        if (m_sessions.count(_id) && m_sessions[_id])
             return true;
         return false;
     }
@@ -274,7 +279,7 @@ protected:  /// protected members(for unit testing)
     /// the network accepting status(false means p2p is not accepting connections)
     bool m_accepting = false;
     /// maps from node ids to the sessions
-    mutable std::unordered_map<NodeID, std::weak_ptr<SessionFace>> m_sessions;
+    mutable std::unordered_map<NodeID, std::shared_ptr<SessionFace>> m_sessions;
     /// maps between peer name and peeer object
     /// attention: (endpoint recorded in m_peers always (listenIp, listenAddress))
     ///           (client endpoint of (connectIp, connectAddress) has no record)
@@ -300,6 +305,9 @@ protected:  /// protected members(for unit testing)
     /// peer count limit
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
+
+    ///< This handler will be sent to sessions before session start.
+    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
 };
 }  // namespace p2p
 

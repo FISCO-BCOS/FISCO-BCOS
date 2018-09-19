@@ -50,15 +50,15 @@ public:
         m_disconnect = false;
     }
     void disconnect(DisconnectReason _reason) { m_disconnect = true; }
-    void ping() { m_ping = chrono::steady_clock::now(); }
     bool isConnected() const { return !m_disconnect; }
     NodeID id() const { return NodeID(m_peer->id()); }
-    void sealAndSend(RLPStream& _s, uint16_t _protocolID) {}
     void addNote(std::string const& _k, std::string const& _v) {}
     PeerSessionInfo info() const { return m_info; }
     std::chrono::steady_clock::time_point connectionTime() { return m_connectionTime; }
     std::shared_ptr<Peer> peer() const { return m_peer; }
     std::chrono::steady_clock::time_point lastReceived() const { return m_lastReceived; }
+    void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) {}
+    void send(std::shared_ptr<bytes> _msg) {}
 
 public:
     bool m_start = false;
@@ -102,7 +102,7 @@ public:
     void setSessions(std::shared_ptr<SessionFace> session)
     {
         RecursiveGuard l(x_sessions);
-        m_sessions[session->id()] = std::weak_ptr<SessionFace>(session);
+        m_sessions[session->id()] = std::shared_ptr<SessionFace>(session);
         // m_peers[session->id()] = session->peer();
     }
 
