@@ -237,7 +237,7 @@ static void sendMsg(Params const& _params, std::shared_ptr<Service> _service)
         msg->setBuffer(buffer);
         buffer->assign(s.begin(), s.end());
         Options options = {0};
-        options.timeout = 3000; ///< ms
+        options.timeout = 3000;  ///< ms
         _service->asyncSendMessageByNodeID(
             h512("46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc"
                  "491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1"),
