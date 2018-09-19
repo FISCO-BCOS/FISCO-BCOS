@@ -39,26 +39,26 @@ namespace p2p
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service(std::shared_ptr<Host> _host) : m_host(_host)
+    Service(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
+      : m_host(_host), m_p2pMsgHandler(_p2pMsgHandler)
     {
-        m_p2pMsgHandler = std::make_shared<P2PMsgHandler>();
         m_ioService = _host->ioService();
         ///< Set m_p2pMsgHandler to host
         ///< When a new session created, host set handler to the new session.
         _host->setP2PMsgHandler(m_p2pMsgHandler);
     }
 
-    ~Service() { m_ioService = NULL; }
+    virtual ~Service() { m_ioService = NULL; }
 
     Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        std::function<void(P2PException, Message::Ptr)> callback, Options const& options) override;
+    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message, CallbackFunc callback,
+        Options const& options) override;
 
     Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
     void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
-        std::function<void(P2PException, Message::Ptr)> callback, Options const& options) override;
+        CallbackFunc callback, Options const& options) override;
 
     void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) override;
 

@@ -191,42 +191,43 @@ class P2PException : public std::exception
 {
 public:
     P2PException(){};
-    P2PException(int errorCode, const std::string& msg) : _errorCode(errorCode), _msg(msg){};
+    P2PException(int _errorCode, const std::string& _msg) : m_errorCode(_errorCode), m_msg(_msg){};
 
-    virtual int errorCode() { return _errorCode; };
-    virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return _msg.c_str(); };
-    bool operator!() const { return _errorCode == 0; }
+    virtual int errorCode() { return m_errorCode; };
+    virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return m_msg.c_str(); };
+    bool operator!() const { return m_errorCode == 0; }
 
 private:
-    int _errorCode = 0;
-    std::string _msg = "";
+    int m_errorCode = 0;
+    std::string m_msg = "";
 };
 
+#define CallbackFunc std::function<void(P2PException, Message::Ptr)>
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
     typedef std::shared_ptr<ResponseCallback> Ptr;
 
-    std::function<void(P2PException, Message::Ptr)> callbackFunc;
-    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
+    CallbackFunc m_callbackFunc;
+    std::shared_ptr<boost::asio::deadline_timer> m_timeoutHandler;
 };
 
-class SessionCallback : public std::enable_shared_from_this<SessionCallback>
+struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
 {
 public:
     typedef std::shared_ptr<SessionCallback> Ptr;
 
-    SessionCallback() { _mutex.lock(); }
+    SessionCallback() { m_mutex.lock(); }
 
-    void onResponse(P2PException error, Message::Ptr message)
+    void onResponse(P2PException _error, Message::Ptr _message)
     {
-        _error = error;
-        _response = message;
-        _mutex.unlock();
+        m_error = _error;
+        m_response = _message;
+        m_mutex.unlock();
     }
 
-    P2PException _error;
-    Message::Ptr _response;
-    std::mutex _mutex;
+    P2PException m_error;
+    Message::Ptr m_response;
+    std::mutex m_mutex;
 };
 
 inline bool isPermanentProblem(DisconnectReason _r)

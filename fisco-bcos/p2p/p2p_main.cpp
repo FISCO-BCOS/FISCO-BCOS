@@ -291,7 +291,8 @@ static void InitNetwork(Params& m_params)
         std::make_shared<Host>(m_params.clientVersion(), CertificateServer::GetInstance().keypair(),
             *m_netConfig.get(), m_asioInterface, m_socketFactory, m_sessionFactory);
     m_host->setStaticNodes(m_params.staticNodes());
-    auto service = std::make_shared<Service>(m_host);
+    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+    auto service = std::make_shared<Service>(m_host, p2pMsgHandler);
     /// begin working
     m_host->start();
     while (true)

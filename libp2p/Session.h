@@ -109,7 +109,7 @@ private:
     void write();
 
     /// call by doRead() to deal with mesage
-    void onMessage(P2PException e, std::shared_ptr<Session> session, Message::Ptr message);
+    void onMessage(P2PException const& e, std::shared_ptr<Session> session, Message::Ptr message);
 
     Host* m_server;                        ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.

@@ -309,7 +309,8 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
-void Session::onMessage(P2PException e, std::shared_ptr<Session> session, Message::Ptr message)
+void Session::onMessage(
+    P2PException const& e, std::shared_ptr<Session> session, Message::Ptr message)
 {
     int16_t protocolID = message->protocolID();
     if (message->isRequestPacket())
@@ -352,16 +353,16 @@ void Session::onMessage(P2PException e, std::shared_ptr<Session> session, Messag
         ResponseCallback::Ptr callback = m_p2pMsgHandler->getCallbackBySeq(message->seq());
         if (callback != NULL)
         {
-            if (callback->timeoutHandler)
+            if (callback->m_timeoutHandler)
             {
                 ///< cancel timer
-                callback->timeoutHandler->cancel();
+                callback->m_timeoutHandler->cancel();
             }
-            if (callback->callbackFunc)
+            if (callback->m_callbackFunc)
             {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
                 ///< TODO: use threadPool
-                callback->callbackFunc(e, message);
+                callback->m_callbackFunc(e, message);
             }
         }
         else

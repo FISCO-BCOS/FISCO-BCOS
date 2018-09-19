@@ -50,25 +50,26 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         }
 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
-        std::function<void(P2PException, Message::Ptr)> fp = std::bind(
+        CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
         message->setProtocolID(g_synchronousPackageProtocolID);
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
 
-        callback->_mutex.lock();
-        callback->_mutex.unlock();
+        callback->m_mutex.lock();
+        callback->m_mutex.unlock();
         LOG(INFO) << "Service::sendMessageByNodeID mutex unlock.";
 
-        if (callback->_error.errorCode() != 0)
+        P2PException error = callback->m_error;
+        if (error.errorCode() != 0)
         {
-            LOG(ERROR) << "asyncSendMessageByNodeID error:" << callback->_error.errorCode() << " "
-                       << callback->_error.what();
-            throw callback->_error;
+            LOG(ERROR) << "asyncSendMessageByNodeID error:" << error.errorCode() << " "
+                       << error.what();
+            throw error;
         }
 
-        callback->_response->Print("Service::sendMessageByNodeID msg returned:");
+        callback->m_response->Print("Service::sendMessageByNodeID msg returned:");
 
-        return callback->_response;
+        return callback->m_response;
     }
     catch (std::exception& e)
     {
@@ -78,8 +79,8 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
     return Message::Ptr();
 }
 
-void Service::asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-    std::function<void(P2PException, Message::Ptr)> callback, Options const& options)
+void Service::asyncSendMessageByNodeID(
+    NodeID const& nodeID, Message::Ptr message, CallbackFunc callback, Options const& options)
 {
     LOG(INFO) << "Call Service::asyncSendMessageByNodeID to NodeID=" << toJS(nodeID);
     try
@@ -99,7 +100,7 @@ void Service::asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr messag
                     {
                         ResponseCallback::Ptr responseCallback =
                             std::make_shared<ResponseCallback>();
-                        responseCallback->callbackFunc = callback;
+                        responseCallback->m_callbackFunc = callback;
                         if (options.timeout > 0)
                         {
                             std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
@@ -107,7 +108,7 @@ void Service::asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr messag
                                     *m_ioService, boost::posix_time::milliseconds(options.timeout));
                             timeoutHandler->async_wait(boost::bind(&Service::onTimeout,
                                 shared_from_this(), boost::asio::placeholders::error, seq));
-                            responseCallback->timeoutHandler = timeoutHandler;
+                            responseCallback->m_timeoutHandler = timeoutHandler;
                         }
                         m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
                     }
@@ -144,13 +145,13 @@ void Service::onTimeout(const boost::system::error_code& error, uint32_t seq)
             if (error == 0)
             {
                 ///< passive timeout
-                if (it->callbackFunc)
+                if (it->m_callbackFunc)
                 {
                     P2PException e(P2PExceptionType::NetworkTimeout,
                         g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
                     Message::Ptr message = make_shared<Message>();
                     message->setSeq(seq);
-                    it->callbackFunc(e, message);
+                    it->m_callbackFunc(e, message);
                 }
                 else
                 {
@@ -177,8 +178,8 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
     return Message::Ptr();
 }
 
-void Service::asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
-    std::function<void(P2PException, Message::Ptr)> callback, Options const& options)
+void Service::asyncSendMessageByTopic(
+    std::string const& topic, Message::Ptr message, CallbackFunc callback, Options const& options)
 {}
 
 void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) {}
