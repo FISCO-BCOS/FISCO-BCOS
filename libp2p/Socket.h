@@ -164,6 +164,7 @@ public:
 
     const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
     void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) { m_nodeIPEndpoint = _nodeIPEndpoint; }
+    boost::asio::ip::tcp::endpoint remote_endpoint() { return ref().remote_endpoint(); }
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;

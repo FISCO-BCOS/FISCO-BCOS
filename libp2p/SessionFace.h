@@ -20,6 +20,10 @@
  * @date 2014
  * @author toxotguo
  * @date 2018
+ *
+ * @author: yujiechen
+ * @date: 2018-09-19
+ * @modification: remove addNote interface
  */
 
 #pragma once
@@ -41,8 +45,6 @@ public:
     virtual bool isConnected() const = 0;
 
     virtual NodeID id() const = 0;
-
-    virtual void addNote(std::string const& _k, std::string const& _v) = 0;
 
     virtual PeerSessionInfo info() const = 0;
 

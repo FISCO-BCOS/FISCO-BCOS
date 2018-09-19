@@ -21,12 +21,17 @@
  * @date 2018-09-13
  */
 #pragma once
+#include "SocketFace.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 
+namespace dev
+{
+namespace p2p
+{
 /**
  * @brief interface of boost::asio related callback
  * (added for unittest)
@@ -38,19 +43,21 @@ public:
     typedef std::function<void(const boost::system::error_code&)> Handler_Type;
     /// write handler
     typedef std::function<void(const boost::system::error_code&, std::size_t)> ReadWriteHandler;
-
+    typedef std::function<bool(bool, boost::asio::ssl::verify_context&)> VerifyCallback;
     /// default implemetation of async_accept
-    virtual void async_accept(
-        bi::tcp::acceptor& tcp_acceptor, bi::tcp::socket& socket_ref, Handler_Type handler)
+    virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace>& socket,
+        boost::asio::io_service::strand& m_strand, Handler_Type handler,
+        boost::system::error_code ec = boost::system::error_code())
     {
-        tcp_acceptor.async_accept(socket_ref, handler);
+        tcp_acceptor.async_accept(socket->ref(), m_strand.wrap(handler));
     }
 
     /// default implementation of async_connect
-    virtual void async_connect(
-        bi::tcp::socket& socket_ref, const bi::tcp::endpoint& peer_endpoint, Handler_Type handler)
+    virtual void async_connect(std::shared_ptr<SocketFace>& socket,
+        boost::asio::io_service::strand& m_strand, const bi::tcp::endpoint& peer_endpoint,
+        Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
     {
-        socket_ref.async_connect(peer_endpoint, handler);
+        socket->ref().async_connect(peer_endpoint, m_strand.wrap(handler));
     }
 
     /// default implementation of async_write
@@ -66,4 +73,28 @@ public:
     {
         ba::async_read(socket_stream, buffers, handler);
     }
+
+    /// default implementation of async_handshake
+    virtual void async_handshake(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::io_service::strand& m_strand, ba::ssl::stream_base::handshake_type const& type,
+        Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
+    {
+        socket->sslref().async_handshake(type, m_strand.wrap(handler));
+    }
+
+    virtual void async_wait(boost::asio::deadline_timer* m_timer,
+        boost::asio::io_service::strand& m_strand, Handler_Type handler,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        if (m_timer)
+            return m_timer->async_wait(m_strand.wrap(handler));
+    }
+
+    virtual void set_verify_callback(
+        std::shared_ptr<SocketFace> const& socket, VerifyCallback callback, bool verify_succ = true)
+    {
+        socket->sslref().set_verify_callback(callback);
+    }
 };
+}  // namespace p2p
+}  // namespace dev

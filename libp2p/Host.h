@@ -23,13 +23,13 @@
  */
 #pragma once
 
+#include "AsioInterface.h"
 #include "Common.h"
 #include "Network.h"
 #include "P2pFactory.h"
 #include "Peer.h"
 #include "SessionFace.h"
 #include "Socket.h"
-#include <libdevcore/AsioInterface.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
@@ -59,7 +59,7 @@ public:
     Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
         shared_ptr<SessionFactory>& _sessionFactory);
-    ~Host();
+    virtual ~Host();
 
     /// ------get interfaces ------
     /// get client version
@@ -127,6 +127,8 @@ public:
         }
         return ret;
     }
+    /// get m_tcpClient
+    bi::tcp::endpoint const& tcpClient() const { return m_tcpClient; }
     /// ------set interfaces ------
     /// set m_reconnectnow to be true, reconnect all peers when callback keepAlivePeers
     void reconnectNow()
@@ -140,6 +142,9 @@ public:
     {
         m_staticNodes = staticNodes;
     }
+
+    /// set max peer counts
+    void setMaxPeerCount(unsigned max_peer_count) { m_maxPeerCount = max_peer_count; }
 
     ///------ Network and worker threads related ------
     /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
@@ -157,11 +162,11 @@ public:
     /// remove expired timer
     /// modify alived peers to m_peers
     /// reconnect all nodes recorded in m_staticNodes periodically
-    void run(boost::system::error_code const& error);
+    virtual void run(boost::system::error_code const& error);
     /// start the network by callback io_serivce.run
     void doWork();
     /// stop the network and worker thread
-    void stop();
+    virtual void stop();
     /// clean resources (include both network, socket resources) when stop working
     void doneWorking();
 
@@ -188,15 +193,13 @@ public:
         RecursiveGuard l(x_sessions);
         for (auto it = m_sessions.begin(); it != m_sessions.end(); it++)
         {
-            if (auto p = it->second)
+            auto p = it->second;
+            if (p->id() == sNodeId)
             {
-                if (p->id() == sNodeId)
-                {
-                    p->disconnect(DisconnectReason::UserReason);
-                    m_sessions.erase(it);
-                    m_peers.erase(p->id());
-                    return true;
-                }
+                p->disconnect(DisconnectReason::UserReason);
+                m_sessions.erase(it);
+                m_peers.erase(p->id());
+                return true;
             }
         }
         return false;
@@ -209,11 +212,11 @@ public:
 
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
-    virtual void runAcceptor();
+    virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());
     /// functions called after openssl handshake,
     /// maily to get node id and verify whether the certificate has been expired
     /// @return: node id of the connected peer
-    std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
+    virtual std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut);
     /// @return true: the given certificate has been expired
     /// @return false: the given certificate has not been expired
@@ -221,7 +224,7 @@ protected:  /// protected functions
     /// server calls handshakeServer to after handshake, mainly calls RLPxHandshake to obtain
     /// informations(client version, caps, etc),start peer session and start accepting procedure
     /// repeatedly
-    void handshakeServer(const boost::system::error_code& error,
+    virtual void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
     /// update m_sessions and m_peers periodically
@@ -232,17 +235,23 @@ protected:  /// protected functions
     bool havePeerSession(NodeID const& _id)
     {
         RecursiveGuard l(x_sessions);
+<<<<<<< HEAD
         if (m_sessions.count(_id) && m_sessions[_id])
-            return true;
+            == == == = if (m_sessions.count(_id))
+>>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
+                         return true;
         return false;
     }
     /// reconnect to all unconnected peers recorded in m_staticNodes
     void reconnectAllNodes();
     /// connect to the server
-    virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint);
+    virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint,
+        boost::system::error_code ec = boost::system::error_code());
+
     /// start RLPxHandshake procedure after ssl handshake succeed
-    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
-        std::shared_ptr<std::string>& endpointPublicKey, NodeIPEndpoint& _nodeIPEndpoint);
+    virtual void handshakeClient(const boost::system::error_code& error,
+        std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
+        NodeIPEndpoint& _nodeIPEndpoint);
     inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
 
 protected:  /// protected members(for unit testing)
@@ -305,10 +314,14 @@ protected:  /// protected members(for unit testing)
     /// peer count limit
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
+<<<<<<< HEAD
 
     ///< This handler will be sent to sessions before session start.
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
 };
-}  // namespace p2p
+== == == =
+};  // namespace p2p
+>>>>>>> 7f8fdb2c03a9fa5ffbb921ae7af1b2e1deb86402
+}  // namespace dev
 
 }  // namespace dev

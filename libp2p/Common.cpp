@@ -28,6 +28,7 @@ using namespace dev;
 using namespace dev::p2p;
 unsigned dev::p2p::c_defaultIPPort = 16789;
 bool dev::p2p::NodeIPEndpoint::test_allowLocal = false;
+
 bool p2p::isPublicAddress(std::string const& _addressToCheck)
 {
     return _addressToCheck.empty() ? false :
@@ -36,46 +37,9 @@ bool p2p::isPublicAddress(std::string const& _addressToCheck)
 
 bool p2p::isPublicAddress(bi::address const& _addressToCheck)
 {
-    return true;
-    return !(isPrivateAddress(_addressToCheck) || isLocalHostAddress(_addressToCheck));
-}
-
-// Helper function to determine if an address falls within one of the reserved ranges
-// For V4:
-// Class A "10.*", Class B "172.[16->31].*", Class C "192.168.*"
-bool p2p::isPrivateAddress(bi::address const& _addressToCheck)
-{
-    if (_addressToCheck.is_v4())
-    {
-        bi::address_v4 v4Address = _addressToCheck.to_v4();
-        bi::address_v4::bytes_type bytesToCheck = v4Address.to_bytes();
-        if (bytesToCheck[0] == 10 || bytesToCheck[0] == 127)
-            return true;
-        if (bytesToCheck[0] == 172 && (bytesToCheck[1] >= 16 && bytesToCheck[1] <= 31))
-            return true;
-        if (bytesToCheck[0] == 192 && bytesToCheck[1] == 168)
-            return true;
-    }
-    else if (_addressToCheck.is_v6())
-    {
-        bi::address_v6 v6Address = _addressToCheck.to_v6();
-        bi::address_v6::bytes_type bytesToCheck = v6Address.to_bytes();
-        if (bytesToCheck[0] == 0xfd && bytesToCheck[1] == 0)
-            return true;
-        if (!bytesToCheck[0] && !bytesToCheck[1] && !bytesToCheck[2] && !bytesToCheck[3] &&
-            !bytesToCheck[4] && !bytesToCheck[5] && !bytesToCheck[6] && !bytesToCheck[7] &&
-            !bytesToCheck[8] && !bytesToCheck[9] && !bytesToCheck[10] && !bytesToCheck[11] &&
-            !bytesToCheck[12] && !bytesToCheck[13] && !bytesToCheck[14] &&
-            (bytesToCheck[15] == 0 || bytesToCheck[15] == 1))
-            return true;
-    }
-    return false;
-}
-
-bool p2p::isPrivateAddress(std::string const& _addressToCheck)
-{
-    return _addressToCheck.empty() ? false :
-                                     isPrivateAddress(bi::address::from_string(_addressToCheck));
+    if (_addressToCheck.to_string() == "0.0.0.0")
+        return false;
+    return !_addressToCheck.is_unspecified();
 }
 
 // Helper function to determine if an address is localhost
@@ -269,7 +233,6 @@ std::string NodeSpec::enode() const
         return "enode://" + m_id.hex() + "@" + ret;
     return ret;
 }
-
 namespace dev
 {
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep)
@@ -296,7 +259,6 @@ boost::asio::ip::address HostResolver::query(std::string host)
             ba::ip::tcp::endpoint end = *i;
             if (result.to_string().empty() || result.to_string() == "0.0.0.0")
                 result = end.address();
-
             LOG(INFO) << "HostResolver::query " << host << ":" << end.address().to_string();
         }
     }
