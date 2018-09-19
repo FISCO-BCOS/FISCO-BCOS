@@ -26,6 +26,7 @@
 #include <libp2p/Host.h>
 #include <libp2p/Network.h>
 #include <libp2p/P2pFactory.h>
+#include <libp2p/Service.h>
 #include <boost/program_options.hpp>
 #include <memory>
 
@@ -41,18 +42,21 @@ public:
         m_listenIp("127.0.0.1"),
         m_p2pPort(30303),
         m_publicIp("127.0.0.1"),
-        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json")
+        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json"),
+        m_sendMsgType(0)
     {
         updateBootstrapnodes();
     }
 
     Params(std::string const& _clientVersion, std::string const& _listenIp,
-        uint16_t const& _p2pPort, std::string const& _publicIp, std::string const& _bootstrapPath)
+        uint16_t const& _p2pPort, std::string const& _publicIp, std::string const& _bootstrapPath,
+        uint16_t _sendMsgType)
       : m_clientVersion(_clientVersion),
         m_listenIp(_listenIp),
         m_p2pPort(_p2pPort),
         m_publicIp(_publicIp),
-        m_bootstrapPath(_bootstrapPath)
+        m_bootstrapPath(_bootstrapPath),
+        m_sendMsgType(_sendMsgType)
     {
         updateBootstrapnodes();
     }
@@ -63,7 +67,8 @@ public:
         m_listenIp("127.0.0.1"),
         m_p2pPort(30303),
         m_publicIp("127.0.0.1"),
-        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json")
+        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json"),
+        m_sendMsgType(0)
     {
         initParams(vm, option);
         updateBootstrapnodes();
@@ -82,17 +87,21 @@ public:
             m_p2pPort = vm["p2p_port"].as<uint16_t>();
         if (vm.count("bootstrap") || vm.count("b"))
             m_bootstrapPath = vm["bootstrap"].as<std::string>();
+        if (vm.count("send_msg_type") || vm.count("s"))
+            m_sendMsgType = vm["send_msg_type"].as<uint16_t>();
     }
     /// --- set interfaces ---
     void setClientVersion(std::string const& _clientVersion) { m_clientVersion = _clientVersion; }
     void setListenIp(std::string const& _listenIp) { m_listenIp = _listenIp; }
     void setP2pPort(uint16_t const& _p2pPort) { m_p2pPort = _p2pPort; }
     void setPublicIp(std::string const& _publicIp) { m_publicIp = _publicIp; }
+    void setSendMsgType(uint16_t const& _sendMsgType) { m_sendMsgType = _sendMsgType; }
     /// --- get interfaces ---
     const std::string& clientVersion() const { return m_clientVersion; }
     const std::string& listenIp() const { return m_listenIp; }
     const uint16_t& p2pPort() const { return m_p2pPort; }
     const std::string& publicIp() const { return m_publicIp; }
+    const uint16_t& sendMsgType() const { return m_sendMsgType; }
 
     /// --- init NetworkConfig ----
     std::shared_ptr<NetworkConfig> creatNetworkConfig()
@@ -159,6 +168,7 @@ private:
     std::string m_publicIp;
     std::string m_bootstrapPath;
     std::map<NodeIPEndpoint, NodeID> m_staticNodes;
+    uint16_t m_sendMsgType;
 };
 
 static Params initCommandLine(int argc, const char* argv[])
@@ -170,7 +180,8 @@ static Params initCommandLine(int argc, const char* argv[])
         "listen_ip,l", boost::program_options::value<std::string>(), "listen ip address")(
         "p2p_port,p", boost::program_options::value<uint16_t>(), "p2p port")("bootstrap, b",
         boost::program_options::value<std::string>(),
-        "path of bootstrapnodes.json")("help,h", "help of p2p module of FISCO-BCOS");
+        "path of bootstrapnodes.json")("help,h", "help of p2p module of FISCO-BCOS")(
+        "send_msg_type,s", boost::program_options::value<uint16_t>(), "sendMessageType");
 
     boost::program_options::variables_map vm;
     try
@@ -193,6 +204,81 @@ static Params initCommandLine(int argc, const char* argv[])
     return m_params;
 }
 
+static void sendMsg(Params const& _params, std::shared_ptr<Service> _service)
+{
+    switch (_params.sendMsgType())
+    {
+    case 0:
+    {
+        _service->registerHandlerByProtoclID(
+            1, [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
+                LOG(INFO) << "Receive message by protocolID:" << msg->protocolID()
+                          << ", packetType:" << msg->packetType() << ", content:"
+                          << std::string((const char*)msg->buffer()->data(), msg->buffer()->size());
+
+                /// send response package
+                if (msg->isRequestPacket())
+                {
+                    /// update protoclID
+                    msg->setProtocolID(msg->getResponceProtocolID());
+                    msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
+                    msg->Print("Send response package by protoclID");
+                    std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+                    msg->encode(*buf);
+                    s->send(buf);
+                }
+            });
+
+        auto msg = std::make_shared<Message>();
+        msg->setProtocolID(1);
+        msg->setPacketType(2);
+        std::shared_ptr<bytes> buffer(new bytes());
+        std::string s = "hello world!";
+        msg->setBuffer(buffer);
+        buffer->assign(s.begin(), s.end());
+        Options options = {0};
+        options.timeout = 3000; ///< ms
+        _service->asyncSendMessageByNodeID(
+            h512("46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc"
+                 "491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1"),
+            msg,
+            [](P2PException e, Message::Ptr msg) {
+                if (e.errorCode() == 0)
+                {
+                    LOG(INFO) << "Callback in response package by seq! seq=" << msg->seq();
+                }
+                else
+                {
+                    LOG(INFO) << "Callback in response package error, seq=" << msg->seq()
+                              << ", msg:" << e.what();
+                }
+            },
+            options);
+
+        break;
+    }
+    case 1:
+    {
+        auto msg = std::make_shared<Message>();
+        msg->setPacketType(2);
+        std::shared_ptr<bytes> buffer(new bytes());
+        std::string s = "hello world!";
+        msg->setBuffer(buffer);
+        buffer->assign(s.begin(), s.end());
+        _service->sendMessageByNodeID(
+            h512("46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc"
+                 "491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1"),
+            msg);
+        break;
+    }
+    default:
+    {
+        LOG(ERROR) << "Invalid Message Type, now type only is 0,1.";
+        break;
+    }
+    }
+}
+
 static void InitNetwork(Params& m_params)
 {
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioInterface>();
@@ -205,10 +291,12 @@ static void InitNetwork(Params& m_params)
         std::make_shared<Host>(m_params.clientVersion(), CertificateServer::GetInstance().keypair(),
             *m_netConfig.get(), m_asioInterface, m_socketFactory, m_sessionFactory);
     m_host->setStaticNodes(m_params.staticNodes());
+    auto service = std::make_shared<Service>(m_host);
     /// begin working
     m_host->start();
     while (true)
     {
+        sendMsg(m_params, service);
         this_thread::sleep_for(chrono::milliseconds(1000));
     }
 }

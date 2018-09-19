@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file P2PMsgHandler.h
+/** @file P2PMsgHandler.cpp
  *  @author chaychen
  *  @date 20180916
  */
