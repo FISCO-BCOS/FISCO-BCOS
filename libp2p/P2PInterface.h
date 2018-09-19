@@ -48,8 +48,7 @@ public:
         std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) = 0;
 
     virtual void registerHandlerByTopic(std::string const& topic,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler,
-        Options const& options) = 0;
+        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) = 0;
 };
 
 }  // namespace p2p

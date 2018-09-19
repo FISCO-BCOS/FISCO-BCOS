@@ -42,8 +42,10 @@ public:
     Service(std::shared_ptr<Host> _host) : m_host(_host)
     {
         m_p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+        m_ioService = _host->ioService();
         ///< Set m_p2pMsgHandler to host
         ///< When a new session created, host set handler to the new session.
+        _host->setP2PMsgHandler(m_p2pMsgHandler);
     }
 
     ~Service() { m_ioService = NULL; }
@@ -66,8 +68,7 @@ public:
         std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) override;
 
     void registerHandlerByTopic(std::string const& topic,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler,
-        Options const& options) override;
+        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) override;
 
 private:
     void onTimeout(const boost::system::error_code& error, uint32_t seq);

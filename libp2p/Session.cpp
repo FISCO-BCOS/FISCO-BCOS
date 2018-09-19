@@ -24,6 +24,7 @@
 
 #include "Session.h"
 #include "Host.h"
+#include "P2PMsgHandler.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Exceptions.h>
@@ -95,111 +96,9 @@ vector<T> randomSelection(vector<T> const& _t, unsigned _n)
     return ret;
 }
 
-// read package after receive the packae
-// @param: _protocolID indicates message type, such as connection msg, sync msg, pbft msg, and so
-// on.
-bool Session::readPacket(uint16_t _protocolID, PacketType _t, RLP const& _r)
-{
-    m_lastReceived = chrono::steady_clock::now();
-    try  // Generic try-catch block designed to capture RLP format errors - TODO: give decent
-         // diagnostics, make a bit more specific over what is caught.
-    {
-        if (_protocolID == 0 && _t < UserPacket)
-        {
-            return interpret(_t, _r);
-        }
-
-        // TODO(wheatli): process the other message
-
-        return false;
-    }
-    catch (std::exception const& _e)
-    {
-        LOG(WARNING) << "Exception caught in p2p::Session::interpret(): " << _e.what()
-                     << ". PacketType: " << _t << ". RLP: " << _r;
-        disconnect(BadProtocol);
-        return true;
-    }
-    return true;
-}
-
-bool Session::interpret(PacketType _t, RLP const& _r)
-{
-    switch (_t)
-    {
-    case DisconnectPacket:
-    {
-        string reason = "Unspecified";
-        auto r = (DisconnectReason)_r[0].toInt<int>();
-        if (!_r[0].isInt())
-            drop(BadProtocol);
-        else
-        {
-            reason = reasonOf(r);
-            LOG(WARNING) << "Disconnect (reason: " << reason << ")";
-            drop(DisconnectRequested);
-        }
-        break;
-    }
-    case PingPacket:
-    {
-        LOG(INFO) << "Recv Ping " << m_info.id;
-        RLPStream s;
-        sealAndSend(prep(s, PongPacket), 0);
-        break;
-    }
-    case PongPacket:
-        DEV_GUARDED(x_info)
-        {
-            m_info.lastPing = std::chrono::steady_clock::now() - m_ping;
-            LOG(INFO) << "Recv Pong Latency: "
-                      << chrono::duration_cast<chrono::milliseconds>(m_info.lastPing).count()
-                      << " ms" << m_info.id;
-        }
-        break;
-    case GetPeersPacket:
-    case PeersPacket:
-        break;
-    default:
-        return false;
-    }
-    return true;
-}
-
-void Session::ping()
-{
-    RLPStream s;
-    sealAndSend(prep(s, PingPacket), 0);
-    m_ping = std::chrono::steady_clock::now();
-}
-
-RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
-{
-    return _s.append((unsigned)_id).appendList(_args);
-}
-
-void Session::sealAndSend(RLPStream& _s, uint16_t _protocolID)
-{
-    std::shared_ptr<bytes> b = std::make_shared<bytes>();
-    _s.swapOut(*b);
-    send(b, _protocolID);
-}
-
-bool Session::checkPacket(bytesConstRef _msg)
-{
-    if (_msg[0] > 0x7f || _msg.size() < 2)
-        return false;
-    if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
-        return false;
-    return true;
-}
-
-void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
+void Session::send(std::shared_ptr<bytes> _msg)
 {
     bytesConstRef msg(_msg.get());
-    // LOG(TRACE) << RLP(msg.cropped(1));
-    if (!checkPacket(msg))
-        LOG(WARNING) << "INVALID PACKET CONSTRUCTED!";
 
     if (!m_socket->isConnected())
         return;
@@ -207,7 +106,7 @@ void Session::send(std::shared_ptr<bytes> _msg, uint16_t _protocolID)
     bool doWrite = false;
     DEV_GUARDED(x_framing)
     {
-        m_writeQueue.push(boost::make_tuple(_msg, _protocolID, utcTime()));
+        m_writeQueue.push(make_pair(_msg, utcTime()));
         doWrite = (m_writeQueue.size() == 1);
     }
     if (doWrite)
@@ -255,18 +154,12 @@ void Session::write()
 {
     try
     {
-        boost::tuple<std::shared_ptr<bytes>, uint16_t, u256> task;
+        std::pair<std::shared_ptr<bytes>, u256> task;
         u256 enter_time = 0;
         DEV_GUARDED(x_framing)
         {
             task = m_writeQueue.top();
-            Header header;
-            uint32_t length = sizeof(Header) + boost::get<0>(task)->size();
-            header.length = htonl(length);
-            header.protocolID = htonl(boost::get<1>(task));
-            std::shared_ptr<bytes> out = boost::get<0>(task);
-            out->insert(out->begin(), (byte*)&header, ((byte*)&header) + sizeof(Header));
-            enter_time = boost::get<2>(task);
+            enter_time = task.second;
         }
 
         auto self(shared_from_this());
@@ -282,8 +175,7 @@ void Session::write()
         if (m_socket->isConnected())
         {
             m_server->ioService()->post([=] {
-                boost::asio::async_write(m_socket->sslref(),
-                    boost::asio::buffer(*(boost::get<0>(task))),
+                boost::asio::async_write(m_socket->sslref(), boost::asio::buffer(*(task.first)),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
                         boost::asio::placeholders::bytes_transferred));
             });
@@ -333,19 +225,11 @@ void Session::drop(DisconnectReason _reason)
 void Session::disconnect(DisconnectReason _reason)
 {
     LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")";
-
-    if (m_socket->isConnected())
-    {
-        RLPStream s;
-        prep(s, DisconnectPacket, 1) << (int)_reason;
-        sealAndSend(s, 0);
-    }
     drop(_reason);
 }
 
 void Session::start()
 {
-    ping();
     m_strand->post(boost::bind(&Session::doRead, this));  // doRead();
 }
 
@@ -355,39 +239,44 @@ void Session::doRead()
     if (m_dropped)
         return;
     auto self(shared_from_this());
-    m_data.resize(sizeof(Header));
+    m_data.resize(sizeof(uint32_t));
 
     auto asyncRead = [this, self](boost::system::error_code ec, std::size_t length) {
-        if (!checkRead(sizeof(Header), ec, length))
+        if (!checkRead(ec))
             return;
-        Header* header = (Header*)m_data.data();
-        uint32_t hLength = ntohl(header->length);
-        uint32_t protocolID = ntohl(header->protocolID);
+        uint32_t fullLength = ntohl(*((uint32_t*)m_data.data()));
+        m_data.resize(fullLength);
+        LOG(INFO) << "Session::doRead fullLength=" << fullLength;
 
-        /// read padded frame and mac
-        m_data.clear();
-        m_data.resize(hLength - sizeof(Header));
-
-        auto _asyncRead = [this, self, hLength, protocolID](
-                              boost::system::error_code ec, std::size_t length) {
+        auto _asyncRead = [this, self](boost::system::error_code ec, std::size_t length) {
             ThreadContext tc(info().id.abridged());
             ThreadContext tc2(info().host);
-            if (!checkRead(hLength - sizeof(Header), ec, length))
+            if (!checkRead(ec))
                 return;
 
-            bytesConstRef frame(m_data.data(), length);
-            auto packetType = (PacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+            Message::Ptr message = std::make_shared<Message>();
+            ssize_t result = message->decode(m_data.data(), m_data.size());
 
-            RLP r(frame.cropped(1));
-            bool ok = readPacket((unsigned short)protocolID, packetType, r);
-            if (!ok)
-                LOG(WARNING) << "Couldn't interpret packet." << RLP(r);
+            if (result > 0)
+            {
+                P2PException e(
+                    P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
+                onMessage(e, self, message);
+            }
+            else
+            {
+                P2PException e(P2PExceptionType::ProtocolError,
+                    g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
+                onMessage(e, self, message);
+            }
 
             doRead();
         };
         if (m_socket->isConnected())
             ba::async_read(m_socket->sslref(),
-                boost::asio::buffer(m_data, hLength - sizeof(Header)), m_strand->wrap(_asyncRead));
+                boost::asio::buffer(
+                    m_data.data() + sizeof(uint32_t), fullLength - sizeof(uint32_t)),
+                m_strand->wrap(_asyncRead));
         else
         {
             LOG(WARNING) << "Error Reading ssl socket is close!";
@@ -396,7 +285,7 @@ void Session::doRead()
         }
     };
     if (m_socket->isConnected())
-        ba::async_read(m_socket->sslref(), boost::asio::buffer(m_data, sizeof(Header)),
+        ba::async_read(m_socket->sslref(), boost::asio::buffer(m_data, sizeof(uint32_t)),
             m_strand->wrap(asyncRead));
     else
     {
@@ -406,7 +295,7 @@ void Session::doRead()
     }
 }
 
-bool Session::checkRead(std::size_t _expected, boost::system::error_code _ec, std::size_t _length)
+bool Session::checkRead(boost::system::error_code _ec)
 {
     if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
         _ec.value() != boost::asio::error::eof)
@@ -416,23 +305,72 @@ bool Session::checkRead(std::size_t _expected, boost::system::error_code _ec, st
 
         return false;
     }
-    else if (_ec && _length < _expected)
-    {
-        LOG(WARNING) << "Error reading - Abrupt peer disconnect: " << _ec.message() << ","
-                     << _expected << "," << _length;
-        drop(TCPError);
-
-        return false;
-    }
-    else if (_length != _expected)
-    {
-        // with static m_data-sized buffer this shouldn't happen unless there's a regression
-        // sec recommends checking anyways (instead of assert)
-        LOG(WARNING) << "Error reading - TCP read buffer length differs from expected frame size."
-                     << _expected << "," << _length;
-        disconnect(UserReason);
-        return false;
-    }
 
     return true;
+}
+
+void Session::onMessage(P2PException e, std::shared_ptr<Session> session, Message::Ptr message)
+{
+    int16_t protocolID = message->protocolID();
+    if (message->isRequestPacket())
+    {
+        ///< request package, get callback by protocolID
+        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> callbackFunc;
+
+        ///< is synchronousPackageProtocolID or not
+        if (g_synchronousPackageProtocolID == protocolID)
+        {
+            callbackFunc = [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
+                /// update protoclID
+                msg->setProtocolID(-g_synchronousPackageProtocolID);
+                msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
+                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+                msg->encode(*buf);
+                s->send(buf);
+            };
+            callbackFunc(e, session, message);
+        }
+        else
+        {
+            bool ret = m_p2pMsgHandler->getHandlerByProtocolID(protocolID, callbackFunc);
+            if (ret && callbackFunc)
+            {
+                LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
+                ///< execute funtion, send response packet by user in callbackFunc
+                ///< TODO: use threadPool
+                callbackFunc(e, session, message);
+            }
+            else
+            {
+                LOG(ERROR) << "Session::onMessage, handler not found by protocolID=" << protocolID;
+            }
+        }
+    }
+    else if (protocolID != 0)
+    {
+        ///< response package, get callback by seq
+        ResponseCallback::Ptr callback = m_p2pMsgHandler->getCallbackBySeq(message->seq());
+        if (callback != NULL)
+        {
+            if (callback->timeoutHandler)
+            {
+                ///< cancel timer
+                callback->timeoutHandler->cancel();
+            }
+            if (callback->callbackFunc)
+            {
+                LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
+                ///< TODO: use threadPool
+                callback->callbackFunc(e, message);
+            }
+        }
+        else
+        {
+            LOG(ERROR) << "Session::onMessage, callback not found by seq=" << message->seq();
+        }
+    }
+    else
+    {
+        LOG(ERROR) << "Session::onMessage, protocolID=0 Error!";
+    }
 }

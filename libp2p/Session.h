@@ -42,6 +42,7 @@ namespace dev
 namespace p2p
 {
 class Peer;
+class P2PMsgHandler;
 class Host;
 /**
  * @brief The Session class
@@ -58,13 +59,9 @@ public:
     void start() override;
     void disconnect(DisconnectReason _reason) override;
 
-    void ping() override;
-
     bool isConnected() const override { return m_socket->isConnected(); }
 
     NodeID id() const override;
-
-    void sealAndSend(RLPStream& _s, uint16_t _protocolID) override;
 
     void addNote(std::string const& _k, std::string const& _v) override
     {
@@ -83,6 +80,12 @@ public:
 
     std::chrono::steady_clock::time_point lastReceived() const override { return m_lastReceived; }
 
+    void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) override
+    {
+        m_p2pMsgHandler = _p2pMsgHandler;
+    }
+
+    void send(std::shared_ptr<bytes> _msg) override;
 
 private:
     struct Header
@@ -90,9 +93,6 @@ private:
         uint32_t length = 0;
         uint32_t protocolID = 0;
     };
-    static RLPStream& prep(RLPStream& _s, PacketType _t, unsigned _args = 0);
-
-    void send(std::shared_ptr<bytes> _msg, uint16_t _protocolID);
 
     /// Drop the connection for the reason @a _r.
     void drop(DisconnectReason _r);
@@ -101,21 +101,15 @@ private:
     void doRead();
 
     /// Check error code after reading and drop peer if error code.
-    bool checkRead(std::size_t _expected, boost::system::error_code _ec, std::size_t _length);
+    bool checkRead(boost::system::error_code _ec);
 
     /// Perform a single round of the write operation. This could end up calling itself
     /// asynchronously.
     void onWrite(boost::system::error_code ec, std::size_t length);
     void write();
 
-    /// Deliver packet to Session or Capability for interpretation.
-    bool readPacket(uint16_t _capId, PacketType _t, RLP const& _r);
-
-    /// Interpret an incoming Session packet.
-    bool interpret(PacketType _t, RLP const& _r);
-
-    /// @returns true iff the _msg forms a valid message for sending or receiving on the network.
-    static bool checkPacket(bytesConstRef _msg);
+    /// call by doRead() to deal with mesage
+    void onMessage(P2PException e, std::shared_ptr<Session> session, Message::Ptr message);
 
     Host* m_server;                        ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
@@ -128,19 +122,14 @@ private:
     class QueueCompare
     {
     public:
-        bool operator()(const boost::tuple<std::shared_ptr<bytes>, uint16_t, u256>& lhs,
-            const boost::tuple<std::shared_ptr<bytes>, uint16_t, u256>& rhs) const
+        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>& lhs,
+            const std::pair<std::shared_ptr<bytes>, u256>& rhs) const
         {
-            if (boost::get<1>(lhs) == 0x13 || boost::get<1>(lhs) == 0x15)
-            {
-                return true;
-            }
-
             return false;
         }
     };
 
-    boost::heap::priority_queue<boost::tuple<std::shared_ptr<bytes>, uint16_t, u256>,
+    boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
         m_writeQueue;
 
@@ -163,6 +152,8 @@ private:
     unsigned m_start_t;
 
     boost::asio::io_service::strand* m_strand;
+
+    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
 };
 
 }  // namespace p2p

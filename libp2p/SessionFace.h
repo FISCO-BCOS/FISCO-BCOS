@@ -28,6 +28,7 @@ namespace dev
 namespace p2p
 {
 class Peer;
+class P2PMsgHandler;
 class SessionFace
 {
 public:
@@ -37,13 +38,9 @@ public:
 
     virtual void disconnect(DisconnectReason _reason) = 0;
 
-    virtual void ping() = 0;
-
     virtual bool isConnected() const = 0;
 
     virtual NodeID id() const = 0;
-
-    virtual void sealAndSend(RLPStream& _s, uint16_t _protocolID) = 0;
 
     virtual void addNote(std::string const& _k, std::string const& _v) = 0;
 
@@ -54,6 +51,10 @@ public:
     virtual std::shared_ptr<Peer> peer() const = 0;
 
     virtual std::chrono::steady_clock::time_point lastReceived() const = 0;
+
+    virtual void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) = 0;
+
+    virtual void send(std::shared_ptr<bytes> _msg) = 0;
 };
 
 }  // namespace p2p
