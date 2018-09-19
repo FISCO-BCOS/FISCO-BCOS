@@ -371,7 +371,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
         LOG(ERROR) << "ERROR: " << _e.what();
     }
     if (!success)
-        socket->ref().close();
+        socket->close();
     /// repeat runAcceptor procedure after start peer session
     runAcceptor();
 }
