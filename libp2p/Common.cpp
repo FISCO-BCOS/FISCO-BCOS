@@ -39,7 +39,7 @@ bool p2p::isPublicAddress(bi::address const& _addressToCheck)
 {
     if (_addressToCheck.to_string() == "0.0.0.0")
         return false;
-    return true;
+    return _addressToCheck.is_unspecified();
 }
 
 // Helper function to determine if an address is localhost
