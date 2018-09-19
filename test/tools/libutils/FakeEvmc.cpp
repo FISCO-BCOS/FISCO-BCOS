@@ -25,6 +25,7 @@
 
 using namespace std;
 using namespace dev;
+using namespace dev::eth;
 
 namespace dev
 {
@@ -40,6 +41,7 @@ bool operator==(evmc_uint256be const& a, evmc_uint256be const& b)
 
 FakeState fakeState;
 eth::LogEntries fakeLogs;
+int64_t fakeDepth = -1;
 
 int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
 {
@@ -104,7 +106,6 @@ size_t copyCode(evmc_context* _context, evmc_address const* _addr, size_t _codeO
     // Handle "big offset" edge case.
     if (_codeOffset >= code.size())
         return 0;
-
     size_t maxToCopy = code.size() - _codeOffset;
     size_t numToCopy = std::min(maxToCopy, _bufferSize);
     std::copy_n(&code[_codeOffset], numToCopy, _bufferData);
@@ -121,10 +122,47 @@ void selfdestruct(
 
 void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _msg) noexcept
 {
-    /// TODO: Implement this callback if required.
-    (void)o_result;
-    (void)_context;
-    (void)_msg;
+    EVMSchedule const& schedule = DefaultSchedule;
+    int64_t gas = _msg->gas;
+    u256 value = fromEvmC(_msg->value);
+    Address caller = fromEvmC(_msg->sender);
+    FakeEvmc sonEvmc(evmc_create_interpreter());
+
+    // Handle CREATE.
+    if (_msg->kind == EVMC_CREATE || _msg->kind == EVMC_CREATE2)
+    {
+        bytes code = bytesConstRef{_msg->input_data, _msg->input_size}.toBytes();
+        bytes data = bytes();
+        Address destination{KeyPair::create().address()};
+        bool isCreate = true;
+        bool isStaticCall = false;
+
+        *o_result = sonEvmc.execute(schedule, code, data, destination, caller, value, gas,
+            sonEvmc.depth(), isCreate, isStaticCall);
+        if (o_result->status_code == EVMC_SUCCESS)
+        {
+            // We assume that generatedCode is added into state immediately
+            bytes generatedCode =
+                bytesConstRef{o_result->output_data, o_result->output_size}.toBytes();
+            fakeState.accountCode(toEvmC(destination)) = generatedCode;
+
+            o_result->create_address = toEvmC(destination);
+            o_result->output_data = nullptr;
+            o_result->output_size = 0;
+        }
+    }
+    else  // CALL
+    {
+        bytes& code = fakeState.accountCode(_msg->destination);
+        cout << "get code size:" << code.size() << endl;
+        bytes data = bytesConstRef{_msg->input_data, _msg->input_size}.toBytes();
+        Address destination = fromEvmC(_msg->destination);
+        bool isCreate = false;
+        bool isStaticCall = (_msg->flags & EVMC_STATIC) != 0;
+
+        *o_result = sonEvmc.execute(schedule, code, data, destination, caller, value, gas,
+            sonEvmc.depth(), isCreate, isStaticCall);
+    }
 }
 
 void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
@@ -175,12 +213,14 @@ evmc_context_fn_table const fakeFnTable = {
 
 FakeEvmc::FakeEvmc(evmc_instance* _instance)
 {
+    fakeDepth++;
+    m_depth = fakeDepth;
     m_instance = _instance;
     m_context = new evmc_context();
     m_context->fn_table = &fakeFnTable;
 }
 
-evmc_result FakeEvmc::execute(dev::eth::EVMSchedule const& schedule, bytes code, bytes data,
+evmc_result FakeEvmc::execute(EVMSchedule const& schedule, bytes code, bytes data,
     Address destination, Address caller, u256 value, int64_t gas, int32_t depth, bool isCreate,
     bool isStaticCall)
 {
@@ -192,7 +232,17 @@ evmc_result FakeEvmc::execute(dev::eth::EVMSchedule const& schedule, bytes code,
     evmc_message msg = {toEvmC(destination), toEvmC(caller), toEvmC(value), data.data(),
         data.size(), toEvmC(codeHash), toEvmC(0x0_cppui256), gas, depth, kind, flags};
 
-    return m_instance->execute(m_instance, m_context, mode, &msg, code.data(), code.size());
+    evmc_result result =
+        m_instance->execute(m_instance, m_context, mode, &msg, code.data(), code.size());
+
+    if (isCreate && result.status_code == EVMC_SUCCESS)
+    {
+        // We assume that generatedCode is added into state immediately
+        bytes generatedCode = bytesConstRef{result.output_data, result.output_size}.toBytes();
+        fakeState.accountCode(toEvmC(destination)) = generatedCode;
+        result.create_address = toEvmC(destination);
+    }
+    return result;
 }
 
 void FakeEvmc::destroy()

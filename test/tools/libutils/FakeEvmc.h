@@ -25,7 +25,9 @@
 #include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/SHA3.h>
+#include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
+#include <libethcore/Instruction.h>
 #include <libethcore/LogEntry.h>
 #include <libinterpreter/interpreter.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -124,7 +126,7 @@ public:
         AccountStateType& accountState = state[toKey(addr)];
         for (auto& s : accountState)
         {
-            std::cout << s.first << ":" << fromEvmC(s.second) << std::endl;
+            std::cout << s.first << ":" << FixedHash<32>(fromEvmC(s.second)).hex() << std::endl;
         }
     }
 
@@ -151,6 +153,7 @@ private:
 };
 
 extern dev::eth::LogEntries fakeLogs;
+extern int64_t fakeDepth;
 
 class FakeEvmc
 {
@@ -158,8 +161,9 @@ public:
     explicit FakeEvmc(evmc_instance* _instance);
     virtual ~FakeEvmc()
     {
-        delete m_context;
-        fakeLogs.clear();
+        fakeDepth--;
+        if (fakeDepth == 0)
+            fakeLogs.clear();
     }
 
     evmc_result execute(dev::eth::EVMSchedule const& schedule, bytes code, bytes data,
@@ -170,10 +174,12 @@ public:
     // TODO:Support more function
 
     FakeState& getState();
+    int64_t depth() { return m_depth; }
 
 private:
     struct evmc_instance* m_instance;
     struct evmc_context* m_context;
+    int64_t m_depth;
 };
 
 }  // namespace test
