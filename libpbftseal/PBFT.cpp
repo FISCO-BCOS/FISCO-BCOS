@@ -116,16 +116,19 @@ void PBFT::initBackupDB() {
 
 void PBFT::resetConfig() {
 	m_node_idx = -1;
-	auto node_num = m_miner_list.size();
-	for(size_t i=0; i<m_miner_list.size(); ++i) {
-		if(m_miner_list[i] == m_key_pair.pub()) {
-			m_account_type = 1;
-			m_node_idx = i;
-			break;
-		}
-	}
+	auto minerList = getMinerNodeList();
+	auto node_num = minerList.size();
+    for (size_t i = 0; i < minerList.size(); ++i)
+    {
+        if (minerList[i] == m_key_pair.pub())
+        {
+            m_account_type = 1;
+            m_node_idx = i;
+            break;
+        }
+    }
 
-	//if (node_num != m_node_num || node_idx != m_node_idx) {
+    //if (node_num != m_node_num || node_idx != m_node_idx) {
 	auto m_node_num = getMinerNodeList().size();
 	m_f = (m_node_num - 1 ) / 3;
 
@@ -392,27 +395,30 @@ h512s PBFT::getMinerNodeList() {
 		auto miners = _storage->select(m_highest_block.hash(), m_highest_block.number().convert_to<int>(), "_sys_miners_", "miner");
 		for(size_t i=0; i<miners->size(); ++i) {
 			auto miner = miners->get(i);
-			if(boost::lexical_cast<int>(miner->getField("enable_num")) >= m_highest_block.number().convert_to<int>()) {
+			if(boost::lexical_cast<int>(miner->getField("enable_num")) <= m_highest_block.number().convert_to<int>()) {
 				h512 nodeID = h512(miner->getField("node_id"));
-
-				if(miner->getField("status") == "0") {
-					minerList.push_back(nodeID);
-				}
-				else {
-					for(auto it=minerList.begin(); it!=minerList.end(); ++it) {
-						if(*it == nodeID) {
-							minerList.erase(it);
-							break;
-						}
-					}
-				}
+				minerList.push_back(nodeID);
 			}
 		}
-
-		_current_miner_list = minerList;
+        auto observers = _storage->select(m_highest_block.hash(),
+            m_highest_block.number().convert_to<int>(), "_sys_miners_", "observer");
+        for (size_t i = 0; i < observers->size(); ++i)
+        {
+            auto observer = observers->get(i);
+            h512 nodeID = h512(observer->getField("node_id"));
+            for (auto it = minerList.begin(); it != minerList.end(); ++it)
+            {
+                if (*it == nodeID)
+                {
+                    minerList.erase(it);
+                    break;
+                }
+            }
+        }
+        _current_miner_list = minerList;
 		_current_miner_num = m_highest_block.number();
 	}
-
+	
 	return _current_miner_list;
 }
 

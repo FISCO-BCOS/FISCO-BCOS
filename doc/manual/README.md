@@ -192,6 +192,7 @@ vim nodes/node-0/config.conf
 ```bash
 ; rpc配置 web3sdk连接用
 [rpc]
+    ;listen_ip应该设置为内网IP
 	listen_ip=0.0.0.0
 	listen_port=30301
 	; 原rpc端口
@@ -202,17 +203,11 @@ vim nodes/node-0/config.conf
 [p2p]
 	listen_ip=0.0.0.0
 	listen_port=30300
-	; p2p最大连接数 默认为100
-	idle_connections=100
-	; p2p重连间隔 单位秒 默认为60s
-	reconnect_interval=60
 	; 配置区块链节点列表 格式为ip:端口 以node.开头
 	node.0=127.0.0.1:30300
 	
 ; PBFT共识配置 同一个共识网络内的所有节点的[pbft]分类配置必须一致
 [pbft]
-    ; 出块间隔 单位ms
-	block_interval=1000
 	; 配置共识节点列表 用NodeID标识 以miner.开头
 	miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
 	
@@ -221,7 +216,6 @@ vim nodes/node-0/config.conf
 	; 配置数据目录 变量${DATAPATH} == data_path
 	data_path=data/
 	log_config=log.conf
-	ext_header=0
 	
 ; 安全配置
 [secure]
@@ -230,16 +224,12 @@ vim nodes/node-0/config.conf
 	cert=${DATAPATH}/node.crt
 	; 配置节点的CA证书
 	ca_cert=${DATAPATH}/ca.crt
-	ca_path=
-	
+
 ; 状态数据库配置
 [statedb]
 	; statedb的类型 可选leveldb/amop
 	type=leveldb
 	path=${DATAPATH}/statedb
-	retryInterval=1
-	; amopdb的最大重试次数 超出次数后程序退推出 默认为0(无限)
-	maxRetry=0
 	; amopdb关注的topic 默认为DB
 	topic=DB
 ```
@@ -617,30 +607,24 @@ HelloWorld contract get function call again :HelloWorld!
 [p2p]
 	listen_ip=0.0.0.0
 	listen_port=30300
-	idle_connections=100
-	reconnect_interval=60
 	node.0=192.168.2.1:30300
 	node.1=192.168.2.2:30304
 [pbft]
-	block_interval=1000
 	miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
 	miner.1=84fb96c26a919cd654107464f49ac08ca6301cdb4ba276a7193f1475f5733f714f0c3ac1cb80cd7279613755782fd590f0f0a758046801acc691475efae0830b
 [common]
 	data_path=data/
 	log_config=log.conf
-	ext_header=0
 [secure]
 	key=${DATAPATH}/node.key
 	cert=${DATAPATH}/node.crt
 	ca_cert=${DATAPATH}/ca.crt
-	ca_path=
 [statedb]
 	type=leveldb
 	path=${DATAPATH}/statedb
-	retryInterval=1
-	maxRetry=0
 	topic=DB
 ```
+
   - **node-1/config.conf**（隐去相同内容）
 ```bash
 [rpc]
@@ -651,12 +635,9 @@ HelloWorld contract get function call again :HelloWorld!
 [p2p]
 	listen_ip=0.0.0.0
 	listen_port=30304
-	idle_connections=100
-	reconnect_interval=60
 	node.0=192.168.2.1:30300
 	node.1=192.168.2.2:30304
 [pbft]
-	block_interval=1000
 	miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
 	miner.1=84fb96c26a919cd654107464f49ac08ca6301cdb4ba276a7193f1475f5733f714f0c3ac1cb80cd7279613755782fd590f0f0a758046801acc691475efae0830b	
 ```
@@ -709,6 +690,7 @@ Host:127.0.0.1:30403
 FISCO BCOS的特性，请直接参看相关特性说明文档：
 
 1. [AMOP（链上链下）](../amop使用说明文档.md)
+1. [AMDB使用说明文档.md](../AMDB使用说明文档.md)
 2. [Contract_Name_Service](../CNS_Contract_Name_Service_服务使用说明文档.md)
 3. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
 4. [web3sdk](../web3sdk使用说明文档.md)
@@ -720,8 +702,6 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 10. [可监管的零知识证明](../可监管的零知识证明说明.md)
 11. [群签名环签名](../启用_关闭群签名环签名ethcall.md)
 12. [弹性联盟链共识框架](../弹性联盟链共识框架说明文档.md)
-
-
 
 ## 第九章 附录
 
@@ -789,7 +769,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 |secure.key|${DATAPATH}/node.key|节点私钥|
 |secure.cert|${DATAPATH}/node.crt|节点证书|
 |secure.ca_cert|${DATAPATH}/ca.crt|链证书|
-|secure.ca_path|||
+|secure.ca_path|空||
 |statedb.type|leveldb|可选leveldb或amop|
 |statedb.path|${DATAPATH}/statedb|leveldb存储路径|
 |statedb.retryInterval|1||
