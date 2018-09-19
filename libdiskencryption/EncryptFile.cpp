@@ -20,7 +20,6 @@
  * 
  * @date: 2018
  */
-#include <curl/curl.h>
 #include <boost/filesystem.hpp>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
@@ -233,6 +232,7 @@ int EncryptFile::writer(char* data, size_t size, size_t nmemb, std::string* writ
 
 string EncryptFile::getKeycenterResponse(const string& b64data,const string& kcUrl)
 {
+#if 0
 	CURL *curl;
 	CURLcode res;
 	curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -260,6 +260,8 @@ string EncryptFile::getKeycenterResponse(const string& b64data,const string& kcU
 	}
 	curl_global_cleanup();
 	return responseData;
+#endif
+	return "";
 }
 
 EncryptFile::~EncryptFile()

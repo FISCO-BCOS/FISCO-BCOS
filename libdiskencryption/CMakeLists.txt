@@ -14,9 +14,9 @@ find_package(Eth)
 target_include_directories(diskencryption PRIVATE ..)
 target_include_directories(diskencryption PRIVATE ../utils)
 					
-target_link_libraries(diskencryption ${Eth_ODBC_LIBRARIES})
+#target_link_libraries(diskencryption ${Eth_ODBC_LIBRARIES})
 #target_link_libraries(diskencryption ${Eth_DEVCORE_LIBRARIES})
 target_link_libraries(diskencryption ${Eth_ETHCORE_LIBRARIES})
 target_link_libraries(diskencryption ${Dev_DEVCRYPTO_LIBRARIES})
-target_link_libraries(diskencryption curl)
+#target_link_libraries(diskencryption curl)
 

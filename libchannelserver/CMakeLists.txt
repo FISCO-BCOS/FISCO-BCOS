@@ -9,4 +9,4 @@ add_library(channelserver ${SRC_LIST} ${HEADERS})
 target_include_directories(channelserver PRIVATE ..)
 target_include_directories(channelserver PUBLIC ${BOOST_INCLUDE_DIR})
 
-target_link_libraries(channelserver ${SSL_LIBRARIE} ssl ${CRYPTO_LIBRARIE} crypto ${KRB5_LIBRARIE} krb5 ${ZLIB_LIBRARIE} z dl)
+#target_link_libraries(channelserver ${SSL_LIBRARIE} ssl ${CRYPTO_LIBRARIE} crypto ${ZLIB_LIBRARIE} z dl)
