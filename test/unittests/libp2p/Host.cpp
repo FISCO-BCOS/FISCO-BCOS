@@ -326,6 +326,16 @@ BOOST_AUTO_TEST_CASE(testRunAndStartedWorking)
     /// test connect to node-self(handshake client)
     std::map<NodeIPEndpoint, NodeID> m_staticNodes;
     ba::io_service m_ioservice(2);
+    auto ifAddresses = Network::getInterfaceAddresses();
+    bi::address addr;
+    for (auto address : ifAddresses)
+    {
+        if (address.is_v4())
+        {
+            addr = address;
+            break;
+        }
+    }
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
     m_staticNodes[m_endpoint] = KeyPair::create().pub();
     getHost()->setStaticNodes(m_staticNodes);
@@ -336,7 +346,7 @@ BOOST_AUTO_TEST_CASE(testRunAndStartedWorking)
     BOOST_CHECK(getHost()->haveNetwork() == true);
     /// test determinePublic
     BOOST_CHECK(getHost()->tcpPublic() == Network::determinePublic(getHost()->networkConfig()));
-    BOOST_CHECK(getHost()->tcpPublic().address().to_string() == "127.0.0.1");
+    BOOST_CHECK(getHost()->tcpPublic().address().to_string() == addr.to_string());
     BOOST_CHECK(getHost()->tcpPublic().port() == listenPort());
     BOOST_CHECK(getHost()->sessions().size() == 1);
     BOOST_CHECK(getHost()->getPeers().size() == 1);
