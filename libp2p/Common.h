@@ -26,6 +26,7 @@
  * @modifications:
  * 1. remove DeadlineOps(useless class)
  * 2. remove isPrivateAddress method for logical imperfect
+ * 3. remove std::hash<bi::address> class since it has not been used
  */
 
 #pragma once
@@ -130,22 +131,15 @@ struct NodeInfo
 
     NodeID id;
     std::string address;
-    unsigned port;
+    unsigned port = 0;
     std::string version;
 };
 
 /**
  * @brief IPv4,UDP/TCP endpoints.
  */
-class NodeIPEndpoint
+struct NodeIPEndpoint
 {
-public:
-    enum RLPAppend
-    {
-        StreamList,
-        StreamInline
-    };
-
     /// Setting true causes isAllowed to return true for all addresses. (Used by test fixtures)
     static bool test_allowLocal;
 
@@ -158,7 +152,6 @@ public:
     {
         address = HostResolver::query(host);
     }
-    NodeIPEndpoint(RLP const& _r) { interpretRLP(_r); }
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
     {
         address = _nodeIPEndpoint.address;
@@ -190,8 +183,6 @@ public:
 
         return tcpPort < rhs.tcpPort;
     }
-    void streamRLP(RLPStream& _s, RLPAppend _append = StreamList) const;
-    void interpretRLP(RLP const& _r);
     std::string name() const
     {
         std::ostringstream os;
@@ -199,7 +190,6 @@ public:
         return os.str();
     }
     bool isValid() { return (!address.to_string().empty()) && (tcpPort != 0); }
-    // TODO: make private, give accessors and rename m_...
     bi::address address;
     uint16_t udpPort = 0;
     uint16_t tcpPort = 0;
@@ -217,59 +207,45 @@ struct PeerSessionInfo
     std::string const host;
     std::chrono::steady_clock::duration lastPing;
     unsigned socketId;
-    std::map<std::string, std::string> notes;
 };
 
 using PeerSessionInfos = std::vector<PeerSessionInfo>;
 
-struct NodeSpec
+class NodeSpec
 {
-    NodeSpec() {}
-
+public:
+    NodeSpec() = default;
     /// Accepts user-readable strings of the form (enode://pubkey@)host({:port,:tcpport.udpport})
     NodeSpec(std::string const& _user);
 
-    NodeSpec(std::string const& _addr, uint16_t _port, int _udpPort = -1)
-      : m_address(_addr), m_tcpPort(_port), m_udpPort(_udpPort == -1 ? _port : (uint16_t)_udpPort)
+    NodeSpec(NodeID const& node_id, std::string const& _addr, uint16_t _port, int _udpPort = -1)
+      : m_id(node_id),
+        m_address(_addr),
+        m_tcpPort(_port),
+        m_udpPort(_udpPort == -1 ? _port : (uint16_t)_udpPort)
     {}
 
+    /// get interfaces
     NodeID id() const { return m_id; }
-
+    uint16_t tcpPort() const { return m_tcpPort; }
+    uint16_t udpPort() const { return m_udpPort; }
+    std::string const& address() const { return m_address; }
     NodeIPEndpoint nodeIPEndpoint() const;
-
     std::string enode() const;
 
+    /// set interfaces
+    void setNodeId(NodeID const& _node) { m_id = _node; }
+    void setAddress(std::string const& _address) { m_address = _address; }
+    void setTcpPort(uint16_t const _port) { m_tcpPort = _port; }
+    void setUdpPort(uint16_t const _port) { m_udpPort = _port; }
+
 private:
+    NodeID m_id;
     std::string m_address;
     uint16_t m_tcpPort = 0;
     uint16_t m_udpPort = 0;
-    NodeID m_id;
 };
 }  // namespace p2p
 /// Simple stream output for a NodeIPEndpoint.
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep);
 }  // namespace dev
-
-/// std::hash for asio::adress
-namespace std
-{
-template <>
-struct hash<bi::address>
-{
-    size_t operator()(bi::address const& _a) const
-    {
-        if (_a.is_v4())
-            return std::hash<unsigned long>()(_a.to_v4().to_ulong());
-        if (_a.is_v6())
-        {
-            auto const& range = _a.to_v6().to_bytes();
-            return boost::hash_range(range.begin(), range.end());
-        }
-        if (_a.is_unspecified())
-            return static_cast<size_t>(0x3487194039229152ull);  // Chosen by fair dice roll,
-                                                                // guaranteed to be random
-        return std::hash<std::string>()(_a.to_string());
-    }
-};
-
-}  // namespace std

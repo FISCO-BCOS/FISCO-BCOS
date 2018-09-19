@@ -39,7 +39,7 @@ bool p2p::isPublicAddress(bi::address const& _addressToCheck)
 {
     if (_addressToCheck.to_string() == "0.0.0.0")
         return false;
-    return _addressToCheck.is_unspecified();
+    return !_addressToCheck.is_unspecified();
 }
 
 // Helper function to determine if an address is localhost
@@ -93,32 +93,6 @@ std::string p2p::reasonOf(DisconnectReason _r)
     default:
         return "Unknown reason.";
     }
-}
-
-void NodeIPEndpoint::streamRLP(RLPStream& _s, RLPAppend _append) const
-{
-    if (_append == StreamList)
-        _s.appendList(4);
-    if (address.is_v4())
-        _s << bytesConstRef(&address.to_v4().to_bytes()[0], 4);
-    else if (address.is_v6())
-        _s << bytesConstRef(&address.to_v6().to_bytes()[0], 16);
-    else
-        _s << bytes();
-    _s << udpPort << tcpPort << host;
-}
-
-void NodeIPEndpoint::interpretRLP(RLP const& _r)
-{
-    if (_r[0].size() == 4)
-        address = bi::address_v4(*(bi::address_v4::bytes_type*)_r[0].toBytes().data());
-    else if (_r[0].size() == 16)
-        address = bi::address_v6(*(bi::address_v6::bytes_type*)_r[0].toBytes().data());
-    else
-        address = bi::address();
-    udpPort = _r[1].toInt<uint16_t>();
-    tcpPort = _r[2].toInt<uint16_t>();
-    host = _r[3].toString();
 }
 
 NodeSpec::NodeSpec(string const& _user)
