@@ -26,9 +26,9 @@ target_link_libraries(fisco-bcos
 	storage
 	initializer
 	abi
-	crypto
-	leveldb
-	snappy idn tasn1 nettle hogweed gmp z dl pthread
+	snappy
+	dl
+	pthread
 )
 
 #target_link_libraries(fisco-bcos ${Eth_EVM_LIBRARIES})

@@ -13,6 +13,7 @@ target_link_libraries(UTXO ${Dev_DEVCORE_LIBRARIES})
 target_link_libraries(UTXO devcore)
 target_link_libraries(UTXO ethereum)
 target_link_libraries(UTXO ethcore)
+target_link_libraries(UTXO leveldb)
 
 install(TARGETS UTXO RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
 
