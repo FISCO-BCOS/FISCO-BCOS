@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include "Common.h"
 
 namespace dev {
 

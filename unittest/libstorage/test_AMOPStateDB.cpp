@@ -108,7 +108,7 @@ public:
         responseJson["result"]["columns"].append("姓名");
         responseJson["result"]["columns"].append("资产号");
         responseJson["result"]["columns"].append("资产名");
-        responseJson["result"]["columns"].append(STATUS);
+        responseJson["result"]["columns"].append(STORAGE_STATUS);
 
         //增加记录
         Json::Value line1;
@@ -193,7 +193,7 @@ public:
         responseJson["result"]["columns"].append("姓名");
         responseJson["result"]["columns"].append("资产号");
         responseJson["result"]["columns"].append("资产名");
-        responseJson["result"]["columns"].append(STATUS);
+        responseJson["result"]["columns"].append(STORAGE_STATUS);
 
         Json::Value line1;
         line1.append("张三");
@@ -280,7 +280,7 @@ public:
 		BOOST_TEST(entry["fields"]["姓名"].asString() == "李四");
 		BOOST_TEST(entry["fields"]["资产号"].asString() == "0");
 		BOOST_TEST(entry["fields"]["资产名"].asString() == "z4");
-		BOOST_TEST(entry[STATUS].asString() == "0");
+		BOOST_TEST(entry[STORAGE_STATUS].asString() == "0");
 #endif
 
         Json::Value responseJson;
