@@ -66,12 +66,6 @@ public:
 
     void sealAndSend(RLPStream& _s, uint16_t _protocolID) override;
 
-    void addNote(std::string const& _k, std::string const& _v) override
-    {
-        Guard l(x_info);
-        m_info.notes[_k] = _v;
-    }
-
     PeerSessionInfo info() const override
     {
         Guard l(x_info);

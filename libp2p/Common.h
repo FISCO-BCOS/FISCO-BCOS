@@ -20,6 +20,13 @@
  * @date 2014
  *
  * Miscellanea required for the Host/Session/NodeTable classes.
+ *
+ * @author yujiechen
+ * @date: 2018-09-19
+ * @modifications:
+ * 1. remove DeadlineOps(useless class)
+ * 2. remove isPrivateAddress method for logical imperfect
+ * 3. remove std::hash<bi::address> class since it has not been used
  */
 
 #pragma once
@@ -57,22 +64,15 @@ extern const Node UnspecifiedNode;
 
 using NodeID = h512;
 
-bool isPrivateAddress(bi::address const& _addressToCheck);
-bool isPrivateAddress(std::string const& _addressToCheck);
 bool isLocalHostAddress(bi::address const& _addressToCheck);
 bool isLocalHostAddress(std::string const& _addressToCheck);
 bool isPublicAddress(bi::address const& _addressToCheck);
 bool isPublicAddress(std::string const& _addressToCheck);
 
-struct NetworkStartRequired : virtual dev::Exception
-{
-};
-struct InvalidPublicIPAddress : virtual dev::Exception
-{
-};
-struct InvalidHostIPAddress : virtual dev::Exception
-{
-};
+/// define Exceptions
+DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
+DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
+DEV_SIMPLE_EXCEPTION(InvalidHostIPAddress);
 
 enum PacketType
 {
@@ -103,28 +103,8 @@ enum DisconnectReason
     NoDisconnect = 0xffff
 };
 
-inline bool isPermanentProblem(DisconnectReason _r)
-{
-    switch (_r)
-    {
-    case DuplicatePeer:
-    case IncompatibleProtocol:
-    case NullIdentity:
-    case UnexpectedIdentity:
-    case LocalIdentity:
-        return true;
-    default:
-        return false;
-    }
-}
-
 /// @returns the string form of the given disconnection reason.
 std::string reasonOf(DisconnectReason _r);
-
-using CapDesc = std::pair<std::string, u256>;
-using CapDescSet = std::set<CapDesc>;
-using CapDescs = std::vector<CapDesc>;
-
 
 class HostResolver
 {
@@ -151,22 +131,15 @@ struct NodeInfo
 
     NodeID id;
     std::string address;
-    unsigned port;
+    unsigned port = 0;
     std::string version;
 };
 
 /**
  * @brief IPv4,UDP/TCP endpoints.
  */
-class NodeIPEndpoint
+struct NodeIPEndpoint
 {
-public:
-    enum RLPAppend
-    {
-        StreamList,
-        StreamInline
-    };
-
     /// Setting true causes isAllowed to return true for all addresses. (Used by test fixtures)
     static bool test_allowLocal;
 
@@ -179,7 +152,6 @@ public:
     {
         address = HostResolver::query(host);
     }
-    NodeIPEndpoint(RLP const& _r) { interpretRLP(_r); }
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
     {
         address = _nodeIPEndpoint.address;
@@ -211,8 +183,6 @@ public:
 
         return tcpPort < rhs.tcpPort;
     }
-    void streamRLP(RLPStream& _s, RLPAppend _append = StreamList) const;
-    void interpretRLP(RLP const& _r);
     std::string name() const
     {
         std::ostringstream os;
@@ -220,7 +190,6 @@ public:
         return os.str();
     }
     bool isValid() { return (!address.to_string().empty()) && (tcpPort != 0); }
-    // TODO: make private, give accessors and rename m_...
     bi::address address;
     uint16_t udpPort = 0;
     uint16_t tcpPort = 0;
@@ -238,140 +207,45 @@ struct PeerSessionInfo
     std::string const host;
     std::chrono::steady_clock::duration lastPing;
     unsigned socketId;
-    std::map<std::string, std::string> notes;
 };
 
 using PeerSessionInfos = std::vector<PeerSessionInfo>;
 
-struct NodeSpec
+class NodeSpec
 {
-    NodeSpec() {}
-
+public:
+    NodeSpec() = default;
     /// Accepts user-readable strings of the form (enode://pubkey@)host({:port,:tcpport.udpport})
     NodeSpec(std::string const& _user);
 
-    NodeSpec(std::string const& _addr, uint16_t _port, int _udpPort = -1)
-      : m_address(_addr), m_tcpPort(_port), m_udpPort(_udpPort == -1 ? _port : (uint16_t)_udpPort)
+    NodeSpec(NodeID const& node_id, std::string const& _addr, uint16_t _port, int _udpPort = -1)
+      : m_id(node_id),
+        m_address(_addr),
+        m_tcpPort(_port),
+        m_udpPort(_udpPort == -1 ? _port : (uint16_t)_udpPort)
     {}
 
+    /// get interfaces
     NodeID id() const { return m_id; }
-
+    uint16_t tcpPort() const { return m_tcpPort; }
+    uint16_t udpPort() const { return m_udpPort; }
+    std::string const& address() const { return m_address; }
     NodeIPEndpoint nodeIPEndpoint() const;
-
     std::string enode() const;
 
+    /// set interfaces
+    void setNodeId(NodeID const& _node) { m_id = _node; }
+    void setAddress(std::string const& _address) { m_address = _address; }
+    void setTcpPort(uint16_t const _port) { m_tcpPort = _port; }
+    void setUdpPort(uint16_t const _port) { m_udpPort = _port; }
+
 private:
+    NodeID m_id;
     std::string m_address;
     uint16_t m_tcpPort = 0;
     uint16_t m_udpPort = 0;
-    NodeID m_id;
 };
-class DeadlineOps
-{
-    class DeadlineOp
-    {
-    public:
-        DeadlineOp(ba::io_service& _io, unsigned _msInFuture,
-            std::function<void(boost::system::error_code const&)> const& _f)
-          : m_timer(new ba::deadline_timer(_io))
-        {
-            m_timer->expires_from_now(boost::posix_time::milliseconds(_msInFuture));
-            m_timer->async_wait(_f);
-        }
-        ~DeadlineOp()
-        {
-            if (m_timer)
-                m_timer->cancel();
-        }
-
-        DeadlineOp(DeadlineOp&& _s) : m_timer(_s.m_timer.release()) {}
-        DeadlineOp& operator=(DeadlineOp&& _s)
-        {
-            assert(&_s != this);
-
-            m_timer.reset(_s.m_timer.release());
-            return *this;
-        }
-
-        bool expired()
-        {
-            Guard l(x_timer);
-            return m_timer->expires_from_now().total_nanoseconds() <= 0;
-        }
-        void wait()
-        {
-            Guard l(x_timer);
-            m_timer->wait();
-        }
-
-    private:
-        std::unique_ptr<ba::deadline_timer> m_timer;
-        Mutex x_timer;
-    };
-
-public:
-    DeadlineOps(ba::io_service& _io, unsigned _reapIntervalMs = 100)
-      : m_io(_io), m_reapIntervalMs(_reapIntervalMs), m_stopped(false)
-    {
-        reap();
-    }
-    ~DeadlineOps() { stop(); }
-
-    void schedule(
-        unsigned _msInFuture, std::function<void(boost::system::error_code const&)> const& _f)
-    {
-        if (m_stopped)
-            return;
-        DEV_GUARDED(x_timers) m_timers.emplace_back(m_io, _msInFuture, _f);
-    }
-
-    void stop()
-    {
-        m_stopped = true;
-        DEV_GUARDED(x_timers) m_timers.clear();
-    }
-
-    bool isStopped() const { return m_stopped; }
-
-protected:
-    void reap();
-
-private:
-    ba::io_service& m_io;
-    unsigned m_reapIntervalMs;
-
-    std::vector<DeadlineOp> m_timers;
-    Mutex x_timers;
-
-    std::atomic<bool> m_stopped;
-};
-
 }  // namespace p2p
-
 /// Simple stream output for a NodeIPEndpoint.
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep);
 }  // namespace dev
-
-/// std::hash for asio::adress
-namespace std
-{
-template <>
-struct hash<bi::address>
-{
-    size_t operator()(bi::address const& _a) const
-    {
-        if (_a.is_v4())
-            return std::hash<unsigned long>()(_a.to_v4().to_ulong());
-        if (_a.is_v6())
-        {
-            auto const& range = _a.to_v6().to_bytes();
-            return boost::hash_range(range.begin(), range.end());
-        }
-        if (_a.is_unspecified())
-            return static_cast<size_t>(0x3487194039229152ull);  // Chosen by fair dice roll,
-                                                                // guaranteed to be random
-        return std::hash<std::string>()(_a.to_string());
-    }
-};
-
-}  // namespace std

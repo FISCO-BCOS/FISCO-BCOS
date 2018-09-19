@@ -42,6 +42,7 @@ public:
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() = 0;
     virtual const NodeIPEndpoint& nodeIPEndpoint() const = 0;
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
+    virtual boost::asio::ip::tcp::endpoint remote_endpoint() = 0;
 };
 }  // namespace p2p
 }  // namespace dev
