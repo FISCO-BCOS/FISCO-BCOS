@@ -47,6 +47,7 @@ BOOST_AUTO_TEST_CASE(testParseCert)
             BOOST_CHECK(cert_parser.isExpire() == true);
             BOOST_CHECK(cert_parser.serialNumber().empty() == true);
             BOOST_CHECK(cert_parser.subjectName().empty() == true);
+            BOOST_CHECK(cert_parser.certType() == 0);
             std::string m_subject;
             std::string m_serial;
             int m_certType;
@@ -59,6 +60,7 @@ BOOST_AUTO_TEST_CASE(testParseCert)
             BOOST_CHECK(cert_parser.isExpire() == false);
             BOOST_CHECK(cert_parser.serialNumber().empty() == false);
             BOOST_CHECK(cert_parser.subjectName().empty() == false);
+            BOOST_CHECK(cert_parser.certType() == 1);
         }
         else
             std::cout << "#### load certificate failed" << std::endl;
