@@ -46,9 +46,11 @@ public:
 
     virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
 
-    virtual void registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler) = 0;
+    virtual void registerHandlerByProtoclID(
+        int16_t protocolID, CallbackFuncWithSession handler) = 0;
 
-    virtual void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) = 0;
+    virtual void registerHandlerByTopic(
+        std::string const& topic, CallbackFuncWithSession handler) = 0;
 };
 
 }  // namespace p2p
