@@ -228,7 +228,7 @@ size_t Host::peerCount() const
         }
     }
     return retCount;
-}
+}  // namespace p2p
 
 /// @return true: the given certificate has been expired
 /// @return false: the given certificate has not been expired
@@ -463,6 +463,8 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             ps->disconnect(TooManyPeers);
             return;
         }
+        /// set P2PMsgHandler to session before start session
+        ps->setP2PMsgHandler(m_p2pMsgHandler);
         /// start session and modify m_sessions
         ps->start();
         m_sessions[node_id] = ps;

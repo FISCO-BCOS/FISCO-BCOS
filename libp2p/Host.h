@@ -205,6 +205,11 @@ public:
         return false;
     }
 
+    void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
+    {
+        m_p2pMsgHandler = _p2pMsgHandler;
+    }
+
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
     virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());
@@ -306,7 +311,10 @@ protected:  /// protected members(for unit testing)
     /// peer count limit
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
-};  // namespace p2p
+
+    ///< This handler will be sent to sessions before session start.
+    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
+};
 }  // namespace p2p
 
 }  // namespace dev

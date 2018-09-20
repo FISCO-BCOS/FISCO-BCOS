@@ -103,6 +103,136 @@ enum DisconnectReason
     NoDisconnect = 0xffff
 };
 
+///< The protocolID of synchronous Package, related to Service::sendMessageByNodeID
+static int16_t g_synchronousPackageProtocolID = 32767;
+
+///< P2PExceptionType and g_P2PExceptionMsg used in P2PException
+enum P2PExceptionType
+{
+    Success = 0,
+    ProtocolError,
+    NetworkTimeout,
+    P2PExceptionTypeCnt
+};
+
+static std::string g_P2PExceptionMsg[P2PExceptionTypeCnt] = {
+    "Success", "ProtocolError", "NetworkTimeout"};
+
+enum PacketDecodeStatus
+{
+    PACKET_ERROR = -1,
+    PACKET_INCOMPLETE = 0
+};
+
+struct Options
+{
+    uint32_t timeout;  /// < The timeout value of async function, in milliseconds.
+};
+
+class Message : public std::enable_shared_from_this<Message>
+{
+public:
+    typedef std::shared_ptr<Message> Ptr;
+
+    const static size_t HEADER_LENGTH = 12;
+    const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
+
+    Message() { m_buffer = std::make_shared<bytes>(); }
+
+    virtual ~Message() {}
+
+    uint32_t length() { return m_length; }
+    void setLength(uint32_t _length) { m_length = _length; }
+
+    int16_t protocolID() { return m_protocolID; }
+    void setProtocolID(int16_t _protocolID) { m_protocolID = _protocolID; }
+    uint16_t packetType() { return m_packetType; }
+    void setPacketType(uint16_t _packetType) { m_packetType = _packetType; }
+
+    uint32_t seq() { return m_seq; }
+    void setSeq(uint32_t _seq) { m_seq = _seq; }
+
+    std::shared_ptr<bytes> buffer() { return m_buffer; }
+    void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
+
+    bool isRequestPacket() { return (m_protocolID > 0); }
+    int16_t getResponceProtocolID()
+    {
+        if (isRequestPacket())
+            return -m_protocolID;
+        else
+            return 0;
+    }
+
+    ///< encode and decode logic implemented in send() and doRead() of session.cpp
+    void encode(bytes& buffer);
+
+    /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
+    /// returned.
+    ssize_t decode(const byte* buffer, size_t size);
+
+    void Print(std::string const& str)
+    {
+        LOG(INFO) << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
+                  << "," << m_seq << ","
+                  << std::string((const char*)m_buffer->data(), m_buffer->size()) << ")";
+    }
+
+private:
+    uint32_t m_length = 0;      ///< m_length = HEADER_LENGTH + length(m_buffer)
+    int16_t m_protocolID = 0;   ///< message type, the first two bytes of information, when greater
+                                ///< than 0 is the ID of the request package.
+    uint16_t m_packetType = 0;  ///< message sub type, the second two bytes of information
+    uint32_t m_seq = 0;         ///< the message identify
+    std::shared_ptr<bytes> m_buffer;  ///< message data
+};
+
+class P2PException : public std::exception
+{
+public:
+    P2PException(){};
+    P2PException(int _errorCode, const std::string& _msg) : m_errorCode(_errorCode), m_msg(_msg){};
+
+    virtual int errorCode() { return m_errorCode; };
+    virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return m_msg.c_str(); };
+    bool operator!() const { return m_errorCode == 0; }
+
+private:
+    int m_errorCode = 0;
+    std::string m_msg = "";
+};
+
+#define CallbackFunc std::function<void(P2PException, Message::Ptr)>
+#define CallbackFuncWithSession \
+    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>
+
+struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
+{
+    typedef std::shared_ptr<ResponseCallback> Ptr;
+
+    CallbackFunc callbackFunc;
+    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
+};
+
+struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
+{
+public:
+    typedef std::shared_ptr<SessionCallback> Ptr;
+
+    SessionCallback() { mutex.lock(); }
+
+    void onResponse(P2PException _error, Message::Ptr _message)
+    {
+        error = _error;
+        response = _message;
+        mutex.unlock();
+    }
+
+    P2PException error;
+    Message::Ptr response;
+    std::mutex mutex;
+};
+
 /// @returns the string form of the given disconnection reason.
 std::string reasonOf(DisconnectReason _r);
 
