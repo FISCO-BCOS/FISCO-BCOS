@@ -22,7 +22,6 @@
  */
 
  #include "CryptoParam.h"
-#include <curl/curl.h>
 #include <libdevcore/FileSystem.h>
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/CommonIO.h>

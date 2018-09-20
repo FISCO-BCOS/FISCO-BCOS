@@ -9,17 +9,6 @@ find_package(Dev)
 
 target_include_directories(raftseal PRIVATE ..)
 
-include_directories(../libodbc/include
-					../libodbc/include/db2_linux
-					../libodbc/include/ibase
-					../libodbc/include/infomix
-					../libodbc/include/mysql
-					../libodbc/include/odbc_linux
-					../libodbc/include/pgsql
-					../libodbc/include/sqlbase
-					../libodbc/include/sqllite
-					../libodbc/include/ss_linux
-					../libodbc/include/sybase)
 target_link_libraries(raftseal ${Dev_DEVCORE_LIBRARIES})
 target_link_libraries(raftseal ${Dev_DEVCRYPTO_LIBRARIES})
 target_link_libraries(raftseal ${Eth_ETHCORE_LIBRARIES})
