@@ -234,9 +234,8 @@ size_t Host::peerCount() const
 /// @return false: the given certificate has not been expired
 bool Host::isExpired(ba::ssl::verify_context& ctx)
 {
-    ParseCert certParser;
-    certParser.ParseInfo(ctx);
-    return certParser.getExpire();
+    ParseCert certParser(ctx);
+    return certParser.isExpire();
 }
 
 /**
