@@ -225,14 +225,12 @@ void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Pt
 
 void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options) {}
 
-void Service::registerHandlerByProtoclID(int16_t protocolID,
-    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler)
+void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler)
 {
     m_p2pMsgHandler->addProtocolID2Handler(protocolID, handler);
 }
 
-void Service::registerHandlerByTopic(std::string const& topic,
-    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler)
+void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler)
 {
     m_p2pMsgHandler->addTopic2Handler(topic, handler);
 }

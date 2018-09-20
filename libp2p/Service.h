@@ -66,11 +66,9 @@ public:
 
     void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
 
-    void registerHandlerByProtoclID(int16_t protocolID,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) override;
+    void registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler) override;
 
-    void registerHandlerByTopic(std::string const& topic,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) override;
+    void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
 
 private:
     void onTimeout(const boost::system::error_code& error, uint32_t seq);

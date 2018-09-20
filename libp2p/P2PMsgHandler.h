@@ -37,10 +37,10 @@ public:
     P2PMsgHandler()
     {
         m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
-        m_protocolID2Handler = std::make_shared<std::unordered_map<uint32_t,
-            std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>>>();
-        m_topic2Handler = std::make_shared<std::unordered_map<std::string,
-            std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>>>();
+        m_protocolID2Handler =
+            std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
+        m_topic2Handler =
+            std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
     }
 
     ///< Add, Get, Erase interface of seq2Callback.
@@ -53,19 +53,15 @@ public:
     ///< Add, Get, Erase interface of protocolID2Handler.
     ///< The return true indicates that the operation was successful.
     ///< The return false indicates that the operation failed.
-    bool addProtocolID2Handler(int16_t protocolID,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> const& callback);
-    bool getHandlerByProtocolID(int16_t protocolID,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>& callback);
+    bool addProtocolID2Handler(int16_t protocolID, CallbackFuncWithSession const& callback);
+    bool getHandlerByProtocolID(int16_t protocolID, CallbackFuncWithSession& callback);
     bool eraseHandlerByProtocolID(int16_t protocolID);
 
     ///< Add, Get, Erase interface of topic2Handler.
     ///< The return true indicates that the operation was successful.
     ///< The return false indicates that the operation failed.
-    bool addTopic2Handler(std::string const& topic,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> const& callback);
-    bool getHandlerByTopic(std::string const& topic,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>& callback);
+    bool addTopic2Handler(std::string const& topic, CallbackFuncWithSession const& callback);
+    bool getHandlerByTopic(std::string const& topic, CallbackFuncWithSession& callback);
     bool eraseHandlerByTopic(std::string const& topic);
 
 private:
@@ -75,15 +71,11 @@ private:
 
     ///< A call B, the function to call after the request is received by B.
     mutable RecursiveMutex x_protocolID2Handler;
-    std::shared_ptr<std::unordered_map<uint32_t,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>>>
-        m_protocolID2Handler;
+    std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
 
     ///< A call B, the function to call after the request is received by B in topic.
     mutable RecursiveMutex x_topic2Handler;
-    std::shared_ptr<std::unordered_map<std::string,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>>>
-        m_topic2Handler;
+    std::shared_ptr<std::unordered_map<std::string, CallbackFuncWithSession>> m_topic2Handler;
 };
 
 }  // namespace p2p

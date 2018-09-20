@@ -316,7 +316,7 @@ void Session::onMessage(
     if (message->isRequestPacket())
     {
         ///< request package, get callback by protocolID
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> callbackFunc;
+        CallbackFuncWithSession callbackFunc;
 
         ///< is synchronousPackageProtocolID or not
         if (g_synchronousPackageProtocolID == protocolID)

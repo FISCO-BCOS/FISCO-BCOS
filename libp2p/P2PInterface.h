@@ -46,11 +46,9 @@ public:
 
     virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
 
-    virtual void registerHandlerByProtoclID(int16_t protocolID,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) = 0;
+    virtual void registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler) = 0;
 
-    virtual void registerHandlerByTopic(std::string const& topic,
-        std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)> handler) = 0;
+    virtual void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) = 0;
 };
 
 }  // namespace p2p
