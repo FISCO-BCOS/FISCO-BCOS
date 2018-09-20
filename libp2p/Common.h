@@ -203,7 +203,8 @@ private:
 };
 
 #define CallbackFunc std::function<void(P2PException, Message::Ptr)>
-#define CallbackFuncWithSession std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>
+#define CallbackFuncWithSession \
+    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
