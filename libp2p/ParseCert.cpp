@@ -69,10 +69,6 @@ void ParseCert::ParseInfo(X509* cert, bool& is_expired, std::string& subjectName
         end = X509_get_notAfter(cert);
         ttStart = ASN1_TIME_get(start, &err);
         ttEnd = ASN1_TIME_get(end, &err);
-        /// free resources
-        ASN1_TIME_free(start);
-        ASN1_TIME_free(end);
-
         time_t t_Now = time(0);
         localtime(&t_Now);
         if (t_Now < ttStart || t_Now > ttEnd)
@@ -88,8 +84,6 @@ void ParseCert::ParseInfo(X509* cert, bool& is_expired, std::string& subjectName
         serial = BN_bn2hex(bignum);
         serialNumber.insert(0, serial);
         /// free resources
-        ASN1_INTEGER_free(asn1_i);
-        OPENSSL_free(serial);
         BN_free(bignum);
         // type of the certificate
         BASIC_CONSTRAINTS* bcons = NULL;
