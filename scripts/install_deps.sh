@@ -159,7 +159,8 @@ Linux)
                 libleveldb-dev \
                 libmicrohttpd-dev \
                 libminiupnpc-dev \
-                uuid-dev
+                uuid-dev \
+                libsnappy-dev	
             ;;
 
         Fedora)

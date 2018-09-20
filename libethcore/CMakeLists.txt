@@ -6,19 +6,6 @@ add_library(ethcore ${SRC_LIST} ${HEADERS})
 
 find_package(Dev)
 
-include_directories(../libodbc/include
-					../libodbc/include/db2_linux
-					../libodbc/include/ibase
-					../libodbc/include/infomix
-					../libodbc/include/mysql
-					../libodbc/include/odbc_linux
-					../libodbc/include/pgsql
-					../libodbc/include/sqlbase
-					../libodbc/include/sqllite
-					../libodbc/include/ss_linux
-					../libodbc/include/sybase)
-					
-
 target_include_directories(ethcore PRIVATE .. ../utils ${JSONCPP_INCLUDE_DIR})
 target_link_libraries(ethcore ${Dev_DEVCORE_LIBRARIES})
 target_link_libraries(ethcore ${Dev_DEVCRYPTO_LIBRARIES})

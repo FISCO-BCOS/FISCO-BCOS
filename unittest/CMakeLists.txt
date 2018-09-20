@@ -33,6 +33,7 @@ if (TESTS)
 	target_link_libraries(testeth web3jsonrpc)
 	target_link_libraries(testeth precompiled)
 	target_link_libraries(testeth storage)
+	target_link_libraries(testeth dl)
 
 	if(BUILD_BOOST)
 		target_include_directories(testeth PUBLIC ${BOOST_INCLUDE_DIR})
