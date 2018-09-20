@@ -33,7 +33,7 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(SocketTest, TestOutputHelperFixture)
-BOOST_AUTO_TEST_CASE(testInitContext)
+BOOST_AUTO_TEST_CASE(testSocket)
 {
     ba::io_service m_io_service;
     std::string address = "127.0.0.1";
@@ -44,6 +44,7 @@ BOOST_AUTO_TEST_CASE(testInitContext)
     BOOST_CHECK(Socket::m_isInit == true);
     BOOST_CHECK(m_socket.isConnected() == false);
     BOOST_CHECK(m_socket.sslref().native_handle()->verify_mode == ba::ssl::verify_peer);
+    /// close socket
     m_socket.close();
     BOOST_CHECK(m_socket.isConnected() == false);
 }
