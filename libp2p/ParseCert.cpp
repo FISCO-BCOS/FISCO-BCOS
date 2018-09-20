@@ -25,24 +25,26 @@
 
 ParseCert::ParseCert(ba::ssl::verify_context& ctx)
 {
-    ParseInfo(ctx);
+    X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+    if (cert)
+        ParseInfo(cert, m_isExpire, m_subjectName, m_serialNumber, m_certType);
+    else
+        X509_free(cert);
 }
 
+/// get interfaces
 bool ParseCert::isExpire() const
 {
     return m_isExpire;
 }
-
 string ParseCert::serialNumber() const
 {
     return m_serialNumber;
 }
-
 string ParseCert::subjectName() const
 {
     return m_subjectName;
 }
-
 int ParseCert::certType() const
 {
     return m_certType;
@@ -50,15 +52,15 @@ int ParseCert::certType() const
 
 ParseCert::~ParseCert() {}
 
-void ParseCert::ParseInfo(ba::ssl::verify_context& ctx)
+void ParseCert::ParseInfo(X509* cert, bool& is_expired, std::string& subjectName,
+    std::string& serialNumber, int& certType)
 {
     // subject name of the certificate
     char subject_name[256];
-    X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
     if (cert)
     {
         X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
-        m_subjectName.insert(0, subject_name);
+        subjectName.insert(0, subject_name);
         int err = 0;
         // lifetime of the certificate
         ASN1_TIME* start = NULL;
@@ -86,7 +88,7 @@ void ParseCert::ParseInfo(ba::ssl::verify_context& ctx)
         asn1_i = X509_get_serialNumber(cert);
         bignum = ASN1_INTEGER_to_BN(asn1_i, NULL);
         serial = BN_bn2hex(bignum);
-        m_serialNumber.insert(0, serial);
+        serialNumber.insert(0, serial);
         /// free resources
         ASN1_INTEGER_free(asn1_i);
         OPENSSL_free(serial);
@@ -95,12 +97,12 @@ void ParseCert::ParseInfo(ba::ssl::verify_context& ctx)
         BASIC_CONSTRAINTS* bcons = NULL;
         int crit = 0;
         bcons = (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
-        m_certType = 0;
+        certType = 0;
         if (bcons != NULL)
         {
             if (bcons->ca == false)
             {
-                m_certType = 1;
+                certType = 1;
             }
             BASIC_CONSTRAINTS_free(bcons);
         }
