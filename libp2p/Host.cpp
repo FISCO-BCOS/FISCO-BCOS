@@ -234,9 +234,8 @@ size_t Host::peerCount() const
 /// @return false: the given certificate has not been expired
 bool Host::isExpired(ba::ssl::verify_context& ctx)
 {
-    ParseCert certParser;
-    certParser.ParseInfo(ctx);
-    return certParser.getExpire();
+    ParseCert certParser(ctx);
+    return certParser.isExpire();
 }
 
 /**
@@ -371,7 +370,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
         LOG(ERROR) << "ERROR: " << _e.what();
     }
     if (!success)
-        socket->ref().close();
+        socket->close();
     /// repeat runAcceptor procedure after start peer session
     runAcceptor();
 }

@@ -28,21 +28,18 @@ using namespace std;
 class ParseCert
 {
 public:
-    ParseCert(void);
-    ~ParseCert(void);
-
-public:
-    void ParseInfo(ba::ssl::verify_context& ctx);
-    bool getExpire();
-    string getSerialNumber();
-    string getSubjectName();
-    int getCertType();
+    ParseCert(ba::ssl::verify_context& ctx);
+    ~ParseCert();
+    bool isExpire() const;
+    string serialNumber() const;
+    string subjectName() const;
+    int certType() const;
 
 private:
+    void ParseInfo(ba::ssl::verify_context& ctx);
     int mypint(const char** s, int n, int min, int max, int* e);
     time_t ASN1_TIME_get(ASN1_TIME* a, int* err);
 
-private:
     bool m_isExpire;        // the certificate is expired or not
     string m_serialNumber;  // serial number of the certificate
     int m_certType;         // type of the certificate (include CA and user certificate)
