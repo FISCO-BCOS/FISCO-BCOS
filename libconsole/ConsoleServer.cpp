@@ -161,15 +161,15 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
   std::stringstream ss;
 
   printDoubleLine(ss);
-	ss << "status                 Show the blockchain status." << std::endl;
-	ss << "p2p.list               Show the peers information." << std::endl;
-	ss << "p2p.update             Update static nodes." << std::endl;
-	ss << "amdb.select            Query the table data." << std::endl;
-	ss << "miner.list             Show the miners information." << std::endl;
-	ss << "miner.add              Add miner node." << std::endl;
-	ss << "miner.remove           Remove miner node." << std::endl;
-	ss << "quit                   Quit the blockchain console." << std::endl;
-	ss << "help                   Provide help information for blockchain console." << std::endl;
+	ss << "status          Show the blockchain status." << std::endl;
+	ss << "p2p.list        Show the peers information." << std::endl;
+	ss << "p2p.update      Update static nodes." << std::endl;
+	ss << "miner.list      Show the miners information." << std::endl;
+	ss << "miner.add       Add miner node." << std::endl;
+	ss << "miner.remove    Remove miner node." << std::endl;
+	ss << "amdb.select     Query the table data." << std::endl;
+	ss << "quit            Quit the blockchain console." << std::endl;
+	ss << "help            Provide help information for blockchain console." << std::endl;
 	printDoubleLine(ss);
 	ss << std::endl;
 	output = ss.str();
@@ -389,7 +389,7 @@ std::string ConsoleServer::addMiner(const std::vector<std::string> args)
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("add(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "add miner : " << nodeID << endl;
+            ss << "add miner successfully: " << nodeID << endl;
         }
         else
         {
@@ -429,7 +429,7 @@ std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("remove(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "remove miner : " << nodeID << endl;
+            ss << "remove miner successfully: " << nodeID << endl;
         }
         else
         {
@@ -450,10 +450,10 @@ std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
 
 void ConsoleServer::printSingleLine(std::stringstream &ss)
 {
-  ss << "----------------------------------------------------------------------" << std::endl;
+  ss << "----------------------------------------------------------------" << std::endl;
 }
 
 void ConsoleServer::printDoubleLine(std::stringstream &ss)
 {
-  ss << "======================================================================" << std::endl;
+  ss << "================================================================" << std::endl;
 }

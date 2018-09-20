@@ -212,6 +212,7 @@ Linux)
                 libmicrohttpd-dev \
                 libminiupnpc-dev \
                 uuid-dev \
+                libsnappy-dev \
                 $LLVM_PACKAGES
             ;;
 
@@ -233,6 +234,7 @@ Linux)
                 libmicrohttpd-devel \
                 gmp-devel \
                 openssl openssl-devel \
+                snappy-devel \
                 libuuid-devel
             ;;
 	#add Oracle Linux Server dependencies

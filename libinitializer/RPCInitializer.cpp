@@ -14,7 +14,7 @@ using namespace dev::eth;
 
 void RPCInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	std::string listenIP = pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
-	int listenPort = pt.get<int>("rpc.listen_port", 5051);
+	int listenPort = pt.get<int>("rpc.listen_port", 30301);
 	int httpListenPort = pt.get<int>("rpc.http_listen_port", 0);
 
 	if(listenPort > 0) {
