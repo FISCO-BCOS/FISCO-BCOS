@@ -11,4 +11,4 @@ target_include_directories(precompiled PRIVATE ${BOOST_INCLUDE_DIR})
 endif()
 
 target_include_directories(precompiled PRIVATE ..)
-target_link_libraries(precompiled JsonRpcCpp::Server storage z dl)
+target_link_libraries(precompiled storage)

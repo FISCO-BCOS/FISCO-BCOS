@@ -4,7 +4,7 @@ find_package(CURL REQUIRED)
 
 # HTTP server from JSON RPC CPP requires microhttpd library. It can find it itself,
 # but we need to know the MHD location for static linking.
-find_package(MHD REQUIRED)
+#find_package(MHD REQUIRED)
 
 set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_BUILD_TYPE=Release
@@ -59,6 +59,7 @@ ExternalProject_Add(jsonrpccpp
 )
 
 add_dependencies(jsonrpccpp jsoncpp)
+add_dependencies(jsonrpccpp MHD)
 
 # Create imported libraries
 if (WIN32)
