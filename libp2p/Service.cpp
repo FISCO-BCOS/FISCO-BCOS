@@ -86,7 +86,7 @@ void Service::asyncSendMessageByNodeID(
     try
     {
         RecursiveGuard l(m_host->mutexSessions());
-        std::unordered_map<NodeID, std::shared_ptr<SessionFace>> s = m_host->sessions();
+        auto s = m_host->sessions();
         for (auto const& i : s)
         {
             LOG(INFO) << "Service::asyncSendMessageByNodeID traversed nodeID = " << toJS(i.first);
@@ -233,6 +233,56 @@ void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSes
 void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler)
 {
     m_p2pMsgHandler->addTopic2Handler(topic, handler);
+}
+
+void Service::setTopicsByNode(
+    NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics)
+{
+    LOG(INFO) << "Call Service::setTopicsByNode to nodeID=" << toJS(_nodeID);
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (i.first == _nodeID)
+            {
+                i.second->setTopics(_topics);
+                LOG(INFO) << "Service::setTopicsByNode success.";
+                break;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::setTopicsByNode error:" << e.what();
+    }
+}
+
+std::shared_ptr<std::vector<std::string>> Service::getTopicsByNode(NodeID const& _nodeID)
+{
+    LOG(INFO) << "Call Service::getTopicsByNode by nodeID=" << toJS(_nodeID);
+    std::shared_ptr<std::vector<std::string>> ret = make_shared<std::vector<std::string>>();
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (i.first == _nodeID)
+            {
+                ret = i.second->topics();
+                LOG(INFO) << "Service::getTopicsByNode success.";
+                break;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::getTopicsByNode error:" << e.what();
+    }
+
+    return ret;
 }
 
 }  // namespace p2p

@@ -57,6 +57,10 @@ public:
     virtual void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) = 0;
 
     virtual void send(std::shared_ptr<bytes> _msg) = 0;
+
+    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
+
+    virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
 };
 
 }  // namespace p2p

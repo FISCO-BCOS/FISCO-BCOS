@@ -51,6 +51,11 @@ public:
 
     virtual void registerHandlerByTopic(
         std::string const& topic, CallbackFuncWithSession handler) = 0;
+
+    virtual void setTopicsByNode(
+        NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) = 0;
+
+    virtual std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) = 0;
 };
 
 }  // namespace p2p

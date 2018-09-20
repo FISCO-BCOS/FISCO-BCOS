@@ -81,6 +81,13 @@ public:
 
     void send(std::shared_ptr<bytes> _msg) override;
 
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    {
+        m_topics = _topics;
+    }
+
+    std::shared_ptr<std::vector<std::string>> topics() const override { return m_topics; }
+
 private:
     struct Header
     {
@@ -148,6 +155,9 @@ private:
     boost::asio::io_service::strand* m_strand;
 
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
+
+    std::shared_ptr<std::vector<std::string>> m_topics;  ///< Topic being concerned by this
+                                                         ///< session/node.
 };
 
 }  // namespace p2p

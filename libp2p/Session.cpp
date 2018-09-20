@@ -49,6 +49,8 @@ Session::Session(Host* _server, std::shared_ptr<SocketFace> const& _s,
 
 
     m_strand = _server->strand();
+
+    m_topics = std::make_shared<std::vector<std::string> >();
 }
 
 Session::~Session()

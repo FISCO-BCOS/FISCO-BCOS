@@ -70,6 +70,11 @@ public:
 
     void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
 
+    void setTopicsByNode(
+        NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) override;
+
+    std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
+
 private:
     void onTimeout(const boost::system::error_code& error, uint32_t seq);
 

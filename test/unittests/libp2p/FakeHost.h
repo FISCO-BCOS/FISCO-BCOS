@@ -58,6 +58,11 @@ public:
     std::chrono::steady_clock::time_point lastReceived() const { return m_lastReceived; }
     void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) {}
     void send(std::shared_ptr<bytes> _msg) {}
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) {}
+    std::shared_ptr<std::vector<std::string>> topics() const
+    {
+        return make_shared<std::vector<std::string>>();
+    }
 
 public:
     bool m_start = false;
@@ -217,7 +222,7 @@ public:
             boost::asio::ssl::context::no_sslv3 | boost::asio::ssl::context::no_tlsv1);
         m_sslContext.set_verify_depth(3);
         m_sslContext.set_verify_mode(ba::ssl::verify_peer);
-        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket> >(_ioService, m_sslContext);
+        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(_ioService, m_sslContext);
     }
 
     NodeIPEndpoint fakeEndPoint(std::string const& addr, uint16_t port)
@@ -242,7 +247,7 @@ public:
     bool m_close;
     NodeIPEndpoint m_nodeIPEndpoint;
     std::shared_ptr<bi::tcp::endpoint> m_remote;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket> > m_sslSocket;
+    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
     ba::ssl::context m_sslContext;
 };
 
