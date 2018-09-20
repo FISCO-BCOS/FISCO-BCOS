@@ -28,8 +28,6 @@ ParseCert::ParseCert(ba::ssl::verify_context& ctx)
     X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
     if (cert)
         ParseInfo(cert, m_isExpire, m_subjectName, m_serialNumber, m_certType);
-    else
-        X509_free(cert);
 }
 
 /// get interfaces
