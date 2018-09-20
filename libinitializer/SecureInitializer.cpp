@@ -124,7 +124,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	try {
 		_sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
 
-		std::shared_ptr<EC_KEY> ecdh(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1), [](EC_KEY *p) {
+		std::shared_ptr<EC_KEY> ecdh(EC_KEY_new_by_curve_name(NID_secp256k1), [](EC_KEY *p) {
 			EC_KEY_free(p);
 		});
 		SSL_CTX_set_tmp_ecdh(_sslContext->native_handle(), ecdh.get());

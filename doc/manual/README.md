@@ -190,26 +190,26 @@ vim nodes/node-0/config.conf
 ```
 
 ```bash
-; rpc配置 web3sdk连接用
+;rpc配置 web3sdk连接用
 [rpc]
     ;listen_ip应该设置为内网IP
-	listen_ip=0.0.0.0
-	listen_port=30301
-	; 原rpc端口
-	http_listen_port=30302
-	console_port=30303
+    listen_ip=0.0.0.0
+    listen_port=30301
+    ;原rpc端口
+    http_listen_port=30302
+    console_port=30303
 	
-; p2p配置 区块链节点间互联用
+;p2p配置 区块链节点间互联用
 [p2p]
-	listen_ip=0.0.0.0
-	listen_port=30300
-	; 配置区块链节点列表 格式为ip:端口 以node.开头
-	node.0=127.0.0.1:30300
+    listen_ip=0.0.0.0
+    listen_port=30300
+    ;配置区块链节点列表 格式为ip:端口 以node.开头
+    node.0=127.0.0.1:30300
 	
 ; PBFT共识配置 同一个共识网络内的所有节点的[pbft]分类配置必须一致
 [pbft]
-	; 配置共识节点列表 用NodeID标识 以miner.开头
-	miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
+    ; 配置共识节点列表 用NodeID标识 以miner.开头
+    miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
 	
 ; 通用配置
 [common]
