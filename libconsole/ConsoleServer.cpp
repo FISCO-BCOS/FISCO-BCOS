@@ -115,6 +115,10 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         {
             output = p2pPeers(args);
         }
+        else if (func == "p2p.update")
+        {
+            output = p2pUpdate(args);
+        }
         else if (func == "miner.list")
         {
             output = p2pMiners(args);
@@ -126,10 +130,6 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         else if (func == "miner.remove")
         {
             output = removeMiner(args);
-        }
-        else if (func == "p2p.update")
-        {
-            output = p2pUpdate(args);
         }
         else if (func == "amdb.select")
         {
@@ -373,6 +373,7 @@ std::string ConsoleServer::addMiner(const std::vector<std::string> args)
     try
     {
         std::stringstream ss;
+        printDoubleLine(ss);
         if (args.size() == 1)
         {
             std::string nodeID = args[0];
@@ -413,6 +414,7 @@ std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
     try
     {
         std::stringstream ss;
+        printDoubleLine(ss);
         if (args.size() == 1)
         {
             std::string nodeID = args[0];

@@ -10,6 +10,11 @@ namespace dev {
 
 namespace precompiled {
 
+	const unsigned TABLE_NOT_EXISTS = 0;
+	const unsigned TABLE_ALREADY_OPEN = 1;
+	const unsigned TABLENAME_ALREADY_EXISTS = 2;
+	const unsigned TABLENAME_CONFLICT = 101;
+
 #if 0
 {
     "56004b6a": "createTable(string,string,string)",
@@ -42,6 +47,7 @@ public:
 
 	Address openTable(PrecompiledContext::Ptr context, const std::string & tableName);
 private:
+	unsigned isTableCreated(PrecompiledContext::Ptr context, const std::string& tableName, const std::string &keyField, const std::string &valueFiled);
 	DBPrecompiled::Ptr getSysTable(PrecompiledContext::Ptr context);
 	dev::storage::MemoryDBFactory::Ptr _memoryDBFactory;
 	std::map<std::string, Address> _name2Table;
