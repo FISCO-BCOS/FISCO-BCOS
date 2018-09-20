@@ -23,20 +23,29 @@
 
 #pragma once
 #include "Common.h"
-#include "string"
+#include <string>
 using namespace std;
 class ParseCert
 {
 public:
+    ParseCert() : m_isExpire(true), m_certType(0) {}
+
     ParseCert(ba::ssl::verify_context& ctx);
     ~ParseCert();
     bool isExpire() const;
     string serialNumber() const;
     string subjectName() const;
+    /// set interfaces
+    void setSubjectName(std::string const& _subjectName) { m_subjectName = _subjectName; }
+    void setExpiration(bool const isExpired) { m_isExpire = isExpired; }
+    void setCertType(const int certType) { m_certType = certType; }
+    void setSerialNumber(std::string const& serialNumber) { m_serialNumber = serialNumber; }
+
     int certType() const;
+    void ParseInfo(X509* cert, bool& is_expired, std::string& subjectName,
+        std::string& serialNumber, int& certType);
 
 private:
-    void ParseInfo(ba::ssl::verify_context& ctx);
     int mypint(const char** s, int n, int min, int max, int* e);
     time_t ASN1_TIME_get(ASN1_TIME* a, int* err);
 
