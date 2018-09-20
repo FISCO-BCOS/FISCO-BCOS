@@ -353,21 +353,25 @@ void Session::onMessage(
         ResponseCallback::Ptr callback = m_p2pMsgHandler->getCallbackBySeq(message->seq());
         if (callback != NULL)
         {
-            if (callback->m_timeoutHandler)
+            if (callback->timeoutHandler)
             {
                 ///< cancel timer
-                callback->m_timeoutHandler->cancel();
+                callback->timeoutHandler->cancel();
             }
-            if (callback->m_callbackFunc)
+            if (callback->callbackFunc)
             {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
                 ///< TODO: use threadPool
-                callback->m_callbackFunc(e, message);
+                callback->callbackFunc(e, message);
+            }
+            else
+            {
+                LOG(INFO) << "Session::onMessage, callbackFunc is null.";
             }
         }
         else
         {
-            LOG(ERROR) << "Session::onMessage, callback not found by seq=" << message->seq();
+            LOG(WARNING) << "Session::onMessage, callback not found by seq=" << message->seq();
         }
     }
     else

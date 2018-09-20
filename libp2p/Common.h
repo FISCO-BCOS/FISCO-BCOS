@@ -207,8 +207,8 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
     typedef std::shared_ptr<ResponseCallback> Ptr;
 
-    CallbackFunc m_callbackFunc;
-    std::shared_ptr<boost::asio::deadline_timer> m_timeoutHandler;
+    CallbackFunc callbackFunc;
+    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
 };
 
 struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
@@ -216,18 +216,18 @@ struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
 public:
     typedef std::shared_ptr<SessionCallback> Ptr;
 
-    SessionCallback() { m_mutex.lock(); }
+    SessionCallback() { mutex.lock(); }
 
     void onResponse(P2PException _error, Message::Ptr _message)
     {
-        m_error = _error;
-        m_response = _message;
-        m_mutex.unlock();
+        error = _error;
+        response = _message;
+        mutex.unlock();
     }
 
-    P2PException m_error;
-    Message::Ptr m_response;
-    std::mutex m_mutex;
+    P2PException error;
+    Message::Ptr response;
+    std::mutex mutex;
 };
 
 /// @returns the string form of the given disconnection reason.

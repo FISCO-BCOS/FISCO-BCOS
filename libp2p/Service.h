@@ -55,6 +55,8 @@ public:
     void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message, CallbackFunc callback,
         Options const& options) override;
 
+    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
+
     Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
     void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,

@@ -55,11 +55,11 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         message->setProtocolID(g_synchronousPackageProtocolID);
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
 
-        callback->m_mutex.lock();
-        callback->m_mutex.unlock();
+        callback->mutex.lock();
+        callback->mutex.unlock();
         LOG(INFO) << "Service::sendMessageByNodeID mutex unlock.";
 
-        P2PException error = callback->m_error;
+        P2PException error = callback->error;
         if (error.errorCode() != 0)
         {
             LOG(ERROR) << "asyncSendMessageByNodeID error:" << error.errorCode() << " "
@@ -67,9 +67,9 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
             throw error;
         }
 
-        callback->m_response->Print("Service::sendMessageByNodeID msg returned:");
+        callback->response->Print("Service::sendMessageByNodeID msg returned:");
 
-        return callback->m_response;
+        return callback->response;
     }
     catch (std::exception& e)
     {
@@ -98,7 +98,7 @@ void Service::asyncSendMessageByNodeID(
                 if (callback)
                 {
                     ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
-                    responseCallback->m_callbackFunc = callback;
+                    responseCallback->callbackFunc = callback;
                     if (options.timeout > 0)
                     {
                         std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
@@ -106,7 +106,7 @@ void Service::asyncSendMessageByNodeID(
                                 *m_ioService, boost::posix_time::milliseconds(options.timeout));
                         timeoutHandler->async_wait(boost::bind(&Service::onTimeout,
                             shared_from_this(), boost::asio::placeholders::error, seq));
-                        responseCallback->m_timeoutHandler = timeoutHandler;
+                        responseCallback->timeoutHandler = timeoutHandler;
                     }
                     m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
                 }
@@ -114,6 +114,48 @@ void Service::asyncSendMessageByNodeID(
                 message->setSeq(seq);
                 message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
                 message->Print("Service::asyncSendMessageByNodeID msg sent:");
+                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+                message->encode(*buf);
+                p->send(buf);
+                return;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "ERROR:" << e.what();
+    }
+}
+
+void Service::asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message)
+{
+    LOG(INFO) << "Call Service::asyncSendMessageByNodeID without callback to NodeID="
+              << toJS(nodeID);
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        std::unordered_map<NodeID, std::shared_ptr<SessionFace>> s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            LOG(INFO) << "Service::asyncSendMessageByNodeID without callback traversed nodeID = "
+                      << toJS(i.first);
+            if (i.first == nodeID)
+            {
+                std::shared_ptr<SessionFace> p = i.second;
+                LOG(INFO)
+                    << "Service::asyncSendMessageByNodeID without callback get session success.";
+                uint32_t seq = ++m_seq;
+
+                ///< insert a empty code callback to seq map
+                CallbackFunc callback = [](P2PException e, Message::Ptr msg) {};
+                ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
+                responseCallback->callbackFunc = callback;
+                m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
+
+                ///< update seq and length
+                message->setSeq(seq);
+                message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+                message->Print("Service::asyncSendMessageByNodeID without callback msg sent:");
                 std::shared_ptr<bytes> buf = std::make_shared<bytes>();
                 message->encode(*buf);
                 p->send(buf);
@@ -142,13 +184,13 @@ void Service::onTimeout(const boost::system::error_code& error, uint32_t seq)
             if (error == 0)
             {
                 ///< passive timeout
-                if (it->m_callbackFunc)
+                if (it->callbackFunc)
                 {
                     P2PException e(P2PExceptionType::NetworkTimeout,
                         g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
                     Message::Ptr message = make_shared<Message>();
                     message->setSeq(seq);
-                    it->m_callbackFunc(e, message);
+                    it->callbackFunc(e, message);
                 }
                 else
                 {

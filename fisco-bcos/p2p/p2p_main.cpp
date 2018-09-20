@@ -271,9 +271,43 @@ static void sendMsg(Params const& _params, std::shared_ptr<Service> _service)
             msg);
         break;
     }
+    case 2:
+    {
+        _service->registerHandlerByProtoclID(
+            2, [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
+                LOG(INFO) << "Receive message by protocolID:" << msg->protocolID()
+                          << ", packetType:" << msg->packetType() << ", content:"
+                          << std::string((const char*)msg->buffer()->data(), msg->buffer()->size());
+
+                /// send response package
+                if (msg->isRequestPacket())
+                {
+                    /// update protoclID
+                    msg->setProtocolID(msg->getResponceProtocolID());
+                    msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
+                    msg->Print("Send response package by protoclID");
+                    std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+                    msg->encode(*buf);
+                    s->send(buf);
+                }
+            });
+
+        auto msg = std::make_shared<Message>();
+        msg->setProtocolID(2);
+        msg->setPacketType(1);
+        std::shared_ptr<bytes> buffer(new bytes());
+        std::string s = "hello world!";
+        msg->setBuffer(buffer);
+        buffer->assign(s.begin(), s.end());
+        _service->asyncSendMessageByNodeID(
+            h512("46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc"
+                 "491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1"),
+            msg);
+        break;
+    }
     default:
     {
-        LOG(ERROR) << "Invalid Message Type, now type only is 0,1.";
+        LOG(ERROR) << "Invalid Message Type, now type only is 0,1,2.";
         break;
     }
     }

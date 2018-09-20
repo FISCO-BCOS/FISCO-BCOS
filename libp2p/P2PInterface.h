@@ -35,6 +35,8 @@ public:
     virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
         CallbackFunc callback, Options const& options) = 0;
 
+    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
+
     virtual Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
     virtual void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
