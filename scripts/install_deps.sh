@@ -159,7 +159,6 @@ Linux)
                 libleveldb-dev \
                 libmicrohttpd-dev \
                 libminiupnpc-dev \
-                uuid-dev \
                 libsnappy-dev	
             ;;
 
@@ -171,8 +170,7 @@ Linux)
                 leveldb-devel \
                 curl-devel \
                 libmicrohttpd-devel \
-                gmp-devel \
-                libuuid-devel
+                gmp-devel 
             ;;
 
 #------------------------------------------------------------------------------
@@ -211,7 +209,6 @@ Linux)
                 libleveldb-dev \
                 libmicrohttpd-dev \
                 libminiupnpc-dev \
-                uuid-dev \
                 libsnappy-dev \
                 $LLVM_PACKAGES
             ;;
@@ -234,8 +231,7 @@ Linux)
                 libmicrohttpd-devel \
                 gmp-devel \
                 openssl openssl-devel \
-                snappy-devel \
-                libuuid-devel
+                snappy-devel 
             ;;
 	#add Oracle Linux Server dependencies
 	Oracle*)
@@ -250,8 +246,7 @@ Linux)
                 curl-devel \
                 libmicrohttpd-devel \
                 gmp-devel \
-                openssl openssl-devel \
-                libuuid-devel
+                openssl openssl-devel 
             ;;
 
         *)
