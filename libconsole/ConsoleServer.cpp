@@ -16,11 +16,14 @@
 #include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelSession.h>
 #include <libstorage/DB.h>
-#include <uuid/uuid.h>
 #include <libethcore/ABI.h>
 #include <libdevcore/FileSystem.h>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>        
+#include <boost/range/algorithm/remove_if.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include <map>
 
 using namespace dev;
@@ -381,10 +384,10 @@ std::string ConsoleServer::addMiner(const std::vector<std::string> args)
             //   ret.from = _key.address();
             t.to = Address(0x1003);
             t.creation = false;
-            uuid_t uuid;
-            uuid_generate(uuid);
-            auto s = toHex(uuid, 2, HexPrefix::Add);
-            t.randomid = u256(toHex(uuid, 2, HexPrefix::Add));
+            static boost::uuids::random_generator uuidGenerator;
+            std::string s = to_string(uuidGenerator());
+            s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
+            t.randomid = u256("0x"+s);
             t.blockLimit = u256(_interface->number() + 100);
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("add(string)", nodeID);
@@ -421,10 +424,10 @@ std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
             TransactionSkeleton t;
             t.to = Address(0x1003);
             t.creation = false;
-            uuid_t uuid;
-            uuid_generate(uuid);
-            auto s = toHex(uuid, 2, HexPrefix::Add);
-            t.randomid = u256(toHex(uuid, 2, HexPrefix::Add));
+            static boost::uuids::random_generator uuidGenerator;
+            std::string s = to_string(uuidGenerator());
+            s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
+            t.randomid = u256("0x"+s);
             t.blockLimit = u256(_interface->number() + 100);
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("remove(string)", nodeID);
