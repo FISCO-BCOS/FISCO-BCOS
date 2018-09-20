@@ -14,7 +14,7 @@ using namespace dev;
 using namespace dev::eth;
 
 void PBFTInitializer::initConfig(const boost::property_tree::ptree &pt) {
-	int blockInterval = pt.get<int>("pbft.block_interval", 1);
+	int blockInterval = pt.get<int>("pbft.block_interval", 1000);
 	int allow_empty_block= pt.get<int>("pbft.allow_empty_block", 0);
 
 	h512s minerList;
