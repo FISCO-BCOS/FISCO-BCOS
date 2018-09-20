@@ -97,7 +97,11 @@ public:
         noteChange();
     }
     /// append a single transaction to m_transactions
-    void appendTransaction(Transaction const& _trans) {}
+    void appendTransaction(Transaction const& _trans)
+    {
+        m_transactions.push_back(_trans);
+        noteChange();
+    }
     void setBlockHeader(BlockHeader const& _blockHeader) { m_blockHeader = _blockHeader; }
 
 private:
