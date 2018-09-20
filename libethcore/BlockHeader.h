@@ -77,7 +77,6 @@ class BlockHeader
 
 public:
     static const unsigned BasicFields = 12;
-
     BlockHeader();
     /// construct block or block header according to input params
     explicit BlockHeader(
@@ -93,6 +92,7 @@ public:
 
     /// extract block header from block
     static RLP extractHeader(bytesConstRef _block);
+    static RLP extractBlock(bytesConstRef _block);
 
     /// get the hash of block header according to block data
     static h256 headerHashFromBlock(bytes const& _block) { return headerHashFromBlock(&_block); }
@@ -115,7 +115,8 @@ public:
 
     /// populate block header from parent
     void populateFromParent(BlockHeader const& parent);
-    void streamRLP(RLPStream& _s) const;
+    void encode(bytes& _header) const;
+    void decode(bytesConstRef& _header_data);
     void clear();
 
     /// block header verify
@@ -252,9 +253,9 @@ public:
     u256 const& sealer() const { return m_sealer; }                      /// field 10
     h512s const& sealerList() const { return m_sealerList; }             /// field 11
     /// ------ get interfaces related to block header END------
+    void populate(RLP const& _header);
 
 private:  /// private function fileds
-    void populate(RLP const& _header);
     /// trans all fileds of the block header into a given stream
     void streamRLPFields(RLPStream& _s) const;
     h256 hashRawRead() const

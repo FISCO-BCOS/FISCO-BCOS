@@ -25,7 +25,7 @@
 #include <libdevcore/TrieHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
-#include <libethcore/TransactionBase.h>
+#include <libethcore/Transaction.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -65,19 +65,19 @@ public:
     void constructBlock(RLPStream& block_rlp, BlockHeader const& block_header)
     {
         block_rlp.appendList(2);
-        RLPStream block_stream;
-        block_header.streamRLP(block_stream);
-        block_rlp.appendRaw(block_stream.out());
+        bytes block_bytes;
+        block_header.encode(block_bytes);
+        block_rlp.appendRaw(block_bytes);
         RLPStream txs_rlp;
         txs_rlp.appendList(3);
         KeyPair key_pair = KeyPair::create();
         for (int i = 0; i < 3; i++)
         {
             TransactionSkeleton trasaction_template;
-            TransactionBase tx(trasaction_template, key_pair.secret());
-            RLPStream tmp_stream;
-            tx.streamRLP(tmp_stream);
-            txs_rlp.appendRaw(tmp_stream.out());
+            Transaction tx(trasaction_template, key_pair.secret());
+            bytes tmp_bytes;
+            tx.encode(tmp_bytes);
+            txs_rlp.appendRaw(tmp_bytes);
         }
         block_rlp.appendRaw(txs_rlp.out());
     }
@@ -117,10 +117,10 @@ BOOST_AUTO_TEST_CASE(testBlockerHeaderGetter)
 BOOST_AUTO_TEST_CASE(testCopyStruct)
 {
     /// trans block_header_genesis to RLP
-    RLPStream block_stream;
-    block_header_genesis.streamRLP(block_stream);
-    BlockHeader block_header_copy(block_stream.out(), HeaderData);
-    BOOST_CHECK_THROW(BlockHeader(block_stream.out(), BlockData), InvalidBlockFormat);
+    bytes block_bytes;
+    block_header_genesis.encode(block_bytes);
+    BlockHeader block_header_copy(block_bytes, HeaderData);
+    BOOST_CHECK_THROW(BlockHeader(block_bytes, BlockData), InvalidBlockFormat);
     BOOST_CHECK(block_header_copy.hash() == block_header_genesis.hash());
     ///----- check details: for debug
     BOOST_CHECK(block_header_genesis.parentHash() == block_header_copy.parentHash());
@@ -181,9 +181,9 @@ BOOST_AUTO_TEST_CASE(testExtraHeaderException)
     // invalid block format because transaction invalid
     RLPStream invalid_txlist;
     invalid_txlist.appendList(2);
-    RLPStream header_rlp;
-    block_header_genesis.streamRLP(header_rlp);
-    invalid_txlist.appendRaw(header_rlp.out());
+    bytes header_bytes;
+    block_header_genesis.encode(header_bytes);
+    invalid_txlist.appendRaw(header_bytes);
     invalid_txlist.appendRaw(invalid_rlp.out());
     BOOST_CHECK_THROW(
         block_header_genesis.extractHeader(ref(invalid_txlist.out())), InvalidBlockFormat);

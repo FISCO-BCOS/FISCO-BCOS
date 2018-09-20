@@ -16,7 +16,7 @@
 */
 
 #include "SealEngine.h"
-#include "TransactionBase.h"
+#include "Transaction.h"
 
 using namespace std;
 using namespace dev;
@@ -62,7 +62,7 @@ void SealEngineFace::populateFromParent(BlockHeader& _bi, BlockHeader const& _pa
     _bi.populateFromParent(_parent);
 }
 
-void SealEngineFace::verifyTransaction(ImportRequirements::value _ir, TransactionBase const& _t,
+void SealEngineFace::verifyTransaction(ImportRequirements::value _ir, Transaction const& _t,
     BlockHeader const& _header, u256 const& _gasUsed) const
 {
     eth::EVMSchedule const& schedule = evmSchedule(_header.number());

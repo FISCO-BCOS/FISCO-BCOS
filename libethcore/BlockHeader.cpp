@@ -127,18 +127,20 @@ h256 BlockHeader::hash() const
     Guard l(m_hashLock);
     if (m_hash == h256())
     {
-        RLPStream s;
-        streamRLP(s);
-        m_hash = sha3(s.out());
+        bytes header;
+        encode(header);
+        m_hash = sha3(header);
     }
     return m_hash;
 }
 
-void BlockHeader::streamRLP(RLPStream& _s) const
+void BlockHeader::encode(bytes& _header) const
 {
+    RLPStream _s;
     unsigned basicFieldsCnt = BlockHeader::BasicFields;
     _s.appendList(basicFieldsCnt);
     BlockHeader::streamRLPFields(_s);
+    _s.swapOut(_header);
 }
 void BlockHeader::streamRLPFields(RLPStream& _s) const
 {
@@ -150,6 +152,13 @@ void BlockHeader::streamRLPFields(RLPStream& _s) const
     _s << m_sealer;
     _s.appendVector(m_sealerList);
 }
+
+void BlockHeader::decode(bytesConstRef& _header_data)
+{
+    RLP header_rlp = RLP(_header_data);
+    populate(header_rlp);
+}
+
 /// calculate hash of the block header according to given block
 h256 BlockHeader::headerHashFromBlock(bytesConstRef _block)
 {
@@ -165,22 +174,28 @@ h256 BlockHeader::headerHashFromBlock(bytesConstRef _block)
  */
 RLP BlockHeader::extractHeader(bytesConstRef _block)
 {
+    RLP root = extractBlock(_block);
+    return root[0];
+}
+
+RLP BlockHeader::extractBlock(bytesConstRef _block)
+{
     RLP root(_block);
     if (!root.isList())
         BOOST_THROW_EXCEPTION(InvalidBlockFormat() << errinfo_comment("Block must be a list")
                                                    << BadFieldError(0, _block.toString()));
-    RLP header = root[0];
     // check block header(must be list)
-    if (!header.isList())
+    if (!root[0].isList())
         BOOST_THROW_EXCEPTION(InvalidBlockFormat() << errinfo_comment("Block header must be a list")
-                                                   << BadFieldError(0, header.data().toString()));
+                                                   << BadFieldError(0, root[0].data().toString()));
     // check the transactions(must be list)
     if (!root[1].isList())
         BOOST_THROW_EXCEPTION(InvalidBlockFormat()
                               << errinfo_comment("Block transactions must be a list")
                               << BadFieldError(1, root[1].data().toString()));
-    return header;
+    return root;
 }
+
 
 /**
  * @brief : create BlockHeader from given rlp

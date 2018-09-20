@@ -60,8 +60,9 @@ BOOST_AUTO_TEST_CASE(testBadBlock)
     blockHeader.setSealerList(sealer_list);
 
     RLPStream blockHeaderStream;
-    blockHeader.streamRLP(blockHeaderStream);
-    badBlock(blockHeaderStream.out(), "This blockheader no bad.");
+    bytes blockHeaderBytes;
+    blockHeader.encode(blockHeaderBytes);
+    badBlock(blockHeaderBytes, "This blockheader no bad.");
 }
 
 BOOST_AUTO_TEST_CASE(testToAddress)

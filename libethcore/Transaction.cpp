@@ -14,12 +14,12 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file TransactionBase.cpp
+/** @file Transaction.cpp
  * @author Gav Wood <i@gavwood.com>, chaychen
  * @date 2014
  */
 
-#include "TransactionBase.h"
+#include "Transaction.h"
 #include "EVMSchedule.h"
 #include <libdevcore/easylog.h>
 #include <libdevcore/vector_ref.h>
@@ -30,7 +30,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::eth;
 
-TransactionBase::TransactionBase(TransactionSkeleton const& _ts, Secret const& _s)
+Transaction::Transaction(TransactionSkeleton const& _ts, Secret const& _s)
   : m_type(_ts.creation ? ContractCreation : MessageCall),
     m_nonce(_ts.nonce),
     m_value(_ts.value),
@@ -45,9 +45,19 @@ TransactionBase::TransactionBase(TransactionSkeleton const& _ts, Secret const& _
         sign(_s);
 }
 
-TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _checkSig)
+Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 {
-    RLP const rlp(_rlpData);
+    decode(_rlpData, _checkSig);
+}
+
+void Transaction::decode(bytesConstRef tx_bytes, CheckTransaction _checkSig)
+{
+    RLP const rlp(tx_bytes);
+    decode(rlp, _checkSig);
+}
+
+void Transaction::decode(RLP const& rlp, CheckTransaction _checkSig)
+{
     try
     {
         if (!rlp.isList())
@@ -83,10 +93,6 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
 
         if (_checkSig == CheckTransaction::Everything)
             m_sender = sender();
-
-        /*if (rlp.itemCount() > 10)
-            BOOST_THROW_EXCEPTION(InvalidTransactionFormat()
-                                  << errinfo_comment("too many fields in the transaction RLP"));*/
     }
     catch (Exception& _e)
     {
@@ -96,7 +102,7 @@ TransactionBase::TransactionBase(bytesConstRef _rlpData, CheckTransaction _check
     }
 }
 
-Address const& TransactionBase::safeSender() const noexcept
+Address const& Transaction::safeSender() const noexcept
 {
     try
     {
@@ -108,7 +114,7 @@ Address const& TransactionBase::safeSender() const noexcept
     }
 }
 
-Address const& TransactionBase::sender() const
+Address const& Transaction::sender() const
 {
     if (!m_sender)
     {
@@ -123,7 +129,7 @@ Address const& TransactionBase::sender() const
     return m_sender;
 }
 
-SignatureStruct const& TransactionBase::signature() const
+SignatureStruct const& Transaction::signature() const
 {
     if (!m_vrs)
         BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
@@ -131,7 +137,7 @@ SignatureStruct const& TransactionBase::signature() const
     return *m_vrs;
 }
 
-void TransactionBase::sign(Secret const& _priv)
+void Transaction::sign(Secret const& _priv)
 {
     auto sig = dev::sign(_priv, sha3(WithoutSignature));
     SignatureStruct sigStruct = *(SignatureStruct const*)&sig;
@@ -139,8 +145,10 @@ void TransactionBase::sign(Secret const& _priv)
         m_vrs = sigStruct;
 }
 
-void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig) const
+/// void Transaction::streamRLP(RLPStream& _s, IncludeSignature _sig) const
+void Transaction::encode(bytes& _trans, IncludeSignature _sig) const
 {
+    RLPStream _s;
     if (m_type == NullTransaction)
         return;
 
@@ -163,12 +171,13 @@ void TransactionBase::streamRLP(RLPStream& _s, IncludeSignature _sig) const
     }
 
     _s << m_blockLimit;
+    _s.swapOut(_trans);
 }
 
 static const u256 c_secp256k1n(
     "115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
-void TransactionBase::checkLowS() const
+void Transaction::checkLowS() const
 {
     if (!m_vrs)
         BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
@@ -177,7 +186,7 @@ void TransactionBase::checkLowS() const
         BOOST_THROW_EXCEPTION(InvalidSignature());
 }
 
-int64_t TransactionBase::baseGasRequired(
+int64_t Transaction::baseGasRequired(
     bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es)
 {
     int64_t g = _contractCreation ? _es.txCreateGas : _es.txGas;
@@ -190,15 +199,16 @@ int64_t TransactionBase::baseGasRequired(
     return g;
 }
 
-h256 TransactionBase::sha3(IncludeSignature _sig) const
+h256 Transaction::sha3(IncludeSignature _sig) const
 {
     if (_sig == WithSignature && m_hashWith)
         return m_hashWith;
 
-    RLPStream s;
-    streamRLP(s, _sig);
+    bytes s;
+    /// streamRLP(s, _sig);
+    encode(s, _sig);
 
-    auto ret = dev::sha3(s.out());
+    auto ret = dev::sha3(s);
     if (_sig == WithSignature)
         m_hashWith = ret;
     return ret;
