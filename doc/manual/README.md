@@ -824,7 +824,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 |p2p.listen_port|30300|p2p端口|
 |p2p.idle_connections|100|p2p最大连接数 默认为100|
 |p2p.reconnect_interval|60|p2p重连间隔 单位秒 默认为60s|
-|p2p.node.0|127.0.0.1：30300|配置区块链节点列表 格式为ip:端口 以node.开头|
+|p2p.node.0|127.0.0.1:30300|配置区块链节点列表 格式为ip:端口 以node.开头|
 
 ### 8.5 log.conf说明
 

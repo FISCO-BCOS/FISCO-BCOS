@@ -88,7 +88,7 @@ fi
 openssl ecparam -out "$output_dir/node.param" -name secp256k1
 
 #准备证书配置
-if [ -e ${CertConfig} ];then
+if [ ! -e ${CertConfig} ];then
 CertConfig="$output_dir/cert.cnf"
 cat  << EOF > "$CertConfig"
 	[ca]
