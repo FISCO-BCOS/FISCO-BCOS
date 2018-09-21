@@ -76,7 +76,12 @@ BOOST_AUTO_TEST_CASE(testConstructorsAndOperators)
 }
 
 /// test Exceptions
-BOOST_AUTO_TEST_CASE(testExceptionCases) {}
+BOOST_AUTO_TEST_CASE(testExceptionCases)
+{
+    /// test constructor
+    FakeBlock fake_block;
+    fake_block.CheckInvalidBlockData(1);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 

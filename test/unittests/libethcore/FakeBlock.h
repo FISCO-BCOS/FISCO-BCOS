@@ -42,8 +42,8 @@ public:
     FakeBlock(size_t size)
     {
         FakeBlockHeader();
-        fakeSigList(size);
-        fakeTransactions(size);
+        FakeSigList(size);
+        FakeTransaction(size);
         m_block.setSigList(m_sigList);
         m_block.setTransactions(m_transaction);
         BOOST_CHECK(m_transaction == m_block.transactions());
@@ -58,6 +58,52 @@ public:
         m_blockHeader.encode(m_blockHeaderData);
         m_block.encode(m_blockData, ref(m_blockHeaderData));
         m_block.decode(ref(m_blockData));
+    }
+
+    /// fake invalid block data
+    bytes FakeInvalidBlockData(size_t index, size_t size)
+    {
+        bytes result;
+        RLPStream s;
+        s.appendList(4);
+        FakeBlockHeader();
+        FakeSigList(size);
+        FakeTransaction(size);
+        unsigned fake_value = 10;
+        // s << fake_value << fake_value << fake_value << fake_value;
+        if (index == 1)
+            s.append(fake_value);
+        else
+            s.appendRaw(m_blockHeaderData);
+        if (index == 2)
+            s.append(fake_value);
+        else
+            s.appendRaw(m_transactionData);
+        s.append(m_blockHeader.hash());
+        s.appendVector(m_sigList);
+        s.swapOut(result);
+        return result;
+    }
+
+    /// check exception conditions related about decode and encode
+    void CheckInvalidBlockData(size_t size)
+    {
+        FakeBlockHeader();
+        BOOST_CHECK_THROW(m_block.decode(ref(m_blockHeaderData)), InvalidBlockFormat);
+        BOOST_REQUIRE_NO_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)));
+        m_blockHeader.setGasUsed(u256(3000000000));
+        m_blockHeader.encode(m_blockHeaderData);
+        BOOST_CHECK_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)), TooMuchGasUsed);
+        m_blockHeaderData[0] += 1;
+        /// construct block header failed, invalid rlp
+        BOOST_CHECK_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)), std::exception);
+        m_blockHeaderData[0] -= 1;
+        /// construct invalid block format
+        for (size_t i = 1; i < 3; i++)
+        {
+            bytes result_bytes = FakeInvalidBlockData(i, size);
+            BOOST_CHECK_THROW(m_block.decode(ref(result_bytes)), InvalidBlockFormat);
+        }
     }
 
     /// fake block header
@@ -82,7 +128,7 @@ public:
     }
 
     /// fake sig list
-    void fakeSigList(size_t size)
+    void FakeSigList(size_t size)
     {
         /// set sig list
         Signature sig;
@@ -97,15 +143,23 @@ public:
     }
 
     /// fake transactions
-    void fakeTransactions(size_t size)
+    void FakeTransaction(size_t size)
     {
         fakeSingleTransaction();
+        RLPStream txs;
+        txs.appendList(size);
+        m_transaction.resize(size);
         for (size_t i = 0; i < size; i++)
         {
-            m_transaction.push_back(m_singleTransaction);
+            m_transaction[i] = m_singleTransaction;
+            bytes trans_data;
+            m_transaction[i].encode(trans_data);
+            txs.appendRaw(trans_data);
         }
+        txs.swapOut(m_transactionData);
     }
 
+    /// fake single transaction
     void fakeSingleTransaction()
     {
         bytes rlpBytes = fromHex(
@@ -135,6 +189,7 @@ public:
     std::vector<std::pair<u256, Signature>> m_sigList;
     bytes m_blockHeaderData;
     bytes m_blockData;
+    bytes m_transactionData;
 };
 
 }  // namespace test
