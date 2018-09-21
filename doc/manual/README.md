@@ -71,6 +71,7 @@ echo 127.0.0.1 > IPList.txt
 # 生成节点配置文件
 bash build_chain.sh -f IPList.txt -n 4 -o nodes
 ```
+> 脚本执行报错参考[build_chain.sh执行报错](#862-build_chainsh执行报错)
 
 2. 启动节点
 
@@ -860,4 +861,10 @@ xxxxx.sh: 行x： $'\r':未找到命令
 ``` shell
 sudo yum -y install dos2unix
 dos2unix xxxxx.sh
+```
+
+#### 8.6.2 `build_chain.sh`执行报错
+```bash
+# 报此错误是因为java环境问题，请使用OpenJDK-8以上版本
+EC KeyFactory not available
 ```
