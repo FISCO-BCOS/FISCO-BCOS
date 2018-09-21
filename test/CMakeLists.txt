@@ -84,6 +84,8 @@ target_link_libraries(test-fisco-bcos evm)
 target_link_libraries(test-fisco-bcos evmc)
 target_link_libraries(test-fisco-bcos interpreter)
 target_link_libraries(test-fisco-bcos p2p)
+target_link_libraries(test-fisco-bcos legacystate)
+target_link_libraries(test-fisco-bcos executivecontext)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 
