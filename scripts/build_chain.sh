@@ -1,34 +1,41 @@
 #!/bin/bash
 
+set -e
+
 ca_file= #CA私钥文件
 node_num=1 #节点数量
 ip_file=
 output_dir=./output/ #输出目录
 port_start=30300 #起始端口
+CLIENTCERT_PWD=123456
+KEYSTORE_PWD=123456
 statedb_type=leveldb #存储
 eth_path=
 make_tar=
+Download=false
+Download_Link=https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev-1.5/bin/fisco-bcos
 
 help() {
 	echo $1
-	echo
 	cat << EOF
 Usage:
-	-f <IP list file> [Required]
-	-e <FISCO-BCOS program path> [Required]
-	-n <Nodes per IP> Default 1
-	-a <CA Key>       Default Generate a new CA
-	-o <Output Dir>   Default ./output/
-	-p <Start Port>   Default 30300
-	-s <StateDB type> Default leveldb. if set -s, use amop
-	-z Generate tar packet
+	-f <IP list file>           [Required]
+	-e <FISCO-BCOS binary path> Default download from github
+	-n <Nodes per IP>           Default 1
+	-a <CA Key>                 Default Generate a new CA
+	-o <Output Dir>             Default ./output/
+	-p <Start Port>             Default 30300
+	-c <ClientCert Passwd>      Default 123456
+	-k <Keystore Passwd>        Default 123456
+	-s <StateDB type>           Default leveldb. if set -s, use amop
+	-z Generate tar packet      Default no
 	-h Help
 EOF
 
-exit
+exit 0
 }
 
-while getopts "a:n:o:p:e:f:szh" option;do
+while getopts "a:n:o:p:e:c:k:f:szh" option;do
 	case $option in
 	a) ca_file=$OPTARG;;
 	n) node_num=$OPTARG;;
@@ -36,6 +43,8 @@ while getopts "a:n:o:p:e:f:szh" option;do
 	o) output_dir=$OPTARG;;
 	p) port_start=$OPTARG;;
 	e) eth_path=$OPTARG;;
+	c) CLIENTCERT_PWD=$OPTARG;;
+	k) KEYSTORE_PWD=$OPTARG;;
 	s) statedb_type=amop;;
 	z) make_tar="yes";;
 	h) help;;
@@ -43,7 +52,10 @@ while getopts "a:n:o:p:e:f:szh" option;do
 done
 
 [ -z $ip_file ] && help 'ERROR: Please specify the IP list file.'
-[ -z $eth_path ] && help 'ERROR: Please specify the fisco-bcos path.'
+if [ -z ${eth_path} ];then
+    eth_path=${output_dir}/fisco-bcos
+	Download=true
+fi
 
 echo "FISCO-BCOS Path: $eth_path"
 echo "IP List File:    $ip_file"
@@ -54,8 +66,14 @@ echo "Start Port:      $port_start"
 
 [ -d "$output_dir" ] || mkdir -p "$output_dir"
 
+if [ "${Download}" = "true" ];then
+	echo "Downloading fisco-bcos binary..." 
+	curl -o ${eth_path} ${Download_Link}
+fi
+
 #准备CA密钥
 if [ ! -e "$ca_file" ]; then
+	echo "Generting CA key..."
 	openssl ecparam -out $output_dir/ca.param -name secp256k1 #准备密钥参数
 	openssl genpkey -paramfile $output_dir/ca.param -out $output_dir/ca.key #生成secp256k1算法的CA密钥
 	openssl req -new -x509 -days 3650 -key $output_dir/ca.key -out $output_dir/ca.crt -batch #生成CA证书, 此处需要输入一些CA信息, 可按需要输入, 或回车跳过
@@ -68,7 +86,7 @@ fi
 openssl ecparam -out "$output_dir/node.param" -name secp256k1
 
 #准备证书配置
-cat  << EOF > "$output_dir/cerf.cnf"
+cat  << EOF > "$output_dir/cert.cnf"
 [ca]
 default_ca=default_ca
 [default_ca]
@@ -95,22 +113,24 @@ basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 EOF
 
-echo "Generating node key certificate..."
+echo "Generating node key and certificate..."
 nodeid_list=""
 ip_list=""
 #生成每个节点的密钥和ip列表
 index=0
 while read line;do
 	for ((i=0;i<node_num;++i));do
-		node_dir="$output_dir/node_${line}_${index}/"
-		mkdir -p "$node_dir/data"
+		node_dir="$output_dir/node_${line}_${index}"
+		mkdir -p $node_dir/data/
+		mkdir -p $node_dir/sdk/
 
 		openssl genpkey -paramfile "$output_dir/node.param" -out "$node_dir/data/node.key"
-		openssl req -new -key "$node_dir/data/node.key" -config "$output_dir/cerf.cnf" -out "$node_dir/data/node.csr" -batch
-		openssl x509 -req -in "$node_dir/data/node.csr" -CAkey "$ca_file" -CA "$output_dir/ca.crt" -out "$node_dir/data/node.crt" -CAcreateserial -extensions v3_req -extfile "$output_dir/cerf.cnf" &> /dev/null
+		openssl req -new -key "$node_dir/data/node.key" -config "$output_dir/cert.cnf" -out "$node_dir/data/node.csr" -batch
+		openssl x509 -req -in "$node_dir/data/node.csr" -CAkey "$ca_file" -CA "$output_dir/ca.crt" -out "$node_dir/data/node.crt" -CAcreateserial -extensions v3_req -extfile "$output_dir/cert.cnf" &> /dev/null
 
-		#openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/keystore.p12"
-		#keytool -importkeystore -destkeystore "$node_dir/client.keystore" -srckeystore "$node_dir/keystore.p12" -srcstoretype pkcs12 -alias client
+		echo ${CLIENTCERT_PWD} > $node_dir/sdk/pwd.conf
+		openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/data/keystore.p12" -password file:$node_dir/sdk/pwd.conf
+		keytool -importkeystore -destkeystore "$node_dir/sdk/client.keystore" -srckeystore "$node_dir/data/keystore.p12" -srcstoretype pkcs12 -alias client -srcstorepass ${CLIENTCERT_PWD} -deststorepass ${KEYSTORE_PWD}
 
 		nodeid=$(openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
 		nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
@@ -230,6 +250,7 @@ EOF
 		chmod +x "$node_dir/start.sh"
 		chmod +x "$node_dir/stop.sh"
 		cp "$output_dir/ca.crt" "$node_dir/data/"
+		cp "$output_dir/ca.crt" "$node_dir/sdk/"
 		cp "$eth_path" "$node_dir/fisco-bcos"
 		echo "cd \${PPath}/node_${line}_${index} && ./start.sh" >> "$output_dir/start_all.sh"
 		((++index))
