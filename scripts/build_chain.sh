@@ -88,13 +88,13 @@ fi
 openssl ecparam -out "$output_dir/node.param" -name secp256k1
 
 #准备证书配置
-if [ ! -e ${CertConfig} ];then
+if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
 CertConfig="$output_dir/cert.cnf"
 cat  << EOF > "$CertConfig"
 	[ca]
 	default_ca=default_ca
 	[default_ca]
-	default_days = 365
+	default_days = 3650
 	default_md = sha256
 	[req]
 	distinguished_name = req_distinguished_name
