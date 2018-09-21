@@ -52,10 +52,9 @@ public:
 
     Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message, CallbackFunc callback,
-        Options const& options) override;
-
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
+    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+        Options const& options = Options()) override;
 
     Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
@@ -76,7 +75,8 @@ public:
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
 
 private:
-    void onTimeout(const boost::system::error_code& error, uint32_t seq);
+    void onTimeout(
+        const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);
 
     std::shared_ptr<Host> m_host;
     boost::asio::io_service* m_ioService;

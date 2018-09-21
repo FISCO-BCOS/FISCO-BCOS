@@ -112,11 +112,12 @@ enum P2PExceptionType
     Success = 0,
     ProtocolError,
     NetworkTimeout,
+    Disconnect,
     P2PExceptionTypeCnt
 };
 
 static std::string g_P2PExceptionMsg[P2PExceptionTypeCnt] = {
-    "Success", "ProtocolError", "NetworkTimeout"};
+    "Success", "ProtocolError", "NetworkTimeout", "Disconnect"};
 
 enum PacketDecodeStatus
 {

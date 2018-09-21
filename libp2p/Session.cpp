@@ -50,7 +50,8 @@ Session::Session(Host* _server, std::shared_ptr<SocketFace> const& _s,
 
     m_strand = _server->strand();
 
-    m_topics = std::make_shared<std::vector<std::string> >();
+    m_topics = std::make_shared<std::vector<std::string>>();
+    m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
 }
 
 Session::~Session()
@@ -203,6 +204,25 @@ void Session::drop(DisconnectReason _reason)
         return;
     m_dropped = true;
 
+    LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
+    for (auto it : *m_seq2Callback)
+    {
+        if (it.second->timeoutHandler)
+        {
+            ///< cancel timer
+            it.second->timeoutHandler->cancel();
+        }
+        if (it.second->callbackFunc)
+        {
+            LOG(INFO) << "Session::drop, call callbackFunc by seq=" << it.first;
+            ///< TODO: use threadPool
+            P2PException e(
+                P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
+            it.second->callbackFunc(e, Message::Ptr());
+            eraseCallbackBySeq(it.first);
+        }
+    }
+
     bi::tcp::socket& socket = m_socket->ref();
     if (m_socket->isConnected())
         try
@@ -352,7 +372,7 @@ void Session::onMessage(
     else if (protocolID != 0)
     {
         ///< response package, get callback by seq
-        ResponseCallback::Ptr callback = m_p2pMsgHandler->getCallbackBySeq(message->seq());
+        ResponseCallback::Ptr callback = getCallbackBySeq(message->seq());
         if (callback != NULL)
         {
             if (callback->timeoutHandler)
@@ -379,5 +399,50 @@ void Session::onMessage(
     else
     {
         LOG(ERROR) << "Session::onMessage, protocolID=0 Error!";
+    }
+}
+
+bool Session::addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback)
+{
+    RecursiveGuard l(x_seq2Callback);
+    if (m_seq2Callback->find(seq) == m_seq2Callback->end())
+    {
+        m_seq2Callback->insert(std::make_pair(seq, callback));
+        return true;
+    }
+    else
+    {
+        LOG(ERROR) << "Handler repetition! SeqID = " << seq;
+        return false;
+    }
+}
+
+ResponseCallback::Ptr Session::getCallbackBySeq(uint32_t seq)
+{
+    RecursiveGuard l(x_seq2Callback);
+    auto it = m_seq2Callback->find(seq);
+    if (it != m_seq2Callback->end())
+    {
+        return it->second;
+    }
+    else
+    {
+        LOG(ERROR) << "Handler not found! SeqID = " << seq;
+        return NULL;
+    }
+}
+
+bool Session::eraseCallbackBySeq(uint32_t seq)
+{
+    RecursiveGuard l(x_seq2Callback);
+    if (m_seq2Callback->find(seq) != m_seq2Callback->end())
+    {
+        m_seq2Callback->erase(seq);
+        return true;
+    }
+    else
+    {
+        LOG(ERROR) << "Handler not found! SeqID = " << seq;
+        return false;
     }
 }

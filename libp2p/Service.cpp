@@ -105,10 +105,10 @@ void Service::asyncSendMessageByNodeID(
                             std::make_shared<boost::asio::deadline_timer>(
                                 *m_ioService, boost::posix_time::milliseconds(options.timeout));
                         timeoutHandler->async_wait(boost::bind(&Service::onTimeout,
-                            shared_from_this(), boost::asio::placeholders::error, seq));
+                            shared_from_this(), boost::asio::placeholders::error, seq, p));
                         responseCallback->timeoutHandler = timeoutHandler;
                     }
-                    m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
+                    p->addSeq2Callback(seq, responseCallback);
                 }
                 ///< update seq and length
                 message->setSeq(seq);
@@ -127,49 +127,8 @@ void Service::asyncSendMessageByNodeID(
     }
 }
 
-void Service::asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message)
-{
-    LOG(INFO) << "Call Service::asyncSendMessageByNodeID without callback to NodeID="
-              << toJS(nodeID);
-    try
-    {
-        RecursiveGuard l(m_host->mutexSessions());
-        std::unordered_map<NodeID, std::shared_ptr<SessionFace>> s = m_host->sessions();
-        for (auto const& i : s)
-        {
-            LOG(INFO) << "Service::asyncSendMessageByNodeID without callback traversed nodeID = "
-                      << toJS(i.first);
-            if (i.first == nodeID)
-            {
-                std::shared_ptr<SessionFace> p = i.second;
-                LOG(INFO)
-                    << "Service::asyncSendMessageByNodeID without callback get session success.";
-                uint32_t seq = ++m_seq;
-
-                ///< insert a empty code callback to seq map
-                CallbackFunc callback = [](P2PException e, Message::Ptr msg) {};
-                ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
-                responseCallback->callbackFunc = callback;
-                m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
-
-                ///< update seq and length
-                message->setSeq(seq);
-                message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
-                message->Print("Service::asyncSendMessageByNodeID without callback msg sent:");
-                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
-                message->encode(*buf);
-                p->send(buf);
-                return;
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        LOG(ERROR) << "ERROR:" << e.what();
-    }
-}
-
-void Service::onTimeout(const boost::system::error_code& error, uint32_t seq)
+void Service::onTimeout(
+    const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p)
 {
     ///< This function is called by the timer active cancellation or passive timeout.
     ///< Active cancellation or passive timeout can be distinguished by error parameter.
@@ -178,7 +137,7 @@ void Service::onTimeout(const boost::system::error_code& error, uint32_t seq)
 
     try
     {
-        auto it = m_p2pMsgHandler->getCallbackBySeq(seq);
+        auto it = p->getCallbackBySeq(seq);
         if (it != NULL)
         {
             if (error == 0)
@@ -199,7 +158,7 @@ void Service::onTimeout(const boost::system::error_code& error, uint32_t seq)
             }
 
             ///< Both active cancellation and passive timeout need to delete callback.
-            m_p2pMsgHandler->eraseCallbackBySeq(seq);
+            p->eraseCallbackBySeq(seq);
         }
         else
         {

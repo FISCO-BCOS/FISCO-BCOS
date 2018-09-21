@@ -63,6 +63,9 @@ public:
     {
         return make_shared<std::vector<std::string>>();
     }
+    bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) { return true; };
+    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) { return make_shared<ResponseCallback>(); }
+    bool eraseCallbackBySeq(uint32_t seq) { return true; };
 
 public:
     bool m_start = false;
