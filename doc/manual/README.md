@@ -121,7 +121,7 @@ bash ./scripts/install_deps.sh
 mkdir build && cd build
 # [Centos] 注意命令末尾的..
 cmake3  ..  
-# [Ubuntu] 
+# [Ubuntu]
 cmake  ..  
 # 编译 多核可尝试make -j$(nproc)
 make
