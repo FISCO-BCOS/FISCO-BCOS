@@ -73,17 +73,7 @@ Block& Block::operator=(Block const& _block)
 void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>>& sig_list)
 {
     /// verify blockheader
-    try
-    {
-        m_blockHeader.verify(CheckEverything);
-    }
-    catch (std::exception& err)
-    {
-        LOG(ERROR) << "Invalid BlockHeader when callback encode of Block, error message:"
-                   << err.what();
-        BOOST_THROW_EXCEPTION(InvalidEncodeBlockHeader() << errinfo_comment(
-                                  "Invalid BlockHeader when callback encode of Block"));
-    }
+    m_blockHeader.verify(CheckEverything);
     /// get bytes of BlockHeader
     bytes header_bytes;
     m_blockHeader.encode(header_bytes);
@@ -101,19 +91,9 @@ void Block::encode(
     bytes& _out, bytesConstRef _header, std::vector<std::pair<u256, Signature>>& sig_list)
 {
     /// check validition of block header before encode
-    BlockHeader tmpBlockHeader;
-    try
-    {
-        tmpBlockHeader = BlockHeader(_header, HeaderData);
-        tmpBlockHeader.verify(CheckEverything);
-    }
-    catch (std::exception& err)
-    {
-        LOG(ERROR) << "Invalid BlockHeader when callback encode of Block, error message:"
-                   << err.what();
-        BOOST_THROW_EXCEPTION(InvalidEncodeBlockHeader() << errinfo_comment(
-                                  "Invalid BlockHeader when callback encode of Block"));
-    }
+    /// _header data validition has already been checked in "populate of BlockHeader"
+    BlockHeader tmpBlockHeader = BlockHeader(_header, HeaderData);
+    tmpBlockHeader.verify(CheckEverything);
     encode(_out, _header, tmpBlockHeader.hash(), sig_list);
 }
 
@@ -128,9 +108,8 @@ void Block::encode(
 void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
     std::vector<std::pair<u256, Signature>>& sig_list)
 {
-    if ()
-        /// refresh transaction list cache
-        bytes txsCache = encodeTransactions();
+    /// refresh transaction list cache
+    bytes txsCache = encodeTransactions();
     /// get block RLPStream
     RLPStream block_stream;
     block_stream.appendList(4);
