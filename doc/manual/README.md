@@ -19,8 +19,8 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 - [前言](#前言)
 - [第一章 FISCO BCOS快速部署](#第一章-fisco-bcos快速部署)
-- [第二章 准备相关证书](#第二章-准备相关证书)
-- [第三章 部署单节点区块链网络](#第三章-部署单节点区块链网络)
+- [第二章 准备相关证书](#第二章-准备fisco-bcos软件)
+- [第三章 部署单节点区块链网络](#第三章-手工部署单节点区块链网络)
 - [第四章 使用控制台](#第四章-使用控制台)
 - [第五章 部署合约、调用合约](#第五章-部署合约调用合约)
 - [第六章 多记账节点组网](#第六章-多记账节点组网)
@@ -42,9 +42,55 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 | 操作系统 |        | CentOS （7.2  64位）或Ubuntu（16.04  64位） |
 | JAVA     |        | Java(TM) 1.8 && JDK 1.8 |
 
-### 1.2 编译源码
+### 1.2 使用快速构建脚本
 
-#### 1.2.1 获取源码
+> 第二、三章是手动部署单节点网络的操作步骤，如果不想**手工操作**，可以尝试使用`FISCO-BCOS/scrtips/build_chain.sh`脚本，根据脚本提示设置参数，快速生成多节点配置文件。
+
+1. 生成节点配置文件
+```bash
+# 假设当前在FISCO-BCOS/build目录下
+cd ../scripts
+# 准备IPList.txt文件
+echo 127.0.0.1 > IPList.txt
+# build_chain.sh 
+# Usage:
+# 	-f <IP list file>           [Required]
+# 	-e <FISCO-BCOS binary path> Default download from github
+# 	-n <Nodes per IP>           Default 1
+# 	-a <CA Key>                 Default Generate a new CA
+# 	-o <Output Dir>             Default ./output/
+# 	-p <Start Port>             Default 30300
+# 	-c <ClientCert Passwd>      Default 123456
+# 	-k <Keystore Passwd>        Default 123456
+# 	-s <StateDB type>           Default leveldb. if set -s, use amop
+# 	-z Generate tar packet      Default no
+# 	-h Help
+
+# 生成节点配置文件
+bash build_chain.sh -f IPList.txt -n 4 -o nodes
+```
+
+2. 启动节点
+
+```bash
+cd nodes
+bash ./start_all.sh
+```
+
+到这里本机已经启动了4个节点组成的一条区块链，**接下来请参考[3.6 验证节点启动](#36-验证节点启动)检查节点运行状态，然后跳转到[第四章 使用控制台](#第四章-使用控制台)继续阅读**。
+
+## 第二章 准备`fisco-bcos`软件
+
+### 2.1 下载官方二进制包[推荐]
+
+```bash
+# FISCO-BCOS/ 目录下操作
+curl -o fisco-bcos https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev-1.5/bin/fisco-bcos
+```
+
+### 2.2 源码编译
+
+1. 获取源码
 
 > 假定在用户目录下获取源码：
 
@@ -59,16 +105,17 @@ git checkout dev-1.5
 
 源码目录说明请参考[附录：源码目录结构说明](#81-源码目录结构说明)
 
-#### 1.2.2 安装编译依赖
+2. 安装编译依赖
 
-> 根目录下执行（若执行出错，请参考[常见问题1](#常见问题)）：
+> 项目根目录下执行（若执行出错，请参考[常见问题1](#常见问题)）：
 
 ```shell
 bash ./scripts/install_deps.sh
 ```
 
-#### 1.2.3 编译
+3. 编译
 
+若编译成功，则生成`build/eth/fisco-bcos`可执行程序。
 ```bash
 mkdir build && cd build
 # [Centos] 注意命令末尾的..
@@ -79,51 +126,12 @@ cmake  ..
 make
 ```
 
-> 若编译成功，则生成build/eth/fisco-bcos。
+## 第三章 手工部署单节点区块链网络
 
+FISCO-BCOS网络采用面向CA的准入机制，保障信息保密性、认证性、完整性、不可抵赖性。**FISCO-BCOS支持多级证书体系，可以是链、机构和节点的三级体系，也可以链和节点两级体系。**
+以链和节点两级证书体系为例，一条链拥有一个链证书及对应的链私钥，链私钥由链管理员拥有。并对每个参与该链的节点签发节点证书。节点证书是节点身份的凭证，并使用该证书与其他节点间建立SSL连接进行加密通讯。本章介绍手动搭建一个单节点的区块链网络，包括链证书、节点私钥、节点证书、配置文件的生成和配置。生成方法如下：
 
-#### 1.2.4 使用快速构建脚本
-
-> 第二、三章是手动部署单节点网络的操作步骤，如果不想**手工操作**，可以尝试使用`FISCO-BCOS/scrtips/build_chain.sh`脚本，根据脚本提示设置参数，快速生成多节点配置文件。
-
-1. 生成节点配置文件
-```bash
-# 假设当前在FISCO-BCOS/build目录下
-cd ../scripts
-# 准备IPList.txt文件
-echo 127.0.0.1 > IPList.txt
-# build_chain.sh 
-# Usage:
-#	-f <IP list file> [Required]
-#	-e <FISCO-BCOS program path> [Required]
-#	-n <Nodes per IP> Default 1
-#	-a <CA Key>       Default Generate a new CA
-#	-o <Output Dir>   Default ./output/
-#	-p <Start Port>   Default 30300
-#   -s <StateDB type> Default leveldb. if set -s, use amop
-#	-z Generate tar packet
-#	-h Help
-
-# 生成节点配置文件
-bash build_chain.sh -f IPList.txt -e ../build/eth/fisco-bcos -n 4 -o nodes
-```
-
-2. 启动节点
-
-```bash
-cd nodes
-bash ./start_all.sh
-```
-
-到这里本机已经启动了4个节点组成的一条区块链，**接下来请参考[3.5 验证节点启动](#34-验证节点启动)检查节点运行状态，然后跳转到[第四章 使用控制台](#第四章-使用控制台)继续阅读**。
-
-## 第二章 准备相关证书
-FISCO-BCOS网络采用面向CA的准入机制，保障信息保密性、认证性、完整性、不可抵赖性。
-
-**FISCO-BCOS支持多级证书体系，可以是链、机构和节点的三级体系，也可以链和节点两级体系。**
-以链和节点两级证书体系为例，一条链拥有一个链证书及对应的链私钥，链私钥由链管理员拥有。并对每个参与该链的节点签发节点证书。节点证书是节点身份的凭证，并使用该证书与其他节点间建立SSL连接进行加密通讯。因此，需要生成链证书、节点证书。生成方法如下：
-
-### 2.1 生成链证书
+### 3.1 生成链证书
 ```bash
 # 假设当前在FISCO-BCOS/build目录下 切换到FISCO-BCOS/scripts目录下
 cd ../scripts
@@ -133,17 +141,17 @@ bash ../chain.sh  #会提示输入相关证书信息，默认可以直接回车
 > FISCO-BCOS/scripts/nodes目录下将生成链证书相关文件。
 > **注意：ca.key 链私钥文件请妥善保存**
 
-### 2.2 生成节点密钥和证书
+### 3.2 生成节点密钥和证书
 
 ```bash
 # 假设节点名为 node-0
 # 如需要生成多个节点，则重复执行 ./node.sh 节点名称 即可
 bash ../node.sh node-0
 ```
-> FISCO-BCOS/scripts/nodes/ 目录下将生成节点目录node-0。node-0目录下将有链证书`ca.crt`、节点私钥`node.key`、节点证书`node.crt`相关文件。
+> `FISCO-BCOS/scripts/nodes/`目录下将生成节点目录`node-0`。`node-0/data`目录下将有链证书`ca.crt`、节点私钥`node.key`、节点证书`node.crt`相关文件。
 > **注意：node.key 节点私钥文件请妥善保存**
 
-### 2.3 生成SDK证书
+### 3.3 生成SDK证书 [可选]
 ``` shell
 # 为节点node0生成sdk所需文件，这里需要设置密码
 bash ../sdk.sh node-0
@@ -151,28 +159,20 @@ cd ../  # 回到scripts目录
 ```
 > FISCO-BCOS/build/nodes/node-0目录下将生成sdk目录，并将sdk目录下所有文件拷贝到SDK端的证书目录下。
 
-## 第三章 部署单节点区块链网络
-
-本章介绍手动搭建一个单节点的区块链网络。
-
-### 3.1 准备节点环境
+### 3.4 准备节点环境
 
 > 假定节点目录为FISCO-BCOS/scripts/nodes/node-0，按如下步骤操作：
 
 ```shell
 # 假定当前目录为FISCO-BCOS/scripts/ 创建目录结构
-mkdir -p nodes/node-0/data/
 
 # 拷贝相关文件
-mv nodes/node-0/ca.crt nodes/node-0/node.* nodes/node-0/data
-cp ../build/eth/fisco-bcos ../genesis.json ../config.conf ../log.conf start.sh stop.sh nodes/node-0
+cp ../fisco-bcos ../genesis.json ../config.conf ../log.conf start.sh stop.sh nodes/node-0
 ```
 
-### 3.2 准备配置文件
+#### 3.4.1 获取NodeID
 
 NodeID唯一标识了区块链中的某个节点，在节点启动前必须进行配置。
-
-#### 3.2.1 获取NodeID
 
 > nodes/node-0/data/node.nodeid文件中已计算好NodeID，也可以使用下面命令获取
 
@@ -186,7 +186,7 @@ openssl ec -in nodes/node-0/data/node.key -text 2> /dev/null | perl -ne '$. > 6 
 d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
 ```
 
-#### 3.2.2 参数配置文件
+#### 3.4.2 参数配置文件
 
 配置使用INI管理，配置文件模板如下，本例中使用单个节点，需要将`nodes/node-0/config.conf`中的miner.0修改为上一步获取的NodeID。
 
@@ -243,26 +243,21 @@ vim nodes/node-0/config.conf
 	topic=DB
 ```
 
-#### 3.2.3 配置log.conf（日志配置文件）
+#### 3.4.3 配置log.conf（日志配置文件）
 
 log.conf中配置节点日志生成的格式和路径，使用默认即可。
 log.conf其它字段说明请参看[附录：log.conf说明](#85-logconf说明)
 
-### 3.3 节点的启动依赖的配置文件
+### 3.5 启动节点
+
+节点的启动依赖下列文件，在启动前，请确认文件已经正确的配置：
 
 - 创世块文件：genesis.json
 - 节点配置文件：config.conf
 - 日志配置文件：log.conf
-- 证书文件：ca.crt、node.key、node.crt
+- 证书文件（nodes/node-0/data/）：ca.crt、node.key、node.crt
 
-genesis.json其它字段说明请参看[附录：genesis.json说明](#83-genesisjson说明genesisjson)
-
-### 3.4 启动节点
-
-节点的启动依赖下列文件，在启动前，请确认文件已经正确的配置：
-
-- 节点证书身份文件（nodes/node-0/data/）：ca.crt、node.crt、node.key
-- 配置文件（nodes/node-0/）：genesis.json、config.conf、log.conf
+> genesis.json其它字段说明请参看[附录：genesis.json说明](#83-genesisjson说明genesisjson)
 
 > 启动节点
 
@@ -294,9 +289,9 @@ INFO|2017-12-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9
 INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38c7a380b13b2e46fecbdca0fac5473f4cbc054190e90b8bd4831faac4521#1tx:0,maxtx:1000,tq.num=0time:1513072338897
 ```
 
-### 3.4 验证节点启动
+### 3.6 验证节点启动
 
-#### 3.5.1 验证进程
+#### 3.6.1 验证进程
 
 ```shell
 ps -ef |grep fisco-bcos
@@ -308,7 +303,7 @@ ps -ef |grep fisco-bcos
 app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --genesis genesis.json --config config.json
 ```
 
-#### 3.5.2 查看日志输出
+#### 3.6.2 查看日志输出
 
 > 执行命令，查看打包信息。
 
@@ -654,7 +649,7 @@ Host:127.0.0.1:30403
 
 1. 准备2个节点的环境
 
-请参考第二、三章内容操作准备`node-0`和`node-1`两个节点文件夹以及相关配置文件，或者使用1.2.4节介绍的`FISCO-BCOS/scripts/build_chain.sh`脚本。手动操作完成`node-0`和`node-1`环境准备后，修改两个节点的`config.conf`文件中的`[pbft].miner.0,[pbft].miner.1,[p2p].node.0,[p2p].node.1`以及相关的端口号后，再分别启动两个节点。示例如下：
+请参考[第三章](#第三章-手工部署单节点区块链网络)内容操作准备`node-0`和`node-1`两个节点文件夹以及相关配置文件，或者使用1.2.4节介绍的`FISCO-BCOS/scripts/build_chain.sh`脚本。手动操作完成`node-0`和`node-1`环境准备后，修改两个节点的`config.conf`文件中的`[pbft].miner.0,[pbft].miner.1,[p2p].node.0,[p2p].node.1`以及相关的端口号后，再分别启动两个节点。示例如下：
   - **node-0/config.conf**
 ```bash
 [rpc]
