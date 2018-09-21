@@ -64,6 +64,7 @@ echo 127.0.0.1 > IPList.txt
 # 	-c <ClientCert Passwd>      Default 123456
 # 	-k <Keystore Passwd>        Default 123456
 # 	-s <StateDB type>           Default leveldb. if set -s, use amop
+# 	-t <Cert config file>       Default auto generate
 # 	-z Generate tar packet      Default no
 # 	-h Help
 
@@ -807,12 +808,12 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 |secure.key|${DATAPATH}/node.key|节点私钥|
 |secure.cert|${DATAPATH}/node.crt|节点证书|
 |secure.ca_cert|${DATAPATH}/ca.crt|链证书|
-|secure.ca_path|空||
+|secure.ca_path|空|可加载指定路径下的ca相关文件|
 |statedb.type|leveldb|可选leveldb或amop|
 |statedb.path|${DATAPATH}/statedb|leveldb存储路径|
 |statedb.retryInterval|1|重连AMDB间隔时间|
 |statedb.maxRetry|0|amopdb的最大重试次数 超出次数后程序退出 默认为0(无限)|
-|statedb.topic|DB||
+|statedb.topic|DB|amopdb关注的topic|
 |pbft.block_interval|1000|出块间隔 单位ms|
 |pbft.miner.0|共识节点NodeID|共识节点列表`miner.x`，**所有联网节点配置文件中该列表必须相同**|
 |rpc.listen_ip|127.0.0.1|监听IP，建议设置为内网IP，禁止外网访问|
