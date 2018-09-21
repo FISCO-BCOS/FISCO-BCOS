@@ -56,17 +56,9 @@ public:
     ///-----encode functions
     void encode(
         bytes& _out, bytesConstRef _header, std::vector<std::pair<u256, Signature>>& sig_list);
-    void encode(bytes& _out, bytesConstRef _header)
-    {
-        std::vector<std::pair<u256, Signature>> sig_list;
-        encode(_out, _header, sig_list);
-    }
+    void encode(bytes& _out, bytesConstRef _header) { encode(_out, _header, m_sigList); }
     void encode(bytes& _out, std::vector<std::pair<u256, Signature>>& sig_list);
-    void encode(bytes& _out)
-    {
-        std::vector<std::pair<u256, Signature>> sig_list;
-        encode(_out, sig_list);
-    }
+    void encode(bytes& _out) { encode(_out, m_sigList); }
 
     ///-----decode functions
     void decode(bytesConstRef _block);
@@ -102,14 +94,11 @@ public:
     /// set sig list
     void inline setSigList(std::vector<std::pair<u256, Signature>> const& _sigList)
     {
-        m_sigList.clear();
-        for (auto sig : _sigList)
-        {
-            m_sigList.push_back(sig);
-        }
+        m_sigList = _sigList;
         noteBlockChange();
     }
-
+    /// get block hash
+    h256 blockHash() { return hash(); }
     h256 hash();
 
 private:

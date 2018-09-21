@@ -34,28 +34,49 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(BlockTest, TestOutputHelperFixture);
-/// test constructors
-BOOST_AUTO_TEST_CASE(testConstructors)
+void checkBlock(Block& m_block, FakeBlock const& fake_block, size_t trans_size, size_t sig_size)
+{
+    BOOST_CHECK(m_block.blockHeader() == fake_block.m_blockHeader);
+    BOOST_CHECK(m_block.headerHash() == fake_block.m_blockHeader.hash());
+    BOOST_CHECK(m_block.hash() == sha3(fake_block.m_blockData));
+    BOOST_CHECK(m_block.blockHash() == sha3(fake_block.m_blockData));
+    BOOST_CHECK(m_block.transactions() == fake_block.m_transaction);
+    BOOST_CHECK(m_block.transactions().size() == trans_size);
+    BOOST_CHECK(m_block.sigList().size() == sig_size);
+    BOOST_CHECK(m_block.sigList() == fake_block.m_sigList);
+}
+/// test constructors and operators
+BOOST_AUTO_TEST_CASE(testConstructorsAndOperators)
 {
     /// test constructor
-    FakeBlock fake_block;
+    FakeBlock fake_block(5);
     Block m_block = fake_block.getBlock();
-    std::cout << "### m_block.blockHeader hash:" << m_block.headerHash() << std::endl;
-    std::cout << "### fake_block.getBlockHeader().hash():" << fake_block.getBlockHeader().hash()
-              << std::endl;
-    BOOST_CHECK(m_block.blockHeader() == fake_block.getBlockHeader());
-    BOOST_CHECK(m_block.headerHash() == fake_block.getBlockHeader().hash());
-    BOOST_CHECK(m_block.hash() == sha3(fake_block.getBlockData()));
-    std::vector<std::pair<u256, Signature>> sig_list;
-    BOOST_CHECK(m_block.sigList() == sig_list);
+    checkBlock(m_block, fake_block, 5, 5);
+    /// test copy constructor
+    Block copied_block(m_block);
+    checkBlock(copied_block, fake_block, 5, 5);
+    /// test operators==
+    BOOST_CHECK(copied_block == m_block);
+    BlockHeader emptyHeader;
+    copied_block.setBlockHeader(emptyHeader);
+    /// test operator !=
+    BOOST_CHECK(copied_block != m_block);
+    /// test operator =
+    copied_block = m_block;
+    checkBlock(copied_block, fake_block, 5, 5);
+    BOOST_CHECK(copied_block == m_block);
 
-    /// test copy
+    /// test empty case
+    FakeBlock fake_block_empty;
+    Block m_empty_block = fake_block_empty.getBlock();
+    checkBlock(m_empty_block, fake_block_empty, 0, 0);
+    m_empty_block = m_block;
+    checkBlock(m_empty_block, fake_block, 5, 5);
+    BOOST_CHECK(m_block == m_empty_block);
 }
-/// test operators
-BOOST_AUTO_TEST_CASE(testOperators) {}
 
-/// test encode and decode
-BOOST_AUTO_TEST_CASE(testEncodeAndDecode) {}
+/// test Exceptions
+BOOST_AUTO_TEST_CASE(testExceptionCases) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 

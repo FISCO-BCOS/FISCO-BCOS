@@ -65,22 +65,6 @@ BOOST_AUTO_TEST_CASE(testCreateTxByTransactionSkeleton)
     RLP rlpObj(rlpBytes);
     bytesConstRef d = rlpObj.data();
     eth::Transaction tx(d, eth::CheckTransaction::Everything);
-
-    Secret secret =
-        jsToSecret("0x41911b3f20adbf6a84f81b57fa175429b0e7058b247911b201622c869a4c1526");
-
-    eth::TransactionSkeleton txSkeleton;
-    txSkeleton.creation = false;
-    txSkeleton.from = tx.sender();
-    txSkeleton.to = tx.to();
-    txSkeleton.value = tx.value();
-    txSkeleton.data = tx.data();
-    txSkeleton.nonce = tx.nonce();
-    txSkeleton.gas = tx.gas();
-    txSkeleton.gasPrice = tx.gasPrice();
-    txSkeleton.blockLimit = tx.blockLimit();
-
-    eth::Transaction tx1(txSkeleton, secret);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

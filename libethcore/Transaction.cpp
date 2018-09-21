@@ -29,22 +29,6 @@
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
-
-Transaction::Transaction(TransactionSkeleton const& _ts, Secret const& _s)
-  : m_type(_ts.creation ? ContractCreation : MessageCall),
-    m_nonce(_ts.nonce),
-    m_value(_ts.value),
-    m_receiveAddress(_ts.to),
-    m_gasPrice(_ts.gasPrice),
-    m_gas(_ts.gas),
-    m_data(_ts.data),
-    m_sender(_ts.from),
-    m_blockLimit(_ts.blockLimit)
-{
-    if (_s)
-        sign(_s);
-}
-
 Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 {
     decode(_rlpData, _checkSig);
@@ -135,14 +119,6 @@ SignatureStruct const& Transaction::signature() const
         BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
     return *m_vrs;
-}
-
-void Transaction::sign(Secret const& _priv)
-{
-    auto sig = dev::sign(_priv, sha3(WithoutSignature));
-    SignatureStruct sigStruct = *(SignatureStruct const*)&sig;
-    if (sigStruct.isValid())
-        m_vrs = sigStruct;
 }
 
 /// void Transaction::streamRLP(RLPStream& _s, IncludeSignature _sig) const

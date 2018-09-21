@@ -64,6 +64,7 @@ public:
     /// @brief : construct block
     void constructBlock(RLPStream& block_rlp, BlockHeader const& block_header)
     {
+        fakeSingleTransaction();
         block_rlp.appendList(2);
         bytes block_bytes;
         block_header.encode(block_bytes);
@@ -73,18 +74,33 @@ public:
         KeyPair key_pair = KeyPair::create();
         for (int i = 0; i < 3; i++)
         {
-            TransactionSkeleton trasaction_template;
-            Transaction tx(trasaction_template, key_pair.secret());
             bytes tmp_bytes;
-            tx.encode(tmp_bytes);
+            m_singleTransaction.encode(tmp_bytes);
             txs_rlp.appendRaw(tmp_bytes);
         }
         block_rlp.appendRaw(txs_rlp.out());
     }
 
+    void fakeSingleTransaction()
+    {
+        bytes rlpBytes = fromHex(
+            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+            "0000"
+            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+            "0000"
+            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+            "657c"
+            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
+
+        RLP rlpObj(rlpBytes);
+        bytesConstRef d = rlpObj.data();
+        m_singleTransaction = Transaction(d, eth::CheckTransaction::Everything);
+    }
+
     ~BlockHeaderFixture() { block_header_genesis.clear(); }
     RLPStream block_rlp;
     BlockHeader block_header_genesis;
+    Transaction m_singleTransaction;
     uint64_t current_time;
     h512s sealer_list;
 };

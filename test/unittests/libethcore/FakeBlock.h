@@ -21,10 +21,12 @@
  * @date 2018-09-21
  */
 #pragma once
+#include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::eth;
@@ -36,9 +38,23 @@ namespace test
 class FakeBlock
 {
 public:
-    FakeBlock()
+    /// for normal case test
+    FakeBlock(size_t size)
     {
         FakeBlockHeader();
+        fakeSigList(size);
+        fakeTransactions(size);
+        m_block.setSigList(m_sigList);
+        m_block.setTransactions(m_transaction);
+        BOOST_CHECK(m_transaction == m_block.transactions());
+        BOOST_CHECK(m_sigList == m_block.sigList());
+        m_blockHeader.encode(m_blockHeaderData);
+        m_block.encode(m_blockData, ref(m_blockHeaderData));
+        m_block.decode(ref(m_blockData));
+    }
+    /// for empty case test
+    FakeBlock()
+    {
         m_blockHeader.encode(m_blockHeaderData);
         m_block.encode(m_blockData, ref(m_blockHeaderData));
         m_block.decode(ref(m_blockData));
@@ -64,18 +80,62 @@ public:
         }
         m_blockHeader.setSealerList(sealer_list);
     }
+
+    /// fake sig list
+    void fakeSigList(size_t size)
+    {
+        /// set sig list
+        Signature sig;
+        h256 block_hash;
+        Secret sec = KeyPair::create().secret();
+        for (size_t i = 0; i < size; i++)
+        {
+            block_hash = sha3(toString("block " + i));
+            sig = sign(sec, block_hash);
+            m_sigList.push_back(std::make_pair(u256(block_hash), sig));
+        }
+    }
+
+    /// fake transactions
+    void fakeTransactions(size_t size)
+    {
+        fakeSingleTransaction();
+        for (size_t i = 0; i < size; i++)
+        {
+            m_transaction.push_back(m_singleTransaction);
+        }
+    }
+
+    void fakeSingleTransaction()
+    {
+        bytes rlpBytes = fromHex(
+            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+            "0000"
+            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+            "0000"
+            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+            "657c"
+            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
+
+        RLP rlpObj(rlpBytes);
+        bytesConstRef d = rlpObj.data();
+        m_singleTransaction = Transaction(d, eth::CheckTransaction::Everything);
+    }
+
     Block& getBlock() { return m_block; }
     BlockHeader& getBlockHeader() { return m_blockHeader; }
     bytes& getBlockHeaderData() { return m_blockHeaderData; }
     bytes& getBlockData() { return m_blockData; }
 
-private:
+public:
     Block m_block;
     BlockHeader m_blockHeader;
     Transactions m_transaction;
+    Transaction m_singleTransaction;
     std::vector<std::pair<u256, Signature>> m_sigList;
     bytes m_blockHeaderData;
     bytes m_blockData;
 };
+
 }  // namespace test
 }  // namespace dev

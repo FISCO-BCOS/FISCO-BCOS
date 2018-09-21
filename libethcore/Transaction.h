@@ -57,37 +57,6 @@ public:
 
     /// Constructs a null transaction.
     Transaction() {}
-
-    /// Constructs a transaction from a transaction skeleton & optional secret.
-    Transaction(TransactionSkeleton const& _ts, Secret const& _s = Secret());
-
-    /// Constructs a signed message-call transaction.
-    Transaction(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, Address const& _dest,
-        bytes const& _data, u256 const& _nonce, Secret const& _secret)
-      : m_type(MessageCall),
-        m_nonce(_nonce),
-        m_value(_value),
-        m_receiveAddress(_dest),
-        m_gasPrice(_gasPrice),
-        m_gas(_gas),
-        m_data(_data)
-    {
-        sign(_secret);
-    }
-
-    /// Constructs a signed contract-creation transaction.
-    Transaction(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, bytes const& _data,
-        u256 const& _nonce, Secret const& _secret)
-      : m_type(ContractCreation),
-        m_nonce(_nonce),
-        m_value(_value),
-        m_gasPrice(_gasPrice),
-        m_gas(_gas),
-        m_data(_data)
-    {
-        sign(_secret);
-    }
-
     /// Constructs an unsigned message-call transaction.
     Transaction(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, Address const& _dest,
         bytes const& _data, u256 const& _nonce = 0)
@@ -160,9 +129,6 @@ public:
         bytes out;
         encode(out, _sig);
         return out;
-        /*
-        streamRLP(s, _sig);
-        return s.out();*/
     }
 
     /// @returns the SHA3 hash of the RLP serialisation of this transaction.
@@ -217,8 +183,6 @@ public:
     /// @returns the signature of the transaction (the signature has the sender encoded in it)
     /// @throws TransactionIsUnsigned if signature was not initialized
     SignatureStruct const& signature() const;
-
-    void sign(Secret const& _priv);  ///< Sign the transaction.
 
     /// @returns amount of gas required for the basic payment.
     int64_t baseGasRequired(EVMSchedule const& _es) const

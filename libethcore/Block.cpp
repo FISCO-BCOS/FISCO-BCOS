@@ -32,24 +32,23 @@ namespace eth
 Block::Block(bytesConstRef _data)
 {
     decode(_data);
+    m_blockHash = hash();
 }
 
 Block::Block(bytes const& _data)
 {
     decode(ref(_data));
+    m_blockHash = hash();
 }
 
 Block::Block(Block const& _block)
-  : m_blockHeader(_block.blockHeader()), m_headerHash(_block.headerHash())
+  : m_blockHeader(_block.blockHeader()),
+    m_transactions(_block.transactions()),
+    m_headerHash(_block.headerHash()),
+    m_sigList(_block.sigList())
 {
-    /// init transaction
-    for (size_t i = 0; i < _block.transactions().size(); i++)
-        m_transactions.push_back(_block.transactions()[i]);
-    /// init sigList
-    for (auto sig : _block.sigList())
-        m_sigList.push_back(sig);
-    noteChange();
     noteBlockChange();
+    noteChange();
 }
 
 Block& Block::operator=(Block const& _block)
@@ -57,11 +56,9 @@ Block& Block::operator=(Block const& _block)
     m_blockHeader = _block.blockHeader();
     m_headerHash = _block.headerHash();
     /// init transaction
-    for (size_t i = 0; i < _block.transactions().size(); i++)
-        m_transactions.push_back(_block.transactions()[i]);
+    m_transactions = _block.transactions();
     /// init sigList
-    for (auto sig : _block.sigList())
-        m_sigList.push_back(sig);
+    m_sigList = _block.sigList();
     noteChange();
     noteBlockChange();
     return *this;
@@ -131,8 +128,9 @@ void Block::encode(
 void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
     std::vector<std::pair<u256, Signature>>& sig_list)
 {
-    /// refresh transaction list cache
-    bytes txsCache = encodeTransactions();
+    if ()
+        /// refresh transaction list cache
+        bytes txsCache = encodeTransactions();
     /// get block RLPStream
     RLPStream block_stream;
     block_stream.appendList(4);
@@ -179,8 +177,8 @@ void Block::decode(bytesConstRef _block_bytes)
     m_blockHeader.populate(block_rlp[0]);
     /// get transaction list
     RLP transactions_rlp = block_rlp[1];
-    m_transactions.resize(transactions_rlp.size());
-    for (size_t i = 0; i < transactions_rlp.size(); i++)
+    m_transactions.resize(transactions_rlp.itemCount());
+    for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
     {
         m_transactions[i].decode(transactions_rlp[i]);
     }
