@@ -16,11 +16,14 @@
 #include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelSession.h>
 #include <libstorage/DB.h>
-#include <uuid/uuid.h>
 #include <libethcore/ABI.h>
 #include <libdevcore/FileSystem.h>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>        
+#include <boost/range/algorithm/remove_if.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include <map>
 
 using namespace dev;
@@ -115,6 +118,10 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         {
             output = p2pPeers(args);
         }
+        else if (func == "p2p.update")
+        {
+            output = p2pUpdate(args);
+        }
         else if (func == "miner.list")
         {
             output = p2pMiners(args);
@@ -126,10 +133,6 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         else if (func == "miner.remove")
         {
             output = removeMiner(args);
-        }
-        else if (func == "p2p.update")
-        {
-            output = p2pUpdate(args);
         }
         else if (func == "amdb.select")
         {
@@ -161,15 +164,15 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
   std::stringstream ss;
 
   printDoubleLine(ss);
-	ss << "status                 Show the blockchain status." << std::endl;
-	ss << "p2p.list               Show the peers information." << std::endl;
-	ss << "p2p.update             Update static nodes." << std::endl;
-	ss << "amdb.select            Query the table data." << std::endl;
-	ss << "miner.list             Show the miners information." << std::endl;
-	ss << "miner.add              Add miner node." << std::endl;
-	ss << "miner.remove           Remove miner node." << std::endl;
-	ss << "quit                   Quit the blockchain console." << std::endl;
-	ss << "help                   Provide help information for blockchain console." << std::endl;
+	ss << "status          Show the blockchain status." << std::endl;
+	ss << "p2p.list        Show the peers information." << std::endl;
+	ss << "p2p.update      Update static nodes." << std::endl;
+	ss << "miner.list      Show the miners information." << std::endl;
+	ss << "miner.add       Add miner node." << std::endl;
+	ss << "miner.remove    Remove miner node." << std::endl;
+	ss << "amdb.select     Query the table data." << std::endl;
+	ss << "quit            Quit the blockchain console." << std::endl;
+	ss << "help            Provide help information for blockchain console." << std::endl;
 	printDoubleLine(ss);
 	ss << std::endl;
 	output = ss.str();
@@ -373,6 +376,7 @@ std::string ConsoleServer::addMiner(const std::vector<std::string> args)
     try
     {
         std::stringstream ss;
+        printDoubleLine(ss);
         if (args.size() == 1)
         {
             std::string nodeID = args[0];
@@ -380,15 +384,15 @@ std::string ConsoleServer::addMiner(const std::vector<std::string> args)
             //   ret.from = _key.address();
             t.to = Address(0x1003);
             t.creation = false;
-            uuid_t uuid;
-            uuid_generate(uuid);
-            auto s = toHex(uuid, 2, HexPrefix::Add);
-            t.randomid = u256(toHex(uuid, 2, HexPrefix::Add));
+            static boost::uuids::random_generator uuidGenerator;
+            std::string s = to_string(uuidGenerator());
+            s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
+            t.randomid = u256("0x"+s);
             t.blockLimit = u256(_interface->number() + 100);
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("add(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "add miner : " << nodeID << endl;
+            ss << "add miner successfully: " << nodeID << endl;
         }
         else
         {
@@ -413,21 +417,22 @@ std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
     try
     {
         std::stringstream ss;
+        printDoubleLine(ss);
         if (args.size() == 1)
         {
             std::string nodeID = args[0];
             TransactionSkeleton t;
             t.to = Address(0x1003);
             t.creation = false;
-            uuid_t uuid;
-            uuid_generate(uuid);
-            auto s = toHex(uuid, 2, HexPrefix::Add);
-            t.randomid = u256(toHex(uuid, 2, HexPrefix::Add));
+            static boost::uuids::random_generator uuidGenerator;
+            std::string s = to_string(uuidGenerator());
+            s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
+            t.randomid = u256("0x"+s);
             t.blockLimit = u256(_interface->number() + 100);
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("remove(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "remove miner : " << nodeID << endl;
+            ss << "remove miner successfully: " << nodeID << endl;
         }
         else
         {
@@ -448,10 +453,10 @@ std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
 
 void ConsoleServer::printSingleLine(std::stringstream &ss)
 {
-  ss << "----------------------------------------------------------------------" << std::endl;
+  ss << "----------------------------------------------------------------" << std::endl;
 }
 
 void ConsoleServer::printDoubleLine(std::stringstream &ss)
 {
-  ss << "======================================================================" << std::endl;
+  ss << "================================================================" << std::endl;
 }
