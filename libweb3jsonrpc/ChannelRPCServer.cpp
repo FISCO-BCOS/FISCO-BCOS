@@ -33,7 +33,10 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <uuid/uuid.h>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>        
+#include <boost/range/algorithm/remove_if.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/random.hpp>
@@ -1022,10 +1025,10 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 
 std::string ChannelRPCServer::newSeq()
 {
-    uuid_t uuid;
-    uuid_generate(uuid);
-
-    return toHex(uuid);
+    static boost::uuids::random_generator uuidGenerator;
+    std::string s = to_string(uuidGenerator());
+    s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
+    return s;
 }
 
 h512 ChannelRPCServer::sendChannelMessageToNode(

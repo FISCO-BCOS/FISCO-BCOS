@@ -235,6 +235,7 @@ EOF
 		((++index))
 		[ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
 	done
+	chmod +x "$output_dir/start_all.sh"
 done < $ip_file
 
 echo "All completed."
