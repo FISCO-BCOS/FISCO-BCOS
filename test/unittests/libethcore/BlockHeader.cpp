@@ -104,10 +104,8 @@ BOOST_AUTO_TEST_CASE(testBlockerHeaderGetter)
     BOOST_CHECK(block_header_genesis.gasLimit() == u256(3000000));
     BOOST_CHECK(block_header_genesis.gasUsed() == u256(100000));
     BOOST_CHECK(block_header_genesis.timestamp() == current_time);
-    bytes invalid_item;
-    BOOST_CHECK(block_header_genesis.extraData(invalid_item, 1) == false);
-    bytes valid_item;
-    BOOST_CHECK(block_header_genesis.extraData(valid_item, 0) == true);
+    bytes valid_item = block_header_genesis.extraData(0);
+    BOOST_CHECK(valid_item.size());
     BOOST_CHECK(valid_item == jsToBytes("0x1020"));
     BOOST_CHECK(block_header_genesis.extraData().size() == 1);
     BOOST_CHECK(block_header_genesis.sealer() == u256("0x00"));

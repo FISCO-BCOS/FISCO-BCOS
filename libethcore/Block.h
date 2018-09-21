@@ -47,12 +47,11 @@ public:
     bool operator==(Block const& _block) const
     {
         return m_blockHeader == _block.blockHeader() && m_headerHash == _block.headerHash() &&
-               m_sigList == _block.sigList() && m_transactions == _block.transactions() &&
-               m_transactionHashSet == _block.transactionHashSet();
+               m_sigList == _block.sigList() && m_transactions == _block.transactions();
     }
     /// operator !=
     bool operator!=(Block const& _cmp) const { return !operator==(_cmp); }
-    explicit operator bool() const { return bool(m_blockHeader) && (m_transactions.size() != 0); }
+    explicit operator bool() const { return bool(m_blockHeader); }
 
     ///-----encode functions
     void encode(
@@ -74,20 +73,10 @@ public:
 
     ///-----get interfaces
     Transactions const& transactions() const { return m_transactions; }
-    Transaction const& transaction(bool& exist, size_t const _index) const
-    {
-        exist = false;
-        if (m_transactions.size() > _index)
-        {
-            exist = true;
-            return m_transactions[_index];
-        }
-        return Transaction();
-    }
+    Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     h256 const& headerHash() const { return m_headerHash; }
     std::vector<std::pair<u256, Signature>> const& sigList() const { return m_sigList; }
-    h256Hash const& transactionHashSet() const { return m_transactionHashSet; }
 
     ///-----set interfaces
     /// set m_transactions
@@ -95,22 +84,52 @@ public:
     {
         m_transactions = _trans;
         noteChange();
+        noteBlockChange();
     }
     /// append a single transaction to m_transactions
     void appendTransaction(Transaction const& _trans)
     {
         m_transactions.push_back(_trans);
         noteChange();
+        noteBlockChange();
     }
-    void setBlockHeader(BlockHeader const& _blockHeader) { m_blockHeader = _blockHeader; }
+    /// set block header
+    void setBlockHeader(BlockHeader const& _blockHeader)
+    {
+        m_blockHeader = _blockHeader;
+        noteBlockChange();
+    }
+    /// set sig list
+    void inline setSigList(std::vector<std::pair<u256, Signature>> const& _sigList)
+    {
+        m_sigList.clear();
+        for (auto sig : _sigList)
+        {
+            m_sigList.push_back(sig);
+        }
+        noteBlockChange();
+    }
+
+    h256 hash();
 
 private:
     /// encode function
     inline void encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
         std::vector<std::pair<u256, Signature>>& sig_list);
     /// callback this function when transaction has changed
-    void noteChange() { m_transaction_changed = true; }
-    void inline encodeTransactions();
+    void noteChange()
+    {
+        RecursiveGuard l(m_txsCacheLock);
+        m_txsCache = bytes();
+    }
+
+    void noteBlockChange()
+    {
+        Guard l(m_hashLock);
+        m_blockHash = h256();
+    }
+
+    bytes inline encodeTransactions();
 
 private:
     /// block header of the block (field 0)
@@ -121,13 +140,14 @@ private:
     h256 m_headerHash;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
-    /// set of the transaction hash
-    h256Hash m_transactionHashSet;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     bytes m_txsCache;
-    /// means whether m_transactions has been changed
-    bool m_transaction_changed = false;
+    h256 m_blockHash;
+
+    /// mutex for block hash
+    mutable Mutex m_hashLock;
+    mutable RecursiveMutex m_txsCacheLock;
 };
 }  // namespace eth
 }  // namespace dev

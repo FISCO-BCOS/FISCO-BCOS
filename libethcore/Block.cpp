@@ -22,6 +22,7 @@
  * @date 2018-09-20
  */
 #include "Block.h"
+#include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 namespace dev
@@ -41,34 +42,29 @@ Block::Block(bytes const& _data)
 Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()), m_headerHash(_block.headerHash())
 {
-    assert(_block.transactions().size() == _block.transactionHashSet().size());
     /// init transaction
     for (size_t i = 0; i < _block.transactions().size(); i++)
         m_transactions.push_back(_block.transactions()[i]);
-    /// init transactionHashSet
-    for (auto tx_hash : _block.transactionHashSet())
-        m_transactionHashSet.insert(tx_hash);
     /// init sigList
     for (auto sig : _block.sigList())
         m_sigList.push_back(sig);
     noteChange();
+    noteBlockChange();
 }
 
 Block& Block::operator=(Block const& _block)
 {
-    assert(_block.transactions().size() == _block.transactionHashSet().size());
     m_blockHeader = _block.blockHeader();
     m_headerHash = _block.headerHash();
     /// init transaction
     for (size_t i = 0; i < _block.transactions().size(); i++)
         m_transactions.push_back(_block.transactions()[i]);
-    /// init transactionHashSet
-    for (auto tx_hash : _block.transactionHashSet())
-        m_transactionHashSet.insert(tx_hash);
     /// init sigList
     for (auto sig : _block.sigList())
         m_sigList.push_back(sig);
     noteChange();
+    noteBlockChange();
+    return *this;
 }
 
 /**
@@ -136,14 +132,14 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
     std::vector<std::pair<u256, Signature>>& sig_list)
 {
     /// refresh transaction list cache
-    encodeTransactions();
+    bytes txsCache = encodeTransactions();
     /// get block RLPStream
     RLPStream block_stream;
     block_stream.appendList(4);
     // append block header
     block_stream.appendRaw(block_header);
     // append transaction list
-    block_stream.appendRaw(m_txsCache);
+    block_stream.appendRaw(txsCache);
     // append block hash
     block_stream.append(hash);
     // append sig_list
@@ -152,10 +148,11 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 }
 
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
-void Block::encodeTransactions()
+bytes Block::encodeTransactions()
 {
     RLPStream txs;
-    if (m_transaction_changed)
+    RecursiveGuard l(m_txsCacheLock);
+    if (m_txsCache == bytes())
     {
         for (size_t i = 0; i < m_transactions.size(); i++)
         {
@@ -164,8 +161,8 @@ void Block::encodeTransactions()
             txs.appendRaw(trans_data);
         }
         txs.swapOut(m_txsCache);
-        m_transaction_changed = false;
     }
+    return m_txsCache;
 }
 
 /**
@@ -177,10 +174,10 @@ void Block::decode(bytesConstRef _block_bytes)
     /// no try-catch to throw exceptions directly
     /// get RLP of block
     RLP block_rlp = BlockHeader::extractBlock(_block_bytes);
-    if (block_rlp.size() < BlockFieldSize)
+    if (block_rlp.size() < c_BlockFieldSize)
     {
         BOOST_THROW_EXCEPTION(InvalidBlockFormat() << errinfo_comment(
-                                  "Fields of Block must be no smaller than " + BlockFieldSize));
+                                  "Fields of Block must be no smaller than " + c_BlockFieldSize));
     }
     /// get block header
     m_blockHeader.populate(block_rlp[0]);
@@ -196,6 +193,21 @@ void Block::decode(bytesConstRef _block_bytes)
     /// get sig_list
     m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
     noteChange();
+    noteBlockChange();
+}
+
+/// get block hash
+h256 Block::hash()
+{
+    Guard l(m_hashLock);
+    if (m_blockHash == h256())
+    {
+        bytes block_bytes;
+        encode(block_bytes);
+        /// calculate hash
+        m_blockHash = sha3(block_bytes);
+    }
+    return m_blockHash;
 }
 
 }  // namespace eth

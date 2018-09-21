@@ -39,7 +39,7 @@ const unsigned c_protocolVersion = 63;
 const unsigned c_minorProtocolVersion = 2;
 const unsigned c_databaseBaseVersion = 9;
 const unsigned c_databaseVersionModifier = 0;
-const unsigned int BlockFieldSize = 4;
+const unsigned c_BlockFieldSize = 4;
 
 const unsigned c_databaseVersion =
     c_databaseBaseVersion + (c_databaseVersionModifier << 8) + (23 << 9);
