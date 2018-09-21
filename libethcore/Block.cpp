@@ -150,8 +150,9 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
 bytes Block::encodeTransactions()
 {
-    RLPStream txs;
     RecursiveGuard l(m_txsCacheLock);
+    RLPStream txs;
+    txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
     {
         for (size_t i = 0; i < m_transactions.size(); i++)
@@ -174,11 +175,6 @@ void Block::decode(bytesConstRef _block_bytes)
     /// no try-catch to throw exceptions directly
     /// get RLP of block
     RLP block_rlp = BlockHeader::extractBlock(_block_bytes);
-    if (block_rlp.size() < c_BlockFieldSize)
-    {
-        BOOST_THROW_EXCEPTION(InvalidBlockFormat() << errinfo_comment(
-                                  "Fields of Block must be no smaller than " + c_BlockFieldSize));
-    }
     /// get block header
     m_blockHeader.populate(block_rlp[0]);
     /// get transaction list
@@ -189,7 +185,7 @@ void Block::decode(bytesConstRef _block_bytes)
         m_transactions[i].decode(transactions_rlp[i]);
     }
     /// get hash of the block header
-    m_headerHash = h256(block_rlp[2].data());
+    m_headerHash = h256(block_rlp[2].toInt<u256>());
     /// get sig_list
     m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
     noteChange();

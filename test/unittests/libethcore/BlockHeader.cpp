@@ -35,7 +35,7 @@ namespace dev
 {
 namespace test
 {
-class BlockHeaderFixture
+class BlockHeaderFixture : public TestOutputHelperFixture
 {
 public:
     BlockHeaderFixture()
