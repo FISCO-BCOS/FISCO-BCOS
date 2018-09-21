@@ -1,7 +1,7 @@
 
 
 
-var proxy="http://127.0.0.1:8545";
+var proxy="http://127.0.0.1:30302";
 
 var encryptType = 0;// 0:ECDSA 1:sm2Withsm3
 //console.log('RPC='+proxy);
