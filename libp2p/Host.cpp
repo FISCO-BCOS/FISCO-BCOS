@@ -226,8 +226,6 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, std::shared_ptr<
 	}
 	if (p->isOffline())
 		p->m_lastConnected = std::chrono::system_clock::now();
-	p->endpoint.address = _s->remoteEndpoint().address();
-	p->endpoint.tcpPort = _s->remoteEndpoint().port();
 
 	// clang error (previously: ... << hex << caps ...)
 	// "'operator<<' should be declared prior to the call site or in an associated namespace of one of its arguments"
@@ -312,7 +310,8 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, std::shared_ptr<
 		ps->start();//启动session 发个ping包
 		m_sessions[id] = ps;
 	}
-
+	p->endpoint.address = _s->remoteEndpoint().address();
+	p->endpoint.tcpPort = _s->remoteEndpoint().port();
 	LOG(INFO) << "p2p.host.peer.register: " << id;
 }
 
