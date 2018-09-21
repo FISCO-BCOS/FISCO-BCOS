@@ -7,7 +7,7 @@
 本文档是FISCO BCOS区块链开源平台的一部分。
 FISCO BCOS平台是金融区块链合作联盟（深圳）（以下简称：金链盟）开源工作组以金融业务实践为参考样本，在BCOS开源平台基础上进行模块升级与功能重塑，深度定制的安全可控、适用于金融行业且完全开源的区块链底层平台。  
 
-金链盟开源工作组获得金链盟成员机构的广泛认可，并由专注于区块链底层技术研发的成员机构及开发者牵头开展工作。其中首批成员包括以下单位（排名不分先后）：博彦科技、华为、深证通、神州数码、四方精创、腾讯、微众银行、越秀金科。   
+金链盟开源工作组获得金链盟成员机构的广泛认可，并由专注于区块链底层技术研发的成员机构及开发者牵头开展工作。其中首批成员包括以下单位（排名不分先后）：博彦科技、华为、深证通、神州数码、四方精创、腾讯、微众银行、越秀金科。
 
 FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行业的分布式商业需求，从业务适当性、性能、安全、政策、技术可行性、运维与治理、成本等多个维度进行综合考虑，打造金融版本的区块链解决方案。
 
@@ -29,28 +29,29 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ## 第一章 FISCO BCOS快速部署
 
-本章主要介绍FISCO BCOS区块链环境的部署。包括机器配置，部署软件环境，编译源码和快速构建。
+本章主要介绍FISCO BCOS区块链环境的部署。包括机器配置，快速构建，部署软件环境和编译源码。
 
 ### 1.1 机器配置
 
-| 配置   | 最低配置   | 推荐配置                                 |
+| 配置   | 最低配置   | 推荐配置                         |
 | ---- | ------ | ------------------------------------ |
 | CPU  | 1.5GHz | 2.4GHz                               |
-| 内存   | 1GB    | 4GB                                  |
-| 核心   | 2核     | 4核                                   |
-| 带宽   | 1Mb    | 5Mb                                  |
-| 操作系统 |        | CentOS （7.2  64位）或Ubuntu（16.04  64位） |
-| JAVA     |        | Java(TM) 1.8 && JDK 1.8 |
+| 内存   | 1GB    | 4GB                                |
+| 核心   | 2核     | 4核                                |
+| 带宽   | 1Mb    | 5Mb                                 |
+| 操作系统|      | CentOS(7.2 64位)或Ubuntu(16.04  64位) |
+| JAVA   |       | Java(TM) 1.8 && JDK 1.8 |
 
 ### 1.2 使用快速构建脚本
 
-> 第二、三章是手动部署单节点网络的操作步骤，如果不想**手工操作**，可以尝试使用`FISCO-BCOS/scrtips/build_chain.sh`脚本，根据脚本提示设置参数，快速生成多节点配置文件。
+> 第二、三章是手动部署单节点网络的操作步骤，如果不想**手工操作**，可以尝试使用`FISCO-BCOS/scrtips/build_chain.sh`脚本，根据脚本提示设置参数，快速搭建区块链网络。
 
-1. 生成节点配置文件
+1. 配置环境
+
 ```bash
 # 假设当前在FISCO-BCOS/build目录下
 cd ../scripts
-# 准备IPList.txt文件
+# 准备IPList.txt文件 按行分割，可以有多个IP
 echo 127.0.0.1 > IPList.txt
 # build_chain.sh 
 # Usage:
@@ -63,6 +64,7 @@ echo 127.0.0.1 > IPList.txt
 # 	-c <ClientCert Passwd>      Default 123456
 # 	-k <Keystore Passwd>        Default 123456
 # 	-s <StateDB type>           Default leveldb. if set -s, use amop
+# 	-t <Cert config file>       Default auto generate
 # 	-z Generate tar packet      Default no
 # 	-h Help
 
@@ -120,7 +122,7 @@ bash ./scripts/install_deps.sh
 mkdir build && cd build
 # [Centos] 注意命令末尾的..
 cmake3  ..  
-# [Ubuntu] 
+# [Ubuntu]
 cmake  ..  
 # 编译 多核可尝试make -j$(nproc)
 make
@@ -132,6 +134,7 @@ FISCO-BCOS网络采用面向CA的准入机制，保障信息保密性、认证�
 以链和节点两级证书体系为例，一条链拥有一个链证书及对应的链私钥，链私钥由链管理员拥有。并对每个参与该链的节点签发节点证书。节点证书是节点身份的凭证，并使用该证书与其他节点间建立SSL连接进行加密通讯。本章介绍手动搭建一个单节点的区块链网络，包括链证书、节点私钥、节点证书、配置文件的生成和配置。生成方法如下：
 
 ### 3.1 生成链证书
+
 ```bash
 # 假设当前在FISCO-BCOS/build目录下 切换到FISCO-BCOS/scripts目录下
 cd ../scripts
@@ -148,15 +151,17 @@ bash ../chain.sh  #会提示输入相关证书信息，默认可以直接回车
 # 如需要生成多个节点，则重复执行 ./node.sh 节点名称 即可
 bash ../node.sh node-0
 ```
-> `FISCO-BCOS/scripts/nodes/`目录下将生成节点目录`node-0`。`node-0/data`目录下将有链证书`ca.crt`、节点私钥`node.key`、节点证书`node.crt`相关文件。
-> **注意：node.key 节点私钥文件请妥善保存**
+
+> **注意：node.key 节点私钥文件请妥善保存**。`FISCO-BCOS/scripts/nodes/`目录下将生成节点目录`node-0`。`node-0/data`目录下将有链证书`ca.crt`、节点私钥`node.key`、节点证书`node.crt`相关文件。
 
 ### 3.3 生成SDK证书 [可选]
+
 ``` shell
 # 为节点node0生成sdk所需文件，这里需要设置密码
 bash ../sdk.sh node-0
 cd ../  # 回到scripts目录
 ```
+
 > FISCO-BCOS/build/nodes/node-0目录下将生成sdk目录，并将sdk目录下所有文件拷贝到SDK端的证书目录下。
 
 ### 3.4 准备节点环境
@@ -164,9 +169,7 @@ cd ../  # 回到scripts目录
 > 假定节点目录为FISCO-BCOS/scripts/nodes/node-0，按如下步骤操作：
 
 ```shell
-# 假定当前目录为FISCO-BCOS/scripts/ 创建目录结构
-
-# 拷贝相关文件
+# 假定当前目录为FISCO-BCOS/scripts/ 拷贝相关文件
 cp ../fisco-bcos ../genesis.json ../config.conf ../log.conf start.sh stop.sh nodes/node-0
 ```
 
@@ -179,11 +182,8 @@ NodeID唯一标识了区块链中的某个节点，在节点启动前必须进�
 ```bash
 # nodes/node-0/data/node.key为节点私钥
 openssl ec -in nodes/node-0/data/node.key -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"'
-```
-> 得到类似下面的NodeID
-
-```bash
-d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
+# 得到类似下面的NodeID
+# d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
 ```
 
 #### 3.4.2 参数配置文件
@@ -259,21 +259,22 @@ log.conf其它字段说明请参看[附录：log.conf说明](#85-logconf说明)
 
 > genesis.json其它字段说明请参看[附录：genesis.json说明](#83-genesisjson说明genesisjson)
 
-> 启动节点
+1. 脚本启动
 
 ```shell
+# 启动节点
 cd nodes/node-0
 bash start.sh
 # 若需要停止节点
 # bash stop.sh
 ```
 
-> 或手动启动
+2. 手动启动
 
 ```shell
 cd nodes/node-0
 # 启动区块链节点
-fisco-bcos --genesis genesis.json --config config.conf & 
+./fisco-bcos --config config.conf --genesis genesis.json &
 # 查看日志输出
 tail -f log/info* |grep ++++  
 # 若需要退出节点
@@ -300,7 +301,7 @@ ps -ef |grep fisco-bcos
 > 看到进程启动
 
 ```log
-app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --genesis genesis.json --config config.json
+app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --config config.json --genesis genesis.json 
 ```
 
 #### 3.6.2 查看日志输出
@@ -311,7 +312,7 @@ app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --genesis genesis.json --c
 tail -f log/info* |grep ++++  #查看日志输出
 ```
 
-> 可看到不断刷出打包信息。
+> 可看到不断刷出打包信息。若上述都正确输出，则表示节点已经正确启动！
 
 ```log
 INFO|2017-12-12 17:52:16:877|+++++++++++++++++++++++++++ Generating seal ondcae019af78cf04e17ad908ec142ca4e25d8da14791bda50a0eeea782ebf3731#1tx:0,maxtx:1000,tq.num=0time:1513072336877
@@ -319,11 +320,10 @@ INFO|2017-12-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9
 INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38c7a380b13b2e46fecbdca0fac5473f4cbc054190e90b8bd4831faac4521#1tx:0,maxtx:1000,tq.num=0time:1513072338897
 ```
 
-若上述都正确输出，则表示节点已经正确启动！
-
 ## 第四章 使用控制台
 
 ### 4.1 连接控制台
+
 查看节点的配置文件config.conf中的ip和console port：
 ```ini
 [rpc]
@@ -332,18 +332,20 @@ INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38
    http_listen_port=30302
    console_port=30303
 ```
+
 节点启动之后，输入以下命令连接节点的控制台：
 ```bash
 telnet 127.0.0.1 30303
-```
-连接成功之后，显示信息如下：
-``` bash
+# 连接成功之后，显示信息如下：
 Trying 127.0.0.1...
 Connected to 127.0.0.1.
 Escape character is '^]'.
 ```
+
 ### 4.2 控制台命令使用
+
 #### 4.2.1 help命令
+
 首先输入help，查看可用的命令：
 
 ```bash
@@ -360,7 +362,9 @@ quit                   Quit the blockchain console.
 help                   Provide help information for blockchain console.
 ======================================================================
 ```
+
 #### 4.2.2 status命令
+
 运行status命令，查看节点的状态，块高和view:
 
 ```bash
@@ -370,7 +374,9 @@ Status: sealing
 Block number:16 at view:1110
 ----------------------------------------------------------------------
 ```
+
 #### 4.2.3 p2p.list命令
+
 运行p2p.list命令，查看与本节点链接的其他节点:
 
 ```bash
@@ -385,7 +391,20 @@ Connected: 1
 ----------------------------------------------------------------------
 ```
 
-#### 4.2.4 miner.list命令
+#### 4.2.4 p2p.update命令
+
+运行p2p.update命令，动态加载配置文件中的P2P信息，与新加入的节点建立连接:
+
+```bash
+Add staticNode:
+----------------------------------------------------------------
+node.0 : 127.0.0.1:30300
+----------------------------------------------------------------
+update successfully！
+----------------------------------------------------------------
+```
+
+#### 4.2.5 miner.list命令
 
 运行miner.list命令，查看网络中的共识节点:
 
@@ -399,7 +418,8 @@ Nodeid: b69fceef5cafad360bc1fad750d9c5ef71627da21527d8621e566a1f4184408a42248492
 ----------------------------------------------------------------------
 ```
 
-#### 4.2.5 miner.add命令
+#### 4.2.6 miner.add命令
+
 运行miner.add命令添加共识节点，该指令需要NodeID作为参数，新添加的共识节点将在下个块开始生效。操作完该指令后，请启动新添加的共识节点，并在新添加的共识节点配置文件`P2P.node.x`中配置已有节点的IP和P2P端口。
 ```bash
 miner.add 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
@@ -407,7 +427,7 @@ add miner successfully: 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab161
 ----------------------------------------------------------------------
 ```
 
-#### 4.2.6 miner.remove命令
+#### 4.2.7 miner.remove命令
 
 运行miner.add命令移除共识节点，该指令需要NodeID作为参数，被移除的节点将转为观察节点。
 ```bash
@@ -416,17 +436,9 @@ remove miner successfully: 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab
 ----------------------------------------------------------------------
 ```
 
-#### 4.2.7 amdb.select命令
+#### 4.2.8 amdb.select命令
 
-运行amdb.select命令，需要两个参数，即表名和主键字段值。通过AMDB使用手册，利用Java客户端向mysql插入2条记录。现在需要查该记录，则查询t_test表，主键字段值为fruit的记录，查询结果显示如下，查询到2条entry信息，即2条记录，记录由多对key-value值构成。
-entry中的key解释如下：
-* \_hash\_ ：记录的区块hash，属于系统字段，系统自动建立。
-* \_id\_ ：记录的id，表的自增字段，属于系统字段，系统自动建立。
-* \_num\_ ：记录的区块高度，属于系统字段，系统自动建立。
-* \_status\_ ：记录的状态，值为0表示正常状态，值为1表示删除状态，属于系统字段，系统自动建立。
-* item_id ：t_test表自定义字段。
-* item_name ：t_test表自定义字段。
-* name ：t_test表自定义字段，name字段是t_test表的主键。
+运行amdb.select命令，需要两个参数，即表名和主键字段值。现在查询t_test表，主键字段值为fruit的记录，查询结果显示如下
 
 ```bash
 amdb.select t_test fruit
@@ -450,20 +462,18 @@ item_name: orange
 name: fruit
 ------------------------------------------------------------------------
 ```
-切换节点配置到leveldb，利用Java客户端向leveldb插入了1条记录，查询结果显示如下，查询到1条entry信息。
+entry中的key解释如下：
+* \_hash\_ ：记录的区块hash，属于系统字段，系统自动建立。
+* \_id\_ ：记录的id，表的自增字段，属于系统字段，系统自动建立。
+* \_num\_ ：记录的区块高度，属于系统字段，系统自动建立。
+* \_status\_ ：记录的状态，值为0表示正常状态，值为1表示删除状态，属于系统字段，系统自动建立。
+* item_id ：t_test表自定义字段。
+* item_name ：t_test表自定义字段。
+* name ：t_test表自定义字段，name字段是t_test表的主键。
 
-``` bash
-amdb.select t_test fruit
-----------------------------------------------------------------------
-Number of entry: 1
-----------------------------------------------------------------------
-_status_: 0
-item_id: 2
-item_name: apple
-name: fruit
-----------------------------------------------------------------------
-```
-#### 4.2.8 quit命令
+
+#### 4.2.9 quit命令
+
 运行quit命令，退出控制台:
 ```bash
 quit
@@ -480,7 +490,6 @@ Connection closed by foreign host.
 
 > 安装依赖环境
 
-
 1. 下载对应平台的solidity编译器, 直接下载后放入系统目录下。
 
 ```shell
@@ -488,7 +497,7 @@ Connection closed by foreign host.
     wget https://github.com/FISCO-BCOS/fisco-solc/raw/master/fisco-solc-ubuntu
     sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc
     sudo chmod +x /usr/bin/fisco-solc
-    
+
 [centos]：
     wget https://github.com/FISCO-BCOS/fisco-solc/raw/master/fisco-solc-centos
     sudo cp fisco-solc-centos  /usr/bin/fisco-solc
@@ -524,13 +533,13 @@ cd ../tool
 cnpm install #该命令在该目录执行一次即可, 如果之前已经执行过一次, 则忽略。
 ```
 
-> 设置区块链节点RPC端口
+> 设置区块链节点http_listen_port端口
 
 ```shell
 vim ../web3lib/config.js
 ```
 
-> 仅需将proxy指向区块链节点的RPC端口即可。RPC端口在节点的config.conf中查看。
+> 仅需将proxy指向区块链节点的http_listen_port端口即可。http_listen_port端口在节点的config.conf中查看。
 
 ```javascript
 var proxy="http://127.0.0.1:30302";
@@ -565,7 +574,7 @@ contract HelloWorld{
 
 #### 5.2.2 编译+部署合约
 
-请先确认config.js已经正确指向区块链节点的RPC端口，且相应的区块链节点已经启动。
+请先确认config.js已经正确指向区块链节点的http_listen_port端口，且相应的区块链节点已经启动。
 
 > 直接使用自动编译部署程序deploy.js，自动编译和部署合约：
 
@@ -594,7 +603,7 @@ HelloWorld deploy success!
 vim demoHelloWorld.js
 ```
 
-#### 5.3.2 调用合约 
+#### 5.3.2 调用合约
 
 > 执行合约调用程序
 
@@ -622,7 +631,7 @@ monitor.js脚本监控节点的连接情况和块高。在运行前，请确认�
 
 （1）被监控的区块链节点已经启动。
 
-（2）config.js正确配置，proxy字段指向了需要监控的区块链节点的RPC端口。
+（2）config.js正确配置，proxy字段指向了需要监控的区块链节点的http_listen_port端口。
 
 > 配置config，并执行monitor.js
 
@@ -696,6 +705,7 @@ Host:127.0.0.1:30403
 ```
 
 3. 启动全部节点并检查
+
 ```bash
 # 在节点0的目录下操作
 cd node-0
@@ -708,11 +718,11 @@ cd node-1
 ### 6.2 使用控制台增删共识节点
 
 在已经运行的网络中添加共识节点，参考以下步骤操作：
-1. 参考第二、三章生成新节点的配置
-2. 使用控制台`miner.add`指令添加新节点的NodeID到网络中
-3. 在新节点的`config.conf`中`[p2p].node`列表中添加已有节点的IP和p2p端口。
-4. 启动新节点
-5. 检查节点的运行状态，参考[3.5 验证节点启动](#34-验证节点启动)
+1. 参考[第三章](#第三章-手工部署单节点区块链网络)生成新节点的配置
+1. 使用控制台`miner.add`指令添加新节点的NodeID到网络中
+1. 在新节点的`config.conf`中`[p2p].node`列表中添加已有节点的IP和p2p端口。
+1. 启动新节点
+1. 检查节点的运行状态，参考[3.5 验证节点启动](#34-验证节点启动)
 
 ## 第七章 FISCO BCOS 特性
 
@@ -720,17 +730,17 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 
 1. [AMOP（链上链下）](../amop使用说明文档.md)
 1. [AMDB使用说明文档.md](../AMDB使用说明文档.md)
-2. [Contract_Name_Service](../CNS_Contract_Name_Service_服务使用说明文档.md)
-3. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
-4. [web3sdk](../web3sdk使用说明文档.md)
-5. [并行计算](../并行计算使用说明文档.md) 
-6. [分布式文件系统](../分布式文件系统使用说明.md)
-7. [监控统计日志](../监控统计日志说明文档.md)
-8. [同态加密](../同态加密说明文档.md)
-9. [机构证书准入](../CA机构身份认证说明文档.md)
-10. [可监管的零知识证明](../可监管的零知识证明说明.md)
-11. [群签名环签名](../启用_关闭群签名环签名ethcall.md)
-12. [弹性联盟链共识框架](../弹性联盟链共识框架说明文档.md)
+1. [Contract_Name_Service](../CNS_Contract_Name_Service_服务使用说明文档.md)
+1. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
+1. [web3sdk](../web3sdk使用说明文档.md)
+1. [并行计算](../并行计算使用说明文档.md)
+1. [分布式文件系统](../分布式文件系统使用说明.md)
+1. [监控统计日志](../监控统计日志说明文档.md)
+1. [同态加密](../同态加密说明文档.md)
+1. [机构证书准入](../CA机构身份认证说明文档.md)
+1. [可监管的零知识证明](../可监管的零知识证明说明.md)
+1. [群签名环签名](../启用_关闭群签名环签名ethcall.md)
+1. [弹性联盟链共识框架](../弹性联盟链共识框架说明文档.md)
 
 ## 第八章 附录
 
@@ -798,12 +808,12 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 |secure.key|${DATAPATH}/node.key|节点私钥|
 |secure.cert|${DATAPATH}/node.crt|节点证书|
 |secure.ca_cert|${DATAPATH}/ca.crt|链证书|
-|secure.ca_path|空||
+|secure.ca_path|空|可加载指定路径下的ca相关文件|
 |statedb.type|leveldb|可选leveldb或amop|
 |statedb.path|${DATAPATH}/statedb|leveldb存储路径|
 |statedb.retryInterval|1|重连AMDB间隔时间|
 |statedb.maxRetry|0|amopdb的最大重试次数 超出次数后程序退出 默认为0(无限)|
-|statedb.topic|DB||
+|statedb.topic|DB|amopdb关注的topic|
 |pbft.block_interval|1000|出块间隔 单位ms|
 |pbft.miner.0|共识节点NodeID|共识节点列表`miner.x`，**所有联网节点配置文件中该列表必须相同**|
 |rpc.listen_ip|127.0.0.1|监听IP，建议设置为内网IP，禁止外网访问|
@@ -814,8 +824,7 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 |p2p.listen_port|30300|p2p端口|
 |p2p.idle_connections|100|p2p最大连接数 默认为100|
 |p2p.reconnect_interval|60|p2p重连间隔 单位秒 默认为60s|
-|p2p.node.0|127.0.0.1：30300|配置区块链节点列表 格式为ip:端口 以node.开头|
-
+|p2p.node.0|127.0.0.1:30300|配置区块链节点列表 格式为ip:端口 以node.开头|
 
 ### 8.5 log.conf说明
 
@@ -852,4 +861,3 @@ xxxxx.sh: 行x： $'\r':未找到命令
 sudo yum -y install dos2unix
 dos2unix xxxxx.sh
 ```
-
