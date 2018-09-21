@@ -14,7 +14,7 @@ using namespace dev::eth;
 
 void ConsoleInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	std::string listenIP = pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
-	int listenPort = pt.get<int>("rpc.console_port", 5053);
+	int listenPort = pt.get<int>("rpc.console_port", 30303);
 
 	if(listenPort > 0) {
 		auto ioService = std::make_shared<boost::asio::io_service>();

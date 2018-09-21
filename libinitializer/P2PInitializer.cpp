@@ -15,7 +15,7 @@ using namespace dev::p2p;
 
 void P2PInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	std::string listenIP = pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
-	int listenPort = pt.get<int>("p2p.listen_port", 30301);
+	int listenPort = pt.get<int>("p2p.listen_port", 30300);
 	int idleConnections = pt.get<int>("p2p.idle_connections", 100);
 	int reconnectInerval = pt.get<int>("p2p.reconnect_interval", 60);
 

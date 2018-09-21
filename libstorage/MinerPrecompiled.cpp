@@ -9,7 +9,7 @@ using namespace dev::precompiled;
 
 bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef param)
 {
-    LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
+    LOG(TRACE) << "this: " << this << " call MinerPrecompiled:" << toHex(param);
 
     //解析出函数名
     uint32_t func = getParamFunc(param);
