@@ -57,7 +57,7 @@ add_subdirectory(evmc)
 add_subdirectory(libinterpreter)
 add_subdirectory(libevm)
 add_subdirectory(libp2p)
-add_subdirectory(liblegacystate)
+add_subdirectory(libmptstate)
 add_subdirectory(libexecutivecontext)
 
 if (TESTS)

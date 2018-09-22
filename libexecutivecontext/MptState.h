@@ -16,28 +16,28 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @Legacy state interface for EVM
+ * @MPT state interface for EVM
  *
- * @file LegacyState.h
+ * @file MptState.h
  * @author jimmyshi
  * @date 2018-09-21
  */
 
 #include "StateFace.h"
 #include <libdevcore/Common.h>
-#include <liblegacystate/State.h>
+#include <libmptstate/State.h>
 
 
 namespace dev
 {
 namespace eth
 {
-class LegacyState : public StateFace
+class MptState : public StateFace
 {
 public:
-    explicit LegacyState(u256 const& _accountStartNonce) : m_state(_accountStartNonce){};
+    explicit MptState(u256 const& _accountStartNonce) : m_state(_accountStartNonce){};
 
-    explicit LegacyState(u256 const& _accountStartNonce, OverlayDB const& _db,
+    explicit MptState(u256 const& _accountStartNonce, OverlayDB const& _db,
         BaseState _bs = BaseState::PreExisting)
       : m_state(_accountStartNonce, _db, _bs){};
 
@@ -45,13 +45,13 @@ public:
     {
         Null
     };
-    LegacyState(NullType) : m_state(Invalid256, OverlayDB(), BaseState::Empty){};
+    MptState(NullType) : m_state(Invalid256, OverlayDB(), BaseState::Empty){};
 
     /// Copy state object.
-    LegacyState(LegacyState const& _s) : m_state(_s.m_state) {}
+    MptState(MptState const& _s) : m_state(_s.m_state) {}
 
     /// Copy state object.
-    LegacyState& operator=(LegacyState const& _s)
+    MptState& operator=(MptState const& _s)
     {
         m_state = _s.m_state;
         return *this;
