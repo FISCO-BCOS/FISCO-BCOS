@@ -16,9 +16,9 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @Legacy EVM context (old ExtVM)
+ * @Legacy EVM context
  *
- * @file EvmExecutiveContext.h
+ * @file ExtVM.h
  * @author jimmyshi
  * @date 2018-09-21
  */

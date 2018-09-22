@@ -16,14 +16,14 @@
  *
  * @brief
  *
- * @file EvmExecutiveContest.cpp
+ * @file ExtVMTest.cpp
  * @author: jimmyshi
  * @date 2018-09-21
  */
 
 #include <libdevcore/FixedHash.h>
-#include <libexecutivecontext/EvmExecutiveContext.h>
-#include <libexecutivecontext/LegacyState.h>
+#include <libexecutivecontext/ExtVM.h>
+#include <libexecutivecontext/MptState.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -35,12 +35,12 @@ namespace dev
 {
 namespace test
 {
-BOOST_FIXTURE_TEST_SUITE(EvmExecutiveContextTest, TestOutputHelperFixture)
+BOOST_FIXTURE_TEST_SUITE(ExtVMTest, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(stateFaceTest)
 {
     OverlayDB db = State::openDB("./", h256("0x1234"));
-    LegacyState s(Invalid256, db, BaseState::Empty);
+    MptState s(Invalid256, db, BaseState::Empty);
     ExtVM vm(s);
 
     Address addr = Address(0);
