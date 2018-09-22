@@ -60,17 +60,18 @@ if [ -z ${eth_path} ];then
 fi
 
 echo "FISCO-BCOS Path: $eth_path"
-echo "IP List File:    $ip_file"
-echo "CA Key:          $ca_file"
-echo "Nodes per IP:    $node_num"
-echo "Output Dir:      $output_dir"
-echo "Start Port:      $port_start"
-
+echo "IP List File   : $ip_file"
+echo "CA Key         : $ca_file"
+echo "Nodes per IP   : $node_num"
+echo "Output Dir     : $output_dir"
+echo "Start Port     : $port_start"
+echo "============================="
 [ -d "$output_dir" ] || mkdir -p "$output_dir"
 
 if [ "${Download}" = "true" ];then
 	echo "Downloading fisco-bcos binary..." 
 	curl -o ${eth_path} ${Download_Link}
+  chmod a+x ${eth_path}
 fi
 
 #准备CA密钥
