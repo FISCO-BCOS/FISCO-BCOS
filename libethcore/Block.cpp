@@ -32,13 +32,11 @@ namespace eth
 Block::Block(bytesConstRef _data)
 {
     decode(_data);
-    m_blockHash = hash();
 }
 
 Block::Block(bytes const& _data)
 {
     decode(ref(_data));
-    m_blockHash = hash();
 }
 
 Block::Block(Block const& _block)
@@ -47,7 +45,6 @@ Block::Block(Block const& _block)
     m_headerHash(_block.headerHash()),
     m_sigList(_block.sigList())
 {
-    noteBlockChange();
     noteChange();
 }
 
@@ -60,7 +57,6 @@ Block& Block::operator=(Block const& _block)
     /// init sigList
     m_sigList = _block.sigList();
     noteChange();
-    noteBlockChange();
     return *this;
 }
 
@@ -125,9 +121,9 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 }
 
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
-bytes Block::encodeTransactions()
+bytes const& Block::encodeTransactions()
 {
-    RecursiveGuard l(m_txsCacheLock);
+    /// RecursiveGuard l(m_txsCacheLock);
     RLPStream txs;
     txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
@@ -166,22 +162,6 @@ void Block::decode(bytesConstRef _block_bytes)
     /// get sig_list
     m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
     noteChange();
-    noteBlockChange();
 }
-
-/// get block hash
-h256 Block::hash()
-{
-    Guard l(m_hashLock);
-    if (m_blockHash == h256())
-    {
-        bytes block_bytes;
-        encode(block_bytes);
-        /// calculate hash
-        m_blockHash = sha3(block_bytes);
-    }
-    return m_blockHash;
-}
-
 }  // namespace eth
 }  // namespace dev

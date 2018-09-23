@@ -44,13 +44,20 @@ public:
 
     ///-----opearator overloads of Block
     /// operator ==
-    bool operator==(Block const& _block) const
+    bool equalAll(Block const& _block) const
     {
         return m_blockHeader == _block.blockHeader() && m_headerHash == _block.headerHash() &&
                m_sigList == _block.sigList() && m_transactions == _block.transactions();
     }
-    /// operator !=
-    bool operator!=(Block const& _cmp) const { return !operator==(_cmp); }
+
+    bool equalWithoutSig(Block const& _block) const
+    {
+        return m_blockHeader == _block.blockHeader() && m_headerHash == _block.headerHash() &&
+               m_transactions == _block.transactions();
+    }
+
+    bool equalHeader(Block const& _block) const { return m_blockHeader == _block.blockHeader(); }
+
     explicit operator bool() const { return bool(m_blockHeader); }
 
     ///-----encode functions
@@ -76,30 +83,22 @@ public:
     {
         m_transactions = _trans;
         noteChange();
-        noteBlockChange();
     }
     /// append a single transaction to m_transactions
     void appendTransaction(Transaction const& _trans)
     {
         m_transactions.push_back(_trans);
         noteChange();
-        noteBlockChange();
     }
     /// set block header
-    void setBlockHeader(BlockHeader const& _blockHeader)
-    {
-        m_blockHeader = _blockHeader;
-        noteBlockChange();
-    }
+    void setBlockHeader(BlockHeader const& _blockHeader) { m_blockHeader = _blockHeader; }
     /// set sig list
     void inline setSigList(std::vector<std::pair<u256, Signature>> const& _sigList)
     {
         m_sigList = _sigList;
-        noteBlockChange();
     }
-    /// get block hash
-    h256 blockHash() { return hash(); }
-    h256 hash();
+    /// get hash of block header
+    h256 blockHeaderHash() { return m_blockHeader.hash(); }
 
 private:
     /// encode function
@@ -108,17 +107,11 @@ private:
     /// callback this function when transaction has changed
     void noteChange()
     {
-        RecursiveGuard l(m_txsCacheLock);
+        /// RecursiveGuard l(m_txsCacheLock);
         m_txsCache = bytes();
     }
 
-    void noteBlockChange()
-    {
-        Guard l(m_hashLock);
-        m_blockHash = h256();
-    }
-
-    bytes inline encodeTransactions();
+    bytes const& encodeTransactions();
 
 private:
     /// block header of the block (field 0)
@@ -132,11 +125,7 @@ private:
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     bytes m_txsCache;
-    h256 m_blockHash;
-
-    /// mutex for block hash
-    mutable Mutex m_hashLock;
-    mutable RecursiveMutex m_txsCacheLock;
+    /// mutable RecursiveMutex m_txsCacheLock;
 };
 }  // namespace eth
 }  // namespace dev
