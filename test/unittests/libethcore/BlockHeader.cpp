@@ -25,7 +25,7 @@
 #include <libdevcore/TrieHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
-#include <libethcore/TransactionBase.h>
+#include <libethcore/Transaction.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -35,7 +35,7 @@ namespace dev
 {
 namespace test
 {
-class BlockHeaderFixture
+class BlockHeaderFixture : public TestOutputHelperFixture
 {
 public:
     BlockHeaderFixture()
@@ -64,27 +64,43 @@ public:
     /// @brief : construct block
     void constructBlock(RLPStream& block_rlp, BlockHeader const& block_header)
     {
+        fakeSingleTransaction();
         block_rlp.appendList(2);
-        RLPStream block_stream;
-        block_header.streamRLP(block_stream);
-        block_rlp.appendRaw(block_stream.out());
+        bytes block_bytes;
+        block_header.encode(block_bytes);
+        block_rlp.appendRaw(block_bytes);
         RLPStream txs_rlp;
         txs_rlp.appendList(3);
         KeyPair key_pair = KeyPair::create();
         for (int i = 0; i < 3; i++)
         {
-            TransactionSkeleton trasaction_template;
-            TransactionBase tx(trasaction_template, key_pair.secret());
-            RLPStream tmp_stream;
-            tx.streamRLP(tmp_stream);
-            txs_rlp.appendRaw(tmp_stream.out());
+            bytes tmp_bytes;
+            m_singleTransaction.encode(tmp_bytes);
+            txs_rlp.appendRaw(tmp_bytes);
         }
         block_rlp.appendRaw(txs_rlp.out());
+    }
+
+    void fakeSingleTransaction()
+    {
+        bytes rlpBytes = fromHex(
+            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+            "0000"
+            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+            "0000"
+            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+            "657c"
+            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
+
+        RLP rlpObj(rlpBytes);
+        bytesConstRef d = rlpObj.data();
+        m_singleTransaction = Transaction(d, eth::CheckTransaction::Everything);
     }
 
     ~BlockHeaderFixture() { block_header_genesis.clear(); }
     RLPStream block_rlp;
     BlockHeader block_header_genesis;
+    Transaction m_singleTransaction;
     uint64_t current_time;
     h512s sealer_list;
 };
@@ -104,10 +120,8 @@ BOOST_AUTO_TEST_CASE(testBlockerHeaderGetter)
     BOOST_CHECK(block_header_genesis.gasLimit() == u256(3000000));
     BOOST_CHECK(block_header_genesis.gasUsed() == u256(100000));
     BOOST_CHECK(block_header_genesis.timestamp() == current_time);
-    bytes invalid_item;
-    BOOST_CHECK(block_header_genesis.extraData(invalid_item, 1) == false);
-    bytes valid_item;
-    BOOST_CHECK(block_header_genesis.extraData(valid_item, 0) == true);
+    bytes valid_item = block_header_genesis.extraData(0);
+    BOOST_CHECK(valid_item.size());
     BOOST_CHECK(valid_item == jsToBytes("0x1020"));
     BOOST_CHECK(block_header_genesis.extraData().size() == 1);
     BOOST_CHECK(block_header_genesis.sealer() == u256("0x00"));
@@ -117,10 +131,10 @@ BOOST_AUTO_TEST_CASE(testBlockerHeaderGetter)
 BOOST_AUTO_TEST_CASE(testCopyStruct)
 {
     /// trans block_header_genesis to RLP
-    RLPStream block_stream;
-    block_header_genesis.streamRLP(block_stream);
-    BlockHeader block_header_copy(block_stream.out(), HeaderData);
-    BOOST_CHECK_THROW(BlockHeader(block_stream.out(), BlockData), InvalidBlockFormat);
+    bytes block_bytes;
+    block_header_genesis.encode(block_bytes);
+    BlockHeader block_header_copy(block_bytes, HeaderData);
+    BOOST_CHECK_THROW(BlockHeader(block_bytes, BlockData), InvalidBlockFormat);
     BOOST_CHECK(block_header_copy.hash() == block_header_genesis.hash());
     ///----- check details: for debug
     BOOST_CHECK(block_header_genesis.parentHash() == block_header_copy.parentHash());
@@ -181,9 +195,9 @@ BOOST_AUTO_TEST_CASE(testExtraHeaderException)
     // invalid block format because transaction invalid
     RLPStream invalid_txlist;
     invalid_txlist.appendList(2);
-    RLPStream header_rlp;
-    block_header_genesis.streamRLP(header_rlp);
-    invalid_txlist.appendRaw(header_rlp.out());
+    bytes header_bytes;
+    block_header_genesis.encode(header_bytes);
+    invalid_txlist.appendRaw(header_bytes);
     invalid_txlist.appendRaw(invalid_rlp.out());
     BOOST_CHECK_THROW(
         block_header_genesis.extractHeader(ref(invalid_txlist.out())), InvalidBlockFormat);

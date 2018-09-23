@@ -14,8 +14,8 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief Unit tests for the TransactionBase
- * @file TransactionBase.cpp
+ * @brief Unit tests for the Transaction
+ * @file Transaction.cpp
  * @author: chaychen
  * @date 2018
  */
@@ -23,7 +23,7 @@
 #include <libdevcore/Assertions.h>
 #include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
-#include <libethcore/TransactionBase.h>
+#include <libethcore/Transaction.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -33,7 +33,7 @@ namespace dev
 {
 namespace test
 {
-BOOST_FIXTURE_TEST_SUITE(TransactionBase, TestOutputHelperFixture)
+BOOST_FIXTURE_TEST_SUITE(Transaction, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
 {
@@ -45,13 +45,13 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
 
     RLP rlpObj(rlpBytes);
     bytesConstRef d = rlpObj.data();
-    eth::TransactionBase tx(d, eth::CheckTransaction::Everything);
+    eth::Transaction tx(d, eth::CheckTransaction::Everything);
 
     BOOST_CHECK(tx.sender() == tx.safeSender());
     BOOST_CHECK_NO_THROW(tx.signature());
     BOOST_CHECK_NO_THROW(tx.checkLowS());
-    RLPStream s;
-    BOOST_CHECK_NO_THROW(tx.streamRLP(s, eth::IncludeSignature::WithSignature));
+    bytes s;
+    BOOST_CHECK_NO_THROW(tx.encode(s, eth::IncludeSignature::WithSignature));
 }
 
 BOOST_AUTO_TEST_CASE(testCreateTxByTransactionSkeleton)
@@ -64,23 +64,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByTransactionSkeleton)
 
     RLP rlpObj(rlpBytes);
     bytesConstRef d = rlpObj.data();
-    eth::TransactionBase tx(d, eth::CheckTransaction::Everything);
-
-    Secret secret =
-        jsToSecret("0x41911b3f20adbf6a84f81b57fa175429b0e7058b247911b201622c869a4c1526");
-
-    eth::TransactionSkeleton txSkeleton;
-    txSkeleton.creation = false;
-    txSkeleton.from = tx.sender();
-    txSkeleton.to = tx.to();
-    txSkeleton.value = tx.value();
-    txSkeleton.data = tx.data();
-    txSkeleton.nonce = tx.nonce();
-    txSkeleton.gas = tx.gas();
-    txSkeleton.gasPrice = tx.gasPrice();
-    txSkeleton.blockLimit = tx.blockLimit();
-
-    eth::TransactionBase tx1(txSkeleton, secret);
+    eth::Transaction tx(d, eth::CheckTransaction::Everything);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -40,10 +40,10 @@ public:
     static void init() {}
     void generateSeal(BlockHeader const& _bi) override
     {
-        RLPStream ret;
-        _bi.streamRLP(ret);
+        bytes ret;
+        _bi.encode(ret);
         if (m_onSealGenerated)
-            m_onSealGenerated(ret.out());
+            m_onSealGenerated(ret);
     }
     void onSealGenerated(std::function<void(bytes const&)> const& _f) override
     {

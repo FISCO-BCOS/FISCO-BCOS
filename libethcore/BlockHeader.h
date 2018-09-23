@@ -77,7 +77,6 @@ class BlockHeader
 
 public:
     static const unsigned BasicFields = 12;
-
     BlockHeader();
     /// construct block or block header according to input params
     explicit BlockHeader(
@@ -93,6 +92,7 @@ public:
 
     /// extract block header from block
     static RLP extractHeader(bytesConstRef _block);
+    static RLP extractBlock(bytesConstRef _block);
 
     /// get the hash of block header according to block data
     static h256 headerHashFromBlock(bytes const& _block) { return headerHashFromBlock(&_block); }
@@ -115,7 +115,8 @@ public:
 
     /// populate block header from parent
     void populateFromParent(BlockHeader const& parent);
-    void streamRLP(RLPStream& _s) const;
+    void encode(bytes& _header) const;
+    void decode(bytesConstRef& _header_data);
     void clear();
 
     /// block header verify
@@ -229,32 +230,24 @@ public:
     ///------set interfaces related to block header END------
 
     /// ------ get interfaces related to block header------
-    h256 const& parentHash() const { return m_parentHash; }              /// field 0
-    h256 const& stateRoot() const { return m_stateRoot; }                /// field 1
-    h256 const& transactionsRoot() const { return m_transactionsRoot; }  /// field 2
-    h256 const& receiptsRoot() const { return m_receiptsRoot; }          /// field 3
-    LogBloom const& logBloom() const { return m_logBloom; }              /// field 4
-    int64_t number() const { return m_number; }                          /// field 5
-    u256 const& gasLimit() const { return m_gasLimit; }                  /// field 6
-    u256 const& gasUsed() const { return m_gasUsed; }                    /// field 7
-    uint64_t timestamp() const { return m_timestamp; }                   /// field 8
-    bool extraData(bytes& item, unsigned int _index) const
-    {
-        if (_index >= m_extraData.size())
-        {
-            return false;
-        }
-        item = m_extraData[_index];
-        return true;
-    }  // field 9
+    h256 const& parentHash() const { return m_parentHash; }                            /// field 0
+    h256 const& stateRoot() const { return m_stateRoot; }                              /// field 1
+    h256 const& transactionsRoot() const { return m_transactionsRoot; }                /// field 2
+    h256 const& receiptsRoot() const { return m_receiptsRoot; }                        /// field 3
+    LogBloom const& logBloom() const { return m_logBloom; }                            /// field 4
+    int64_t number() const { return m_number; }                                        /// field 5
+    u256 const& gasLimit() const { return m_gasLimit; }                                /// field 6
+    u256 const& gasUsed() const { return m_gasUsed; }                                  /// field 7
+    uint64_t timestamp() const { return m_timestamp; }                                 /// field 8
+    bytes const& extraData(unsigned int _index) const { return m_extraData[_index]; }  // field 9
 
     std::vector<bytes> const& extraData() const { return m_extraData; }  /// field 9
     u256 const& sealer() const { return m_sealer; }                      /// field 10
     h512s const& sealerList() const { return m_sealerList; }             /// field 11
     /// ------ get interfaces related to block header END------
+    void populate(RLP const& _header);
 
 private:  /// private function fileds
-    void populate(RLP const& _header);
     /// trans all fileds of the block header into a given stream
     void streamRLPFields(RLPStream& _s) const;
     h256 hashRawRead() const
