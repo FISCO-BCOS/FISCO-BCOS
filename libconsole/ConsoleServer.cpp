@@ -116,7 +116,7 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         }
         else if (func == "p2p.list")
         {
-            output = p2pPeers(args);
+            output = p2pList(args);
         }
         else if (func == "p2p.update")
         {
@@ -124,7 +124,7 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         }
         else if (func == "miner.list")
         {
-            output = p2pMiners(args);
+            output = minerList(args);
         }
         else if (func == "miner.add")
         {
@@ -211,7 +211,7 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 	return output;
 }
 
-std::string ConsoleServer::p2pPeers(const std::vector<std::string> args) {
+std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 	std::string output;
 
 	try {
@@ -225,7 +225,7 @@ std::string ConsoleServer::p2pPeers(const std::vector<std::string> args) {
 		{
 		  printSingleLine(ss);
 		  const p2p::NodeID nodeid = peers[i].id;
-			ss << "Nodeid: " << nodeid << std::endl;
+			ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
 			ss << "Ip: " << peers[i].host << std::endl;
 			ss << "Port:" << peers[i].port << std::endl;
 			ss << "Connected: " << _host->isConnected(nodeid) << std::endl;
@@ -237,13 +237,13 @@ std::string ConsoleServer::p2pPeers(const std::vector<std::string> args) {
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
 
-		output = "ERROR while p2p.peers";
+		output = "ERROR while p2p.list";
 	}
 
 	return output;
 }
 
-std::string ConsoleServer::p2pMiners(const std::vector<std::string> args) {
+std::string ConsoleServer::minerList(const std::vector<std::string> args) {
 	std::string output;
 
 	try {
@@ -251,15 +251,28 @@ std::string ConsoleServer::p2pMiners(const std::vector<std::string> args) {
 
 		printDoubleLine(ss);
 		ss << "Miners number: ";
-		dev::h512s minerNodeList =
+		dev::h512s minerList =
 				dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->getMinerNodeList();
-		ss << minerNodeList.size() << std::endl;
+		std::vector<h512>::iterator iter;
+		std::vector<p2p::PeerSessionInfo> peers = _host->peerSessionInfo();
+		ss << minerList.size() << std::endl;
 		printSingleLine(ss);
-		for(size_t i = 0; i < minerNodeList.size(); i++)
-		{
-			const p2p::NodeID nodeid = minerNodeList[i];
-			ss << "Nodeid: " << nodeid << std::endl;
-		}
+    for(size_t i = 0; i < peers.size(); i++)
+    {
+      printSingleLine(ss);
+      const p2p::NodeID nodeid = peers[i].id;
+      iter = find(minerList.begin(), minerList.end(), nodeid);
+      if(iter != minerList.end())
+      {
+        ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
+        ss << "Ip: " << peers[i].host << std::endl;
+        ss << "Port:" << peers[i].port << std::endl;
+        ss << "Connected: " << _host->isConnected(nodeid) << std::endl;
+        minerList.erase(iter);
+      }
+      printSingleLine(ss);
+    }
+		ss << "Nodeid(local): " << (minerList[0].hex()).substr(0, 8) << "..." << std::endl;
 		printSingleLine(ss);
 		ss << std::endl;
 		output = ss.str();
@@ -267,7 +280,7 @@ std::string ConsoleServer::p2pMiners(const std::vector<std::string> args) {
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
 
-		output = "ERROR while p2p.miners";
+		output = "ERROR while miner.list";
 	}
 
 	return output;
