@@ -51,7 +51,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 ```bash
 # 假设当前在FISCO-BCOS/build目录下
 cd ../scripts
-# 准备IPList.txt文件 按行分割，可以有多个IP
+# 准备IPList.txt文件 按行分割，可以有多个IP，每个IP表示一个部署的目标服务器IP，每个服务器可以部署多个节点实例，不同节点实例端口会自动分配。
 echo 127.0.0.1 > IPList.txt
 # build_chain.sh 
 # Usage:
@@ -295,22 +295,23 @@ INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38
 
 #### 3.6.1 验证进程
 
-```shell
+```bash
 ps -ef |grep fisco-bcos
 ```
 
 > 看到进程启动
 
 ```log
-app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --config config.json --genesis genesis.json 
+app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --config config.conf --genesis genesis.json 
 ```
 
 #### 3.6.2 查看日志输出
 
 > 执行命令，查看打包信息。
 
-```shell
-tail -f log/info* |grep ++++  #查看日志输出
+```bash
+# 查看节点日志，当前操作目录scripts，参数中node-0为节点目录
+tail -f nodes/node-0/log/info* |grep ++++  #查看日志输出
 ```
 
 > 可看到不断刷出打包信息。若上述都正确输出，则表示节点已经正确启动！
@@ -318,7 +319,6 @@ tail -f log/info* |grep ++++  #查看日志输出
 ```log
 INFO|2017-12-12 17:52:16:877|+++++++++++++++++++++++++++ Generating seal ondcae019af78cf04e17ad908ec142ca4e25d8da14791bda50a0eeea782ebf3731#1tx:0,maxtx:1000,tq.num=0time:1513072336877
 INFO|2017-12-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9b23b0733ac47fe5385072f80fc036b7517abae0a3e7762739cc66bc7dca#1tx:0,maxtx:1000,tq.num=0time:1513072337887
-INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38c7a380b13b2e46fecbdca0fac5473f4cbc054190e90b8bd4831faac4521#1tx:0,maxtx:1000,tq.num=0time:1513072338897
 ```
 
 ## 第四章 使用控制台
