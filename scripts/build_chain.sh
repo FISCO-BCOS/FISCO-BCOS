@@ -132,6 +132,7 @@ while read line;do
 		openssl genpkey -paramfile "$output_dir/node.param" -out "$node_dir/data/node.key"
 		openssl req -new -key "$node_dir/data/node.key" -config "${CertConfig}" -out "$node_dir/data/node.csr" -batch
 		openssl x509 -req -in "$node_dir/data/node.csr" -CAkey "$ca_file" -CA "$output_dir/ca.crt" -out "$node_dir/data/node.crt" -CAcreateserial -extensions v3_req -extfile "${CertConfig}" &> /dev/null
+    	openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"' > "$node_dir/data/node.nodeid"
 
 		echo ${CLIENTCERT_PWD} > $node_dir/sdk/pwd.conf
 		openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/data/keystore.p12" -password file:$node_dir/sdk/pwd.conf
