@@ -89,7 +89,6 @@ private:
     int m_addressCount = 0x10000;
     BlockInfo m_blockInfo;
     // std::shared_ptr<State> m_state;
-//    std::vector<TransactionReceipt>;
 };
 
 }  // namespace blockverifier
