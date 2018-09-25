@@ -86,6 +86,8 @@ target_link_libraries(test-fisco-bcos interpreter)
 target_link_libraries(test-fisco-bcos p2p)
 target_link_libraries(test-fisco-bcos mptstate)
 target_link_libraries(test-fisco-bcos executivecontext)
+target_link_libraries(test-fisco-bcos txpool)
+target_link_libraries(test-fisco-bcos blockmanager)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 
