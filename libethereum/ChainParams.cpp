@@ -194,13 +194,6 @@ ChainParams ChainParams::loadGenesis(string const& _json, h256 const& _stateRoot
     cp.timestamp = u256(fromBigEndian<u256>(fromHex(genesis["timestamp"].get_str())));
     cp.extraData = bytes(fromHex(genesis["extraData"].get_str()));
 
-	//从创世块读取上帝帐号，按理说下面的genesisBlock 也要加上这个字段
-	cp.god = genesis.count("god") ? h160(genesis["god"].get_str()) : h160();
-
-    cp.god = genesis.count("god") ? h160(genesis["god"].get_str()) : h160();
-
-    cp.author = cp.god;
-
     // magic code for handling ethash stuff:
     if ((genesis.count("mixhash") || genesis.count("mixHash")) && genesis.count("nonce"))
     {
@@ -211,17 +204,6 @@ ChainParams ChainParams::loadGenesis(string const& _json, h256 const& _stateRoot
     }
 
     cp.genesisState = jsonToAccountMap(_json, cp.accountStartNonce, nullptr, &cp.precompiled);
-
-
-    if (genesis.count("initMinerNodes"))
-    {
-        for (auto initNode : genesis["initMinerNodes"].get_array())
-        {
-            cp._vInitIdentityNodes.push_back(initNode.get_str());
-            LOG(INFO) << "initNodes size : " << cp._vInitIdentityNodes.size()
-                      << "| node :" << initNode.get_str() << "\n";
-        }
-    }
 
     cp.stateRoot = _stateRoot ? _stateRoot : cp.calculateStateRoot();
     // cout << "loadGenesis: stateRoot=" << cp.stateRoot;

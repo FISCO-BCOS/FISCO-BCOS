@@ -62,7 +62,6 @@ struct ChainParams: public ChainOperationParams
 
 	h256 calculateStateRoot(bool _force = false) const;
 
-	std::vector<std::string> _vInitIdentityNodes;
 	/// Genesis block info.
 	bytes genesisBlock() const;
 	/// load config/genesis
