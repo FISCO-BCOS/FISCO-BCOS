@@ -51,8 +51,7 @@ struct PriorityCompare
         return _first.importTime() <= _second.importTime();
     }
 };
-
-class TxPool : public TxPoolInterface
+class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
 {
 public:
     TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
