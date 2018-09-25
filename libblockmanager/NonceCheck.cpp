@@ -78,68 +78,75 @@ void NonceCheck::updateCache(bool _rebuild)
 {
     DEV_WRITE_GUARDED(m_lock)
     {
-        try
+        if (auto block_manager = m_blockManager.lock())
         {
-            Timer timer;
-            unsigned lastnumber = m_blockManager->number();
-            unsigned prestartblk = m_startblk;
-            unsigned preendblk = m_endblk;
-
-            m_endblk = lastnumber;
-            if (lastnumber > (unsigned)NonceCheck::maxblocksize)
-                m_startblk = lastnumber - (unsigned)NonceCheck::maxblocksize;
-            else
-                m_startblk = 0;
-
-            LOG(TRACE) << "NonceCheck::updateCache m_startblk=" << m_startblk
-                       << ",m_endblk=" << m_endblk << ",prestartblk=" << prestartblk
-                       << ",preendblk=" << preendblk << ",_rebuild=" << _rebuild;
-            if (_rebuild)
+            try
             {
-                m_cache.clear();
-                preendblk = 0;
-            }
-            else
-            {
-                for (unsigned i = prestartblk; i < m_startblk; i++)
+                Timer timer;
+                unsigned lastnumber = block_manager->number();
+                unsigned prestartblk = m_startblk;
+                unsigned preendblk = m_endblk;
+
+                m_endblk = lastnumber;
+                if (lastnumber > (unsigned)NonceCheck::maxblocksize)
+                    m_startblk = lastnumber - (unsigned)NonceCheck::maxblocksize;
+                else
+                    m_startblk = 0;
+
+                LOG(TRACE) << "NonceCheck::updateCache m_startblk=" << m_startblk
+                           << ",m_endblk=" << m_endblk << ",prestartblk=" << prestartblk
+                           << ",preendblk=" << preendblk << ",_rebuild=" << _rebuild;
+                if (_rebuild)
                 {
-                    h256 blockhash = m_blockManager->numberHash(i);
+                    m_cache.clear();
+                    preendblk = 0;
+                }
+                else
+                {
+                    for (unsigned i = prestartblk; i < m_startblk; i++)
+                    {
+                        h256 blockhash = block_manager->numberHash(i);
 
-                    std::vector<bytes> bytestrans = m_blockManager->transactions(blockhash);
+                        std::vector<bytes> bytestrans = block_manager->transactions(blockhash);
+                        for (unsigned j = 0; j < bytestrans.size(); j++)
+                        {
+                            Transaction t = Transaction(bytestrans[j], CheckTransaction::None);
+                            string key = this->generateKey(t);
+                            auto iter = m_cache.find(key);
+                            if (iter != m_cache.end())
+                                m_cache.erase(iter);
+                        }  // for
+                    }      // for
+                }
+                for (unsigned i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
+                {
+                    h256 blockhash = block_manager->numberHash(i);
+
+                    std::vector<bytes> bytestrans = block_manager->transactions(blockhash);
                     for (unsigned j = 0; j < bytestrans.size(); j++)
                     {
                         Transaction t = Transaction(bytestrans[j], CheckTransaction::None);
                         string key = this->generateKey(t);
                         auto iter = m_cache.find(key);
-                        if (iter != m_cache.end())
-                            m_cache.erase(iter);
+                        if (iter == m_cache.end())
+                            m_cache.insert(std::pair<std::string, bool>(key, true));
                     }  // for
                 }      // for
+
+                LOG(TRACE) << "NonceCheck::updateCache cache size=" << m_cache.size() << ",cost"
+                           << (timer.elapsed() * 1000);
             }
-            for (unsigned i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
+            catch (...)
             {
-                h256 blockhash = m_blockManager->numberHash(i);
-
-                std::vector<bytes> bytestrans = m_blockManager->transactions(blockhash);
-                for (unsigned j = 0; j < bytestrans.size(); j++)
-                {
-                    Transaction t = Transaction(bytestrans[j], CheckTransaction::None);
-                    string key = this->generateKey(t);
-                    auto iter = m_cache.find(key);
-                    if (iter == m_cache.end())
-                        m_cache.insert(std::pair<std::string, bool>(key, true));
-                }  // for
-            }      // for
-
-            LOG(TRACE) << "NonceCheck::updateCache cache size=" << m_cache.size() << ",cost"
-                       << (timer.elapsed() * 1000);
+                // should not happen as exceptions
+                LOG(WARNING) << "o NO!!!!  NonceCheck::updateCache "
+                             << boost::current_exception_diagnostic_information();
+                // m_aborting=true;
+            }
         }
-        catch (...)
+        else
         {
-            // should not happen as exceptions
-            LOG(WARNING) << "o NO!!!!  NonceCheck::updateCache "
-                         << boost::current_exception_diagnostic_information();
-            // m_aborting=true;
+            LOG(ERROR) << "expired BlockManager";
         }
     }
 }  // fun

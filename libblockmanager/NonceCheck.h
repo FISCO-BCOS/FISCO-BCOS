@@ -36,7 +36,7 @@
 
 using namespace std;
 using namespace dev::eth;
-
+using namespace dev::blockmanager;
 namespace dev
 {
 namespace eth
@@ -45,7 +45,7 @@ class NonceCheck
 {
 public:
     static u256 maxblocksize;
-    NonceCheck(std::shared_ptr<dev::blockmanager::BlockManagerInterface> const& _blockManager)
+    NonceCheck(std::shared_ptr<BlockManagerInterface> const& _blockManager)
       : m_blockManager(_blockManager)
     {}
     ~NonceCheck();
@@ -55,7 +55,7 @@ public:
     void delCache(Transactions const& _transcations);
 
 private:
-    std::shared_ptr<dev::blockmanager::BlockManagerInterface> m_blockManager;
+    std::weak_ptr<BlockManagerInterface> m_blockManager;
     std::unordered_map<std::string, bool> m_cache;
     unsigned m_startblk;
     unsigned m_endblk;
