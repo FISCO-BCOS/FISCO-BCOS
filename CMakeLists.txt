@@ -62,6 +62,7 @@ add_subdirectory(libexecutivecontext)
 add_subdirectory(libtxpool)
 add_subdirectory(libblocksync)
 add_subdirectory(libconsensus)
+add_subdirectory(libblockmanager)
 
 if (TESTS)
         enable_testing()
