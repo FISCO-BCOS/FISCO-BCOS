@@ -32,7 +32,7 @@ class ConsensusInterface : public Worker
 {
 public:
     ConsensusInterface() = default;
-    virtual ~ConsensusInterface() = 0;
+    virtual ~ConsensusInterface(){};
 
     /// start the consensus module
     virtual void start() = 0;
