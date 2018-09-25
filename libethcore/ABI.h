@@ -53,6 +53,15 @@ public:
         fixedItems.push_back(ret);
     }
 
+
+    void serialise(string64 const& _t)
+    {
+        bytes ret(64);
+        bytesConstRef((byte const*)_t.data(), 64).populate(bytesRef(&ret));
+
+        fixedItems.push_back(ret);
+    }
+
     void serialise(std::string const& _t)
     {
         bytes ret = h256(u256(_t.size())).asBytes();

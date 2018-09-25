@@ -131,7 +131,7 @@ using u256HashMap = std::unordered_map<u256, u256>;
 
 // String types.
 using strings = std::vector<std::string>;
-
+using string64 = std::array<char, 64>;
 // Fixed-length string types.
 using string32 = std::array<char, 32>;
 
