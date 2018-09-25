@@ -340,8 +340,8 @@ void Session::onMessage(
         ///< request package, get callback by protocolID
         CallbackFuncWithSession callbackFunc;
 
-        ///< is synchronousPackageProtocolID or not
-        if (g_synchronousPackageProtocolID == protocolID)
+        ///< is synchronousPackageProtocolID or AMOPProtocolID
+        if (g_synchronousPackageProtocolID == protocolID || g_AMOPProtocolID == protocolID)
         {
             callbackFunc = [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
                 /// update protoclID

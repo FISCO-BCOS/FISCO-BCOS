@@ -75,8 +75,13 @@ public:
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
 
 private:
-    void onTimeout(
+    void onTimeoutByTopic(const boost::system::error_code& error,
+        std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
+        CallbackFunc callback, Options const& options, uint32_t totalTimeout);
+    void onTimeoutByNode(
         const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);
+
+    NodeIDs getPeersByTopic(std::string const& topic);
 
     std::shared_ptr<Host> m_host;
     boost::asio::io_service* m_ioService;
