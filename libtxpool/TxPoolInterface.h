@@ -32,7 +32,7 @@ class TxPoolInterface
 {
 public:
     TxPoolInterface() = default;
-    virtual ~TxPoolInterface() = 0;
+    virtual ~TxPoolInterface(){};
 
     /**
      * @brief Remove transaction from the queue
