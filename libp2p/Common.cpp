@@ -140,6 +140,41 @@ ssize_t Message::decode(const byte* buffer, size_t size)
     return m_length;
 }
 
+void Message::encodeAMOPBuffer(std::string const& topic)
+{
+    ///< check protocolID is AMOP message or not
+    if (g_AMOPProtocolID != abs(m_protocolID))
+    {
+        return;
+    }
+
+    ///< new buffer format:topic lenght + topic data + ori buffer data
+    m_buffer->insert(m_buffer->begin(), topic.begin(), topic.end());
+    uint32_t topicLen = htonl(topic.size());
+    m_buffer->insert(m_buffer->begin(), (byte*)&topicLen, (byte*)&topicLen + sizeof(topicLen));
+}
+
+ssize_t Message::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic)
+{
+    ///< check protocolID is AMOP message or not
+    if (g_AMOPProtocolID != abs(m_protocolID))
+    {
+        return PACKET_ERROR;
+    }
+
+    uint32_t topicLen = ntohl(*((uint32_t*)m_buffer->data()));
+    LOG(INFO) << "Message::decodeAMOPBuffer topic len=" << topicLen
+              << ", buffer size=" << m_buffer->size();
+    if (topicLen + 4 > m_buffer->size())
+    {
+        return PACKET_ERROR;
+    }
+    topic = std::string((char*)(m_buffer->data()) + 4, topicLen);
+    buffer->insert(buffer->end(), m_buffer->begin() + 4 + topicLen, m_buffer->end());
+
+    return buffer->size();
+}
+
 NodeSpec::NodeSpec(string const& _user)
 {
     m_address = _user;
