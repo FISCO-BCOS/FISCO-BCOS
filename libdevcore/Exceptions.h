@@ -41,11 +41,14 @@ namespace dev
  */
 struct Exception : virtual std::exception, virtual boost::exception
 {
-	Exception(std::string _message = std::string()): m_message(std::move(_message)) {}
-	const char* what() const noexcept override { return m_message.empty() ? std::exception::what() : m_message.c_str(); }
+    Exception(std::string _message = std::string()) : m_message(std::move(_message)) {}
+    const char* what() const noexcept override
+    {
+        return m_message.empty() ? std::exception::what() : m_message.c_str();
+    }
 
 private:
-	std::string m_message;
+    std::string m_message;
 };
 
 /// construct a new exception class overidding Exception
