@@ -29,7 +29,7 @@ Usage:
 	-k <Keystore Passwd>        Default 123456
 	-s <StateDB type>           Default leveldb. if set -s, use amop
 	-t <Cert config file>       Default auto generate
-	-z Generate tar packet      Default no
+	-z >Generate tar packet>    Default no
 	-h Help
 EOF
 
@@ -137,12 +137,12 @@ while read line;do
 		echo ${CLIENTCERT_PWD} > $node_dir/sdk/pwd.conf
 		openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/data/keystore.p12" -password file:$node_dir/sdk/pwd.conf
 		keytool -importkeystore -destkeystore "$node_dir/sdk/client.keystore" -srckeystore "$node_dir/data/keystore.p12" -srcstoretype pkcs12 -alias client -srcstorepass ${CLIENTCERT_PWD} -deststorepass ${KEYSTORE_PWD}
-
+        rm $node_dir/sdk/pwd.conf
 		nodeid=$(openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
 		nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
-		"
+	"
 		ip_list=$"${ip_list}node.${index}="${line}:$(( port_start + index * 4 ))"
-		"
+	"
 		((++index))
 	done
 done < $ip_file
@@ -156,9 +156,9 @@ while read line;do
 	for ((i=0;i<node_num;++i));do
 		echo "Generating IP:${line} ID:${index} config files..."
 		node_dir="$output_dir/node_${line}_${index}"
-	cat << EOF > "$node_dir/config${i}.conf"
+	cat << EOF > "$node_dir/config.conf"
 [rpc]
-	listen_ip=0.0.0.0
+	listen_ip=127.0.0.1
 	listen_port=$(( port_start + 1 + index * 4 ))
 	http_listen_port=$(( port_start + 2 + index * 4 ))
 	console_port=$(( port_start + 3 + index * 4 ))
@@ -244,12 +244,14 @@ EOF
 
 	cat << EOF > "$node_dir/start.sh"
 #!/bin/bash
-nohup setsid ./fisco-bcos --config config${i}.conf --genesis genesis.json&
+fisco_bcos=\`pwd\`/fisco-bcos
+nohup setsid $fisco_bcos --config config.conf --genesis genesis.json&
 EOF
 
 	cat << EOF > "$node_dir/stop.sh"
 #!/bin/bash
-weth_pid=\`ps aux|grep "config config${i}.conf"|grep -v grep|awk '{print \$2}'\`
+fisco_bcos=\`pwd\`/fisco-bcos
+weth_pid=\`ps aux|grep "${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 kill -9 \${weth_pid}
 EOF
 
