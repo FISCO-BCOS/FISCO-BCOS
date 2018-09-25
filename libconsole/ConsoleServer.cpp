@@ -272,7 +272,10 @@ std::string ConsoleServer::minerList(const std::vector<std::string> args) {
       }
       printSingleLine(ss);
     }
-		ss << "Nodeid(local): " << (minerList[0].hex()).substr(0, 8) << "..." << std::endl;
+    p2p::NodeInfo node = _host->nodeInfo();
+		ss << "Nodeid(local): " << (node.id.hex()).substr(0, 8) << "..." << std::endl;
+		ss << "Ip: " << node.address << std::endl;
+	  ss << "Port:" << node.port << std::endl;
 		printSingleLine(ss);
 		ss << std::endl;
 		output = ss.str();
