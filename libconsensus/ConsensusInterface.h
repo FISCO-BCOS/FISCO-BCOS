@@ -48,7 +48,7 @@ public:
     virtual ConsensusStatus consensusStatus() const = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual const int32_t getProtocolId() const = 0;
+    virtual int32_t const& getProtocolId() const = 0;
     virtual void setProtocolId(uint32_t const _protocolId) = 0;
 };
 }  // namespace consensus
