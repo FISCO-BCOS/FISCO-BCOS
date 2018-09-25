@@ -32,5 +32,10 @@ struct TxPoolStatus
     size_t unverified;
     size_t dropped;
 };
+struct Limits
+{
+    size_t current;
+    size_t future;
+};
 }  // namespace txpool
 }  // namespace dev

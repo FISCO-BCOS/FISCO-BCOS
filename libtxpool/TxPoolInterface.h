@@ -23,7 +23,6 @@
  */
 #pragma once
 #include <libethcore/Transaction.h>
-using namespace dev::eth;
 namespace dev
 {
 namespace txpool
@@ -35,21 +34,12 @@ public:
     TxPoolInterface() = default;
     virtual ~TxPoolInterface() = 0;
 
-    /// push a transaction into the txpool
-    virtual void enqueue(bytesRef _data, h512 const& _nodeId) = 0;
-
-    /**
-     * @brief:mark transaction as future.
-     *        It wont be retured in topTransactions list until
-     *        a transaction with a preceeding nonce is imported or is dropped
-     * @param _t : Transaction hash
-     */
-    virtual void setFuture(h256 const& _t) = 0;
     /**
      * @brief Remove transaction from the queue
      * @param _txHash: transaction hash
      */
     virtual void drop(h256 const& _txHash) = 0;
+    virtual void dropGood(Transaction const& _t) = 0;
     /**
      * @brief Get top transactions from the queue
      *
@@ -60,40 +50,32 @@ public:
     virtual Transactions topTransactions(
         unsigned _limit, h256Hash const& _avoid = h256Hash()) const = 0;
 
-    /// get all transactions(maybe blocksync module need this interface)
-    virtual Transactions allTransactions() const = 0;
-    /**
-     * @brief : Get a hash set of transactions in the queue
-     *
-     * @return h256Hash : A hash set of all transactions in the queue
-     */
-    virtual h256Hash knownTransactions() const = 0;
+    /// get all current transactions(maybe blocksync module need this interface)
+    virtual Transactions pendingList() const = 0;
     /// get current transaction num
-    virtual size_t currentTxNum() = 0;
+    virtual size_t pendingSize() = 0;
 
     /**
-     * @brief submit a transaction through RPC/web3sdk
-     *
+     * @brief submit a transaction through RPC
      * @param _t : transaction
-     * @return std::pair<h256, Address> : maps from transaction hash to contract address
+     * @return std::pair<h256, Address>: maps from transaction hash to contract address
      */
-    virtual std::pair<h256, Address> submitTransaction(Transaction const& _tx) = 0;
-    /// submit the given message-call transaction
-    virtual void submitMessageCallTransaction(Transaction const& _tx) = 0;
+    virtual std::pair<h256, Address> submit(Transaction const& _tx) = 0;
 
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
      * synchronously.
-     *
-     * @param _tx : Trasnaction data.
+     * @param _tx : Trasaction data.
      * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
      * @return ImportResult : Import result code.
      */
     virtual ImportResult import(Transaction const& _tx, IfDropped _ik = IfDropped::Ignore);
+
     /// @returns the status of the transaction queue.
     virtual TxPoolStatus status() const = 0;
-    /// Clear the queue
-    virtual void clear() = 0;
+
+    /// protocol id used when register handler to p2p module
+    virtual const int16_t getProtocolId() const = 0;
 };
 }  // namespace txpool
 }  // namespace dev
