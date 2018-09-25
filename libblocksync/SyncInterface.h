@@ -32,7 +32,7 @@ class SyncInterface : public Worker
 {
 public:
     SyncInterface() = default;
-    virtual ~SyncInterface() = 0;
+    virtual ~SyncInterface(){};
     /// start blockSync
     virtual void start() = 0;
     /// stop blockSync
