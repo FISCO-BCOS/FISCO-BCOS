@@ -32,7 +32,7 @@ class BlockManagerInterface
 {
 public:
     BlockManagerInterface() = default;
-    virtual ~BlockManagerInterface() = 0;
+    virtual ~BlockManagerInterface(){};
     virtual uint64_t number() const = 0;
     virtual h256 numberHash(unsigned _i) const = 0;
     virtual std::vector<bytes> transactions(h256 const& _blockHash) = 0;
