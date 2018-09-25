@@ -181,7 +181,6 @@ h256 Transaction::sha3(IncludeSignature _sig) const
         return m_hashWith;
 
     bytes s;
-    /// streamRLP(s, _sig);
     encode(s, _sig);
 
     auto ret = dev::sha3(s);

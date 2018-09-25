@@ -61,17 +61,19 @@ public:
     }
 
     /// default implementation of async_write
-    virtual void async_write(
-        bi::tcp::socket& socket_stream, ba::mutable_buffers_1& buffers, ReadWriteHandler handler)
+    virtual void async_write(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler,
+        std::size_t transferred_bytes = 0)
     {
-        boost::asio::async_write(socket_stream, buffers, handler);
+        ba::async_write(socket->sslref(), buffers, handler);
     }
 
     /// default implementation of async_read
-    virtual void async_read(
-        bi::tcp::socket& socket_stream, ba::mutable_buffers_1& buffers, ReadWriteHandler handler)
+    virtual void async_read(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::io_service::strand& m_strand, boost::asio::mutable_buffers_1 buffers,
+        ReadWriteHandler handler)
     {
-        ba::async_read(socket_stream, buffers, handler);
+        ba::async_read(socket->sslref(), buffers, m_strand.wrap(handler));
     }
 
     /// default implementation of async_handshake
