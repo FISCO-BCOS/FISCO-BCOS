@@ -54,6 +54,7 @@ public:
     virtual bool forceSync() = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual const int16_t getProtocolId() const = 0;
+    virtual const int32_t getProtocolId() const = 0;
+    virtual void setProtocolId(uint32_t const _protocolId) = 0;
 }  // namespace sync
 }  // namespace sync
