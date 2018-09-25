@@ -28,6 +28,7 @@ Usage:
 	-c <ClientCert Passwd>      Default 123456
 	-k <Keystore Passwd>        Default 123456
 	-s <StateDB type>           Default leveldb. if set -s, use amop
+	-t <Cert config file>       Default auto generate
 	-z Generate tar packet      Default no
 	-h Help
 EOF
@@ -35,7 +36,7 @@ EOF
 exit 0
 }
 
-while getopts "a:n:o:p:e:c:k:f:szh" option;do
+while getopts "a:n:o:p:e:c:k:f:t:szh" option;do
 	case $option in
 	a) ca_file=$OPTARG;;
 	n) node_num=$OPTARG;;
@@ -46,6 +47,7 @@ while getopts "a:n:o:p:e:c:k:f:szh" option;do
 	c) CLIENTCERT_PWD=$OPTARG;;
 	k) KEYSTORE_PWD=$OPTARG;;
 	s) statedb_type=amop;;
+	t) CertConfig=$OPTARG;;
 	z) make_tar="yes";;
 	h) help;;
 	esac
@@ -58,17 +60,18 @@ if [ -z ${eth_path} ];then
 fi
 
 echo "FISCO-BCOS Path: $eth_path"
-echo "IP List File:    $ip_file"
-echo "CA Key:          $ca_file"
-echo "Nodes per IP:    $node_num"
-echo "Output Dir:      $output_dir"
-echo "Start Port:      $port_start"
-
+echo "IP List File   : $ip_file"
+echo "CA Key         : $ca_file"
+echo "Nodes per IP   : $node_num"
+echo "Output Dir     : $output_dir"
+echo "Start Port     : $port_start"
+echo "============================="
 [ -d "$output_dir" ] || mkdir -p "$output_dir"
 
 if [ "${Download}" = "true" ];then
 	echo "Downloading fisco-bcos binary..." 
 	curl -o ${eth_path} ${Download_Link}
+  chmod a+x ${eth_path}
 fi
 
 #准备CA密钥
@@ -86,33 +89,35 @@ fi
 openssl ecparam -out "$output_dir/node.param" -name secp256k1
 
 #准备证书配置
-cat  << EOF > "$output_dir/cert.cnf"
-[ca]
-default_ca=default_ca
-[default_ca]
-default_days = 365
-default_md = sha256
-[req]
-distinguished_name = req_distinguished_name
-req_extensions = v3_req
-[req_distinguished_name]
-countryName = CN
-countryName_default = CN
-stateOrProvinceName = State or Province Name (full name)
-stateOrProvinceName_default =GuangDong
-localityName = Locality Name (eg, city)
-localityName_default = ShenZhen
-organizationalUnitName = Organizational Unit Name (eg, section)
-organizationalUnitName_default = webank
-commonName =  Organizational  commonName (eg, webank)
-commonName_default = webank
-commonName_max = 64
-[ v3_req ]
-# Extensions to add to a certificate request
-basicConstraints = CA:FALSE
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
+CertConfig="$output_dir/cert.cnf"
+cat  << EOF > "$CertConfig"
+	[ca]
+	default_ca=default_ca
+	[default_ca]
+	default_days = 3650
+	default_md = sha256
+	[req]
+	distinguished_name = req_distinguished_name
+	req_extensions = v3_req
+	[req_distinguished_name]
+	countryName = CN
+	countryName_default = CN
+	stateOrProvinceName = State or Province Name (full name)
+	stateOrProvinceName_default =GuangDong
+	localityName = Locality Name (eg, city)
+	localityName_default = ShenZhen
+	organizationalUnitName = Organizational Unit Name (eg, section)
+	organizationalUnitName_default = webank
+	commonName =  Organizational  commonName (eg, webank)
+	commonName_default = webank
+	commonName_max = 64
+	[ v3_req ]
+	# Extensions to add to a certificate request
+	basicConstraints = CA:FALSE
+	keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 EOF
-
+fi
 echo "Generating node key and certificate..."
 nodeid_list=""
 ip_list=""
@@ -125,8 +130,8 @@ while read line;do
 		mkdir -p $node_dir/sdk/
 
 		openssl genpkey -paramfile "$output_dir/node.param" -out "$node_dir/data/node.key"
-		openssl req -new -key "$node_dir/data/node.key" -config "$output_dir/cert.cnf" -out "$node_dir/data/node.csr" -batch
-		openssl x509 -req -in "$node_dir/data/node.csr" -CAkey "$ca_file" -CA "$output_dir/ca.crt" -out "$node_dir/data/node.crt" -CAcreateserial -extensions v3_req -extfile "$output_dir/cert.cnf" &> /dev/null
+		openssl req -new -key "$node_dir/data/node.key" -config "${CertConfig}" -out "$node_dir/data/node.csr" -batch
+		openssl x509 -req -in "$node_dir/data/node.csr" -CAkey "$ca_file" -CA "$output_dir/ca.crt" -out "$node_dir/data/node.crt" -CAcreateserial -extensions v3_req -extfile "${CertConfig}" &> /dev/null
 
 		echo ${CLIENTCERT_PWD} > $node_dir/sdk/pwd.conf
 		openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/data/keystore.p12" -password file:$node_dir/sdk/pwd.conf
