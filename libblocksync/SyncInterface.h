@@ -52,6 +52,8 @@ public:
     /// abort sync and reset all status of blockSyncs
     virtual void reset() = 0;
     virtual bool forceSync() = 0;
-    static const int16_t c_ProtoclId = 2;
+
+    /// protocol id used when register handler to p2p module
+    virtual const int16_t getProtocolId() const = 0;
 }  // namespace sync
 }  // namespace sync

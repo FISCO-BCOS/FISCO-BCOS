@@ -24,11 +24,10 @@
 #include <libdevcore/Exceptions.h>
 #include <libp2p/Common.h>
 #include <set>
-using namespace dev::p2p;
 namespace dev
 {
 namespace sync
 {
-using NodeList = std::set<NodeID>;
+using NodeList = std::set<dev::p2p::NodeID>;
 }
 }  // namespace dev
