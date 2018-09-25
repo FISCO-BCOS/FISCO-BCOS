@@ -40,7 +40,7 @@ console.log('Soc File :'+filename);
   console.log(filename+" deploy success!");
   try {
 	 //try to add cns service, catch exceptions
-	 cns_tool.cnsAdd(filename);   
+	//  cns_tool.cnsAdd(filename);   
   } catch(e){
   //console.log(filename+'cns add failed , e = '+e);
 }

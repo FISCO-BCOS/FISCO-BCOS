@@ -92,7 +92,6 @@ struct ChainOperationParams
 	bool evmCoverLog = false; 
 	bool statLog = false; 
 	Address sysytemProxyAddress;
-	Address god;
 
 	std::string listenIp;
 	int cryptoMod = 0;	
