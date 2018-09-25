@@ -20,15 +20,14 @@
  */
 #include "TablePrecompiled.h"
 #include "ConditionPrecompiled.h"
-#include "Table.h"
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
+#include "Table.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
-
 
 
 std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)

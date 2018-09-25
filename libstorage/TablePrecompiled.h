@@ -21,8 +21,8 @@
 #pragma once
 
 #include "Table.h"
-#include <libdevcore/Common.h>
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/Common.h>
 
 namespace dev
 {
@@ -54,7 +54,7 @@ public:
 
     virtual ~TablePrecompiled(){};
 
-  
+
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) override;
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param) override;
@@ -66,9 +66,8 @@ public:
 
 private:
     dev::storage::Table::Ptr m_table;
-
 };
 
-}  // namespace precompiled
+}  // namespace blockverifier
 
 }  // namespace dev
