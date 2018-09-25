@@ -69,7 +69,7 @@ public:
 	MessageFactory::Ptr messageFactory() { return _messageFactory; }
 	void setMessageFactory(MessageFactory::Ptr messageFactory) { _messageFactory = messageFactory; }
 
-	void stop();
+	virtual void stop();
 
 private:
 	void onHandshake(const boost::system::error_code& error, ChannelSession::Ptr session);
