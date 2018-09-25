@@ -25,11 +25,8 @@ namespace dev
 {
 namespace consensus
 {
-enum PBFTStatus
+enum ConsensusStatus
 {
-    PBFT_INIT = 0,
-    PBFT_PREPARED,
-    PBFT_COMMITTED
 };
 }
 }  // namespace dev

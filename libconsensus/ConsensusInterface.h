@@ -25,6 +25,7 @@
 #include <libethcore/Common.h>
 namespace dev
 {
+class ConsensusStatus;
 namespace consensus
 {
 class ConsensusInterface : public Worker
@@ -44,7 +45,10 @@ public:
     virtual void setMinerList(h512s const& _minerList) const = 0;
 
     /// get status of consensus
-    virtual PBFTStatus pbftStatus() const = 0;
+    virtual ConsensusStatus consensusStatus() const = 0;
+
+    /// protocol id used when register handler to p2p module
+    virtual const int16_t getProtocolId() const = 0;
 };
 }  // namespace consensus
 }  // namespace dev
