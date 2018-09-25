@@ -56,7 +56,7 @@ std::string Entry::getField(const std::string& key) const
     return "";
 }
 
-void Entry::setField(const std::string& key,const std::string& value)
+void Entry::setField(const std::string& key, const std::string& value)
 {
     auto it = m_fields.find(key);
 

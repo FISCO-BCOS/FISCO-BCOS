@@ -20,20 +20,20 @@
  */
 #pragma once
 
-#include "TablePrecompiled.h"
 #include "MemoryTableFactory.h"
-#include <libdevcrypto/Common.h>
+#include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcrypto/Common.h>
 #include <map>
 
 namespace dev
 {
 namespace blockverifier
 {
-	const unsigned TABLE_NOT_EXISTS = 0;
-	const unsigned TABLE_ALREADY_OPEN = 1;
-	const unsigned TABLENAME_ALREADY_EXISTS = 2;
-	const unsigned TABLENAME_CONFLICT = 101;
+const unsigned TABLE_NOT_EXISTS = 0;
+const unsigned TABLE_ALREADY_OPEN = 1;
+const unsigned TABLENAME_ALREADY_EXISTS = 2;
+const unsigned TABLENAME_CONFLICT = 101;
 #if 0
 {
     "56004b6a": "createTable(string,string,string)",
@@ -54,7 +54,7 @@ public:
 
     virtual ~TableFactoryPrecompiled(){};
 
-   
+
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param);
@@ -69,13 +69,14 @@ public:
     Address openTable(ExecutiveContext::Ptr context, const std::string& tableName);
 
 private:
-	unsigned isTableCreated(ExecutiveContext::Ptr context, const std::string& tableName, const std::string &keyField, const std::string &valueFiled);
+    unsigned isTableCreated(ExecutiveContext::Ptr context, const std::string& tableName,
+        const std::string& keyField, const std::string& valueFiled);
     TablePrecompiled::Ptr getSysTable(ExecutiveContext::Ptr context);
     dev::storage::MemoryTableFactory::Ptr m_MemoryTableFactory;
     std::map<std::string, Address> m_name2Table;
     h256 m_hash;
 };
 
-}  // namespace precompiled
+}  // namespace blockverifier
 
 }  // namespace dev

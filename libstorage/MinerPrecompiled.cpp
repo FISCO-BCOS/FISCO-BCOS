@@ -19,8 +19,8 @@
  *  @date 20180921
  */
 #include "MinerPrecompiled.h"
-#include "libstorage/TableFactoryPrecompiled.h"
 #include "libstorage/EntriesPrecompiled.h"
+#include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 

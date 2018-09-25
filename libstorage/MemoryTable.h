@@ -20,8 +20,8 @@
  */
 #pragma once
 
-#include "Table.h"
 #include "Storage.h"
+#include "Table.h"
 
 namespace dev
 {

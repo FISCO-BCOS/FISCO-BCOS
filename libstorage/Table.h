@@ -33,7 +33,7 @@ public:
     virtual ~Entry() {}
 
     virtual std::string getField(const std::string& key) const;
-    virtual void setField(const std::string& key,const std::string& value);
+    virtual void setField(const std::string& key, const std::string& value);
     virtual std::map<std::string, std::string>* fields();
 
     virtual uint32_t getStatus();

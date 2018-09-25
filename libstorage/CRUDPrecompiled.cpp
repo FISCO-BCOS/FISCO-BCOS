@@ -19,8 +19,8 @@
  *  @date 20180921
  */
 #include "CRUDPrecompiled.h"
-#include "libstorage/TableFactoryPrecompiled.h"
 #include "libstorage/EntriesPrecompiled.h"
+#include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 
@@ -37,7 +37,8 @@ storage::Table::Ptr CRUDPrecompiled::openTable(
 {
     LOG(DEBUG) << "CRUD open table:" << tableName;
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(context->getPrecompiled(Address(0x1001)));
+        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
+            context->getPrecompiled(Address(0x1001)));
     auto address = tableFactoryPrecompiled->openTable(context, tableName);
     if (address == Address())
         return nullptr;

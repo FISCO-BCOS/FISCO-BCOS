@@ -19,8 +19,8 @@
  *  @date 20180921
  */
 #include "TableFactoryPrecompiled.h"
-#include "TablePrecompiled.h"
 #include "MemoryTable.h"
+#include "TablePrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
@@ -125,18 +125,19 @@ TablePrecompiled::Ptr TableFactoryPrecompiled::getSysTable(ExecutiveContext::Ptr
 }
 
 unsigned TableFactoryPrecompiled::isTableCreated(ExecutiveContext::Ptr context,
-    const string& tableName, const string &keyField, const string &valueFiled)
+    const string& tableName, const string& keyField, const string& valueFiled)
 {
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
         return TABLE_ALREADY_OPEN;
     auto sysTable = getSysTable(context);
-    auto tableEntries = sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
+    auto tableEntries =
+        sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
     if (tableEntries->size() == 0u)
         return TABLE_NOT_EXISTS;
-    for (size_t i =0; i< tableEntries->size(); ++i)
+    for (size_t i = 0; i < tableEntries->size(); ++i)
     {
-		auto entry = tableEntries->get(i);
+        auto entry = tableEntries->get(i);
         if (keyField == entry->getField("key_field") &&
             valueFiled == entry->getField("value_field"))
             return TABLENAME_ALREADY_EXISTS;
@@ -153,7 +154,8 @@ Address TableFactoryPrecompiled::openTable(ExecutiveContext::Ptr context, const 
         return it->second;
     }
     auto sysTable = getSysTable(context);
-    auto tableEntries = sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
+    auto tableEntries =
+        sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
     if (tableEntries->size() == 0u)
         return Address();
 
@@ -174,8 +176,8 @@ h256 TableFactoryPrecompiled::hash(std::shared_ptr<ExecutiveContext> context)
     LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
     for (auto tableAddress : m_name2Table)
     {
-        TablePrecompiled::Ptr table =
-            std::dynamic_pointer_cast<TablePrecompiled>(context->getPrecompiled(tableAddress.second));
+        TablePrecompiled::Ptr table = std::dynamic_pointer_cast<TablePrecompiled>(
+            context->getPrecompiled(tableAddress.second));
         h256 hash = table->hash();
         LOG(DEBUG) << "table:" << tableAddress.first << " hash:" << hash;
         if (hash == h256())

@@ -20,8 +20,8 @@
  */
 #include "LevelDBStorage.h"
 
-#include "Table.h"
 #include "LevelDBStorage.h"
+#include "Table.h"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/easylog.h>

@@ -20,12 +20,12 @@
  */
 #pragma once
 
-#include "Table.h"
 #include "Storage.h"
+#include "StorageException.h"
+#include "Table.h"
 #include <json/json.h>
 #include <leveldb/db.h>
 #include <libdevcore/FixedHash.h>
-#include "StorageException.h"
 namespace dev
 {
 namespace storage
