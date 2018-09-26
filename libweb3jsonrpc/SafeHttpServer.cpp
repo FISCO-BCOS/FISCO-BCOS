@@ -21,7 +21,9 @@
  */
 
 #include "SafeHttpServer.h"
+#include <arpa/inet.h>
 #include <jsonrpccpp/common/specificationparser.h>
+#include <netinet/in.h>
 #include <sstream>
 
 using namespace std;
@@ -64,6 +66,10 @@ bool SafeHttpServer::StartListening()
 {
     if (!this->running)
     {
+        struct sockaddr_in sock;
+        sock.sin_family = AF_INET;
+        sock.sin_port = htons(this->port);
+        sock.sin_addr.s_addr = inet_addr(m_address.c_str());
         if (this->path_sslcert != "" && this->path_sslkey != "")
         {
             try
@@ -72,10 +78,10 @@ bool SafeHttpServer::StartListening()
                 jsonrpc::SpecificationParser::GetFileContent(this->path_sslkey, this->sslkey);
 
                 this->daemon = MHD_start_daemon(MHD_USE_SSL | MHD_USE_SELECT_INTERNALLY, this->port,
-                    NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR,
-                    m_address.c_str(), MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(),
-                    MHD_OPTION_HTTPS_MEM_CERT, this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE,
-                    this->threads, MHD_OPTION_END);
+                    NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
+                    MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(), MHD_OPTION_HTTPS_MEM_CERT,
+                    this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE, this->threads,
+                    MHD_OPTION_END);
             }
             catch (jsonrpc::JsonRpcException& ex)
             {
@@ -85,7 +91,7 @@ bool SafeHttpServer::StartListening()
         else
         {
             this->daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, this->port, NULL, NULL,
-                SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, m_address.c_str(),
+                SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
                 MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
         }
         if (this->daemon != NULL)
