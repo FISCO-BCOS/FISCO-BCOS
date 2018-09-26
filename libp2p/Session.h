@@ -86,6 +86,19 @@ protected:
     virtual void doRead();
     void setTest(bool const& _test) { m_test = _test; }
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    {
+        m_topics = _topics;
+    }
+
+    std::shared_ptr<std::vector<std::string>> topics() const override { return m_topics; }
+
+    bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) override;
+    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) override;
+    bool eraseCallbackBySeq(uint32_t seq) override;
+
+    NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
+
 private:
     struct Header
     {
@@ -149,6 +162,13 @@ private:
 
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
     bool m_test = false;  /// for unit test
+
+    std::shared_ptr<std::vector<std::string>> m_topics;  ///< Topic being concerned by this
+                                                         ///< session/node.
+
+    ///< A call B, the function to call after the response is received by A.
+    mutable RecursiveMutex x_seq2Callback;
+    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 };
 
 }  // namespace p2p
