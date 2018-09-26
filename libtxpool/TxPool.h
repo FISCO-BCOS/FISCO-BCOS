@@ -56,7 +56,7 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
         std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
-        uint64_t const& _limit = 102400, int32_t const& _protocolId = 4)
+        uint64_t const& _limit = 102400, int32_t const& _protocolId = 11)
       : m_service(_p2pService),
         m_blockManager(_blockManager),
         m_limit(_limit),
@@ -115,8 +115,7 @@ public:
     virtual void setProtocolId(uint32_t const& _protocolId) { m_protocolId = _protocolId; }
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
-
-    uint64_t number() const { return m_blockManager->number(); }
+    void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
 protected:
     /**
@@ -136,9 +135,9 @@ protected:
     virtual ImportResult verify(
         Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
     /// check block limit
-    virtual bool inline isBlockLimitOk(Transaction const& _ts) const;
+    virtual bool isBlockLimitOk(Transaction const& _ts) const;
     /// check nonce
-    virtual bool inline isNonceOk(Transaction const& _ts, bool _needinsert) const;
+    virtual bool isNonceOk(Transaction const& _ts, bool _needinsert) const;
     /// interface for filter check
     virtual u256 filterCheck(const Transaction& _t) const { return u256(0); };
     void clear();

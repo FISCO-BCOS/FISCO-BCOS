@@ -39,10 +39,19 @@ void TxPool::enqueue(
     dev::p2p::P2PException exception, std::shared_ptr<Session> session, Message::Ptr pMessage)
 {
     if (exception.errorCode() != 0)
-        BOOST_THROW_EXCEPTION(P2pObtainTransactionFailed()
+        BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed()
                               << errinfo_comment("obtain transaction from lower network failed"));
     bytesConstRef tx_data = bytesConstRef(pMessage->buffer().get());
-    import(tx_data);
+    ImportResult result = import(tx_data);
+    if (result == ImportResult::NonceCheckFail)
+        BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed()
+                              << errinfo_comment("nonce check failed when enqueue transaction"));
+    if (result == ImportResult::BlockLimitCheckFail)
+        BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed() << errinfo_comment(
+                                  "block limit check failed when enqueue transaction"));
+    if (result == ImportResult::Malformed)
+        BOOST_THROW_EXCEPTION(
+            MalformedTransactionException() << errinfo_comment("Malformed transaction"));
 }
 
 /**
@@ -57,6 +66,11 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     if (ret == ImportResult::NonceCheckFail)
     {
         return make_pair(_tx.sha3(), Address(1));
+    }
+    else if (ImportResult::Malformed == ret)
+    {
+        BOOST_THROW_EXCEPTION(
+            MalformedTransactionException() << errinfo_comment("Malformed transaction"));
     }
     else if (ImportResult::BlockLimitCheckFail == ret)
     {
@@ -76,20 +90,14 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
  */
 ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
 {
-    try
-    {
-        Transaction tx(_txBytes, CheckTransaction::Everything);
-        /// check sha3
-        if (sha3(_txBytes) != tx.sha3())
-            BOOST_THROW_EXCEPTION(InconsistentTransactionSha3()
-                                  << errinfo_comment("Transaction sha3 is inconsistent"));
-        return import(tx, _ik);
-    }
-    catch (std::exception& err)
-    {
-        LOG(ERROR) << "Ignoring invalid transaction" << err.what();
-        return ImportResult::Malformed;
-    }
+    Transaction tx;
+
+    tx.decode(_txBytes, CheckTransaction::Everything);
+    /// check sha3
+    if (sha3(_txBytes.toBytes()) != tx.sha3())
+        BOOST_THROW_EXCEPTION(
+            InconsistentTransactionSha3() << errinfo_comment("Transaction sha3 is inconsistent"));
+    return import(tx, _ik);
 }
 
 /**
@@ -114,7 +122,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
             removeTrans(m_txsQueue.rbegin()->sha3());
         }
     }
-    return ImportResult::Success;
+    return verify_ret;
 }
 
 /**
@@ -130,6 +138,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
  */
 ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bool _needinsert)
 {
+    std::cout << "verify" << std::endl;
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
     if (m_known.count(tx_hash))
@@ -152,7 +161,7 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
  * @return true : block limit of the given transaction is valid
  * @return false : block limit of the given transaction is invalid
  */
-bool inline TxPool::isBlockLimitOk(Transaction const& _tx) const
+bool TxPool::isBlockLimitOk(Transaction const& _tx) const
 {
     if (_tx.blockLimit() == Invalid256 || m_blockManager->number() >= _tx.blockLimit() ||
         _tx.blockLimit() > (m_blockManager->number() + m_maxBlockLimit))
@@ -173,7 +182,7 @@ bool inline TxPool::isBlockLimitOk(Transaction const& _tx) const
  * @return true : valid nonce
  * @return false : invalid nonce
  */
-bool inline TxPool::isNonceOk(Transaction const& _tx, bool _needInsert) const
+bool TxPool::isNonceOk(Transaction const& _tx, bool _needInsert) const
 {
     if (_tx.nonce() == Invalid256 || (!m_blockManager->isNonceOk(_tx, _needInsert)))
     {
