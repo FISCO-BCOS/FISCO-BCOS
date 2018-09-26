@@ -256,7 +256,6 @@ std::string ConsoleServer::minerList(const std::vector<std::string> args) {
 		std::vector<h512>::iterator iter;
 		std::vector<p2p::PeerSessionInfo> peers = _host->peerSessionInfo();
 		ss << minerList.size() << std::endl;
-		printSingleLine(ss);
     for(size_t i = 0; i < peers.size(); i++)
     {
       printSingleLine(ss);
@@ -272,10 +271,10 @@ std::string ConsoleServer::minerList(const std::vector<std::string> args) {
       }
       printSingleLine(ss);
     }
-    p2p::NodeInfo node = _host->nodeInfo();
-		ss << "Nodeid(local): " << (node.id.hex()).substr(0, 8) << "..." << std::endl;
-		ss << "Ip: " << node.address << std::endl;
-	  ss << "Port:" << node.port << std::endl;
+    printSingleLine(ss);
+		ss << "Nodeid(local): " << (_host->id().hex()).substr(0, 8) << "..." << std::endl;
+		ss << "Ip: " << _host->listenAddress() << std::endl;
+	  ss << "Port:" << _host->listenPort() << std::endl;
 		printSingleLine(ss);
 		ss << std::endl;
 		output = ss.str();
