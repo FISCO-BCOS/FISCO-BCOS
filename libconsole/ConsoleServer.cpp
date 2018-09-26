@@ -122,15 +122,15 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         {
             output = p2pUpdate(args);
         }
-        else if (func == "miner.list")
+        else if (func == "pbft.list")
         {
             output = minerList(args);
         }
-        else if (func == "miner.add")
+        else if (func == "pbft.add")
         {
             output = addMiner(args);
         }
-        else if (func == "miner.remove")
+        else if (func == "pbft.remove")
         {
             output = removeMiner(args);
         }
@@ -167,9 +167,9 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
 	ss << "status          Show the blockchain status." << std::endl;
 	ss << "p2p.list        Show the peers information." << std::endl;
 	ss << "p2p.update      Update static nodes." << std::endl;
-	ss << "miner.list      Show the miners information." << std::endl;
-	ss << "miner.add       Add miner node." << std::endl;
-	ss << "miner.remove    Remove miner node." << std::endl;
+	ss << "pbft.list       Show pbft consensus node list." << std::endl;
+	ss << "pbft.add        Add pbft consensus node." << std::endl;
+	ss << "pbft.remove     Remove pbft consensus node." << std::endl;
 	ss << "amdb.select     Query the table data." << std::endl;
 	ss << "quit            Quit the blockchain console." << std::endl;
 	ss << "help            Provide help information for blockchain console." << std::endl;
