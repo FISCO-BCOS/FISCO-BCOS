@@ -1,0 +1,104 @@
+/*
+    This file is part of cpp-ethereum.
+
+    cpp-ethereum is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    cpp-ethereum is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file ExecutionResult.h
+ * @author
+ * @date
+ */
+
+#pragma once
+
+#include <libdevcore/RLP.h>
+#include <libdevcore/SHA3.h>
+#include <libethcore/Common.h>
+
+
+namespace dev
+{
+namespace eth
+{
+enum class TransactionException
+{
+    None = 0,
+    Unknown,
+    BadRLP,
+    InvalidFormat,
+    OutOfGasIntrinsic,  ///< Too little gas to pay for the base transaction cost.
+    InvalidSignature,
+    InvalidNonce,
+    NotEnoughCash,
+    OutOfGasBase,  ///< Too little gas to pay for the base transaction cost.
+    BlockGasLimitReached,
+    BadInstruction,
+    BadJumpDestination,
+    OutOfGas,    ///< Ran out of gas executing code of the transaction.
+    OutOfStack,  ///< Ran out of stack executing code of the transaction.
+    StackUnderflow,
+    NonceCheckFail,  // noncecheck ok() ==  false
+    BlockLimitCheckFail,
+    FilterCheckFail,
+    NoDeployPermission,
+    NoCallPermission,
+    NoTxPermission,
+    EthCallIdNotFound,
+    UTXOInvalidType,
+    UTXOJsonParamError,
+    UTXOTokenIDInvalid,
+    UTXOTokenUsed,
+    UTXOTokenOwnerShipCheckFail,
+    UTXOTokenLogicCheckFail,
+    UTXOTokenAccountingBalanceFail,
+    UTXOTokenCntOutofRange,
+    UTXOTokenKeyRepeat,
+    UTXOLowEthVersion,
+    UTXOTxError,
+    UTXODBError,
+    PrecompiledError,
+    RevertInstruction,
+    InvalidZeroSignatureFormat,
+    AddressAlreadyUsed
+};
+
+enum class CodeDeposit
+{
+    None = 0,
+    Failed,
+    Success
+};
+
+struct VMException;
+
+TransactionException toTransactionException(Exception const& _e);
+std::ostream& operator<<(std::ostream& _out, TransactionException const& _er);
+
+/// Description of the result of executing a transaction.
+struct ExecutionResult
+{
+    u256 gasUsed = 0;
+    TransactionException excepted = TransactionException::Unknown;
+    Address newAddress;
+    bytes output;
+    CodeDeposit codeDeposit =
+        CodeDeposit::None;  ///< Failed if an attempted deposit failed due to lack of gas.
+    u256 gasRefunded = 0;
+    unsigned depositSize = 0;  ///< Amount of code of the creation's attempted deposit.
+    u256 gasForDeposit;        ///< Amount of gas remaining for the code deposit phase.
+};
+
+std::ostream& operator<<(std::ostream& _out, ExecutionResult const& _er);
+
+}  // namespace eth
+}  // namespace dev
