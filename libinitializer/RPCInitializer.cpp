@@ -42,7 +42,7 @@ void RPCInitializer::initConfig(const boost::property_tree::ptree &pt) {
 
 	if(httpListenPort > 0) {
 		//不设置析构，ModularServer会析构
-		_safeHttpServer.reset(new SafeHttpServer(httpListenPort), [](SafeHttpServer *p) {
+		_safeHttpServer.reset(new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer *p) {
 			(void)p;
 		});
 	}
