@@ -52,6 +52,14 @@ public:
         m_block.encode(m_blockData, ref(m_blockHeaderData));
         m_block.decode(ref(m_blockData));
     }
+
+    void reEncodeDecode()
+    {
+        m_blockHeader.encode(m_blockHeaderData);
+        m_block.encode(m_blockData, ref(m_blockHeaderData));
+        m_block.decode(ref(m_blockData));
+    }
+
     /// for empty case test
     FakeBlock()
     {
