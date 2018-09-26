@@ -63,16 +63,7 @@ public:
         m_limit(_limit),
         m_protocolId(_protocolId)
     {
-        if (!m_service)
-        {
-            LOG(ERROR) << "p2p service hasn't been inited, exit now!";
-            exit(-1);
-        }
-        if (!m_blockManager)
-        {
-            LOG(ERROR) << "BlockManager hasn't been setted, exit now!";
-            exit(-1);
-        }
+        assert(m_service && m_blockManager);
         /// register enqueue interface to p2p by protocalID
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
