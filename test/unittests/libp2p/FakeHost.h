@@ -21,6 +21,7 @@
  * @date 2018-09-10
  */
 #pragma once
+#include <libethcore/Protocol.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Session.h>
@@ -106,7 +107,7 @@ public:
     }
     virtual void doRead()
     {
-        setProtocolId(11);
+        setProtocolId(dev::eth::ProtocolID::TxPool);
         EncodeData();
         if (m_read == 1)
             return;
@@ -114,7 +115,7 @@ public:
         Session::doRead();
     }
     unsigned m_read = 0;
-    uint16_t m_protocolId = 0;
+    int16_t m_protocolId = 0;
     std::string m_dataContent;
 };
 
