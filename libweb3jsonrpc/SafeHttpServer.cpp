@@ -22,7 +22,6 @@
 
 #include "SafeHttpServer.h"
 #include <jsonrpccpp/common/specificationparser.h>
-#include <microhttpd.h>
 #include <sstream>
 
 using namespace std;

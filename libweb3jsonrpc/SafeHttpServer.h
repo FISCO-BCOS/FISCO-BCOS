@@ -21,6 +21,7 @@
 
 #include <string>
 #include <map>
+#include <microhttpd.h>
 #include "jsonrpccpp/server/abstractserverconnector.h"
 
 namespace dev
