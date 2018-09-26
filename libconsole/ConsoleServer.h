@@ -36,12 +36,12 @@ public:
 
 	std::string help(const std::vector<std::string> args);
 	std::string status(const std::vector<std::string> args);
-	std::string p2pPeers(const std::vector<std::string> args);
-	std::string p2pMiners(const std::vector<std::string> args);
+	std::string p2pList(const std::vector<std::string> args);
 	std::string p2pUpdate(const std::vector<std::string> args);
-	std::string amdbSelect(const std::vector<std::string> args);
+	std::string minerList(const std::vector<std::string> args);
 	std::string addMiner(const std::vector<std::string> args);
 	std::string removeMiner(const std::vector<std::string> args);
+	std::string amdbSelect(const std::vector<std::string> args);
 
 private:
 	std::shared_ptr<dev::channel::ChannelServer> _server;
