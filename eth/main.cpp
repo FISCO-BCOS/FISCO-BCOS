@@ -51,8 +51,6 @@
 
 #include <libweb3jsonrpc/AccountHolder.h>
 #include <libweb3jsonrpc/Eth.h>
-#include <libweb3jsonrpc/SafeHttpServer.h>
-#include <jsonrpccpp/client/connectors/httpclient.h>
 #include <libwebthree/SystemManager.h>
 #include <libweb3jsonrpc/ModularServer.h>
 #include <libweb3jsonrpc/IpcServer.h>
@@ -68,7 +66,6 @@
 #include <libweb3jsonrpc/Test.h>
 #include "Farm.h"
 
-//#include <ethminer/MinerAux.h>
 #include "AccountManager.h"
 
 #include <libdiskencryption/CryptoParam.h>
