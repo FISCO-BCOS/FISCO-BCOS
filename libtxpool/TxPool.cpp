@@ -138,7 +138,6 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
  */
 ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bool _needinsert)
 {
-    std::cout << "verify" << std::endl;
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
     if (m_known.count(tx_hash))
