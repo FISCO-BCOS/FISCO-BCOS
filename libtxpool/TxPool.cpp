@@ -49,9 +49,6 @@ void TxPool::enqueue(
     if (result == ImportResult::BlockLimitCheckFail)
         BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed() << errinfo_comment(
                                   "block limit check failed when enqueue transaction"));
-    if (result == ImportResult::Malformed)
-        BOOST_THROW_EXCEPTION(
-            MalformedTransactionException() << errinfo_comment("Malformed transaction"));
 }
 
 /**
@@ -66,11 +63,6 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     if (ret == ImportResult::NonceCheckFail)
     {
         return make_pair(_tx.sha3(), Address(1));
-    }
-    else if (ImportResult::Malformed == ret)
-    {
-        BOOST_THROW_EXCEPTION(
-            MalformedTransactionException() << errinfo_comment("Malformed transaction"));
     }
     else if (ImportResult::BlockLimitCheckFail == ret)
     {
