@@ -5,7 +5,10 @@ set -e
 ca_file= #CA私钥文件
 node_num=1 #节点数量
 ip_file=
-output_dir=./output/ #输出目录
+ip_param=
+use_ip_param=
+ip_array=
+output_dir=./nodes/ #输出目录
 port_start=30300 #起始端口
 CLIENTCERT_PWD=123456
 KEYSTORE_PWD=123456
@@ -19,28 +22,36 @@ help() {
 	echo $1
 	cat << EOF
 Usage:
-	-f <IP list file>           [Required]
+	-l <IP list>                [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
+	-f <IP list file>           split by line, "ip:nodeNum"
 	-e <FISCO-BCOS binary path> Default download from github
 	-n <Nodes per IP>           Default 1
 	-a <CA Key>                 Default Generate a new CA
-	-o <Output Dir>             Default ./output/
+	-o <Output Dir>             Default ./nodes/
 	-p <Start Port>             Default 30300
 	-c <ClientCert Passwd>      Default 123456
 	-k <Keystore Passwd>        Default 123456
 	-s <StateDB type>           Default leveldb. if set -s, use amop
 	-t <Cert config file>       Default auto generate
-	-z >Generate tar packet>    Default no
+	-z <Generate tar packet>    Default no
 	-h Help
+e.g 
+    build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
 EOF
 
 exit 0
 }
 
-while getopts "a:n:o:p:e:c:k:f:t:szh" option;do
+while getopts "a:n:o:p:e:c:k:f:l:t:szh" option;do
 	case $option in
 	a) ca_file=$OPTARG;;
 	n) node_num=$OPTARG;;
-	f) ip_file=$OPTARG;;
+	f) ip_file=$OPTARG
+	   use_ip_param="false"
+	;;
+	l) ip_param=$OPTARG
+	   use_ip_param="true"
+	;;
 	o) output_dir=$OPTARG;;
 	p) port_start=$OPTARG;;
 	e) eth_path=$OPTARG;;
@@ -53,19 +64,24 @@ while getopts "a:n:o:p:e:c:k:f:t:szh" option;do
 	esac
 done
 
-[ -z $ip_file ] && help 'ERROR: Please specify the IP list file.'
+[ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
+if [ "${use_ip_param}" = "true" ];then
+    ip_array=(${ip_param//,/ })
+elif [ "${use_ip_param}" = "false" ];then
+	n=0
+	while read line;do
+		ip_array[n]=$line
+		((++n))
+	done < $ip_file
+else 
+    help 
+fi
+
 if [ -z ${eth_path} ];then
     eth_path=${output_dir}/fisco-bcos
 	Download=true
 fi
 
-echo "FISCO-BCOS Path: $eth_path"
-echo "IP List File   : $ip_file"
-echo "CA Key         : $ca_file"
-echo "Nodes per IP   : $node_num"
-echo "Output Dir     : $output_dir"
-echo "Start Port     : $port_start"
-echo "============================="
 [ -d "$output_dir" ] || mkdir -p "$output_dir"
 
 if [ "${Download}" = "true" ];then
@@ -123,9 +139,12 @@ nodeid_list=""
 ip_list=""
 #生成每个节点的密钥和ip列表
 index=0
-while read line;do
-	for ((i=0;i<node_num;++i));do
-		node_dir="$output_dir/node_${line}_${index}"
+for line in ${ip_array[*]};do
+	ip=${line%:*}
+	num=${line#*:}
+	[ $num = $ip -o -z ${num} ] && num=${node_num}
+	for ((i=0;i<num;++i));do
+		node_dir="$output_dir/node_${ip}_${index}"
 		mkdir -p $node_dir/data/
 		mkdir -p $node_dir/sdk/
 
@@ -136,26 +155,29 @@ while read line;do
 
 		echo ${CLIENTCERT_PWD} > $node_dir/sdk/pwd.conf
 		openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/data/keystore.p12" -password file:$node_dir/sdk/pwd.conf
-		keytool -importkeystore -destkeystore "$node_dir/sdk/client.keystore" -srckeystore "$node_dir/data/keystore.p12" -srcstoretype pkcs12 -alias client -srcstorepass ${CLIENTCERT_PWD} -deststorepass ${KEYSTORE_PWD}
+		keytool -importkeystore -destkeystore "$node_dir/sdk/client.keystore" -srckeystore "$node_dir/data/keystore.p12" -srcstoretype pkcs12 -alias client -srcstorepass ${CLIENTCERT_PWD} -deststorepass ${KEYSTORE_PWD} >> /dev/null 2>&1
         rm $node_dir/sdk/pwd.conf
 		nodeid=$(openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
 		nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
 	"
-		ip_list=$"${ip_list}node.${index}="${line}:$(( port_start + index * 4 ))"
+		ip_list=$"${ip_list}node.${index}="${ip}:$(( port_start + index * 4 ))"
 	"
 		((++index))
 	done
-done < $ip_file
+done 
 
 echo "#!/bin/bash" > "$output_dir/start_all.sh"
 echo "PPath=\`pwd\`" >> "$output_dir/start_all.sh"
 echo "Generating node configuration..."
 #生成每个节点的配置、创世块文件和启动脚本
 index=0
-while read line;do
-	for ((i=0;i<node_num;++i));do
-		echo "Generating IP:${line} ID:${index} config files..."
-		node_dir="$output_dir/node_${line}_${index}"
+for line in ${ip_array[*]};do
+	ip=${line%:*}
+	num=${line#*:}
+	[ $num = $ip -o -z ${num} ] && num=${node_num}
+	for ((i=0;i<num;++i));do
+		echo "Generating IP:${ip} ID:${index} config files..."
+		node_dir="$output_dir/node_${ip}_${index}"
 	cat << EOF > "$node_dir/config.conf"
 [rpc]
 	listen_ip=127.0.0.1
@@ -245,7 +267,7 @@ EOF
 	cat << EOF > "$node_dir/start.sh"
 #!/bin/bash
 fisco_bcos=\`pwd\`/fisco-bcos
-nohup setsid $fisco_bcos --config config.conf --genesis genesis.json&
+nohup setsid \$fisco_bcos --config config.conf --genesis genesis.json&
 EOF
 
 	cat << EOF > "$node_dir/stop.sh"
@@ -260,11 +282,20 @@ EOF
 		cp "$output_dir/ca.crt" "$node_dir/data/"
 		cp "$output_dir/ca.crt" "$node_dir/sdk/"
 		cp "$eth_path" "$node_dir/fisco-bcos"
-		echo "cd \${PPath}/node_${line}_${index} && ./start.sh" >> "$output_dir/start_all.sh"
+		echo "cd \${PPath}/node_${line}_${index} && bash start.sh" >> "$output_dir/start_all.sh"
 		((++index))
 		[ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
 	done
 	chmod +x "$output_dir/start_all.sh"
-done < $ip_file
+done 
 
-echo "All completed."
+echo "All completed. All files in $output_dir"
+echo "============================="
+echo "FISCO-BCOS Path: $eth_path"
+echo "IP List File   : $ip_file"
+echo "IP List File   : $ip_param"
+echo "CA Key         : $ca_file"
+echo "Nodes per IP   : $node_num"
+echo "Output Dir     : $output_dir"
+echo "Start Port     : $port_start"
+echo "============================="
