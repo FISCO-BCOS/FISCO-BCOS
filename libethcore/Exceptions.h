@@ -77,6 +77,7 @@ DEV_SIMPLE_EXCEPTION(InvalidReceiptsStateRoot);
 DEV_SIMPLE_EXCEPTION(StateTrieReconstructionFailed);
 DEV_SIMPLE_EXCEPTION(InvalidStateChunkData);
 DEV_SIMPLE_EXCEPTION(InvalidBlockChunkData);
+DEV_SIMPLE_EXCEPTION(InvalidCommitBehaviour);
 
 /// block && block header related
 DEV_SIMPLE_EXCEPTION(InvalidBlockNonce);
@@ -89,6 +90,7 @@ DEV_SIMPLE_EXCEPTION(GenesisBlockCannotBeCalculated);
 DEV_SIMPLE_EXCEPTION(InvalidLogBloom);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
+
 /// transactionReceipt related
 DEV_SIMPLE_EXCEPTION(InvalidTransactionReceiptFormat);
 DEV_SIMPLE_EXCEPTION(TransactionReceiptVersionError);
@@ -100,6 +102,7 @@ DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(UnknownError);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
+
 struct VMException : Exception
 {
 };
