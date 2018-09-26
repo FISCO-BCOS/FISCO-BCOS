@@ -57,6 +57,19 @@ public:
     virtual void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) = 0;
 
     virtual void send(std::shared_ptr<bytes> _msg) = 0;
+
+    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
+
+    virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
+
+    ///< Add, Get, Erase interface of seq2Callback.
+    ///< The return true indicates that the operation was successful.
+    ///< The return false indicates that the operation failed.
+    virtual bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) = 0;
+    virtual ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) = 0;
+    virtual bool eraseCallbackBySeq(uint32_t seq) = 0;
+
+    virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 };
 
 }  // namespace p2p

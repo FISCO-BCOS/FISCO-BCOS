@@ -33,9 +33,8 @@ public:
     virtual Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
 
     virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback, Options const& options) = 0;
-
-    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
+        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+        Options const& options = Options()) = 0;
 
     virtual Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
@@ -44,6 +43,9 @@ public:
 
     virtual void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
+    virtual void asyncMulticastMessageByNodeIDList(
+        NodeIDs const& nodeIDs, Message::Ptr message) = 0;
+
     virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
 
     virtual void registerHandlerByProtoclID(
@@ -51,6 +53,13 @@ public:
 
     virtual void registerHandlerByTopic(
         std::string const& topic, CallbackFuncWithSession handler) = 0;
+
+    virtual void setTopicsByNode(
+        NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) = 0;
+
+    virtual std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) = 0;
+
+    virtual SessionInfos sessionInfos() const = 0;
 };
 
 }  // namespace p2p

@@ -52,10 +52,9 @@ public:
 
     Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message, CallbackFunc callback,
-        Options const& options) override;
-
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
+    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+        Options const& options = Options()) override;
 
     Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
@@ -64,14 +63,32 @@ public:
 
     void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
+    void asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message) override;
+
     void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
 
     void registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler) override;
 
     void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
 
+    void setTopicsByNode(
+        NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) override;
+
+    std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
+
+    ///< Only connected node
+    virtual SessionInfos sessionInfos() const override;
+
 private:
-    void onTimeout(const boost::system::error_code& error, uint32_t seq);
+    void onTimeoutByTopic(const boost::system::error_code& error,
+        std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
+        CallbackFunc callback, Options const& options, uint32_t totalTimeout);
+    void onTimeoutByNode(
+        const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);
+
+    NodeIDs getPeersByTopic(std::string const& topic);
+
+    bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
 
     std::shared_ptr<Host> m_host;
     boost::asio::io_service* m_ioService;

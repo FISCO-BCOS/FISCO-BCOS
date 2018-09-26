@@ -81,6 +81,19 @@ public:
 
     void send(std::shared_ptr<bytes> _msg) override;
 
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    {
+        m_topics = _topics;
+    }
+
+    std::shared_ptr<std::vector<std::string>> topics() const override { return m_topics; }
+
+    bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) override;
+    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) override;
+    bool eraseCallbackBySeq(uint32_t seq) override;
+
+    NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
+
 private:
     struct Header
     {
@@ -148,6 +161,13 @@ private:
     boost::asio::io_service::strand* m_strand;
 
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
+
+    std::shared_ptr<std::vector<std::string>> m_topics;  ///< Topic being concerned by this
+                                                         ///< session/node.
+
+    ///< A call B, the function to call after the response is received by A.
+    mutable RecursiveMutex x_seq2Callback;
+    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 };
 
 }  // namespace p2p
