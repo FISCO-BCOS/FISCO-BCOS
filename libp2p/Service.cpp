@@ -52,7 +52,6 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        message->setProtocolID(g_synchronousPackageProtocolID);
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
 
         callback->mutex.lock();
@@ -86,7 +85,7 @@ void Service::asyncSendMessageByNodeID(
     try
     {
         RecursiveGuard l(m_host->mutexSessions());
-        std::unordered_map<NodeID, std::shared_ptr<SessionFace>> s = m_host->sessions();
+        auto s = m_host->sessions();
         for (auto const& i : s)
         {
             LOG(INFO) << "Service::asyncSendMessageByNodeID traversed nodeID = " << toJS(i.first);
@@ -104,11 +103,11 @@ void Service::asyncSendMessageByNodeID(
                         std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
                             std::make_shared<boost::asio::deadline_timer>(
                                 *m_ioService, boost::posix_time::milliseconds(options.timeout));
-                        timeoutHandler->async_wait(boost::bind(&Service::onTimeout,
-                            shared_from_this(), boost::asio::placeholders::error, seq));
+                        timeoutHandler->async_wait(boost::bind(&Service::onTimeoutByNode,
+                            shared_from_this(), boost::asio::placeholders::error, seq, p));
                         responseCallback->timeoutHandler = timeoutHandler;
                     }
-                    m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
+                    p->addSeq2Callback(seq, responseCallback);
                 }
                 ///< update seq and length
                 message->setSeq(seq);
@@ -127,58 +126,107 @@ void Service::asyncSendMessageByNodeID(
     }
 }
 
-void Service::asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message)
+void Service::onTimeoutByTopic(const boost::system::error_code& error,
+    std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
+    CallbackFunc callback, Options const& options, uint32_t totalTimeout)
 {
-    LOG(INFO) << "Call Service::asyncSendMessageByNodeID without callback to NodeID="
-              << toJS(nodeID);
+    LOG(INFO) << "Service::onTimeoutByTopic, error=" << error;
+
     try
     {
-        RecursiveGuard l(m_host->mutexSessions());
-        std::unordered_map<NodeID, std::shared_ptr<SessionFace>> s = m_host->sessions();
-        for (auto const& i : s)
+        auto it = oriSession->getCallbackBySeq(message->seq());
+        ///< Both active cancellation and passive timeout need to delete callback.
+        oriSession->eraseCallbackBySeq(message->seq());
+
+        if (it != NULL)
         {
-            LOG(INFO) << "Service::asyncSendMessageByNodeID without callback traversed nodeID = "
-                      << toJS(i.first);
-            if (i.first == nodeID)
+            if (error == 0)
             {
-                std::shared_ptr<SessionFace> p = i.second;
-                LOG(INFO)
-                    << "Service::asyncSendMessageByNodeID without callback get session success.";
-                uint32_t seq = ++m_seq;
+                ///< passive timeout
+                if (nodeIDsToSend.size() > 0 && totalTimeout < options.timeout)
+                {
+                    NodeID nodeID = nodeIDsToSend[0];
+                    LOG(INFO) << "Call Service::asyncSendMessageByTopic to NodeID=" << toJS(nodeID);
+                    try
+                    {
+                        RecursiveGuard l(m_host->mutexSessions());
+                        auto s = m_host->sessions();
+                        for (auto const& i : s)
+                        {
+                            if (i.first == nodeID)
+                            {
+                                std::shared_ptr<SessionFace> newSession = i.second;
+                                if (callback)
+                                {
+                                    ResponseCallback::Ptr responseCallback =
+                                        std::make_shared<ResponseCallback>();
+                                    responseCallback->callbackFunc = callback;
 
-                ///< insert a empty code callback to seq map
-                CallbackFunc callback = [](P2PException e, Message::Ptr msg) {};
-                ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
-                responseCallback->callbackFunc = callback;
-                m_p2pMsgHandler->addSeq2Callback(seq, responseCallback);
+                                    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
+                                        std::make_shared<boost::asio::deadline_timer>(*m_ioService,
+                                            boost::posix_time::milliseconds(options.subTimeout));
+                                    timeoutHandler->async_wait(
+                                        boost::bind(&Service::onTimeoutByTopic, shared_from_this(),
+                                            boost::asio::placeholders::error, newSession,
+                                            nodeIDsToSend, message, callback, options,
+                                            totalTimeout + options.subTimeout));
+                                    responseCallback->timeoutHandler = timeoutHandler;
+                                    newSession->addSeq2Callback(message->seq(), responseCallback);
+                                }
 
-                ///< update seq and length
-                message->setSeq(seq);
-                message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
-                message->Print("Service::asyncSendMessageByNodeID without callback msg sent:");
-                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
-                message->encode(*buf);
-                p->send(buf);
-                return;
+                                std::shared_ptr<bytes> msgBuffer = std::make_shared<bytes>();
+                                message->encode(*msgBuffer);
+                                newSession->send(msgBuffer);
+                                return;
+                            }
+                        }
+                    }
+                    catch (std::exception& e)
+                    {
+                        LOG(ERROR) << "Service::onTimeoutByTopic error:" << e.what();
+                    }
+                    nodeIDsToSend.erase(nodeIDsToSend.begin());
+                }
+                else
+                {
+                    if (it->callbackFunc)
+                    {
+                        P2PException e(P2PExceptionType::NetworkTimeout,
+                            g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
+                        Message::Ptr msg = make_shared<Message>();
+                        msg->setSeq(message->seq());
+                        it->callbackFunc(e, msg);
+                    }
+                    else
+                    {
+                        LOG(ERROR) << "Service::onTimeoutByTopic callback empty.";
+                    }
+                }
             }
+        }
+        else
+        {
+            LOG(WARNING) << "Service::onTimeoutByNode not found seq: " << message->seq()
+                         << " callback，may timeout";
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        LOG(ERROR) << "Service::onTimeoutByNode error:" << e.what();
     }
 }
 
-void Service::onTimeout(const boost::system::error_code& error, uint32_t seq)
+void Service::onTimeoutByNode(
+    const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p)
 {
     ///< This function is called by the timer active cancellation or passive timeout.
     ///< Active cancellation or passive timeout can be distinguished by error parameter.
     ///< If the timer is active cancelled, callbackFunc will not be called.
-    LOG(INFO) << "Service::onTimeout, error=" << error << ", seq=" << seq;
+    LOG(INFO) << "Service::onTimeoutByNode, error=" << error << ", seq=" << seq;
 
     try
     {
-        auto it = m_p2pMsgHandler->getCallbackBySeq(seq);
+        auto it = p->getCallbackBySeq(seq);
         if (it != NULL)
         {
             if (error == 0)
@@ -194,21 +242,22 @@ void Service::onTimeout(const boost::system::error_code& error, uint32_t seq)
                 }
                 else
                 {
-                    LOG(ERROR) << "Service::onTimeout callback empty.";
+                    LOG(ERROR) << "Service::onTimeoutByNode callback empty.";
                 }
             }
 
             ///< Both active cancellation and passive timeout need to delete callback.
-            m_p2pMsgHandler->eraseCallbackBySeq(seq);
+            p->eraseCallbackBySeq(seq);
         }
         else
         {
-            LOG(WARNING) << "Service::onTimeout not found seq: " << seq << " callback，may timeout";
+            LOG(WARNING) << "Service::onTimeoutByNode not found seq: " << seq
+                         << " callback，may timeout";
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Service::onTimeout error:" << e.what();
+        LOG(ERROR) << "Service::onTimeoutByNode error:" << e.what();
     }
 }
 
@@ -219,9 +268,119 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
 
 void Service::asyncSendMessageByTopic(
     std::string const& topic, Message::Ptr message, CallbackFunc callback, Options const& options)
-{}
+{
+    LOG(INFO) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
+    assert(options.timeout > 0 && options.subTimeout > 0);
+    NodeIDs nodeIDsToSend = getPeersByTopic(topic);
+    if (nodeIDsToSend.size() == 0)
+    {
+        LOG(INFO) << "Call Service::asyncSendMessageByTopic, nodeIDsToSend size=0.";
+        return;
+    }
+    NodeID nodeID = nodeIDsToSend[0];
+    nodeIDsToSend.erase(nodeIDsToSend.begin());
+    LOG(INFO) << "Call Service::asyncSendMessageByTopic to NodeID=" << toJS(nodeID);
 
-void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) {}
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (i.first == nodeID)
+            {
+                std::shared_ptr<SessionFace> p = i.second;
+                uint32_t seq = ++m_seq;
+                ///< update seq and length
+                message->setSeq(seq);
+                message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+                message->Print("Service::asyncSendMessageByTopic msg sent:");
+                if (callback)
+                {
+                    ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
+                    responseCallback->callbackFunc = callback;
+                    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
+                        std::make_shared<boost::asio::deadline_timer>(
+                            *m_ioService, boost::posix_time::milliseconds(options.subTimeout));
+                    timeoutHandler->async_wait(boost::bind(&Service::onTimeoutByTopic,
+                        shared_from_this(), boost::asio::placeholders::error, p, nodeIDsToSend,
+                        message, callback, options, 0));
+                    responseCallback->timeoutHandler = timeoutHandler;
+                    p->addSeq2Callback(seq, responseCallback);
+                }
+                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+                message->encode(*buf);
+                p->send(buf);
+                return;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "ERROR:" << e.what();
+    }
+}
+
+void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message)
+{
+    NodeIDs nodeIDsToSend = getPeersByTopic(topic);
+    LOG(INFO) << "Call Service::asyncMulticastMessageByTopic nodes size=" << nodeIDsToSend.size();
+    try
+    {
+        uint32_t seq = ++m_seq;
+        message->setSeq(seq);
+        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+        message->encode(*buf);
+
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (isSessionInNodeIDList(i.first, nodeIDsToSend))
+                i.second->send(buf);
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::asyncMulticastMessageByTopic error:" << e.what();
+    }
+}
+
+void Service::asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message)
+{
+    LOG(INFO) << "Call Service::asyncMulticastMessageByNodeIDList nodes size=" << nodeIDs.size();
+    try
+    {
+        uint32_t seq = ++m_seq;
+        message->setSeq(seq);
+        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+        message->encode(*buf);
+
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (isSessionInNodeIDList(i.first, nodeIDs))
+                i.second->send(buf);
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::asyncMulticastMessageByNodeIDList error:" << e.what();
+    }
+}
+
+bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs)
+{
+    for (auto const& nodeID : nodeIDs)
+    {
+        if (targetNodeID == nodeID)
+            return true;
+    }
+    return false;
+}
 
 void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options) {}
 
@@ -233,6 +392,102 @@ void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSes
 void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler)
 {
     m_p2pMsgHandler->addTopic2Handler(topic, handler);
+}
+
+void Service::setTopicsByNode(
+    NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics)
+{
+    LOG(INFO) << "Call Service::setTopicsByNode to nodeID=" << toJS(_nodeID);
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (i.first == _nodeID)
+            {
+                i.second->setTopics(_topics);
+                LOG(INFO) << "Service::setTopicsByNode success.";
+                break;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::setTopicsByNode error:" << e.what();
+    }
+}
+
+std::shared_ptr<std::vector<std::string>> Service::getTopicsByNode(NodeID const& _nodeID)
+{
+    LOG(INFO) << "Call Service::getTopicsByNode by nodeID=" << toJS(_nodeID);
+    std::shared_ptr<std::vector<std::string>> ret = make_shared<std::vector<std::string>>();
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (i.first == _nodeID)
+            {
+                ret = i.second->topics();
+                LOG(INFO) << "Service::getTopicsByNode success.";
+                break;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::getTopicsByNode error:" << e.what();
+    }
+
+    return ret;
+}
+
+SessionInfos Service::sessionInfos() const
+{
+    SessionInfos infos;
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            infos.push_back(
+                SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::sessionInfos error:" << e.what();
+    }
+    return infos;
+}
+
+NodeIDs Service::getPeersByTopic(std::string const& topic)
+{
+    NodeIDs nodeList;
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            for (auto j : *(i.second->topics()))
+            {
+                if (j == topic)
+                {
+                    nodeList.push_back(i.first);
+                }
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::getPeersByTopic error:" << e.what();
+    }
+
+    return nodeList;
 }
 
 }  // namespace p2p
