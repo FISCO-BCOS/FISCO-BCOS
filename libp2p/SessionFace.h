@@ -69,7 +69,7 @@ public:
     virtual ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) = 0;
     virtual bool eraseCallbackBySeq(uint32_t seq) = 0;
 
-    virtual const NodeIPEndpoint& nodeIPEndpoint() const = 0;
+    virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 };
 
 }  // namespace p2p
