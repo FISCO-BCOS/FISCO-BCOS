@@ -160,6 +160,11 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     avoid.insert(pending_list[1].sha3());
     top_transactions = m_txPool->topTransactions(20, avoid);
     BOOST_CHECK(top_transactions.size() == 0);
+    /// check getProtocol id
+    BOOST_CHECK(m_txPool->getProtocolId() == dev::eth::ProtocolID::TxPool);
+    BOOST_CHECK(m_txPool->maxBlockLimit() == u256(1000));
+    m_txPool->setMaxBlockLimit(100);
+    BOOST_CHECK(m_txPool->maxBlockLimit() == u256(100));
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
