@@ -139,6 +139,27 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     m_txPool->setTxPoolLimit(2);
     m_txPool->import(ref(trans_data));
     BOOST_CHECK(m_txPool->pendingSize() == 2);
+    /// test status
+    TxPoolStatus m_status = m_txPool->status();
+    BOOST_CHECK(m_status.current == 2);
+    BOOST_CHECK(m_status.dropped == 0);
+    /// test drop
+    bool ret = m_txPool->drop(pending_list[4].sha3());
+    BOOST_CHECK(ret == false);
+    ret = m_txPool->drop(pending_list[0].sha3());
+    BOOST_CHECK(ret == true);
+    BOOST_CHECK(m_txPool->pendingSize() == 1);
+    m_status = m_txPool->status();
+    BOOST_CHECK(m_status.current == 1);
+    BOOST_CHECK(m_status.dropped == 1);
+
+    /// test topTransactions
+    Transactions top_transactions = m_txPool->topTransactions(20);
+    BOOST_CHECK(top_transactions.size() == m_txPool->pendingSize());
+    h256Hash avoid;
+    avoid.insert(pending_list[1].sha3());
+    top_transactions = m_txPool->topTransactions(20, avoid);
+    BOOST_CHECK(top_transactions.size() == 0);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
