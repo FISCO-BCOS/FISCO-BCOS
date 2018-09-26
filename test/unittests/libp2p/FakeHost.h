@@ -63,9 +63,10 @@ public:
     {
         return make_shared<std::vector<std::string>>();
     }
-    bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) { return true; };
+    bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) { return true; }
     ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) { return make_shared<ResponseCallback>(); }
-    bool eraseCallbackBySeq(uint32_t seq) { return true; };
+    bool eraseCallbackBySeq(uint32_t seq) { return true; }
+    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
 
 public:
     bool m_start = false;

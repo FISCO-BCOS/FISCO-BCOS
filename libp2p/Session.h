@@ -92,6 +92,8 @@ public:
     ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) override;
     bool eraseCallbackBySeq(uint32_t seq) override;
 
+    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
+
 private:
     struct Header
     {

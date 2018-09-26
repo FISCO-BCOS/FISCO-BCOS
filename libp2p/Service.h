@@ -76,6 +76,9 @@ public:
 
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
 
+    ///< Only connected node
+    virtual SessionInfos sessionInfos() const override;
+
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,
         std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,

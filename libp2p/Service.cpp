@@ -444,6 +444,26 @@ std::shared_ptr<std::vector<std::string>> Service::getTopicsByNode(NodeID const&
     return ret;
 }
 
+SessionInfos Service::sessionInfos() const
+{
+    SessionInfos infos;
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            infos.push_back(
+                SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::sessionInfos error:" << e.what();
+    }
+    return infos;
+}
+
 NodeIDs Service::getPeersByTopic(std::string const& topic)
 {
     NodeIDs nodeList;

@@ -397,6 +397,22 @@ private:
     uint16_t m_tcpPort = 0;
     uint16_t m_udpPort = 0;
 };
+
+struct SessionInfo
+{
+    NodeID nodeID;
+    NodeIPEndpoint nodeIPEndpoint;
+    std::vector<std::string> topics;
+    SessionInfo(NodeID const& _nodeID, NodeIPEndpoint const& _nodeIPEndpoint,
+        std::vector<std::string> const& _topics)
+    {
+        nodeID = _nodeID;
+        nodeIPEndpoint = _nodeIPEndpoint;
+        topics = _topics;
+    }
+};
+using SessionInfos = std::vector<SessionInfo>;
+
 }  // namespace p2p
 /// Simple stream output for a NodeIPEndpoint.
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep);

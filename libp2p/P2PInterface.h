@@ -58,6 +58,8 @@ public:
         NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) = 0;
 
     virtual std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) = 0;
+
+    virtual SessionInfos sessionInfos() const = 0;
 };
 
 }  // namespace p2p
