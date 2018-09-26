@@ -39,8 +39,7 @@ static std::string const c_genesisJsonForWe = std::string() +
 "parentHash": "0x0",
 "extraData": "0x0",
 "gasLimit": "0x13880000000000",
-"god":"0x4d23de3297034cdd4a58db35f659a9b61fc7577b",
-"alloc": {}, 	"initMinerNodes":["de0fa385816b505799433e54b88788e21cb42092a6ff5bcaa2285d7ace906e5e6ce8ef2b30134ff276a5834d58721291acc5864e07e6d52469b79b28e699dfde"]
+"alloc": {}
 }
 )E";
 
