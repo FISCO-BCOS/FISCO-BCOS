@@ -25,8 +25,9 @@
 
 #include "StateFace.h"
 #include <libdevcore/Common.h>
+#include <libdevcore/Guards.h>
+#include <libethcore/Exceptions.h>
 #include <libmptstate/State.h>
-
 
 namespace dev
 {
@@ -60,23 +61,13 @@ public:
     static OverlayDB openDB(boost::filesystem::path const& _path, h256 const& _genesisHash,
         WithExisting _we = WithExisting::Trust);
 
-    virtual u256 storage(Address const& _contract, u256 const& _memory) const;
+    virtual bool addressInUse(Address const& _address) const;
 
-    virtual void setStorage(Address const& _contract, u256 const& _location, u256 const& _value);
+    virtual bool accountNonemptyAndExisting(Address const& _address) const;
 
-    virtual bytes const& code(Address const& _addr) const override;
-
-    virtual size_t codeSize(Address const& _contract) const;
-
-    virtual h256 codeHash(Address const& _contract) const;
-
-    virtual void setCode(Address const& _address, bytes&& _code);
+    virtual bool addressHasCode(Address const& _address) const;
 
     virtual u256 balance(Address const& _id) const;
-
-    virtual bool accountNonemptyAndExisting(Address const& _address) const override;
-
-    virtual bool addressInUse(Address const& _address) const;
 
     virtual void addBalance(Address const& _id, u256 const& _amount);
 
@@ -84,7 +75,55 @@ public:
 
     virtual void setBalance(Address const& _addr, u256 const& _value);
 
+    virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value);
+
+    virtual h256 storageRoot(Address const& _contract) const;
+
+    virtual u256 storage(Address const& _contract, u256 const& _memory) const;
+
+    virtual void setStorage(Address const& _contract, u256 const& _location, u256 const& _value);
+
+    virtual void clearStorage(Address const& _contract);
+
+    virtual void createContract(Address const& _address);
+
+    virtual void setCode(Address const& _address, bytes&& _code);
+
+    virtual void kill(Address _a);
+
+    // virtual std::map<h256, std::pair<u256, u256>> storage(Address const& _contract) const;
+
+    virtual bytes const& code(Address const& _addr) const;
+
+    virtual h256 codeHash(Address const& _contract) const;
+
+    virtual size_t codeSize(Address const& _contract) const;
+
+    virtual void incNonce(Address const& _id);
+
+    virtual void setNonce(Address const& _addr, u256 const& _newNonce);
+
     virtual u256 getNonce(Address const& _addr) const;
+
+    virtual h256 rootHash() const;
+
+    virtual void commit(StateFace::CommitBehaviour _commitBehaviour);
+
+    virtual void DbCommit();
+
+    virtual void setRoot(h256 const& _root);
+
+    virtual u256 const& accountStartNonce() const;
+
+    virtual u256 const& requireAccountStartNonce() const;
+
+    virtual void noteAccountStartNonce(u256 const& _actual);
+
+    virtual size_t savepoint() const;
+
+    virtual void rollback(size_t _savepoint);
+
+    virtual void clear();
 
     State& getState();
 

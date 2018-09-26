@@ -331,6 +331,8 @@ public:
 
     ChangeLog const& changeLog() const { return m_changeLog; }
 
+    void cacheClear() { return m_cache.clear(); }
+
 private:
     /// Turns all "touched" empty accounts into non-alive accounts.
     void removeEmptyAccounts();
