@@ -61,27 +61,30 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 1. 配置环境
 
 ```bash
-# 假设当前在FISCO-BCOS/build目录下
-cd ../scripts
-# 准备IPList.txt文件 按行分割，可以有多个IP，每个IP表示一个部署的目标服务器IP，每个服务器可以部署多个节点实例，不同节点实例端口会自动分配。
-echo 127.0.0.1 > IPList.txt
-# build_chain.sh 
+# 假设当前在用户目录下，执行下面命令下载构建脚本
+curl -o build_chain.sh https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev-1.5/scripts/build_chain.sh && chmod a+x build_chain.sh
+# build_chain.sh
 # Usage:
-# 	-f <IP list file>           [Required]
+#	-l <IP list>                [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
+#	-f <IP list file>           split by line, "ip:nodeNum"
 # 	-e <FISCO-BCOS binary path> Default download from github
 # 	-n <Nodes per IP>           Default 1
 # 	-a <CA Key>                 Default Generate a new CA
-# 	-o <Output Dir>             Default ./output/
+# 	-o <Output Dir>             Default ./nodes/
 # 	-p <Start Port>             Default 30300
 # 	-c <ClientCert Passwd>      Default 123456
 # 	-k <Keystore Passwd>        Default 123456
 # 	-s <StateDB type>           Default leveldb. if set -s, use amop
 # 	-t <Cert config file>       Default auto generate
-# 	-z Generate tar packet      Default no
+# 	-z <Generate tar packet>    Default no
 # 	-h Help
 
-# 生成节点配置文件
-bash build_chain.sh -f IPList.txt -n 4 -o nodes
+# 生成节点配置文件，下面命令表示为127.0.0.1这个IP生成4个节点
+# 默认使用leveldb存储，如需使用AMDB，在下面命令末尾加 -s
+bash build_chain.sh -l "127.0.0.1:4"
+# 脚本必须有-l或-f选项来指定ip
+# -f指定文件，按行分割，每行格式为IP:NUM，表示一个部署服务器IP和该服务器部署节点数，不同节点实例端口会自动分配。
+# -l 选项和-f类似，以","分割，例如"IP1:num1,IP2:NUM2"
 ```
 > 脚本执行报错参考[build_chain.sh执行报错](#862-build_chainsh执行报错)
 
@@ -92,7 +95,24 @@ cd nodes
 bash ./start_all.sh
 ```
 
-到这里本机已经启动了4个节点组成的一条区块链，**接下来请参考[3.6 验证节点启动](#36-验证节点启动)检查节点运行状态，然后跳转到[第四章 使用控制台](#第四章-使用控制台)继续阅读**。
+3. 验证节点启动
+
+```bash
+# 检查进程启动
+ps -ef |grep fisco-bcos
+#app 19390     1  1 17:52 ?   00:00:05 fisco-bcos --config config.conf --genesis genesis.json 
+```
+
+```bash
+#  查看日志输出
+cd nodes/node_127.0.0.1_0
+tail -f log/info* |grep ++++  #查看日志输出
+# 可看到不断刷出打包信息，表示节点已经正确启动！
+#INFO|2018-08-12 17:52:16:877|+++++++++++++++++++++++++++ Generating seal ondcae019af78cf04e17ad908ec142ca4e25d8da14791bda50a0eeea782ebf3731#1tx:0,maxtx:1000,tq.num=0time:1513072336877
+#INFO|2018-08-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9b23b0733ac47fe5385072f80fc036b7517abae0a3e7762739cc66bc7dca#1tx:0,maxtx:1000,tq.num=0time:1513072337887
+```
+
+到这里已经成功部署一条由4个节点组成的区块链，**接下来请参考[第四章 使用控制台](#第四章-使用控制台)继续探索FISCO-BCOS**，想了解脚本操作的具体细节请参考第二、三章内容。
 
 ## 第二章 准备`fisco-bcos`软件
 
@@ -312,9 +332,8 @@ INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38
 ps -ef |grep fisco-bcos
 ```
 
-> 看到进程启动
-
-```log
+```bash
+# 看到进程启动
 app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --config config.conf --genesis genesis.json 
 ```
 
@@ -326,9 +345,9 @@ app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --config config.conf --gen
 #  当前操作目录FISCO-BCOS/scripts/
 cd nodes/node-0
 tail -f log/info* |grep ++++  #查看日志输出
-# 可看到不断刷出打包信息。若上述都正确输出，则表示节点已经正确启动！
-INFO|2017-12-12 17:52:16:877|+++++++++++++++++++++++++++ Generating seal ondcae019af78cf04e17ad908ec142ca4e25d8da14791bda50a0eeea782ebf3731#1tx:0,maxtx:1000,tq.num=0time:1513072336877
-INFO|2017-12-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9b23b0733ac47fe5385072f80fc036b7517abae0a3e7762739cc66bc7dca#1tx:0,maxtx:1000,tq.num=0time:1513072337887
+# 可看到不断刷出打包信息，表示节点已经正确启动！
+#INFO|2018-08-12 17:52:16:877|+++++++++++++++++++++++++++ Generating seal ondcae019af78cf04e17ad908ec142ca4e25d8da14791bda50a0eeea782ebf3731#1tx:0,maxtx:1000,tq.num=0time:1513072336877
+#INFO|2018-08-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9b23b0733ac47fe5385072f80fc036b7517abae0a3e7762739cc66bc7dca#1tx:0,maxtx:1000,tq.num=0time:1513072337887
 ```
 
 ## 第四章 使用控制台
@@ -741,7 +760,7 @@ FISCO BCOS的特性，请直接参看相关特性说明文档：
 
 1. [AMOP（链上链下）](../amop使用说明文档.md)
 1. [AMDB使用说明文档.md](../AMDB使用说明文档.md)
-1. [Contract_Name_Service](../CNS_Contract_Name_Service_服务使用说明文档.md)
+1. [Contract_Name_Service](../CNS_Contract_Name_Service_服务使用说明文档.md) （1.5.0暂不支持，下个版本加入）
 1. EthCall [设计文档](../EthCall设计文档.md) [说明文档](../EthCall说明文档.md)
 1. [web3sdk](../web3sdk使用说明文档.md)
 1. [并行计算](../并行计算使用说明文档.md)
