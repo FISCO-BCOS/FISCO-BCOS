@@ -282,7 +282,7 @@ EOF
 		cp "$output_dir/ca.crt" "$node_dir/data/"
 		cp "$output_dir/ca.crt" "$node_dir/sdk/"
 		cp "$eth_path" "$node_dir/fisco-bcos"
-		echo "cd \${PPath}/node_${line}_${index} && bash start.sh" >> "$output_dir/start_all.sh"
+		echo "cd \${PPath}/node_${ip}_${index} && bash start.sh" >> "$output_dir/start_all.sh"
 		((++index))
 		[ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
 	done
