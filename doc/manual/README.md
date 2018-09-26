@@ -434,12 +434,12 @@ update successfully！
 ----------------------------------------------------------------
 ```
 
-#### 4.2.5 miner.list命令
+#### 4.2.5 pbft.list命令
 
 运行miner.list命令，查看网络中的共识节点:
 
 ```bash
-miner.list
+pbft.list
 ----------------------------------------------------------------------
 Miners number: 2
 ----------------------------------------------------------------------
@@ -448,20 +448,21 @@ Nodeid: b69fceef5cafad360bc1fad750d9c5ef71627da21527d8621e566a1f4184408a42248492
 ----------------------------------------------------------------------
 ```
 
-#### 4.2.6 miner.add命令
+#### 4.2.6 pbft.add命令
 
 运行miner.add命令添加共识节点，该指令需要NodeID作为参数，新添加的共识节点将在下个块开始生效。操作完该指令后，请启动新添加的共识节点，并在新添加的共识节点配置文件`P2P.node.x`中配置已有节点的IP和P2P端口。
 ```bash
-miner.add 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
+# 例如添加一个新的共识节点
+pbft.add 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
 add miner successfully: 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
 ----------------------------------------------------------------------
 ```
 
-#### 4.2.7 miner.remove命令
+#### 4.2.7 pbft.remove命令
 
 运行miner.add命令移除共识节点，该指令需要NodeID作为参数，被移除的节点将转为观察节点。
 ```bash
-miner.remove 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
+pbft.remove 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
 remove miner successfully: 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
 ----------------------------------------------------------------------
 ```
@@ -544,7 +545,7 @@ sudo yum install -y nodejs
 ```shell
 #Ubuntu安装nodejs 需要6以上的版本
 curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
-sudo apt-get install -y nodejs npm
+sudo apt-get install -y nodejs
 ```
 
 3. 安装node依赖
@@ -731,7 +732,7 @@ Host:127.0.0.1:30403
 	node.1=192.168.2.2:30304
 [pbft]
 	miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
-	miner.1=84fb96c26a919cd654107464f49ac08ca6301cdb4ba276a7193f1475f5733f714f0c3ac1cb80cd7279613755782fd590f0f0a758046801acc691475efae0830b	
+	miner.1=84fb96c26a919cd654107464f49ac08ca6301cdb4ba276a7193f1475f5733f714f0c3ac1cb80cd7279613755782fd590f0f0a758046801acc691475efae0830b
 ```
 
 3. 启动全部节点并检查
@@ -745,14 +746,15 @@ cd node-1
 ./start.sh
 ```
 
-### 6.2 使用控制台增删共识节点
+### 6.2 使用控制台扩容已经运行的链
 
 在已经运行的网络中添加共识节点，参考以下步骤操作：
-1. 参考[第三章](#第三章-手工部署单节点区块链网络)生成新节点的配置
-1. 使用控制台`miner.add`指令添加新节点的NodeID到网络中
-1. 在新节点的`config.conf`中`[p2p].node`列表中添加已有节点的IP和p2p端口。
+1. 参考[第三章](#第三章-手工部署单节点区块链网络)生成新节点的环境
+1. 拷贝已有节点的`config.conf`中`[pbft]`配置项，替换新节点的`config.conf`中`[pbft]`所有内容
+1. 使用控制台`pbft.add`指令添加新节点的NodeID到网络中
+1. 拷贝已有节点的`config.conf`中`[p2p].node.x`列表，替换新节点的`config.conf`中`[p2p].node.x`列表
 1. 启动新节点
-1. 检查节点的运行状态，参考[3.5 验证节点启动](#34-验证节点启动)
+1. 检查节点的运行状态，参考[3.6 验证节点启动](#36-验证节点启动)
 
 ## 第七章 FISCO BCOS 特性
 
