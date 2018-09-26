@@ -56,7 +56,7 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
         std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
-        uint64_t const& _limit = 102400, int32_t const& _protocolId = 11)
+        uint64_t const& _limit = 102400, int16_t const& _protocolId = 11)
       : m_service(_p2pService),
         m_blockManager(_blockManager),
         m_limit(_limit),
@@ -111,8 +111,8 @@ public:
     TxPoolStatus status() const override;
 
     /// protocol id used when register handler to p2p module
-    virtual int32_t const& getProtocolId() const { return m_protocolId; }
-    virtual void setProtocolId(uint32_t const& _protocolId) { m_protocolId = _protocolId; }
+    virtual int16_t const& getProtocolId() const { return m_protocolId; }
+    virtual void setProtocolId(int16_t const& _protocolId) { m_protocolId = _protocolId; }
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
@@ -154,7 +154,7 @@ private:
     uint64_t m_limit;
     mutable SharedMutex m_lock;
     /// protocolId
-    int32_t m_protocolId;
+    int16_t m_protocolId;
     /// max block limit
     u256 m_maxBlockLimit = 1000;
     /// transaction queue
