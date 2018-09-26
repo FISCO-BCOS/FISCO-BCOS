@@ -81,6 +81,11 @@ public:
 
     void send(std::shared_ptr<bytes> _msg) override;
 
+protected:
+    /// Perform a read on the socket.
+    virtual void doRead();
+    void setTest(bool const& _test) { m_test = _test; }
+    std::vector<byte> m_data;  ///< Buffer for ingress packet data.
 private:
     struct Header
     {
@@ -90,9 +95,6 @@ private:
 
     /// Drop the connection for the reason @a _r.
     void drop(DisconnectReason _r);
-
-    /// Perform a read on the socket.
-    void doRead();
 
     /// Check error code after reading and drop peer if error code.
     bool checkRead(boost::system::error_code _ec);
@@ -127,8 +129,6 @@ private:
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
         m_writeQueue;
 
-    std::vector<byte> m_data;  ///< Buffer for ingress packet data.
-
     bytes m_incoming;  ///< Read buffer for ingress bytes.
 
     std::shared_ptr<Peer> m_peer;  ///< The Peer object.
@@ -148,6 +148,7 @@ private:
     boost::asio::io_service::strand* m_strand;
 
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
+    bool m_test = false;  /// for unit test
 };
 
 }  // namespace p2p
