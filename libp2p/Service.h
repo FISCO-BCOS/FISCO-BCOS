@@ -63,6 +63,8 @@ public:
 
     void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
+    void asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message) override;
+
     void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
 
     void registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler) override;
@@ -82,6 +84,8 @@ private:
         const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);
 
     NodeIDs getPeersByTopic(std::string const& topic);
+
+    bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
 
     std::shared_ptr<Host> m_host;
     boost::asio::io_service* m_ioService;

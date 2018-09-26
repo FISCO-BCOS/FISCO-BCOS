@@ -43,6 +43,8 @@ public:
 
     virtual void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
+    virtual void asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message) = 0;
+
     virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
 
     virtual void registerHandlerByProtoclID(

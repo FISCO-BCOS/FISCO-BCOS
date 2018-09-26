@@ -46,6 +46,7 @@
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/Protocol.h>
 #include <chrono>
 #include <sstream>
 
@@ -105,12 +106,6 @@ enum DisconnectReason
     UserReason = 0x10,
     NoDisconnect = 0xffff
 };
-
-///< TODO: use enum
-///< The protocolID of AMOP
-static int16_t g_AMOPProtocolID = 32766;
-///< The protocolID of synchronous Package, related to Service::sendMessageByNodeID
-static int16_t g_synchronousPackageProtocolID = 32767;
 
 ///< P2PExceptionType and g_P2PExceptionMsg used in P2PException
 enum P2PExceptionType
@@ -189,7 +184,7 @@ public:
         std::stringstream strMsg;
         strMsg << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
                << "," << m_seq << ",";
-        if (g_AMOPProtocolID != abs(m_protocolID))
+        if (dev::eth::ProtocolID::AMOP != abs(m_protocolID))
         {
             strMsg << std::string((const char*)m_buffer->data(), m_buffer->size());
         }

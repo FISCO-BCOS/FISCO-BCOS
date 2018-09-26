@@ -143,7 +143,7 @@ ssize_t Message::decode(const byte* buffer, size_t size)
 void Message::encodeAMOPBuffer(std::string const& topic)
 {
     ///< check protocolID is AMOP message or not
-    if (g_AMOPProtocolID != abs(m_protocolID))
+    if (dev::eth::ProtocolID::AMOP != abs(m_protocolID))
     {
         return;
     }
@@ -157,7 +157,7 @@ void Message::encodeAMOPBuffer(std::string const& topic)
 ssize_t Message::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic)
 {
     ///< check protocolID is AMOP message or not
-    if (g_AMOPProtocolID != abs(m_protocolID))
+    if (dev::eth::ProtocolID::AMOP != abs(m_protocolID))
     {
         return PACKET_ERROR;
     }

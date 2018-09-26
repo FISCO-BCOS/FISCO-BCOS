@@ -52,7 +52,6 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        message->setProtocolID(g_synchronousPackageProtocolID);
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
 
         callback->mutex.lock();
@@ -322,7 +321,66 @@ void Service::asyncSendMessageByTopic(
     }
 }
 
-void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) {}
+void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message)
+{
+    NodeIDs nodeIDsToSend = getPeersByTopic(topic);
+    LOG(INFO) << "Call Service::asyncMulticastMessageByTopic nodes size=" << nodeIDsToSend.size();
+    try
+    {
+        uint32_t seq = ++m_seq;
+        message->setSeq(seq);
+        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+        message->encode(*buf);
+
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (isSessionInNodeIDList(i.first, nodeIDsToSend))
+                i.second->send(buf);
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::asyncMulticastMessageByTopic error:" << e.what();
+    }
+}
+
+void Service::asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message)
+{
+    LOG(INFO) << "Call Service::asyncMulticastMessageByNodeIDList nodes size=" << nodeIDs.size();
+    try
+    {
+        uint32_t seq = ++m_seq;
+        message->setSeq(seq);
+        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+        message->encode(*buf);
+
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            if (isSessionInNodeIDList(i.first, nodeIDs))
+                i.second->send(buf);
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::asyncMulticastMessageByNodeIDList error:" << e.what();
+    }
+}
+
+bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs)
+{
+    for (auto const& nodeID : nodeIDs)
+    {
+        if (targetNodeID == nodeID)
+            return true;
+    }
+    return false;
+}
 
 void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options) {}
 

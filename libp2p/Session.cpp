@@ -340,33 +340,17 @@ void Session::onMessage(
         ///< request package, get callback by protocolID
         CallbackFuncWithSession callbackFunc;
 
-        ///< is synchronousPackageProtocolID or AMOPProtocolID
-        if (g_synchronousPackageProtocolID == protocolID || g_AMOPProtocolID == protocolID)
+        bool ret = m_p2pMsgHandler->getHandlerByProtocolID(protocolID, callbackFunc);
+        if (ret && callbackFunc)
         {
-            callbackFunc = [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
-                /// update protoclID
-                msg->setProtocolID(-g_synchronousPackageProtocolID);
-                msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
-                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
-                msg->encode(*buf);
-                s->send(buf);
-            };
+            LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
+            ///< execute funtion, send response packet by user in callbackFunc
+            ///< TODO: use threadPool
             callbackFunc(e, session, message);
         }
         else
         {
-            bool ret = m_p2pMsgHandler->getHandlerByProtocolID(protocolID, callbackFunc);
-            if (ret && callbackFunc)
-            {
-                LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
-                ///< execute funtion, send response packet by user in callbackFunc
-                ///< TODO: use threadPool
-                callbackFunc(e, session, message);
-            }
-            else
-            {
-                LOG(ERROR) << "Session::onMessage, handler not found by protocolID=" << protocolID;
-            }
+            LOG(ERROR) << "Session::onMessage, handler not found by protocolID=" << protocolID;
         }
     }
     else if (protocolID != 0)
