@@ -27,6 +27,7 @@
 #include <libblockmanager/NonceCheck.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
+#include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libp2p/Service.h>
 using namespace dev::eth;
@@ -56,22 +57,15 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
         std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
-        uint64_t const& _limit = 102400, int32_t const& _protocolId = 4)
+        int16_t const& _protocolId, uint64_t const& _limit = 102400)
       : m_service(_p2pService),
         m_blockManager(_blockManager),
         m_limit(_limit),
         m_protocolId(_protocolId)
     {
-        if (!m_service)
-        {
-            LOG(ERROR) << "p2p service hasn't been inited, exit now!";
-            exit(-1);
-        }
-        if (!m_blockManager)
-        {
-            LOG(ERROR) << "BlockManager hasn't been setted, exit now!";
-            exit(-1);
-        }
+        assert(m_service && m_blockManager);
+        if (m_protocolId == 0)
+            BOOST_THROW_EXCEPTION(InvalidProtocolID() << errinfo_comment("ProtocolID must be > 0"));
         /// register enqueue interface to p2p by protocalID
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
@@ -111,12 +105,10 @@ public:
     TxPoolStatus status() const override;
 
     /// protocol id used when register handler to p2p module
-    virtual int32_t const& getProtocolId() const { return m_protocolId; }
-    virtual void setProtocolId(uint32_t const& _protocolId) { m_protocolId = _protocolId; }
+    virtual int16_t const& getProtocolId() const { return m_protocolId; }
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
-
-    uint64_t number() const { return m_blockManager->number(); }
+    void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
 protected:
     /**
@@ -136,9 +128,9 @@ protected:
     virtual ImportResult verify(
         Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
     /// check block limit
-    virtual bool inline isBlockLimitOk(Transaction const& _ts) const;
+    virtual bool isBlockLimitOk(Transaction const& _ts) const;
     /// check nonce
-    virtual bool inline isNonceOk(Transaction const& _ts, bool _needinsert) const;
+    virtual bool isNonceOk(Transaction const& _ts, bool _needinsert) const;
     /// interface for filter check
     virtual u256 filterCheck(const Transaction& _t) const { return u256(0); };
     void clear();
@@ -155,7 +147,7 @@ private:
     uint64_t m_limit;
     mutable SharedMutex m_lock;
     /// protocolId
-    int32_t m_protocolId;
+    int16_t m_protocolId;
     /// max block limit
     u256 m_maxBlockLimit = 1000;
     /// transaction queue

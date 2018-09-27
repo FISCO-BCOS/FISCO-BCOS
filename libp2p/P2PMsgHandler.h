@@ -36,19 +36,11 @@ class P2PMsgHandler
 public:
     P2PMsgHandler()
     {
-        m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
         m_protocolID2Handler =
             std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
         m_topic2Handler =
             std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
     }
-
-    ///< Add, Get, Erase interface of seq2Callback.
-    ///< The return true indicates that the operation was successful.
-    ///< The return false indicates that the operation failed.
-    bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback);
-    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq);
-    bool eraseCallbackBySeq(uint32_t seq);
 
     ///< Add, Get, Erase interface of protocolID2Handler.
     ///< The return true indicates that the operation was successful.
@@ -65,10 +57,6 @@ public:
     bool eraseHandlerByTopic(std::string const& topic);
 
 private:
-    ///< A call B, the function to call after the response is received by A.
-    mutable RecursiveMutex x_seq2Callback;
-    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
-
     ///< A call B, the function to call after the request is received by B.
     mutable RecursiveMutex x_protocolID2Handler;
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
