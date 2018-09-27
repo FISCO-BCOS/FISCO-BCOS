@@ -127,13 +127,13 @@ public:
 		}
 
 		if(_data->size() < 1) {
-			throw(ChannelException(-1, "ERROR，message length: 0"));
+			throw(ChannelException(-1, "ERROR, message length: 0"));
 		}
 
 		uint8_t topicLen = *((uint8_t*)_data->data());
 
 		if(_data->size() < topicLen) {
-			throw(ChannelException(-1, "ERROR，topic length topicLen: " + boost::lexical_cast<std::string>(topicLen) + " size:" + boost::lexical_cast<std::string>(_data->size())));
+			throw(ChannelException(-1, "ERROR, topic length topicLen: " + boost::lexical_cast<std::string>(topicLen) + " size:" + boost::lexical_cast<std::string>(_data->size())));
 		}
 
 		std::string topic((char*)_data->data() + 1, topicLen - 1);
@@ -143,7 +143,7 @@ public:
 
 	virtual void setTopic(const std::string &topic) {
 		if(_data->size() > 0) {
-			throw(ChannelException(-1, "禁止在已有data时设置topic"));
+			throw(ChannelException(-1, "Already have data, can't set topic."));
 		}
 
 		_data->push_back((char) topic.size() + 1);
@@ -164,7 +164,7 @@ public:
 
 	virtual void setData(const byte *p, size_t size) override {
 		if(_data->empty()) {
-			throw(ChannelException(-1, "禁止在无topic时设置data"));
+			throw(ChannelException(-1, "Topic not set, can't set data."));
 		}
 
 		_data->insert(_data->end(), p, p + size);
