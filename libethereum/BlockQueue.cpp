@@ -427,7 +427,7 @@ bool BlockQueue::doneDrain(h256s const& _bad)
 
 void BlockQueue::tick()
 {
-	vector<pair<h256, bytes>> TODO:;
+	vector<pair<h256, bytes>> todo;
 	{
 		UpgradableGuard l(m_lock);
 		if (m_future.isEmpty())
@@ -444,12 +444,12 @@ void BlockQueue::tick()
 		{
 			UpgradeGuard l2(l);
 			DEV_INVARIANT_CHECK;
-			TODO: = m_future.removeByKeyNotGreater(t);
+			todo = m_future.removeByKeyNotGreater(t);
 		}
 	}
-	LOG(INFO) << "Importing" << TODO:.size() << "past-future blocks.";
+	LOG(INFO) << "Importing" << todo.size() << "past-future blocks.";
 
-	for (auto const& b : TODO:) {
+	for (auto const& b : todo) {
 		LOG(INFO) << "Importing past-future block, hash=" << b.first;
 		import(&b.second);
 	}
