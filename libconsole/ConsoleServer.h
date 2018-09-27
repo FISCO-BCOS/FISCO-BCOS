@@ -38,9 +38,9 @@ public:
 	std::string status(const std::vector<std::string> args);
 	std::string p2pList(const std::vector<std::string> args);
 	std::string p2pUpdate(const std::vector<std::string> args);
-	std::string minerList(const std::vector<std::string> args);
-	std::string addMiner(const std::vector<std::string> args);
-	std::string removeMiner(const std::vector<std::string> args);
+	std::string pbftList(const std::vector<std::string> args);
+	std::string pbftAdd(const std::vector<std::string> args);
+	std::string pbftRemove(const std::vector<std::string> args);
 	std::string amdbSelect(const std::vector<std::string> args);
 
 private:
@@ -52,6 +52,7 @@ private:
 	KeyPair _key;
 	void printSingleLine(std::stringstream &ss);
 	void printDoubleLine(std::stringstream &ss);
+	void printPrompt(std::stringstream &ss);
 };
 
 }
