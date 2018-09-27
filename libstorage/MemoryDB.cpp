@@ -10,7 +10,7 @@ using namespace dev;
 using namespace dev::storage;
 
 void dev::storage::MemoryDB::init(const std::string &tableName) {
-  LOG(DEBUG) << "初始化MemoryDB:" << tableName;
+  LOG(DEBUG) << "Init MemoryDB:" << tableName;
 
   _tableInfo = _remoteDB->info(tableName);
 }
@@ -18,7 +18,7 @@ void dev::storage::MemoryDB::init(const std::string &tableName) {
 Entries::Ptr dev::storage::MemoryDB::select(const std::string &key,
                                                  Condition::Ptr condition) {
   try {
-    LOG(DEBUG) << "MemoryDB查询数据: " << key;
+    LOG(DEBUG) << "MemoryDB query data: " << key;
 
     Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -28,7 +28,7 @@ Entries::Ptr dev::storage::MemoryDB::select(const std::string &key,
         entries =
             _remoteDB->select(_blockHash, _blockNum, _tableInfo->name, key);
 
-        LOG(DEBUG) << "AMOPDB查询到:" << entries->size() << "条数据";
+        LOG(DEBUG) << "AMOPDB get :" << entries->size() << " items";
 
         _cache.insert(std::make_pair(key, entries));
       }
@@ -37,14 +37,14 @@ Entries::Ptr dev::storage::MemoryDB::select(const std::string &key,
     }
 
     if (entries.get() == NULL) {
-      LOG(ERROR) << "未找到数据";
+      LOG(ERROR) << "No data found";
 
       return entries;
     }
 
     return processEntries(entries, condition);
   } catch (std::exception &e) {
-    LOG(ERROR) << "查询DB错误:" << e.what();
+    LOG(ERROR) << "Query DB error:" << e.what();
   }
 
   return Entries::Ptr();
@@ -54,7 +54,7 @@ size_t dev::storage::MemoryDB::update(const std::string &key,
                                            Entry::Ptr entry,
                                            Condition::Ptr condition) {
   try {
-    LOG(DEBUG) << "MemoryDB更新数据: " << key;
+    LOG(DEBUG) << "MemoryDB update data: " << key;
 
     Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -64,7 +64,7 @@ size_t dev::storage::MemoryDB::update(const std::string &key,
         entries =
             _remoteDB->select(_blockHash, _blockNum, _tableInfo->name, key);
 
-        LOG(DEBUG) << "AMOPDB查询到:" << entries->size() << "条数据";
+        LOG(DEBUG) << "AMOPDB get:" << entries->size() << " items";
 
         _cache.insert(std::make_pair(key, entries));
       }
@@ -73,7 +73,7 @@ size_t dev::storage::MemoryDB::update(const std::string &key,
     }
 
     if (entries.get() == NULL) {
-      LOG(ERROR) << "未找到数据";
+      LOG(ERROR) << "No data found";
 
       return 0;
     }
@@ -91,7 +91,7 @@ size_t dev::storage::MemoryDB::update(const std::string &key,
 
     return updateEntries->size();
   } catch (std::exception &e) {
-    LOG(ERROR) << "访问DB错误:" << e.what();
+    LOG(ERROR) << "Request DB error:" << e.what();
   }
 
   return 0;
@@ -100,7 +100,7 @@ size_t dev::storage::MemoryDB::update(const std::string &key,
 size_t dev::storage::MemoryDB::insert(const std::string &key,
                                            Entry::Ptr entry) {
   try {
-    LOG(DEBUG) << "MemoryDB插入数据: " << key;
+    LOG(DEBUG) << "MemoryDB insert data: " << key;
 
     Entries::Ptr entries = std::make_shared<Entries>();
     Condition::Ptr condition = std::make_shared<Condition>();
@@ -111,7 +111,7 @@ size_t dev::storage::MemoryDB::insert(const std::string &key,
         entries =
             _remoteDB->select(_blockHash, _blockNum, _tableInfo->name, key);
 
-        LOG(DEBUG) << "AMOPDB查询到:" << entries->size() << "条数据";
+        LOG(DEBUG) << "AMOPDB get :" << entries->size() << " items.";
 
         _cache.insert(std::make_pair(key, entries));
       }
@@ -131,7 +131,7 @@ size_t dev::storage::MemoryDB::insert(const std::string &key,
       return 1;
     }
   } catch (std::exception &e) {
-    LOG(ERROR) << "查询DB错误";
+    LOG(ERROR) << "Query DB error";
   }
 
   return 1;
@@ -139,7 +139,7 @@ size_t dev::storage::MemoryDB::insert(const std::string &key,
 
 size_t dev::storage::MemoryDB::remove(const std::string &key,
                                            Condition::Ptr condition) {
-  LOG(DEBUG) << "MemoryDB删除数据: " << key;
+  LOG(DEBUG) << "MemoryDB remove data : " << key;
 
   Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -148,7 +148,7 @@ size_t dev::storage::MemoryDB::remove(const std::string &key,
     if (_remoteDB.get() != NULL) {
       entries = _remoteDB->select(_blockHash, _blockNum, _tableInfo->name, key);
 
-      LOG(DEBUG) << "AMOPDB查询到:" << entries->size() << "条数据";
+      LOG(DEBUG) << "AMOPDB get :" << entries->size() << " items.";
 
       _cache.insert(std::make_pair(key, entries));
     }
@@ -292,7 +292,7 @@ bool dev::storage::MemoryDB::processCondition(Entry::Ptr entry,
       }
     }
   } catch (std::exception &e) {
-    LOG(ERROR) << "比对错误:" << e.what();
+    LOG(ERROR) << "Compare error:" << e.what();
 
     return false;
   }

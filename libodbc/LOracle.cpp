@@ -174,12 +174,12 @@ Status LOracle::Write(const WriteOptions&, WriteBatch* batch)
 
 		}
 		catch (std::exception& e){
-			//todo 其他异常是否直接退出。需考虑
+			//TODO: 其他异常是否直接退出。需考虑
 			std::cerr << "exception: " << e.what() << std::endl;
 			break;
 		}
 		catch (...){
-			//todo 其他异常是否直接退出。需考虑
+			//TODO: 其他异常是否直接退出。需考虑
 			std::cerr << "unknown exception occured" << std::endl;
 			break;
 		}
@@ -257,12 +257,12 @@ Status LOracle::Get(const ReadOptions&, const Slice& key, std::string* value)
 					}
 				}
 				catch (std::exception& e){
-					//todo 其他异常是否直接退出。需考虑
+					//TODO: 其他异常是否直接退出。需考虑
 					std::cout << "exception: " << e.what() << std::endl;
 					break;
 				}
 				catch (...){
-					//todo 其他异常是否直接退出。需考虑
+					//TODO: 其他异常是否直接退出。需考虑
 					std::cout << "unknown exception occured" << std::endl;
 					break;
 				}

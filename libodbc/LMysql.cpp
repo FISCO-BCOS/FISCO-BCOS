@@ -155,12 +155,9 @@ Status LMysql::Write(const WriteOptions& , WriteBatch* batch)
 		}
 		catch (SAException &x)
 		{
-			//DB�쳣 sleep 50ms Ȼ���������
 			sleep(50);
 			// print error message
 			std::cerr << "SAException: " << x.ErrText().GetMultiByteChars() << std::endl;
-			// д����
-			//��ʱ�����������ʧ����� �����쳣��δ����
 			if (x.ErrNativeCode() == CR_SERVER_LOST || x.ErrNativeCode() == CR_SERVER_GONE_ERROR)
 			{
 				if (con.isConnected())
@@ -169,23 +166,21 @@ Status LMysql::Write(const WriteOptions& , WriteBatch* batch)
 				}
 
 				LvlDbInterface::Connect();
-				std::cout << "SAException: lostServer  writeData��" << iTryTimes << "|" << x.ErrText().GetMultiByteChars() << "|" << x.ErrNativeCode() << std::endl;
+				std::cout << "SAException: lostServer  writeData" << iTryTimes << "|" << x.ErrText().GetMultiByteChars() << "|" << x.ErrNativeCode() << std::endl;
 				continue;
 			}
 			else{
-				std::cout << "SAException: other reason  writeData��" << iTryTimes << "|" << x.ErrText().GetMultiByteChars() << "|" << x.ErrNativeCode() << std::endl;
+				std::cout << "SAException: other reason  writeData" << iTryTimes << "|" << x.ErrText().GetMultiByteChars() << "|" << x.ErrNativeCode() << std::endl;
 
 			}
 			iTryTimes++;
 
 		}
 		catch (std::exception& e){
-			//todo �����쳣�Ƿ�ֱ���˳����迼��
 			std::cerr << "exception: " << e.what() << std::endl;
 			break;
 		}
 		catch (...){
-			//todo �����쳣�Ƿ�ֱ���˳����迼��
 			std::cerr << "unknown exception occured" << std::endl;
 			break;
 		}
@@ -204,7 +199,6 @@ Status LMysql::Get(const ReadOptions& , const Slice& key, std::string* value)
 		Cache::Handle *handle = _dataCc->Lookup(key);
 		if (handle == NULL) {
 
-			//��ռλ�� �ַ����滻
 			bool bBreak=false;
 			bool bFind = false;
 			int iTryTimes = 0;
@@ -220,7 +214,6 @@ Status LMysql::Get(const ReadOptions& , const Slice& key, std::string* value)
 					while (cmd.FetchNext())
 					{
 						bFind = true;
-						// ���һ���ֶ�
 						for (int i = 1; i <= cmd.FieldCount(); ++i)
 						{
 							*value = cmd[i].asString();
@@ -234,7 +227,6 @@ Status LMysql::Get(const ReadOptions& , const Slice& key, std::string* value)
 					sleep(100);
 					std::cout << "SAException: get data " << ossql.str() << "|" << x.ErrText().GetMultiByteChars() << "|" << x.ErrNativeCode() << std::endl;
 					iTryTimes++;
-					//�����������ϣ���Ҫ������������
 					if (x.ErrNativeCode() == CR_SERVER_LOST || x.ErrNativeCode() == CR_SERVER_GONE_ERROR)
 					{
 						if (con.isConnected())
@@ -249,7 +241,6 @@ Status LMysql::Get(const ReadOptions& , const Slice& key, std::string* value)
 					}
 					else{
 						
-						//�����쳣��֪��ô�����Ƿ�OK
 						if (con.isConnected())
 						{
 							con.Disconnect();
@@ -261,12 +252,10 @@ Status LMysql::Get(const ReadOptions& , const Slice& key, std::string* value)
 					}
 				}
 				catch (std::exception& e){
-					//todo �����쳣�Ƿ�ֱ���˳����迼��
 					std::cout << "exception: " << e.what() << std::endl;
 					break;
 				}
 				catch (...){
-					//todo �����쳣�Ƿ�ֱ���˳����迼��
 					std::cout << "unknown exception occured" << std::endl;
 					break;
 				}
@@ -277,7 +266,6 @@ Status LMysql::Get(const ReadOptions& , const Slice& key, std::string* value)
 			{
 				char *cstr = new char[value->size() + 1];
 				strcpy(cstr, value->c_str());
-				//����骸�free
 				_dataCc->Release(_dataCc->Insert(key, EncodeValue(cstr), value->size(), &Deleter));
 				*value = asString(fromHex(*value));
 			}

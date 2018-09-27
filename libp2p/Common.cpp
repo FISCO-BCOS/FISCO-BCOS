@@ -88,7 +88,7 @@ bool p2p::isPrivateAddress(std::string const& _addressToCheck)
 // Helper function to determine if an address is localhost
 bool p2p::isLocalHostAddress(bi::address const& _addressToCheck)
 {
-	// @todo: ivp6 link-local adresses (macos), ex: fe80::1%lo0
+	// @TODO:: ivp6 link-local adresses (macos), ex: fe80::1%lo0
 	static const set<bi::address> c_rejectAddresses = {
 		{bi::address_v4::from_string("127.0.0.1")},
 		{bi::address_v4::from_string("0.0.0.0")},

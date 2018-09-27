@@ -33,7 +33,7 @@ struct ChannelMessageFixture {
 	}
 
 	~ChannelMessageFixture() {
-		//什么也不做
+		
 	}
 
 	std::string httpRequest = "POST / HTTP/1.1\r\n"
