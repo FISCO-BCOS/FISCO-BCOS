@@ -18,186 +18,179 @@
 /**
  * @Mpt state interface for EVM
  *
- * @file MptState.cpp
+ * @file MPTState.cpp
  * @author jimmyshi
  * @date 2018-09-21
  */
 
-#include "MptState.h"
+#include "MPTState.h"
 
 namespace dev
 {
 namespace eth
 {
-OverlayDB MptState::openDB(
+OverlayDB MPTState::openDB(
     boost::filesystem::path const& _path, h256 const& _genesisHash, WithExisting _we)
 {
-    std::mutex open_db_lock;
-    Guard l(open_db_lock);
     return State::openDB(_path, _genesisHash, _we);
 };
 
-bool MptState::addressInUse(Address const& _address) const
+bool MPTState::addressInUse(Address const& _address) const
 {
     return m_state.addressInUse(_address);
 }
 
-bool MptState::accountNonemptyAndExisting(Address const& _address) const
+bool MPTState::accountNonemptyAndExisting(Address const& _address) const
 {
     return m_state.accountNonemptyAndExisting(_address);
 }
 
-bool MptState::addressHasCode(Address const& _address) const
+bool MPTState::addressHasCode(Address const& _address) const
 {
     return m_state.addressHasCode(_address);
 }
 
-u256 MptState::balance(Address const& _id) const
+u256 MPTState::balance(Address const& _id) const
 {
     return m_state.balance(_id);
 }
 
-void MptState::addBalance(Address const& _id, u256 const& _amount)
+void MPTState::addBalance(Address const& _id, u256 const& _amount)
 {
     m_state.addBalance(_id, _amount);
 }
 
-void MptState::subBalance(Address const& _addr, u256 const& _value)
+void MPTState::subBalance(Address const& _addr, u256 const& _value)
 {
     m_state.subBalance(_addr, _value);
 }
 
-void MptState::setBalance(Address const& _addr, u256 const& _value)
+void MPTState::setBalance(Address const& _addr, u256 const& _value)
 {
     m_state.setBalance(_addr, _value);
 }
 
-void MptState::transferBalance(Address const& _from, Address const& _to, u256 const& _value)
+void MPTState::transferBalance(Address const& _from, Address const& _to, u256 const& _value)
 {
     m_state.transferBalance(_from, _to, _value);
 }
 
-h256 MptState::storageRoot(Address const& _contract) const
+h256 MPTState::storageRoot(Address const& _contract) const
 {
     return m_state.storageRoot(_contract);
 }
 
-u256 MptState::storage(Address const& _contract, u256 const& _memory) const
+u256 MPTState::storage(Address const& _contract, u256 const& _memory) const
 {
     return m_state.storage(_contract, _memory);
 }
 
-void MptState::setStorage(Address const& _contract, u256 const& _location, u256 const& _value)
+void MPTState::setStorage(Address const& _contract, u256 const& _location, u256 const& _value)
 {
     m_state.setStorage(_contract, _location, _value);
 }
 
-void MptState::clearStorage(Address const& _contract)
+void MPTState::clearStorage(Address const& _contract)
 {
     m_state.clearStorage(_contract);
 }
 
-void MptState::createContract(Address const& _address)
+void MPTState::createContract(Address const& _address)
 {
     m_state.createContract(_address);
 }
 
-void MptState::setCode(Address const& _address, bytes&& _code)
+void MPTState::setCode(Address const& _address, bytes&& _code)
 {
     m_state.setCode(_address, std::move(_code));
 }
 
-void MptState::kill(Address _a)
+void MPTState::kill(Address _a)
 {
     m_state.kill(_a);
 }
 
-bytes const& MptState::code(Address const& _addr) const
+bytes const& MPTState::code(Address const& _addr) const
 {
     return m_state.code(_addr);
 }
 
-h256 MptState::codeHash(Address const& _contract) const
+h256 MPTState::codeHash(Address const& _contract) const
 {
     return m_state.codeHash(_contract);
 }
 
-size_t MptState::codeSize(Address const& _contract) const
+size_t MPTState::codeSize(Address const& _contract) const
 {
     return m_state.codeSize(_contract);
 }
 
-void MptState::incNonce(Address const& _id)
+void MPTState::incNonce(Address const& _id)
 {
     m_state.incNonce(_id);
 }
 
-void MptState::setNonce(Address const& _addr, u256 const& _newNonce)
+void MPTState::setNonce(Address const& _addr, u256 const& _newNonce)
 {
     m_state.setNonce(_addr, _newNonce);
 }
 
-u256 MptState::getNonce(Address const& _addr) const
+u256 MPTState::getNonce(Address const& _addr) const
 {
     return m_state.getNonce(_addr);
 }
 
-h256 MptState::rootHash() const
+h256 MPTState::rootHash() const
 {
     return m_state.rootHash();
 }
 
-void MptState::commit(StateFace::CommitBehaviour _commitBehaviour)
+void MPTState::commit()
 {
-    if (_commitBehaviour == CommitBehaviour::KeepEmptyAccounts)
-        m_state.commit(State::CommitBehaviour::KeepEmptyAccounts);
-    else if (_commitBehaviour == CommitBehaviour::RemoveEmptyAccounts)
-        m_state.commit(State::CommitBehaviour::RemoveEmptyAccounts);
-    else
-        BOOST_THROW_EXCEPTION(InvalidCommitBehaviour());
+    m_state.commit();
 }
 
-void MptState::DbCommit()
+void MPTState::dbCommit()
 {
     m_state.db().commit();
 }
 
-void MptState::setRoot(h256 const& _root)
+void MPTState::setRoot(h256 const& _root)
 {
     m_state.setRoot(_root);
 }
 
-u256 const& MptState::accountStartNonce() const
+u256 const& MPTState::accountStartNonce() const
 {
     return m_state.accountStartNonce();
 }
 
-u256 const& MptState::requireAccountStartNonce() const
+u256 const& MPTState::requireAccountStartNonce() const
 {
     return m_state.requireAccountStartNonce();
 }
 
-void MptState::noteAccountStartNonce(u256 const& _actual)
+void MPTState::noteAccountStartNonce(u256 const& _actual)
 {
     m_state.noteAccountStartNonce(_actual);
 }
 
-size_t MptState::savepoint() const
+size_t MPTState::savepoint() const
 {
     return m_state.savepoint();
 }
 
-void MptState::rollback(size_t _savepoint)
+void MPTState::rollback(size_t _savepoint)
 {
     m_state.rollback(_savepoint);
 }
 
-void MptState::clear()
+void MPTState::clear()
 {
     m_state.cacheClear();
 }
 
-State& MptState::getState()
+State& MPTState::getState()
 {
     return m_state;
 }
