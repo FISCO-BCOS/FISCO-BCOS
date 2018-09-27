@@ -378,7 +378,7 @@ struct AMOPDBFixture
 
     ~AMOPDBFixture()
     {
-        //什么也不做
+        
     }
 
     dev::storage::AMOPStorage::Ptr amopDB;

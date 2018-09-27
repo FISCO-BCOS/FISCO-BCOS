@@ -10,7 +10,7 @@ using namespace dev;
 using namespace dev::precompiled;
 
 void DBPrecompiled::beforeBlock(std::shared_ptr<PrecompiledContext>) {
-  //什么也不做
+  
 }
 
 void DBPrecompiled::afterBlock(std::shared_ptr<PrecompiledContext> context,
@@ -26,7 +26,7 @@ std::string DBPrecompiled::toString(std::shared_ptr<PrecompiledContext>) {
 
 bytes DBPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
                           bytesConstRef param) {
-  LOG(DEBUG) << "调用DB";
+  LOG(DEBUG) << "call DBPrecompiled";
 
   //解析出函数名
   uint32_t func = getParamFunc(param);

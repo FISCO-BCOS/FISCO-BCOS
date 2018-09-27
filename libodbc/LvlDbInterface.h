@@ -134,7 +134,6 @@ namespace leveldb{
 
 		virtual Status Put(const WriteOptions&, const Slice& key, const Slice& value) = 0;
 
-		//����Ľӿ���ʱ�Ȳ���Ҫʵ�� �ȼ���־ ����Щ��Ҫ
 		virtual Iterator* NewIterator(const ReadOptions&) override{
 			std::cout << "weodbc  interface neet NewIterator ";
 			//cnote << "weodbc  interface neet NewIterator ";
@@ -173,7 +172,6 @@ namespace leveldb{
 
 
 	public:
-		//sa����
 		SAConnection con;
 		SAClient_t _saClient;
 		std::string _sDbConnInfo;

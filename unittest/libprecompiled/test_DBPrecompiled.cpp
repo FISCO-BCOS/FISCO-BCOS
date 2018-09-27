@@ -43,7 +43,7 @@ struct DBPrecompiledFixture {
   }
 
   ~DBPrecompiledFixture() {
-    //什么也不做
+    
   }
 
   dev::precompiled::DBPrecompiled::Ptr dbPrecompiled;

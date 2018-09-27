@@ -598,7 +598,7 @@ std::pair<ExecutionResult, TransactionReceipt> State::execute(EnvInfo const& _en
 		e.finalize();
 
 		if (_p == Permanence::Dry) {
-			//什么也不做
+			
 		}
 		else if (_p == Permanence::Reverted)
 			m_cache.clear();
