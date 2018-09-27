@@ -178,7 +178,7 @@ void Session::write()
         if (m_socket->isConnected())
         {
             m_server->ioService()->post([=] {
-                boost::asio::async_write(m_socket->sslref(), boost::asio::buffer(*(task.first)),
+                m_server->asioInterface()->async_write(m_socket, boost::asio::buffer(*(task.first)),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
                         boost::asio::placeholders::bytes_transferred));
             });
@@ -252,7 +252,9 @@ void Session::disconnect(DisconnectReason _reason)
 
 void Session::start()
 {
-    m_strand->post(boost::bind(&Session::doRead, this));  // doRead();
+    /// m_strand->post(boost::bind(&Session::doRead, this));  // doRead();
+    m_server->asioInterface()->strand_post(
+        *m_strand, boost::bind(&Session::doRead, this));  // doRead();
 }
 
 void Session::doRead()
@@ -261,8 +263,8 @@ void Session::doRead()
     if (m_dropped)
         return;
     auto self(shared_from_this());
-    m_data.resize(sizeof(uint32_t));
-
+    if (!m_test)
+        m_data.resize(sizeof(uint32_t));
     auto asyncRead = [this, self](boost::system::error_code ec, std::size_t length) {
         if (!checkRead(ec))
             return;
@@ -278,7 +280,6 @@ void Session::doRead()
 
             Message::Ptr message = std::make_shared<Message>();
             ssize_t result = message->decode(m_data.data(), m_data.size());
-
             if (result > 0)
             {
                 P2PException e(
@@ -291,14 +292,13 @@ void Session::doRead()
                     g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
                 onMessage(e, self, message);
             }
-
             doRead();
         };
         if (m_socket->isConnected())
-            ba::async_read(m_socket->sslref(),
+            m_server->asioInterface()->async_read(m_socket, *m_strand,
                 boost::asio::buffer(
                     m_data.data() + sizeof(uint32_t), fullLength - sizeof(uint32_t)),
-                m_strand->wrap(_asyncRead));
+                _asyncRead);
         else
         {
             LOG(WARNING) << "Error Reading ssl socket is close!";
@@ -307,8 +307,10 @@ void Session::doRead()
         }
     };
     if (m_socket->isConnected())
-        ba::async_read(m_socket->sslref(), boost::asio::buffer(m_data, sizeof(uint32_t)),
-            m_strand->wrap(asyncRead));
+    {
+        m_server->asioInterface()->async_read(
+            m_socket, *m_strand, boost::asio::buffer(m_data, sizeof(uint32_t)), asyncRead);
+    }
     else
     {
         LOG(WARNING) << "Error Reading ssl socket is close!";
