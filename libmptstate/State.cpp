@@ -96,7 +96,7 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, Wit
 void State::populateFrom(AccountMap const& _map)
 {
     eth::commit(_map, m_state);
-    commit(State::CommitBehaviour::KeepEmptyAccounts);
+    commit();
 }
 
 u256 const& State::requireAccountStartNonce() const
@@ -189,10 +189,10 @@ void State::clearCacheIfTooLarge() const
     }
 }
 
-void State::commit(CommitBehaviour _commitBehaviour)
+void State::commit()
 {
-    if (_commitBehaviour == CommitBehaviour::RemoveEmptyAccounts)
-        removeEmptyAccounts();
+    // Remove empty accounts by default
+    removeEmptyAccounts();
     m_touched += dev::eth::commit(m_cache, m_state);
     m_changeLog.clear();
     m_cache.clear();
