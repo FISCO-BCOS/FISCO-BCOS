@@ -21,8 +21,10 @@
  * @date 2018-09-10
  */
 #pragma once
+#include <libethcore/Protocol.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
+#include <libp2p/Session.h>
 #include <libp2p/SessionFace.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -81,9 +83,59 @@ public:
     std::chrono::steady_clock::time_point m_ping;
 };
 
-class FakeSessionFactory : public SessionFactory
+class FakeSessionForTest : public Session
 {
 public:
+    FakeSessionForTest(Host* _server, std::shared_ptr<SocketFace> const& _s,
+        std::shared_ptr<Peer> const& _n, PeerSessionInfo const& _info)
+      : Session(_server, _s, _n, _info)
+    {
+        setTest(true);
+    }
+
+    void setProtocolId(int16_t const& protocol_id) { m_protocolId = protocol_id; }
+
+    void setDataContent(std::string const& data_content) { m_dataContent = data_content; }
+    void EncodeData()
+    {
+        std::string invalid_tx_data = "test invalid tx data";
+        setDataContent(invalid_tx_data);
+        Message::Ptr message = std::make_shared<Message>();
+        message->setProtocolID(m_protocolId);  // set protocol id
+        std::shared_ptr<bytes> buffer =
+            std::make_shared<bytes>(m_dataContent.begin(), m_dataContent.end());
+        message->setBuffer(buffer);
+        message->encode(m_data);
+    }
+    virtual void doRead()
+    {
+        setProtocolId(dev::eth::ProtocolID::TxPool);
+        EncodeData();
+        if (m_read == 1)
+            return;
+        m_read = 1;
+        Session::doRead();
+    }
+    unsigned m_read = 0;
+    int16_t m_protocolId = 0;
+    std::string m_dataContent;
+};
+
+class FakeSessionForTestFactory : public SessionFactory
+{
+public:
+    virtual std::shared_ptr<SessionFace> create_session(Host* _server,
+        std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
+        PeerSessionInfo _info)
+    {
+        std::shared_ptr<SessionFace> m_session =
+            std::make_shared<FakeSessionForTest>(_server, _socket, _peer, _info);
+        return m_session;
+    }
+};
+
+class FakeSessionFactory : public SessionFactory
+{
     virtual std::shared_ptr<SessionFace> create_session(Host* _server,
         std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
         PeerSessionInfo _info)
@@ -153,7 +205,6 @@ public:
     {
         Host::connect(_nodeIPEndpoint, ec);
     }
-
     bool havePeerSession(NodeID const& _id) { return Host::havePeerSession(_id); }
     void reconnectAllNodes() { return Host::reconnectAllNodes(); }
     bool accepting() { return m_accepting; }
@@ -215,7 +266,6 @@ public:
         m_nodeIPEndpoint = remote_endpoint;
         if (remote_endpoint.tcpPort == 0)
         {
-            std::cout << "####fake remote_point: 30314" << std::endl;
             NodeIPEndpoint m_fake_endpoint = fakeEndPoint("127.0.0.1", 30304);
             m_remote->address(m_fake_endpoint.address);
             m_remote->port(30314);
@@ -317,9 +367,33 @@ public:
     {
         m_timer->cancel();
     }
+
+    /// fake implementation of async_write
+    virtual void async_write(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler,
+        std::size_t transferred_bytes = 0,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        handler(ec, transferred_bytes);
+    }
+
+    /// fake implementation of async_read
+    virtual void async_read(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::io_service::strand& m_strand, boost::asio::mutable_buffers_1 buffers,
+        ReadWriteHandler handler, std::size_t transferred_bytes = 0,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        handler(ec, transferred_bytes);
+    }
+    /// fake implementation of m_strand.post
+    virtual void strand_post(boost::asio::io_service::strand& m_strand, Base_Handler handler)
+    {
+        handler();
+    }
 };
-/// create Host
-static FakeHost* createFakeHost(
+
+/// create Host with specified session factory
+static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
     std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
 {
     KeyPair key_pair = KeyPair::create();
@@ -327,11 +401,27 @@ static FakeHost* createFakeHost(
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
     /// create m_socketFactory
     std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<FakeSocketFactory>();
-    /// create m_sessionFactory
-    std::shared_ptr<SessionFactory> m_sessionFactory = std::make_shared<FakeSessionFactory>();
     FakeHost* m_host = new FakeHost(client_version, key_pair, network_config, m_asioInterface,
         m_socketFactory, m_sessionFactory);
     return m_host;
+}
+
+/// creat fake host
+static FakeHost* createFakeHost(
+    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
+{
+    /// create m_sessionFactory
+    std::shared_ptr<SessionFactory> m_sessionFactory = std::make_shared<FakeSessionFactory>();
+    return createHost(m_sessionFactory, client_version, listenIp, listenPort);
+}
+/// create Host with real Session object
+static FakeHost* createFakeHostWithSession(
+    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
+{
+    /// create m_sessionFactory
+    std::shared_ptr<SessionFactory> m_sessionFactory =
+        std::make_shared<FakeSessionForTestFactory>();
+    return createHost(m_sessionFactory, client_version, listenIp, listenPort);
 }
 }  // namespace test
 }  // namespace dev

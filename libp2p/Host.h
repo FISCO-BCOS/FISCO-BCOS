@@ -218,6 +218,8 @@ public:
     std::shared_ptr<std::vector<std::string>> topics() const { return m_topics; };
     uint32_t topicSeq() const { return m_topicSeq; }
 
+    shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
+
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
     virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());

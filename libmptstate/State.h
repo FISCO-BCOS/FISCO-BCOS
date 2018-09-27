@@ -163,12 +163,6 @@ class State
     friend class dev::test::StateLoader;
 
 public:
-    enum class CommitBehaviour
-    {
-        KeepEmptyAccounts,
-        RemoveEmptyAccounts
-    };
-
     using AddressMap = std::map<h256, Address>;
 
     /// Default constructor; creates with a blank database prepopulated with the genesis block.
@@ -310,9 +304,8 @@ public:
     /// The hash of the root of our state tree.
     h256 rootHash() const { return m_state.root(); }
 
-    /// Commit all changes waiting in the address cache to the DB.
-    /// @param _commitBehaviour whether or not to remove empty accounts during commit.
-    void commit(CommitBehaviour _commitBehaviour);
+    /// Commit all changes waiting in the address cache to the DB. Remove empty account
+    void commit();
 
     /// Resets any uncommitted changes to the cache.
     void setRoot(h256 const& _root);
@@ -330,6 +323,8 @@ public:
     void rollback(size_t _savepoint);
 
     ChangeLog const& changeLog() const { return m_changeLog; }
+
+    void cacheClear() { return m_cache.clear(); }
 
 private:
     /// Turns all "touched" empty accounts into non-alive accounts.

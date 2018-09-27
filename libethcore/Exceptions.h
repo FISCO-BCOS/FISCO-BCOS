@@ -68,7 +68,8 @@ DEV_SIMPLE_EXCEPTION(PendingTransactionAlreadyExists);
 DEV_SIMPLE_EXCEPTION(TransactionAlreadyInChain);
 DEV_SIMPLE_EXCEPTION(UnknownTransactionValidationError);
 DEV_SIMPLE_EXCEPTION(InconsistentTransactionSha3);
-DEV_SIMPLE_EXCEPTION(P2pObtainTransactionFailed);
+DEV_SIMPLE_EXCEPTION(P2pEnqueueTransactionFailed);
+DEV_SIMPLE_EXCEPTION(MalformedTransactionException);
 
 /// state trie related
 DEV_SIMPLE_EXCEPTION(InvalidStateRoot);
@@ -89,6 +90,7 @@ DEV_SIMPLE_EXCEPTION(GenesisBlockCannotBeCalculated);
 DEV_SIMPLE_EXCEPTION(InvalidLogBloom);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
+
 /// transactionReceipt related
 DEV_SIMPLE_EXCEPTION(InvalidTransactionReceiptFormat);
 DEV_SIMPLE_EXCEPTION(TransactionReceiptVersionError);
@@ -100,6 +102,8 @@ DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(UnknownError);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
+DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
+
 struct VMException : Exception
 {
 };

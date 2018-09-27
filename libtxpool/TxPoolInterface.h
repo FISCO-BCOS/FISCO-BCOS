@@ -76,8 +76,7 @@ public:
     virtual TxPoolStatus status() const = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual int32_t const& getProtocolId() const = 0;
-    virtual void setProtocolId(uint32_t const& _protocolId) = 0;
+    virtual int16_t const& getProtocolId() const = 0;
 };
 }  // namespace txpool
 }  // namespace dev
