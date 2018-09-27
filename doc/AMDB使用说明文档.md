@@ -167,6 +167,10 @@ node.ip=127.0.0.1
 node.listen_port=30301
 # 节点的topic
 node.topic=DB
+# 节点的keystore密码
+keystorePassWord=123456
+# 节点的clientCert密码
+clientCertPassWord=123456
 ```
 
 db.properties 为连接数据库的配置文件，具体配置内容如下:

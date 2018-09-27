@@ -81,8 +81,8 @@ void ConsoleServer::onConnect(dev::channel::ChannelException e, dev::channel::Ch
 	ss << std::endl;
 	printDoubleLine(ss);
 	ss << "Welcome to the FISCO BCOS console!" << std::endl;
-	ss << "Copyright (c) "<< boost::gregorian::day_clock::local_day().year();
-	ss <<" FISCO and/or its affiliates. All rights reserved." << std::endl << std::endl;
+	ss << "Version: " << dev::Version << " " << dev::Copyright<< std::endl;
+	ss << "FISCO and/or its affiliates. All rights reserved." << std::endl << std::endl;
 	ss << "Type 'help' for command list. Type 'quit' to quit the console." << std::endl;
 	printDoubleLine(ss);
 	ss << std::endl;
@@ -374,7 +374,7 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
       unsigned int number = _interface->number();
       h256 hash = _interface->hashFromNumber(number);
       dev::storage::Entries::Ptr entries =
-          _stateStorage->select(hash, number, tableName, key);
+          _stateStorage->select(hash, number+1, tableName, key);
       size_t size = entries->size();
       printDoubleLine(ss);
       ss << "Number of entry: " << size << std::endl;
@@ -493,12 +493,12 @@ std::string ConsoleServer::pbftRemove(const std::vector<std::string> args)
 
 void ConsoleServer::printSingleLine(std::stringstream &ss)
 {
-  ss << "--------------------------------------------------------------------" << std::endl;
+  ss << "------------------------------------------------------------------------" << std::endl;
 }
 
 void ConsoleServer::printDoubleLine(std::stringstream &ss)
 {
-  ss << "====================================================================" << std::endl;
+  ss << "========================================================================" << std::endl;
 }
 void ConsoleServer::printPrompt(std::stringstream &ss)
 {
