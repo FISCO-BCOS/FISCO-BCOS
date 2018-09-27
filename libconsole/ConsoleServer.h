@@ -53,7 +53,6 @@ private:
 	void printShortSingleLine(std::stringstream &ss);
 	void printSingleLine(std::stringstream &ss);
 	void printDoubleLine(std::stringstream &ss);
-	void printPrompt(std::stringstream &ss);
 };
 
 }
