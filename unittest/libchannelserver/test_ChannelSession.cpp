@@ -15,7 +15,7 @@ struct ChannelSessionFixture {
 	}
 
 	~ChannelSessionFixture() {
-		//什么也不做
+		
 	}
 
 	dev::channel::ChannelSession::Ptr channelSession;
