@@ -6,11 +6,11 @@ using namespace dev;
 using namespace dev::precompiled;
 
 void ConditionPrecompiled::beforeBlock(std::shared_ptr<PrecompiledContext>) {
-	//什么也不做
+	
 }
 
 void ConditionPrecompiled::afterBlock(std::shared_ptr<PrecompiledContext>, bool commit) {
-	//什么也不做
+	
 }
 
 std::string ConditionPrecompiled::toString(std::shared_ptr<PrecompiledContext>) {
@@ -18,9 +18,8 @@ std::string ConditionPrecompiled::toString(std::shared_ptr<PrecompiledContext>) 
 }
 
 bytes ConditionPrecompiled::call(std::shared_ptr<PrecompiledContext> context, bytesConstRef param) {
-	LOG(DEBUG) << "调用Condition:" << toHex(param);
+	LOG(DEBUG) << "Call ConditionPrecompiled:" << toHex(param);
 
-	//解析出函数名
 	uint32_t func = getParamFunc(param);
 	bytesConstRef data = getParamData(param);
 

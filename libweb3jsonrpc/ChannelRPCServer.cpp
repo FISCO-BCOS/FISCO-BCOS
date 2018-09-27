@@ -172,7 +172,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
     if (it != _seq2session.end())
     {
-        LOG(INFO) << "send ethereum resp seq：" << it->first << " response:" << _response;
+        LOG(INFO) << "send ethereum resp seq:" << it->first << " response:" << _response;
 
         std::shared_ptr<bytes> resp(new bytes());
 
@@ -189,7 +189,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
     }
     else
     {
-        LOG(ERROR) << "not found seq，may be timeout:" << addInfo;
+        LOG(ERROR) << "not found seq, may be timeout:" << addInfo;
     }
 
     return false;
@@ -337,7 +337,7 @@ void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr se
 	LOG(DEBUG) << "receive sdk channel message";
 
 	if (message->dataSize() < 128) {
-		LOG(ERROR) << "invaild channel message，too short:" << message->dataSize();
+		LOG(ERROR) << "invaild channel message, too short:" << message->dataSize();
 		return;
 	}
 
@@ -443,7 +443,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
     if (message->dataSize() < 1)
     {
-        LOG(ERROR) << "invalid channel2 message，too short:" << message->dataSize();
+        LOG(ERROR) << "invalid channel2 message, too short:" << message->dataSize();
         return;
     }
 
@@ -468,7 +468,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             auto newIt = _seq2MessageSession.insert(std::make_pair(message->seq(), messageSession));
             if (newIt.second == false)
             {
-                LOG(WARNING) << "seq:" << message->seq() << " session repeat，overwrite";
+                LOG(WARNING) << "seq:" << message->seq() << " session repeat, overwrite";
 
                 newIt.first->second.fromSession = session;
             }
@@ -498,7 +498,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
         {
             if (it == _seq2MessageSession.end())
             {
-                LOG(WARNING) << "not found seq，may timeout?";
+                LOG(WARNING) << "not found seq, may timeout?";
 
                 return;
             }
@@ -509,7 +509,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                 {
                     LOG(DEBUG) << "seq" << message->seq() << " push to  "
                                << it->second.toSession->host() << ":"
-                               << it->second.toSession->port() << " 失败:" << message->result();
+                               << it->second.toSession->port() << " failed:" << message->result();
                     it->second.failedSessions.insert(it->second.toSession);
 
                     auto session =
@@ -610,7 +610,7 @@ void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::ChannelMess
 
 	if (!sended) {
 
-			LOG(DEBUG) << "no seq，PUSH message";
+			LOG(DEBUG) << "no seq, PUSH message";
 
 			std::lock_guard<std::mutex> lock(_sessionMutex);
 		for (auto it : _sessions) {
@@ -625,7 +625,7 @@ void dev::ChannelRPCServer::onNodeMessage(h512 nodeID, dev::channel::ChannelMess
 	}
 
 	if (!sended) {
-			LOG(ERROR) << "push message failed, no sdk connection，errorcde 101";
+			LOG(ERROR) << "push message failed, no sdk connection, errorcde 101";
 
 			if (message->result() == 0) {
 				message->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
@@ -654,7 +654,7 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
     {
         if (message->dataSize() < 1)
         {
-            LOG(ERROR) << "invalid channel message，too short:" << message->dataSize();
+            LOG(ERROR) << "invalid channel message, too short:" << message->dataSize();
             return;
         }
 
@@ -682,7 +682,7 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
                         _seq2MessageSession.insert(std::make_pair(message->seq(), messageSession));
                     if (newIt.second == false)
                     {
-                        LOG(WARNING) << "seq:" << message->seq() << " session repeat，overwrite";
+                        LOG(WARNING) << "seq:" << message->seq() << " session repeat, overwrite";
 
                         newIt.first->second = messageSession;
                     }
@@ -712,7 +712,7 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
         {
             if (it == _seq2MessageSession.end())
             {
-                LOG(ERROR) << "error，not found session:" << message->seq();
+                LOG(ERROR) << "error, not found session:" << message->seq();
                 return;
             }
 
@@ -955,7 +955,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
         {
             LOG(ERROR) << "no SDK follow topic:" << topic;
 
-            throw dev::channel::ChannelException(103, "send failed，no node follow topic:" + topic);
+            throw dev::channel::ChannelException(103, "send failed, no node follow topic:" + topic);
         }
 
         dev::channel::TopicChannelMessage::Ptr response;
@@ -972,7 +972,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 
         if (!response)
         {
-            throw dev::channel::ChannelException(99, "send fail，all retry failed");
+            throw dev::channel::ChannelException(99, "send fail, all retry failed");
         }
 
         return response;
@@ -1052,9 +1052,9 @@ h512 ChannelRPCServer::sendChannelMessageToNode(
 
         if (peers.empty())
         {
-            LOG(ERROR) << "send failed，no node follow topic:" << topic;
+            LOG(ERROR) << "send failed, no node follow topic:" << topic;
 
-            throw dev::channel::ChannelException(103, "send failed，no node follow topic:" + topic);
+            throw dev::channel::ChannelException(103, "send failed, no node follow topic:" + topic);
         }
 
         boost::mt19937 rng(static_cast<unsigned>(std::time(0)));

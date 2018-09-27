@@ -279,7 +279,7 @@ void Session::write()
 			// must check queue, as write callback can occur following dropped()
 			if (ec)
 			{
-				LOG(WARNING) << "Error sending: " << ec.message();
+				LOG(DEBUG) << "Error sending: " << ec.message();
 				drop(TCPError);
 				return;
 			}
@@ -327,7 +327,7 @@ void Session::drop(DisconnectReason _reason)
 		try
 		{
 			boost::system::error_code ec;
-			LOG(WARNING) << "Closing " << m_socket->ref().lowest_layer().remote_endpoint(ec) << "(" << reasonOf(_reason) << ")";
+			LOG(DEBUG) << "Closing " << m_socket->ref().lowest_layer().remote_endpoint(ec) << "(" << reasonOf(_reason) << ")";
 			m_socket->ref().lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 			m_socket->ref().lowest_layer().close();
 		}
@@ -344,7 +344,7 @@ void Session::drop(DisconnectReason _reason)
 
 void Session::disconnect(DisconnectReason _reason)
 {
-	LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")";
+	LOG(DEBUG) << "Disconnecting (our reason:" << reasonOf(_reason) << ")";
 
 	if (m_socket->ref().lowest_layer().is_open())
 	{

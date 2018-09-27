@@ -24,7 +24,7 @@ std::string Entry::getField(const std::string &key) const {
   if (it != _fields.end()) {
     return it->second;
   } else {
-    throw StorageException(-1, "未找到字段: " + key);
+    throw StorageException(-1, "Undefined field: " + key);
   }
 
   return "";
@@ -72,7 +72,7 @@ void Entry::setDirty(bool dirty) { _dirty = dirty; }
 Entry::Ptr Entries::get(size_t i) {
   if (_entries.size() <= i) {
     throw StorageException(
-        -1, "Entries不存在该元素: " + boost::lexical_cast<std::string>(i));
+        -1, "Entries doesn't has : " + boost::lexical_cast<std::string>(i));
 
     return Entry::Ptr();
   }

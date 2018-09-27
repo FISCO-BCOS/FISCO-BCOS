@@ -23,7 +23,7 @@ struct StorageFixture {
   }
 
   ~StorageFixture() {
-    //什么也不做
+    
   }
 
   dev::storage::Entry::Ptr entry;

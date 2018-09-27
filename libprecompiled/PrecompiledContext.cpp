@@ -6,7 +6,7 @@ using namespace dev;
 using namespace dev::precompiled;
 
 PrecompiledContext::PrecompiledContext() {
-  LOG(TRACE) << "构建PrecompiledContext";
+  LOG(TRACE) << "Build PrecompiledContext";
 }
 
 void PrecompiledContext::beforeBlock() {
@@ -29,20 +29,20 @@ void PrecompiledContext::afterBlock(bool commit) {
 
 bytes PrecompiledContext::call(Address address, bytesConstRef param) {
   try {
-    LOG(TRACE) << "PrecompiledEngine调用:" << _blockInfo.hash << " "
+    LOG(TRACE) << "PrecompiledEngine call:" << _blockInfo.hash << " "
                << _blockInfo.number << " " << address << " " << toHex(param);
 
     auto p = getPrecompiled(address);
 
     if (p) {
       bytes out = p->call(shared_from_this(), param);
-      // LOG(TRACE) << "PrecompiledEngine调用结果:" <<
+      // LOG(TRACE) << "PrecompiledEngine result:" <<
       return out;
     } else {
-      LOG(DEBUG) << "未找到address:" << address;
+      LOG(DEBUG) << "undefined address:" << address;
     }
   } catch (std::exception &e) {
-    LOG(ERROR) << "Precompiled执行错误:" << e.what();
+    LOG(ERROR) << "Precompiled execute error:" << e.what();
 
     throw dev::eth::PrecompiledError();
   }
@@ -77,7 +77,7 @@ bool PrecompiledContext::isPrecompiled(Address address) {
   auto p = getPrecompiled(address);
 
   if (p) {
-    LOG(DEBUG) << "内部合约：" << address;
+    LOG(DEBUG) << "Precompiled :" << address;
   }
 
   return p.get() != NULL;

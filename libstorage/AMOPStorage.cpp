@@ -18,7 +18,7 @@ AMOPStorage::AMOPStorage() {
 TableInfo::Ptr AMOPStorage::info(const std::string &table) {
   try {
 #if 0
-		LOG(DEBUG) << "获取AMOPDB info:" << table;
+		LOG(DEBUG) << "Get AMOPDB info:" << table;
 		Json::Value requestJson;
 
 		requestJson["op"] = "info";
@@ -30,8 +30,8 @@ TableInfo::Ptr AMOPStorage::info(const std::string &table) {
 
 		int code = responseJson["code"].asInt();
 		if(code != 0) {
-			LOG(ERROR) << "查表信息异常:" << code;
-			throw new StorageException(code, "查表信息异常:" + boost::lexical_cast<std::string>(code));
+			LOG(ERROR) << "Query table info error:" << code;
+			throw new StorageException(code, "Query table info error:" + boost::lexical_cast<std::string>(code));
 		}
 
 		TableInfo::Ptr tableInfo = std::make_shared<TableInfo>();
@@ -47,13 +47,13 @@ TableInfo::Ptr AMOPStorage::info(const std::string &table) {
 
     return tableInfo;
   } catch (StorageException &e) {
-    LOG(ERROR) << "获取表信息异常:" << e.what();
+    LOG(ERROR) << "Get table info error:" << e.what();
 
     throw e;
   } catch (std::exception &e) {
-    LOG(ERROR) << "获取表信息异常:" << e.what();
+    LOG(ERROR) << "Get table info error:" << e.what();
 
-    throw StorageException(-1, std::string("获取表信息异常:") + e.what());
+    throw StorageException(-1, std::string("Get table info error:") + e.what());
   }
 
   return TableInfo::Ptr();
@@ -63,7 +63,7 @@ Entries::Ptr AMOPStorage::select(h256 hash, int num,
                                       const std::string &table,
                                       const std::string &key) {
   try {
-    LOG(DEBUG) << "查询AMOPDB数据";
+    LOG(DEBUG) << "Query AMOPDB data";
 
     Json::Value requestJson;
 
@@ -77,10 +77,10 @@ Entries::Ptr AMOPStorage::select(h256 hash, int num,
 
     int code = responseJson["code"].asInt();
     if (code != 0) {
-      LOG(ERROR) << "远程数据库返回异常:" << code;
+      LOG(ERROR) << "Remote database return error:" << code;
 
       throw StorageException(
-          -1, "远程数据库返回异常:" + boost::lexical_cast<std::string>(code));
+          -1, "Remote database return error:" + boost::lexical_cast<std::string>(code));
     }
 
     std::vector<std::string> columns;
@@ -113,9 +113,9 @@ Entries::Ptr AMOPStorage::select(h256 hash, int num,
     entries->setDirty(false);
     return entries;
   } catch (std::exception &e) {
-    LOG(ERROR) << "数据库查询异常:" << e.what();
+    LOG(ERROR) << "Query database error:" << e.what();
 
-    throw StorageException(-1, std::string("数据库查询异常:") + e.what());
+    throw StorageException(-1, std::string("Query database error:") + e.what());
   }
 
   return Entries::Ptr();
@@ -125,10 +125,10 @@ size_t AMOPStorage::commit(h256 hash, int num,
                                 const std::vector<TableData::Ptr> &datas,
                                 h256 blockHash) {
   try {
-    LOG(DEBUG) << "数据库提交数据:" << datas.size();
+    LOG(DEBUG) << "Commit data to database:" << datas.size();
 
     if (datas.size() == 0) {
-      LOG(DEBUG) << "无数据";
+      LOG(DEBUG) << "Empty data.";
 
       return 0;
     }
@@ -171,19 +171,19 @@ size_t AMOPStorage::commit(h256 hash, int num,
 
     int code = responseJson["code"].asInt();
     if (code != 0) {
-      LOG(ERROR) << "远程数据库返回异常:" << code;
+      LOG(ERROR) << "Remote database return error:" << code;
 
       throw StorageException(
-          -1, "远程数据库返回异常:" + boost::lexical_cast<std::string>(code));
+          -1, "Remote database return error:" + boost::lexical_cast<std::string>(code));
     }
 
     int count = responseJson["result"]["count"].asInt();
 
     return count;
   } catch (std::exception &e) {
-    LOG(ERROR) << "数据库提交数据异常:" << e.what();
+    LOG(ERROR) << "Commit data to database error:" << e.what();
 
-    throw StorageException(-1, std::string("数据库提交数据异常:") + e.what());
+    throw StorageException(-1, std::string("Commit data to database error:") + e.what());
   }
 
   return 0;
@@ -206,57 +206,57 @@ Json::Value AMOPStorage::requestDB(const Json::Value &value) {
       ssOut << value;
 
       auto str = ssOut.str();
-      LOG(DEBUG) << "请求AMOPDB:" << request->seq() << " " << str;
+      LOG(DEBUG) << "Request AMOPDB:" << request->seq() << " " << str;
 
       request->setTopic(_topic);
 
       dev::channel::TopicChannelMessage::Ptr response;
 
-      LOG(TRACE) << "开始第 " << retry << " 次amdb请求";
+      LOG(TRACE) << "Retry Request amdb :" << retry;
       request->setData((const byte *)str.data(), str.size());
       response = _channelRPCServer->pushChannelMessage(request);
       if (response.get() == NULL || response->result() != 0) {
-        LOG(ERROR) << "requestDB错误:" << response->result();
+        LOG(ERROR) << "requestDB error:" << response->result();
 
         throw StorageException(
-            -1, "远程数据库返回异常:" +
+            -1, "Remote database return error:" +
                     boost::lexical_cast<std::string>(response->result()));
       }
 
       // 解析topic
       std::string topic = response->topic();
-      LOG(DEBUG) << "收到topic:" << topic;
+      LOG(DEBUG) << "Receive topic:" << topic;
 
       std::stringstream ssIn;
       std::string jsonStr(response->data(),
                           response->data() + response->dataSize());
       ssIn << jsonStr;
 
-      LOG(DEBUG) << "AMOPDB响应:" << ssIn.str();
+      LOG(DEBUG) << "AMOPDB Response:" << ssIn.str();
 
       Json::Value responseJson;
       ssIn >> responseJson;
 
       auto codeValue = responseJson["code"];
       if (!codeValue.isInt()) {
-        throw StorageException(-1, "未找到amdb返回码code");
+        throw StorageException(-1, "undefined amdb error code");
       }
 
       int code = codeValue.asInt();
       if (code != 0) {
         throw StorageException(
-            -1, "amdb返回码异常:" + boost::lexical_cast<std::string>(code));
+            -1, "amdb return code error:" + boost::lexical_cast<std::string>(code));
       }
 
       return responseJson;
     } catch (std::exception &e) {
-      LOG(ERROR) << "AMDB异常: " << e.what();
-      LOG(ERROR) << "重试中...";
+      LOG(ERROR) << "AMDB error: " << e.what();
+      LOG(ERROR) << "Retrying...";
     }
 
     ++retry;
     if (_maxRetry != 0 && retry >= _maxRetry) {
-      LOG(ERROR) << "达到重试上限:" << retry;
+      LOG(ERROR) << "Reach max retry:" << retry;
 
       //存储无法正常使用，退出程序
       auto e = StorageException(-1, "Reach max retry");
