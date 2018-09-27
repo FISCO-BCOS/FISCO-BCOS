@@ -348,7 +348,6 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
     _host->setStaticNodes(nodes);
     printSingleLine(ss);
     ss << "Update p2p nodes successfully！" << std::endl;
-    printSingleLine(ss);
   }
   catch(std::exception &e) {
     LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);

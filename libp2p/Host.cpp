@@ -289,7 +289,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, std::shared_ptr<
 		unsigned offset = (unsigned)UserPacket;
 		uint16_t cnt = 1;
 
-		// todo: mutex Session::m_capabilities and move for(:caps) out of mutex.
+		// TODO:: mutex Session::m_capabilities and move for(:caps) out of mutex.
 		for (auto const& i : caps)
 		{
 			auto pcap = m_capabilities[i];
@@ -354,7 +354,7 @@ void Host::runAcceptor()
 
 			if (peerCount() > peerSlots(Ingress))
 			{
-				LOG(INFO) << "达到最大连接数，断开 (" << Ingress << " * ideal peer count): " << socket->remoteEndpoint();
+				LOG(INFO) << "Reach Max connections, disconnect (" << Ingress << " * ideal peer count): " << socket->remoteEndpoint();
 				socket->close();
 				if (ec.value() < 1)
 					runAcceptor();
@@ -591,7 +591,7 @@ void Host::startedWorking()
 	for (auto const& h : m_capabilities)
 		h.second->onStarting();// 启动多个线程
 
-	// try to open acceptor (todo: ipv6)
+	// try to open acceptor (TODO:: ipv6)
 	//已经进行bind和listen
 	int port = Network::tcp4Listen(m_tcp4Acceptor, m_netPrefs);
 	if (port > 0)
@@ -603,7 +603,7 @@ void Host::startedWorking()
 	else
 	{
 		LOG(INFO) << "p2p.start.notice id:" << id() << "TCP Listen port is invalid or unavailable.";
-		LOG(ERROR) << "P2pPort bind failed！" << "\n";
+		LOG(ERROR) << "P2pPort bind failed!" << "\n";
 		exit(-1);
 	}
 

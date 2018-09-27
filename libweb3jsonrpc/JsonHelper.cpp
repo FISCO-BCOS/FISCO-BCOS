@@ -70,8 +70,8 @@ namespace p2p
 
 Json::Value toJson(p2p::PeerSessionInfo const& _p)
 {
-	//@todo localAddress
-	//@todo protocols
+	//@TODO: localAddress
+	//@TODO: protocols
 	Json::Value ret;
 	ret["id"] = _p.id.hex();
 	ret["name"] = _p.clientVersion;

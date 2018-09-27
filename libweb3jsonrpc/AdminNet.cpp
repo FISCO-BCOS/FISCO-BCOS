@@ -92,7 +92,7 @@ Json::Value AdminNet::admin_nodeInfo()
 	ret["id"] = i.id.hex();
 	ret["enode"] = i.enode();
 	ret["protocols"] = Json::objectValue;
-	ret["protocols"]["eth"] = Json::objectValue; //@todo fill with information
+	ret["protocols"]["eth"] = Json::objectValue; //@TODO: fill with information
 	return ret;
 }
 

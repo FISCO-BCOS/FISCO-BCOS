@@ -6,12 +6,12 @@ using namespace dev;
 using namespace dev::precompiled;
 
 void EntryPrecompiled::beforeBlock(std::shared_ptr<PrecompiledContext>) {
-  //什么也不做
+  
 }
 
 void EntryPrecompiled::afterBlock(std::shared_ptr<PrecompiledContext>,
                                   bool commit) {
-  //什么也不做
+  
 }
 
 std::string EntryPrecompiled::toString(std::shared_ptr<PrecompiledContext>) {
@@ -20,7 +20,7 @@ std::string EntryPrecompiled::toString(std::shared_ptr<PrecompiledContext>) {
 
 bytes EntryPrecompiled::call(std::shared_ptr<PrecompiledContext> context,
                              bytesConstRef param) {
-  LOG(DEBUG) << "调用Entry:";
+  LOG(DEBUG) << "Call EntryPrecompiled:";
 
   //解析出函数名
   uint32_t func = getParamFunc(param);

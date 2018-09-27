@@ -60,7 +60,7 @@ namespace libabi
 		o.create_if_missing = true;
 		leveldb::DB * db    = nullptr;
 
-		//打开 state db
+		//Open state db
 		leveldb::Status status = ldb::DB::Open(o, path + "/abiname", &db);
 		if (!status.ok() || !db)
 		{
