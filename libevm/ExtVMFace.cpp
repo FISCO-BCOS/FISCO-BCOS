@@ -172,12 +172,6 @@ void create(evmc_result* o_result, ExtVMFace& _env, evmc_message const* _msg) no
     assert(fromEvmC(_msg->sender) == _env.myAddress());
 
     *o_result = _env.create(value, gas, init, opcode, salt, {});
-
-    if (o_result->status_code == EVMC_SUCCESS)
-    {
-        o_result->output_data = nullptr;
-        o_result->output_size = 0;
-    }
 }
 
 void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _msg) noexcept
@@ -199,6 +193,7 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
     params.data = {_msg->input_data, _msg->input_size};
     params.staticCall = (_msg->flags & EVMC_STATIC) != 0;
     params.onOp = {};
+
     *o_result = env.call(params);
 }
 

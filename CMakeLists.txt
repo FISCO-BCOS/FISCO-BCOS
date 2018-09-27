@@ -61,7 +61,6 @@ add_subdirectory(libmptstate)
 add_subdirectory(libexecutivecontext)
 add_subdirectory(libblockverifier)
 add_subdirectory(libstorage)
-
 add_subdirectory(libtxpool)
 add_subdirectory(libblocksync)
 add_subdirectory(libconsensus)
