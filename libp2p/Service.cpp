@@ -407,7 +407,8 @@ void Service::setTopicsByNode(
             if (i.first == _nodeID)
             {
                 i.second->setTopics(_topics);
-                LOG(INFO) << "Service::setTopicsByNode success.";
+                LOG(INFO) << "Service::setTopicsByNode completed, topics size="
+                          << getTopicsByNode(_nodeID)->size();
                 break;
             }
         }
@@ -431,7 +432,7 @@ std::shared_ptr<std::vector<std::string>> Service::getTopicsByNode(NodeID const&
             if (i.first == _nodeID)
             {
                 ret = i.second->topics();
-                LOG(INFO) << "Service::getTopicsByNode success.";
+                LOG(INFO) << "Service::getTopicsByNode success, topics size=" << ret->size();
                 break;
             }
         }
@@ -486,7 +487,7 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     {
         LOG(ERROR) << "Service::getPeersByTopic error:" << e.what();
     }
-
+    LOG(INFO) << "Service::getPeersByTopic topic=" << topic << ", peers size=" << nodeList.size();
     return nodeList;
 }
 

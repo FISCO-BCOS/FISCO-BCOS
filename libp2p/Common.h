@@ -184,7 +184,7 @@ public:
         std::stringstream strMsg;
         strMsg << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
                << "," << m_seq << ",";
-        if (dev::eth::ProtocolID::AMOP != abs(m_protocolID))
+        if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
         {
             strMsg << std::string((const char*)m_buffer->data(), m_buffer->size());
         }
@@ -207,6 +207,13 @@ private:
     uint16_t m_packetType = 0;  ///< message sub type, the second two bytes of information
     uint32_t m_seq = 0;         ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
+};
+
+enum AMOPPacketType
+{
+    SendTopicSeq = 1,
+    RequestTopics = 2,
+    SendTopics = 3
 };
 
 class P2PException : public std::exception
