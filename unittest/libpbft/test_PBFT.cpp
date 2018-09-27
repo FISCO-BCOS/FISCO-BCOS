@@ -14,7 +14,7 @@ struct PBFTFixture {
 	}
 
 	~PBFTFixture() {
-		//什么也不做
+		
 	}
 
 };

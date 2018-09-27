@@ -227,7 +227,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 			LOG(ERROR) << "Read failed:" << error.value() << "," << error.message();
 
 			if (_actived) {
-				disconnect(ChannelException(-1, "Read failed，disconnect"));
+				disconnect(ChannelException(-1, "Read failed, disconnect"));
 			}
 		}
 	}
@@ -317,7 +317,7 @@ void ChannelSession::onWrite(const boost::system::error_code& error, std::shared
 		else {
 			LOG(ERROR) << "Write error: " << error.message();
 
-			disconnect(ChannelException(-1, "Write error，disconnect"));
+			disconnect(ChannelException(-1, "Write error, disconnect"));
 		}
 
 		_writing = false;
