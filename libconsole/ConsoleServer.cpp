@@ -81,8 +81,7 @@ void ConsoleServer::onConnect(dev::channel::ChannelException e, dev::channel::Ch
 	ss << std::endl;
 	printDoubleLine(ss);
 	ss << "Welcome to the FISCO BCOS console!" << std::endl;
-	ss << "Version: " << dev::Version << " " << dev::Copyright<< std::endl;
-	ss << "FISCO and/or its affiliates. All rights reserved." << std::endl << std::endl;
+	ss << "Version: " << dev::Version << " " << dev::Copyright<< std::endl << std::endl;
 	ss << "Type 'help' for command list. Type 'quit' to quit the console." << std::endl;
 	printDoubleLine(ss);
 	ss << std::endl;
