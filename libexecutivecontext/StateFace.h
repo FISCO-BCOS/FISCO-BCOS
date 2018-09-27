@@ -34,12 +34,6 @@ namespace eth
 class StateFace
 {
 public:
-    enum class CommitBehaviour
-    {
-        KeepEmptyAccounts,
-        RemoveEmptyAccounts
-    };
-
     /// Check if the address is in use.
     virtual bool addressInUse(Address const& _address) const = 0;
 
