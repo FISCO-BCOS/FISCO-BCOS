@@ -21,12 +21,21 @@
  * @date: 2018-09-21
  */
 #pragma once
+#include <libdevcore/FixedHash.h>
 namespace dev
 {
 namespace consensus
 {
-enum ConsensusStatus
+enum NodeAccountType
 {
+    NonMinerAccount = 0,
+    MinerAccount
 };
-}
+struct ConsensusStatus
+{
+    std::string consensusEngine;
+    dev::h512s minerList;
+};
+
+}  // namespace consensus
 }  // namespace dev
