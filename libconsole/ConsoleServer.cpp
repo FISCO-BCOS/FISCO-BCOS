@@ -85,7 +85,7 @@ void ConsoleServer::onConnect(dev::channel::ChannelException e, dev::channel::Ch
 	ss << "Type 'help' for command list. Type 'quit' to quit the console." << std::endl;
 	printDoubleLine(ss);
 	ss << std::endl;
-	printPrompt(ss);
+
 	output = ss.str();
 	auto response = session->messageFactory()->buildMessage();
 	response->setData((byte*)output.data(), output.size());
@@ -193,7 +193,7 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
 	ss << "help            Provide help information for blockchain console." << std::endl;
 	printSingleLine(ss);
 	ss << std::endl;
-	printPrompt(ss);
+
 	output = ss.str();
 	return output;
 }
@@ -225,7 +225,7 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 	}
 	printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
 
 	return output;
@@ -267,7 +267,7 @@ std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 	}
 	printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
 	return output;
 }
@@ -325,7 +325,7 @@ std::string ConsoleServer::pbftList(const std::vector<std::string> args) {
 	}
 	printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
 	return output;
 }
@@ -376,7 +376,7 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
   }
   printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
   return output;
 }
@@ -419,7 +419,7 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
   }
   printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
   return output;
 }
@@ -463,7 +463,7 @@ std::string ConsoleServer::pbftAdd(const std::vector<std::string> args)
     }
     printSingleLine(ss);
     ss << std::endl;
-    printPrompt(ss);
+
     output = ss.str();
     return output;
 }
@@ -505,7 +505,7 @@ std::string ConsoleServer::pbftRemove(const std::vector<std::string> args)
     }
     printSingleLine(ss);
     ss << std::endl;
-    printPrompt(ss);
+
     output = ss.str();
     return output;
 }
@@ -522,8 +522,4 @@ void ConsoleServer::printSingleLine(std::stringstream &ss)
 void ConsoleServer::printDoubleLine(std::stringstream &ss)
 {
   ss << "========================================================================" << std::endl;
-}
-void ConsoleServer::printPrompt(std::stringstream &ss)
-{
-  ss << "fisco bcos>";
 }
