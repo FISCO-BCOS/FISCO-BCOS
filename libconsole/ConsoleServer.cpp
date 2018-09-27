@@ -327,7 +327,7 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
     }
     _host->setStaticNodes(nodes);
     printSingleLine(ss);
-    ss << "update successfully！" << std::endl;
+    ss << "update successfully!" << std::endl;
     printSingleLine(ss);
     ss << std::endl;
     output = ss.str();

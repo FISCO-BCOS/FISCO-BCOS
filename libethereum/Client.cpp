@@ -180,9 +180,9 @@ void Client::updateConfig() {
 	else
 		m_omit_empty_block = true;
 
-	LOG(TRACE) << "Client::Client m_maxBlockTranscations：" << m_maxBlockTranscations;
-	LOG(TRACE) << "Client::Client sealEngine() m_intervalBlockTime：" << sealEngine()->getIntervalBlockTime();
-	LOG(TRACE) << "Client::Client BlockHeader::maxBlockHeadGas：" << BlockHeader::maxBlockHeadGas;
+	LOG(TRACE) << "Client::Client m_maxBlockTranscations:" << m_maxBlockTranscations;
+	LOG(TRACE) << "Client::Client sealEngine() m_intervalBlockTime:" << sealEngine()->getIntervalBlockTime();
+	LOG(TRACE) << "Client::Client BlockHeader::maxBlockHeadGas:" << BlockHeader::maxBlockHeadGas;
 	LOG(TRACE) << "Client::Client TransactionBase::maxTranscationGas:" << TransactionBase::maxGas;
 	LOG(TRACE) << "Client::Client NonceCheck::maxNonceCheckBlock:" << NonceCheck::maxblocksize;
 	LOG(TRACE) << "Client::Client BlockChain::maxBlockLimit:" << BlockChain::maxBlockLimit;

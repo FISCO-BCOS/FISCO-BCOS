@@ -211,7 +211,7 @@ StateContainer::msec_t StateContainer::getRecordInterval(int child_code)
         _mp_record_start_time.erase(it); //此child_code的记录完成使命，删掉节省空间  
         return getCurrentTime() - record_start_time;
     } else {
-        // todo 报警一下，可能出现了函数嵌套多次调用
+        // TODO: 报警一下，可能出现了函数嵌套多次调用
         return -1;
     } 
 }

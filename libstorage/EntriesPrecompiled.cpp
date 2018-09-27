@@ -7,11 +7,11 @@ using namespace dev;
 using namespace dev::precompiled;
 
 void dev::precompiled::EntriesPrecompiled::beforeBlock(std::shared_ptr<PrecompiledContext>) {
-	//什么也不做
+	
 }
 
 void dev::precompiled::EntriesPrecompiled::afterBlock(std::shared_ptr<PrecompiledContext>, bool commit) {
-	//什么也不做
+	
 }
 
 std::string dev::precompiled::EntriesPrecompiled::toString(std::shared_ptr<PrecompiledContext>) {
@@ -19,7 +19,7 @@ std::string dev::precompiled::EntriesPrecompiled::toString(std::shared_ptr<Preco
 }
 
 bytes dev::precompiled::EntriesPrecompiled::call(std::shared_ptr<PrecompiledContext> context, bytesConstRef param) {
-	LOG(DEBUG)<< "调用Entries:" << toHex(param);
+	LOG(DEBUG)<< "Call EntriesPrecompiled:" << toHex(param);
 
 	//解析出函数名
 	uint32_t func = getParamFunc(param);
