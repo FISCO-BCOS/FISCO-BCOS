@@ -24,6 +24,7 @@
 #include <boost/uuid/uuid_io.hpp>        
 #include <boost/range/algorithm/remove_if.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
 #include <map>
 
 using namespace dev;
@@ -75,6 +76,22 @@ void ConsoleServer::onConnect(dev::channel::ChannelException e, dev::channel::Ch
 	session->setMessageHandler(fp);
 
 	session->run();
+	std::string output;
+	std::stringstream ss;
+	ss << std::endl;
+	printDoubleLine(ss);
+	ss << "Welcome to the FISCO BCOS console!" << std::endl;
+	ss << "Version: " << dev::Version << " " << dev::Copyright<< std::endl << std::endl;
+	ss << "Type 'help' for command list. Type 'quit' to quit the console." << std::endl;
+	printDoubleLine(ss);
+	ss << std::endl;
+	printPrompt(ss);
+	output = ss.str();
+	auto response = session->messageFactory()->buildMessage();
+	response->setData((byte*)output.data(), output.size());
+
+	session->asyncSendMessage(response, dev::channel::ChannelSession::CallbackType(), 0);
+
 }
 
 void ConsoleServer::setKey(KeyPair key) {
@@ -124,15 +141,15 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         }
         else if (func == "pbft.list")
         {
-            output = minerList(args);
+            output = pbftList(args);
         }
         else if (func == "pbft.add")
         {
-            output = addMiner(args);
+            output = pbftAdd(args);
         }
         else if (func == "pbft.remove")
         {
-            output = removeMiner(args);
+            output = pbftRemove(args);
         }
         else if (func == "amdb.select")
         {
@@ -145,6 +162,7 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
         else
         {
             output = "Unknown command, enter 'help' for command list.\n";
+            output += "fisco bcos>";
         }
     }
     catch (std::exception& e)
@@ -166,7 +184,7 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
   printDoubleLine(ss);
 	ss << "status          Show the blockchain status." << std::endl;
 	ss << "p2p.list        Show the peers information." << std::endl;
-	ss << "p2p.update      Update static nodes." << std::endl;
+	ss << "p2p.update      Update p2p nodes." << std::endl;
 	ss << "pbft.list       Show pbft consensus node list." << std::endl;
 	ss << "pbft.add        Add pbft consensus node." << std::endl;
 	ss << "pbft.remove     Remove pbft consensus node." << std::endl;
@@ -175,15 +193,16 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
 	ss << "help            Provide help information for blockchain console." << std::endl;
 	printDoubleLine(ss);
 	ss << std::endl;
+	printPrompt(ss);
 	output = ss.str();
 	return output;
 }
 
 std::string ConsoleServer::status(const std::vector<std::string> args) {
 	std::string output;
+  std::stringstream ss;
 
 	try {
-		std::stringstream ss;
 
 		printDoubleLine(ss);
 		ss << "Status: ";
@@ -199,23 +218,24 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 		ss << "Block number:" << _interface->number() << " at view:" << dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->view();
 	  ss << std::endl;
 	  printSingleLine(ss);
-		ss << std::endl;
-		output = ss.str();
 	}
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
-
-		output = "ERROR while status";
+		ss << "ERROR while status | ";
+		ss << e.what();
 	}
+  ss << std::endl;
+  printPrompt(ss);
+  output = ss.str();
 
 	return output;
 }
 
 std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 	std::string output;
+	std::stringstream ss;
 
 	try {
-		std::stringstream ss;
 
 		printDoubleLine(ss);
 		ss << "Peers number: ";
@@ -231,74 +251,73 @@ std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 			ss << "Connected: " << _host->isConnected(nodeid) << std::endl;
 			printSingleLine(ss);
 		}
-		ss << std::endl;
-		output = ss.str();
 	}
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
-
-		output = "ERROR while p2p.list";
+		ss << "ERROR while p2p.list | ";
+		ss << e.what();
 	}
-
+  ss << std::endl;
+  printPrompt(ss);
+  output = ss.str();
 	return output;
 }
 
-std::string ConsoleServer::minerList(const std::vector<std::string> args) {
+std::string ConsoleServer::pbftList(const std::vector<std::string> args) {
 	std::string output;
+	std::stringstream ss;
 
 	try {
-		std::stringstream ss;
 
 		printDoubleLine(ss);
-		ss << "Miners number: ";
-		dev::h512s minerList =
+		ss << "Consensus nodes number: ";
+		dev::h512s pbftList =
 				dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->getMinerNodeList();
 		std::vector<h512>::iterator iter;
 		std::vector<p2p::PeerSessionInfo> peers = _host->peerSessionInfo();
-		ss << minerList.size() << std::endl;
-		printSingleLine(ss);
+		ss << pbftList.size() << std::endl;
     for(size_t i = 0; i < peers.size(); i++)
     {
       printSingleLine(ss);
       const p2p::NodeID nodeid = peers[i].id;
-      iter = find(minerList.begin(), minerList.end(), nodeid);
-      if(iter != minerList.end())
+      iter = find(pbftList.begin(), pbftList.end(), nodeid);
+      if(iter != pbftList.end())
       {
         ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
         ss << "Ip: " << peers[i].host << std::endl;
         ss << "Port:" << peers[i].port << std::endl;
         ss << "Connected: " << _host->isConnected(nodeid) << std::endl;
-        minerList.erase(iter);
+        pbftList.erase(iter);
       }
       printSingleLine(ss);
     }
-    p2p::NodeInfo node = _host->nodeInfo();
-		ss << "Nodeid(local): " << (node.id.hex()).substr(0, 8) << "..." << std::endl;
-		ss << "Ip: " << node.address << std::endl;
-	  ss << "Port:" << node.port << std::endl;
+    printSingleLine(ss);
+		ss << "Nodeid(local): " << (_host->id().hex()).substr(0, 8) << "..." << std::endl;
+		ss << "Ip: " << _host->listenAddress() << std::endl;
+	  ss << "Port:" << _host->listenPort() << std::endl;
 		printSingleLine(ss);
-		ss << std::endl;
-		output = ss.str();
 	}
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
-
-		output = "ERROR while miner.list";
+		ss << "ERROR while pbft.list | ";
+		ss << e.what();
 	}
-
+  ss << std::endl;
+  printPrompt(ss);
+  output = ss.str();
 	return output;
 }
 
 std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
   std::string output;
+  std::stringstream ss;
 
   try {
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(getConfigPath(), pt);
     std::map<NodeIPEndpoint, NodeID> nodes;
-    std::stringstream ss;
     printDoubleLine(ss);
-    ss << "Add staticNode: " << std::endl;
+    ss << "Add p2p nodes: " << std::endl;
     printSingleLine(ss);
     for(auto it: pt.get_child("p2p")) {
       if(it.first.find("node.") == 0) {
@@ -327,17 +346,16 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
     }
     _host->setStaticNodes(nodes);
     printSingleLine(ss);
-    ss << "update successfully!" << std::endl;
-    printSingleLine(ss);
-    ss << std::endl;
-    output = ss.str();
+    ss << "Update p2p nodes successfully！" << std::endl;
   }
   catch(std::exception &e) {
     LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
-
-    output = "ERROR while p2p.update";
+    ss << "ERROR while p2p.update | ";
+    ss << e.what();
   }
-
+  ss << std::endl;
+  printPrompt(ss);
+  output = ss.str();
   return output;
 }
 
@@ -345,16 +363,16 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
 
 std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
   std::string output;
+  std::stringstream ss;
 
   try {
-    std::stringstream ss;
-    if (args.size() == 2) {
+    if (args.size() == 2 && args[0] != "" && args[1] != "") {
       std::string tableName = args[0];
       std::string key = args[1];
       unsigned int number = _interface->number();
       h256 hash = _interface->hashFromNumber(number);
       dev::storage::Entries::Ptr entries =
-          _stateStorage->select(hash, number, tableName, key);
+          _stateStorage->select(hash, number+1, tableName, key);
       size_t size = entries->size();
       printDoubleLine(ss);
       ss << "Number of entry: " << size << std::endl;
@@ -374,26 +392,26 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
          << std::endl;
       ss << "amdb.select t_test fruit" << std::endl;
     }
-    ss << std::endl;
-    output = ss.str();
   } catch (std::exception &e) {
     LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
-
-    output = "ERROR while amdb.select";
+    ss << "ERROR while amdb.select | ";
+    ss << e.what();
   }
-
+  ss << std::endl;
+  printPrompt(ss);
+  output = ss.str();
   return output;
 }
 
 
-std::string ConsoleServer::addMiner(const std::vector<std::string> args)
+std::string ConsoleServer::pbftAdd(const std::vector<std::string> args)
 {
     std::string output;
+    std::stringstream ss;
     try
     {
-        std::stringstream ss;
         printDoubleLine(ss);
-        if (args.size() == 1)
+        if (args.size() == 1 && args[0] != "")
         {
             std::string nodeID = args[0];
             TransactionSkeleton t;
@@ -408,33 +426,35 @@ std::string ConsoleServer::addMiner(const std::vector<std::string> args)
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("add(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "add miner successfully: " << nodeID << endl;
+            ss << "Add consensus node successfully!" << endl;
         }
         else
         {
             ss << "You must specify nodeID, for example" << std::endl;
-            ss << "miner.add 123456789..." << std::endl;
+            ss << "pbft.add 123456789..." << std::endl;
         }
         printSingleLine(ss);
-        output = ss.str();
     }
     catch (std::exception& e)
     {
         LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
-        output += "ERROR while miner.add | ";
-        output += e.what();
+        ss << "ERROR while pbft.add | ";
+        ss << e.what();
     }
+    ss << std::endl;
+    printPrompt(ss);
+    output = ss.str();
     return output;
 }
 
-std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
+std::string ConsoleServer::pbftRemove(const std::vector<std::string> args)
 {
     std::string output;
+    std::stringstream ss;
     try
     {
-        std::stringstream ss;
         printDoubleLine(ss);
-        if (args.size() == 1)
+        if (args.size() == 1 && args[0] != "")
         {
             std::string nodeID = args[0];
             TransactionSkeleton t;
@@ -448,31 +468,37 @@ std::string ConsoleServer::removeMiner(const std::vector<std::string> args)
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("remove(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "remove miner successfully: " << nodeID << endl;
+            ss << "Remove consensus node successfully! " << endl;
         }
         else
         {
             ss << "You must specify nodeID, for example" << std::endl;
-            ss << "miner.remove 123456789..." << std::endl;
+            ss << "pbft.remove 123456789..." << std::endl;
         }
         printSingleLine(ss);
-        output = ss.str();
     }
     catch (std::exception& e)
     {
         LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
-        output += "ERROR while miner.remove | ";
-        output += e.what();
+        ss << "ERROR while pbft.remove | ";
+        ss <<  e.what();
     }
+    ss << std::endl;
+    printPrompt(ss);
+    output = ss.str();
     return output;
 }
 
 void ConsoleServer::printSingleLine(std::stringstream &ss)
 {
-  ss << "----------------------------------------------------------------" << std::endl;
+  ss << "------------------------------------------------------------------------" << std::endl;
 }
 
 void ConsoleServer::printDoubleLine(std::stringstream &ss)
 {
-  ss << "================================================================" << std::endl;
+  ss << "========================================================================" << std::endl;
+}
+void ConsoleServer::printPrompt(std::stringstream &ss)
+{
+  ss << "fisco bcos>";
 }
