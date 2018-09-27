@@ -42,7 +42,7 @@ public:
     FakeTxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
         std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
         uint64_t const& _limit = 102400, int32_t const& _protocolId = dev::eth::ProtocolID::TxPool)
-      : TxPool(_p2pService, _blockManager, _limit, _protocolId)
+      : TxPool(_p2pService, _blockManager, _protocolId, _limit)
     {}
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore)
     {

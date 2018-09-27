@@ -57,13 +57,15 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
         std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
-        uint64_t const& _limit = 102400, int16_t const& _protocolId = dev::eth::ProtocolID::TxPool)
+        int16_t const& _protocolId, uint64_t const& _limit = 102400)
       : m_service(_p2pService),
         m_blockManager(_blockManager),
         m_limit(_limit),
         m_protocolId(_protocolId)
     {
         assert(m_service && m_blockManager);
+        if (m_protocolId == 0)
+            BOOST_THROW_EXCEPTION(InvalidProtocolID() << errinfo_comment("ProtocolID must be > 0"));
         /// register enqueue interface to p2p by protocalID
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
@@ -104,7 +106,6 @@ public:
 
     /// protocol id used when register handler to p2p module
     virtual int16_t const& getProtocolId() const { return m_protocolId; }
-    virtual void setProtocolId(int16_t const& _protocolId) { m_protocolId = _protocolId; }
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
