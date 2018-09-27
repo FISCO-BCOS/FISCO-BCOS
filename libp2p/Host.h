@@ -330,7 +330,7 @@ protected:  /// protected members(for unit testing)
 
     ///< Represents the my topics situation at a certain stage. When topics change, increase
     ///< m_topicSeq.
-    m_topicSeq m_topicSeq;
+    uint32_t m_topicSeq;
 
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;

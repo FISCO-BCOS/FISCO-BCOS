@@ -28,7 +28,7 @@
  * (construction of io_service is io_service(std::size_t concurrency_hint);)
  * (currenncy_hint means that "A suggestion to the implementation on how many threads it should
  * allow to run simultaneously.") (since ethereum use 2, we modify io_service from 1 to 2) 2.
- 
+ *
  * @ author: chaychen
  * @ date: 2018-09-27
  * @ modifications:

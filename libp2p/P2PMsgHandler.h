@@ -40,8 +40,8 @@ public:
             std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
         m_topic2Handler =
             std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
-        
-        /// register AMOP related protocolID of P2P
+
+        ///< register AMOP related protocolID of P2P
         registerAMOP();
     }
 
