@@ -119,6 +119,94 @@ bool P2PMsgHandler::eraseHandlerByTopic(std::string const& topic)
     }
 }
 
+void P2PMsgHandler::registerAMOP()
+{
+    addProtocolID2Handler(dev::eth::ProtocolID::AMOP,
+        [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
+            msg->Print("Message received in AMOP handler");
+            switch (msg->packetType())
+            {
+            case AMOPPacketType::SendTopicSeq:
+            {
+                uint32_t msgSeq = std::stoul(
+                    std::string((const char*)msg->buffer()->data(), msg->buffer()->size()));
+                uint32_t recordSeq = s->peerTopicSeq(s->id());
+                LOG(INFO) << "HandleSendTopicSeq recordSeq:" << recordSeq << ", msgSeq:" << msgSeq;
+                if (recordSeq < msgSeq)
+                {
+                    Message::Ptr retMsg = std::make_shared<Message>();
+                    retMsg->setProtocolID(dev::eth::ProtocolID::AMOP);
+                    retMsg->setPacketType(AMOPPacketType::RequestTopics);
+                    retMsg->setLength(Message::HEADER_LENGTH + retMsg->buffer()->size());
+                    std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
+                    retMsg->encode(*msgBuf);
+                    s->send(msgBuf);
+                }
+                break;
+            }
+            case AMOPPacketType::RequestTopics:
+            {
+                Message::Ptr retMsg = std::make_shared<Message>();
+                retMsg->setProtocolID(dev::eth::ProtocolID::AMOP);
+                retMsg->setPacketType(AMOPPacketType::SendTopics);
+                stringstream str;
+                str << to_string(s->host()->topicSeq()) << "|";
+                std::shared_ptr<std::vector<std::string>> topics = s->host()->topics();
+                if (topics->size() > 0)
+                {
+                    for (auto const& topic : *topics)
+                    {
+                        str << topic << "|";
+                    }
+                }
+                std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+                std::string content = str.str();
+                LOG(INFO) << "HandleRequestTopics, the buffer content of message sent:" << content;
+                buffer->assign(content.begin(), content.end());
+                retMsg->setBuffer(buffer);
+                retMsg->setLength(Message::HEADER_LENGTH + retMsg->buffer()->size());
+                std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
+                retMsg->encode(*msgBuf);
+                s->send(msgBuf);
+                break;
+            }
+            case AMOPPacketType::SendTopics:
+            {
+                std::string buffer =
+                    std::string((const char*)msg->buffer()->data(), msg->buffer()->size());
+                std::shared_ptr<std::vector<std::string>> topics =
+                    std::make_shared<std::vector<std::string>>();
+                uint32_t topicSeq = 0;
+                ///< split implement
+                auto last = 0;
+                auto index = buffer.find_first_of("|", last);
+                while (index != std::string::npos)
+                {
+                    if (0 != topicSeq)
+                    {
+                        topics->push_back(buffer.substr(last, index - last));
+                    }
+                    else
+                    {
+                        topicSeq = std::stoul(buffer.substr(last, index - last));
+                    }
+                    last = index + 1;
+                    index = buffer.find_first_of("|", last);
+                }
+                LOG(INFO) << "HandleSendTopics, counter node topicSeq:" << topicSeq
+                          << ", topics size:" << topics->size();
+                s->setTopicsAndTopicSeq(s->id(), topics, topicSeq);
+                break;
+            }
+            default:
+            {
+                LOG(INFO) << "Invalid packetType in AMOP message.";
+                break;
+            }
+            }
+        });
+}
+
 }  // namespace p2p
 
 }  // namespace dev
