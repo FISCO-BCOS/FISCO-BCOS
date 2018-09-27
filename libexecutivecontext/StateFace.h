@@ -134,11 +134,11 @@ public:
 
     /// Commit all changes waiting in the address cache to the DB.
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.
-    virtual void commit(StateFace::CommitBehaviour _commitBehaviour) = 0;
+    virtual void commit() = 0;
 
     /// Commit levelDB data into hardisk or commit AMDB data into database (Called after commit())
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.
-    virtual void DbCommit() = 0;
+    virtual void dbCommit() = 0;
 
     /// Resets any uncommitted changes to the cache. Return a new root in params &root
     virtual void setRoot(h256 const& _root) = 0;
@@ -154,6 +154,9 @@ public:
 
     /// Revert all recent changes up to the given @p _savepoint savepoint.
     virtual void rollback(size_t _savepoint) = 0;
+
+    /// Clear state's cache
+    virtual void clear() = 0;
 };
 
 }  // namespace eth
