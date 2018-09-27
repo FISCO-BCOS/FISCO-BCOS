@@ -202,13 +202,13 @@ h256 DBFactoryPrecompiled::hash(shared_ptr<PrecompiledContext> context)
 {
     bytes data;
 
-    LOG(DEBUG) << "this: " << this << " 总计表:" << _name2Table.size();
+    LOG(DEBUG) << "this: " << this << " Summary table:" << _name2Table.size();
     for (auto dbAddress : _name2Table)
     {
         DBPrecompiled::Ptr db =
             dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(dbAddress.second));
         h256 hash = db->hash();
-        LOG(DEBUG) << "表:" << dbAddress.first << " hash:" << hash;
+        LOG(DEBUG) << "Table:" << dbAddress.first << " hash:" << hash;
         if (hash == h256())
         {
             continue;
@@ -223,7 +223,7 @@ h256 DBFactoryPrecompiled::hash(shared_ptr<PrecompiledContext> context)
         return h256();
     }
 
-    LOG(DEBUG) << "计算DBFactoryPrecompiled data:" << data << " hash:" << dev::sha256(&data);
+    LOG(DEBUG) << "Compute DBFactoryPrecompiled data:" << data << " hash:" << dev::sha256(&data);
 
     _hash = dev::sha256(&data);
     return _hash;

@@ -79,7 +79,7 @@ struct DBFactoryPrecompiledFixture {
   }
 
   ~DBFactoryPrecompiledFixture() {
-    //什么也不做
+    
   }
   Storage::Ptr mockAMOPDB;
   dev::precompiled::DBFactoryPrecompiled::Ptr dbFactoryPrecompiled;

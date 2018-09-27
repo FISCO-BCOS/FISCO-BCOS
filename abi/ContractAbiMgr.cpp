@@ -50,7 +50,7 @@ namespace libabi
 
 		LOG(INFO) << "[ContractAbiMgr::setSystemContract] set systemcontract.";
 
-		//校验abi信息
+		//Check abi info
 		std::map<std::string, libabi::SolidityAbi> allAbis;
 		m_contractAbiDBMgr->getAllAbi(allAbis);
 
@@ -60,7 +60,6 @@ namespace libabi
 			getContractAbi(it->second.getContractName(), it->second.getVersion(), abi);
 			if (abi.rlp() == it->second.rlp())
 			{
-				//abi信息一致
 				LOG(DEBUG) << "[ContractAbiMgr::setSystemContract] set systemcontract"
 					<< " ,contract=" << abi.getContractName()
 					<< " ,version=" << abi.getVersion()
@@ -72,7 +71,6 @@ namespace libabi
 			}
 			else
 			{
-				//abi信息不一致
 				LOG(WARNING) << "[ContractAbiMgr::setSystemContract] this abi info is differ from sys"
 					<< " ,db_contract=" << it->second.getContractName()
 					<< " ,db_version=" << it->second.getVersion()
@@ -95,7 +93,6 @@ namespace libabi
 
 	void ContractAbiMgr::updateAbiInDB(const SolidityAbi &abi)
 	{
-		//系统合约没有设置之前不更新,说明处于初始化阶段
 		if (!m_isSystemContractInit)
 		{
 			LOG(TRACE) << "[ContractAbiMgr::updateAbiInDB] systemcontract is not set"
@@ -139,7 +136,6 @@ namespace libabi
 
 		if (isEndOK)
 		{
-			//abi信息一致
 			LOG(DEBUG) << "[ContractAbiMgr::getContractAbi] end"
 				<< " ,contract=" << abi.getContractName()
 				<< " ,version=" << abi.getVersion()
@@ -158,13 +154,12 @@ namespace libabi
 	void ContractAbiMgr::addContractAbi(const SolidityAbi &abi)
 	{
 		std::string strCNSName = (abi.getVersion().empty() ? abi.getContractName() : abi.getContractName() + "/" + abi.getVersion());
-		//更新缓存
+		// Update Cache
 		DEV_READ_GUARDED(m_abis_lock)
 		{
 			auto it = m_abis.find(strCNSName);
 			if (it != m_abis.end())
 			{
-				//更新操作
 				LOG(INFO) << "[ContractAbiMgr::addContractAbi] update operation"
 					<< " ,contract=" << it->second.getContractName()
 					<< " ,version=" << it->second.getVersion()
@@ -179,14 +174,13 @@ namespace libabi
 			auto it0 = m_addrToName.find(abi.getAddr());
 			if (it0 != m_addrToName.end())
 			{
-				//更新操作
 				LOG(INFO) << "[ContractAbiMgr::addContractAbi] update operation"
 					<< " ,cnsname=" << it0->second;
 			}
 			m_addrToName[abi.getAddr()] = strCNSName;
 		}
 
-		//更新level-db
+		//Update level-db
 		updateAbiInDB(abi);
 
 		//abi信息一致
