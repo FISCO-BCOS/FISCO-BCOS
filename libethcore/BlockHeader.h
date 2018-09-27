@@ -150,6 +150,7 @@ public:
         m_stateRoot = _state_root;
         noteDirty();
     }
+
     /// field 4: set logBloom
     void setLogBloom(LogBloom const& _logBloom)
     {

@@ -29,12 +29,12 @@ namespace dev
 {
 namespace eth
 {
-Block::Block(bytesConstRef _data)
+Block::Block(bytesConstRef _data) : m_currentBytes(_data.toBytes())
 {
     decode(_data);
 }
 
-Block::Block(bytes const& _data)
+Block::Block(bytes const& _data) : m_currentBytes(_data)
 {
     decode(ref(_data));
 }
@@ -43,7 +43,11 @@ Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()),
     m_transactions(_block.transactions()),
     m_headerHash(_block.headerHash()),
-    m_sigList(_block.sigList())
+    m_sigList(_block.sigList()),
+    m_currentBytes(_block.m_currentBytes),
+    m_txsCache(_block.m_txsCache),
+    m_txsMapCache(_block.m_txsMapCache),
+    m_txsRoot(_block.m_txsRoot)
 {
     noteChange();
 }
@@ -56,6 +60,11 @@ Block& Block::operator=(Block const& _block)
     m_transactions = _block.transactions();
     /// init sigList
     m_sigList = _block.sigList();
+    /// init m_currentBytes
+    m_currentBytes = _block.m_currentBytes;
+    m_txsCache = _block.m_txsCache;
+    m_txsMapCache = _block.m_txsMapCache;
+    m_txsRoot = _block.m_txsRoot;
     noteChange();
     return *this;
 }
@@ -123,19 +132,23 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
 bytes const& Block::encodeTransactions()
 {
-    /// RecursiveGuard l(m_txsCacheLock);
     RLPStream txs;
     txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
     {
+        m_txsMapCache.clear();
         for (size_t i = 0; i < m_transactions.size(); i++)
         {
+            RLPStream s;
+            s << i;
             bytes trans_data;
             m_transactions[i].encode(trans_data);
             txs.appendRaw(trans_data);
+            m_txsMapCache.insert(std::make_pair(s.out(), trans_data));
         }
         txs.swapOut(m_txsCache);
     }
+    m_txsRoot = hash256(m_txsMapCache);
     return m_txsCache;
 }
 
@@ -161,6 +174,7 @@ void Block::decode(bytesConstRef _block_bytes)
     m_headerHash = h256(block_rlp[2].toInt<u256>());
     /// get sig_list
     m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
+    m_currentBytes = _block_bytes.toBytes();
     noteChange();
 }
 }  // namespace eth

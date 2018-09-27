@@ -25,7 +25,7 @@
 #include "BlockHeader.h"
 #include "Transaction.h"
 #include <libdevcore/Common.h>
-
+#include <libdevcore/TrieHash.h>
 namespace dev
 {
 namespace eth
@@ -90,6 +90,13 @@ public:
         m_transactions.push_back(_trans);
         noteChange();
     }
+    /// append transactions
+    void appendTransactions(Transactions const& _trans_array)
+    {
+        for (auto trans : _trans_array)
+            m_transactions.push_back(trans);
+        noteChange();
+    }
     /// set block header
     void setBlockHeader(BlockHeader const& _blockHeader) { m_blockHeader = _blockHeader; }
     /// set sig list
@@ -99,6 +106,15 @@ public:
     }
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
+    bool isSealed() const { return !m_currentBytes.empty(); }
+    size_t getTransactionSize() { return m_transactions.size(); }
+
+    /// get transactionRoot
+    h256 const getTransactionRoot()
+    {
+        encodeTransactions();
+        return m_txsRoot;
+    }
 
 private:
     /// encode function
@@ -109,6 +125,7 @@ private:
     {
         /// RecursiveGuard l(m_txsCacheLock);
         m_txsCache = bytes();
+        m_txsMapCache = BytesMap();
     }
 
     bytes const& encodeTransactions();
@@ -122,10 +139,13 @@ private:
     h256 m_headerHash;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
+    /// bytes for block
+    bytes m_currentBytes;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     bytes m_txsCache;
-    /// mutable RecursiveMutex m_txsCacheLock;
+    BytesMap m_txsMapCache;
+    h256 m_txsRoot;
 };
 }  // namespace eth
 }  // namespace dev
