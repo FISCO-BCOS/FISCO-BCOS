@@ -101,6 +101,7 @@ DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(UnknownError);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
+DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
 struct VMException : Exception
 {
 };
