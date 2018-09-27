@@ -164,7 +164,7 @@ string dev::getDefaultDataDir(string _prefix)
 		return (boost::filesystem::path(path) / _prefix).string();
 	else
 	{
-	#ifndef _MSC_VER // todo?
+	#ifndef _MSC_VER // TODO:?
 		LOG(WARNING) << "getDataDir(): SHGetSpecialFolderPathA() failed.";
 	#endif
 		BOOST_THROW_EXCEPTION(std::runtime_error("getDataDir() - SHGetSpecialFolderPathA() failed."));
