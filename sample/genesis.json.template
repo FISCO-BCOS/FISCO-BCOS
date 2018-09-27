@@ -7,7 +7,5 @@
 	"parentHash": "0x0",
 	"extraData": "0x0",
 	"gasLimit": "0x13880000000000",
-	"god":"{admin}",
-	"alloc": {}, 	
-	"initMinerNodes":{initMinerNodes}
+	"alloc": {}
 }
