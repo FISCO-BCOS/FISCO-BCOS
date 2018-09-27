@@ -63,7 +63,7 @@ public:
     {
         m_nonceCheck = _nonceCheck;
     }
-
+    virtual dev::eth::BlockHeader const& getLatestBlockHeader() const {}
     /// fake block chain
     void FakeBlockChain(uint64_t _blockNum, size_t const& trans_size)
     {
