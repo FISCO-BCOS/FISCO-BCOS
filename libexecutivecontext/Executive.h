@@ -14,16 +14,14 @@
 
 #pragma once
 
+#include "ExecutionResult.h"
+#include <json/json.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
 #include <libevm/VMFace.h>
-
-#include <json/json.h>
 #include <functional>
-
-#include "ExecutionResult.h"
 
 namespace Json
 {

@@ -344,9 +344,8 @@ bool Executive::go(OnOpFunc const& _onOp)
         {
             // TODO: AUDIT: check that this can never reasonably happen. Consider what to do if it
             // does.
-            LOG(WARNING)
-                << "Unexpected exception in VM. There may be a bug in this implementation. "
-                << diagnostic_information(_e);
+            LOG(ERROR) << "Unexpected exception in VM. There may be a bug in this implementation. "
+                       << diagnostic_information(_e);
             exit(1);
             // Another solution would be to reject this transaction, but that also
             // has drawbacks. Essentially, the amount of ram has to be increased here.
@@ -355,7 +354,7 @@ bool Executive::go(OnOpFunc const& _onOp)
         {
             // TODO: AUDIT: check that this can never reasonably happen. Consider what to do if it
             // does.
-            LOG(WARNING) << "Unexpected std::exception in VM. Not enough RAM? " << _e.what();
+            LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? " << _e.what();
             exit(1);
             // Another solution would be to reject this transaction, but that also
             // has drawbacks. Essentially, the amount of ram has to be increased here.

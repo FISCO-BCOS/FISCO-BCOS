@@ -46,7 +46,9 @@
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/Protocol.h>
 #include <chrono>
+#include <sstream>
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
@@ -63,6 +65,8 @@ extern const NodeIPEndpoint UnspecifiedNodeIPEndpoint;
 extern const Node UnspecifiedNode;
 
 using NodeID = h512;
+/// Nice name for vector of NodeID.
+using NodeIDs = std::vector<NodeID>;
 
 bool isLocalHostAddress(bi::address const& _addressToCheck);
 bool isLocalHostAddress(std::string const& _addressToCheck);
@@ -103,20 +107,18 @@ enum DisconnectReason
     NoDisconnect = 0xffff
 };
 
-///< The protocolID of synchronous Package, related to Service::sendMessageByNodeID
-static int16_t g_synchronousPackageProtocolID = 32767;
-
 ///< P2PExceptionType and g_P2PExceptionMsg used in P2PException
 enum P2PExceptionType
 {
     Success = 0,
     ProtocolError,
     NetworkTimeout,
+    Disconnect,
     P2PExceptionTypeCnt
 };
 
 static std::string g_P2PExceptionMsg[P2PExceptionTypeCnt] = {
-    "Success", "ProtocolError", "NetworkTimeout"};
+    "Success", "ProtocolError", "NetworkTimeout", "Disconnect"};
 
 enum PacketDecodeStatus
 {
@@ -126,7 +128,9 @@ enum PacketDecodeStatus
 
 struct Options
 {
-    uint32_t timeout;  /// < The timeout value of async function, in milliseconds.
+    uint32_t subTimeout;  ///< The timeout value of every node, used in send message to topic, in
+                          ///< milliseconds.
+    uint32_t timeout;     ///< The timeout value of async function, in milliseconds.
 };
 
 class Message : public std::enable_shared_from_this<Message>
@@ -164,18 +168,36 @@ public:
             return 0;
     }
 
-    ///< encode and decode logic implemented in send() and doRead() of session.cpp
     void encode(bytes& buffer);
 
     /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
     /// returned.
     ssize_t decode(const byte* buffer, size_t size);
 
+    ///< This buffer param is the m_buffer member stored in struct Messger, and the topic info will
+    ///< be encoded in buffer.
+    void encodeAMOPBuffer(std::string const& topic);
+    ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
+
     void Print(std::string const& str)
     {
-        LOG(INFO) << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
-                  << "," << m_seq << ","
-                  << std::string((const char*)m_buffer->data(), m_buffer->size()) << ")";
+        std::stringstream strMsg;
+        strMsg << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
+               << "," << m_seq << ",";
+        if (dev::eth::ProtocolID::AMOP != abs(m_protocolID))
+        {
+            strMsg << std::string((const char*)m_buffer->data(), m_buffer->size());
+        }
+        else
+        {
+            std::string topic;
+            std::shared_ptr<bytes> temp = std::make_shared<bytes>();
+            decodeAMOPBuffer(temp, topic);
+            strMsg << "Topic is " << topic << ","
+                   << std::string((const char*)temp->data(), temp->size());
+        }
+        strMsg << ")";
+        LOG(INFO) << strMsg.str();
     }
 
 private:
@@ -375,6 +397,22 @@ private:
     uint16_t m_tcpPort = 0;
     uint16_t m_udpPort = 0;
 };
+
+struct SessionInfo
+{
+    NodeID nodeID;
+    NodeIPEndpoint nodeIPEndpoint;
+    std::vector<std::string> topics;
+    SessionInfo(NodeID const& _nodeID, NodeIPEndpoint const& _nodeIPEndpoint,
+        std::vector<std::string> const& _topics)
+    {
+        nodeID = _nodeID;
+        nodeIPEndpoint = _nodeIPEndpoint;
+        topics = _topics;
+    }
+};
+using SessionInfos = std::vector<SessionInfo>;
+
 }  // namespace p2p
 /// Simple stream output for a NodeIPEndpoint.
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep);
