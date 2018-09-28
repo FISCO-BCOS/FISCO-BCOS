@@ -179,10 +179,10 @@ public:
     void encodeAMOPBuffer(std::string const& topic);
     ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
 
-    void Print(std::string const& str)
+    void printMsgWithPrefix(std::string const& strPrefix)
     {
         std::stringstream strMsg;
-        strMsg << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
+        strMsg << strPrefix << "Message(" << m_length << "," << m_protocolID << "," << m_packetType
                << "," << m_seq << ",";
         if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
         {
@@ -193,8 +193,7 @@ public:
             std::string topic;
             std::shared_ptr<bytes> temp = std::make_shared<bytes>();
             decodeAMOPBuffer(temp, topic);
-            strMsg << "Topic is " << topic << ","
-                   << std::string((const char*)temp->data(), temp->size());
+            strMsg << topic << "," << std::string((const char*)temp->data(), temp->size());
         }
         strMsg << ")";
         LOG(INFO) << strMsg.str();
