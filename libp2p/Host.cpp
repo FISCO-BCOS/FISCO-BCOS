@@ -28,6 +28,11 @@
  * (construction of io_service is io_service(std::size_t concurrency_hint);)
  * (currenncy_hint means that "A suggestion to the implementation on how many threads it should
  * allow to run simultaneously.") (since ethereum use 2, we modify io_service from 1 to 2) 2.
+ *
+ * @ author: chaychen
+ * @ date: 2018-09-27
+ * @ modifications:
+ * Add send topicSeq
  */
 #include "Host.h"
 #include "Common.h"
@@ -59,6 +64,7 @@ namespace p2p
 /// Interval at which Host::run will call keepAlivePeers to ping peers.
 std::chrono::seconds const c_keepAliveInterval = std::chrono::seconds(30);
 std::chrono::seconds const c_reconnectNodesInterval = std::chrono::seconds(60);
+std::chrono::seconds const c_sendTopicSeqInterval = std::chrono::seconds(10);
 
 /// Disconnect timeout after failure to respond to keepAlivePeers ping.
 std::chrono::milliseconds const c_keepAliveTimeOut = std::chrono::milliseconds(1000);
@@ -79,9 +85,12 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_listenPort(_n.listenPort),
     m_asioInterface(_asioInterface),
     m_socketFactory(_socketFactory),
-    m_sessionFactory(_sessionFactory)
+    m_sessionFactory(_sessionFactory),
+    m_lastSendTopicSeq(chrono::steady_clock::time_point::min()),
+    m_topicSeq(0)
 {
     LOG(INFO) << "Id:" << id();
+    m_topics = std::make_shared<std::vector<std::string>>();
 }
 
 /// destructor function
@@ -490,6 +499,8 @@ void Host::run(boost::system::error_code const&)
     keepAlivePeers();
     /// reconnect all nodes recorded in m_staticNodes periodically
     reconnectAllNodes();
+    /// send my topic seq to all sessions periodically
+    sendTopicSeq();
     auto runcb = [this](boost::system::error_code const& error) { run(error); };
     m_timer->expires_from_now(boost::posix_time::milliseconds(c_timerInterval));
     m_asioInterface->async_wait(m_timer.get(), m_strand, runcb);
@@ -590,6 +601,33 @@ void Host::reconnectAllNodes()
         connect(it.first);
     }
     m_lastReconnect = chrono::steady_clock::now();
+}
+
+void Host::sendTopicSeq()
+{
+    if (chrono::steady_clock::now() - c_sendTopicSeqInterval < m_lastSendTopicSeq)
+        return;
+    LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
+
+    Message::Ptr msg = std::make_shared<Message>();
+    msg->setProtocolID(dev::eth::ProtocolID::AMOP);
+    msg->setPacketType(AMOPPacketType::SendTopicSeq);
+    std::string s = to_string(m_topicSeq);
+    std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+    buffer->assign(s.begin(), s.end());
+    msg->setBuffer(buffer);
+    msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
+    std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
+    msg->encode(*msgBuf);
+
+    /// Send my current topic seq to all nodes
+    {
+        RecursiveGuard l(x_sessions);
+        for (auto const& i : sessions())
+            i.second->send(msgBuf);
+    }
+
+    m_lastSendTopicSeq = chrono::steady_clock::now();
 }
 
 /**

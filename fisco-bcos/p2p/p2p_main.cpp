@@ -226,161 +226,6 @@ static h512 node7 = h512(
     "113ea98e53722a4b411e0450e71cb018720355b110d45dbf441ff3a89b36f009c4ae4b66ab243fc0660444c0ce71fa"
     "3bb1e8af9b0a70cfcada5c36f884bebf65");
 
-static void registerAllHandler(std::shared_ptr<Service> _service)
-{
-    _service->registerHandlerByTopic(
-        "topic1", [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
-            LOG(INFO) << "Receive message by Topic, content:"
-                      << std::string((const char*)msg->buffer()->data(), msg->buffer()->size());
-
-            /// send response package
-            if (msg->isRequestPacket())
-            {
-                /// update protoclID
-                msg->setProtocolID(msg->getResponceProtocolID());
-                msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
-                msg->Print("Send response package by Topic");
-                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
-                msg->encode(*buf);
-                s->send(buf);
-            }
-        });
-
-    _service->registerHandlerByProtoclID(
-        1, [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
-            LOG(INFO) << "Receive message by protocolID:" << msg->protocolID()
-                      << ", packetType:" << msg->packetType() << ", content:"
-                      << std::string((const char*)msg->buffer()->data(), msg->buffer()->size());
-
-            /// send response package
-            if (msg->isRequestPacket())
-            {
-                /// update protoclID
-                msg->setProtocolID(msg->getResponceProtocolID());
-                msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
-                msg->Print("Send response package by protoclID");
-                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
-                msg->encode(*buf);
-                s->send(buf);
-            }
-        });
-
-    _service->registerHandlerByProtoclID(
-        2, [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
-            LOG(INFO) << "Receive message by protocolID:" << msg->protocolID()
-                      << ", packetType:" << msg->packetType() << ", content:"
-                      << std::string((const char*)msg->buffer()->data(), msg->buffer()->size());
-
-            /// send response package
-            if (msg->isRequestPacket())
-            {
-                /// update protoclID
-                msg->setProtocolID(msg->getResponceProtocolID());
-                msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
-                msg->Print("Send response package by protoclID");
-                std::shared_ptr<bytes> buf = std::make_shared<bytes>();
-                msg->encode(*buf);
-                s->send(buf);
-            }
-        });
-}
-
-static void sendMsg(Params const& _params, std::shared_ptr<Service> _service)
-{
-    switch (_params.sendMsgType())
-    {
-    case 0:
-    {
-        auto msg = std::make_shared<Message>();
-        msg->setProtocolID(1);
-        msg->setPacketType(2);
-        std::shared_ptr<bytes> buffer(new bytes());
-        std::string s = "hello world!";
-        msg->setBuffer(buffer);
-        buffer->assign(s.begin(), s.end());
-        Options options = {0};
-        options.timeout = 3000;  ///< ms
-        _service->asyncSendMessageByNodeID(node2, msg,
-            [](P2PException e, Message::Ptr msg) {
-                if (e.errorCode() == 0)
-                {
-                    LOG(INFO) << "Callback in response package by seq! seq=" << msg->seq();
-                }
-                else
-                {
-                    LOG(INFO) << "Callback in response package error, seq=" << msg->seq()
-                              << ", msg:" << e.what();
-                }
-            },
-            options);
-
-        break;
-    }
-    case 1:
-    {
-        auto msg = std::make_shared<Message>();
-        msg->setPacketType(2);
-        std::shared_ptr<bytes> buffer(new bytes());
-        std::string s = "hello world!";
-        msg->setBuffer(buffer);
-        buffer->assign(s.begin(), s.end());
-        _service->sendMessageByNodeID(node2, msg);
-        break;
-    }
-    case 2:
-    {
-        auto msg = std::make_shared<Message>();
-        msg->setProtocolID(2);
-        msg->setPacketType(1);
-        std::shared_ptr<bytes> buffer(new bytes());
-        std::string s = "hello world!";
-        msg->setBuffer(buffer);
-        buffer->assign(s.begin(), s.end());
-        _service->asyncSendMessageByNodeID(node2, msg);
-        break;
-    }
-    case 3:
-    {
-        auto msg = std::make_shared<Message>();
-        msg->setProtocolID(32766);
-        msg->setPacketType(0);
-        std::shared_ptr<bytes> buffer(new bytes());
-        std::string s = "hello world!";
-        buffer->assign(s.begin(), s.end());
-        msg->setBuffer(buffer);
-        msg->encodeAMOPBuffer("Topic1");
-        Options options = {0};
-        options.subTimeout = 1000;
-        options.timeout = 3000;  ///< ms
-        _service->asyncSendMessageByTopic("topic1", msg,
-            [](P2PException e, Message::Ptr msg) {
-                if (e.errorCode() == 0)
-                {
-                    LOG(INFO) << "Callback in response package by seq! seq=" << msg->seq();
-                    std::string topic;
-                    std::shared_ptr<bytes> temp = std::make_shared<bytes>();
-                    msg->decodeAMOPBuffer(temp, topic);
-                    LOG(INFO) << "Topic is " << topic << ","
-                              << std::string((const char*)temp->data(), temp->size());
-                }
-                else
-                {
-                    LOG(INFO) << "Callback in response package error, seq=" << msg->seq()
-                              << ", msg:" << e.what();
-                }
-            },
-            options);
-
-        break;
-    }
-    default:
-    {
-        LOG(ERROR) << "Invalid Message Type, now type only is 0,1,2,3.";
-        break;
-    }
-    }
-}
-
 static void InitNetwork(Params& m_params)
 {
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioInterface>();
@@ -393,14 +238,42 @@ static void InitNetwork(Params& m_params)
         std::make_shared<Host>(m_params.clientVersion(), CertificateServer::GetInstance().keypair(),
             *m_netConfig.get(), m_asioInterface, m_socketFactory, m_sessionFactory);
     m_host->setStaticNodes(m_params.staticNodes());
+    /// set the period for nodes to update topics
+    uint32_t counter = 0;
+    uint32_t interval = 0;
+    if (node1 == m_host->id())
+    {
+        interval = 6;
+    }
+    else if (node2 == m_host->id())
+    {
+        interval = 15;
+    }
+    else if (node3 == m_host->id())
+    {
+        interval = 10;
+    }
+    else if (node4 == m_host->id())
+    {
+        interval = 1;
+    }
     auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
     auto service = std::make_shared<Service>(m_host, p2pMsgHandler);
-    registerAllHandler(service);
     /// begin working
     m_host->start();
     while (true)
     {
-        sendMsg(m_params, service);
+        /// update my topics periodically
+        counter++;
+        if (counter % interval == 0)
+        {
+            std::shared_ptr<std::vector<std::string>> topics = m_host->topics();
+            std::string topic = "Topic" + to_string(counter);
+            topics->push_back(topic);
+            LOG(INFO) << "Add topic periodically, now Topics[" << topics->size() - 1
+                      << "]:" << topic;
+            m_host->setTopics(topics);
+        }
         this_thread::sleep_for(chrono::milliseconds(1000));
     }
 }
