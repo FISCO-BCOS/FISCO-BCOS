@@ -165,7 +165,7 @@ size_t dev::storage::MemoryDB::remove(const std::string &key,
 
   entries->setDirty(true);
 
-  return 1;
+  return updateEntries->size();
 }
 
 h256 dev::storage::MemoryDB::hash() {
@@ -180,10 +180,6 @@ h256 dev::storage::MemoryDB::hash() {
 
             data.insert(data.end(), fieldIt.second.begin(),
                         fieldIt.second.end());
-
-            // std::string status =
-            // boost::lexical_cast<std::string>(fieldIt.second->getStatus());
-            // data.insert(data.end(), status.begin(), status.end());
           }
         }
       }

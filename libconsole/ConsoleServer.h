@@ -50,9 +50,9 @@ private:
 	dev::storage::Storage::Ptr _stateStorage = nullptr;
 	bool _running = false;
 	KeyPair _key;
+	void printShortSingleLine(std::stringstream &ss);
 	void printSingleLine(std::stringstream &ss);
 	void printDoubleLine(std::stringstream &ss);
-	void printPrompt(std::stringstream &ss);
 };
 
 }
