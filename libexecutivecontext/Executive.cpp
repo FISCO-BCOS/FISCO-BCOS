@@ -172,49 +172,23 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s.savepoint();
-    /*
-        if (m_sealEngine.isPrecompiled(_p.codeAddress, m_envInfo.number()))
-        {
-            bigint g = m_sealEngine.costOfPrecompiled(_p.codeAddress, _p.data, m_envInfo.number());
-            if (_p.gas < g)
-            {
-                m_excepted = TransactionException::OutOfGasBase;
-                // Bail from exception.
+    if (m_envInfo.isOrginPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
+        m_envInfo.executeOrginPrecompiled(_p.codeAddress, _p.data, _p.out);
+    }
+    else if (m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
 
-                // Empty precompiled contracts need to be deleted even in case of OOG
-                // because the bug in both Geth and Parity led to deleting RIPEMD precompiled in
-       this
-                // case see
-                //
-       https://github.com/ethereum/go-ethereum/pull/3341/files#diff-2433aa143ee4772026454b8abd76b9dd
-                // We mark the account as touched here, so that is can be removed among other
-       touched
-                // empty accounts (after tx finalization)
-                // if (m_envInfo.number() >= m_sealEngine.chainParams().EIP158ForkBlock)
-                m_s.addBalance(_p.codeAddress, 0);
+        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
-                return true;  // true actually means "all finished - nothing more to be done
-       regarding
-                              // go().
-            }
-            else
-            {
-                m_gas = (u256)(_p.gas - g);
-                bytes output;
-                bool success;
-                tie(success, output) =
-                    m_sealEngine.executePrecompiled(_p.codeAddress, _p.data, m_envInfo.number());
-                size_t outputSize = output.size();
-                m_output = owning_bytes_ref{std::move(output), 0, outputSize};
-                if (!success)
-                {
-                    m_gas = 0;
-                    m_excepted = TransactionException::OutOfGas;
-                    return true;  // true means no need to run go().
-                }
-            }
-        }
-        else//*/
+        auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
+        bytesConstRef(&result).copyTo(_p.out);
+
+        LOG(DEBUG) << "Precompiled result: " << result;
+    }
+    else
     {
         m_gas = _p.gas;
         if (m_s.addressHasCode(_p.codeAddress))

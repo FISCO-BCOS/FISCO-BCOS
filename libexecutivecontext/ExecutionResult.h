@@ -25,7 +25,6 @@
 #include <libdevcore/SHA3.h>
 #include <libethcore/Common.h>
 
-
 namespace dev
 {
 namespace eth
@@ -66,10 +65,7 @@ enum class TransactionException
     UTXOLowEthVersion,
     UTXOTxError,
     UTXODBError,
-    PrecompiledError,
-    RevertInstruction,
-    InvalidZeroSignatureFormat,
-    AddressAlreadyUsed
+    PrecompiledError
 };
 
 enum class CodeDeposit

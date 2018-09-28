@@ -135,10 +135,21 @@ public:
     /// @return used gas of the evm
     u256 const& gasUsed() const { return m_gasUsed; }
 
+    dev::blockverifier::ExecutiveContext::Ptr precompiledEngine() const
+    {
+        return m_executiveEngine;
+    }
+    void setPrecompiledEngine(dev::blockverifier::ExecutiveContext::Ptr executiveEngine)
+    {
+        m_executiveEngine = executiveEngine;
+    }
+
+
 private:
     BlockHeader m_headerInfo;
     LastBlockHashesFace const& m_lastHashes;
     u256 m_gasUsed;
+    dev::blockverifier::ExecutiveContext::Ptr m_executiveEngine;
 };
 
 /// Represents a call result.
