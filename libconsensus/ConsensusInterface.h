@@ -47,7 +47,7 @@ public:
     virtual ConsensusStatus consensusStatus() const = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual int16_t const& getProtocolId() const = 0;
+    virtual int16_t const& protocolId() const = 0;
 
     /// get node account type
     virtual NodeAccountType getNodeAccountType() = 0;

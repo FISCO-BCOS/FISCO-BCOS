@@ -39,12 +39,11 @@ namespace consensus
 class Consensus : public Worker, virtual ConsensusInterface
 {
 public:
-    Consensus() = default;
     Consensus(std::shared_ptr<dev::p2p::Service>& _service,
         std::shared_ptr<dev::txpool::TxPool>& _txPool,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
-        int16_t const& _protocolId, h512s const& _minerList = h512s())
+        int16_t const& _protocolId, h512s const& _minerList)
       : Worker("consensus", 0),
         m_service(_service),
         m_txPool(_txPool),
@@ -76,7 +75,7 @@ public:
     ConsensusStatus consensusStatus() const override { return ConsensusStatus(); }
 
     /// protocol id used when register handler to p2p module
-    int16_t const& getProtocolId() const { return m_protocolId; }
+    int16_t const& protocolId() const { return m_protocolId; }
     void setMaxBlockTransactions(uint64_t const& _maxBlockTransactions)
     {
         m_maxBlockTransactions = _maxBlockTransactions;
@@ -113,16 +112,7 @@ protected:
     void doWork() override { doWork(true); }
     bool isBlockSyncing();
 
-private:
-    /// reset timestamp of block header
-    void inline resetCurrentTime()
-    {
-        uint64_t parent_time = m_blockManager->getLatestBlockHeader().timestamp();
-        m_sealingHeader.setTimestamp(max(parent_time + 1, utcTime()));
-    }
-    void inline submitToEncode();
-
-private:
+protected:
     std::shared_ptr<dev::p2p::Service> m_service;
     std::shared_ptr<dev::txpool::TxPool> m_txPool;
     std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
@@ -151,6 +141,15 @@ private:
 
     NodeAccountType m_accountType;
     u256 m_idx = 0;
+
+private:
+    /// reset timestamp of block header
+    void inline resetCurrentTime()
+    {
+        uint64_t parent_time = m_blockManager->getLatestBlockHeader().timestamp();
+        m_sealingHeader.setTimestamp(max(parent_time + 1, utcTime()));
+    }
+    void inline submitToEncode();
 };
 }  // namespace consensus
 }  // namespace dev
