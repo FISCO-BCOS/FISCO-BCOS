@@ -87,12 +87,6 @@ void Consensus::loadTransactions(uint64_t startIndex, uint64_t const& maxTransac
             LOG(INFO) << "Skipping txpool sync for a sealed block";
             return;
         }
-        /// sealed transaction over maxBlockTransactions
-        if (m_sealing.getTransactionSize() >= maxTransaction)
-        {
-            LOG(INFO) << "Skipping txq sync for full block";
-            return;
-        }
         m_sealing.appendTransactions(
             m_txPool->topTransactions(maxTransaction - startIndex + 1, startIndex));
         if (m_sealing.getTransactionSize() >= maxTransaction)
