@@ -74,6 +74,7 @@ public:
     Transactions const& transactions() const { return m_transactions; }
     Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
+    BlockHeader& header() { return m_blockHeader; }
     h256 const& headerHash() const { return m_headerHash; }
     std::vector<std::pair<u256, Signature>> const& sigList() const { return m_sigList; }
 
