@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE(call_remove) {
   bytes out = dbPrecompiled->call(context, bytesConstRef(&in));
   u256 num;
   abi.abiOut(bytesConstRef(&out), num);
-  BOOST_TEST(num == 1u);
+  BOOST_TEST(num == 0u);
 }
 
 BOOST_AUTO_TEST_CASE(call_update2) {

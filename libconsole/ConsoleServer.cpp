@@ -85,7 +85,7 @@ void ConsoleServer::onConnect(dev::channel::ChannelException e, dev::channel::Ch
 	ss << "Type 'help' for command list. Type 'quit' to quit the console." << std::endl;
 	printDoubleLine(ss);
 	ss << std::endl;
-	printPrompt(ss);
+
 	output = ss.str();
 	auto response = session->messageFactory()->buildMessage();
 	response->setData((byte*)output.data(), output.size());
@@ -191,9 +191,9 @@ std::string ConsoleServer::help(const std::vector<std::string> args) {
 	ss << "amdb.select     Query the table data." << std::endl;
 	ss << "quit            Quit the blockchain console." << std::endl;
 	ss << "help            Provide help information for blockchain console." << std::endl;
-	printDoubleLine(ss);
+	printSingleLine(ss);
 	ss << std::endl;
-	printPrompt(ss);
+
 	output = ss.str();
 	return output;
 }
@@ -217,15 +217,15 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 
 		ss << "Block number:" << _interface->number() << " at view:" << dynamic_cast<dev::eth::PBFT*>(_interface->sealEngine())->view();
 	  ss << std::endl;
-	  printSingleLine(ss);
 	}
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
 		ss << "ERROR while status | ";
 		ss << e.what();
 	}
+	printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
 
 	return output;
@@ -243,13 +243,21 @@ std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 		ss << peers.size() << std::endl;
 		for(size_t i = 0; i < peers.size(); i++)
 		{
-		  printSingleLine(ss);
+		  printShortSingleLine(ss);
 		  const p2p::NodeID nodeid = peers[i].id;
 			ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
 			ss << "Ip: " << peers[i].host << std::endl;
 			ss << "Port:" << peers[i].port << std::endl;
-			ss << "Connected: " << _host->isConnected(nodeid) << std::endl;
-			printSingleLine(ss);
+			ss << "Online: ";
+			if(_host->isConnected(nodeid))
+			{
+			  ss << "true";
+			}
+			else
+			{
+			  ss << "false";
+			}
+			ss << std::endl;
 		}
 	}
 	catch(std::exception &e) {
@@ -257,8 +265,9 @@ std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 		ss << "ERROR while p2p.list | ";
 		ss << e.what();
 	}
+	printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
 	return output;
 }
@@ -278,7 +287,7 @@ std::string ConsoleServer::pbftList(const std::vector<std::string> args) {
 		ss << pbftList.size() << std::endl;
     for(size_t i = 0; i < peers.size(); i++)
     {
-      printSingleLine(ss);
+      printShortSingleLine(ss);
       const p2p::NodeID nodeid = peers[i].id;
       iter = find(pbftList.begin(), pbftList.end(), nodeid);
       if(iter != pbftList.end())
@@ -286,24 +295,37 @@ std::string ConsoleServer::pbftList(const std::vector<std::string> args) {
         ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
         ss << "Ip: " << peers[i].host << std::endl;
         ss << "Port:" << peers[i].port << std::endl;
-        ss << "Connected: " << _host->isConnected(nodeid) << std::endl;
-        pbftList.erase(iter);
+        ss << "Online: ";
+        if(_host->isConnected(nodeid))
+        {
+          ss << "true";
+        }
+        else
+        {
+          ss << "false";
+        }
+        ss << std::endl;
       }
-      printSingleLine(ss);
     }
-    printSingleLine(ss);
-		ss << "Nodeid(local): " << (_host->id().hex()).substr(0, 8) << "..." << std::endl;
-		ss << "Ip: " << _host->listenAddress() << std::endl;
-	  ss << "Port:" << _host->listenPort() << std::endl;
-		printSingleLine(ss);
+    printShortSingleLine(ss);
+    //local node
+    const p2p::NodeID nodeid = _host->id();
+    iter = find(pbftList.begin(), pbftList.end(), nodeid);
+    if(iter != pbftList.end())
+    {
+      ss << "Nodeid(local): " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
+      ss << "Ip: " << _host->listenAddress() << std::endl;
+      ss << "Port:" << _host->listenPort() << std::endl;
+    }
 	}
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
 		ss << "ERROR while pbft.list | ";
 		ss << e.what();
 	}
+	printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
 	return output;
 }
@@ -318,7 +340,7 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
     std::map<NodeIPEndpoint, NodeID> nodes;
     printDoubleLine(ss);
     ss << "Add p2p nodes: " << std::endl;
-    printSingleLine(ss);
+    printShortSingleLine(ss);
     for(auto it: pt.get_child("p2p")) {
       if(it.first.find("node.") == 0) {
             ss << it.first << " : " << it.second.data() << std::endl;
@@ -345,7 +367,6 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
       }
     }
     _host->setStaticNodes(nodes);
-    printSingleLine(ss);
     ss << "Update p2p nodes successfully！" << std::endl;
   }
   catch(std::exception &e) {
@@ -353,8 +374,9 @@ std::string ConsoleServer::p2pUpdate(const std::vector<std::string> args) {
     ss << "ERROR while p2p.update | ";
     ss << e.what();
   }
+  printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
   return output;
 }
@@ -376,17 +398,15 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
       size_t size = entries->size();
       printDoubleLine(ss);
       ss << "Number of entry: " << size << std::endl;
-      printSingleLine(ss);
       for (size_t i = 0; i < size; ++i) {
+        printShortSingleLine(ss);
         storage::Entry::Ptr entry = entries->get(i);
         std::map<std::string, std::string> *fields = entry->fields();
         std::map<std::string, std::string>::iterator it;
         for (it = fields->begin(); it != fields->end(); it++) {
           ss << it->first << ": " << it->second << std::endl;
         }
-        printSingleLine(ss);
       }
-      output = ss.str();
     } else {
       ss << "You must specify table name and table key, for example"
          << std::endl;
@@ -397,8 +417,9 @@ std::string ConsoleServer::amdbSelect(const std::vector<std::string> args) {
     ss << "ERROR while amdb.select | ";
     ss << e.what();
   }
+  printSingleLine(ss);
   ss << std::endl;
-  printPrompt(ss);
+
   output = ss.str();
   return output;
 }
@@ -433,7 +454,6 @@ std::string ConsoleServer::pbftAdd(const std::vector<std::string> args)
             ss << "You must specify nodeID, for example" << std::endl;
             ss << "pbft.add 123456789..." << std::endl;
         }
-        printSingleLine(ss);
     }
     catch (std::exception& e)
     {
@@ -441,8 +461,9 @@ std::string ConsoleServer::pbftAdd(const std::vector<std::string> args)
         ss << "ERROR while pbft.add | ";
         ss << e.what();
     }
+    printSingleLine(ss);
     ss << std::endl;
-    printPrompt(ss);
+
     output = ss.str();
     return output;
 }
@@ -475,7 +496,6 @@ std::string ConsoleServer::pbftRemove(const std::vector<std::string> args)
             ss << "You must specify nodeID, for example" << std::endl;
             ss << "pbft.remove 123456789..." << std::endl;
         }
-        printSingleLine(ss);
     }
     catch (std::exception& e)
     {
@@ -483,12 +503,17 @@ std::string ConsoleServer::pbftRemove(const std::vector<std::string> args)
         ss << "ERROR while pbft.remove | ";
         ss <<  e.what();
     }
+    printSingleLine(ss);
     ss << std::endl;
-    printPrompt(ss);
+
     output = ss.str();
     return output;
 }
 
+void ConsoleServer::printShortSingleLine(std::stringstream &ss)
+{
+  ss << "------------------------------------" << std::endl;
+}
 void ConsoleServer::printSingleLine(std::stringstream &ss)
 {
   ss << "------------------------------------------------------------------------" << std::endl;
@@ -497,8 +522,4 @@ void ConsoleServer::printSingleLine(std::stringstream &ss)
 void ConsoleServer::printDoubleLine(std::stringstream &ss)
 {
   ss << "========================================================================" << std::endl;
-}
-void ConsoleServer::printPrompt(std::stringstream &ss)
-{
-  ss << "fisco bcos>";
 }
