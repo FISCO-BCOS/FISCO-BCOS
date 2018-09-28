@@ -12,7 +12,7 @@ macro(configure_project)
 	# features
 	eth_default_option(VMTRACE OFF)
 	eth_default_option(PROFILING OFF)
-	eth_default_option(FATDB OFF)
+	eth_default_option(FATDB ON)
 	eth_default_option(ROCKSDB OFF)
 	eth_default_option(PARANOID OFF)
 	eth_default_option(MINIUPNPC OFF)
