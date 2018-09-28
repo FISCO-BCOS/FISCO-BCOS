@@ -66,8 +66,6 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
             throw error;
         }
 
-        callback->response->Print("Service::sendMessageByNodeID msg returned:");
-
         return callback->response;
     }
     catch (std::exception& e)
@@ -112,7 +110,6 @@ void Service::asyncSendMessageByNodeID(
                 ///< update seq and length
                 message->setSeq(seq);
                 message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
-                message->Print("Service::asyncSendMessageByNodeID msg sent:");
                 std::shared_ptr<bytes> buf = std::make_shared<bytes>();
                 message->encode(*buf);
                 p->send(buf);
@@ -263,6 +260,33 @@ void Service::onTimeoutByNode(
 
 Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr message)
 {
+    LOG(INFO) << "Call Service::sendMessageByTopic";
+    try
+    {
+        SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
+        CallbackFunc fp = std::bind(
+            &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
+        asyncSendMessageByTopic(topic, message, fp, Options());
+
+        callback->mutex.lock();
+        callback->mutex.unlock();
+        LOG(INFO) << "Service::sendMessageByTopic mutex unlock.";
+
+        P2PException error = callback->error;
+        if (error.errorCode() != 0)
+        {
+            LOG(ERROR) << "Service::sendMessageByTopic error:" << error.errorCode() << " "
+                       << error.what();
+            throw error;
+        }
+
+        return callback->response;
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::sendMessageByTopic error:" << e.what();
+    }
+
     return Message::Ptr();
 }
 
@@ -294,7 +318,6 @@ void Service::asyncSendMessageByTopic(
                 ///< update seq and length
                 message->setSeq(seq);
                 message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
-                message->Print("Service::asyncSendMessageByTopic msg sent:");
                 if (callback)
                 {
                     ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
@@ -382,7 +405,29 @@ bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& n
     return false;
 }
 
-void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options) {}
+void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options)
+{
+    LOG(INFO) << "Call Service::asyncBroadcastMessage";
+    try
+    {
+        uint32_t seq = ++m_seq;
+        message->setSeq(seq);
+        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+        message->encode(*buf);
+
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            i.second->send(buf);
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::asyncBroadcastMessage error:" << e.what();
+    }
+}
 
 void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler)
 {
@@ -392,6 +437,55 @@ void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSes
 void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler)
 {
     m_p2pMsgHandler->addTopic2Handler(topic, handler);
+
+    ///< Register handler by Topic protocolID only once.
+    CallbackFuncWithSession callback;
+    if (false == m_p2pMsgHandler->getHandlerByProtocolID(dev::eth::ProtocolID::Topic, callback))
+    {
+        registerHandlerByProtoclID(dev::eth::ProtocolID::Topic,
+            [=](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
+                LOG(INFO) << "Session::onMessage, call callbackFunc by Topic protocolID.";
+
+                ///< Get topic from message buffer.
+                std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+                std::string topic;
+                msg->decodeAMOPBuffer(buffer, topic);
+                std::shared_ptr<std::vector<std::string>> topics = s->host()->topics();
+
+                ///< This above topic get this node/host attention or not.
+                bool bFind = false;
+                for (size_t i = 0; i < topics->size(); i++)
+                {
+                    if (topic == (*topics)[i])
+                    {
+                        bFind = true;
+                        break;
+                    }
+                }
+
+                if (bFind)
+                {
+                    CallbackFuncWithSession callbackFunc;
+
+                    bool ret = m_p2pMsgHandler->getHandlerByTopic(topic, callbackFunc);
+                    if (ret && callbackFunc)
+                    {
+                        LOG(INFO) << "Session::onMessage, call callbackFunc by topic=" << topic;
+                        ///< execute funtion, send response packet by user in callbackFunc
+                        ///< TODO: use threadPool
+                        callbackFunc(e, s, msg);
+                    }
+                    else
+                    {
+                        LOG(ERROR) << "Session::onMessage, handler not found by topic=" << topic;
+                    }
+                }
+                else
+                {
+                    LOG(ERROR) << "Session::onMessage, topic donot get this node/host attention.";
+                }
+            });
+    }
 }
 
 void Service::setTopicsByNode(
@@ -407,7 +501,8 @@ void Service::setTopicsByNode(
             if (i.first == _nodeID)
             {
                 i.second->setTopics(_topics);
-                LOG(INFO) << "Service::setTopicsByNode success.";
+                LOG(INFO) << "Service::setTopicsByNode completed, topics size="
+                          << getTopicsByNode(_nodeID)->size();
                 break;
             }
         }
@@ -431,7 +526,7 @@ std::shared_ptr<std::vector<std::string>> Service::getTopicsByNode(NodeID const&
             if (i.first == _nodeID)
             {
                 ret = i.second->topics();
-                LOG(INFO) << "Service::getTopicsByNode success.";
+                LOG(INFO) << "Service::getTopicsByNode success, topics size=" << ret->size();
                 break;
             }
         }
@@ -486,7 +581,7 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     {
         LOG(ERROR) << "Service::getPeersByTopic error:" << e.what();
     }
-
+    LOG(INFO) << "Service::getPeersByTopic topic=" << topic << ", peers size=" << nodeList.size();
     return nodeList;
 }
 

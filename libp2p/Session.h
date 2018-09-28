@@ -81,16 +81,15 @@ public:
 
     void send(std::shared_ptr<bytes> _msg) override;
 
-protected:
-    /// Perform a read on the socket.
-    virtual void doRead();
-    void setTest(bool const& _test) { m_test = _test; }
-    std::vector<byte> m_data;  ///< Buffer for ingress packet data.
+    ///< interface to set and get topicSeq
+    void setTopicSeq(uint32_t _topicSeq) override { m_topicSeq = _topicSeq; }
+    uint32_t topicSeq() const { return m_topicSeq; }
+
+    ///< interface to set and get topics
     void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
     {
         m_topics = _topics;
     }
-
     std::shared_ptr<std::vector<std::string>> topics() const override { return m_topics; }
 
     bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) override;
@@ -98,6 +97,21 @@ protected:
     bool eraseCallbackBySeq(uint32_t seq) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
+
+    Host* host() { return m_server; }
+
+    ///< interface to get topicSeq of counter node
+    uint32_t peerTopicSeq(NodeID const& nodeID);
+
+    ///< interface to set topicSeq/topics of counter node
+    void setTopicsAndTopicSeq(NodeID const& nodeID,
+        std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq);
+
+protected:
+    /// Perform a read on the socket.
+    virtual void doRead();
+    void setTest(bool const& _test) { m_test = _test; }
+    std::vector<byte> m_data;  ///< Buffer for ingress packet data.
 
 private:
     struct Header
@@ -163,6 +177,8 @@ private:
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
     bool m_test = false;  /// for unit test
 
+    uint32_t m_topicSeq = 0;  ///< Represents the topics situation at a certain stage. When topics
+                              ///< change, increase m_topicSeq.
     std::shared_ptr<std::vector<std::string>> m_topics;  ///< Topic being concerned by this
                                                          ///< session/node.
 

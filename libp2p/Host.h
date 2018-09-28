@@ -210,6 +210,14 @@ public:
         m_p2pMsgHandler = _p2pMsgHandler;
     }
 
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics)
+    {
+        m_topics = _topics;
+        m_topicSeq++;
+    }
+    std::shared_ptr<std::vector<std::string>> topics() const { return m_topics; };
+    uint32_t topicSeq() const { return m_topicSeq; }
+
     shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
 
 protected:  /// protected functions
@@ -252,6 +260,8 @@ protected:  /// protected functions
         std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
         NodeIPEndpoint& _nodeIPEndpoint);
     inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
+
+    void sendTopicSeq();
 
 protected:  /// protected members(for unit testing)
     /// values inited by contructor
@@ -316,6 +326,16 @@ protected:  /// protected members(for unit testing)
 
     ///< This handler will be sent to sessions before session start.
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
+
+    ///< Time we sent the last topic seq to all
+    std::chrono::steady_clock::time_point m_lastSendTopicSeq;
+
+    ///< Represents the my topics situation at a certain stage. When topics change, increase
+    ///< m_topicSeq.
+    uint32_t m_topicSeq;
+
+    ///< Topics being concerned by myself
+    std::shared_ptr<std::vector<std::string>> m_topics;
 };
 }  // namespace p2p
 
