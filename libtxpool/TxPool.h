@@ -93,8 +93,8 @@ public:
      * @param _avoid : Transactions to avoid returning.
      * @return Transactions : up to _limit transactions
      */
-    Transactions topTransactions(
-        unsigned _limit, h256Hash const& _avoid = h256Hash()) const override;
+    Transactions topTransactions(uint64_t const& _limit, uint64_t const& start = 0,
+        h256Hash const& _avoid = h256Hash()) const override;
 
     /// get all transactions(maybe blocksync module need this interface)
     Transactions pendingList() const override;

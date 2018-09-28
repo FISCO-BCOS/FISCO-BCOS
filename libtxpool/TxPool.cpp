@@ -241,15 +241,18 @@ bool TxPool::drop(h256 const& _txHash)
  * @param _avoid : Transactions to avoid returning.
  * @return Transactions : up to _limit transactions
  */
-Transactions TxPool::topTransactions(unsigned _limit, h256Hash const& _avoid) const
+Transactions TxPool::topTransactions(
+    uint64_t const& _limit, uint64_t const& start, h256Hash const& _avoid) const
 {
     ReadGuard l(m_lock);
     Transactions ret;
+    uint64_t i = 0;
     for (auto it = m_txsQueue.begin(); ret.size() < m_limit && it != m_txsQueue.end(); it++)
     {
-        if (!_avoid.count(it->sha3()))
+        if (i >= start)
         {
-            ret.push_back(*it);
+            if (!_avoid.count(it->sha3()))
+                ret.push_back(*it);
         }
     }
     return ret;
