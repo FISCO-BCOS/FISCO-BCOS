@@ -1,3 +1,5 @@
+[![image for the blockchain contest](https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master/doc/imgs/application_contest.png "点击图片报名")](https://con.geekbang.org/)
+
 # 1.项目介绍
 
 ## 1.1 项目概况
@@ -32,13 +34,9 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 ## 2.2 安装说明
 
-如果您想快速体验FISCO BCOS，我们提供了[一键快速安装部署](sample/)工具。[(FISCO BCOS One-Click Installation Manual)](sample/README_EN.md)
 
-如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](docker/)。[(FISCO BCOS Docker Installation Manual)](docker/README_EN.md)
-
-如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书](doc/manual)。[(FISCO-BCOS Manual)](doc/manual/README_EN.md)
-
-如果你想快速搭建生产上的可用环境, 请参考[FISCO-BCOS物料包工具](https://github.com/FISCO-BCOS/fisco-package-build-tool)。
+如果您想亲自动手配置、搭建FISCO BCOS1.5.0，请参考[这里](doc/manual)。
+如果您想亲自动手配置、搭建FISCO BCOS1.3.x，请参考[这里](https://fisco-bcos-documentation.readthedocs.io)。
 
 ## 2.3 实践指引
 
