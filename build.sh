@@ -100,6 +100,11 @@ install_ubuntu_deps()
 	execute_cmd "curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -"
         execute_cmd "sudo apt-get -y install nodejs"
 	check_nodejs
+	cnpm_path=`which cnpm`
+        if [ -f "${cnpm_path}" ];then
+            execute_cmd "rm -rf ${cnpm_path}"
+        fi
+    execute_cmd "sudo npm set registry https://registry.npm.taobao.org && sudo npm set disturl https://npm.taobao.org/dist && sudo npm cache clean"
 	execute_cmd "sudo npm install -g cnpm --registry=https://registry.npm.taobao.org"
 	execute_cmd "sudo cnpm install -g babel-cli babel-preset-es2017"
 	echo '{ "presets": ["es2017"] }' > ~/.babelrc
