@@ -115,20 +115,20 @@ else
 fi
 
 echo "---------- Generate node basic files ----------" && sleep 1
-execute_cmd "sh generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $listenip:$p2pport ${gflag}"
+execute_cmd "bash generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $listenip:$p2pport ${gflag}"
 echo 
 
 if [ ${enable_guomi} -eq 0 ];then
     echo "---------- Generate node cert files ----------" && sleep 1
-    execute_cmd "sh generate_node_cert.sh -a $agency_name -d $agency_dir -n $name -o $output_dir/$name/data $mflag"
+    execute_cmd "bash generate_node_cert.sh -a $agency_name -d $agency_dir -n $name -o $output_dir/$name/data $mflag"
     echo
 
     echo "---------- Generate node genesis file ----------" && sleep 1
-    execute_cmd "sh generate_genesis.sh -d $output_dir/$name -o $output_dir/$name $god_cmd"
+    execute_cmd "bash generate_genesis.sh -d $output_dir/$name -o $output_dir/$name $god_cmd"
 fi
  
 echo "---------- Deploy system contract ----------" && sleep 1
-execute_cmd "sh deploy_systemcontract.sh -d $output_dir/$name ${gflag}"
+execute_cmd "bash deploy_systemcontract.sh -d $output_dir/$name ${gflag}"
 echo
 echo  "Genesis node generate success!" && sleep 1
 bash node_info.sh -d $output_dir/$name ${gflag}
