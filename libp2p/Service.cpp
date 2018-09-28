@@ -66,8 +66,6 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
             throw error;
         }
 
-        callback->response->Print("Service::sendMessageByNodeID msg returned:");
-
         return callback->response;
     }
     catch (std::exception& e)
@@ -112,7 +110,6 @@ void Service::asyncSendMessageByNodeID(
                 ///< update seq and length
                 message->setSeq(seq);
                 message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
-                message->Print("Service::asyncSendMessageByNodeID msg sent:");
                 std::shared_ptr<bytes> buf = std::make_shared<bytes>();
                 message->encode(*buf);
                 p->send(buf);
@@ -283,8 +280,6 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
             throw error;
         }
 
-        callback->response->Print("Service::sendMessageByTopic msg returned:");
-
         return callback->response;
     }
     catch (std::exception& e)
@@ -323,7 +318,6 @@ void Service::asyncSendMessageByTopic(
                 ///< update seq and length
                 message->setSeq(seq);
                 message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
-                message->Print("Service::asyncSendMessageByTopic msg sent:");
                 if (callback)
                 {
                     ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();

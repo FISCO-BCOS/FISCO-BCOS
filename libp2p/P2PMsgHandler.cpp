@@ -123,7 +123,7 @@ void P2PMsgHandler::registerAMOP()
 {
     addProtocolID2Handler(dev::eth::ProtocolID::AMOP,
         [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
-            msg->Print("Message received in AMOP handler");
+            msg->printMsgWithPrefix("Message received in AMOP handler,");
             switch (msg->packetType())
             {
             case AMOPPacketType::SendTopicSeq:
