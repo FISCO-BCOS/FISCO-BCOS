@@ -33,7 +33,7 @@ namespace consensus
 {
 enum NodeAccountType
 {
-    NonMinerAccount = 0,
+    ObserverAccount = 0,
     MinerAccount
 };
 struct ConsensusStatus
