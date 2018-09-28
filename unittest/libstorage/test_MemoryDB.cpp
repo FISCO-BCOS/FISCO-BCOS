@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE(empty_remove) {
   Condition::Ptr condition = memDB->newCondition();
   condition->EQ("姓名", "王五");
   size_t c = memDB->remove("王五", condition);
-  BOOST_CHECK(c == 1u);
+  BOOST_TEST(c == 0u);
   memDB->clear();
 }
 
