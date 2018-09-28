@@ -263,6 +263,35 @@ void Service::onTimeoutByNode(
 
 Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr message)
 {
+    LOG(INFO) << "Call Service::sendMessageByTopic";
+    try
+    {
+        SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
+        CallbackFunc fp = std::bind(
+            &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
+        asyncSendMessageByTopic(topic, message, fp, Options());
+
+        callback->mutex.lock();
+        callback->mutex.unlock();
+        LOG(INFO) << "Service::sendMessageByTopic mutex unlock.";
+
+        P2PException error = callback->error;
+        if (error.errorCode() != 0)
+        {
+            LOG(ERROR) << "Service::sendMessageByTopic error:" << error.errorCode() << " "
+                       << error.what();
+            throw error;
+        }
+
+        callback->response->Print("Service::sendMessageByTopic msg returned:");
+
+        return callback->response;
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::sendMessageByTopic error:" << e.what();
+    }
+
     return Message::Ptr();
 }
 
@@ -382,7 +411,29 @@ bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& n
     return false;
 }
 
-void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options) {}
+void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options)
+{
+    LOG(INFO) << "Call Service::asyncBroadcastMessage";
+    try
+    {
+        uint32_t seq = ++m_seq;
+        message->setSeq(seq);
+        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+        message->encode(*buf);
+
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            i.second->send(buf);
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::asyncBroadcastMessage error:" << e.what();
+    }
+}
 
 void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler)
 {
