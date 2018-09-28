@@ -88,7 +88,7 @@ void Consensus::loadTransactions(uint64_t startIndex, uint64_t const& maxTransac
             return;
         }
         m_sealing.appendTransactions(
-            m_txPool->topTransactions(maxTransaction - startIndex + 1, startIndex));
+            m_txPool->topTransactions(maxTransaction - startIndex - 1, startIndex));
         if (m_sealing.getTransactionSize() >= maxTransaction)
             m_syncTxPool = false;
     }
