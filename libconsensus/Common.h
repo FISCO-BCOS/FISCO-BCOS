@@ -43,6 +43,29 @@ struct ConsensusStatus
 };
 
 // for pbft
+enum PBFTPacketType : byte
+{
+    PrepareReqPacket = 0x00,
+    SignReqPacket = 0x01,
+    CommitReqPacket = 0x02,
+    ViewChangeReqPacket = 0x03,
+    PBFTPacketCount
+};
+struct PBFTMsgPacket
+{
+    u256 node_idx;
+    h512 node_id;
+    unsigned packet_id;
+    bytes data;  // rlp data
+    u256 timestamp;
+
+    PBFTMsgPacket() : node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(utcTime()) {}
+    PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data)
+      : node_idx(_idx), node_id(_id), packet_id(_pid), data(_data.toBytes()), timestamp(utcTime())
+    {}
+};
+
+// for pbft
 struct PBFTMsg
 {
     u256 height = Invalid256;
@@ -57,13 +80,15 @@ struct PBFTMsg
     {
         RLPStream tmp;
         streamRLPFields(tmp);
-        tmp.swapOut(encodedBytes);
+        RLPStream list_rlp;
+        list_rlp.appendList(1).append(tmp.out());
+        list_rlp.swapOut(encodedBytes);
     }
 
-    virtual void decode(bytesConstRef data)
+    virtual void decode(std::string& data, size_t const& index = 0)
     {
         RLP rlp(data);
-        populate(rlp);
+        populate(rlp[index]);
     }
 
     void streamRLPFields(RLPStream& _s) const
