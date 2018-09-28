@@ -146,23 +146,23 @@ if [ ${enable_guomi} -eq 0 ];then
     [ -z $agency_dir ] && help 'Error! Please specify <agency dir> using -d, using ${agency_name} by default' && agency_dir="${agency_name}"
     
     echo "---------- Generate node basic files ----------" && sleep 1
-    execute_cmd "sh generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $peers -x $systemproxyaddress "
+    execute_cmd "bash generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $peers -x $systemproxyaddress "
     echo 
 
     echo "---------- Generate node cert files ----------" && sleep 1
-    execute_cmd "sh generate_node_cert.sh -a $agency_name -d $agency_dir -n $name -o $output_dir/$name/data $mflag"
+    execute_cmd "bash generate_node_cert.sh -a $agency_name -d $agency_dir -n $name -o $output_dir/$name/data $mflag"
     echo
 
     echo "---------- Generate node genesis file ----------" && sleep 1
-    execute_cmd "sh generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -s ${god_address}"
+    execute_cmd "bash generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -s ${god_address}"
 
     echo
     echo  "Node generate success!" && sleep 1
 else
     LOG_INFO "---------- Generate node basic files ----------"
-    execute_cmd "sh generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $peers -x $systemproxyaddress -g"
+    execute_cmd "bash generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $peers -x $systemproxyaddress -g"
     LOG_INFO "---------- Generate node genesis file ----------"
-    execute_cmd "sh generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -r ${god_address} -g"
+    execute_cmd "bash generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -r ${god_address} -g"
 fi
 
 

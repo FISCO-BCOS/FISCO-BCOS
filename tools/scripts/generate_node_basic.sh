@@ -102,7 +102,7 @@ check_node_running() {
     if [ $agent_pid ]; then
         echo "Attention! Node is running. Node will be destroied. Continue?"
         yes_go_other_exit
-        set +e && sh stop.sh && set -e
+        set +e && bash stop.sh && set -e
     fi
     cd $pre_dir
 }
