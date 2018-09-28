@@ -114,7 +114,7 @@ check_node_running() {
         yes_go_other_exit
 
         echo "Starting node..."
-        set +e && sh start.sh && set -e
+        set +e && bash start.sh && set -e
         sleep 5
     fi
     cd $pre_dir

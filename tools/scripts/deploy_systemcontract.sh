@@ -110,7 +110,7 @@ start_node() {
         echo "Attention! Node is running. Node will be stopped after deployment. Continue to deploy?"
         yes_go_other_exit
     else
-        sh start.sh
+        bash start.sh
     fi
     cd $pre_dir
 }
@@ -135,7 +135,7 @@ deploy_systemcontract_using_nodejs() {
 stop_node() {
     node_dir=$1
     cd $node_dir
-    set +e && sh stop.sh && set -e
+    set +e && bash stop.sh && set -e
     cd -
 }
 

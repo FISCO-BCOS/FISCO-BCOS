@@ -5,7 +5,7 @@
 #3 如遇到中途依赖库下载失败，一般和网络状况有关，请到https://github.com/bcosorg/lib找到相应的库，手动安装成功后，再执行此脚本
 #
 
-#!/bin/sh
+#!/bin/bash
 
 current_dir=`pwd`
 
@@ -94,7 +94,11 @@ install_centos_package()
 #install ubuntu package
 install_ubuntu_deps()
 {
-	install_ubuntu_package "cmake" "npm" "openssl" "libssl-dev" "libkrb5-dev" "nodejs-legacy" "jq"
+	#delete the default nodejs of ubuntu
+        execute_cmd "sudo apt -y remove nodejs"
+	install_ubuntu_package "cmake" "openssl" "libssl-dev" "libkrb5-dev" "jq"
+	execute_cmd "curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -"
+        execute_cmd "sudo apt-get -y install nodejs"
 	check_nodejs
 	execute_cmd "sudo npm install -g cnpm --registry=https://registry.npm.taobao.org"
 	execute_cmd "sudo cnpm install -g babel-cli babel-preset-es2017"
