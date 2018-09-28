@@ -36,6 +36,11 @@ namespace dev
 class ConsensusStatus;
 namespace consensus
 {
+struct Sealing
+{
+    Block sealing_block;
+    /// TODO, ExecutiveContext
+};
 class Consensus : public Worker, virtual ConsensusInterface
 {
 public:
@@ -97,18 +102,34 @@ public:
 
 protected:
     /// sealing block
-    virtual bool shouldSeal() { return false; }
-    virtual void calculateMaxPackTxNum(uint64_t& tx_num) {}
-    virtual bool generateBlock(
-        bytes& _block_data, uint64_t const& tx_num, uint64_t const& max_block_can_seal);
-    virtual void handleBlock(BlockHeader& blockHeader, bytesConstRef block_data);
-    virtual bool shouldWaitForNextInterval() { return false; }
+    virtual bool shouldSeal();
+    virtual bool shouldWait(bool const& wait);
+    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
+    {
+        uint64_t tx_num = m_sealing.sealing_block.getTransactionSize();
+        return (tx_num >= maxTxsCanSeal);
+    }
+    virtual uint64_t calculateMaxPackTxNum() { return m_maxBlockTransactions; }
+    virtual void handleBlock();
     virtual void doWork(bool wait);
-
     /// load transactions from transaction pool
-    void loadTransactions(uint64_t startIndex, uint64_t const& maxBlockTransactions);
+    void loadTransactions(uint64_t const& maxBlockTransactions, uint64_t const& curTxsNum);
     void doWork() override { doWork(true); }
-    bool isBlockSyncing();
+    bool inline isBlockSyncing();
+
+    /// functions for usage
+    void inline setSealingRoot(
+        h256 const& trans_root, h256 const& receipt_root, h256 const& state_root);
+    void inline appendSealingExtraData(bytes const& _extra);
+    void inline ResetSealingHeader();
+    virtual void executeBlock();
+    bool encodeBlock(bytes& blockBytes);
+    /// reset timestamp of block header
+    void inline resetCurrentTime()
+    {
+        uint64_t parent_time = m_blockManager->getLatestBlockHeader().timestamp();
+        m_sealing.sealing_block.header().setTimestamp(max(parent_time + 1, utcTime()));
+    }
 
 protected:
     std::shared_ptr<dev::p2p::Service> m_service;
@@ -120,8 +141,7 @@ protected:
     uint64_t m_maxBlockTransactions = 1000;
 
     /// current sealing block
-    Block m_sealing;
-    BlockHeader m_sealingHeader;
+    Sealing m_sealing;
     /// lock on m_sealing
     mutable SharedMutex x_sealing;
     /// atomic value represents that whether is calling syncTransactionQueue now
@@ -139,15 +159,6 @@ protected:
 
     NodeAccountType m_accountType;
     u256 m_idx = 0;
-
-private:
-    /// reset timestamp of block header
-    void inline resetCurrentTime()
-    {
-        uint64_t parent_time = m_blockManager->getLatestBlockHeader().timestamp();
-        m_sealingHeader.setTimestamp(max(parent_time + 1, utcTime()));
-    }
-    void inline submitToEncode();
 };
 }  // namespace consensus
 }  // namespace dev
