@@ -46,8 +46,9 @@ public:
      * @param _avoid : Transactions to avoid returning.
      * @return Transactions : up to _limit transactions
      */
-    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit,
-        uint64_t const& start = 0, h256Hash const& _avoid = h256Hash()) const = 0;
+    virtual dev::eth::Transactions topTransactions(
+        uint64_t const& _limit, h256Hash const& _avoid) = 0;
+    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
 
     /// get all current transactions(maybe blocksync module need this interface)
     virtual dev::eth::Transactions pendingList() const = 0;
