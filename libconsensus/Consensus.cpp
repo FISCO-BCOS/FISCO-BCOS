@@ -32,12 +32,11 @@ namespace consensus
 /// start the consensus module
 void Consensus::start()
 {
-    if (m_startSeal)
+    if (m_startConsensus)
     {
         LOG(WARNING) << "Consensus module has already been started, return directly";
         return;
     }
-    doWork(false);
     startWorking();
 }
 
@@ -45,15 +44,28 @@ void Consensus::start()
 void Consensus::doWork(bool wait)
 {
     bool sealed = false;
-    bool condition = true;
     DEV_READ_GUARDED(x_sealing)
     sealed = m_sealing.isSealed();
     /// TODO: m_remoteWorking
     bool t = false;
-    if (!sealed && !m_blockSync->isSyncing() && m_syncTxPool.compare_exchange_strong(t, false))
-        syncTxPool(m_maxBlockTransactions);
-    /// sealing block
-    rejigSealing();
+    if (!sealed && m_startConsensus && getNodeAccountType() == NodeAccountType::MinerAccount &&
+        shouldSeal())
+    {
+        uint64_t tx_num;
+        /// obtain the transaction num should be packed
+        uint64_t max_block_can_seal = m_maxBlockTransactions;
+        calculateMaxPackTxNum(max_block_can_seal);
+        /// get current transaction num
+        DEV_READ_GUARDED(x_sealing)
+        tx_num = m_sealing.getTransactionSize();
+        /// generate block
+        bytes block_data;
+        bool ret = generateBlock(block_data, tx_num, max_block_can_seal);
+        if (ret == true)
+        {
+            handleBlock(m_sealingHeader, ref(block_data));
+        }
+    }
     DEV_READ_GUARDED(x_sealing)
     sealed = m_sealing.isSealed();
     /// wait for 1s even the block has been sealed
@@ -65,7 +77,7 @@ void Consensus::doWork(bool wait)
 }
 
 /// sync transactions from txPool
-void Consensus::syncTxPool(uint64_t const& maxBlockTransactions)
+void Consensus::loadTransactions(uint64_t startIndex, uint64_t const& maxTransaction)
 {
     DEV_WRITE_GUARDED(x_sealing)
     {
@@ -76,13 +88,14 @@ void Consensus::syncTxPool(uint64_t const& maxBlockTransactions)
             return;
         }
         /// sealed transaction over maxBlockTransactions
-        if (m_sealing.getTransactionSize() >= maxBlockTransactions)
+        if (m_sealing.getTransactionSize() >= maxTransaction)
         {
             LOG(INFO) << "Skipping txq sync for full block";
             return;
         }
-        m_sealing.appendTransactions(m_txPool->topTransactions(maxBlockTransactions));
-        if (m_sealing.getTransactionSize() >= maxBlockTransactions)
+        m_sealing.appendTransactions(
+            m_txPool->topTransactions(maxTransaction - startIndex + 1, startIndex));
+        if (m_sealing.getTransactionSize() >= maxTransaction)
             m_syncTxPool = false;
     }
 }
@@ -102,46 +115,33 @@ void Consensus::submitToEncode()
 }
 
 /// sealing function
-bool Consensus::generateSeal(bytes& _block_data)
+bool Consensus::generateBlock(
+    bytes& _block_data, uint64_t const& tx_num, uint64_t const& max_block_can_seal)
 {
-    if (m_startSeal && getNodeAccountType() == NodeAccountType::MinerAccount && !isBlockSyncing() &&
-        shouldSeal())
+    DEV_WRITE_GUARDED(x_sealing)
     {
-        DEV_WRITE_GUARDED(x_sealing)
+        bool t = true;
+        if (tx_num < max_block_can_seal && !m_blockSync->isSyncing() &&
+            m_syncTxPool.compare_exchange_strong(t, false))
+            loadTransactions(tx_num, max_block_can_seal);
+        if (shouldWaitForNextInterval())
         {
-            if (m_sealing.isSealed())
-            {
-                LOG(WARNING) << "Forbit to seal sealed block ...";
-                return false;
-            }
-            uint64_t txNum = m_sealing.getTransactionSize();
-            uint64_t packTxNum = m_maxBlockTransactions;
-            updatePackedTxNum(packTxNum);
-            bool t = true;
-            if (txNum < packTxNum && !m_blockSync->isSyncing() &&
-                m_syncTxPool.compare_exchange_strong(t, false))
-                syncTxPool(packTxNum);
-            txNum = m_sealing.getTransactionSize();
-            if (shouldWaitForNextInterval())
-            {
-                LOG(DEBUG) << "Wait for next interval, tx:" << txNum;
-                return false;
-            }
-            submitToEncode();
-            m_sealingHeader = m_sealing.blockHeader();
-            try
-            {
-                m_sealing.encode(_block_data);
-            }
-            catch (std::exception& e)
-            {
-                LOG(ERROR) << "ERROR: sealBlock failed";
-                return false;
-            }
-            return true;
+            LOG(DEBUG) << "Wait for next interval, tx:" << m_sealing.getTransactionSize();
+            return false;
+        }
+        submitToEncode();
+        m_sealingHeader = m_sealing.blockHeader();
+        try
+        {
+            m_sealing.encode(_block_data);
+        }
+        catch (std::exception& e)
+        {
+            LOG(ERROR) << "ERROR: sealBlock failed";
+            return false;
         }
     }
-    return false;
+    return true;
 }
 
 /// check whether the blocksync module is syncing
@@ -154,7 +154,7 @@ bool Consensus::isBlockSyncing()
 /// stop the consensus module
 void Consensus::stop()
 {
-    m_startSeal = false;
+    m_startConsensus = false;
     doneWorking();
     stopWorking();
 }

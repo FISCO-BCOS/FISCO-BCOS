@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     BOOST_CHECK(top_transactions.size() == m_txPool->pendingSize());
     h256Hash avoid;
     avoid.insert(pending_list[1].sha3());
-    top_transactions = m_txPool->topTransactions(20, avoid);
+    top_transactions = m_txPool->topTransactions(20, 0, avoid);
     BOOST_CHECK(top_transactions.size() == 0);
     /// check getProtocol id
     BOOST_CHECK(m_txPool->getProtocolId() == dev::eth::ProtocolID::TxPool);

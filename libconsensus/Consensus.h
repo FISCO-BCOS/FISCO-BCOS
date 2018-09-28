@@ -97,18 +97,16 @@ public:
 
 protected:
     /// sealing block
-    virtual void rejigSealing(){};
     virtual bool shouldSeal() { return false; }
-    /// for pbft
-    virtual void updatePackedTxNum(uint64_t& tx_num) {}
-    /// for pbft
+    virtual void calculateMaxPackTxNum(uint64_t& tx_num) {}
+    virtual bool generateBlock(
+        bytes& _block_data, uint64_t const& tx_num, uint64_t const& max_block_can_seal);
+    virtual void handleBlock(BlockHeader& blockHeader, bytesConstRef block_data);
     virtual bool shouldWaitForNextInterval() { return false; }
-    /// fetch transactions from transaction pool
-    virtual bool generateSeal(bytes& _block_data);
     virtual void doWork(bool wait);
 
-    /// sync transactions from txPool
-    void syncTxPool(uint64_t const& maxBlockTransactions);
+    /// load transactions from transaction pool
+    void loadTransactions(uint64_t startIndex, uint64_t const& maxBlockTransactions);
     void doWork() override { doWork(true); }
     bool isBlockSyncing();
 
@@ -135,7 +133,7 @@ protected:
     ///< Has the remote worker recently been reset?
     bool m_remoteWorking = false;
     /// True if we /should/ be sealing.
-    bool m_startSeal = false;
+    bool m_startConsensus = false;
 
     std::vector<bytes> m_extraData;
 
