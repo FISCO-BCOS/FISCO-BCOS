@@ -102,7 +102,7 @@ install_ubuntu_deps()
 	check_nodejs
 	cnpm_path=`which cnpm`
         if [ -f "${cnpm_path}" ];then
-            execute_cmd "rm -rf ${cnpm_path}"
+            execute_cmd "sudo rm -rf ${cnpm_path}"
         fi
     execute_cmd "sudo npm set registry https://registry.npm.taobao.org && sudo npm set disturl https://npm.taobao.org/dist && sudo npm cache clean"
 	execute_cmd "sudo npm install -g cnpm --registry=https://registry.npm.taobao.org"
@@ -193,7 +193,7 @@ build_ubuntu_source()
 	else
 		execute_cmd "cmake -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
 	fi
-	execute_cmd "make && make install"
+	execute_cmd "make && sudo make install"
 }
 
 build_centos_source()
@@ -290,7 +290,7 @@ install_all()
 	### install all deps
 	install_all_deps
 	### build source
-	build_source
+	#build_source
 	### init nodejs
 	nodejs_init
 	### check
