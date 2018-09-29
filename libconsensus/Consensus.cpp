@@ -103,6 +103,13 @@ void inline Consensus::ResetSealingHeader()
     m_sealing.sealing_block.header().setExtraData(m_extraData);
 }
 
+void inline Consensus::ResetSealingBlock()
+{
+    m_sealing.sealing_block.resetCurrentBlock();
+    ResetSealingHeader();
+    m_transactionSet.clear();
+}
+
 void inline Consensus::appendSealingExtraData(bytes const& _extra)
 {
     m_sealing.sealing_block.header().appendExtraDataArray(_extra);

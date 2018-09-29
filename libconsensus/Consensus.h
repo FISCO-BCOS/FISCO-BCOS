@@ -128,6 +128,7 @@ protected:
         h256 const& trans_root, h256 const& receipt_root, h256 const& state_root);
     void inline appendSealingExtraData(bytes const& _extra);
     void inline ResetSealingHeader();
+    void inline ResetSealingBlock();
     virtual void executeBlock();
     bool encodeBlock(bytes& blockBytes);
     /// reset timestamp of block header
