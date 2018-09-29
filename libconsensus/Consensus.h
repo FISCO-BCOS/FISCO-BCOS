@@ -39,6 +39,8 @@ namespace consensus
 struct Sealing
 {
     Block sealing_block;
+    /// hash set for filter fetched transactions
+    h256Hash m_transactionSet;
     /// TODO, ExecutiveContext
 };
 class Consensus : public Worker, virtual ConsensusInterface
@@ -63,11 +65,7 @@ public:
                 InvalidProtocolID() << errinfo_comment("Protocol id must be larger than 0"));
     }
 
-    virtual ~Consensus()
-    {
-        m_transactionSet.clear();
-        stop();
-    }
+    virtual ~Consensus() { stop(); }
     /// start the consensus module
     void start() override;
     /// stop the consensus module
@@ -166,8 +164,6 @@ protected:
 
     NodeAccountType m_accountType;
     u256 m_idx = 0;
-    /// hash set for filter fetched transactions
-    h256Hash m_transactionSet;
 };
 }  // namespace consensus
 }  // namespace dev

@@ -89,7 +89,7 @@ void Consensus::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
     m_sealing.sealing_block.appendTransactions(
-        m_txPool->topTransactions(transToFetch, m_transactionSet, true));
+        m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
 
 void inline Consensus::ResetSealingHeader()
@@ -107,7 +107,7 @@ void inline Consensus::ResetSealingBlock()
 {
     m_sealing.sealing_block.resetCurrentBlock();
     ResetSealingHeader();
-    m_transactionSet.clear();
+    m_sealing.m_transactionSet.clear();
 }
 
 void inline Consensus::appendSealingExtraData(bytes const& _extra)
