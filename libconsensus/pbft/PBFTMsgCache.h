@@ -19,17 +19,17 @@
  * @brief : define classes to manager pbft back keys
  * @file: PBFTMsgCache.h
  * @author: yujiechen
- * 
+ *
  * @date: 2018-09-29
- * 
+ *
  */
 
 #pragma once
 #include <libconsensus/Common.h>
-#include <libdevcore/easylog.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
+#include <libdevcore/easylog.h>
 #include <unordered_map>
 namespace dev
 {
@@ -54,7 +54,7 @@ public:
         case ViewChangeReqPacket:
             insertMessage(x_knownViewChange, m_knownViewChange, c_knownViewChange, key);
         default:
-            LOG(WARNING) << "Invalid packet type:"<<type;
+            LOG(WARNING) << "Invalid packet type:" << type;
             return false;
         }
     }
@@ -72,7 +72,7 @@ public:
         case ViewChangeReqPacket:
             return exists(x_knownViewChange, m_knownViewChange, key);
         default:
-            LOG(WARNING) << "Invalid packet type:"<<type;
+            LOG(WARNING) << "Invalid packet type:" << type;
             return false;
         }
     }
