@@ -13,7 +13,6 @@ find_package(Dev)
 target_include_directories(p2p PRIVATE ..)
 target_link_libraries(p2p ${Dev_DEVCORE_LIBRARIES})
 target_link_libraries(p2p ${Dev_DEVCRYPTO_LIBRARIES})
-target_link_libraries(p2p crypto)
-target_link_libraries(p2p dl)
+target_link_libraries(p2p crypto pthread dl)
 
 install(TARGETS p2p RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
