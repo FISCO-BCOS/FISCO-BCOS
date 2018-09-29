@@ -5,7 +5,7 @@ name=`pwd`/$1
 if [ -z "$name" ];  then
     echo "Usage:node.sh nodePath"
     echo "nodePath is relative to the current path"
-elif [  -d "$name" ]; then
+elif [ -d "$name" ]; then
     echo "$name DIR exist! please clean all old DIR!"
 else
     cat << EOF > cert.cnf

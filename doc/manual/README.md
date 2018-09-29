@@ -20,7 +20,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 新版本的设计原则是用户体验优先，在个这个原则下大幅度简化了1.3.x版本的操作步骤，减少了1.3.x版本的依赖，尤其是添加了二进制发行版，让用户可以跳过复杂的编译阶段。另一方面新版本添加了一些新的极其好用的功能，简要概括如下：
 - [AMDB（Advanced Mass Database）](../AMDB使用说明文档.md)以支持海量数据存储
 - 新增[初版控制台](#第三章-使用控制台)以方便查看节点信息，不再依赖nodejs脚本
-- 更改配置文件格式为ini以方便查错
+- 更改配置文件格式为`ini`以方便查错
 - 简化1.3.x部署系统合约相关步骤
 
 在用户体验优先的原则下，新版本为了简化操作步骤导致与1.3.x版本有所差异，新版本与1.3.x版本在数据上兼容，而在连接层不兼容。1.3.x作为已经稳定的版本，会继续维护和优化（[1.3.x版本文档](https://fisco-bcos-documentation.readthedocs.io)）但不会加入AMDB特性。如开发和生产上已经使用了1.3.x的版本，可继续保持在1.3.x的版本上运行，如需使用AMDB支持海量数据存储等特性，可使用1.5版本。
@@ -37,8 +37,8 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 - [第一章 FISCO BCOS快速部署](#第一章-fisco-bcos快速部署)
 - [第二章 手工部署单节点区块链网络](#第二章-手工部署单节点区块链网络)
 - [第三章 使用控制台](#第三章-使用控制台)
-- [第四章 部署合约、调用合约](#第四章-部署合约调用合约)
-- [第五章 多记账节点组网](#第五章-多记账节点组网)
+- [第四章 节点管理](#第四章-节点管理)
+- [第五章 部署合约、调用合约](#第五章-部署合约调用合约)
 - [第六章 FISCO BCOS 特性](#第六章-fisco-bcos-特性)
 - [第七章 附录](#第七章-附录)
 
@@ -126,6 +126,7 @@ tail -f log/info* |grep ++++  #查看日志输出
 ```bash
 # FISCO-BCOS/ 目录下操作
 curl -o fisco-bcos https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev-1.5/bin/fisco-bcos
+# 添加可执行权限
 chmod a+x fisco-bcos
 ```
 
@@ -138,7 +139,6 @@ chmod a+x fisco-bcos
 ```bash
 # clone源码
 git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git
-
 # 切换到源码根目录
 cd FISCO-BCOS 
 git checkout dev-1.5
@@ -207,7 +207,9 @@ cd ../  # 回到scripts目录
 
 ```shell
 # 假定当前目录为FISCO-BCOS/scripts/ 拷贝相关文件
-cp ../fisco-bcos ../genesis.json ../config.conf ../log.conf start.sh stop.sh nodes/node-0
+cp ../genesis.json ../config.conf ../log.conf start.sh stop.sh nodes/node-0
+# 拷贝fisco-bcos，如果是下载的fisco-bcos请执行cp ../fisco-bcos nodes/node-0
+cp ../build/eth/fisco-bcos nodes/node-0
 ```
 
 #### 2.5.1 获取NodeID
@@ -229,7 +231,7 @@ openssl ec -in nodes/node-0/data/node.key -text 2> /dev/null | perl -ne '$. > 6 
 
 ```bash
 # 假设当前目录为FISCO-BCOS/scripts
-# 获取NodeID
+# 获取NodeID并复制
 cat nodes/node-0/data/node.nodeid
 # 修改 nodes/node-0/config.conf中miner.0=${NodeID}
 vim nodes/node-0/config.conf
@@ -268,7 +270,7 @@ vim nodes/node-0/config.conf
 	key=${DATAPATH}/node.key
 	; 配置节点的证书 
 	cert=${DATAPATH}/node.crt
-	; 配置节点的CA证书
+	; 配置链的CA证书
 	ca_cert=${DATAPATH}/ca.crt
 
 ; 状态数据库配置
@@ -284,6 +286,10 @@ vim nodes/node-0/config.conf
 
 log.conf中配置节点日志生成的格式和路径，使用默认即可。
 log.conf其它字段说明请参看[附录：log.conf说明](#75-logconf说明)
+
+#### 2.5.3 AMDB数据代理配置[可选]
+
+**当`config.conf`中配置项`statedb.type=amop`时**，[参考这里](../AMDB使用说明文档.md)配置并启动AMDB数据代理。
 
 ### 2.6 启动节点
 
@@ -319,17 +325,9 @@ tail -f log/info* |grep ++++
 # kill -9 13432 #13432是查看到的进程号
 ```
 
-> 几秒后可看到不断刷出打包信息。
-
-```log
-INFO|2017-12-12 17:52:16:877|+++++++++++++++++++++++++++ Generating seal ondcae019af78cf04e17ad908ec142ca4e25d8da14791bda50a0eeea782ebf3731#1tx:0,maxtx:1000,tq.num=0time:1513072336877
-INFO|2017-12-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9b23b0733ac47fe5385072f80fc036b7517abae0a3e7762739cc66bc7dca#1tx:0,maxtx:1000,tq.num=0time:1513072337887
-INFO|2017-12-12 17:52:18:897|+++++++++++++++++++++++++++ Generating seal onb5b38c7a380b13b2e46fecbdca0fac5473f4cbc054190e90b8bd4831faac4521#1tx:0,maxtx:1000,tq.num=0time:1513072338897
-```
-
 ### 2.7 验证节点启动
 
-#### 2.7.1 验证进程
+1. 验证进程
 
 ```bash
 ps -ef |grep fisco-bcos
@@ -340,7 +338,7 @@ ps -ef |grep fisco-bcos
 app 19390     1  1 17:52 ?        00:00:05 fisco-bcos --config config.conf --genesis genesis.json 
 ```
 
-#### 2.7.2 查看日志输出
+2. 查看日志输出
 
 查看指定节点的共识信息（如nodes/node-0）
 
@@ -398,7 +396,7 @@ help                   Provide help information for blockchain console.
 
 #### 3.2.2 status命令
 
-运行status命令，查看节点的状态，块高和view:
+运行命令，查看节点的状态，块高和view:
 
 ```bash
 status
@@ -410,7 +408,7 @@ Block number:16 at view:1110
 
 #### 3.2.3 p2p.list命令
 
-运行p2p.list命令，查看与本节点链接的其他节点:
+运行命令，查看与本节点链接的其他节点:
 
 ```bash
 p2p.list
@@ -438,7 +436,7 @@ Connected: 1
 
 #### 3.2.4 p2p.update命令
 
-运行p2p.update命令，动态加载配置文件中的P2P信息，与新加入的节点建立连接:
+运行命令，动态加载配置文件中的P2P信息，与新加入的节点建立连接:
 
 ```bash
 Add p2p nodes:
@@ -451,7 +449,7 @@ Update p2p nodes successfully！
 
 #### 3.2.5 pbft.list命令
 
-运行pbft.list命令，查看网络中的共识节点:
+运行命令，查看网络中的共识节点:
 
 ```bash
 pbft.list
@@ -484,20 +482,20 @@ Port:30300
 
 #### 3.2.6 pbft.add命令
 
-运行pbft.add命令添加共识节点，该指令需要NodeID作为参数，新添加的共识节点将在下个块开始生效。操作完该指令后，请启动新添加的共识节点，并在新添加的共识节点配置文件`P2P.node.x`中配置已有节点的IP和P2P端口。
+运行命令添加共识节点，该指令需要NodeID作为参数，新添加的共识节点将在下个块开始生效。操作完该指令后，请启动新添加的共识节点，并在新添加的共识节点配置文件`P2P.node.x`中配置已有节点的IP和P2P端口。
 ```bash
 # 例如添加一个新的共识节点
 pbft.add 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
-Add consensus node successfully!
+Tx(Add consensus node) send successfully!
 ----------------------------------------------------------------
 ```
 
 #### 3.2.7 pbft.remove命令
 
-运行pbft.add命令移除共识节点，该指令需要NodeID作为参数，被移除的节点将转为观察节点。
+运行命令移除共识节点，该指令需要NodeID作为参数，被移除的节点将转为观察节点。
 ```bash
 pbft.remove 44d80249498aaa4384b5d1393b93b586415a9333e1d85a8dd18ab1618e391c86e7acb9b5082e12cdfd352e49bd724f83d4b8267f5de552aa420b43a8b834e48e
-Remove consensus node successfully!
+Tx(Remove consensus node) send successfully!
 ----------------------------------------------------------------
 ```
 
@@ -545,13 +543,123 @@ quit
 Connection closed by foreign host.
 ```
 
-## 第四章 部署合约、调用合约
+## 第四章 节点管理
+
+目前FISCO-BCOS网络中的节点有共识节点和观察节点两种身份，本章将分别介绍如何新添加共识节点、新添加观察节点以及节点类型转换。
+
+### 4.1 新加观察节点
+
+1. 请参考[第二章](#第二章-手工部署单节点区块链网络)操作准备`node-1`节点环境。**节点必须使用已有节点的链CA证书来签发节点证书**。
+1. 拷贝`node-0/config.conf,node-0/genesis.json`文件到`node-1/`
+1. 修改`node-1/config.conf`文件中监听的IP和端口
+1. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
+1. 验证节点是否已加入网络，参考[第三章](#第三章-使用控制台)中`status`和`p2p.list`。
+
+下面以添加`node-1`操作为例：
+
+- 准备`node-1`节点环境
+
+```bash
+# 假设当前在FISCO-BCOS/scripts目录下，已经按之前步骤建立了nodes/node-0
+cd nodes
+# 生成node-1证书相关文件
+bash ../node.sh node-1
+# 拷贝node-0的配置文件
+cp node-0/config.conf node-0/genesis.json node-0/start.sh node-0/stop.sh node-1/
+```
+
+- 修改config.conf配置文件，主要修改了监听的端口，其他配置内容与`node-0/config.conf`相同。
+
+```bash
+[rpc]
+    listen_ip=127.0.0.1
+    listen_port=30305
+    http_listen_port=30306
+    console_port=30307
+[p2p]
+    listen_ip=0.0.0.0
+    listen_port=30304
+    node.0=127.0.0.1:30300
+    node.1=127.0.0.1:30304
+```
+
+- 启动节点node-1
+```bash
+cd node-1
+bash start.sh
+```
+
+- 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
+- 验证节点是否已加入网络
+```bash
+# 连接控制台
+telnet 127.0.0.1 30307
+# 查看连接的节点
+p2p.list
+# 可以看到已经连接了节点node-0
+p2p.list
+========================================================================
+Peers number: 1
+------------------------------------
+Nodeid: d23a6bad...
+Ip: 0.0.0.0
+Port:30300
+Online: true
+------------------------------------------------------------------------
+```
+
+### 4.2 新加共识节点
+
+在已经运行的网络中添加共识节点，参考以下步骤操作：
+1. 参考上一节[新加观察节点](#41-新加观察节点)，首先将新节点添加为观察节点
+1. 使用[控制台](#第三章-使用控制台)中`pbft.add`指令添加新节点的NodeID到网络中
+1. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
+1. 验证节点是否是共识节点，参考[第三章](#第三章-使用控制台)中`pbft.list`。
+
+下面以将`node-1`为例操作（准备`node-1`环境以及做为观察节点加入网络不再赘述）：
+```bash
+# 假设node-1已经按照上一节操作，作为观察节点加入了网络
+pbft.list
+========================================================================
+Consensus nodes number: 1
+------------------------------------
+Nodeid: da7ffab9...
+Ip: 0.0.0.0
+Port:30300
+Online: true
+------------------------------------
+------------------------------------------------------------------------
+```
+
+- 将`node-1`添加到共识节点列表
+```bash
+pbft.add 68af18b8665aa0737f0a435bee975d9667405ee96696c7fdeee4b2164eb51c859bffb37f54dcb1ff28aa51f45d28686605c025cb46f9f8d8a2e6c3597c55d0fe
+========================================================================
+Tx(Add consensus node) send successfully!
+------------------------------------------------------------------------
+# 查看共识节点列表
+pbft.list
+========================================================================
+Consensus nodes number: 2
+------------------------------------
+Nodeid: 68af18b8...
+Ip: 0.0.0.0
+Port:30304
+Online: true
+------------------------------------
+Nodeid(local): da7ffab9...
+Ip: 0.0.0.0
+Port:30300
+------------------------------------------------------------------------
+```
+
+## 第五章 部署合约、调用合约
 
 智能合约是部署在区块链上的应用。开发者可根据自身需求在区块链上部署各种智能合约。
 
-智能合约通过solidity语言实现，用fisco-solc进行编译。本章以HelloWorld.sol智能合约为例介绍智能合约的部署和调用。
+智能合约通过solidity语言实现，用fisco-solc进行编译。本章以`HelloWorld.sol`智能合约为例介绍智能合约的部署和调用。
 
-### 4.1 配置
+### 5.1 配置
 
 > 安装依赖环境
 
@@ -610,9 +718,9 @@ vim ../web3lib/config.js
 var proxy="http://127.0.0.1:30302";
 ```
 
-### 4.2 部署合约
+### 5.2 部署合约
 
-#### 4.2.1 实现合约
+#### 5.2.1 实现合约
 
 ```shell
 cd FISCO-BCOS/tool
@@ -637,7 +745,7 @@ contract HelloWorld{
 }
 ```
 
-#### 4.2.2 编译+部署合约
+#### 5.2.2 编译+部署合约
 
 请先确认config.js已经正确指向区块链节点的http_listen_port端口，且相应的区块链节点已经启动。
 
@@ -658,9 +766,9 @@ HelloWorldcontract address 0xa807685dd3cf6374ee56963d3d95065f6f056372
 HelloWorld deploy success!
 ```
 
-### 4.3 调用合约
+### 5.3 调用合约
 
-#### 4.3.1 编写合约调用程序
+#### 5.3.1 编写合约调用程序
 
 > 用nodejs实现，具体实现方法请直接看demoHelloWorld.js源码
 
@@ -668,7 +776,7 @@ HelloWorld deploy success!
 vim demoHelloWorld.js
 ```
 
-#### 4.3.2 调用合约
+#### 5.3.2 调用合约
 
 > 执行合约调用程序
 
@@ -690,7 +798,7 @@ HelloWorld contract set function call , (transaction hash ：0x6463e0ea9db6c4aff
 HelloWorld contract get function call again :HelloWorld!
 ```
 
-### 4.4 监控连接和块高
+### 5.4 监控连接和块高
 
 monitor.js脚本监控节点的连接情况和块高。在运行前，请确认：
 
@@ -716,79 +824,6 @@ NodeId:838a187e32e72e3889330c2591536d20868f34691f1822fbcd43cb345ef437c7a65681709
 Host:127.0.0.1:30403
 --------------------------------------------------------------
 ```
-
-## 第五章 多记账节点组网
-
-### 5.1 创建初始有2个节点的区块链网络
-
-1. 准备2个节点的环境
-
-请参考[第二章](#第二章-手工部署单节点区块链网络)内容操作准备`node-0`和`node-1`两个节点文件夹以及相关配置文件（**节点必须使用同一个CA证书来签发节点证书**），或者使用1.2.4节介绍的`FISCO-BCOS/scripts/build_chain.sh`脚本。手动操作完成`node-0`和`node-1`环境准备后，修改两个节点的`config.conf`文件中的`[pbft].miner.0,[pbft].miner.1,[p2p].node.0,[p2p].node.1`以及相关的端口号后，再分别启动两个节点。示例如下：
-  - **node-0/config.conf**
-```bash
-[rpc]
-	listen_ip=127.0.0.1
-	listen_port=30301
-	http_listen_port=30302
-	console_port=30303
-[p2p]
-	listen_ip=0.0.0.0
-	listen_port=30300
-	node.0=192.168.2.1:30300
-	node.1=192.168.2.2:30304
-[pbft]
-	miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
-	miner.1=84fb96c26a919cd654107464f49ac08ca6301cdb4ba276a7193f1475f5733f714f0c3ac1cb80cd7279613755782fd590f0f0a758046801acc691475efae0830b
-[common]
-	data_path=data/
-	log_config=log.conf
-[secure]
-	key=${DATAPATH}/node.key
-	cert=${DATAPATH}/node.crt
-	ca_cert=${DATAPATH}/ca.crt
-[statedb]
-	type=leveldb
-	path=${DATAPATH}/statedb
-	topic=DB
-```
-
-  - **node-1/config.conf**（隐去相同内容）
-```bash
-[rpc]
-	listen_ip=127.0.0.1
-	listen_port=30305
-	http_listen_port=30306
-	console_port=30307
-[p2p]
-	listen_ip=0.0.0.0
-	listen_port=30304
-	node.0=192.168.2.1:30300
-	node.1=192.168.2.2:30304
-[pbft]
-	miner.0=d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
-	miner.1=84fb96c26a919cd654107464f49ac08ca6301cdb4ba276a7193f1475f5733f714f0c3ac1cb80cd7279613755782fd590f0f0a758046801acc691475efae0830b
-```
-
-3. 启动全部节点并检查
-
-```bash
-# 在节点0的目录下操作
-cd node-0
-./start.sh
-# 在节点1的目录下操作
-cd node-1
-./start.sh
-```
-
-### 5.2 使用控制台添加链共识节点
-
-在已经运行的网络中添加共识节点，参考以下步骤操作：
-1. 参考[第二章](#第二章-手工部署单节点区块链网络)生成新节点的环境
-1. 拷贝已有节点的`config.conf`中`[pbft]`配置项，替换新节点的`config.conf`中`[pbft]`所有内容
-1. 使用控制台`pbft.add`指令添加新节点的NodeID到网络中
-1. 拷贝已有节点的`config.conf`中`[p2p].node.x`列表，替换新节点的`config.conf`中`[p2p].node.x`列表
-1. 启动新节点
-1. 检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
 
 ## 第六章 FISCO BCOS 特性
 

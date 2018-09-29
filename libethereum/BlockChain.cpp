@@ -996,7 +996,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 			br.receipts.push_back(tempBlock->receipt(i));
 			goodTransactions.push_back(tempBlock->pending()[i]);
 
-			LOG(INFO) << " Hash=" << (tempBlock->pending()[i].sha3()) << ",Randid=" << tempBlock->pending()[i].randomid() << ",上链=" << utcTime();
+			LOG(INFO) << " Hash=" << (tempBlock->pending()[i].sha3()) << ",Randid=" << tempBlock->pending()[i].randomid() << ",OnChain=" << utcTime();
 
 		}
 
