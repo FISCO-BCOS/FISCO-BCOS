@@ -13,6 +13,12 @@ using namespace dev;
 using namespace dev::precompiled;
 using namespace std;
 
+DBFactoryPrecompiled::DBFactoryPrecompiled()
+{
+    m_sysTables.push_back("_sys_tables_");
+    m_sysTables.push_back("_sys_miners_");
+}
+
 void DBFactoryPrecompiled::beforeBlock(shared_ptr<PrecompiledContext> context) {}
 
 void DBFactoryPrecompiled::afterBlock(shared_ptr<PrecompiledContext> context, bool commit)
@@ -104,6 +110,7 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
         string fieldNames;
 
         abi.abiOut(data, tableName, keyName, fieldNames);
+        LOG(DEBUG) << "DBFactory call createTable:" << tableName;
         vector<string> fieldNameList;
         boost::split(fieldNameList, fieldNames, boost::is_any_of(","));
         for (auto& str : fieldNameList)
@@ -120,6 +127,7 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
             tableEntry->setField("key_field", keyName);
             tableEntry->setField("value_field", valueFiled);
             sysTable->getDB()->insert(tableName, tableEntry);
+            LOG(DEBUG) << "DBFactory create table:" << tableName;
         }
         out = abi.abiIn("", errorCode);
         break;
@@ -156,7 +164,7 @@ DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr con
 }
 
 unsigned DBFactoryPrecompiled::isTableCreated(PrecompiledContext::Ptr context,
-    const string& tableName, const string &keyField, const string &valueFiled)
+    const string& tableName, const string& keyField, const string& valueFiled)
 {
     auto it = _name2Table.find(tableName);
     if (it != _name2Table.end())
@@ -165,13 +173,17 @@ unsigned DBFactoryPrecompiled::isTableCreated(PrecompiledContext::Ptr context,
     auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
     if (tableEntries->size() == 0u)
         return TABLE_NOT_EXISTS;
-    for (size_t i =0; i< tableEntries->size(); ++i)
+    for (size_t i = 0; i < tableEntries->size(); ++i)
     {
-		auto entry = tableEntries->get(i);
+        auto entry = tableEntries->get(i);
         if (keyField == entry->getField("key_field") &&
             valueFiled == entry->getField("value_field"))
+        {
+            LOG(DEBUG) << "DBFactory table already exists:" << tableName;
             return TABLENAME_ALREADY_EXISTS;
+        }
     }
+    LOG(DEBUG) << "DBFactory table conflict:" << tableName;
     return TABLENAME_CONFLICT;
 }
 
@@ -183,10 +195,17 @@ Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const s
         LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
         return it->second;
     }
-    auto sysTable = getSysTable(context);
-    auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
-    if (tableEntries->size() == 0u)
-        return Address();
+
+    if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), tableName))
+    {
+        auto sysTable = getSysTable(context);
+        auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
+        if (tableEntries->size() == 0u)
+        {
+            LOG(DEBUG) << tableName << "not exists.";
+            return Address();
+        }
+    }
 
     LOG(DEBUG) << "Open new table:" << tableName;
     dev::storage::DB::Ptr db = _memoryDBFactory->openTable(
