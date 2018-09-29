@@ -22,10 +22,8 @@
 #pragma once
 
 #include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/LogBloom.h>
-#include <libdevcore/LogEntries.h>
 #include <libdevcore/RLP.h>
+#include <libethcore/Common.h>
 #include <libevm/ExtVMFace.h>
 #include <array>
 
