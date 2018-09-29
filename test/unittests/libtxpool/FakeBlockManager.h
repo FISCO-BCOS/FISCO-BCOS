@@ -69,7 +69,7 @@ public:
     {
         m_blockChain.clear();
         m_blockHash.clear();
-        for (uint64_t blockHeight = 0; blockHeight <= _blockNum; blockHeight++)
+        for (uint64_t blockHeight = 0; blockHeight < _blockNum; blockHeight++)
         {
             FakeBlock fake_block(trans_size);
             if (blockHeight > 0)

@@ -48,6 +48,8 @@ public:
         m_block.setTransactions(m_transaction);
         BOOST_CHECK(m_transaction == m_block.transactions());
         BOOST_CHECK(m_sigList == m_block.sigList());
+        m_blockHeaderData.clear();
+        m_blockData.clear();
         m_blockHeader.encode(m_blockHeaderData);
         m_block.encode(m_blockData, ref(m_blockHeaderData));
         m_block.decode(ref(m_blockData));
@@ -142,6 +144,7 @@ public:
         Signature sig;
         h256 block_hash;
         Secret sec = KeyPair::create().secret();
+        m_sigList.clear();
         for (size_t i = 0; i < size; i++)
         {
             block_hash = sha3(toString("block " + i));
