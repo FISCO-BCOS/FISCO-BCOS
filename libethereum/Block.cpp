@@ -138,7 +138,8 @@ void Block::resetCurrent(u256 const& _timestamp)
     m_precommit = m_state;
     m_committedToSeal = false;
 
-    _precompiledContext->afterBlock(false);
+    //_precompiledContext->afterBlock(false);
+    _precompiledContext = std::make_shared<dev::precompiled::PrecompiledContext>();
     performIrregularModifications();
 }
 
