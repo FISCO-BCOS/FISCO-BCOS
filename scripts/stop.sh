@@ -1,6 +1,6 @@
 #! /bin/sh
 #stop fisco-bcos
-name=`pwd`/config.conf
+name=`pwd`/fisco-bcos
 agent_pid=`ps aux|grep "$name"|grep -v grep|awk '{print $2}'`
 kill_cmd="kill -9 ${agent_pid}"
 echo "${kill_cmd}"
