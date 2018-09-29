@@ -1,0 +1,61 @@
+/*
+    This file is part of FISCO-BCOS.
+
+    FISCO-BCOS is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    FISCO-BCOS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file EntriesPrecompiled.h
+ *  @author ancelmo
+ *  @date 20180921
+ */
+#pragma once
+
+#include "Table.h"
+#include "libblockverifier/ExecutiveContext.h"
+
+namespace dev
+{
+namespace blockverifier
+{
+#if 0
+contract Entries {
+    function get(int) public constant returns(Entry);
+    function size() public constant returns(int);
+}
+{
+    "846719e0": "get(int256)",
+    "949d225d": "size()"
+}
+#endif
+
+class EntriesPrecompiled : public Precompiled
+{
+public:
+    typedef std::shared_ptr<EntriesPrecompiled> Ptr;
+
+    virtual ~EntriesPrecompiled(){};
+
+    virtual std::string toString(std::shared_ptr<ExecutiveContext>);
+
+    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param);
+
+    void setEntries(dev::storage::Entries::Ptr entries) { m_entries = entries; }
+    dev::storage::Entries::Ptr getEntries() { return m_entries; }
+
+private:
+    dev::storage::Entries::Ptr m_entries;
+};
+
+}  // namespace blockverifier
+
+}  // namespace dev

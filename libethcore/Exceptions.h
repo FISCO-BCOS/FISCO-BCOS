@@ -67,6 +67,9 @@ DEV_SIMPLE_EXCEPTION(ZeroSignatureTransaction);
 DEV_SIMPLE_EXCEPTION(PendingTransactionAlreadyExists);
 DEV_SIMPLE_EXCEPTION(TransactionAlreadyInChain);
 DEV_SIMPLE_EXCEPTION(UnknownTransactionValidationError);
+DEV_SIMPLE_EXCEPTION(InconsistentTransactionSha3);
+DEV_SIMPLE_EXCEPTION(P2pEnqueueTransactionFailed);
+DEV_SIMPLE_EXCEPTION(MalformedTransactionException);
 
 /// state trie related
 DEV_SIMPLE_EXCEPTION(InvalidStateRoot);
@@ -87,6 +90,7 @@ DEV_SIMPLE_EXCEPTION(GenesisBlockCannotBeCalculated);
 DEV_SIMPLE_EXCEPTION(InvalidLogBloom);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
+
 /// transactionReceipt related
 DEV_SIMPLE_EXCEPTION(InvalidTransactionReceiptFormat);
 DEV_SIMPLE_EXCEPTION(TransactionReceiptVersionError);
@@ -98,6 +102,8 @@ DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(UnknownError);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
+DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
+
 struct VMException : Exception
 {
 };
@@ -113,6 +119,16 @@ ETH_SIMPLE_EXCEPTION_VM(OutOfStack);
 ETH_SIMPLE_EXCEPTION_VM(StackUnderflow);
 ETH_SIMPLE_EXCEPTION_VM(DisallowedStateChange);
 ETH_SIMPLE_EXCEPTION_VM(BufferOverrun);
+
+struct UnexpectedException : virtual Exception
+{
+};
+#define ETH_UNEXPECTED_EXCEPTION(X)                               \
+    struct X : virtual UnexpectedException                        \
+    {                                                             \
+        const char* what() const noexcept override { return #X; } \
+    }
+ETH_UNEXPECTED_EXCEPTION(PrecompiledError);
 
 /// Reports VM internal error. This is not based on VMException because it must be handled
 /// differently than defined consensus exceptions.

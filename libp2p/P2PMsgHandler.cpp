@@ -25,51 +25,6 @@ namespace dev
 {
 namespace p2p
 {
-bool P2PMsgHandler::addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback)
-{
-    RecursiveGuard l(x_seq2Callback);
-    if (m_seq2Callback->find(seq) == m_seq2Callback->end())
-    {
-        m_seq2Callback->insert(std::make_pair(seq, callback));
-        return true;
-    }
-    else
-    {
-        LOG(ERROR) << "Handler repetition! SeqID = " << seq;
-        return false;
-    }
-}
-
-ResponseCallback::Ptr P2PMsgHandler::getCallbackBySeq(uint32_t seq)
-{
-    RecursiveGuard l(x_seq2Callback);
-    auto it = m_seq2Callback->find(seq);
-    if (it != m_seq2Callback->end())
-    {
-        return it->second;
-    }
-    else
-    {
-        LOG(ERROR) << "Handler not found! SeqID = " << seq;
-        return NULL;
-    }
-}
-
-bool P2PMsgHandler::eraseCallbackBySeq(uint32_t seq)
-{
-    RecursiveGuard l(x_seq2Callback);
-    if (m_seq2Callback->find(seq) != m_seq2Callback->end())
-    {
-        m_seq2Callback->erase(seq);
-        return true;
-    }
-    else
-    {
-        LOG(ERROR) << "Handler not found! SeqID = " << seq;
-        return false;
-    }
-}
-
 bool P2PMsgHandler::addProtocolID2Handler(
     int16_t protocolID, CallbackFuncWithSession const& callback)
 {

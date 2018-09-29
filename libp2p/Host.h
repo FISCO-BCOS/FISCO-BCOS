@@ -210,6 +210,8 @@ public:
         m_p2pMsgHandler = _p2pMsgHandler;
     }
 
+    shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
+
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
     virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());

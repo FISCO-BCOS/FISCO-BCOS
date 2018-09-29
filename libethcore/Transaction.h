@@ -166,6 +166,7 @@ public:
     {
         clearSignature();
         m_nonce = _n;
+        m_hashWith = h256(0);
     }
 
     /// @returns the latest block number to be packaged for transaction.
@@ -180,10 +181,17 @@ public:
     /// @returns true if the transaction was signed
     bool hasSignature() const { return m_vrs.is_initialized(); }
 
+    /// @returns true if the transaction was signed with zero signature
+    bool hasZeroSignature() const { return m_vrs && isZeroSignature(m_vrs->r, m_vrs->s); }
+
     /// @returns the signature of the transaction (the signature has the sender encoded in it)
     /// @throws TransactionIsUnsigned if signature was not initialized
     SignatureStruct const& signature() const;
-
+    void updateSignature(boost::optional<SignatureStruct> const& sig)
+    {
+        m_vrs = sig;
+        m_hashWith = h256(0);
+    }
     /// @returns amount of gas required for the basic payment.
     int64_t baseGasRequired(EVMSchedule const& _es) const
     {
