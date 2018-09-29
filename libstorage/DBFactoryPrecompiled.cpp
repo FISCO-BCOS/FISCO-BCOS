@@ -30,7 +30,7 @@ void DBFactoryPrecompiled::afterBlock(shared_ptr<PrecompiledContext> context, bo
         return;
     }
 
-    LOG(DEBUG) << "Submiting DBPrecopiled";
+    LOG(DEBUG) << "Submiting DBPrecompiled";
 
     //汇总所有表的数据并提交
     vector<dev::storage::TableData::Ptr> datas;
