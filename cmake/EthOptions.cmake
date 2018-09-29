@@ -15,7 +15,7 @@ macro(configure_project)
 	eth_default_option(FATDB ON)
 	eth_default_option(ROCKSDB OFF)
 	eth_default_option(PARANOID OFF)
-	eth_default_option(MINIUPNPC ON)
+	eth_default_option(MINIUPNPC OFF)
 	
 	#ARCH TYPE
 	eth_default_option(STATIC_BUILD OFF)
