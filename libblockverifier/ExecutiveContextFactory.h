@@ -1,9 +1,8 @@
 #pragma once
 
 #include "ExecutiveContext.h"
+#include <libdevcore/OverlayDB.h>
 #include <libstorage/Storage.h>
-#include <libweb3jsonrpc/ChannelRPCServer.h>
-
 namespace dev
 {
 namespace blockverifier
@@ -13,16 +12,16 @@ class ExecutiveContextFactory : public std::enable_shared_from_this<ExecutiveCon
 public:
     typedef std::shared_ptr<ExecutiveContextFactory> Ptr;
 
-    virtual ~PrecompiledContextFactory(){};
+    virtual ~ExecutiveContextFactory(){};
 
     virtual void initExecutiveContext(BlockInfo blockInfo, ExecutiveContext::Ptr context);
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
-    virtual void setOverlayDB(OverlayDB const& db);
+    virtual void setOverlayDB(OverlayDB& db);
 
 private:
     dev::storage::Storage::Ptr m_stateStorage;
-    OverlayDB const& m_db;
+    OverlayDB m_db;
 };
 
 }  // namespace blockverifier

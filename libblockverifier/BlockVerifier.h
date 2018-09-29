@@ -20,17 +20,27 @@
  */
 #pragma once
 
+#include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
-#include <ExecutiveContext.h>
-#include <Precompiled.h>
+#include "Precompiled.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
+#include <libevm/ExtVMFace.h>
+#include <libmptstate/State.h>
 #include <memory>
 namespace dev
 {
+namespace eth
+{
+class PrecompiledContract;
+class TransactionReceipt;
+class ExecutionResult;
+class LastBlockHashesFace;
+
+}  // namespace eth
 namespace blockverifier
 {
 class BlockVerifier : public std::enable_shared_from_this<BlockVerifier>
@@ -42,10 +52,10 @@ public:
 
     virtual ~BlockVerifier(){};
 
-    ExecutiveContext::Ptr executeBlock(const Block& block, int stateType,
-        std::unordered_map<Address, PrecompiledContract> const& precompiledContract);
+    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, int stateType,
+        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
 
-    TransactionReceipt executeTransation(const Transaction& transaction);
+    // dev::eth::TransactionReceipt executeTransation(const dev::eth::Transaction& transaction);
 
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
     {
@@ -55,8 +65,6 @@ public:
     ExecutiveContextFactory::Ptr getExecutiveContextFactory() { return m_executiveContextFactory; }
 
 private:
-    // bool exeTransation(const Transaction& transaction, ExecutiveContext::Ptr context);
-
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
 };
 

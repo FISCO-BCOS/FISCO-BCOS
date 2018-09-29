@@ -1,8 +1,8 @@
 #include "ExecutiveContextFactory.h"
 #include <libdevcore/Common.h>
 #include <libstorage/CRUDPrecompiled.h>
-#include <libstorage/DBFactoryPrecompiled.h>
-#include <libstorage/MemoryDBFactory.h>
+#include <libstorage/MemoryTableFactory.h>
+#include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -20,18 +20,18 @@ void ExecutiveContextFactory::initExecutiveContext(
 #endif
 
     // DBFactoryPrecompiled
-    dev::storage::MemoryDBFactory::Ptr memoryDBFactory =
-        std::make_shared<dev::storage::MemoryDBFactory>();
-    memoryDBFactory->setStateStorage(m_stateStorage);
-    memoryDBFactory->setBlockHash(blockInfo.hash);
-    memoryDBFactory->setBlockNum(blockInfo.number.convert_to<int>());
+    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
+        std::make_shared<dev::storage::MemoryTableFactory>();
+    memoryTableFactory->setStateStorage(m_stateStorage);
+    memoryTableFactory->setBlockHash(blockInfo.hash);
+    memoryTableFactory->setBlockNum(blockInfo.number.convert_to<int>());
 
-    auto dbFactoryPrecompiled = std::make_shared<dev::precompiled::DBFactoryPrecompiled>();
-    dbFactoryPrecompiled->setMemoryDBFactory(memoryDBFactory);
+    auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
+    tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
 
-    context->setAddress2Precompiled(Address(0x1001), dbFactoryPrecompiled);
+    context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
     context->setAddress2Precompiled(
-        Address(0x1002), std::make_shared<dev::precompiled::CRUDPrecompiled>());
+        Address(0x1002), std::make_shared<dev::blockverifier::CRUDPrecompiled>());
 
     context->setBlockInfo(blockInfo);
 }
@@ -41,7 +41,7 @@ void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateSt
     m_stateStorage = stateStorage;
 }
 
-void ExecutiveContextFactory::setOverlayDB(OverlayDB const& db)
+void ExecutiveContextFactory::setOverlayDB(OverlayDB& db)
 {
     m_db = db;
 }

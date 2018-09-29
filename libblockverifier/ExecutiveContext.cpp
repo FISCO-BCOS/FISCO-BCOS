@@ -21,17 +21,20 @@
 
 
 #include "ExecutiveContext.h"
+#include <libdevcore/easylog.h>
+#include <libethcore/Exceptions.h>
 #include <libexecutivecontext/ExecutionResult.h>
+#include <libstorage/TableFactoryPrecompiled.h>
 
-namespace dev
-{
-namespace blockverifier
-{
+using namespace dev::eth;
+using namespace dev::blockverifier;
+using namespace dev;
+
 bytes ExecutiveContext::call(Address address, bytesConstRef param)
 {
     try
     {
-        LOG(TRACE) << "PrecompiledEngine call:" << _blockInfo.hash << " " << _blockInfo.number
+        LOG(TRACE) << "PrecompiledEngine call:" << m_blockInfo.hash << " " << m_blockInfo.number
                    << " " << address << " " << toHex(param);
 
         auto p = getPrecompiled(address);
@@ -58,9 +61,9 @@ bytes ExecutiveContext::call(Address address, bytesConstRef param)
 
 Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 {
-    Address address(++_addressCount);
+    Address address(++m_addressCount);
 
-    _address2Precompiled.insert(std::make_pair(address, p));
+    m_address2Precompiled.insert(std::make_pair(address, p));
 
     return address;
 }
@@ -68,7 +71,7 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 
 bool ExecutiveContext::isPrecompiled(Address address)
 {
-    LOG(TRACE) << "PrecompiledEngine isPrecompiled:" << _blockInfo.hash << " " << address;
+    LOG(TRACE) << "PrecompiledEngine isPrecompiled:" << m_blockInfo.hash << " " << address;
 
     auto p = getPrecompiled(address);
 
@@ -82,15 +85,60 @@ bool ExecutiveContext::isPrecompiled(Address address)
 
 Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address)
 {
-    LOG(TRACE) << "PrecompiledEngine getPrecompiled:" << _blockInfo.hash << " " << address;
+    LOG(TRACE) << "PrecompiledEngine getPrecompiled:" << m_blockInfo.hash << " " << address;
 
-    LOG(TRACE) << "address size:" << _address2Precompiled.size();
-    auto itPrecompiled = _address2Precompiled.find(address);
+    LOG(TRACE) << "address size:" << m_address2Precompiled.size();
+    auto itPrecompiled = m_address2Precompiled.find(address);
 
-    if (itPrecompiled != _address2Precompiled.end())
+    if (itPrecompiled != m_address2Precompiled.end())
     {
         return itPrecompiled->second;
     }
 
     return Precompiled::Ptr();
+}
+
+std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& address)
+{
+    std::string tableName = "_contract_data_" + address.hex() + "_";
+    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
+    auto addr = tableFactoryPrecompiled->openTable(shared_from_this(), tableName);
+    if (addr == Address())
+        return nullptr;
+    TablePrecompiled::Ptr tablePrecompiled =
+        std::dynamic_pointer_cast<TablePrecompiled>(getPrecompiled(addr));
+    auto table = tablePrecompiled->getTable();
+    return table;
+}
+
+std::shared_ptr<dev::eth::StateFace> ExecutiveContext::getState()
+{
+    return m_stateFace;
+}
+void ExecutiveContext::setState(std::shared_ptr<dev::eth::StateFace> state)
+{
+    m_stateFace = state;
+}
+
+bool ExecutiveContext::isOrginPrecompiled(Address const& _a) const
+{
+    return m_precompiledContract.count(_a);
+}
+
+bigint ExecutiveContext::costOfOrginPrecompiled(Address const& _a, bytesConstRef _in) const
+{
+    return m_precompiledContract.at(_a).cost(_in);
+}
+
+void ExecutiveContext::executeOrginPrecompiled(
+    Address const& _a, bytesConstRef _in, bytesRef _out) const
+{
+    // return m_precompiledContract.at(_a).execute(_in, _out);
+}
+
+void ExecutiveContext::setPrecompiledContract(
+    std::unordered_map<Address, PrecompiledContract> const& precompiledContract)
+{
+    m_precompiledContract = precompiledContract;
 }

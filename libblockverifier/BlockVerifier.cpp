@@ -19,67 +19,74 @@
  *  @date 20180921
  */
 #include "BlockVerifier.h"
-
-
+#include <libethcore/PrecompiledContract.h>
+#include <libethcore/TransactionReceipt.h>
 using namespace dev;
+using namespace dev::eth;
 using namespace dev::blockverifier;
 
-ExecutiveContext::Ptr BlockVerifier::executeBlock(const Block& block, int stateType,
-    std::unordered_map<Address, PrecompiledContract> const& precompiledContract);
+ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, int stateType,
+    std::unordered_map<Address, PrecompiledContract> const& precompiledContract)
 {
-    LOG(TRACE) << "Block:enact tx_num=" << block.transactions().size();
-    try
-    {
-        dev::blockverifier::BlockInfo blockInfo;
-        blockInfo.hash = block.blockHeader().hash();
-        blockInfo.number = block.blockHeader().number();
-        dev::blockverifier::ExecutiveContext::Ptr executiveContext =
-            std::make_shared<dev::blockverifier::ExecutiveContext>();
-        executiveContext->setPrecompiledContract(precompiledContract);
-        m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
-    }
-    catch (exception& e)
-    {
-        LOG(ERROR) << "Error:" << e.what();
-    }
-    unsigned i = 0;
-    DEV_TIMED_ABOVE("Block::enact txExec,blk=" + toString(block.info.number()) +
-                        ",txs=" + toString(block.transactions.size()) + " ",
-        1)
+    /* LOG(TRACE) << "Block:enact tx_num=" << block.transactions().size();
+     try
+     {
+         dev::blockverifier::BlockInfo blockInfo;
+         blockInfo.hash = block.blockHeader().hash();
+         blockInfo.number = block.blockHeader().number();
+         dev::blockverifier::ExecutiveContext::Ptr executiveContext =
+             std::make_shared<dev::blockverifier::ExecutiveContext>();
+         executiveContext->setPrecompiledContract(precompiledContract);
+         m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
+     }
+     catch (exception& e)
+     {
+         LOG(ERROR) << "Error:" << e.what();
+     }
+     unsigned i = 0;
+     DEV_TIMED_ABOVE("Block::enact txExec,blk=" + toString(block.info.number()) +
+                         ",txs=" + toString(block.transactions.size()) + " ",
+         1)
 
-    for (Transaction const& tr : block.transactions)
-    {
-        try
-        {
-            LOG(TRACE) << "Enacting transaction: " << tr.randomid()
-                       << tr.from() /*<< state().transactionsFrom(tr.from()) */ << tr.value()
-                       << toString(tr.sha3());
-            execute(lh, tr, OnOpFunc(), executiveContext);
+     for (Transaction const& tr : block.transactions)
+     {
+         try
+         {
+             execute(lh, tr, OnOpFunc(), executiveContext);
 
-            // LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
-            // LOG(TRACE) << m_state;
-        }
-        catch (Exception& ex)
-        {
-            ex << errinfo_transactionIndex(i);
-            throw;
-        }
+             // LOG(TRACE) << "Now: " << tr.from() << state().transactionsFrom(tr.from());
+             // LOG(TRACE) << m_state;
+         }
+         catch (Exception& ex)
+         {
+             ex << errinfo_transactionIndex(i);
+             throw;
+         }
 
-        LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
-        LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot())
-                   << ",gasUsed=" << toString(m_receipts.back().gasUsed())
-                   << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
+         LOG(TRACE) << "Block::enact: t=" << toString(tr.sha3());
+         LOG(TRACE) << "Block::enact: stateRoot=" << toString(m_receipts.back().stateRoot())
+                    << ",gasUsed=" << toString(m_receipts.back().gasUsed())
+                    << ",sha3=" << toString(sha3(m_receipts.back().rlp()));
 
-        RLPStream receiptRLP;
-        m_receipts.back().streamRLP(receiptRLP);
-        receipts.push_back(receiptRLP.out());
-        ++i;
-    }
+         RLPStream receiptRLP;
+         m_receipts.back().streamRLP(receiptRLP);
+         receipts.push_back(receiptRLP.out());
+         ++i;
+     }
+     */
 }
+/*
+ dev::eth::TransactionReceipt BlockVerifier::executeTransation(const dev::eth::Transaction&
+transaction)
+ {
+     dev::eth::TransactionReceipt receipt;
+     return receipt;
+ }
+
 
 // will throw exception
-ExecutionResult BlockVerifier::execute(LastHashes const& _lh, Transaction const& _t, Permanence _p,
-    OnOpFunc const& _onOp, dev::blockverifier::ExecutiveContext::Ptr executiveContext)
+ExecutionResult BlockVerifier::execute(LastBlockHashesFace const& _lh, Transaction const& _t,
+Permanence _p, OnOpFunc const& _onOp, dev::blockverifier::ExecutiveContext::Ptr executiveContext)
 {
     dev::precompiled::BlockInfo blockInfo;
     blockInfo.hash = info().hash();
@@ -132,3 +139,4 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
     return make_pair(
         res, TransactionReceipt(rootHash(), startGasUsed + e.gasUsed(), e.logs(), e.newAddress()));
 }
+*/

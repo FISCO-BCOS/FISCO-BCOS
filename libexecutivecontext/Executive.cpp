@@ -172,23 +172,23 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s.savepoint();
-    if (m_envInfo.isOrginPrecompiled(_p.codeAddress))
-    {
-        m_gas = _p.gas;
-        m_envInfo.executeOrginPrecompiled(_p.codeAddress, _p.data, _p.out);
-    }
-    else if (m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
-    {
-        m_gas = _p.gas;
+    /* if (m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+     {
+         m_gas = _p.gas;
+         m_envInfo.precompiledEngine()->executeOrginPrecompiled(_p.codeAddress, _p.data, _p.out);
+     }
+     else if (m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
+     {
+         m_gas = _p.gas;
 
-        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
+         LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
-        auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
-        bytesConstRef(&result).copyTo(_p.out);
+         auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
+         bytesConstRef(&result).copyTo(_p.out);
 
-        LOG(DEBUG) << "Precompiled result: " << result;
-    }
-    else
+         LOG(DEBUG) << "Precompiled result: " << result;
+     }
+     else*/
     {
         m_gas = _p.gas;
         if (m_s.addressHasCode(_p.codeAddress))

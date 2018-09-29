@@ -21,15 +21,26 @@
 #pragma once
 
 #include "Precompiled.h"
+#include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ChainOperationParams.h>
+#include <libethcore/PrecompiledContract.h>
 #include <libexecutivecontext/StateFace.h>
-#include <libstorage/TableFactoryPrecompiled.h>
 #include <memory>
 
 namespace dev
 {
+namespace storage
+{
+class Table;
+}
+
+namespace eth
+{
+class StateFace;
+}
+
 namespace blockverifier
 {
 class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
@@ -57,13 +68,9 @@ public:
     BlockInfo blockInfo() { return m_blockInfo; }
     void setBlockInfo(BlockInfo blockInfo) { m_blockInfo = blockInfo; }
 
-    std::shared_ptr<StateFace> getState() { return m_stateFace; }
-    void setState(std::shared_ptr<StateFace> state) { m_stateFace = state }
+    std::shared_ptr<dev::eth::StateFace> getState();
+    void setState(std::shared_ptr<dev::eth::StateFace> state);
 
-    void pushBackTransactionReceipt(TransactionReceipt receipt)
-    {
-        m_TransactionReceipts.push_back(receipt);
-    }
 
     void commit()
     {
@@ -77,65 +84,46 @@ public:
         clearPreCompiled();
     };
 
-    std::shared_ptr<storage::Table> getTable(const Address& address)
-    {
-        std::string tableName = "_contract_data_" + address.hex() + "_";
-        TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-            std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-        auto address = tableFactoryPrecompiled->openTable(shared_from_this(), tableName);
-        if (address == Address())
-            return nullptr;
-        TablePrecompiled::Ptr tablePrecompiled =
-            std::dynamic_pointer_cast<TablePrecompiled>(getPrecompiled(address));
-        auto table = tablePrecompiled->getTable();
-        return table;
-    };
+    std::shared_ptr<dev::storage::Table> getTable(const Address& address);
 
-    virtual bool isOrginPrecompiled(Address const& _a) const
-    {
-        return precompiledContract.count(_a);
-    }
 
-    virtual bigint costOfOrginPrecompiled(Address const& _a, bytesConstRef _in) const
-    {
-        return precompiledContract.at(_a).cost(_in);
-    }
-    virtual void executeOrginPrecompiled(Address const& _a, bytesConstRef _in, bytesRef _out) const
-    {
-        return precompiledContract.at(_a).execute(_in, _out);
-    }
+    virtual bool isOrginPrecompiled(Address const& _a) const;
+
+    virtual bigint costOfOrginPrecompiled(Address const& _a, bytesConstRef _in) const;
+
+    virtual void executeOrginPrecompiled(Address const& _a, bytesConstRef _in, bytesRef _out) const;
 
     void setPrecompiledContract(
-        std::unordered_map<Address, PrecompiledContract> const& precompiledContract)
-    {
-        m_precompiledContract = precompiledContract;
-    }
+        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
+
 
 private:
-    void commitState() { m_stateFace.commit(); };
-
-    void commitPreCompiled()
-    {
-        TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-            std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-        tableFactoryPrecompiled->getmemoryTableFactory()->commit();
+    void commitState(){
+        // m_stateFace.commit();
     };
 
-    void clearState() { m_stateFace.clear(); };
+    void commitPreCompiled(){
+        // TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        //    std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
+        // tableFactoryPrecompiled->getmemoryTableFactory()->commit();
+    };
 
-    void clearPreCompiled()
-    {
-        TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-            std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-        tableFactoryPrecompiled->getmemoryTableFactory()->clear();
+    void clearState(){
+        // m_stateFace.clear();
+    };
+
+
+    void clearPreCompiled(){
+        // TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        //    std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
+        // tableFactoryPrecompiled->getmemoryTableFactory()->clear();
     };
 
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
     int m_addressCount = 0x10000;
     BlockInfo m_blockInfo;
-    std::shared_ptr<StateFace> m_stateFace;
-    TransactionReceipts m_TransactionReceipts;
-    std::unordered_map<Address, PrecompiledContract> m_precompiledContract;
+    std::shared_ptr<dev::eth::StateFace> m_stateFace;
+    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 };
 
 }  // namespace blockverifier

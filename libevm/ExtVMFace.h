@@ -32,7 +32,7 @@
 #include <libethcore/LastBlockHashesFace.h>
 #include <libethcore/LogEntry.h>
 
-#include <evmc/evmc.h>
+#include <evmc/include/evmc/evmc.h>
 
 #include <boost/optional.hpp>
 #include <functional>
@@ -40,6 +40,11 @@
 
 namespace dev
 {
+namespace blockverifier
+{
+class ExecutiveContext;
+}
+
 namespace eth
 {
 struct SubState
@@ -135,21 +140,17 @@ public:
     /// @return used gas of the evm
     u256 const& gasUsed() const { return m_gasUsed; }
 
-    dev::blockverifier::ExecutiveContext::Ptr precompiledEngine() const
-    {
-        return m_executiveEngine;
-    }
-    void setPrecompiledEngine(dev::blockverifier::ExecutiveContext::Ptr executiveEngine)
-    {
-        m_executiveEngine = executiveEngine;
-    }
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine();
+
+    void setPrecompiledEngine(
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine);
 
 
 private:
     BlockHeader m_headerInfo;
     LastBlockHashesFace const& m_lastHashes;
     u256 m_gasUsed;
-    dev::blockverifier::ExecutiveContext::Ptr m_executiveEngine;
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> m_executiveEngine;
 };
 
 /// Represents a call result.
