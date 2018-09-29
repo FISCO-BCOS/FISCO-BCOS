@@ -24,6 +24,7 @@
 #pragma once
 #include "BlockHeader.h"
 #include "Transaction.h"
+#include "TransactionReceipt.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/TrieHash.h>
 namespace dev
@@ -41,7 +42,7 @@ public:
     Block(Block const& _block);
     /// assignment operator
     Block& operator=(Block const& _block);
-
+    ~Block() { resetCurrentBlock(); }
     ///-----opearator overloads of Block
     /// operator ==
     bool equalAll(Block const& _block) const
@@ -72,6 +73,7 @@ public:
 
     ///-----get interfaces
     Transactions const& transactions() const { return m_transactions; }
+    TransactionReceipts const& transactionReceipts() const { return m_transactionReceipts; }
     Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     BlockHeader& header() { return m_blockHeader; }
@@ -84,6 +86,11 @@ public:
     {
         m_transactions = _trans;
         noteChange();
+    }
+    /// set m_transactionReceipts
+    void setTransactionReceipts(TransactionReceipts const& transReceipt)
+    {
+        m_transactionReceipts = transReceipt;
     }
     /// append a single transaction to m_transactions
     void appendTransaction(Transaction const& _trans)
@@ -121,6 +128,7 @@ public:
     {
         m_blockHeader = BlockHeader();
         m_transactions.clear();
+        m_transactionReceipts.clear();
         m_sigList.clear();
         m_currentBytes.clear();
         m_txsCache.clear();
@@ -147,6 +155,7 @@ private:
     BlockHeader m_blockHeader;
     /// transaction list (field 1)
     Transactions m_transactions;
+    TransactionReceipts m_transactionReceipts;
     /// hash of the block header (field 2)
     h256 m_headerHash;
     /// sig list (field 3)
