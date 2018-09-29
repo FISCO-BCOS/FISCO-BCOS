@@ -67,12 +67,10 @@ void Consensus::doWork(bool wait)
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
             /// load transaction from transaction queue
-            if(max_blockCanSeal > 0 && tx_num < max_blockCanSeal)
+            if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal)
                 loadTransactions(max_blockCanSeal - tx_num);
-            else
-                return;
             /// check enough
-            if (checkTxsEnough(max_blockCanSeal))
+            if (!checkTxsEnough(max_blockCanSeal))
                 return;
             handleBlock();
             /// wait for 1s even the block has been sealed
