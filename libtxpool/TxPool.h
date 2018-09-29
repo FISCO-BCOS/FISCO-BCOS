@@ -93,8 +93,9 @@ public:
      * @param _avoid : Transactions to avoid returning.
      * @return Transactions : up to _limit transactions
      */
-    Transactions topTransactions(uint64_t const& _limit, h256Hash const& _avoid) override;
-    Transactions topTransactions(uint64_t const& _limit) override;
+    Transactions topTransactions(
+        uint64_t const& _limit, h256Hash& _avoid, bool update_void = false) override;
+    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit);
     /// get all transactions(maybe blocksync module need this interface)
     Transactions pendingList() const override;
     /// get current transaction num
@@ -157,8 +158,6 @@ private:
     h256Hash m_known;
     /// hash of dropped transactions
     h256Hash m_dropped;
-    /// hash set for filter fetched transactions
-    h256Hash m_transactionSet;
 };  // namespace txpool
 }  // namespace txpool
 }  // namespace dev

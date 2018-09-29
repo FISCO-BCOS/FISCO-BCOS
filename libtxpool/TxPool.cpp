@@ -231,8 +231,6 @@ bool TxPool::drop(h256 const& _txHash)
         return false;
     UpgradeGuard ul(l);
     m_dropped.insert(_txHash);
-    if (m_transactionSet.count(_txHash))
-        m_transactionSet.erase(_txHash);
     return removeTrans(_txHash);
 }
 
@@ -243,7 +241,7 @@ bool TxPool::drop(h256 const& _txHash)
  * @param _avoid : Transactions to avoid returning.
  * @return Transactions : up to _limit transactions
  */
-Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash const& _avoid)
+Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool updateAvoid)
 {
     ReadGuard l(m_lock);
     Transactions ret;
@@ -253,16 +251,17 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash const& _av
         if (!_avoid.count(it->sha3()))
         {
             ret.push_back(*it);
-            m_transactionSet.insert(it->sha3());
+            if (updateAvoid)
+                _avoid.insert(it->sha3());
         }
     }
     return ret;
 }
 
-/// obtain transactions with filter logic
-Transactions TxPool::topTransactions(uint64_t const& _limit)
+dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
 {
-    return topTransactions(_limit, m_transactionSet);
+    h256Hash _avoid = h256Hash();
+    return topTransactions(_limit, _avoid);
 }
 
 /// get all transactions(maybe blocksync module need this interface)
@@ -301,7 +300,6 @@ void TxPool::clear()
     m_known.clear();
     m_txsQueue.clear();
     m_txsHash.clear();
-    m_transactionSet.clear();
 }
 }  // namespace txpool
 }  // namespace dev
