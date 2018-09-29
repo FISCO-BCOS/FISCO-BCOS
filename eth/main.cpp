@@ -110,18 +110,16 @@ void help()
 
 string ethCredits(bool _interactive = false)
 {
-	std::ostringstream cout;
-	cout
-		<< "FISCO-BCOS " << dev::Version << "\n"
-		<< dev::Copyright << "\n"
-		<< "  See the README for contributors and credits."
-		<< "\n";
+    std::ostringstream cout;
+    cout << "FISCO-BCOS " << dev::Version << "  " << dev::Copyright
+         << "  See README for contributors and credits."
+         << "\n";
 
-	if (_interactive)
-		cout << "Type 'exit' to quit"
-			 << "\n"
-			 << "\n";
-	return cout.str();
+    if (_interactive)
+        cout << "Type 'exit' to quit"
+             << "\n"
+             << "\n";
+    return cout.str();
 }
 
 void version()
@@ -448,6 +446,10 @@ int main(int argc, char** argv)
 
 	auto caps = set<string> {"eth"};
 
+	el::Configurations conf;
+	conf.set(el::Level::Global, el::ConfigurationType::ToStandardOutput, to_string(false));
+	el::Loggers::reconfigureAllLoggers(conf);
+
 	//启动channelServer
 	Initializer::Ptr initializer = std::make_shared<Initializer>();
 	initializer->init(getConfigPath());
@@ -502,11 +504,10 @@ int main(int argc, char** argv)
 	    false
 	);
 
-	cout << "NodeID=" << toString(web3.id()) << "\n";
 	cout << ethCredits();
+	cout << "NodeID=" << toString(web3.id()) << "\n";
 
 	web3.startNetwork();
-	cout << "Node ID: " << web3.enode() << "\n";
 	unique_ptr<rpc::SessionManager> sessionManager;
 
 	using FullServer = ModularServer <

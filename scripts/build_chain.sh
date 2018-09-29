@@ -134,7 +134,7 @@ cat  << EOF > "$CertConfig"
 	keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 EOF
 fi
-echo "Generating node key and certificate..."
+echo "Generating node key ..."
 nodeid_list=""
 ip_list=""
 #生成每个节点的密钥和ip列表
@@ -142,9 +142,11 @@ index=0
 for line in ${ip_array[*]};do
 	ip=${line%:*}
 	num=${line#*:}
-	[ $num = $ip -o -z ${num} ] && num=${node_num}
+	[ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
 	for ((i=0;i<num;++i));do
+		# echo "Generating IP:${ip} ID:${index} key files..."
 		node_dir="$output_dir/node_${ip}_${index}"
+		[ -d "$node_dir" ] && echo "$node_dir exist! Please delete!" && exit 1
 		mkdir -p $node_dir/data/
 		mkdir -p $node_dir/sdk/
 
@@ -174,7 +176,7 @@ index=0
 for line in ${ip_array[*]};do
 	ip=${line%:*}
 	num=${line#*:}
-	[ $num = $ip -o -z ${num} ] && num=${node_num}
+	[ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
 	for ((i=0;i<num;++i));do
 		echo "Generating IP:${ip} ID:${index} config files..."
 		node_dir="$output_dir/node_${ip}_${index}"
@@ -188,7 +190,6 @@ for line in ${ip_array[*]};do
 [p2p]
 	listen_ip=0.0.0.0
 	listen_port=$(( port_start + index * 4 ))
-
 	$ip_list
 [pbft]
 	$nodeid_list

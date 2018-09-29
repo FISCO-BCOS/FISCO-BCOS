@@ -116,7 +116,7 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session, dev::ch
 
         if (args.empty())
         {
-            output = "Emput input!";
+            output = "Empty input!";
             throw std::exception();
         }
 
@@ -447,7 +447,7 @@ std::string ConsoleServer::pbftAdd(const std::vector<std::string> args)
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("add(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "Add consensus node successfully!" << endl;
+            ss << "Tx(Add consensus node) send successfully!" << endl;
         }
         else
         {
@@ -489,7 +489,7 @@ std::string ConsoleServer::pbftRemove(const std::vector<std::string> args)
             dev::eth::ContractABI abi;
             t.data = abi.abiIn("remove(string)", nodeID);
             _interface->submitTransaction(t, _key.secret());
-            ss << "Remove consensus node successfully! " << endl;
+            ss << "Tx(Remove consensus node) send successfully! " << endl;
         }
         else
         {
