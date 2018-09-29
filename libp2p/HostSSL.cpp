@@ -177,7 +177,7 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 
 	LOG(INFO) << "Hello: " << clientVersion << "V[" << protocolVersion << "]" << _id << showbase << capslog.str() << dec << listenPort;
 
-	shared_ptr<SessionFace> ps = make_shared<Session>(this, move(_io), _s, p, PeerSessionInfo({_id, clientVersion, p->endpoint.address.to_string(), listenPort, chrono::steady_clock::duration(), _rlp[2].toSet<CapDesc>(), 0, map<string, string>(), _nodeIPEndpoint}));
+	shared_ptr<SessionFace> ps = make_shared<Session>(this, move(_io), _s, p, PeerSessionInfo({_id, clientVersion, p->endpoint.address.to_string(), listenPort, chrono::steady_clock::duration(), _rlp[2].toSet<CapDesc>(), 0, map<string, string>(), protocolVersion, _nodeIPEndpoint}));
 	//((Session *)ps.get())->setStatistics(new InterfaceStatistics(getDataDir() + "P2P" + p->id.hex(), m_statisticsInterval));
 
 	if (protocolVersion < dev::p2p::c_protocolVersion - 1)
