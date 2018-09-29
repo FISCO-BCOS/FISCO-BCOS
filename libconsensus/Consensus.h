@@ -38,7 +38,7 @@ namespace consensus
 {
 struct Sealing
 {
-    Block sealing_block;
+    Block block;
     /// hash set for filter fetched transactions
     h256Hash m_transactionSet;
     /// TODO, ExecutiveContext
@@ -108,7 +108,7 @@ protected:
     virtual bool shouldWait(bool const& wait);
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
-        uint64_t tx_num = m_sealing.sealing_block.getTransactionSize();
+        uint64_t tx_num = m_sealing.block.getTransactionSize();
         if (tx_num >= maxTxsCanSeal)
             m_syncTxPool = false;
         return (tx_num >= maxTxsCanSeal);
@@ -133,7 +133,7 @@ protected:
     void inline resetCurrentTime()
     {
         uint64_t parent_time = m_blockManager->getLatestBlockHeader().timestamp();
-        m_sealing.sealing_block.header().setTimestamp(max(parent_time + 1, utcTime()));
+        m_sealing.block.header().setTimestamp(max(parent_time + 1, utcTime()));
     }
 
 protected:

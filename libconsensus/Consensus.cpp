@@ -44,7 +44,7 @@ bool Consensus::shouldSeal()
 {
     bool sealed;
     DEV_READ_GUARDED(x_sealing)
-    sealed = m_sealing.sealing_block.isSealed();
+    sealed = m_sealing.block.isSealed();
     bool t = true;
     return (!sealed && m_startConsensus && getNodeAccountType() == NodeAccountType::MinerAccount &&
             !isBlockSyncing() && m_syncTxPool.compare_exchange_strong(t, false));
@@ -52,7 +52,7 @@ bool Consensus::shouldSeal()
 
 bool Consensus::shouldWait(bool const& wait)
 {
-    return !m_syncTxPool && (wait || m_sealing.sealing_block.isSealed());
+    return !m_syncTxPool && (wait || m_sealing.block.isSealed());
 }
 
 /// doWork
@@ -63,10 +63,10 @@ void Consensus::doWork(bool wait)
         DEV_WRITE_GUARDED(x_sealing)
         {
             /// get current transaction num
-            uint64_t tx_num = m_sealing.sealing_block.getTransactionSize();
+            uint64_t tx_num = m_sealing.block.getTransactionSize();
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
-            if (max_blockCanSeal < tx_num)
+            if (max_blockCanSeal > 0 && max_blockCanSeal < tx_num)
                 return;
             /// load transaction from transaction queue
             loadTransactions(max_blockCanSeal - tx_num);
@@ -88,7 +88,7 @@ void Consensus::doWork(bool wait)
 void Consensus::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
-    m_sealing.sealing_block.appendTransactions(
+    m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
 
@@ -96,30 +96,30 @@ void inline Consensus::ResetSealingHeader()
 {
     /// import block
     resetCurrentTime();
-    m_sealing.sealing_block.header().setSealerList(minerList());
-    m_sealing.sealing_block.header().setSealer(nodeIdx());
-    m_sealing.sealing_block.header().setLogBloom(LogBloom());
-    m_sealing.sealing_block.header().setGasUsed(0);
-    m_sealing.sealing_block.header().setExtraData(m_extraData);
+    m_sealing.block.header().setSealerList(minerList());
+    m_sealing.block.header().setSealer(nodeIdx());
+    m_sealing.block.header().setLogBloom(LogBloom());
+    m_sealing.block.header().setGasUsed(0);
+    m_sealing.block.header().setExtraData(m_extraData);
 }
 
 void inline Consensus::ResetSealingBlock()
 {
-    m_sealing.sealing_block.resetCurrentBlock();
+    m_sealing.block.resetCurrentBlock();
     ResetSealingHeader();
     m_sealing.m_transactionSet.clear();
 }
 
 void inline Consensus::appendSealingExtraData(bytes const& _extra)
 {
-    m_sealing.sealing_block.header().appendExtraDataArray(_extra);
+    m_sealing.block.header().appendExtraDataArray(_extra);
 }
 
 void inline Consensus::setSealingRoot(
     h256 const& trans_root, h256 const& receipt_root, h256 const& state_root)
 {
     /// set transaction root, receipt root and state root
-    m_sealing.sealing_block.header().setRoots(trans_root, receipt_root, state_root);
+    m_sealing.block.header().setRoots(trans_root, receipt_root, state_root);
 }
 /// TODO: update m_sealing and receiptRoot
 void Consensus::executeBlock() {}
@@ -128,7 +128,7 @@ bool Consensus::encodeBlock(bytes& blockBytes)
 {
     try
     {
-        m_sealing.sealing_block.encode(blockBytes);
+        m_sealing.block.encode(blockBytes);
         return true;
     }
     catch (std::exception& e)
