@@ -117,6 +117,17 @@ public:
         return m_txsRoot;
     }
 
+    void resetCurrentBlock()
+    {
+        m_blockHeader = BlockHeader();
+        m_transactions.clear();
+        m_sigList.clear();
+        m_currentBytes.clear();
+        m_txsCache.clear();
+        m_txsMapCache.clear();
+        m_txsRoot.clear();
+    }
+
 private:
     /// encode function
     inline void encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
