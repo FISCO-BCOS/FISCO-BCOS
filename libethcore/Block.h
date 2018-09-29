@@ -24,8 +24,9 @@
 #pragma once
 #include "BlockHeader.h"
 #include "Transaction.h"
+#include "TransactionReceipt.h"
 #include <libdevcore/Common.h>
-
+#include <libdevcore/TrieHash.h>
 namespace dev
 {
 namespace eth
@@ -41,7 +42,7 @@ public:
     Block(Block const& _block);
     /// assignment operator
     Block& operator=(Block const& _block);
-
+    ~Block() { resetCurrentBlock(); }
     ///-----opearator overloads of Block
     /// operator ==
     bool equalAll(Block const& _block) const
@@ -72,8 +73,10 @@ public:
 
     ///-----get interfaces
     Transactions const& transactions() const { return m_transactions; }
+    TransactionReceipts const& transactionReceipts() const { return m_transactionReceipts; }
     Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
+    BlockHeader& header() { return m_blockHeader; }
     h256 const& headerHash() const { return m_headerHash; }
     std::vector<std::pair<u256, Signature>> const& sigList() const { return m_sigList; }
 
@@ -84,10 +87,22 @@ public:
         m_transactions = _trans;
         noteChange();
     }
+    /// set m_transactionReceipts
+    void setTransactionReceipts(TransactionReceipts const& transReceipt)
+    {
+        m_transactionReceipts = transReceipt;
+    }
     /// append a single transaction to m_transactions
     void appendTransaction(Transaction const& _trans)
     {
         m_transactions.push_back(_trans);
+        noteChange();
+    }
+    /// append transactions
+    void appendTransactions(Transactions const& _trans_array)
+    {
+        for (auto trans : _trans_array)
+            m_transactions.push_back(trans);
         noteChange();
     }
     /// set block header
@@ -99,6 +114,27 @@ public:
     }
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
+    bool isSealed() const { return !m_currentBytes.empty(); }
+    size_t getTransactionSize() { return m_transactions.size(); }
+
+    /// get transactionRoot
+    h256 const getTransactionRoot()
+    {
+        encodeTransactions();
+        return m_txsRoot;
+    }
+
+    void resetCurrentBlock()
+    {
+        m_blockHeader = BlockHeader();
+        m_transactions.clear();
+        m_transactionReceipts.clear();
+        m_sigList.clear();
+        m_currentBytes.clear();
+        m_txsCache.clear();
+        m_txsMapCache.clear();
+        m_txsRoot.clear();
+    }
 
 private:
     /// encode function
@@ -109,6 +145,7 @@ private:
     {
         /// RecursiveGuard l(m_txsCacheLock);
         m_txsCache = bytes();
+        m_txsMapCache = BytesMap();
     }
 
     bytes const& encodeTransactions();
@@ -118,14 +155,18 @@ private:
     BlockHeader m_blockHeader;
     /// transaction list (field 1)
     Transactions m_transactions;
+    TransactionReceipts m_transactionReceipts;
     /// hash of the block header (field 2)
     h256 m_headerHash;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
+    /// bytes for block
+    bytes m_currentBytes;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     bytes m_txsCache;
-    /// mutable RecursiveMutex m_txsCacheLock;
+    BytesMap m_txsMapCache;
+    h256 m_txsRoot;
 };
 }  // namespace eth
 }  // namespace dev

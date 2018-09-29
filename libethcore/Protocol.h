@@ -38,6 +38,12 @@ enum ProtocolID
     TxPool = 10
 };
 
+enum ExtraIndex
+{
+    PBFTExtraData = 0,
+    ExtraIndexNum
+};
+
 inline int16_t getGroupProtoclID(int8_t groupID, uint8_t protocolID)
 {
     if (groupID < 0)

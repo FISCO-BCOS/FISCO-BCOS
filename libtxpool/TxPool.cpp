@@ -241,18 +241,27 @@ bool TxPool::drop(h256 const& _txHash)
  * @param _avoid : Transactions to avoid returning.
  * @return Transactions : up to _limit transactions
  */
-Transactions TxPool::topTransactions(unsigned _limit, h256Hash const& _avoid) const
+Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool updateAvoid)
 {
     ReadGuard l(m_lock);
     Transactions ret;
+    uint64_t i = 0;
     for (auto it = m_txsQueue.begin(); ret.size() < m_limit && it != m_txsQueue.end(); it++)
     {
         if (!_avoid.count(it->sha3()))
         {
             ret.push_back(*it);
+            if (updateAvoid)
+                _avoid.insert(it->sha3());
         }
     }
     return ret;
+}
+
+dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
+{
+    h256Hash _avoid = h256Hash();
+    return topTransactions(_limit, _avoid);
 }
 
 /// get all transactions(maybe blocksync module need this interface)

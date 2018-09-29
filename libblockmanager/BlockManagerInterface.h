@@ -21,7 +21,7 @@
  * @date: 2018-09-21
  */
 #pragma once
-#include <libdevcore/Worker.h>
+#include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
 namespace dev
@@ -37,6 +37,7 @@ public:
     virtual h256 numberHash(unsigned _i) const = 0;
     virtual std::vector<bytes> transactions(h256 const& _blockHash) = 0;
     virtual bool isNonceOk(dev::eth::Transaction const& _transaction, bool _needinsert = false) = 0;
+    virtual dev::eth::BlockHeader const& getLatestBlockHeader() const = 0;
 };
 }  // namespace blockmanager
 }  // namespace dev

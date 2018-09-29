@@ -63,13 +63,13 @@ public:
     {
         m_nonceCheck = _nonceCheck;
     }
-
+    virtual dev::eth::BlockHeader const& getLatestBlockHeader() const {}
     /// fake block chain
     void FakeBlockChain(uint64_t _blockNum, size_t const& trans_size)
     {
         m_blockChain.clear();
         m_blockHash.clear();
-        for (uint64_t blockHeight = 0; blockHeight <= _blockNum; blockHeight++)
+        for (uint64_t blockHeight = 0; blockHeight < _blockNum; blockHeight++)
         {
             FakeBlock fake_block(trans_size);
             if (blockHeight > 0)

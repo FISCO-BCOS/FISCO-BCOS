@@ -94,8 +94,8 @@ public:
      * @return Transactions : up to _limit transactions
      */
     Transactions topTransactions(
-        unsigned _limit, h256Hash const& _avoid = h256Hash()) const override;
-
+        uint64_t const& _limit, h256Hash& _avoid, bool update_void = false) override;
+    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit);
     /// get all transactions(maybe blocksync module need this interface)
     Transactions pendingList() const override;
     /// get current transaction num

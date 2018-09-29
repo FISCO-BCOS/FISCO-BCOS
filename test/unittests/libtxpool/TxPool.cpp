@@ -34,10 +34,10 @@ namespace dev
 {
 namespace test
 {
-class TxPoolFixture : public TestOutputHelperFixture
+class TxPoolFixture
 {
 public:
-    TxPoolFixture() {}
+    TxPoolFixture() { FakeTxPoolFunc(5, 5); }
     void FakeTxPoolFunc(uint64_t _blockNum, size_t const& transSize = 5)
     {
         /// fake block manager
@@ -76,37 +76,38 @@ public:
     uint16_t listenPort = 30304;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TxPoolTest, TxPoolFixture)
+BOOST_FIXTURE_TEST_SUITE(TxPoolTest, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testSessionRead)
 {
-    FakeTxPoolFunc(5, 5);
-    BOOST_CHECK(!!m_txPool);
-    BOOST_CHECK(!!m_topicService);
-    BOOST_CHECK(!!m_blockManager);
+    TxPoolFixture pool_test;
+    BOOST_CHECK(!!pool_test.m_txPool);
+    BOOST_CHECK(!!pool_test.m_topicService);
+    BOOST_CHECK(!!pool_test.m_blockManager);
     ba::io_service m_ioservice(2);
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
     std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice, m_endpoint);
     NodeID m_nodeId = KeyPair::create().pub();
     /// start peer session and doRead
-    BOOST_CHECK_THROW(m_host->startPeerSession(m_nodeId, fake_socket), std::exception);
+    BOOST_CHECK_THROW(pool_test.m_host->startPeerSession(m_nodeId, fake_socket), std::exception);
 }
+
 BOOST_AUTO_TEST_CASE(testImportAndSubmit)
 {
-    FakeTxPoolFunc(5, 5);
-    BOOST_CHECK(!!m_txPool);
-    BOOST_CHECK(!!m_topicService);
-    BOOST_CHECK(!!m_blockManager);
-    bytes trans_data =
-        m_blockManager->transactions(m_blockManager->m_blockChain[0].headerHash())[0];
+    TxPoolFixture pool_test;
+    BOOST_CHECK(!!pool_test.m_txPool);
+    BOOST_CHECK(!!pool_test.m_topicService);
+    BOOST_CHECK(!!pool_test.m_blockManager);
+    bytes trans_data = pool_test.m_blockManager->transactions(
+        pool_test.m_blockManager->m_blockChain[0].headerHash())[0];
     /// import invalid transaction
-    ImportResult result = m_txPool->import(ref(trans_data));
+    ImportResult result = pool_test.m_txPool->import(ref(trans_data));
     BOOST_CHECK(result == ImportResult::NonceCheckFail);
     /// submit invalid transaction
     Transaction tx(trans_data, CheckTransaction::Everything);
-    std::pair<h256, Address> ret_result = m_txPool->submit(tx);
+    std::pair<h256, Address> ret_result = pool_test.m_txPool->submit(tx);
     BOOST_CHECK(ret_result == std::make_pair(tx.sha3(), Address(1)));
-    std::vector<bytes> transaction_vec =
-        m_blockManager->transactions(m_blockManager->m_blockChain[0].headerHash());
+    std::vector<bytes> transaction_vec = pool_test.m_blockManager->transactions(
+        pool_test.m_blockManager->m_blockChain[0].headerHash());
     Secret sec = KeyPair::create().secret();
     /// set valid nonce
     for (size_t i = 0; i < transaction_vec.size(); i++)
@@ -116,18 +117,18 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
         tx.setNonce(u256(tx.nonce() + i + 1));
         bytes trans_bytes2;
         tx.encode(trans_bytes2);
-        BOOST_CHECK_THROW(m_txPool->import(ref(trans_bytes2)), InvalidSignature);
+        BOOST_CHECK_THROW(pool_test.m_txPool->import(ref(trans_bytes2)), InvalidSignature);
         /// resignature
         Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         tx.encode(trans_bytes2);
-        result = m_txPool->import(ref(trans_bytes2));
+        result = pool_test.m_txPool->import(ref(trans_bytes2));
         BOOST_CHECK(result == ImportResult::Success);
     }
-    BOOST_CHECK(m_txPool->pendingSize() == 5);
+    BOOST_CHECK(pool_test.m_txPool->pendingSize() == 5);
     /// test ordering of txPool
-    Transactions pending_list = m_txPool->pendingList();
-    for (unsigned int i = 1; i < m_txPool->pendingSize(); i++)
+    Transactions pending_list = pool_test.m_txPool->pendingList();
+    for (unsigned int i = 1; i < pool_test.m_txPool->pendingSize(); i++)
     {
         BOOST_CHECK(pending_list[i - 1].importTime() <= pending_list[i].importTime());
     }
@@ -136,35 +137,35 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     Signature sig = sign(sec, tx.sha3(WithoutSignature));
     tx.updateSignature(SignatureStruct(sig));
     tx.encode(trans_data);
-    m_txPool->setTxPoolLimit(2);
-    m_txPool->import(ref(trans_data));
-    BOOST_CHECK(m_txPool->pendingSize() == 2);
+    pool_test.m_txPool->setTxPoolLimit(2);
+    pool_test.m_txPool->import(ref(trans_data));
+    BOOST_CHECK(pool_test.m_txPool->pendingSize() == 2);
     /// test status
-    TxPoolStatus m_status = m_txPool->status();
+    TxPoolStatus m_status = pool_test.m_txPool->status();
     BOOST_CHECK(m_status.current == 2);
     BOOST_CHECK(m_status.dropped == 0);
     /// test drop
-    bool ret = m_txPool->drop(pending_list[4].sha3());
+    bool ret = pool_test.m_txPool->drop(pending_list[4].sha3());
     BOOST_CHECK(ret == false);
-    ret = m_txPool->drop(pending_list[0].sha3());
+    ret = pool_test.m_txPool->drop(pending_list[0].sha3());
     BOOST_CHECK(ret == true);
-    BOOST_CHECK(m_txPool->pendingSize() == 1);
-    m_status = m_txPool->status();
+    BOOST_CHECK(pool_test.m_txPool->pendingSize() == 1);
+    m_status = pool_test.m_txPool->status();
     BOOST_CHECK(m_status.current == 1);
     BOOST_CHECK(m_status.dropped == 1);
 
     /// test topTransactions
-    Transactions top_transactions = m_txPool->topTransactions(20);
-    BOOST_CHECK(top_transactions.size() == m_txPool->pendingSize());
+    Transactions top_transactions = pool_test.m_txPool->topTransactions(20);
+    BOOST_CHECK(top_transactions.size() == pool_test.m_txPool->pendingSize());
     h256Hash avoid;
     avoid.insert(pending_list[1].sha3());
-    top_transactions = m_txPool->topTransactions(20, avoid);
+    top_transactions = pool_test.m_txPool->topTransactions(20, avoid);
     BOOST_CHECK(top_transactions.size() == 0);
     /// check getProtocol id
-    BOOST_CHECK(m_txPool->getProtocolId() == dev::eth::ProtocolID::TxPool);
-    BOOST_CHECK(m_txPool->maxBlockLimit() == u256(1000));
-    m_txPool->setMaxBlockLimit(100);
-    BOOST_CHECK(m_txPool->maxBlockLimit() == u256(100));
+    BOOST_CHECK(pool_test.m_txPool->getProtocolId() == dev::eth::ProtocolID::TxPool);
+    BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == u256(1000));
+    pool_test.m_txPool->setMaxBlockLimit(100);
+    BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == u256(100));
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
