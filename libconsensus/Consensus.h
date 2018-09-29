@@ -63,7 +63,11 @@ public:
                 InvalidProtocolID() << errinfo_comment("Protocol id must be larger than 0"));
     }
 
-    virtual ~Consensus() { stop(); }
+    virtual ~Consensus()
+    {
+        m_transactionSet.clear();
+        stop();
+    }
     /// start the consensus module
     void start() override;
     /// stop the consensus module
@@ -107,13 +111,15 @@ protected:
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.sealing_block.getTransactionSize();
+        if (tx_num >= maxTxsCanSeal)
+            m_syncTxPool = false;
         return (tx_num >= maxTxsCanSeal);
     }
     virtual uint64_t calculateMaxPackTxNum() { return m_maxBlockTransactions; }
     virtual void handleBlock();
     virtual void doWork(bool wait);
     /// load transactions from transaction pool
-    void loadTransactions(uint64_t const& maxBlockTransactions, uint64_t const& curTxsNum);
+    void loadTransactions(uint64_t const& transToFetch);
     void doWork() override { doWork(true); }
     bool inline isBlockSyncing();
 
@@ -159,6 +165,8 @@ protected:
 
     NodeAccountType m_accountType;
     u256 m_idx = 0;
+    /// hash set for filter fetched transactions
+    h256Hash m_transactionSet;
 };
 }  // namespace consensus
 }  // namespace dev

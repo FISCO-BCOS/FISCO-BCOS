@@ -69,7 +69,7 @@ void Consensus::doWork(bool wait)
             if (max_blockCanSeal < tx_num)
                 return;
             /// load transaction from transaction queue
-            loadTransactions(max_blockCanSeal, tx_num);
+            loadTransactions(max_blockCanSeal - tx_num);
             /// check enough
             if (checkTxsEnough(max_blockCanSeal))
                 return;
@@ -85,12 +85,11 @@ void Consensus::doWork(bool wait)
 }
 
 /// sync transactions from txPool
-void Consensus::loadTransactions(uint64_t const& maxTransaction, uint64_t const& curTxsNum)
+void Consensus::loadTransactions(uint64_t const& transToFetch)
 {
-    uint64_t trans_toFetch = maxTransaction - curTxsNum;
-    m_sealing.sealing_block.appendTransactions(m_txPool->topTransactions(trans_toFetch));
-    if (m_sealing.sealing_block.getTransactionSize() >= maxTransaction)
-        m_syncTxPool = false;
+    /// fetch transactions and update m_transactionSet
+    m_sealing.sealing_block.appendTransactions(
+        m_txPool->topTransactions(transToFetch, m_transactionSet, true));
 }
 
 void inline Consensus::ResetSealingHeader()
