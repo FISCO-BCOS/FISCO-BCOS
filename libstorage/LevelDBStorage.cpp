@@ -32,6 +32,8 @@ Entries::Ptr LevelDBStorage::select(h256 hash, int num,
           StorageException(-1, "Query leveldb exception:" + s.ToString()));
     }
 
+    LOG(TRACE) << "leveldb select key:" << entryKey << " value:" << value;
+
     Entries::Ptr entries = std::make_shared<Entries>();
     if (!s.IsNotFound()) {
       // parse json
@@ -84,13 +86,13 @@ size_t LevelDBStorage::commit(h256 hash, int num,
         entry["num"] = num;
 
         for (size_t i = 0; i < dataIt.second->size(); ++i) {
-          if (dataIt.second->get(i)->dirty()) {
+          //if (dataIt.second->get(i)->dirty()) {
             Json::Value value;
             for (auto fieldIt : *(dataIt.second->get(i)->fields())) {
               value[fieldIt.first] = fieldIt.second;
             }
             entry["values"].append(value);
-          }
+          //}
         }
 
         std::stringstream ssOut;
@@ -98,6 +100,8 @@ size_t LevelDBStorage::commit(h256 hash, int num,
 
         batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
         ++total;
+
+        LOG(TRACE) << "leveldb commit key:" << entryKey << " value:" << ssOut.str();
       }
     }
 
