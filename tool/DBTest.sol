@@ -11,7 +11,7 @@ contract DBTest {
         df.createTable("t_test", "name", "item_id,item_name");
     }
 
-    function read(string name) public constant returns(bytes32[], int[], bytes32[]){
+    function select(string name) public constant returns(bytes32[], int[], bytes32[]){
         DBFactory df = DBFactory(0x1001);
         DB db = df.openDB("t_test");
         
