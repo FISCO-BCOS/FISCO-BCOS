@@ -239,6 +239,26 @@ std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 
 		printDoubleLine(ss);
 		ss << "Peers number: ";
+		auto sessions = _host->mSessions();
+		for (auto it = sessions.begin(); it != sessions.end(); ++it) {
+			auto s = it->second.lock();
+			if(s) {
+				printShortSingleLine(ss);
+				const p2p::NodeID nodeid = s->id();
+				ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
+				ss << "Ip: " << s->peer()->endpoint.address << std::endl;
+				ss << "Port:" << s->peer()->endpoint.tcpPort << std::endl;
+				ss << "Online: ";
+				if (_host->isConnected(nodeid)) {
+					ss << "true";
+				} else {
+					ss << "false";
+				}
+				ss << std::endl;
+			}
+		}
+
+#if 0
 		std::vector<p2p::PeerSessionInfo> peers = _host->peerSessionInfo();
 		ss << peers.size() << std::endl;
 		for(size_t i = 0; i < peers.size(); i++)
@@ -259,6 +279,7 @@ std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 			}
 			ss << std::endl;
 		}
+#endif
 	}
 	catch(std::exception &e) {
 		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
