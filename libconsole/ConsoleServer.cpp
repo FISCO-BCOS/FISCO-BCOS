@@ -164,8 +164,7 @@ void ConsoleServer::onRequest(dev::channel::ChannelSession::Ptr session,
     }
     else
     {
-      output = "Unknown command, enter 'help' for command list.\n";
-      output += "fisco bcos>";
+      output = "Unknown command, enter 'help' for command list.\n\n";
     }
   }
   catch (std::exception& e)
