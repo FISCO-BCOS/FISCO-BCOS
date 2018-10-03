@@ -234,35 +234,40 @@ std::string ConsoleServer::status(const std::vector<std::string> args) {
 }
 
 std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
-  std::string output;
-  std::stringstream ss;
 
-  try {
+	std::string output;
+	std::stringstream ss;
 
-    printDoubleLine(ss);
-    ss << "Peers number: ";
-    std::vector<p2p::PeerSessionInfo> peers = _host->peerSessionInfo();
-    ss << peers.size() << std::endl;
-    for (size_t i = 0; i < peers.size(); i++) {
-      printShortSingleLine(ss);
-      const p2p::NodeID nodeid = peers[i].id;
-      ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
-      ss << "Ip: " << peers[i].host << std::endl;
-      ss << "Port:" << peers[i].port << std::endl;
-      ss << "Online: ";
-      if (_host->isConnected(nodeid)) {
-        ss << "true";
-      } else {
-        ss << "false";
-      }
-      ss << std::endl;
-    }
-  } catch (std::exception &e) {
-    LOG(ERROR)<< "ERROR: " << boost::diagnostic_information(e);
-    ss << "ERROR while p2p.list | ";
-    ss << e.what();
-  }
-  printSingleLine(ss);
+	try {
+
+		printDoubleLine(ss);
+		ss << "Peers number: ";
+		auto sessions = _host->mSessions();
+		ss << sessions.size() << std::endl;
+		for (auto it = sessions.begin(); it != sessions.end(); ++it) {
+			auto s = it->second.lock();
+			if(s) {
+				printShortSingleLine(ss);
+				const p2p::NodeID nodeid = s->id();
+				ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
+				ss << "Ip: " << s->peer()->endpoint.address << std::endl;
+				ss << "Port:" << s->peer()->endpoint.tcpPort << std::endl;
+				ss << "Online: ";
+				if (_host->isConnected(nodeid)) {
+					ss << "true";
+				} else {
+					ss << "false";
+				}
+				ss << std::endl;
+			}
+		}
+	}
+	catch(std::exception &e) {
+		LOG(ERROR) << "ERROR: " << boost::diagnostic_information(e);
+		ss << "ERROR while p2p.list | ";
+		ss << e.what();
+	}
+	printSingleLine(ss);
   ss << std::endl;
 
   output = ss.str();
