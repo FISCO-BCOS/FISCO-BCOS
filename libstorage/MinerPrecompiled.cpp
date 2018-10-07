@@ -55,18 +55,29 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         if (table.get())
         {
             auto condition = table->newCondition();
-            condition->EQ("node_id", nodeID);
-            auto entries = table->select(key, condition);
+            condition->EQ(MINER_KEY_NODEID, nodeID);
+            auto entries = table->select(MINER_TYPE_MINER, condition);
+            auto entry = table->newEntry();
+            entry->setField(MINER_PRIME_KEY, MINER_TYPE_MINER);
             if (entries->size() == 0u)
             {
-                auto entry = table->newEntry();
-                entry->setField("type", key);
-                entry->setField("node_id", nodeID);
-                entry->setField("enable_num", context->blockInfo().number.str());
-                table->insert(key, entry);
-                LOG(DEBUG) << "MinerPrecompiled add miner nodeID : " << nodeID;
+                entries = table->select(MINER_TYPE_OBSERVER, condition);
+                if (entries->size() == 0u)
+                {
+                    entry->setField(MINER_KEY_NODEID, nodeID);
+                    entry->setField(MINER_KEY_ENABLENUM, (context->blockInfo().number + 1).str());
+                    table->insert(MINER_TYPE_MINER, entry);
+                    LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
+                    break;
+                }
+                LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
+                table->update(MINER_TYPE_OBSERVER, entry, condition);
+                break;
             }
+            LOG(DEBUG) << "MinerPrecompiled already miner, nodeID : " << nodeID;
+            break;
         }
+        LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
         break;
     }
     case 0x80599e4b:
@@ -82,13 +93,21 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         if (table.get())
         {
             auto condition = table->newCondition();
-            condition->EQ("node_id", nodeID);
-            auto entries = table->select(key, condition);
+            condition->EQ(MINER_KEY_NODEID, nodeID);
+            auto entries = table->select(MINER_TYPE_MINER, condition);
+            auto entry = table->newEntry();
+            entry->setField(MINER_PRIME_KEY, MINER_TYPE_OBSERVER);
             if (entries->size() == 0u)
+            {
+                LOG(DEBUG) << "MinerPrecompiled remove node not in _sys_miners_, nodeID : "
+                           << nodeID;
+                table->insert(MINER_TYPE_OBSERVER, entry);
                 break;
-            table->remove(key, condition);
+            }
+            table->update(MINER_TYPE_MINER, entry, condition);
             LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
         }
+        LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
         break;
     }
     default:

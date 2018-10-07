@@ -52,8 +52,8 @@ class TableFactoryPrecompiled : public Precompiled
 public:
     typedef std::shared_ptr<TableFactoryPrecompiled> Ptr;
 
+    TableFactoryPrecompiled();
     virtual ~TableFactoryPrecompiled(){};
-
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
@@ -73,6 +73,7 @@ private:
         const std::string& keyField, const std::string& valueFiled);
     TablePrecompiled::Ptr getSysTable(ExecutiveContext::Ptr context);
     dev::storage::MemoryTableFactory::Ptr m_MemoryTableFactory;
+    std::vector<std::string> m_sysTables;
     std::map<std::string, Address> m_name2Table;
     h256 m_hash;
 };

@@ -33,6 +33,11 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
 
+TableFactoryPrecompiled::TableFactoryPrecompiled()
+{
+    m_sysTables.push_back("_sys_tables_");
+    m_sysTables.push_back("_sys_miners_");
+}
 
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -140,8 +145,12 @@ unsigned TableFactoryPrecompiled::isTableCreated(ExecutiveContext::Ptr context,
         auto entry = tableEntries->get(i);
         if (keyField == entry->getField("key_field") &&
             valueFiled == entry->getField("value_field"))
+        {
+            LOG(DEBUG) << "TableFactory table already exists:" << tableName;
             return TABLENAME_ALREADY_EXISTS;
+        }
     }
+    LOG(DEBUG) << "TableFactory table conflict:" << tableName;
     return TABLENAME_CONFLICT;
 }
 
@@ -153,11 +162,17 @@ Address TableFactoryPrecompiled::openTable(ExecutiveContext::Ptr context, const 
         LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
         return it->second;
     }
-    auto sysTable = getSysTable(context);
-    auto tableEntries =
-        sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
-    if (tableEntries->size() == 0u)
-        return Address();
+
+    if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), tableName))
+    {
+        auto sysTable = getSysTable(context);
+        auto tableEntries = sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
+        if (tableEntries->size() == 0u)
+        {
+            LOG(DEBUG) << tableName << "not exist.";
+            return Address();
+        }
+    }
 
     LOG(DEBUG) << "Open new table:" << tableName;
     dev::storage::Table::Ptr table = m_MemoryTableFactory->openTable(
