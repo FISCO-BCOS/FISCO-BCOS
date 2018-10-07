@@ -71,10 +71,9 @@ public:
 private:
     unsigned isTableCreated(ExecutiveContext::Ptr context, const std::string& tableName,
         const std::string& keyField, const std::string& valueFiled);
-    TablePrecompiled::Ptr getSysTable(ExecutiveContext::Ptr context);
+    Address getSysTable(ExecutiveContext::Ptr context, const std::string& _tableName);
     dev::storage::MemoryTableFactory::Ptr m_MemoryTableFactory;
     std::vector<std::string> m_sysTables;
-    std::map<std::string, Address> m_name2Table;
     h256 m_hash;
 };
 

@@ -20,7 +20,10 @@
  */
 #include "MemoryTableFactory.h"
 #include "MemoryTable.h"
+#include "TablePrecompiled.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace dev;
@@ -70,4 +73,47 @@ void MemoryTableFactory::setBlockHash(h256 blockHash)
 void MemoryTableFactory::setBlockNum(int blockNum)
 {
     m_blockNum = blockNum;
+}
+
+Address MemoryTableFactory::getTable(const std::string& tableName)
+{
+    auto it = m_name2Table.find(tableName);
+    if (it == m_name2Table.end())
+    {
+        return Address();
+    }
+    return it->second;
+}
+
+void MemoryTableFactory::insertTable(const std::string& _tableName, const Address& _address)
+{
+    m_name2Table.insert(std::make_pair(_tableName, _address));
+}
+
+h256 MemoryTableFactory::hash(std::shared_ptr<blockverifier::ExecutiveContext> context)
+{
+    bytes data;
+    LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
+    for (auto tableAddress : m_name2Table)
+    {
+        blockverifier::TablePrecompiled::Ptr table =
+            std::dynamic_pointer_cast<blockverifier::TablePrecompiled>(
+                context->getPrecompiled(tableAddress.second));
+        h256 hash = table->hash();
+        LOG(DEBUG) << "table:" << tableAddress.first << " hash:" << hash;
+        if (hash == h256())
+        {
+            continue;
+        }
+
+        bytes tableHash = table->hash().asBytes();
+        data.insert(data.end(), tableHash.begin(), tableHash.end());
+    }
+    if (data.empty())
+    {
+        return h256();
+    }
+    LOG(DEBUG) << "MemoryTableFactory data:" << data << " hash:" << dev::sha256(&data);
+
+    return dev::sha256(&data);
 }
