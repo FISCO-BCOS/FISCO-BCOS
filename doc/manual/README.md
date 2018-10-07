@@ -59,7 +59,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ### 1.2 使用快速构建脚本
 
-> 第二、三章是手动部署单节点网络的操作步骤，如果不想**手工操作**，可以尝试使用`FISCO-BCOS/scrtips/build_chain.sh`脚本，根据脚本提示设置参数，快速搭建区块链网络。
+> 第二章是手动部署单节点网络的操作步骤，如果不想**手工操作**，可以尝试使用`FISCO-BCOS/scrtips/build_chain.sh`脚本，根据脚本提示设置参数，快速搭建区块链网络。
 
 1. 快速构建4节点区块链
 
@@ -83,12 +83,11 @@ curl -o build_chain.sh https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/d
 # 	-h Help
 
 # 生成节点配置文件，下面命令表示为127.0.0.1这个IP生成4个节点
-# 默认使用leveldb存储，如需使用AMDB，在下面命令末尾加 -s
+# 默认使用leveldb存储，如需使用AMDB，添加 -s 选项
 bash build_chain.sh -l "127.0.0.1:4"
-# 脚本必须有-l或-f选项来指定ip
-# -f指定文件，按行分割，每行格式为IP:NUM，表示一个部署服务器IP和该服务器部署节点数，不同节点实例端口会自动分配。
-# -l 选项和-f类似，以","分割，例如"IP1:num1,IP2:NUM2"
 ```
+> 脚本必须有-l或-f选项来指定ip。生成节点后，拷贝IP对应的节点文件夹到部署服务器启动节点。
+> -f指定文件，按行分割，每行格式为IP:NUM，表示一个部署服务器IP和该服务器部署节点数，不同节点实例端口会自动分配。`-l`选项和`-f`类似，以`,`分割，例如`"IP1:num1,IP2:NUM2"`
 > 脚本执行报错参考[build_chain.sh执行报错](#762-build_chainsh执行报错)
 
 2. 启动节点
@@ -964,6 +963,7 @@ dos2unix xxxxx.sh
 ```
 
 #### 7.6.2 `build_chain.sh`执行报错
+
 ```bash
 # 报此错误是因为java环境问题，请使用OpenJDK-8以上版本
 EC KeyFactory not available
