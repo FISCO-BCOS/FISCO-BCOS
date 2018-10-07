@@ -42,15 +42,19 @@ void DBFactoryPrecompiled::afterBlock(shared_ptr<PrecompiledContext> context, bo
 
         dev::storage::TableData::Ptr tableData = make_shared<dev::storage::TableData>();
         tableData->tableName = dbIt.first;
+
+        bool dirtyTable = false;
         for (auto it : *(dbPrecompiled->getDB()->data()))
         {
-            if (it.second->dirty() || !_memoryDBFactory->stateStorage()->onlyDirty())
-            {
-                tableData->data.insert(make_pair(it.first, it.second));
-            }
+        	//至少有一个dirty的数据，才把全表提交给Storage
+        	tableData->data.insert(make_pair(it.first, it.second));
+
+        	if(it.second->dirty()) {
+        		dirtyTable = true;
+        	}
         }
 
-        if (!tableData->data.empty())
+        if (!tableData->data.empty() && dirtyTable)
         {
             datas.push_back(tableData);
         }
