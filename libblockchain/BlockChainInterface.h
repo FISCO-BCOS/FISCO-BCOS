@@ -37,11 +37,12 @@ class BlockChainInterface
 public:
     BlockChainInterface() = default;
     virtual ~BlockChainInterface(){};
-    virtual uint64_t number() const = 0;
-    virtual h256 numberHash(unsigned _i) const = 0;
-    virtual std::shared_ptr<Block> getBlockByHash(h256 const& _blockHash) = 0;
-    virtual std::shared_ptr<Block> getBlockByNumber(unsigned _i) = 0;
-    virtual void commitBlock(const Block& block, std::shared_ptr<ExecutiveContext>) = 0;
+    virtual int64_t number() const = 0;
+    virtual dev::h256 numberHash(int64_t _i) const = 0;
+    virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
+    virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
+    virtual void commitBlock(
+        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
 };
 }  // namespace blockchain
 }  // namespace dev
