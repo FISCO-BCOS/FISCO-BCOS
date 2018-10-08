@@ -35,8 +35,8 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 ## 2.2 安装说明
 
 
-如果您想亲自动手配置、搭建FISCO BCOS1.5.0，请参考[这里](doc/manual)。
-如果您想亲自动手配置、搭建FISCO BCOS1.3.x，请参考[这里](https://fisco-bcos-documentation.readthedocs.io)。
+如果您想亲自动手配置、搭建 **[FISCO BCOS1.5.0，请参考这里](doc/manual)。**  
+如果您想亲自动手配置、搭建 **[FISCO BCOS1.3.x，请参考这里](https://fisco-bcos-documentation.readthedocs.io)。**
 
 ## 2.3 实践指引
 

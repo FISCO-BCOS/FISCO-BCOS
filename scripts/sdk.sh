@@ -37,6 +37,7 @@ keytool -importkeystore -destkeystore client.keystore -srckeystore keystore.p12 
 
 mv client.keystore sdk/
 cp $nodePath/data/ca.crt sdk/
+rm $nodePath/sdk/pwd.conf
 echo "=============================="
 echo "Build $nodePath/sdk Crt suc!!!"
 
