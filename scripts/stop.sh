@@ -1,14 +1,5 @@
-#! /bin/sh
-#stop fisco-bcos
-name=`pwd`/fisco-bcos
-agent_pid=`ps aux|grep "$name"|grep -v grep|awk '{print $2}'`
-kill_cmd="kill -9 ${agent_pid}"
-echo "${kill_cmd}"
-eval ${kill_cmd}
-
-#stop tail -f log
-name=`pwd`/log/info
-agent_pid=`ps aux|grep "$name"|grep -v grep|awk '{print $2}'`
-kill_cmd="kill -9 ${agent_pid}"
-echo "${kill_cmd}"
-eval ${kill_cmd}
+#!/bin/bash
+SHELL_FOLDER=$(cd "$(dirname "$0")";pwd)
+fisco_bcos=${SHELL_FOLDER}/fisco-bcos
+weth_pid=`ps aux|grep "${fisco_bcos}"|grep -v grep|awk '{print $2}'`
+kill -9 ${weth_pid}
