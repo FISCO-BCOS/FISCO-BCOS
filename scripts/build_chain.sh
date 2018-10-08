@@ -267,14 +267,17 @@ EOF
 
 	cat << EOF > "$node_dir/start.sh"
 #!/bin/bash
-fisco_bcos=\`pwd\`/fisco-bcos
+SHELL_FOLDER=\$(cd "\$(dirname "\$0")";pwd)
+fisco_bcos=\${SHELL_FOLDER}/fisco-bcos
+cd \${SHELL_FOLDER}
 nohup setsid \$fisco_bcos --config config.conf --genesis genesis.json&
 EOF
 
 	cat << EOF > "$node_dir/stop.sh"
 #!/bin/bash
-fisco_bcos=\`pwd\`/fisco-bcos
-weth_pid=\`ps aux|grep "${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+SHELL_FOLDER=\$(cd "\$(dirname "\$0")";pwd)
+fisco_bcos=\${SHELL_FOLDER}/fisco-bcos
+weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 kill -9 \${weth_pid}
 EOF
 
