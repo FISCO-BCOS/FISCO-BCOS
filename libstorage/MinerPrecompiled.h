@@ -36,9 +36,9 @@ contract Miner {
 }
 #endif
 
-/// \brief Miner Node 
+/// \brief Miner Node
 const static char* const MINER_TYPE_MINER = "miner";
-/// \brief Observer Node 
+/// \brief Observer Node
 const static char* const MINER_TYPE_OBSERVER = "observer";
 const static char* const MINER_KEY_NODEID = "node_id";
 const static char* const MINER_KEY_ENABLENUM = "enable_num";
