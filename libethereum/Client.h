@@ -170,7 +170,7 @@ public:
 	void setNetworkId(u256 const& _n) override;
 
 	/// Get the seal engine.
-	SealEngineFace* sealEngine() const override { return bc().sealEngine(); }
+	virtual SealEngineFace* sealEngine() const override { return bc().sealEngine(); }
 
 	// Debug stuff:
 
