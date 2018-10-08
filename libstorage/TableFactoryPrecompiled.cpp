@@ -117,7 +117,7 @@ Address TableFactoryPrecompiled::getSysTable(
     if (address == Address())
     {
         dev::storage::Table::Ptr table = m_MemoryTableFactory->openTable(
-            context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), _tableName);
+            context->blockInfo().hash, context->blockInfo().number.convert_to<int64_t>(), _tableName);
 
         TablePrecompiled::Ptr tablePrecompiled = std::make_shared<TablePrecompiled>();
         tablePrecompiled->setTable(table);

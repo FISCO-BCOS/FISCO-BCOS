@@ -39,8 +39,8 @@ public:
 
     virtual ~MemoryTableFactory() {}
 
-    Table::Ptr openTable(h256 blockHash, int num, const std::string& table) override;
-    Table::Ptr createTable(h256 blockHash, int num, const std::string& tableName,
+    Table::Ptr openTable(h256 blockHash, int64_t num, const std::string& table) override;
+    Table::Ptr createTable(h256 blockHash, int64_t num, const std::string& tableName,
         const std::string& keyField, const std::vector<std::string>& valueField) override;
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
