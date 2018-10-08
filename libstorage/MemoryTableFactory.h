@@ -28,7 +28,7 @@ namespace dev
 {
 namespace blockverifier
 {
-    class ExecutiveContext;
+class ExecutiveContext;
 }
 namespace storage
 {
@@ -49,14 +49,14 @@ public:
     void setBlockHash(h256 blockHash);
     void setBlockNum(int blockNum);
     Address getTable(const std::string& tableName);
-    void insertTable(const std::string& _tableName, const Address &_address);
+    void insertTable(const std::string& _tableName, const Address& _address);
     h256 hash(std::shared_ptr<blockverifier::ExecutiveContext> context);
+
 private:
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
     std::map<std::string, Address> m_name2Table;
-
 };
 
 }  // namespace storage
