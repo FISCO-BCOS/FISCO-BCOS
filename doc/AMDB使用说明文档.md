@@ -163,7 +163,7 @@ AMDB 的 dist/conf 目录下有配置文件 amdb.properties 和 db.properties。
 ```properties
 # 节点ip
 node.ip=127.0.0.1
-# 节点的listen_port
+# 节点的rpc listen_port
 node.listen_port=30301
 # 节点的topic
 node.topic=DB

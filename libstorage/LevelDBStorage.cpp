@@ -50,15 +50,20 @@ Entries::Ptr LevelDBStorage::select(h256 hash, int num,
       for (auto it = values.begin(); it != values.end(); ++it) {
         Entry::Ptr entry = std::make_shared<Entry>();
 
+        entry->setField("_hash_", blockHash);
+        entry->setField("_num_", std::to_string(num));
         for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt) {
           entry->setField(valueIt.key().asString(), valueIt->asString());
         }
-
-        entry->setDirty(false);
-        entries->addEntry(entry);
+        // judge status
+        if (entry->getStatus() == 0)
+        {
+          entry->setDirty(false);
+          entries->addEntry(entry);
+        }
       }
     }
-
+    entries->setDirty(false);
     return entries;
   } catch (std::exception &e) {
     LOG(ERROR) << "Query leveldb exception:"
