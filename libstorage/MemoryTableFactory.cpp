@@ -29,7 +29,7 @@
 using namespace dev;
 using namespace dev::storage;
 
-Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int num, const std::string& table)
+Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const std::string& table)
 {
     LOG(DEBUG) << "Open table:" << blockHash << " num:" << num << " table:" << table;
 
@@ -43,8 +43,9 @@ Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int num, const std::str
     return memoryTable;
 }
 
-Table::Ptr MemoryTableFactory::createTable(h256 blockHash, int num, const std::string& tableName,
-    const std::string& keyField, const std::vector<std::string>& valueField)
+Table::Ptr MemoryTableFactory::createTable(h256 blockHash, int64_t num,
+    const std::string& tableName, const std::string& keyField,
+    const std::vector<std::string>& valueField)
 {
     LOG(DEBUG) << "Create Table:" << blockHash << " num:" << num << " table:" << tableName;
 
