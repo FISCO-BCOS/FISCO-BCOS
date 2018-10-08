@@ -22,9 +22,14 @@
 
 #include "Storage.h"
 #include "Table.h"
+#include "libdevcore/Address.h"
 
 namespace dev
 {
+namespace blockverifier
+{
+class ExecutiveContext;
+}
 namespace storage
 {
 class MemoryTableFactory : public StateDBFactory
@@ -34,8 +39,8 @@ public:
 
     virtual ~MemoryTableFactory() {}
 
-    Table::Ptr openTable(h256 blockHash, int num, const std::string& table) override;
-    Table::Ptr createTable(h256 blockHash, int num, const std::string& tableName,
+    Table::Ptr openTable(h256 blockHash, int64_t num, const std::string& table) override;
+    Table::Ptr createTable(h256 blockHash, int64_t num, const std::string& tableName,
         const std::string& keyField, const std::vector<std::string>& valueField) override;
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
@@ -43,11 +48,15 @@ public:
 
     void setBlockHash(h256 blockHash);
     void setBlockNum(int blockNum);
+    Address getTable(const std::string& tableName);
+    void insertTable(const std::string& _tableName, const Address& _address);
+    h256 hash(std::shared_ptr<blockverifier::ExecutiveContext> context);
 
 private:
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
+    std::map<std::string, Address> m_name2Table;
 };
 
 }  // namespace storage

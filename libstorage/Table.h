@@ -134,8 +134,8 @@ public:
 
     virtual ~StateDBFactory() {}
 
-    virtual Table::Ptr openTable(h256 blockHash, int num, const std::string& table) = 0;
-    virtual Table::Ptr createTable(h256 blockHash, int num, const std::string& tableName,
+    virtual Table::Ptr openTable(h256 blockHash, int64_t num, const std::string& table) = 0;
+    virtual Table::Ptr createTable(h256 blockHash, int64_t num, const std::string& tableName,
         const std::string& keyField, const std::vector<std::string>& valueField) = 0;
 };
 
