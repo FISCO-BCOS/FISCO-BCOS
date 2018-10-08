@@ -106,6 +106,7 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
             }
             table->update(MINER_TYPE_MINER, entry, condition);
             LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
+            break;
         }
         LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
         break;
