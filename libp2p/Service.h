@@ -79,6 +79,8 @@ public:
     ///< Only connected node
     virtual SessionInfos sessionInfos() const override;
 
+    bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
+
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,
         std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
