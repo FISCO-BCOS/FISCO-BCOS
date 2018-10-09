@@ -16,7 +16,7 @@
  */
 
 /**
- * @brief : external interface of blockchain
+ * @brief : Imp of blockchain
  * @author: mingzhenliu
  * @date: 2018-09-21
  */

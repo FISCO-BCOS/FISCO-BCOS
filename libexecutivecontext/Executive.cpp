@@ -24,8 +24,8 @@
 #include <libevm/VMFactory.h>
 
 #include <json/json.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <boost/timer.hpp>
-
 #include <numeric>
 
 using namespace std;
@@ -172,23 +172,28 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s.savepoint();
-    /* if (m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
-     {
-         m_gas = _p.gas;
-         m_envInfo.precompiledEngine()->executeOrginPrecompiled(_p.codeAddress, _p.data, _p.out);
-     }
-     else if (m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
-     {
-         m_gas = _p.gas;
+    if (m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
+        bytes output;
+        bool success;
+        tie(success, output) =
+            m_envInfo.precompiledEngine()->executeOrginPrecompiled(_p.codeAddress, _p.data);
+        size_t outputSize = output.size();
+        m_output = owning_bytes_ref{std::move(output), 0, outputSize};
+    }
+    else if (m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
 
-         LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
+        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
-         auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
-         bytesConstRef(&result).copyTo(_p.out);
-
-         LOG(DEBUG) << "Precompiled result: " << result;
-     }
-     else*/
+        auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
+        size_t outputSize = result.size();
+        m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+        LOG(DEBUG) << "Precompiled result: " << result;
+    }
+    else
     {
         m_gas = _p.gas;
         if (m_s.addressHasCode(_p.codeAddress))
