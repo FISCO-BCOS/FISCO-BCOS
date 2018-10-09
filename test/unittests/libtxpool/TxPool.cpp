@@ -21,7 +21,7 @@
  * @author: yujiechen
  * @date: 2018-09-25
  */
-#include "FakeBlockManager.h"
+#include "FakeBlockChain.h"
 #include <libdevcrypto/Common.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -29,7 +29,7 @@
 #include <boost/test/unit_test.hpp>
 using namespace dev;
 using namespace dev::txpool;
-using namespace dev::blockmanager;
+using namespace dev::blockchain;
 namespace dev
 {
 namespace test
@@ -41,12 +41,7 @@ public:
     void FakeTxPoolFunc(uint64_t _blockNum, size_t const& transSize = 5)
     {
         /// fake block manager
-        m_blockManager = std::make_shared<FakeBlockManager>(_blockNum, transSize);
-        m_nonce = std::make_shared<NonceCheck>(m_blockManager);
-        m_nonce->init();
-        auto fake_blockManager = dynamic_cast<FakeBlockManager*>(m_blockManager.get());
-        if (fake_blockManager)
-            fake_blockManager->setNonceCheck(m_nonce);
+        m_blockChain = std::make_shared<FakeBlockChain>(_blockNum, transSize);
         /// fake host of p2p module
         FakeHost* hostPtr = createFakeHostWithSession(clientVersion, listenIp, listenPort);
         m_host = std::shared_ptr<Host>(hostPtr);
@@ -54,10 +49,10 @@ public:
         m_p2pHandler = std::make_shared<P2PMsgHandler>();
         /// fake service of p2p module
         m_topicService = std::make_shared<Service>(m_host, m_p2pHandler);
-        std::shared_ptr<BlockManagerInterface> blockManager =
-            std::shared_ptr<BlockManagerInterface>(m_blockManager);
+        std::shared_ptr<BlockChainInterface> blockChain =
+            std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
-        m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockManager);
+        m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain);
     }
 
     void setSessionData(std::string const& data_content)
@@ -68,9 +63,8 @@ public:
     std::shared_ptr<FakeTxPool> m_txPool;
     std::shared_ptr<Service> m_topicService;
     std::shared_ptr<P2PMsgHandler> m_p2pHandler;
-    std::shared_ptr<FakeBlockManager> m_blockManager;
+    std::shared_ptr<FakeBlockChain> m_blockChain;
     std::shared_ptr<Host> m_host;
-    std::shared_ptr<NonceCheck> m_nonce;
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
@@ -82,7 +76,7 @@ BOOST_AUTO_TEST_CASE(testSessionRead)
     TxPoolFixture pool_test;
     BOOST_CHECK(!!pool_test.m_txPool);
     BOOST_CHECK(!!pool_test.m_topicService);
-    BOOST_CHECK(!!pool_test.m_blockManager);
+    BOOST_CHECK(!!pool_test.m_blockChain);
     ba::io_service m_ioservice(2);
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
     std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice, m_endpoint);
@@ -96,9 +90,12 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     TxPoolFixture pool_test;
     BOOST_CHECK(!!pool_test.m_txPool);
     BOOST_CHECK(!!pool_test.m_topicService);
-    BOOST_CHECK(!!pool_test.m_blockManager);
-    bytes trans_data = pool_test.m_blockManager->transactions(
-        pool_test.m_blockManager->m_blockChain[0].headerHash())[0];
+    BOOST_CHECK(!!pool_test.m_blockChain);
+    Transactions trans =
+        pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
+            ->transactions();
+    bytes trans_data;
+    trans[0].encode(trans_data);
     /// import invalid transaction
     ImportResult result = pool_test.m_txPool->import(ref(trans_data));
     BOOST_CHECK(result == ImportResult::NonceCheckFail);
@@ -106,15 +103,15 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     Transaction tx(trans_data, CheckTransaction::Everything);
     std::pair<h256, Address> ret_result = pool_test.m_txPool->submit(tx);
     BOOST_CHECK(ret_result == std::make_pair(tx.sha3(), Address(1)));
-    std::vector<bytes> transaction_vec = pool_test.m_blockManager->transactions(
-        pool_test.m_blockManager->m_blockChain[0].headerHash());
+    Transactions transaction_vec =
+        pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
+            ->transactions();
     Secret sec = KeyPair::create().secret();
     /// set valid nonce
-    for (size_t i = 0; i < transaction_vec.size(); i++)
+    size_t i = 0;
+    for (auto tx : transaction_vec)
     {
-        bytes trans_bytes = transaction_vec[i];
-        Transaction tx(trans_bytes, CheckTransaction::Everything);
-        tx.setNonce(u256(tx.nonce() + i + 1));
+        tx.setNonce(tx.nonce() + u256(i) + u256(1));
         bytes trans_bytes2;
         tx.encode(trans_bytes2);
         BOOST_CHECK_THROW(pool_test.m_txPool->import(ref(trans_bytes2)), InvalidSignature);
@@ -124,6 +121,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
         tx.encode(trans_bytes2);
         result = pool_test.m_txPool->import(ref(trans_bytes2));
         BOOST_CHECK(result == ImportResult::Success);
+        i++;
     }
     BOOST_CHECK(pool_test.m_txPool->pendingSize() == 5);
     /// test ordering of txPool
@@ -133,7 +131,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
         BOOST_CHECK(pending_list[i - 1].importTime() <= pending_list[i].importTime());
     }
     /// test out of limit, clear the queue
-    tx.setNonce(u256(tx.nonce() + 10));
+    tx.setNonce(u256(tx.nonce() + u256(10)));
     Signature sig = sign(sec, tx.sha3(WithoutSignature));
     tx.updateSignature(SignatureStruct(sig));
     tx.encode(trans_data);
@@ -164,7 +162,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     /// check getProtocol id
     BOOST_CHECK(pool_test.m_txPool->getProtocolId() == dev::eth::ProtocolID::TxPool);
     BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == u256(1000));
-    pool_test.m_txPool->setMaxBlockLimit(100);
+    pool_test.m_txPool->setMaxBlockLimit(u256(100));
     BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == u256(100));
 }
 BOOST_AUTO_TEST_SUITE_END()

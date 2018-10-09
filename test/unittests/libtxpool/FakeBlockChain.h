@@ -22,15 +22,14 @@
  * @date: 2018-09-25
  */
 #pragma once
-#include <libblockmanager/BlockManagerInterface.h>
-#include <libblockmanager/NonceCheck.h>
+#include <libblockchain/BlockChainInterface.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev;
 using namespace dev::txpool;
-using namespace dev::blockmanager;
+using namespace dev::blockchain;
 
 namespace dev
 {
@@ -40,9 +39,9 @@ class FakeTxPool : public TxPool
 {
 public:
     FakeTxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
-        std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         uint64_t const& _limit = 102400, int32_t const& _protocolId = dev::eth::ProtocolID::TxPool)
-      : TxPool(_p2pService, _blockManager, _protocolId, _limit)
+      : TxPool(_p2pService, _blockChain, _protocolId, _limit)
     {}
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore)
     {
@@ -50,22 +49,17 @@ public:
     }
 };
 
-class FakeBlockManager : public BlockManagerInterface
+class FakeBlockChain : public BlockChainInterface
 {
 public:
-    FakeBlockManager(uint64_t _blockNum, size_t const& transSize = 5) : m_blockNumber(_blockNum)
+    FakeBlockChain(uint64_t _blockNum, size_t const& transSize = 5) : m_blockNumber(_blockNum)
     {
-        FakeBlockChain(_blockNum, transSize);
+        FakeTheBlockChain(_blockNum, transSize);
     }
 
-    ~FakeBlockManager() {}
-    void setNonceCheck(std::shared_ptr<NonceCheck> const& _nonceCheck)
-    {
-        m_nonceCheck = _nonceCheck;
-    }
-    virtual dev::eth::BlockHeader const& getLatestBlockHeader() const {}
-    /// fake block chain
-    void FakeBlockChain(uint64_t _blockNum, size_t const& trans_size)
+    ~FakeBlockChain() {}
+    /// fake the block chain
+    void FakeTheBlockChain(uint64_t _blockNum, size_t const& trans_size)
     {
         m_blockChain.clear();
         m_blockHash.clear();
@@ -74,40 +68,34 @@ public:
             FakeBlock fake_block(trans_size);
             if (blockHeight > 0)
             {
-                fake_block.m_blockHeader.setParentHash(m_blockChain[blockHeight - 1].headerHash());
+                fake_block.m_blockHeader.setParentHash(m_blockChain[blockHeight - 1]->headerHash());
                 fake_block.reEncodeDecode();
             }
-            m_blockChain.push_back(fake_block.m_block);
             m_blockHash[fake_block.m_blockHeader.hash()] = blockHeight;
+            m_blockChain.push_back(std::make_shared<Block>(fake_block.m_block));
         }
     }
 
-    uint64_t number() const { return m_blockNumber; }
+    int64_t number() const { return m_blockNumber - 1; }
 
-    h256 numberHash(unsigned _i) const { return m_blockChain[_i].headerHash(); }
+    dev::h256 numberHash(int64_t _i) const { return m_blockChain[_i]->headerHash(); }
 
-    std::vector<bytes> transactions(h256 const& _blockHash)
+    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
-        std::vector<bytes> ret;
         if (m_blockHash.count(_blockHash))
-        {
-            bytes block_data;
-            m_blockChain[m_blockHash[_blockHash]].encode(block_data);
-            for (auto const& i : RLP(block_data)[1])
-                ret.push_back(i.data().toBytes());
-        }
-        return ret;
+            return m_blockChain[m_blockHash[_blockHash]];
     }
 
-    bool isNonceOk(dev::eth::Transaction const& _transaction, bool _needinsert = false)
+    virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i)
     {
-        if (auto nonce_check = m_nonceCheck.lock())
-            return nonce_check->ok(_transaction, _needinsert);
-        return false;
+        return getBlockByHash(numberHash(_i));
     }
-    std::weak_ptr<NonceCheck> m_nonceCheck;
+
+    virtual void commitBlock(
+        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
+    {}
     std::map<h256, uint64_t> m_blockHash;
-    std::vector<Block> m_blockChain;
+    std::vector<std::shared_ptr<Block> > m_blockChain;
     uint64_t m_blockNumber;
 };
 
