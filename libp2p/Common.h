@@ -78,17 +78,6 @@ DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
 DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
 DEV_SIMPLE_EXCEPTION(InvalidHostIPAddress);
 
-enum PacketType
-{
-    HelloPacket = 0,
-    DisconnectPacket,
-    PingPacket,
-    PongPacket,
-    GetPeersPacket,
-    PeersPacket,
-    UserPacket = 0x10
-};
-
 enum DisconnectReason
 {
     DisconnectRequested = 0,
