@@ -60,6 +60,8 @@ public:
     std::chrono::steady_clock::time_point lastReceived() const { return m_lastReceived; }
     void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) {}
     void send(std::shared_ptr<bytes> _msg) {}
+    void setTopicSeq(uint32_t _topicSeq) {}
+    uint32_t topicSeq() const { return 0; }
     void setTopics(std::shared_ptr<std::vector<std::string>> _topics) {}
     std::shared_ptr<std::vector<std::string>> topics() const
     {

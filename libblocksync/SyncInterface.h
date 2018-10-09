@@ -40,7 +40,7 @@ public:
 
     /// get status of block sync
     /// @returns Synchonization status
-    SyncStatus status() const = 0;
+    virtual SyncStatus status() const = 0;
     virtual bool isSyncing() const = 0;
     virtual h256 latestBlockSent() = 0;
 
@@ -56,5 +56,7 @@ public:
     /// protocol id used when register handler to p2p module
     virtual int32_t const& getProtocolId() const = 0;
     virtual void setProtocolId(uint32_t const _protocolId) = 0;
+};
+
 }  // namespace sync
-}  // namespace sync
+}  // namespace dev

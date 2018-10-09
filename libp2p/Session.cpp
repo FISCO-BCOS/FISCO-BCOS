@@ -432,3 +432,50 @@ bool Session::eraseCallbackBySeq(uint32_t seq)
         return false;
     }
 }
+
+uint32_t Session::peerTopicSeq(NodeID const& nodeID)
+{
+    uint32_t seq = uint32_t(-1);
+    try
+    {
+        RecursiveGuard l(m_server->mutexSessions());
+        auto s = m_server->sessions();
+        for (auto const& i : s)
+        {
+            if (i.first == nodeID)
+            {
+                seq = i.second->topicSeq();
+                break;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Session::peerTopicSeq error:" << e.what();
+    }
+    return seq;
+}
+
+void Session::setTopicsAndTopicSeq(
+    NodeID const& nodeID, std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq)
+{
+    try
+    {
+        RecursiveGuard l(m_server->mutexSessions());
+        auto s = m_server->sessions();
+        for (auto const& i : s)
+        {
+            if (i.first == nodeID)
+            {
+                std::shared_ptr<SessionFace> p = i.second;
+                p->setTopics(_topics);
+                p->setTopicSeq(_topicSeq);
+                break;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Session::setTopicsAndTopicSeq error:" << e.what();
+    }
+}

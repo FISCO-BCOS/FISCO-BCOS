@@ -45,6 +45,7 @@
 #include <chrono>
 #include <functional>
 #include <map>
+#include <queue>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -340,4 +341,44 @@ private:
     bytes m_bytes;
 };
 
+template <class T>
+class QueueSet
+{
+public:
+    bool push(T const& _t)
+    {
+        if (m_set.count(_t) == 0)
+        {
+            m_set.insert(_t);
+            m_queue.push(_t);
+            return true;
+        }
+        return false;
+    }
+    bool pop()
+    {
+        if (m_queue.size() == 0)
+            return false;
+        auto t = m_queue.front();
+        m_queue.pop();
+        m_set.erase(t);
+        return true;
+    }
+
+    void insert(T const& _t) { push(_t); }
+    size_t count(T const& _t) const { return exist(_t) ? 1 : 0; }
+    bool exist(T const& _t) const { return m_set.count(_t) > 0; }
+    size_t size() const { return m_set.size(); }
+
+    void clear()
+    {
+        m_set.clear();
+        while (!m_queue.empty())
+            m_queue.pop();
+    }
+
+private:
+    std::unordered_set<T> m_set;
+    std::queue<T> m_queue;
+};
 }  // namespace dev
