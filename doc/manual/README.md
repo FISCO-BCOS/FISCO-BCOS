@@ -114,7 +114,7 @@ tail -f log/info* |grep ++++  #查看日志输出
 #INFO|2018-08-12 17:52:17:887|+++++++++++++++++++++++++++ Generating seal on3fef9b23b0733ac47fe5385072f80fc036b7517abae0a3e7762739cc66bc7dca#1tx:0,maxtx:1000,tq.num=0time:1513072337887
 ```
 
-到这里已经成功部署一条由4个节点组成的区块链，**接下来请参考[第三章 使用控制台](#第三章-使用控制台)继续探索FISCO-BCOS**，想了解脚本操作细节请参考第二、三章内容。
+到这里已经成功部署一条由4个节点组成的区块链，**接下来请参考[第三章 使用控制台](#第三章-使用控制台)继续探索FISCO-BCOS**，想了解脚本操作细节请参考第二章内容。
 
 ## 第二章 手工部署单节点区块链网络
 
@@ -573,9 +573,11 @@ Connection closed by foreign host.
 # 假设当前在FISCO-BCOS/scripts目录下，已经按之前步骤建立了nodes/node-0
 cd nodes
 # 生成node-1证书相关文件
-bash ../node.sh node-1
+bash node.sh node-1
 # 拷贝node-0的配置文件
 cp node-0/config.conf node-0/genesis.json node-0/start.sh node-0/stop.sh node-1/
+# 拷贝fisco-bcos
+cp node-0/fisco-bcos node-1/
 ```
 
 - 修改config.conf配置文件，主要修改了监听的端口，其他配置内容与`node-0/config.conf`相同。
