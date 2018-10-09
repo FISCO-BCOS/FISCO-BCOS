@@ -233,9 +233,12 @@ private:
         bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
     {
         Message::Ptr message;
-        std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(data.toBytes());
+        std::shared_ptr<dev::bytes> p_data;
+        PBFTMsgPacket packet;
+        packet.data = data.toBytes();
+        packet.packet_id = packetType;
+        packet.encode(*p_data);
         message->setBuffer(p_data);
-        message->setPacketType(packetType);
         message->setProtocolID(protocolId);
         return message;
     }
