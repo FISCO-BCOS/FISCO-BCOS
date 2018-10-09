@@ -23,8 +23,9 @@
  */
 #pragma once
 #include "ConsensusInterface.h"
-#include <libblockmanager/BlockManagerInterface.h>
+#include <libblockchain/BlockChainInterface.h>
 #include <libblocksync/SyncInterface.h>
+#include <libblockverifier/BlockVerifier.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>
@@ -36,26 +37,21 @@ namespace dev
 class ConsensusStatus;
 namespace consensus
 {
-struct Sealing
-{
-    Block block;
-    /// hash set for filter fetched transactions
-    h256Hash m_transactionSet;
-    /// TODO, ExecutiveContext
-};
 class Consensus : public Worker, virtual ConsensusInterface
 {
 public:
-    Consensus(std::shared_ptr<dev::p2p::Service>& _service,
-        std::shared_ptr<dev::txpool::TxPool>& _txPool,
+    Consensus(std::shared_ptr<dev::p2p::Service> _service,
+        std::shared_ptr<dev::txpool::TxPool> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
+        std::shared_ptr<dev::blockverifier::BlockVerifier> _blockVerifier,
         int16_t const& _protocolId, h512s const& _minerList)
       : Worker("consensus", 0),
         m_service(_service),
         m_txPool(_txPool),
+        m_blockChain(_blockChain),
         m_blockSync(_blockSync),
-        m_blockManager(_blockManager),
+        m_blockVerifier(_blockVerifier),
         m_protocolId(_protocolId),
         m_minerList(_minerList)
     {
@@ -101,11 +97,17 @@ public:
     virtual void setNodeIdx(u256 const& _idx) override { m_idx = _idx; }
     void setExtraData(std::vector<bytes> const& _extra) { m_extraData = _extra; }
     std::vector<bytes> const& extraData() const { return m_extraData; }
+    bool const& allowFutureBlocks() const { return m_allowFutureBlocks; }
+    void setAllowFutureBlocks(bool isAllowFutureBlocks)
+    {
+        m_allowFutureBlocks = isAllowFutureBlocks;
+    }
 
 protected:
     /// sealing block
     virtual bool shouldSeal();
     virtual bool shouldWait(bool const& wait);
+    virtual void reportBlock(BlockHeader const& blockHeader){};
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
@@ -119,31 +121,45 @@ protected:
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
     void doWork() override { doWork(true); }
-    bool inline isBlockSyncing();
+    bool isBlockSyncing();
 
     /// functions for usage
-    void inline setSealingRoot(
-        h256 const& trans_root, h256 const& receipt_root, h256 const& state_root);
-    void inline appendSealingExtraData(bytes const& _extra);
-    void inline ResetSealingHeader();
-    void inline ResetSealingBlock();
-    virtual void executeBlock();
+    void setSealingRoot(h256 const& trans_root, h256 const& receipt_root, h256 const& state_root)
+    {
+        /// set transaction root, receipt root and state root
+        m_sealing.block.header().setRoots(trans_root, receipt_root, state_root);
+    }
+    void appendSealingExtraData(bytes const& _extra);
+    void ResetSealingHeader();
+    void ResetSealingBlock();
+    dev::blockverifier::ExecutiveContext::Ptr executeBlock(Block& block);
+    virtual void executeBlock() { m_sealing.p_execContext = executeBlock(m_sealing.block); }
+    bool blockExists(h256 const& blockHash)
+    {
+        if (m_blockChain->getBlockByHash(blockHash) == nullptr)
+            return false;
+        return true;
+    }
+    virtual void checkBlockValid(Block const& block);
     bool encodeBlock(bytes& blockBytes);
     /// reset timestamp of block header
-    void inline resetCurrentTime()
+    void resetCurrentTime()
     {
-        uint64_t parent_time = m_blockManager->getLatestBlockHeader().timestamp();
-        m_sealing.block.header().setTimestamp(max(parent_time + 1, utcTime()));
+        uint64_t parentTime =
+            m_blockChain->getBlockByNumber(m_blockChain->number())->header().timestamp();
+        m_sealing.block.header().setTimestamp(max(parentTime + 1, utcTime()));
     }
 
 protected:
     std::shared_ptr<dev::p2p::Service> m_service;
     std::shared_ptr<dev::txpool::TxPool> m_txPool;
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
-    std::shared_ptr<dev::blockmanager::BlockManagerInterface> m_blockManager;
+    std::shared_ptr<dev::blockverifier::BlockVerifier> m_blockVerifier;
     int16_t m_protocolId;
     h512s m_minerList;
     uint64_t m_maxBlockTransactions = 1000;
+    bool m_allowFutureBlocks = true;
 
     /// current sealing block
     Sealing m_sealing;
@@ -163,7 +179,7 @@ protected:
     std::vector<bytes> m_extraData;
 
     NodeAccountType m_accountType;
-    u256 m_idx = 0;
+    u256 m_idx = u256(0);
 };
 }  // namespace consensus
 }  // namespace dev

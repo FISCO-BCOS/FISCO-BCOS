@@ -24,7 +24,7 @@
 #include "Consensus.h"
 #include <libethcore/LogEntry.h>
 using namespace dev::sync;
-using namespace dev::blockmanager;
+using namespace dev::blockverifier;
 namespace dev
 {
 namespace consensus
@@ -38,6 +38,7 @@ void Consensus::start()
         return;
     }
     startWorking();
+    reportBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
 }
 
 bool Consensus::shouldSeal()
@@ -98,7 +99,7 @@ void inline Consensus::ResetSealingHeader()
     m_sealing.block.header().setSealerList(minerList());
     m_sealing.block.header().setSealer(nodeIdx());
     m_sealing.block.header().setLogBloom(LogBloom());
-    m_sealing.block.header().setGasUsed(0);
+    m_sealing.block.header().setGasUsed(u256(0));
     m_sealing.block.header().setExtraData(m_extraData);
 }
 
@@ -114,14 +115,42 @@ void inline Consensus::appendSealingExtraData(bytes const& _extra)
     m_sealing.block.header().appendExtraDataArray(_extra);
 }
 
-void inline Consensus::setSealingRoot(
-    h256 const& trans_root, h256 const& receipt_root, h256 const& state_root)
+/// update m_sealing and receiptRoot
+inline dev::blockverifier::ExecutiveContext::Ptr Consensus::executeBlock(Block& block)
 {
-    /// set transaction root, receipt root and state root
-    m_sealing.block.header().setRoots(trans_root, receipt_root, state_root);
+    std::unordered_map<Address, dev::eth::PrecompiledContract> contract;
+    /// reset execute context
+    return m_blockVerifier->executeBlock(block, 0, contract);
 }
-/// TODO: update m_sealing and receiptRoot
-void Consensus::executeBlock() {}
+
+void Consensus::checkBlockValid(Block const& block)
+{
+    h256 block_hash = block.blockHeader().hash();
+    /// check the timestamp
+    if (block.blockHeader().timestamp() > u256(utcTime()) && !m_allowFutureBlocks)
+    {
+        LOG(ERROR) << "Future timestamp(now disabled) of block_hash = " << block_hash;
+        BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
+    }
+    /// check the block number
+    if (block.blockHeader().number() <= m_blockChain->number())
+    {
+        LOG(ERROR) << "Old Block Height, block_hash = " << block_hash;
+        BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
+    }
+    /// check existence of this block (Must non-exist)
+    if (blockExists(block_hash))
+    {
+        LOG(ERROR) << "Block Already Existed, drop now, block_hash = " << block_hash;
+        BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
+    }
+    /// check the existence of the parent block (Must exist)
+    if (!blockExists(block.blockHeader().parentHash()))
+    {
+        LOG(ERROR) << "Parent Block Doesn't Exist, drop now, block_hash = " << block_hash;
+        BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
+    }
+}
 
 bool Consensus::encodeBlock(bytes& blockBytes)
 {
