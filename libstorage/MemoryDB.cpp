@@ -176,10 +176,11 @@ h256 dev::storage::MemoryDB::hash() {
       for (size_t i = 0; i < it.second->size(); ++i) {
         if (it.second->get(i)->dirty()) {
           for (auto fieldIt : *(it.second->get(i)->fields())) {
-            data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-
-            data.insert(data.end(), fieldIt.second.begin(),
-                        fieldIt.second.end());
+            if(isHash(fieldIt.first))
+            {
+                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+                data.insert(data.end(), fieldIt.second.begin(),fieldIt.second.end());
+            }
           }
         }
       }
@@ -196,6 +197,18 @@ h256 dev::storage::MemoryDB::hash() {
   h256 hash = dev::sha256(bR);
 
   return hash;
+}
+
+bool dev::storage::MemoryDB::isHash(std::string _str)
+{
+    if((_str.substr(0, 1) != "_" && _str.substr(_str.size()-1, 1) != "_") || (_str == "_status_"))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 void dev::storage::MemoryDB::clear() { _cache.clear(); }

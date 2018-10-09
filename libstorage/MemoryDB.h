@@ -31,6 +31,7 @@ public:
 private:
 	Entries::Ptr processEntries(Entries::Ptr entries, Condition::Ptr condition);
 	bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
+	bool isHash(std::string key);
 
 	Storage::Ptr _remoteDB;
 	TableInfo::Ptr _tableInfo;
