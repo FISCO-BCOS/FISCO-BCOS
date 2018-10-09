@@ -160,6 +160,7 @@ inline void PBFTConsensus::changeViewForEmptyBlock()
     m_timeManager.changeView();
     m_emptyBlockFlag = true;
     m_leaderFailed = true;
+    m_signalled.notify_all();
 }
 
 void PBFTConsensus::broadcastSignedReq()
@@ -713,6 +714,7 @@ ViewChangeReq PBFTConsensus::handleViewChangeMsg(PBFTMsgPacket const& pbftMsg)
                       << ",req.view = " << viewChange_req.view << ",min_view = " << min_view;
             m_timeManager.changeView();
             m_toView = min_view - u256(1);
+            m_signalled.notify_all();
         }
     }
     return viewChange_req;
