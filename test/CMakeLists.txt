@@ -88,6 +88,7 @@ target_link_libraries(test-fisco-bcos mptstate)
 target_link_libraries(test-fisco-bcos executivecontext)
 target_link_libraries(test-fisco-bcos txpool)
 target_link_libraries(test-fisco-bcos blockchain)
+target_link_libraries(test-fisco-bcos consensus)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 
