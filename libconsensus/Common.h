@@ -43,11 +43,13 @@ enum NodeAccountType
     ObserverAccount = 0,
     MinerAccount
 };
+
 struct ConsensusStatus
 {
     std::string consensusEngine;
     dev::h512s minerList;
 };
+
 struct Sealing
 {
     dev::eth::Block block;
@@ -65,23 +67,29 @@ enum PBFTPacketType : byte
     ViewChangeReqPacket = 0x03,
     PBFTPacketCount
 };
+
+/// PBFT message
 struct PBFTMsgPacket
 {
+    /// the index of the node that sends this pbft message
     u256 node_idx;
+    /// the node id of the node that sends this pbft message
     h512 node_id;
+    /// type of the packet(maybe prepare, sign or commit)
+    /// (receive from the network or send to the network)
     unsigned packet_id;
-    bytes data;  // rlp data
+    /// the data of concrete request(receive from or send to the network)
+    bytes data;
+    /// timestamp of receive this pbft message
     u256 timestamp;
+    /// default constructor
     PBFTMsgPacket() : node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(u256(utcTime()))
     {}
-    inline void streamRLPFields(RLPStream& s) const { s << packet_id << data; }
-    inline void setOtherField(u256 const& idx, h512 const& nodeId)
-    {
-        node_idx = idx;
-        node_id = nodeId;
-        timestamp = u256(utcTime());
-    }
 
+    /**
+     * @brief : encode network-send part of PBFTMsgPacket into bytes (RLP encoder)
+     * @param encodedBytes: encoded bytes of the network-send part of PBFTMsgPacket
+     */
     virtual void encode(bytes& encodedBytes) const
     {
         RLPStream tmp;
@@ -90,13 +98,32 @@ struct PBFTMsgPacket
         list_rlp.appendList(1).append(tmp.out());
         list_rlp.swapOut(encodedBytes);
     }
-
+    /**
+     * @brief : decode the network-receive part of PBFTMsgPacket into PBFTMsgPacket object
+     * @param data: network-receive part of PBFTMsgPacket
+     * @ Exception Case: if decode failed, we throw exceptions
+     */
     virtual void decode(bytesConstRef data)
     {
         RLP rlp(data);
         populate(rlp);
     }
 
+    /// RLP decode: serialize network-received packet-data from bytes to RLP
+    void streamRLPFields(RLPStream& s) const { s << packet_id << data; }
+
+    /**
+     * @brief: set non-network-receive-or-send part of PBFTMsgPacket
+     * @param idx: the index of the node that send the PBFTMsgPacket
+     * @param nodeId : the id of the node that send the PBFTMsgPacket
+     */
+    void setOtherField(u256 const& idx, h512 const& nodeId)
+    {
+        node_idx = idx;
+        node_id = nodeId;
+        timestamp = u256(utcTime());
+    }
+    /// populate PBFTMsgPacket from RLP object
     void populate(RLP const& rlp)
     {
         int field = 0;
@@ -114,22 +141,28 @@ struct PBFTMsgPacket
     }
 };
 
-// for pbft
+/// the base class of PBFT message
 struct PBFTMsg
 {
+    /// the number of the block that is handling
     int64_t height = -1;
+    /// view when construct this PBFTMsg
     u256 view = Invalid256;
+    /// index of the node generate the PBFTMsg
     u256 idx = Invalid256;
+    /// timestamp when generate the PBFTMsg
     u256 timestamp = Invalid256;
+    /// block-header hash of the block handling
     h256 block_hash;
-    Signature sig;   // signature of block_hash
-    Signature sig2;  // other fileds' signature
+    /// signature to the block_hash
+    Signature sig;
+    /// signature to the hash of other fields except block_hash, sig and sig2
+    Signature sig2;
 
-    /// signature _hash with the private key of node
-    Signature signHash(h256 const& hash, KeyPair const& keyPair) const
-    {
-        return dev::sign(keyPair.secret(), hash);
-    }
+    /**
+     * @brief: encode the PBFTMsg into bytes
+     * @param encodedBytes: the encoded bytes of specified PBFTMsg
+     */
     virtual void encode(bytes& encodedBytes) const
     {
         RLPStream tmp;
@@ -139,17 +172,25 @@ struct PBFTMsg
         list_rlp.swapOut(encodedBytes);
     }
 
+    /**
+     * @brief : decode the bytes received from network into PBFTMsg object
+     * @param data : network-received data to be decoded
+     * @param index: the index of RLP data need to be populated
+     * @Exception Case: if decode failed, throw exception directly
+     */
     virtual void decode(bytesConstRef data, size_t const& index = 0)
     {
         RLP rlp(data);
         populate(rlp[index]);
     }
 
+    /// trans PBFTMsg into RLPStream for encoding
     void streamRLPFields(RLPStream& _s) const
     {
         _s << height << view << idx << timestamp << block_hash << sig.asBytes() << sig2.asBytes();
     }
 
+    /// populate specified rlp into PBFTMsg object
     void populate(RLP const& rlp)
     {
         int field = 0;
@@ -171,6 +212,7 @@ struct PBFTMsg
         }
     }
 
+    /// clear the PBFTMsg
     void clear()
     {
         height = -1;
@@ -182,20 +224,46 @@ struct PBFTMsg
         sig2 = Signature();
     }
 
+    /// get the hash of the fields without block_hash, sig and sig2
     h256 fieldsWithoutBlock() const
     {
         RLPStream ts;
         ts << height << view << idx << timestamp;
         return dev::sha3(ts.out());
     }
+
+    /**
+     * @brief : sign for specified hash using given keyPair
+     * @param hash: hash data need to be signed
+     * @param keyPair: keypair used to sign for the specified hash
+     * @return Signature: signature result
+     */
+    Signature signHash(h256 const& hash, KeyPair const& keyPair) const
+    {
+        return dev::sign(keyPair.secret(), hash);
+    }
 };
 
+/// definition of the prepare requests
 struct PrepareReq : public PBFTMsg
 {
+    /// block data
     bytes block;
+    /// execution result of block(save the execution result temporarily)
+    /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext;
 
+    /// default constructor
     PrepareReq() = default;
+    /**
+     * @brief: populate the prepare request from specified prepare request,
+     *         given view and node index
+     *
+     * @param req: given prepare request to populate the PrepareReq object
+     * @param keyPair: keypair used to sign for the PrepareReq
+     * @param _view: current view
+     * @param _idx: index of the node that generates this PrepareReq
+     */
     PrepareReq(PrepareReq const& req, KeyPair const& keyPair, u256 const& _view, u256 const& _idx)
     {
         height = req.height;
@@ -206,8 +274,16 @@ struct PrepareReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         block = req.block;
+        p_execContext = nullptr;
     }
 
+    /**
+     * @brief: construct PrepareReq from given block, view and node idx
+     * @param blockStruct : the given block used to populate the PrepareReq
+     * @param keyPair : keypair used to sign for the PrepareReq
+     * @param _view : current view
+     * @param _idx : index of the node that generates this PrepareReq
+     */
     PrepareReq(
         dev::eth::Block& blockStruct, KeyPair const& keyPair, u256 const& _view, u256 const& _idx)
     {
@@ -224,6 +300,12 @@ struct PrepareReq : public PBFTMsg
         p_execContext = nullptr;
     }
 
+    /**
+     * @brief : update the PrepareReq with specified block and block-execution-result
+     *
+     * @param sealing : object contains both block and block-execution-result
+     * @param keyPair : keypair used to sign for the PrepareReq
+     */
     void updatePrepareReq(Sealing& sealing, KeyPair const& keyPair)
     {
         timestamp = u256(utcTime());
@@ -238,24 +320,29 @@ struct PrepareReq : public PBFTMsg
                    << timestamp;
     }
 
+    /// encode the PrepareReq into bytes
     virtual void encode(bytes& encodedBytes) const
     {
         RLPStream s;
         streamRLPFields(s);
         s.swapOut(encodedBytes);
     }
+
+    /// decode network-received data from bytes to PrepareReq object
     virtual void decode(bytesConstRef data)
     {
         RLP rlp(data);
         populate(rlp);
     }
 
+    /// trans PrepareReq from object to RLPStream
     void streamRLPFields(RLPStream& _s) const
     {
         PBFTMsg::streamRLPFields(_s);
         _s << block;
     }
 
+    /// populate PrepareReq from given RLP object
     void populate(RLP const& _rlp)
     {
         PBFTMsg::populate(_rlp);
@@ -273,9 +360,18 @@ struct PrepareReq : public PBFTMsg
     }
 };
 
+/// signature request
 struct SignReq : public PBFTMsg
 {
     SignReq() = default;
+
+    /**
+     * @brief: populate the SignReq from given PrepareReq and node index
+     *
+     * @param req: PrepareReq used to populate the SignReq
+     * @param keyPair: keypair used to sign for the SignReq
+     * @param _idx: index of the node that generates this SignReq
+     */
     SignReq(PrepareReq const& req, KeyPair const& keyPair, u256 const& _idx)
     {
         height = req.height;
@@ -287,9 +383,18 @@ struct SignReq : public PBFTMsg
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
     }
 };
+
+/// commit request
 struct CommitReq : public PBFTMsg
 {
     CommitReq() = default;
+    /**
+     * @brief: populate the CommitReq from given PrepareReq and node index
+     *
+     * @param req: PrepareReq used to populate the CommitReq
+     * @param keyPair: keypair used to sign for the CommitReq
+     * @param _idx: index of the node that generates this CommitReq
+     */
     CommitReq(PrepareReq const& req, KeyPair const& keyPair, u256 const& _idx)
     {
         height = req.height;
@@ -301,9 +406,19 @@ struct CommitReq : public PBFTMsg
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
     }
 };
+
+/// view change request
 struct ViewChangeReq : public PBFTMsg
 {
     ViewChangeReq() = default;
+    /**
+     * @brief: generate ViewChangeReq from given params
+     * @param keyPair: keypair used to sign for the ViewChangeReq
+     * @param _height: current block number
+     * @param _view: current view
+     * @param _idx: index of the node that generates this ViewChangeReq
+     * @param _hash: block hash
+     */
     ViewChangeReq(KeyPair const& keyPair, uint64_t const& _height, u256 const _view,
         u256 const& _idx, h256 const& _hash)
     {
