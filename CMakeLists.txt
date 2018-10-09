@@ -45,6 +45,7 @@ include(ProjectBoost)
 
 #Global include path for all libs.
 include_directories("${CMAKE_SOURCE_DIR}" "utils")
+include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
 
 configure_project(TESTS)
 # generate executable binary fisco-bcos

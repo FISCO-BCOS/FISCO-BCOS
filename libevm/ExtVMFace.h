@@ -32,7 +32,7 @@
 #include <libethcore/LastBlockHashesFace.h>
 #include <libethcore/LogEntry.h>
 
-#include <evmc/include/evmc/evmc.h>
+#include <evmc/evmc.h>
 
 #include <boost/optional.hpp>
 #include <functional>

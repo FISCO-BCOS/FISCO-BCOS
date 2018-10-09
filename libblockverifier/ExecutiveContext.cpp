@@ -126,15 +126,10 @@ bool ExecutiveContext::isOrginPrecompiled(Address const& _a) const
     return m_precompiledContract.count(_a);
 }
 
-bigint ExecutiveContext::costOfOrginPrecompiled(Address const& _a, bytesConstRef _in) const
+std::pair<bool, bytes> ExecutiveContext::executeOrginPrecompiled(
+    Address const& _a, bytesConstRef _in) const
 {
-    return m_precompiledContract.at(_a).cost(_in);
-}
-
-void ExecutiveContext::executeOrginPrecompiled(
-    Address const& _a, bytesConstRef _in, bytesRef _out) const
-{
-    // return m_precompiledContract.at(_a).execute(_in, _out);
+    return m_precompiledContract.at(_a).execute(_in);
 }
 
 void ExecutiveContext::setPrecompiledContract(

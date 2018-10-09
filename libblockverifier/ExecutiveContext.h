@@ -89,9 +89,8 @@ public:
 
     virtual bool isOrginPrecompiled(Address const& _a) const;
 
-    virtual bigint costOfOrginPrecompiled(Address const& _a, bytesConstRef _in) const;
-
-    virtual void executeOrginPrecompiled(Address const& _a, bytesConstRef _in, bytesRef _out) const;
+    virtual std::pair<bool, bytes> executeOrginPrecompiled(
+        Address const& _a, bytesConstRef _in) const;
 
     void setPrecompiledContract(
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
