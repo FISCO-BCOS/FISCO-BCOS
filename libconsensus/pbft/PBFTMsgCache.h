@@ -77,13 +77,16 @@ public:
         }
     }
 
-    bool inline exists(Mutex& lock, QueueSet<std::string>& queue, std::string const& key)
+    bool exists(Mutex& lock, QueueSet<std::string>& queue, std::string const& key)
     {
+        /// lock succ
         DEV_GUARDED(lock)
         return queue.exist(key);
+        /// lock failed
+        return false;
     }
 
-    void inline insertMessage(Mutex& lock, QueueSet<std::string>& queue, size_t const& maxCacheSize,
+    void insertMessage(Mutex& lock, QueueSet<std::string>& queue, size_t const& maxCacheSize,
         std::string const& key)
     {
         DEV_GUARDED(lock)
