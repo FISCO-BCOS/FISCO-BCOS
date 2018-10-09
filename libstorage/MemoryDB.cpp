@@ -3,7 +3,7 @@
 #include <json/json.h>
 #include <libdevcore/Hash.h>
 #include <libdevcore/easylog.h>
-#include <boost/lexical_cast.hpp>
+#include "Common.h"
 #include "DB.h"
 
 using namespace dev;
@@ -199,16 +199,25 @@ h256 dev::storage::MemoryDB::hash() {
   return hash;
 }
 
-bool dev::storage::MemoryDB::isHash(std::string _str)
+bool dev::storage::MemoryDB::isHash(std::string _key)
 {
-    if((_str.substr(0, 1) != "_" && _str.substr(_str.size()-1, 1) != "_") || (_str == "_status_"))
+    if(!_key.empty())
     {
-        return true;
+        if((_key.substr(0, 1) != "_" && _key.substr(_key.size()-1, 1) != "_") || (_key == STORAGE_STATUS))
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
     else
     {
+        LOG(ERROR) << "Empty key error.";
         return false;
     }
+
 }
 
 void dev::storage::MemoryDB::clear() { _cache.clear(); }
