@@ -84,6 +84,7 @@ public:
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
+        return nullptr;
     }
 
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i)
