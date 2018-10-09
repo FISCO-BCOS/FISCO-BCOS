@@ -87,6 +87,12 @@ struct PBFTMsgPacket
     PBFTMsgPacket() : node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(u256(utcTime()))
     {}
 
+    bool operator==(PBFTMsgPacket const& msg)
+    {
+        return node_idx == msg.node_idx && node_id == msg.node_id && packet_id == msg.packet_id &&
+               data == msg.data && timestamp == msg.timestamp;
+    }
+    bool operator!=(PBFTMsgPacket const& msg) { return !operator==(msg); }
     /**
      * @brief : encode network-send part of PBFTMsgPacket into bytes (RLP encoder)
      * @param encodedBytes: encoded bytes of the network-send part of PBFTMsgPacket
@@ -95,23 +101,17 @@ struct PBFTMsgPacket
     {
         RLPStream tmp;
         streamRLPFields(tmp);
-        RLPStream list_rlp;
-        list_rlp.appendList(1).append(tmp.out());
-        list_rlp.swapOut(encodedBytes);
+        tmp.swapOut(encodedBytes);
     }
     /**
      * @brief : decode the network-receive part of PBFTMsgPacket into PBFTMsgPacket object
      * @param data: network-receive part of PBFTMsgPacket
      * @ Exception Case: if decode failed, we throw exceptions
      */
-    virtual void decode(bytesConstRef data)
-    {
-        RLP rlp(data);
-        populate(rlp);
-    }
+    virtual void decode(bytesConstRef data) { populate(data); }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    void streamRLPFields(RLPStream& s) const { s << packet_id << data; }
+    void streamRLPFields(RLPStream& s) const { s.append(unsigned(packet_id)).append(data); }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -125,18 +125,16 @@ struct PBFTMsgPacket
         timestamp = u256(utcTime());
     }
     /// populate PBFTMsgPacket from RLP object
-    void populate(RLP const& rlp)
+    void populate(bytesConstRef req_data)
     {
-        int field = 0;
         try
         {
-            packet_id = rlp[field = 0].toInt<unsigned>();
-            data = rlp[field = 1].data().toBytes();
+            packet_id = (unsigned)RLP(req_data.cropped(0, 1)).toInt<unsigned>(RLP::ThrowOnFail);
+            data = RLP(req_data.cropped(1)).toBytes();
         }
         catch (Exception const& e)
         {
-            e << dev::eth::errinfo_name("invalid msg format")
-              << dev::eth::BadFieldError(field, toHex(rlp[field].data().toBytes()));
+            e << dev::eth::errinfo_name("invalid msg format");
             throw;
         }
     }
@@ -178,6 +176,7 @@ struct PBFTMsg
                block_hash == req.block_hash && sig == req.sig && sig2 == req.sig2;
     }
 
+    bool operator!=(PBFTMsg const& req) { return !operator==(req); }
     /**
      * @brief: encode the PBFTMsg into bytes
      * @param encodedBytes: the encoded bytes of specified PBFTMsg
