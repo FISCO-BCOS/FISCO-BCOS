@@ -133,8 +133,8 @@ public:
         std::shared_ptr<dev::txpool::TxPool> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifier> _blockVerifier, KeyPair const& _key_pair,
-        int16_t const& _protocolId, h512s const& _minerList = h512s())
+        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+        KeyPair const& _key_pair, int16_t const& _protocolId, h512s const& _minerList = h512s())
       : Consensus(
             _service, _txPool, _blockChain, _blockSync, m_blockVerifier, _protocolId, _minerList)
     {

@@ -22,7 +22,6 @@
  * @date: 2018-09-28
  */
 #include "PBFTConsensus.h"
-#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
 using namespace dev::eth;

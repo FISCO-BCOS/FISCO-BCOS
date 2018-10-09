@@ -25,7 +25,7 @@
 #include "ConsensusInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblocksync/SyncInterface.h>
-#include <libblockverifier/BlockVerifier.h>
+#include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>
@@ -44,7 +44,7 @@ public:
         std::shared_ptr<dev::txpool::TxPool> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifier> _blockVerifier,
+        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, h512s const& _minerList)
       : Worker("consensus", 0),
         m_service(_service),
@@ -155,7 +155,7 @@ protected:
     std::shared_ptr<dev::txpool::TxPool> m_txPool;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
-    std::shared_ptr<dev::blockverifier::BlockVerifier> m_blockVerifier;
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
     int16_t m_protocolId;
     h512s m_minerList;
     uint64_t m_maxBlockTransactions = 1000;

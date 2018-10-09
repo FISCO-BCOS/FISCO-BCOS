@@ -21,7 +21,8 @@
  * @date: 2018-09-21
  */
 #pragma once
-#include <libblockverifier/BlockVerifier.h>
+#include <libblockverifier/BlockVerifierInterface.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/SHA3.h>
@@ -153,11 +154,23 @@ struct PBFTMsg
     /// timestamp when generate the PBFTMsg
     u256 timestamp = Invalid256;
     /// block-header hash of the block handling
-    h256 block_hash;
+    h256 block_hash = h256();
     /// signature to the block_hash
-    Signature sig;
+    Signature sig = Signature();
     /// signature to the hash of other fields except block_hash, sig and sig2
-    Signature sig2;
+    Signature sig2 = Signature();
+    PBFTMsg() = default;
+    PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, u256 const& _view, u256 const& _idx,
+        h256 const _blockHash)
+    {
+        height = _height;
+        view = _view;
+        idx = _idx;
+        timestamp = u256(utcTime());
+        block_hash = _blockHash;
+        sig = signHash(block_hash, _keyPair);
+        sig2 = signHash(fieldsWithoutBlock(), _keyPair);
+    }
 
     /**
      * @brief: encode the PBFTMsg into bytes
