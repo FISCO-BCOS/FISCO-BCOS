@@ -3,7 +3,7 @@
 #include <json/json.h>
 #include <libdevcore/Hash.h>
 #include <libdevcore/easylog.h>
-#include <boost/lexical_cast.hpp>
+#include "Common.h"
 #include "DB.h"
 
 using namespace dev;
@@ -176,10 +176,11 @@ h256 dev::storage::MemoryDB::hash() {
       for (size_t i = 0; i < it.second->size(); ++i) {
         if (it.second->get(i)->dirty()) {
           for (auto fieldIt : *(it.second->get(i)->fields())) {
-            data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-
-            data.insert(data.end(), fieldIt.second.begin(),
-                        fieldIt.second.end());
+            if(isHash(fieldIt.first))
+            {
+                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+                data.insert(data.end(), fieldIt.second.begin(),fieldIt.second.end());
+            }
           }
         }
       }
@@ -196,6 +197,27 @@ h256 dev::storage::MemoryDB::hash() {
   h256 hash = dev::sha256(bR);
 
   return hash;
+}
+
+bool dev::storage::MemoryDB::isHash(std::string _key)
+{
+    if(!_key.empty())
+    {
+        if((_key.substr(0, 1) != "_" && _key.substr(_key.size()-1, 1) != "_") || (_key == STORAGE_STATUS))
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        LOG(ERROR) << "Empty key error.";
+        return false;
+    }
+
 }
 
 void dev::storage::MemoryDB::clear() { _cache.clear(); }
