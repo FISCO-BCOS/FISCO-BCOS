@@ -21,29 +21,28 @@
 #pragma once
 
 #include "Precompiled.h"
+#include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/ChainOperationParams.h>
+#include <libethcore/PrecompiledContract.h>
+#include <libexecutivecontext/StateFace.h>
 #include <memory>
 
 namespace dev
 {
+namespace storage
+{
+class Table;
+}
+
+namespace eth
+{
+class StateFace;
+}
+
 namespace blockverifier
 {
-class CallParams
-{
-public:
-    typedef std::shared_ptr<CallParams> Ptr;
-    Address senderAddress;
-    Address codeAddress;
-    Address receiveAddress;
-    u256 valueTransfer;
-    u256 apparentValue;
-    u256 gas;
-    bytesConstRef data;
-    bytesRef out;
-    //    OnOpFunc onOp;
-};
-
 class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 {
 public:
@@ -53,23 +52,13 @@ public:
 
     virtual ~ExecutiveContext(){};
 
-    // void Execute()
+    virtual bytes call(Address address, bytesConstRef param);
 
-    virtual bytes call(CallParams::Ptr callParams)
-    {
-        bytes out;
-        return out;
-    };
+    virtual Address registerPrecompiled(Precompiled::Ptr p);
 
-    virtual Address registerPrecompiled(Precompiled::Ptr p)
-    {
-        Address addr;
-        return addr;
-    };
+    virtual bool isPrecompiled(Address address);
 
-    virtual bool isPrecompiled(Address address) { return false; };
-
-    Precompiled::Ptr getPrecompiled(Address address) { return m_address2Precompiled[address]; };
+    Precompiled::Ptr getPrecompiled(Address address);
 
     void setAddress2Precompiled(Address address, Precompiled::Ptr precompiled)
     {
@@ -79,16 +68,62 @@ public:
     BlockInfo blockInfo() { return m_blockInfo; }
     void setBlockInfo(BlockInfo blockInfo) { m_blockInfo = blockInfo; }
 
-    // std::shared_ptr<State> getState() { return state; }
-    // void setState(std::shared_ptr<State> state) { m_state = state }
+    std::shared_ptr<dev::eth::StateFace> getState();
+    void setState(std::shared_ptr<dev::eth::StateFace> state);
 
-    // std::shared_ptr<State> getState() { return state; }
-    // void setState(std::shared_ptr<State> state) { m_state = state }
+
+    void commit()
+    {
+        commitState();
+        commitPreCompiled();
+    };
+
+    void clear()
+    {
+        clearState();
+        clearPreCompiled();
+    };
+
+    std::shared_ptr<dev::storage::Table> getTable(const Address& address);
+
+
+    virtual bool isOrginPrecompiled(Address const& _a) const;
+
+    virtual bigint costOfOrginPrecompiled(Address const& _a, bytesConstRef _in) const;
+
+    virtual void executeOrginPrecompiled(Address const& _a, bytesConstRef _in, bytesRef _out) const;
+
+    void setPrecompiledContract(
+        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
+
+
 private:
+    void commitState(){
+        // m_stateFace.commit();
+    };
+
+    void commitPreCompiled(){
+        // TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        //    std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
+        // tableFactoryPrecompiled->getmemoryTableFactory()->commit();
+    };
+
+    void clearState(){
+        // m_stateFace.clear();
+    };
+
+
+    void clearPreCompiled(){
+        // TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        //    std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
+        // tableFactoryPrecompiled->getmemoryTableFactory()->clear();
+    };
+
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
     int m_addressCount = 0x10000;
     BlockInfo m_blockInfo;
-    // std::shared_ptr<State> m_state;
+    std::shared_ptr<dev::eth::StateFace> m_stateFace;
+    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 };
 
 }  // namespace blockverifier
