@@ -172,6 +172,12 @@ struct PBFTMsg
         sig2 = signHash(fieldsWithoutBlock(), _keyPair);
     }
 
+    bool operator==(PBFTMsg const& req)
+    {
+        return height == req.height && view == req.view && timestamp == req.timestamp &&
+               block_hash == req.block_hash && sig == req.sig && sig2 == req.sig2;
+    }
+
     /**
      * @brief: encode the PBFTMsg into bytes
      * @param encodedBytes: the encoded bytes of specified PBFTMsg
@@ -198,13 +204,13 @@ struct PBFTMsg
     }
 
     /// trans PBFTMsg into RLPStream for encoding
-    void streamRLPFields(RLPStream& _s) const
+    virtual void streamRLPFields(RLPStream& _s) const
     {
         _s << height << view << idx << timestamp << block_hash << sig.asBytes() << sig2.asBytes();
     }
 
     /// populate specified rlp into PBFTMsg object
-    void populate(RLP const& rlp)
+    virtual void populate(RLP const& rlp)
     {
         int field = 0;
         try
@@ -265,9 +271,12 @@ struct PrepareReq : public PBFTMsg
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext;
-
     /// default constructor
     PrepareReq() = default;
+    PrepareReq(KeyPair const& _keyPair, int64_t const& _height, u256 const& _view, u256 const& _idx,
+        h256 const _blockHash)
+      : PBFTMsg(_keyPair, _height, _view, _idx, _blockHash), p_execContext(nullptr)
+    {}
     /**
      * @brief: populate the prepare request from specified prepare request,
      *         given view and node index
@@ -333,30 +342,15 @@ struct PrepareReq : public PBFTMsg
                    << timestamp;
     }
 
-    /// encode the PrepareReq into bytes
-    virtual void encode(bytes& encodedBytes) const
-    {
-        RLPStream s;
-        streamRLPFields(s);
-        s.swapOut(encodedBytes);
-    }
-
-    /// decode network-received data from bytes to PrepareReq object
-    virtual void decode(bytesConstRef data)
-    {
-        RLP rlp(data);
-        populate(rlp);
-    }
-
     /// trans PrepareReq from object to RLPStream
-    void streamRLPFields(RLPStream& _s) const
+    virtual void streamRLPFields(RLPStream& _s) const
     {
         PBFTMsg::streamRLPFields(_s);
         _s << block;
     }
 
     /// populate PrepareReq from given RLP object
-    void populate(RLP const& _rlp)
+    virtual void populate(RLP const& _rlp)
     {
         PBFTMsg::populate(_rlp);
         int field = 0;
