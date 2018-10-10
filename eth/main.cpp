@@ -411,6 +411,9 @@ int main(int argc, char** argv)
 			help();
 		else if (arg == "-V" || arg == "--version")
 			version();
+		else if (arg == "-R" || arg == "--rescue") {
+			withExisting = WithExisting::Rescue;
+		}
 		else
 		{
 			LOG(ERROR) << "Invalid argument: " << arg << "\n";
