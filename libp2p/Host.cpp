@@ -443,7 +443,7 @@ void Host::connect(NodeIPEndpoint const &endpoint)
 	{
 		if (ec)
 		{
-			LOG(ERROR) << "Connection refused to node " << endpoint << "(" << ec.message() << ")";
+			LOG(ERROR) << "Connection refused to node " << endpoint.address.to_string() << ":" << endpoint.tcpPort << "(" << ec.message() << ")";
 			// Manually set error (session not present)
 
 			Guard l(x_pendingNodeConns);
