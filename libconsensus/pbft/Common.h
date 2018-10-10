@@ -31,7 +31,6 @@ namespace dev
 {
 namespace consensus
 {
-
 // for pbft
 enum PBFTPacketType : byte
 {
