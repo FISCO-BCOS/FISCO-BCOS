@@ -430,6 +430,13 @@ std::string ConsoleServer::pbftAdd(const std::vector<std::string> args) {
     printDoubleLine(ss);
     if (args.size() == 1 && args[0] != "") {
       std::string nodeID = args[0];
+      if (nodeID.size() != 128u)
+      {
+        ss << "NodeId length error!" << std::endl;
+        printSingleLine(ss);
+        ss << std::endl;
+        return ss.str();
+      }
       TransactionSkeleton t;
       //   ret.from = _key.address();
       t.to = Address(0x1003);
@@ -466,6 +473,13 @@ std::string ConsoleServer::pbftRemove(const std::vector<std::string> args) {
     printDoubleLine(ss);
     if (args.size() == 1 && args[0] != "") {
       std::string nodeID = args[0];
+      if (nodeID.size() != 128u)
+      {
+        ss << "NodeId length error!" << std::endl;
+        printSingleLine(ss);
+        ss << std::endl;
+        return ss.str();
+      }
       TransactionSkeleton t;
       t.to = Address(0x1003);
       t.creation = false;
