@@ -74,7 +74,6 @@ private:
     Address getSysTable(ExecutiveContext::Ptr context, const std::string& _tableName);
     dev::storage::MemoryTableFactory::Ptr m_MemoryTableFactory;
     std::vector<std::string> m_sysTables;
-    h256 m_hash;
 };
 
 }  // namespace blockverifier
