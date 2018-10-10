@@ -38,13 +38,13 @@ void PBFTConsensus::initPBFTEnv(KeyPair const& _key_pair, unsigned view_timeout)
 {
     Guard l(m_mutex);
     m_keyPair = _key_pair;
+    m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
+    m_reqCache = std::make_shared<PBFTReqCache>();
     resetConfig();
     m_consensusBlockNumber = 0;
     m_toView = u256(0);
     m_leaderFailed = false;
     initBackupDB();
-    m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-    m_reqCache = std::make_shared<PBFTReqCache>();
     m_timeManager.initTimerManager(view_timeout);
     LOG(INFO) << "PBFT initEnv success";
 }
@@ -75,14 +75,14 @@ void PBFTConsensus::resetConfig()
 void PBFTConsensus::initBackupDB()
 {
     std::string path = getGroupBackupMsgPath();
+    /// try-catch has already been considered by libdevcore/LevelDB.*
+    m_backupDB = std::make_shared<LevelDB>(path);
     if (boost::filesystem::space(path).available < 1024)
     {
         LOG(ERROR) << "Not enough available space found on hard drive. Please free some up and "
                       "then re-run. Bailing.";
         BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
     }
-    /// try-catch has already been considered by libdevcore/LevelDB.*
-    m_backupDB = std::make_shared<LevelDB>(path);
     // reload msg from db
     PBFTMsg pbft_msg = m_reqCache->committedPrepareCache();
     reloadMsg(c_backupKeyCommitted, &pbft_msg);

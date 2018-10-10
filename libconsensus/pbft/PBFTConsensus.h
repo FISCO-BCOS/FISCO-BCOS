@@ -408,7 +408,7 @@ private:
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
 
     /// get group id
-    uint8_t m_groupId;
+    uint8_t m_groupId = 0;
     /// static vars
     static const std::string c_backupKeyCommitted;
     static const std::string c_backupMsgDirName;
