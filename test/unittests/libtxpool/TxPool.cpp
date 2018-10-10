@@ -23,9 +23,7 @@
  */
 #include "FakeBlockChain.h"
 #include <libdevcrypto/Common.h>
-#include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev;
 using namespace dev::txpool;
@@ -34,42 +32,6 @@ namespace dev
 {
 namespace test
 {
-class TxPoolFixture
-{
-public:
-    TxPoolFixture() { FakeTxPoolFunc(5, 5); }
-    void FakeTxPoolFunc(uint64_t _blockNum, size_t const& transSize = 5)
-    {
-        /// fake block manager
-        m_blockChain = std::make_shared<FakeBlockChain>(_blockNum, transSize);
-        /// fake host of p2p module
-        FakeHost* hostPtr = createFakeHostWithSession(clientVersion, listenIp, listenPort);
-        m_host = std::shared_ptr<Host>(hostPtr);
-        /// create p2pHandler
-        m_p2pHandler = std::make_shared<P2PMsgHandler>();
-        /// fake service of p2p module
-        m_topicService = std::make_shared<Service>(m_host, m_p2pHandler);
-        std::shared_ptr<BlockChainInterface> blockChain =
-            std::shared_ptr<BlockChainInterface>(m_blockChain);
-        /// fake txpool
-        m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain);
-    }
-
-    void setSessionData(std::string const& data_content)
-    {
-        for (auto session : m_host->sessions())
-            dynamic_cast<FakeSessionForTest*>(session.second.get())->setDataContent(data_content);
-    }
-    std::shared_ptr<FakeTxPool> m_txPool;
-    std::shared_ptr<Service> m_topicService;
-    std::shared_ptr<P2PMsgHandler> m_p2pHandler;
-    std::shared_ptr<FakeBlockChain> m_blockChain;
-    std::shared_ptr<Host> m_host;
-    std::string clientVersion = "2.0";
-    std::string listenIp = "127.0.0.1";
-    uint16_t listenPort = 30304;
-};
-
 BOOST_FIXTURE_TEST_SUITE(TxPoolTest, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testSessionRead)
 {

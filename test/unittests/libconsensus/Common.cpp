@@ -22,11 +22,11 @@
  * @date: 2018-10-09
  */
 #include <libconsensus/Common.h>
+#include <libconsensus/pbft/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev::consensus;
-
 namespace dev
 {
 namespace test
