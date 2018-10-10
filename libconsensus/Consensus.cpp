@@ -37,6 +37,7 @@ void Consensus::start()
         LOG(WARNING) << "Consensus module has already been started, return directly";
         return;
     }
+    /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     reportBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
 }
@@ -47,7 +48,7 @@ bool Consensus::shouldSeal()
     DEV_READ_GUARDED(x_sealing)
     sealed = m_sealing.block.isSealed();
     bool t = true;
-    return (!sealed && m_startConsensus && getNodeAccountType() == NodeAccountType::MinerAccount &&
+    return (!sealed && m_startConsensus && accountType() == NodeAccountType::MinerAccount &&
             !isBlockSyncing() && m_syncTxPool.compare_exchange_strong(t, false));
 }
 
@@ -56,7 +57,6 @@ bool Consensus::shouldWait(bool const& wait)
     return !m_syncTxPool && (wait || m_sealing.block.isSealed());
 }
 
-/// doWork
 void Consensus::doWork(bool wait)
 {
     if (shouldSeal())
@@ -84,7 +84,10 @@ void Consensus::doWork(bool wait)
     }
 }
 
-/// sync transactions from txPool
+/**
+ * @brief: load transactions from the transaction pool
+ * @param transToFetch: max transactions to fetch
+ */
 void Consensus::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
@@ -92,7 +95,7 @@ void Consensus::loadTransactions(uint64_t const& transToFetch)
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
 
-void inline Consensus::ResetSealingHeader()
+void Consensus::ResetSealingHeader()
 {
     /// import block
     resetCurrentTime();
@@ -103,20 +106,20 @@ void inline Consensus::ResetSealingHeader()
     m_sealing.block.header().setExtraData(m_extraData);
 }
 
-void inline Consensus::ResetSealingBlock()
+void Consensus::ResetSealingBlock()
 {
     m_sealing.block.resetCurrentBlock();
     ResetSealingHeader();
     m_sealing.m_transactionSet.clear();
 }
 
-void inline Consensus::appendSealingExtraData(bytes const& _extra)
+void Consensus::appendSealingExtraData(bytes const& _extra)
 {
     m_sealing.block.header().appendExtraDataArray(_extra);
 }
 
 /// update m_sealing and receiptRoot
-inline dev::blockverifier::ExecutiveContext::Ptr Consensus::executeBlock(Block& block)
+dev::blockverifier::ExecutiveContext::Ptr Consensus::executeBlock(Block& block)
 {
     std::unordered_map<Address, dev::eth::PrecompiledContract> contract;
     /// reset execute context
@@ -167,7 +170,7 @@ bool Consensus::encodeBlock(bytes& blockBytes)
 }
 
 /// check whether the blocksync module is syncing
-bool inline Consensus::isBlockSyncing()
+bool Consensus::isBlockSyncing()
 {
     SyncStatus state = m_blockSync->status();
     return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
