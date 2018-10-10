@@ -166,7 +166,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s.savepoint();
-    if (m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+    if (m_envInfo.precompiledEngine() &&
+        m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
         m_gas = _p.gas;
         bytes output;
@@ -176,7 +177,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         size_t outputSize = output.size();
         m_output = owning_bytes_ref{std::move(output), 0, outputSize};
     }
-    else if (m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
+    else if (m_envInfo.precompiledEngine() &&
+             m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
     {
         m_gas = _p.gas;
 
