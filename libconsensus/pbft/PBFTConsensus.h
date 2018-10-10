@@ -22,6 +22,7 @@
  * @date: 2018-09-28
  */
 #pragma once
+#include "Common.h"
 #include "PBFTMsgCache.h"
 #include "PBFTReqCache.h"
 #include <libconsensus/Consensus.h>
@@ -56,7 +57,7 @@ struct TimeManager
     float m_execTimePerTx;
     uint64_t m_leftTime;
 
-    void initTimerManager(unsigned view_timeout)
+    inline void initTimerManager(unsigned view_timeout)
     {
         m_lastExecFinishTime = m_lastExecBlockFiniTime = m_lastConsensusTime = utcTime();
         m_viewTimeout = view_timeout;
@@ -64,7 +65,7 @@ struct TimeManager
         m_lastGarbageCollection = std::chrono::system_clock::now();
     }
 
-    void changeView()
+    inline void changeView()
     {
         m_lastConsensusTime = 0;
         m_lastSignTime = 0;
@@ -76,7 +77,7 @@ struct TimeManager
         m_changeCycle = std::min(m_changeCycle + 1, (unsigned)kMaxChangeCycle);
     }
 
-    bool isTimeout()
+    inline bool isTimeout()
     {
         auto now = utcTime();
         auto last = std::max(m_lastConsensusTime, m_lastSignTime);
@@ -84,7 +85,7 @@ struct TimeManager
         return (now - last >= interval);
     }
 
-    void updateTimeAfterHandleBlock(size_t const& txNum, uint64_t const& startExecTime)
+    inline void updateTimeAfterHandleBlock(size_t const& txNum, uint64_t const& startExecTime)
     {
         m_lastExecFinishTime = utcTime();
         if (txNum != 0)
@@ -96,7 +97,7 @@ struct TimeManager
         }
     }
 
-    uint64_t calculateMaxPackTxNum(uint64_t defaultMaxTxNum, u256 const& view)
+    inline uint64_t calculateMaxPackTxNum(uint64_t defaultMaxTxNum, u256 const& view)
     {
         auto last_exec_finish_time = std::min(m_lastExecFinishTime, m_lastExecBlockFiniTime);
         unsigned passed_time = 0;
@@ -134,7 +135,8 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        KeyPair const& _key_pair, int16_t const& _protocolId, h512s const& _minerList = h512s())
+        int16_t const& _protocolId, h512s const& _minerList = h512s(),
+        KeyPair const& _key_pair = KeyPair::create())
       : Consensus(
             _service, _txPool, _blockChain, _blockSync, m_blockVerifier, _protocolId, _minerList)
     {
@@ -143,11 +145,14 @@ public:
         initPBFTEnv(_key_pair, 3 * getIntervalBlockTime());
     }
 
-    void setIntervalBlockTime(unsigned const& _intervalBlockTime)
+    inline void setIntervalBlockTime(unsigned const& _intervalBlockTime)
     {
         m_timeManager.m_intervalBlockTime = _intervalBlockTime;
     }
-    unsigned const& getIntervalBlockTime() const { return m_timeManager.m_intervalBlockTime; }
+    inline unsigned const& getIntervalBlockTime() const
+    {
+        return m_timeManager.m_intervalBlockTime;
+    }
 
 protected:
     void workLoop() override;
@@ -157,8 +162,8 @@ protected:
     void checkTimeout();
     bool shouldSeal() override;
     void rehandleCommitedPrepareCache(PrepareReq const& req);
-    bool isMiner(h512& nodeId, const u256& idx) const;
-    void checkBlockValid(Block const& block)
+    bool getNodeIDByIndex(h512& nodeId, const u256& idx) const;
+    inline void checkBlockValid(Block const& block)
     {
         Consensus::checkBlockValid(block);
         checkMinerList(block);
@@ -180,25 +185,24 @@ protected:
         P2PException exception, std::shared_ptr<Session> session, Message::Ptr message);
 
     /// handler prepare messages
-    PrepareReq handlePrepareMsg(PBFTMsgPacket const& pbftMsg);
+    void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     void handlePrepareMsg(PrepareReq& prepare_req, bool self = false);
-    SignReq handleSignMsg(PBFTMsgPacket const& pbftMsg);
-    CommitReq handleCommitMsg(PBFTMsgPacket const& pbftMsg);
-    ViewChangeReq handleViewChangeMsg(PBFTMsgPacket const& pbftMsg);
+    void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
+    void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
+    void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
     void catchupView(ViewChangeReq const& req, ostringstream& oss);
     void checkAndCommit();
     void checkAndSave();
     void checkAndChangeView();
 
-    bool shouldChangeViewForEmptyBlock()
+    inline bool shouldChangeViewForEmptyBlock()
     {
         bool ret = (m_sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock);
         if (ret)
             m_sealing.block.resetCurrentBlock();
         return ret;
     }
-
     void reportBlock(BlockHeader const& blockHeader) override;
 
 private:
@@ -207,7 +211,7 @@ private:
     void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
     void backupMsg(std::string const& _key, PBFTMsg const& _msg);
-    std::string getGroupBackupMsgPath()
+    inline std::string getGroupBackupMsgPath()
     {
         return getLedgerDir(toString(m_groupId)).string() + "/" + c_backupMsgDirName;
     }
@@ -216,23 +220,25 @@ private:
 
     void broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>());
-    bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)
+    inline bool broadcastFilter(
+        h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
-    void broadcastMark(h512 const& nodeId, unsigned const& packetType, std::string const& key)
+    inline void broadcastMark(
+        h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
-    void clearMask() { m_broadCastCache->clearAll(); }
+    inline void clearMask() { m_broadCastCache->clearAll(); }
     ssize_t getIndexByMiner(dev::h512 node_id) const;
     h512 getMinerByIndex(size_t index) const;
 
     /// trans data into message
-    Message::Ptr transDataToMessage(
+    inline Message::Ptr transDataToMessage(
         bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
     {
-        Message::Ptr message;
+        Message::Ptr message = std::make_shared<Message>();
         std::shared_ptr<dev::bytes> p_data;
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
@@ -243,23 +249,25 @@ private:
         return message;
     }
 
-    Message::Ptr transDataToMessage(bytesConstRef data, uint16_t const& packetType)
+    inline Message::Ptr transDataToMessage(bytesConstRef data, uint16_t const& packetType)
     {
         return transDataToMessage(data, packetType, m_protocolId);
     }
 
-    bool isValidReq(Message::Ptr message, std::shared_ptr<Session> session)
+    inline bool isValidReq(Message::Ptr message, std::shared_ptr<Session> session)
     {
+        if (message->buffer()->size() <= 0)
+            return false;
         h512 node_id;
-        bool is_miner = isMiner(node_id, m_idx);
-        if (message->buffer()->size() <= 0 || session->id() == node_id || !is_miner)
+        bool is_miner = getNodeIDByIndex(node_id, m_idx);
+        if (!is_miner || session->id() == node_id)
             return false;
         return true;
     }
 
     /// translate network-recevied packets to requests
     template <class T>
-    bool decodeToRequests(T& req, Message::Ptr message, std::shared_ptr<Session> session)
+    inline bool decodeToRequests(T& req, Message::Ptr message, std::shared_ptr<Session> session)
     {
         bool valid = isValidReq(message, session);
         if (valid)
@@ -278,7 +286,7 @@ private:
     }
 
     template <class T>
-    bool decodeToRequests(T& req, bytesConstRef data)
+    inline bool decodeToRequests(T& req, bytesConstRef data)
     {
         try
         {
@@ -294,7 +302,7 @@ private:
 
     bool isValidPrepare(PrepareReq const& req, bool self, ostringstream& oss) const;
     template <class T>
-    CheckResult checkReq(T const& req, ostringstream& oss) const
+    inline CheckResult checkReq(T const& req, ostringstream& oss) const
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
@@ -331,18 +339,22 @@ private:
     bool isValidViewChangeReq(ViewChangeReq const& req, ostringstream& oss) const;
 
     template <class T>
-    bool hasConsensused(T const& req) const
+    inline bool hasConsensused(T const& req) const
     {
         return req.height < m_consensusBlockNumber || req.view < m_view;
     }
 
     template <typename T>
-    bool isFutureBlock(T const& req) const
+    inline bool isFutureBlock(T const& req) const
     {
-        return req.height > m_consensusBlockNumber || req.view > m_view;
+        if (req.height > m_consensusBlockNumber)
+            return true;
+        if (req.height == m_consensusBlockNumber && req.view > m_view)
+            return true;
+        return false;
     }
 
-    bool isHashSavedAfterCommit(PrepareReq const& req) const
+    inline bool isHashSavedAfterCommit(PrepareReq const& req) const
     {
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
@@ -350,7 +362,7 @@ private:
         return true;
     }
 
-    bool isValidLeader(PrepareReq const& req) const
+    inline bool isValidLeader(PrepareReq const& req) const
     {
         auto leader = getLeader();
         if (!leader.first || req.idx != leader.second)
@@ -358,7 +370,7 @@ private:
         return true;
     }
 
-    std::pair<bool, u256> getLeader() const
+    inline std::pair<bool, u256> getLeader() const
     {
         if (m_cfgErr || m_leaderFailed || m_highestBlock.number() == 0)
         {
@@ -368,7 +380,7 @@ private:
     }
     void checkMinerList(Block const& block);
     bool execBlock();
-    Sealing execBlock(PrepareReq& req, ostringstream& oss);
+    void execBlock(Sealing& sealing, PrepareReq& req, ostringstream& oss);
     u256 minValidNodes() const { return m_nodeNum - m_f; }
     void setBlock();
     void changeViewForEmptyBlock();
@@ -398,14 +410,15 @@ private:
     /// get group id
     uint8_t m_groupId;
     /// static vars
-    const static std::string c_backupKeyCommitted;
-    const static std::string c_backupMsgDirName;
-    const static unsigned c_PopWaitSeconds = 5;
+    static const std::string c_backupKeyCommitted;
+    static const std::string c_backupMsgDirName;
+    static const unsigned c_PopWaitSeconds = 5;
 
     std::shared_ptr<PBFTBroadcastCache> m_broadCastCache;
     std::shared_ptr<PBFTReqCache> m_reqCache;
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;
+    mutable Mutex m_mutex;
 };
 }  // namespace consensus
 }  // namespace dev

@@ -36,6 +36,7 @@ const std::string PBFTConsensus::c_backupKeyCommitted = "committed";
 const std::string PBFTConsensus::c_backupMsgDirName = "pbftMsgBackup";
 void PBFTConsensus::initPBFTEnv(KeyPair const& _key_pair, unsigned view_timeout)
 {
+    Guard l(m_mutex);
     m_keyPair = _key_pair;
     resetConfig();
     m_consensusBlockNumber = 0;
@@ -146,15 +147,16 @@ bool PBFTConsensus::execBlock()
     }
 }
 
-inline void PBFTConsensus::setBlock()
+void PBFTConsensus::setBlock()
 {
     ResetSealingBlock();
     setSealingRoot(m_sealing.block.getTransactionRoot(), h256(Invalid256), h256(Invalid256));
 }
 
 /// change view for empty block
-inline void PBFTConsensus::changeViewForEmptyBlock()
+void PBFTConsensus::changeViewForEmptyBlock()
 {
+    Guard l(m_mutex);
     LOG(INFO) << "changeViewForEmptyBlock m_toView=" << m_toView << ", node=" << m_idx;
     m_timeManager.changeView();
     m_emptyBlockFlag = true;
@@ -281,7 +283,7 @@ void PBFTConsensus::broadcastSignReq(PrepareReq const& req)
     m_reqCache->addSignReq(sign_req);
 }
 
-inline bool PBFTConsensus::isMiner(h512& nodeID, const u256& idx) const
+bool PBFTConsensus::getNodeIDByIndex(h512& nodeID, const u256& idx) const
 {
     nodeID = getMinerByIndex(idx.convert_to<size_t>());
     if (nodeID == h512())
@@ -292,10 +294,10 @@ inline bool PBFTConsensus::isMiner(h512& nodeID, const u256& idx) const
     return true;
 }
 
-inline bool PBFTConsensus::checkSign(PBFTMsg const& req) const
+bool PBFTConsensus::checkSign(PBFTMsg const& req) const
 {
     h512 node_id;
-    if (isMiner(node_id, req.idx))
+    if (getNodeIDByIndex(node_id, req.idx))
     {
         Public pub_id = jsToPublic(toJS(node_id.hex()));
         return dev::verify(pub_id, req.sig, req.block_hash) &&
@@ -315,9 +317,6 @@ void PBFTConsensus::broadcastCommitReq(PrepareReq const& req)
 
 void PBFTConsensus::broadcastViewChangeReq()
 {
-    LOG(INFO) << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
-              << " , view = " << m_view << ", to_view:" << m_toView;
-
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
 
     bytes view_change_data;
@@ -331,22 +330,25 @@ void PBFTConsensus::broadcastMsg(unsigned const& packetType, std::string const& 
     auto sessions = m_service->sessionInfos();
     for (auto session : sessions)
     {
-        /// peer is a miner ?
+        /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
             return;
-        /// peer is in the _filter list
+        if (packetType != ViewChangeReqPacket &&
+            getIndexByMiner(session.nodeID) != NodeAccountType::MinerAccount)
+            return;
+        /// peer is in the _filter list ?
         if (filter.count(session.nodeID))
         {
             broadcastMark(session.nodeID, packetType, key);
             return;
         }
+        /// packet has been broadcasted?
         if (broadcastFilter(session.nodeID, packetType, key))
-        {
-            /// send messages
-            m_service->asyncSendMessageByNodeID(
-                session.nodeID, transDataToMessage(data, packetType), nullptr);
-            broadcastMark(session.nodeID, packetType, key);
-        }
+            return;
+        /// send messages
+        m_service->asyncSendMessageByNodeID(
+            session.nodeID, transDataToMessage(data, packetType), nullptr);
+        broadcastMark(session.nodeID, packetType, key);
     }
 }
 
@@ -371,8 +373,7 @@ ssize_t PBFTConsensus::getIndexByMiner(dev::h512 node_id) const
     return index;
 }
 
-inline bool PBFTConsensus::isValidPrepare(
-    PrepareReq const& req, bool allowSelf, ostringstream& oss) const
+bool PBFTConsensus::isValidPrepare(PrepareReq const& req, bool allowSelf, ostringstream& oss) const
 {
     if (m_reqCache->isExistPrepare(req))
     {
@@ -416,7 +417,7 @@ inline bool PBFTConsensus::isValidPrepare(
 }
 
 /// check miner list
-inline void PBFTConsensus::checkMinerList(Block const& block)
+void PBFTConsensus::checkMinerList(Block const& block)
 {
     if (m_minerList != block.blockHeader().sealerList())
     {
@@ -434,21 +435,19 @@ inline void PBFTConsensus::checkMinerList(Block const& block)
     }
 }
 
-Sealing PBFTConsensus::execBlock(PrepareReq& req, ostringstream& oss)
+void PBFTConsensus::execBlock(Sealing& sealing, PrepareReq& req, ostringstream& oss)
 {
     Block working_block(req.block);
     LOG(TRACE) << "start exec tx, blk=" << req.height << ", hash = " << req.block_hash
                << ", idx = " << req.idx << ", time =" << utcTime();
     checkBlockValid(working_block);
-    Sealing sealing;
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     m_timeManager.m_lastExecFinishTime = utcTime();
-    return sealing;
 }
 
 /// check whether the block is empty
-inline bool PBFTConsensus::needOmit(Sealing const& sealing)
+bool PBFTConsensus::needOmit(Sealing const& sealing)
 {
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
     {
@@ -475,14 +474,12 @@ void PBFTConsensus::onRecvPBFTMessage(
     }
 }
 
-PrepareReq PBFTConsensus::handlePrepareMsg(PBFTMsgPacket const& pbftMsg)
+void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& pbftMsg)
 {
-    PrepareReq prepare_req;
     bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
     if (!valid)
-        return prepare_req;
+        return;
     handlePrepareMsg(prepare_req);
-    return prepare_req;
 }
 
 void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, bool self)
@@ -499,7 +496,7 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, bool self)
     Sealing workingSealing;
     try
     {
-        workingSealing = execBlock(prepare_req, oss);
+        execBlock(workingSealing, prepare_req, oss);
     }
     catch (std::exception& e)
     {
@@ -566,7 +563,8 @@ void PBFTConsensus::checkAndSave()
         /// add sign-list into the block header
         if (m_reqCache->prepareCache().height > m_highestBlock.number())
         {
-            Block block = m_reqCache->generateAndSetSigList(minValidNodes());
+            Block block(m_reqCache->prepareCache().block);
+            m_reqCache->generateAndSetSigList(block, minValidNodes());
             LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[" << toString(m_reqCache->prepareCache().block_hash)
                       << "][" << m_reqCache->prepareCache().height << "][" << utcTime() << "]["
                       << "onSealGenerated"
@@ -588,6 +586,7 @@ void PBFTConsensus::checkAndSave()
 
 void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
 {
+    Guard l(m_mutex);
     /// update the highest block
     m_highestBlock = blockHeader;
     if (m_highestBlock.number() >= m_consensusBlockNumber)
@@ -607,13 +606,12 @@ void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
 }
 
 /// recv sign message from p2p
-SignReq PBFTConsensus::handleSignMsg(PBFTMsgPacket const& pbftMsg)
+void PBFTConsensus::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
-    SignReq sign_req;
     bool valid = decodeToRequests(sign_req, ref(pbftMsg.data));
     if (!valid)
-        return sign_req;
+        return;
     ostringstream oss;
     oss << "handleSignMsg: idx=" << sign_req.idx << ",view=" << sign_req.view
         << ",blk=" << sign_req.height << ",hash=" << sign_req.block_hash.abridged()
@@ -621,14 +619,13 @@ SignReq PBFTConsensus::handleSignMsg(PBFTMsgPacket const& pbftMsg)
 
     valid = isValidSignReq(sign_req, oss);
     if (!valid)
-        return sign_req;
+        return;
     m_reqCache->addSignReq(sign_req);
     checkAndCommit();
     LOG(DEBUG) << "handleSignMsg, timecost=" << 1000 * t.elapsed();
-    return sign_req;
 }
 
-inline bool PBFTConsensus::isValidSignReq(SignReq const& req, ostringstream& oss) const
+bool PBFTConsensus::isValidSignReq(SignReq const& req, ostringstream& oss) const
 {
     if (m_reqCache->isExistSign(req))
     {
@@ -646,13 +643,12 @@ inline bool PBFTConsensus::isValidSignReq(SignReq const& req, ostringstream& oss
     return true;
 }
 
-CommitReq PBFTConsensus::handleCommitMsg(PBFTMsgPacket const& pbftMsg)
+void PBFTConsensus::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
-    CommitReq commit_req;
     bool valid = decodeToRequests(commit_req, ref(pbftMsg.data));
     if (!valid)
-        return commit_req;
+        return;
     ostringstream oss;
     oss << "handleCommitMsg: idx=" << commit_req.idx << ",view=" << commit_req.view
         << ",blk=" << commit_req.height << ",hash=" << commit_req.block_hash.abridged()
@@ -660,14 +656,14 @@ CommitReq PBFTConsensus::handleCommitMsg(PBFTMsgPacket const& pbftMsg)
 
     valid = isValidCommitReq(commit_req, oss);
     if (!valid)
-        return commit_req;
+        return;
     m_reqCache->addCommitReq(commit_req);
     checkAndSave();
     LOG(DEBUG) << "handleCommitMsg, timecost=" << 1000 * t.elapsed();
-    return commit_req;
+    return;
 }
 
-inline bool PBFTConsensus::isValidCommitReq(CommitReq const& req, ostringstream& oss) const
+bool PBFTConsensus::isValidCommitReq(CommitReq const& req, ostringstream& oss) const
 {
     if (m_reqCache->isExistCommit(req))
     {
@@ -685,19 +681,18 @@ inline bool PBFTConsensus::isValidCommitReq(CommitReq const& req, ostringstream&
     return true;
 }
 
-ViewChangeReq PBFTConsensus::handleViewChangeMsg(PBFTMsgPacket const& pbftMsg)
+void PBFTConsensus::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
 {
-    ViewChangeReq viewChange_req;
     bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
     if (!valid)
-        return viewChange_req;
+        return;
     ostringstream oss;
     oss << "handleViewChangeMsg: idx=" << viewChange_req.idx << ",view=" << viewChange_req.view
         << ",blk=" << viewChange_req.height << ",hash=" << viewChange_req.block_hash.abridged()
         << ",from=" << pbftMsg.node_id;
     valid = isValidViewChangeReq(viewChange_req, oss);
     if (!valid)
-        return viewChange_req;
+        return;
     catchupView(viewChange_req, oss);
     m_reqCache->addViewChangeReq(viewChange_req);
     if (viewChange_req.view == m_toView)
@@ -716,10 +711,9 @@ ViewChangeReq PBFTConsensus::handleViewChangeMsg(PBFTMsgPacket const& pbftMsg)
             m_signalled.notify_all();
         }
     }
-    return viewChange_req;
 }
 
-inline bool PBFTConsensus::isValidViewChangeReq(ViewChangeReq const& req, ostringstream& oss) const
+bool PBFTConsensus::isValidViewChangeReq(ViewChangeReq const& req, ostringstream& oss) const
 {
     if (m_reqCache->isExistViewChange(req))
     {
@@ -750,13 +744,13 @@ inline bool PBFTConsensus::isValidViewChangeReq(ViewChangeReq const& req, ostrin
     return true;
 }
 
-inline void PBFTConsensus::catchupView(ViewChangeReq const& req, ostringstream& oss)
+void PBFTConsensus::catchupView(ViewChangeReq const& req, ostringstream& oss)
 {
     if (req.view + u256(1) < m_toView)
     {
         LOG(INFO) << oss.str()
-                  << " broadcast view change requst for view-behind, req.view=" << req.view
-                  << "m_toView = " << m_toView;
+                  << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
+                  << " , view = " << m_view << ", to_view:" << m_toView;
         broadcastViewChangeReq();
     }
 }
@@ -776,6 +770,7 @@ void PBFTConsensus::checkAndChangeView()
 
 void PBFTConsensus::collectGarbage()
 {
+    Guard l(m_mutex);
     if (!m_highestBlock)
         return;
     Timer t;
@@ -793,12 +788,15 @@ void PBFTConsensus::checkTimeout()
 {
     if (m_timeManager.isTimeout())
     {
+        Guard l(m_mutex);
         Timer t;
         m_toView += u256(1);
         m_leaderFailed = true;
         m_timeManager.updateChangeCycle();
         m_timeManager.m_lastConsensusTime = utcTime();
         m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
+        LOG(INFO) << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
+                  << " , view = " << m_view << ", to_view:" << m_toView;
         broadcastViewChangeReq();
         checkAndChangeView();
         LOG(DEBUG) << "checkTimeout timecost=" << t.elapsed() << ", m_view=" << m_view
@@ -808,34 +806,39 @@ void PBFTConsensus::checkTimeout()
 
 void PBFTConsensus::handleMsg(PBFTMsgPacket const& pbftMsg)
 {
+    Guard l(m_mutex);
     PBFTMsg pbft_msg;
     std::string key;
     switch (pbftMsg.packet_id)
     {
     case PrepareReqPacket:
     {
-        PrepareReq prepare_req = handlePrepareMsg(pbftMsg);
+        PrepareReq prepare_req;
+        handlePrepareMsg(prepare_req, pbftMsg);
         key = prepare_req.block_hash.hex();
         pbft_msg = prepare_req;
         break;
     }
     case SignReqPacket:
     {
-        SignReq req = handleSignMsg(pbftMsg);
+        SignReq req;
+        handleSignMsg(req, pbftMsg);
         key = req.sig.hex();
         pbft_msg = req;
         break;
     }
     case CommitReqPacket:
     {
-        CommitReq req = handleCommitMsg(pbftMsg);
+        CommitReq req;
+        handleCommitMsg(req, pbftMsg);
         key = req.sig.hex();
         pbft_msg = req;
         break;
     }
     case ViewChangeReqPacket:
     {
-        ViewChangeReq req = handleViewChangeMsg(pbftMsg);
+        ViewChangeReq req;
+        handleViewChangeMsg(req, pbftMsg);
         key = req.sig.hex() + toJS(req.view);
         pbft_msg = req;
         break;
@@ -890,6 +893,7 @@ void PBFTConsensus::workLoop()
 
 void PBFTConsensus::handleFutureBlock()
 {
+    Guard l(m_mutex);
     PrepareReq future_req = m_reqCache->futurePrepareCache();
     if (future_req.height == m_consensusBlockNumber && future_req.view == m_view)
     {
