@@ -64,6 +64,8 @@ public:
         m_MemoryTableFactory = MemoryTableFactory;
     }
 
+    dev::storage::MemoryTableFactory::Ptr getmemoryTableFactory() { return m_MemoryTableFactory; }
+
     h256 hash(std::shared_ptr<ExecutiveContext> context);
 
     Address openTable(ExecutiveContext::Ptr context, const std::string& tableName);
