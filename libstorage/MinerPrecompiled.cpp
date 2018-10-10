@@ -53,6 +53,8 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
                 db->update(MINER_TYPE_OBSERVER, entry, condition);
                 break;
             }
+            // in case levelDB select observer
+            db->update(MINER_TYPE_MINER, entry, condition);
             LOG(DEBUG) << "MinerPrecompiled already miner, nodeID : " << nodeID;
             break;
         }
@@ -77,6 +79,8 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
             auto entries = db->select(MINER_TYPE_MINER, condition);
             auto entry = db->newEntry();
             entry->setField(MINER_PRIME_KEY, MINER_TYPE_OBSERVER);
+            entry->setField(MINER_KEY_NODEID, nodeID);
+            entry->setField(MINER_KEY_ENABLENUM, context->blockInfo().number.str());
             if (entries->size() == 0u)
             {
                 LOG(DEBUG) << "MinerPrecompiled remove node not in _sys_miners_, nodeID : "
