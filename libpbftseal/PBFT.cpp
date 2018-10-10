@@ -389,36 +389,42 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 h512s PBFT::getMinerNodeList() {
 	Guard lock(_current_miner_mutex);
 
-	if(m_highest_block.number() != _current_miner_num) {
+	if (m_highest_block.number() != _current_miner_num)
+	{
 		auto minerList = m_miner_list;
-
-		auto miners = _storage->select(m_highest_block.hash(), m_highest_block.number().convert_to<int>(), "_sys_miners_", "miner");
-		for(size_t i=0; i<miners->size(); ++i) {
-			auto miner = miners->get(i);
-			if(boost::lexical_cast<int>(miner->getField("enable_num")) <= m_highest_block.number().convert_to<int>() + 1) {
-				h512 nodeID = h512(miner->getField("node_id"));
-				minerList.push_back(nodeID);
+		auto nodes = _storage->select(m_highest_block.hash(), m_highest_block.number().convert_to<int>(), "_sys_miners_", "node");
+		for (size_t i = 0; i < nodes->size(); ++i)
+		{
+			auto node = nodes->get(i);
+			if ((node->getField("type") == "miner") && (boost::lexical_cast<int>(node->getField("enable_num")) <= m_highest_block.number().convert_to<int>() + 1))
+			{
+				h512 nodeID = h512(node->getField("node_id"));
+				if (minerList.end() == find(minerList.begin(), minerList.end(), nodeID))
+				{
+					minerList.push_back(nodeID);
+				}
 			}
 		}
-        auto observers = _storage->select(m_highest_block.hash(),
-            m_highest_block.number().convert_to<int>(), "_sys_miners_", "observer");
-        for (size_t i = 0; i < observers->size(); ++i)
-        {
-            auto observer = observers->get(i);
-            h512 nodeID = h512(observer->getField("node_id"));
-            for (auto it = minerList.begin(); it != minerList.end(); ++it)
-            {
-                if (*it == nodeID)
-                {
-                    minerList.erase(it);
-                    break;
-                }
-            }
-        }
-        _current_miner_list = minerList;
+		for (size_t i = 0; i < nodes->size(); ++i)
+		{
+			auto node = nodes->get(i);
+			if ((node->getField("type") == "observer") && (boost::lexical_cast<int>(node->getField("enable_num")) <= m_highest_block.number().convert_to<int>() + 1))
+			{
+				h512 nodeID = h512(node->getField("node_id"));
+				for (auto it = minerList.begin(); it != minerList.end(); ++it)
+				{
+					if (*it == nodeID)
+					{
+						minerList.erase(it);
+						break;
+					}
+				}
+			}
+		}
+		_current_miner_list = minerList;
 		_current_miner_num = m_highest_block.number();
 	}
-	
+
 	return _current_miner_list;
 }
 

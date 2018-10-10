@@ -22,7 +22,7 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
     switch (func)
     {
     case 0xb0c8f9dc:
-    {  // add(string)
+    { // add(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)
@@ -34,28 +34,22 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
         if (db.get())
         {
             auto condition = db->newCondition();
-            condition->EQ(MINER_KEY_NODEID, nodeID);
-            auto entries = db->select(MINER_TYPE_MINER, condition);
+            condition->EQ(NODE_KEY_NODEID, nodeID);
+            auto entries = db->select(PRIME_KEY, condition);
             auto entry = db->newEntry();
-            entry->setField(MINER_PRIME_KEY, MINER_TYPE_MINER);
+            entry->setField(NODE_TYPE, NODE_TYPE_MINER);
             if (entries->size() == 0u)
             {
-                entries = db->select(MINER_TYPE_OBSERVER, condition);
-                if (entries->size() == 0u)
-                {
-                    entry->setField(MINER_KEY_NODEID, nodeID);
-                    entry->setField(MINER_KEY_ENABLENUM, (context->blockInfo().number + 1).str());
-                    db->insert(MINER_TYPE_MINER, entry);
-                    LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
-                    break;
-                }
-                LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
-                db->update(MINER_TYPE_OBSERVER, entry, condition);
-                break;
+                entry->setField(NODE_KEY_ENABLENUM, (context->blockInfo().number + 1).str());
+                entry->setField(NODE_KEY_NODEID, nodeID);
+                db->insert(PRIME_KEY, entry);
+                LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
             }
-            // in case levelDB select observer
-            db->update(MINER_TYPE_MINER, entry, condition);
-            LOG(DEBUG) << "MinerPrecompiled already miner, nodeID : " << nodeID;
+            else
+            {
+                db->update(PRIME_KEY, entry, condition);
+                LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
+            }
             break;
         }
         LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
@@ -63,7 +57,7 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
         break;
     }
     case 0x80599e4b:
-    {  // remove(string)
+    { // remove(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)
@@ -75,21 +69,24 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
         if (db.get())
         {
             auto condition = db->newCondition();
-            condition->EQ(MINER_KEY_NODEID, nodeID);
-            auto entries = db->select(MINER_TYPE_MINER, condition);
+            condition->EQ(NODE_KEY_NODEID, nodeID);
+            auto entries = db->select(PRIME_KEY, condition);
             auto entry = db->newEntry();
-            entry->setField(MINER_PRIME_KEY, MINER_TYPE_OBSERVER);
-            entry->setField(MINER_KEY_NODEID, nodeID);
-            entry->setField(MINER_KEY_ENABLENUM, context->blockInfo().number.str());
+            entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
+
             if (entries->size() == 0u)
             {
                 LOG(DEBUG) << "MinerPrecompiled remove node not in _sys_miners_, nodeID : "
                            << nodeID;
-                db->insert(MINER_TYPE_OBSERVER, entry);
-                break;
+                entry->setField(NODE_KEY_NODEID, nodeID);
+                entry->setField(NODE_KEY_ENABLENUM, context->blockInfo().number.str());
+                db->insert(PRIME_KEY, entry);
             }
-            db->update(MINER_TYPE_MINER, entry, condition);
-            LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
+            else
+            {
+                db->update(PRIME_KEY, entry, condition);
+                LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
+            }
         }
         LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
         break;
