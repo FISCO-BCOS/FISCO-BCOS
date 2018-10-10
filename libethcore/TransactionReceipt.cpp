@@ -54,6 +54,7 @@ void TransactionReceipt::streamRLP(RLPStream& _s) const
         l.streamRLP(_s);
 }
 
+
 std::ostream& dev::eth::operator<<(std::ostream& _out, TransactionReceipt const& _r)
 {
     _out << "Root: " << _r.stateRoot() << "\n";

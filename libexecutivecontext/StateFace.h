@@ -31,6 +31,12 @@ namespace dev
 {
 namespace eth
 {
+enum StateType
+{
+    MptState,
+    StorageState
+};
+
 class StateFace
 {
 public:
