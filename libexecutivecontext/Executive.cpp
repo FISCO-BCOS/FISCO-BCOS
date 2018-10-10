@@ -77,10 +77,10 @@ void Executive::initialize(Transaction const& _transaction)
     if (!m_t.hasZeroSignature())
     {
         // Avoid invalid transactions.
-        u256 nonceReq;
+        Address sender;
         try
         {
-            nonceReq = m_s.getNonce(m_t.sender());
+            sender = m_t.sender();
         }
         catch (InvalidSignature const&)
         {
@@ -88,28 +88,22 @@ void Executive::initialize(Transaction const& _transaction)
             m_excepted = TransactionException::InvalidSignature;
             throw;
         }
-        if (m_t.nonce() != nonceReq)
-        {
-            LOG(WARNING) << "Sender: " << m_t.sender().hex() << " Invalid Nonce: Require "
-                         << nonceReq << " Got " << m_t.nonce();
-            m_excepted = TransactionException::InvalidNonce;
-            BOOST_THROW_EXCEPTION(
-                InvalidNonce() << RequirementError((bigint)nonceReq, (bigint)m_t.nonce()));
-        }
+
+        // No need nonce increasing sequently at all. See random id for more.
 
         // Avoid unaffordable transactions.
         bigint gasCost = (bigint)m_t.gas() * m_t.gasPrice();
         bigint totalCost = m_t.value() + gasCost;
-        if (m_s.balance(m_t.sender()) < totalCost)
+        if (m_s.balance(sender) < totalCost)
         {
             LOG(WARNING) << "Not enough cash: Require > " << totalCost << " = " << m_t.gas()
                          << " * " << m_t.gasPrice() << " + " << m_t.value() << " Got"
-                         << m_s.balance(m_t.sender()) << " for sender: " << m_t.sender();
+                         << m_s.balance(sender) << " for sender: " << sender;
             m_excepted = TransactionException::NotEnoughCash;
             m_excepted = TransactionException::NotEnoughCash;
             BOOST_THROW_EXCEPTION(NotEnoughCash()
-                                  << RequirementError(totalCost, (bigint)m_s.balance(m_t.sender()))
-                                  << errinfo_comment(m_t.sender().hex()));
+                                  << RequirementError(totalCost, (bigint)m_s.balance(sender))
+                                  << errinfo_comment(sender.hex()));
         }
         m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
     }
