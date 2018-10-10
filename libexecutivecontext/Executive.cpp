@@ -24,8 +24,8 @@
 #include <libevm/VMFactory.h>
 
 #include <json/json.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <boost/timer.hpp>
-
 #include <numeric>
 
 using namespace std;
@@ -77,10 +77,10 @@ void Executive::initialize(Transaction const& _transaction)
     if (!m_t.hasZeroSignature())
     {
         // Avoid invalid transactions.
-        u256 nonceReq;
+        Address sender;
         try
         {
-            nonceReq = m_s.getNonce(m_t.sender());
+            sender = m_t.sender();
         }
         catch (InvalidSignature const&)
         {
@@ -88,28 +88,22 @@ void Executive::initialize(Transaction const& _transaction)
             m_excepted = TransactionException::InvalidSignature;
             throw;
         }
-        if (m_t.nonce() != nonceReq)
-        {
-            LOG(WARNING) << "Sender: " << m_t.sender().hex() << " Invalid Nonce: Require "
-                         << nonceReq << " Got " << m_t.nonce();
-            m_excepted = TransactionException::InvalidNonce;
-            BOOST_THROW_EXCEPTION(
-                InvalidNonce() << RequirementError((bigint)nonceReq, (bigint)m_t.nonce()));
-        }
+
+        // No need nonce increasing sequently at all. See random id for more.
 
         // Avoid unaffordable transactions.
         bigint gasCost = (bigint)m_t.gas() * m_t.gasPrice();
         bigint totalCost = m_t.value() + gasCost;
-        if (m_s.balance(m_t.sender()) < totalCost)
+        if (m_s.balance(sender) < totalCost)
         {
             LOG(WARNING) << "Not enough cash: Require > " << totalCost << " = " << m_t.gas()
                          << " * " << m_t.gasPrice() << " + " << m_t.value() << " Got"
-                         << m_s.balance(m_t.sender()) << " for sender: " << m_t.sender();
+                         << m_s.balance(sender) << " for sender: " << sender;
             m_excepted = TransactionException::NotEnoughCash;
             m_excepted = TransactionException::NotEnoughCash;
             BOOST_THROW_EXCEPTION(NotEnoughCash()
-                                  << RequirementError(totalCost, (bigint)m_s.balance(m_t.sender()))
-                                  << errinfo_comment(m_t.sender().hex()));
+                                  << RequirementError(totalCost, (bigint)m_s.balance(sender))
+                                  << errinfo_comment(sender.hex()));
         }
         m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
     }
@@ -172,49 +166,28 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s.savepoint();
-    /*
-        if (m_sealEngine.isPrecompiled(_p.codeAddress, m_envInfo.number()))
-        {
-            bigint g = m_sealEngine.costOfPrecompiled(_p.codeAddress, _p.data, m_envInfo.number());
-            if (_p.gas < g)
-            {
-                m_excepted = TransactionException::OutOfGasBase;
-                // Bail from exception.
+    if (m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
+        bytes output;
+        bool success;
+        tie(success, output) =
+            m_envInfo.precompiledEngine()->executeOrginPrecompiled(_p.codeAddress, _p.data);
+        size_t outputSize = output.size();
+        m_output = owning_bytes_ref{std::move(output), 0, outputSize};
+    }
+    else if (m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
 
-                // Empty precompiled contracts need to be deleted even in case of OOG
-                // because the bug in both Geth and Parity led to deleting RIPEMD precompiled in
-       this
-                // case see
-                //
-       https://github.com/ethereum/go-ethereum/pull/3341/files#diff-2433aa143ee4772026454b8abd76b9dd
-                // We mark the account as touched here, so that is can be removed among other
-       touched
-                // empty accounts (after tx finalization)
-                // if (m_envInfo.number() >= m_sealEngine.chainParams().EIP158ForkBlock)
-                m_s.addBalance(_p.codeAddress, 0);
+        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
-                return true;  // true actually means "all finished - nothing more to be done
-       regarding
-                              // go().
-            }
-            else
-            {
-                m_gas = (u256)(_p.gas - g);
-                bytes output;
-                bool success;
-                tie(success, output) =
-                    m_sealEngine.executePrecompiled(_p.codeAddress, _p.data, m_envInfo.number());
-                size_t outputSize = output.size();
-                m_output = owning_bytes_ref{std::move(output), 0, outputSize};
-                if (!success)
-                {
-                    m_gas = 0;
-                    m_excepted = TransactionException::OutOfGas;
-                    return true;  // true means no need to run go().
-                }
-            }
-        }
-        else//*/
+        auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
+        size_t outputSize = result.size();
+        m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+        LOG(DEBUG) << "Precompiled result: " << result;
+    }
+    else
     {
         m_gas = _p.gas;
         if (m_s.addressHasCode(_p.codeAddress))

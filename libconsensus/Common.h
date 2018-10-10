@@ -30,6 +30,12 @@ namespace dev
 {
 namespace consensus
 {
+DEV_SIMPLE_EXCEPTION(DisabledFutureTime);
+DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
+DEV_SIMPLE_EXCEPTION(ExistedBlock);
+DEV_SIMPLE_EXCEPTION(ParentNoneExist);
+DEV_SIMPLE_EXCEPTION(BlockMinerListWrong);
+
 enum NodeAccountType
 {
     ObserverAccount = 0,

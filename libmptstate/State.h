@@ -19,7 +19,6 @@
 
 #include "Account.h"
 #include "CodeSizeCache.h"
-#include "GasPricer.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/OverlayDB.h>
 #include <libdevcore/RLP.h>
