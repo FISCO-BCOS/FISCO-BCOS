@@ -22,7 +22,7 @@ const char* const NODE_TYPE_MINER = "miner";
 const char* const NODE_TYPE_OBSERVER = "observer";
 const char* const NODE_KEY_NODEID = "node_id";
 const char* const NODE_KEY_ENABLENUM = "enable_num";
-const char* const PRIME_KEY = "node";
+const char* const PRI_KEY = "node";
 class MinerPrecompiled : public CRUDPrecompiled
 {
 public:

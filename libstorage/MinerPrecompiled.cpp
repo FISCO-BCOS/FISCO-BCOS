@@ -35,19 +35,19 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
         {
             auto condition = db->newCondition();
             condition->EQ(NODE_KEY_NODEID, nodeID);
-            auto entries = db->select(PRIME_KEY, condition);
+            auto entries = db->select(PRI_KEY, condition);
             auto entry = db->newEntry();
             entry->setField(NODE_TYPE, NODE_TYPE_MINER);
             if (entries->size() == 0u)
             {
                 entry->setField(NODE_KEY_ENABLENUM, (context->blockInfo().number + 1).str());
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                db->insert(PRIME_KEY, entry);
+                db->insert(PRI_KEY, entry);
                 LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
             }
             else
             {
-                db->update(PRIME_KEY, entry, condition);
+                db->update(PRI_KEY, entry, condition);
                 LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
             }
             break;
@@ -70,7 +70,7 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
         {
             auto condition = db->newCondition();
             condition->EQ(NODE_KEY_NODEID, nodeID);
-            auto entries = db->select(PRIME_KEY, condition);
+            auto entries = db->select(PRI_KEY, condition);
             auto entry = db->newEntry();
             entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
 
@@ -80,11 +80,11 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
                            << nodeID;
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 entry->setField(NODE_KEY_ENABLENUM, context->blockInfo().number.str());
-                db->insert(PRIME_KEY, entry);
+                db->insert(PRI_KEY, entry);
             }
             else
             {
-                db->update(PRIME_KEY, entry, condition);
+                db->update(PRI_KEY, entry, condition);
                 LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
             }
         }
