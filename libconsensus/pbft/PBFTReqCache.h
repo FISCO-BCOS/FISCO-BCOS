@@ -23,7 +23,7 @@
  * @date: 2018-09-30
  */
 #pragma once
-#include <libconsensus/Common.h>
+#include <libconsensus/pbft/Common.h>
 #include <libdevcore/easylog.h>
 namespace dev
 {
@@ -39,60 +39,105 @@ public:
      * @return true : the prepare request exists in the  raw-prepare-cache
      * @return false : the prepare request doesn't exist in the  raw-prepare-cache
      */
-    bool isExistPrepare(PrepareReq const& req)
+    inline bool isExistPrepare(PrepareReq const& req)
     {
         return m_rawPrepareCache.block_hash == req.block_hash;
     }
 
-    bool isExistSign(SignReq const& req)
+    inline bool isExistSign(SignReq const& req)
     {
         return cacheExists(m_signCache, req.block_hash, req.sig.hex());
     }
 
-    bool isExistCommit(CommitReq const& req)
+    inline bool isExistCommit(CommitReq const& req)
     {
         return cacheExists(m_commitCache, req.block_hash, req.sig.hex());
     }
 
-    bool isExistViewChange(ViewChangeReq const& req)
+    inline bool isExistViewChange(ViewChangeReq const& req)
     {
         return cacheExists(m_recvViewChangeReq, req.block_hash, req.idx);
     }
 
-    u256 getSigCacheSize(h256 const& blockHash) { return u256(m_signCache[blockHash].size()); }
-    u256 getCommitCacheSize(h256 const& blockHash) { return u256(m_commitCache[blockHash].size()); }
+    inline u256 const getSigCacheSize(h256 const& blockHash)
+    {
+        return u256(m_signCache[blockHash].size());
+    }
+    inline u256 const getCommitCacheSize(h256 const& blockHash)
+    {
+        return u256(m_commitCache[blockHash].size());
+    }
 
-    u256 getViewChangeSize(u256 const& toView) { return u256(m_recvViewChangeReq[toView].size()); }
+    inline u256 const getViewChangeSize(u256 const& toView)
+    {
+        return u256(m_recvViewChangeReq[toView].size());
+    }
 
-    PrepareReq const& prepareCache() { return m_prepareCache; }
-    PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
-    PrepareReq const& futurePrepareCache() { return m_futurePrepareCache; }
-    PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
+    inline PrepareReq const& prepareCache() { return m_prepareCache; }
+    inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
+    inline PrepareReq const& futurePrepareCache() { return m_futurePrepareCache; }
+    inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
 
 
-    void addRawPrepare(PrepareReq const& req);
-    void addPrepareReq(PrepareReq const& req);
-    void addSignReq(SignReq const& req);
-    void addCommitReq(CommitReq const& req);
-    void addViewChangeReq(ViewChangeReq const& req);
-    void updateCommittedPrepare();
+    inline void addRawPrepare(PrepareReq const& req)
+    {
+        m_rawPrepareCache = req;
+        LOG(DEBUG) << "addRawPrepare: current raw_prepare:" << req.block_hash.abridged()
+                   << "| reset prepare cache";
+        m_prepareCache = PrepareReq();
+    }
 
-    dev::eth::Block generateAndSetSigList(u256 const& minSigSize);
+    inline void addPrepareReq(PrepareReq const& req)
+    {
+        m_prepareCache = req;
+        removeInvalidSignCache(req.block_hash, req.view);
+        removeInvalidCommitCache(req.block_hash, req.view);
+    }
+    inline void addSignReq(SignReq const& req) { m_signCache[req.block_hash][req.sig.hex()] = req; }
+    inline void addCommitReq(CommitReq const& req)
+    {
+        m_commitCache[req.block_hash][req.sig.hex()] = req;
+    }
+    inline void addViewChangeReq(ViewChangeReq const& req)
+    {
+        m_recvViewChangeReq[req.view][req.idx] = req;
+    }
+    inline void updateCommittedPrepare() { m_committedPrepareCache = m_rawPrepareCache; }
+
+    void generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize);
 
     bool canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum, u256 const& toView,
         dev::eth::BlockHeader const& highestBlock, int64_t const& consensusBlockNumber,
         ViewChangeReq const& req);
 
-    void triggerViewChange(u256 const& curView);
+    inline void triggerViewChange(u256 const& curView)
+    {
+        m_rawPrepareCache.clear();
+        m_prepareCache.clear();
+        m_signCache.clear();
+        m_commitCache.clear();
+        removeInvalidViewChange(curView);
+    }
 
     void delCache(h256 const& hash);
-    void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader);
+    inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
+    {
+        removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
+        removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
+    }
     void removeInvalidViewChange(u256 const& view, dev::eth::BlockHeader const& highestBlock);
-    void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
+    inline void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
     {
         removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
     }
-    void clearAll();
+    inline void clearAll()
+    {
+        m_prepareCache.clear();
+        m_rawPrepareCache.clear();
+        m_signCache.clear();
+        m_recvViewChangeReq.clear();
+        m_commitCache.clear();
+    }
     void addFuturePrepareCache(PrepareReq const& req);
     void resetFuturePrepare() { m_futurePrepareCache = PrepareReq(); }
 
@@ -121,14 +166,14 @@ private:
         }
     }
 
-    void inline removeInvalidViewChange(u256 const& curView);
+    void removeInvalidViewChange(u256 const& curView);
     /// remove sign cache according to block hash and view
-    void inline removeInvalidSignCache(h256 const& blockHash, u256 const& view);
+    void removeInvalidSignCache(h256 const& blockHash, u256 const& view);
     /// remove commit cache according to block hash and view
-    void inline removeInvalidCommitCache(h256 const& blockHash, u256 const& view);
+    void removeInvalidCommitCache(h256 const& blockHash, u256 const& view);
 
     template <typename T, typename S>
-    bool cacheExists(T cache, h256 const& blockHash, S const& key)
+    inline bool cacheExists(T cache, h256 const& blockHash, S const& key)
     {
         auto it = cache.find(blockHash);
         if (it == cache.end())

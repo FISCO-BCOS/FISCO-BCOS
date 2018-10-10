@@ -28,39 +28,6 @@ namespace dev
 {
 namespace consensus
 {
-void inline PBFTReqCache::addRawPrepare(PrepareReq const& req)
-{
-    m_rawPrepareCache = req;
-    LOG(DEBUG) << "addRawPrepare: current raw_prepare:" << req.block_hash.abridged()
-               << "| reset prepare cache";
-    m_prepareCache = PrepareReq();
-}
-
-void inline PBFTReqCache::addSignReq(SignReq const& req)
-{
-    m_signCache[req.block_hash][req.sig.hex()] = req;
-}
-void inline PBFTReqCache::addPrepareReq(PrepareReq const& req)
-{
-    m_prepareCache = req;
-    removeInvalidSignCache(req.block_hash, req.view);
-    removeInvalidCommitCache(req.block_hash, req.view);
-}
-
-void inline PBFTReqCache::addCommitReq(CommitReq const& req)
-{
-    m_commitCache[req.block_hash][req.sig.hex()] = req;
-}
-void inline PBFTReqCache::addViewChangeReq(ViewChangeReq const& req)
-{
-    m_recvViewChangeReq[req.view][req.idx] = req;
-}
-
-void inline PBFTReqCache::updateCommittedPrepare()
-{
-    m_committedPrepareCache = m_rawPrepareCache;
-}
-
 void PBFTReqCache::delCache(h256 const& hash)
 {
     LOG(DEBUG) << "try to delete hash=" << hash << " from pbft cache";
@@ -77,7 +44,7 @@ void PBFTReqCache::delCache(h256 const& hash)
         m_prepareCache.clear();
 }
 
-dev::eth::Block PBFTReqCache::generateAndSetSigList(u256 const& minSigSize)
+void PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize)
 {
     std::vector<std::pair<u256, Signature>> sig_list;
     for (auto item : m_commitCache[m_prepareCache.block_hash])
@@ -86,9 +53,7 @@ dev::eth::Block PBFTReqCache::generateAndSetSigList(u256 const& minSigSize)
     }
     assert(u256(sig_list.size()) >= minSigSize);
     /// set siglist for prepare cache
-    dev::eth::Block block(m_prepareCache.block);
     block.setSigList(sig_list);
-    return block;
 }
 
 bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum,
@@ -126,30 +91,6 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNod
     return (count > minInvalidNodeNum) && !flag;
 }
 
-void inline PBFTReqCache::triggerViewChange(u256 const& curView)
-{
-    m_rawPrepareCache.clear();
-    m_prepareCache.clear();
-    m_signCache.clear();
-    m_commitCache.clear();
-    removeInvalidViewChange(curView);
-}
-
-void inline PBFTReqCache::collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
-{
-    removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
-    removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
-}
-
-void inline PBFTReqCache::clearAll()
-{
-    m_prepareCache.clear();
-    m_rawPrepareCache.clear();
-    m_signCache.clear();
-    m_recvViewChangeReq.clear();
-    m_commitCache.clear();
-}
-
 void PBFTReqCache::removeInvalidViewChange(
     u256 const& view, dev::eth::BlockHeader const& highestBlock)
 {
@@ -166,7 +107,7 @@ void PBFTReqCache::removeInvalidViewChange(
     }
 }
 
-void inline PBFTReqCache::addFuturePrepareCache(PrepareReq const& req)
+void PBFTReqCache::addFuturePrepareCache(PrepareReq const& req)
 {
     if (m_futurePrepareCache.block_hash != req.block_hash)
     {
@@ -176,7 +117,7 @@ void inline PBFTReqCache::addFuturePrepareCache(PrepareReq const& req)
     }
 }
 
-void inline PBFTReqCache::removeInvalidViewChange(u256 const& curView)
+void PBFTReqCache::removeInvalidViewChange(u256 const& curView)
 {
     for (auto it = m_recvViewChangeReq.begin(); it != m_recvViewChangeReq.end();)
     {
@@ -188,7 +129,7 @@ void inline PBFTReqCache::removeInvalidViewChange(u256 const& curView)
 }
 
 /// remove sign cache according to block hash and view
-void inline PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, u256 const& view)
+void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, u256 const& view)
 {
     auto it = m_signCache.find(blockHash);
     if (it == m_signCache.end())
@@ -204,7 +145,7 @@ void inline PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, u256 con
     }
 }
 /// remove commit cache according to block hash and view
-void inline PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, u256 const& view)
+void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, u256 const& view)
 {
     auto it = m_commitCache.find(blockHash);
     if (it == m_commitCache.end())
@@ -218,5 +159,6 @@ void inline PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, u256 c
             pcache++;
     }
 }
+
 }  // namespace consensus
 }  // namespace dev
