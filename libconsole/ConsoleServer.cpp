@@ -252,13 +252,6 @@ std::string ConsoleServer::p2pList(const std::vector<std::string> args) {
 				ss << "Nodeid: " << (nodeid.hex()).substr(0, 8) << "..." << std::endl;
 				ss << "Ip: " << s->peer()->endpoint.address << std::endl;
 				ss << "Port:" << s->peer()->endpoint.tcpPort << std::endl;
-				ss << "Online: ";
-				if (_host->isConnected(nodeid)) {
-					ss << "true";
-				} else {
-					ss << "false";
-				}
-				ss << std::endl;
 			}
 		}
 	}
@@ -290,9 +283,9 @@ std::string ConsoleServer::pbftList(const std::vector<std::string> args) {
     for(auto it = pbftList.begin(); it != pbftList.end(); ++it)
     {
       auto session = _host->peerSession(*it);
+
       if(session)
-      {
-        printShortSingleLine(ss);
+      { printShortSingleLine(ss);
         ss << "NodeId: " << (session->id().hex()).substr(0, 8) << "..." << std::endl;
         ss << "IP: " << session->peer()->endpoint.address << std::endl;
         ss << "Port:" << session->peer()->endpoint.tcpPort << std::endl;
@@ -304,6 +297,16 @@ std::string ConsoleServer::pbftList(const std::vector<std::string> args) {
         }
         ss << std::endl;
       }
+      else
+      {
+         if(*it != _host->id())
+         {   printShortSingleLine(ss);
+             ss << "NodeId: " << ((*it).hex()).substr(0, 8) << "..." << std::endl;
+             ss << "Online: false";
+             ss << std::endl;
+         }
+      }
+
     }
     printShortSingleLine(ss);
     //local node
