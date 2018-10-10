@@ -120,6 +120,16 @@ ETH_SIMPLE_EXCEPTION_VM(StackUnderflow);
 ETH_SIMPLE_EXCEPTION_VM(DisallowedStateChange);
 ETH_SIMPLE_EXCEPTION_VM(BufferOverrun);
 
+struct UnexpectedException : virtual Exception
+{
+};
+#define ETH_UNEXPECTED_EXCEPTION(X)                               \
+    struct X : virtual UnexpectedException                        \
+    {                                                             \
+        const char* what() const noexcept override { return #X; } \
+    }
+ETH_UNEXPECTED_EXCEPTION(PrecompiledError);
+
 /// Reports VM internal error. This is not based on VMException because it must be handled
 /// differently than defined consensus exceptions.
 struct InternalVMError : Exception

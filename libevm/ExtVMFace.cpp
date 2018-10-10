@@ -22,7 +22,7 @@
 
 #include "ExtVMFace.h"
 #include <evmc/helpers.h>
-
+#include <libblockverifier/ExecutiveContext.h>
 namespace dev
 {
 namespace eth
@@ -231,6 +231,15 @@ ExtVMFace::ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _calle
     m_isCreate(_isCreate),
     m_staticCall(_staticCall)
 {}
+std::shared_ptr<dev::blockverifier::ExecutiveContext> EnvInfo::precompiledEngine()
+{
+    return m_executiveEngine;
+}
+void EnvInfo::setPrecompiledEngine(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine)
+{
+    m_executiveEngine = executiveEngine;
+}
 
 }  // namespace eth
 }  // namespace dev
