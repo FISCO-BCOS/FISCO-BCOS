@@ -159,8 +159,6 @@ public:
     /// Collect execution results in the result storage provided.
     void setResultRecipient(ExecutionResult& _res) { m_res = &_res; }
 
-    ExecutionResult* getExecutionResult() { return m_res; }
-
     /// Revert all changes made to the state by this execution.
     void revert();
 
