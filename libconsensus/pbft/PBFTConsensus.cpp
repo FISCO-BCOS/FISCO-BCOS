@@ -34,11 +34,16 @@ namespace consensus
 {
 const std::string PBFTConsensus::c_backupKeyCommitted = "committed";
 const std::string PBFTConsensus::c_backupMsgDirName = "pbftMsgBackup";
+
+void PBFTConsensus::start()
+{
+    initPBFTEnv(3 * getIntervalBlockTime());
+    Consensus::start();
+}
+
 void PBFTConsensus::initPBFTEnv(unsigned view_timeout)
 {
     Guard l(m_mutex);
-    m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-    m_reqCache = std::make_shared<PBFTReqCache>();
     resetConfig();
     m_consensusBlockNumber = 0;
     m_view = m_toView = u256(0);
@@ -76,7 +81,7 @@ void PBFTConsensus::initBackupDB()
     /// try-catch has already been considered by libdevcore/LevelDB.*
     std::string path = getBackupMsgPath();
     m_backupDB = std::make_shared<LevelDB>(path);
-    if (isDiskSpaceEnough(path))
+    if (!isDiskSpaceEnough(path))
     {
         LOG(ERROR) << "Not enough available space found on hard drive. Please free some up and "
                       "then re-run. Bailing.";

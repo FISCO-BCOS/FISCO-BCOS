@@ -144,8 +144,13 @@ public:
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTConsensus::onRecvPBFTMessage, this, _1, _2, _3));
-        initPBFTEnv(3 * getIntervalBlockTime());
+        m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
+        m_reqCache = std::make_shared<PBFTReqCache>();
     }
+
+    void setBaseDir(std::string const& _path) { m_baseDir = _path; }
+
+    std::string const& getBaseDir() { return m_baseDir; }
 
     inline void setIntervalBlockTime(unsigned const& _intervalBlockTime)
     {
@@ -158,6 +163,7 @@ public:
     }
 
 protected:
+    void start() override;
     void workLoop() override;
     void handleBlock() override;
     void handleFutureBlock();
@@ -387,7 +393,7 @@ protected:
 
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
-        return boost::filesystem::space(path).available < 1024;
+        return boost::filesystem::space(path).available > 1024;
     }
 
 protected:
