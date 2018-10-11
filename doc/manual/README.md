@@ -55,7 +55,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 | 核心   | 2核     | 4核                                |
 | 带宽   | 1Mb    | 5Mb                                 |
 | 操作系统|      | CentOS(7.2 64位)或Ubuntu(16.04  64位) |
-| JAVA   |       | Java(TM) 1.8 && JDK 1.8 |
+| **JAVA**   |       | Java(TM) 1.8 && JDK 1.8 |
 
 ### 1.2 使用快速构建脚本
 
@@ -71,7 +71,6 @@ curl -o build_chain.sh https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/d
 #	-l <IP list>                [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
 #	-f <IP list file>           split by line, "ip:nodeNum"
 # 	-e <FISCO-BCOS binary path> Default download from github
-# 	-n <Nodes per IP>           Default 1
 # 	-a <CA Key>                 Default Generate a new CA
 # 	-o <Output Dir>             Default ./nodes/
 # 	-p <Start Port>             Default 30300
@@ -94,7 +93,7 @@ bash build_chain.sh -l "127.0.0.1:4"
 
 ```bash
 cd nodes
-bash ./start_all.sh
+bash start_all.sh
 ```
 
 3. 验证节点启动
@@ -150,7 +149,7 @@ git checkout dev-1.5
 > 项目根目录下执行（若执行出错，请参考[常见问题1](#76-常见问题)）：
 
 ```shell
-bash ./scripts/install_deps.sh
+bash scripts/install_deps.sh
 ```
 
 3. 编译
@@ -178,7 +177,7 @@ mkdir nodes
 cp chain.sh node.sh sdk.sh nodes/
 # 进入nodes目录，并运行chain.sh脚本
 cd nodes
-bash ./chain.sh  #会提示输入相关证书信息，默认可以直接回车
+bash chain.sh  #会提示输入相关证书信息，默认可以直接回车
 ```
 > FISCO-BCOS/scripts/nodes目录下将生成链证书相关文件，包括链证书ca.crt, 链私钥ca.key, 密钥参数server.param
 > **注意：ca.key 链私钥文件请妥善保存**
@@ -187,23 +186,16 @@ bash ./chain.sh  #会提示输入相关证书信息，默认可以直接回车
 
 ```bash
 # 切换到FISCO-BCOS/scripts/nodes目录下
-# 如需要生成多个节点，则重复执行 ./node.sh 节点名称 即可，假设节点名为 node-0，运行
-bash ./node.sh node-0
+# node.sh需要同级目录下存在ca.key、ca.crt
+# 如需要生成多个节点，则重复执行 node.sh 节点名称 即可，假设节点名为 node-0，运行
+# Usage:node.sh nodeName [CLIENTCERT_PWD] [KEYSTORE_PWD]
+bash node.sh node-0 123456 123456
 ```
 
 > **注意：node.key 节点私钥文件请妥善保存**。`FISCO-BCOS/scripts/nodes/`目录下将生成节点目录`node-0`。`node-0/data`目录下将有链证书`ca.crt`、节点私钥`node.key`、节点证书`node.crt`相关文件。
+> FISCO-BCOS/scripts/nodes/node-0目录下将自动生成sdk目录，请将sdk目录下所有文件拷贝到SDK端的证书目录下。
 
-### 2.4 生成SDK证书 [可选]
-
-``` shell
-# 切换到FISCO-BCOS/scripts/nodes目录下
-# 为节点node0生成sdk所需文件，这里需要设置两个密码(至少6位),若不提供，默认均设置为123456。
-bash ./sdk.sh node-0 123abc 456cde
-```
-
-> FISCO-BCOS/scripts/nodes/node-0目录下将生成sdk目录，并将sdk目录下所有文件拷贝到SDK端的证书目录下。
-
-### 2.5 准备节点环境
+### 2.4 准备节点环境
 
 > 假定节点目录为FISCO-BCOS/scripts/nodes/node-0，按如下步骤操作：
 
@@ -214,7 +206,7 @@ cp genesis.json config.conf log.conf scripts/start.sh scripts/stop.sh scripts/no
 cp build/eth/fisco-bcos scripts/nodes/node-0
 ```
 
-#### 2.5.1 获取NodeID
+#### 2.4.1 获取NodeID
 
 NodeID唯一标识了区块链中的某个节点，在节点启动前必须进行配置。
 
@@ -227,7 +219,7 @@ openssl ec -in nodes/node-0/data/node.key -text 2> /dev/null | perl -ne '$. > 6 
 # d23a6bad030a395b4ca3f2c4fa9a31ad58411fe8b6313472881d88d1fa3feaeab81b0ff37156ab3b1a69350115fd68cc2e4f2490ce01b1d7b4d8e22de00aea71
 ```
 
-#### 2.5.2 参数配置文件
+#### 2.4.2 参数配置文件
 
 配置使用INI管理，配置文件模板如下，本例中使用单个节点，需要将`nodes/node-0/config.conf`中的miner.0修改为上一步获取的NodeID。
 
@@ -284,16 +276,16 @@ vim nodes/node-0/config.conf
 	topic=DB
 ```
 
-#### 2.5.3 配置log.conf（日志配置文件）
+#### 2.4.3 配置log.conf（日志配置文件）
 
 log.conf中配置节点日志生成的格式和路径，使用默认即可。
 log.conf其它字段说明请参看[附录：log.conf说明](#75-logconf说明)
 
-#### 2.5.3 AMDB数据代理配置[可选]
+#### 2.4.3 AMDB数据代理配置[可选]
 
 **当`config.conf`中配置项`statedb.type=amop`时**，[参考这里](../AMDB使用说明文档.md)配置并启动AMDB数据代理。
 
-### 2.6 启动节点
+### 2.5 启动节点
 
 节点的启动依赖下列文件，在启动前，请确认文件已经正确的配置：
 
@@ -327,7 +319,7 @@ tail -f log/info* |grep ++++
 # kill -9 13432 #13432是查看到的进程号
 ```
 
-### 2.7 验证节点启动
+### 2.6 验证节点启动
 
 1. 验证进程
 
@@ -560,7 +552,7 @@ Connection closed by foreign host.
 ### 4.1 新加观察节点
 
 1. 请参考[第二章](#第二章-手工部署单节点区块链网络)操作准备`node-1`节点环境。**节点必须使用已有节点的链CA证书来签发节点证书**。
-1. 拷贝`node-0/config.conf,node-0/genesis.json`文件到`node-1/`
+1. 拷贝`node-0/config.conf,node-0/genesis.json,node-0/fisco-bcos`文件到`node-1/`
 1. 修改`node-1/config.conf`文件中监听的IP和端口
 1. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
 1. 验证节点是否已加入网络，参考[第三章](#第三章-使用控制台)中`status`和`p2p.list`。
@@ -570,14 +562,12 @@ Connection closed by foreign host.
 - 准备`node-1`节点环境
 
 ```bash
-# 假设当前在FISCO-BCOS/scripts目录下，已经按之前步骤建立了nodes/node-0
+# 假设当前在FISCO-BCOS/scripts目录下，已经按之前步骤建立了nodes/node-0，拷贝scripts/node.sh脚本到scripts/nodes目录下
 cd nodes
-# 生成node-1证书相关文件
+# 生成node-1证书相关文件，node.sh同级目录下需要有ca.key和ca.crt
 bash node.sh node-1
 # 拷贝node-0的配置文件
-cp node-0/config.conf node-0/genesis.json node-0/start.sh node-0/stop.sh node-1/
-# 拷贝fisco-bcos
-cp node-0/fisco-bcos node-1/
+cp node-0/* node-1/
 ```
 
 - 修改config.conf配置文件，主要修改了监听的端口，其他配置内容与`node-0/config.conf`相同。
@@ -981,3 +971,15 @@ dos2unix xxxxx.sh
 # 报此错误是因为java环境问题，请使用OpenJDK-8以上版本
 EC KeyFactory not available
 ```
+
+#### 7.6.3 节点数据清空
+
+- `levelDB`模式节点需要删除节点目录下`data`文件夹下的所有文件夹，注意`data`目录下的文件不能删除
+- `amop`模式节点需要删除节点目录下`data`文件夹下的所有文件夹，注意`data`目录下的文件不能删除，**除此之外还需要清空所使用的数据库中的所有数据**。
+
+#### 7.6.4 节点数据恢复
+
+如果节点启动时出现`DatabaseAlreadyOpen`错误，请按照以下步骤检查：
+1. 检查节点是否重复启动，如果该节点已经启动，请先停止已启动的节点
+1. 如果确认没有重复启动的节点，尝试在启动fisco-bcos时增加--rescue参数
+1. 如果仍有问题，按[7.6.3](#763-节点数据清空)的步骤，清理节点数据，再尝试重启
