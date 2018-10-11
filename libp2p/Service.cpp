@@ -563,7 +563,6 @@ SessionInfos Service::sessionInfosByProtocolID(int16_t _protocolID) const
 {
     std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(_protocolID);
     std::string topic = toString(ret.first);
-
     SessionInfos infos;
     try
     {
@@ -575,7 +574,8 @@ SessionInfos Service::sessionInfosByProtocolID(int16_t _protocolID) const
             {
                 if (j == topic)
                 {
-                    infos.push_back(SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
+                    infos.push_back(
+                        SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
                     break;
                 }
             }
