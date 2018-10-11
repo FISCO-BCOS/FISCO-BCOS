@@ -32,11 +32,12 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(consensusTest, TestOutputHelperFixture)
 
 void checkKeyExist(PBFTBroadcastCache& cache, unsigned const& type, KeyPair const& keyPair,
-    std::string const& str, bool const& exist = true)
+    std::string const& str, bool const& insert = true, bool const& exist = true)
 {
     std::string key = dev::sign(keyPair.secret(), sha3(str)).hex();
-    cache.insertKey(keyPair.pub(), type, key);
-    if (exist == true)
+    if (insert)
+        cache.insertKey(keyPair.pub(), type, key);
+    if (exist)
         BOOST_CHECK(cache.keyExists(keyPair.pub(), type, key));
     else
         BOOST_CHECK(!cache.keyExists(keyPair.pub(), type, key));
@@ -65,14 +66,14 @@ BOOST_AUTO_TEST_CASE(testInsertKey)
     checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test2");
     checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test3");
     /// test other packet
-    checkKeyExist(broadCast_cache, 100, key_pair, "test1", false);
-    checkKeyExist(broadCast_cache, 100, key_pair, "test2", false);
-    checkKeyExist(broadCast_cache, 1000, key_pair, "test3", false);
+    checkKeyExist(broadCast_cache, 100, key_pair, "test1", true, false);
+    checkKeyExist(broadCast_cache, 100, key_pair, "test2", true, false);
+    checkKeyExist(broadCast_cache, 1000, key_pair, "test3", true, false);
     /// clearAll
     broadCast_cache.clearAll();
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test1", false);
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test2", false);
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test3", false);
+    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test1", false, false);
+    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test2", false, false);
+    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test3", false, false);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
