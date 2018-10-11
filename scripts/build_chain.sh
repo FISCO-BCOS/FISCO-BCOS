@@ -172,7 +172,7 @@ for line in ${ip_array[*]};do
 		((++index))
 	done
 done 
-
+rm "$output_dir/node.param"
 echo "#!/bin/bash" > "$output_dir/start_all.sh"
 echo "PPath=\`pwd\`" >> "$output_dir/start_all.sh"
 echo "Generating node configuration..."
