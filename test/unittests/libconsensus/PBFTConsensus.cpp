@@ -66,14 +66,6 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastGarbageCollection <=
                 std::chrono::system_clock::now());
 }
-
-/// test initPBFTEnv (exception case)
-BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
-{
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT, "invalid");
-}
-
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
