@@ -34,10 +34,9 @@ namespace consensus
 {
 const std::string PBFTConsensus::c_backupKeyCommitted = "committed";
 const std::string PBFTConsensus::c_backupMsgDirName = "pbftMsgBackup";
-void PBFTConsensus::initPBFTEnv(KeyPair const& _key_pair, unsigned view_timeout)
+void PBFTConsensus::initPBFTEnv(unsigned view_timeout)
 {
     Guard l(m_mutex);
-    m_keyPair = _key_pair;
     m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
     m_reqCache = std::make_shared<PBFTReqCache>();
     resetConfig();
@@ -74,8 +73,8 @@ void PBFTConsensus::resetConfig()
 /// init pbftMsgBackup
 void PBFTConsensus::initBackupDB()
 {
-    std::string path = getGroupBackupMsgPath();
     /// try-catch has already been considered by libdevcore/LevelDB.*
+    std::string path = getBackupMsgPath();
     m_backupDB = std::make_shared<LevelDB>(path);
     if (isDiskSpaceEnough(path))
     {

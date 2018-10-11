@@ -135,14 +135,16 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, h512s const& _minerList = h512s(),
-        KeyPair const& _key_pair = KeyPair::create())
+        int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        h512s const& _minerList = h512s())
       : Consensus(
-            _service, _txPool, _blockChain, _blockSync, m_blockVerifier, _protocolId, _minerList)
+            _service, _txPool, _blockChain, _blockSync, m_blockVerifier, _protocolId, _minerList),
+        m_keyPair(_key_pair),
+        m_baseDir(_baseDir)
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTConsensus::onRecvPBFTMessage, this, _1, _2, _3));
-        initPBFTEnv(_key_pair, 3 * getIntervalBlockTime());
+        initPBFTEnv(3 * getIntervalBlockTime());
     }
 
     inline void setIntervalBlockTime(unsigned const& _intervalBlockTime)
@@ -207,15 +209,12 @@ protected:
     void reportBlock(BlockHeader const& blockHeader) override;
 
 protected:
-    void initPBFTEnv(KeyPair const& _key_pair, unsigned _view_timeout);
+    void initPBFTEnv(unsigned _view_timeout);
     void resetConfig();
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
     void backupMsg(std::string const& _key, PBFTMsg const& _msg);
-    inline std::string getGroupBackupMsgPath()
-    {
-        return getLedgerDir(toString(m_groupId)).string() + "/" + c_backupMsgDirName;
-    }
+    inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
 
@@ -395,6 +394,7 @@ protected:
     u256 m_view = u256(0);
     u256 m_toView = u256(0);
     KeyPair m_keyPair;
+    std::string m_baseDir;
     /// total number of nodes
     u256 m_nodeNum = u256(0);
     /// at-least number of valid nodes
@@ -413,8 +413,6 @@ protected:
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
 
-    /// get group id
-    uint8_t m_groupId = 0;
     /// static vars
     static const std::string c_backupKeyCommitted;
     static const std::string c_backupMsgDirName;
