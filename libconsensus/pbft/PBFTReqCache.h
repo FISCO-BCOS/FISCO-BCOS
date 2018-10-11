@@ -75,6 +75,7 @@ public:
 
     inline PrepareReq const& prepareCache() { return m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
+    PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
     inline PrepareReq const& futurePrepareCache() { return m_futurePrepareCache; }
     inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
 
