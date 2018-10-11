@@ -388,27 +388,28 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 
 h512s PBFT::getMinerNodeList() {
 	Guard lock(_current_miner_mutex);
-
+	int currentBlockNum = m_highest_block.number().convert_to<int>() + 1;
 	if (m_highest_block.number() != _current_miner_num)
 	{
 		auto minerList = m_miner_list;
-		auto nodes = _storage->select(m_highest_block.hash(), m_highest_block.number().convert_to<int>(), "_sys_miners_", "node");
+		auto nodes = _storage->select(m_highest_block.hash(), currentBlockNum, "_sys_miners_", "node");
 		for (size_t i = 0; i < nodes->size(); ++i)
 		{
 			auto node = nodes->get(i);
-			if ((node->getField("type") == "miner") && (boost::lexical_cast<int>(node->getField("enable_num")) <= m_highest_block.number().convert_to<int>() + 1))
+			if ((node->getField("type") == "miner") && (boost::lexical_cast<int>(node->getField("enable_num")) <= currentBlockNum))
 			{
 				h512 nodeID = h512(node->getField("node_id"));
 				if (minerList.end() == find(minerList.begin(), minerList.end(), nodeID))
 				{
 					minerList.push_back(nodeID);
+					LOG(DEBUG) << "Add Node:" << nodeID << " to pbft list.";
 				}
 			}
 		}
 		for (size_t i = 0; i < nodes->size(); ++i)
 		{
 			auto node = nodes->get(i);
-			if ((node->getField("type") == "observer") && (boost::lexical_cast<int>(node->getField("enable_num")) <= m_highest_block.number().convert_to<int>() + 1))
+			if ((node->getField("type") == "observer") && (boost::lexical_cast<int>(node->getField("enable_num")) <= currentBlockNum))
 			{
 				h512 nodeID = h512(node->getField("node_id"));
 				for (auto it = minerList.begin(); it != minerList.end(); ++it)
@@ -416,6 +417,7 @@ h512s PBFT::getMinerNodeList() {
 					if (*it == nodeID)
 					{
 						minerList.erase(it);
+						LOG(DEBUG) << "Remove Node:" << nodeID << " from pbft list.";
 						break;
 					}
 				}
