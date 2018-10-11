@@ -205,7 +205,7 @@ protected:
     }
     void reportBlock(BlockHeader const& blockHeader) override;
 
-private:
+protected:
     void initPBFTEnv(KeyPair const& _key_pair, unsigned _view_timeout);
     void resetConfig();
     void initBackupDB();
@@ -385,7 +385,7 @@ private:
     void setBlock();
     void changeViewForEmptyBlock();
 
-private:
+protected:
     u256 m_view = u256(0);
     u256 m_toView = u256(0);
     KeyPair m_keyPair;

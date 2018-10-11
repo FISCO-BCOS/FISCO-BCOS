@@ -42,7 +42,7 @@ void PBFTConsensus::initPBFTEnv(KeyPair const& _key_pair, unsigned view_timeout)
     m_reqCache = std::make_shared<PBFTReqCache>();
     resetConfig();
     m_consensusBlockNumber = 0;
-    m_toView = u256(0);
+    m_view = m_toView = u256(0);
     m_leaderFailed = false;
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
@@ -332,19 +332,19 @@ void PBFTConsensus::broadcastMsg(unsigned const& packetType, std::string const& 
     {
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
-            return;
+            continue;
         if (packetType != ViewChangeReqPacket &&
             getIndexByMiner(session.nodeID) != NodeAccountType::MinerAccount)
-            return;
+            continue;
         /// peer is in the _filter list ?
         if (filter.count(session.nodeID))
         {
             broadcastMark(session.nodeID, packetType, key);
-            return;
+            continue;
         }
         /// packet has been broadcasted?
         if (broadcastFilter(session.nodeID, packetType, key))
-            return;
+            continue;
         /// send messages
         m_service->asyncSendMessageByNodeID(
             session.nodeID, transDataToMessage(data, packetType), nullptr);
