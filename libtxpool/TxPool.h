@@ -22,9 +22,9 @@
  * @date: 2018-09-23
  */
 #pragma once
+#include "NonceCheck.h"
 #include "TxPoolInterface.h"
-#include <libblockmanager/BlockManagerInterface.h>
-#include <libblockmanager/NonceCheck.h>
+#include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -56,19 +56,20 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 {
 public:
     TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
-        std::shared_ptr<dev::blockmanager::BlockManagerInterface> _blockManager,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         int16_t const& _protocolId, uint64_t const& _limit = 102400)
       : m_service(_p2pService),
-        m_blockManager(_blockManager),
+        m_blockChain(_blockChain),
         m_limit(_limit),
         m_protocolId(_protocolId)
     {
-        assert(m_service && m_blockManager);
+        assert(m_service && m_blockChain);
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(InvalidProtocolID() << errinfo_comment("ProtocolID must be > 0"));
         /// register enqueue interface to p2p by protocalID
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
+        m_nonceCheck = std::make_shared<dev::eth::NonceCheck>(m_blockChain);
     }
 
     virtual ~TxPool() { clear(); }
@@ -142,14 +143,15 @@ private:
 private:
     /// p2p module
     std::shared_ptr<dev::p2p::Service> m_service;
-    std::shared_ptr<dev::blockmanager::BlockManagerInterface> m_blockManager;
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<dev::eth::NonceCheck> m_nonceCheck;
     /// Max number of pending transactions
     uint64_t m_limit;
     mutable SharedMutex m_lock;
     /// protocolId
     int16_t m_protocolId;
     /// max block limit
-    u256 m_maxBlockLimit = 1000;
+    u256 m_maxBlockLimit = u256(1000);
     /// transaction queue
     using PriorityQueue = std::multiset<Transaction, PriorityCompare>;
     PriorityQueue m_txsQueue;

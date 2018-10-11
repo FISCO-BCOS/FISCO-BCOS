@@ -16,28 +16,33 @@
  */
 
 /**
- * @brief : external interface of block manager
- * @author: yujiechen
+ * @brief : external interface of blockchain
+ * @author: mingzhenliu
  * @date: 2018-09-21
  */
 #pragma once
-#include <libethcore/BlockHeader.h>
+
+#include <libethcore/Block.h>
 #include <libethcore/Common.h>
-#include <libethcore/Transaction.h>
 namespace dev
 {
-namespace blockmanager
+namespace blockverifier
 {
-class BlockManagerInterface
+class ExecutiveContext;
+}
+namespace blockchain
+{
+class BlockChainInterface
 {
 public:
-    BlockManagerInterface() = default;
-    virtual ~BlockManagerInterface(){};
-    virtual uint64_t number() const = 0;
-    virtual h256 numberHash(unsigned _i) const = 0;
-    virtual std::vector<bytes> transactions(h256 const& _blockHash) = 0;
-    virtual bool isNonceOk(dev::eth::Transaction const& _transaction, bool _needinsert = false) = 0;
-    virtual dev::eth::BlockHeader const& getLatestBlockHeader() const = 0;
+    BlockChainInterface() = default;
+    virtual ~BlockChainInterface(){};
+    virtual int64_t number() const = 0;
+    virtual dev::h256 numberHash(int64_t _i) const = 0;
+    virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
+    virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
+    virtual void commitBlock(
+        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
 };
-}  // namespace blockmanager
+}  // namespace blockchain
 }  // namespace dev
