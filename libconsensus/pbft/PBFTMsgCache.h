@@ -62,6 +62,7 @@ public:
             return true;
         case ViewChangeReqPacket:
             insertMessage(x_knownViewChange, m_knownViewChange, c_knownViewChange, key);
+            return true;
         default:
             LOG(WARNING) << "Invalid packet type:" << type;
             return false;
