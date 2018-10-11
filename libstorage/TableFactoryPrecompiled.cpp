@@ -183,9 +183,5 @@ Address TableFactoryPrecompiled::openTable(ExecutiveContext::Ptr context, const 
 
 h256 TableFactoryPrecompiled::hash(std::shared_ptr<ExecutiveContext> context)
 {
-    auto hash = m_MemoryTableFactory->hash(context);
-    if (hash == h256())
-        return hash;
-    m_hash = hash;
-    return m_hash;
+    return m_MemoryTableFactory->hash(context);
 }

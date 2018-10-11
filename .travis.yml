@@ -39,17 +39,23 @@ matrix:
         - ZIP_SUFFIX=ubuntu-trusty
 git:
     depth: 2
-# install cmake
+cache:
+  directories:
+  - $TRAVIS_BUILD_DIR/deps
+addons:
+  apt:
+    packages:
+    - cmake
 install: |
     if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-      sudo chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash -x ./tools/ci/check-commit.sh && ./tools/ci/install_cmake.sh;
+      sudo chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash -x ./tools/ci/check-commit.sh;
     fi
-before_scripts: #clean cache
-    cd tools && chmod a+x clean_cache.sh && ./clean_cache.sh && cd ..
 script:
     cd tools && chmod a+x build.sh && ./build.sh && cd .. && ./build/test/test-fisco-bcos -- --testpath=test/data/ 
 after_success:
     bash <(curl -s https://codecov.io/bash)
+after_failure:
+    cd tools && bash clean_cache.sh 
 webhooks:
     urls:
       - https://webhooks.gitter.im/e/334c46f8aee9f5fb65dc

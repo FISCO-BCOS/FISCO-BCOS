@@ -95,7 +95,7 @@ Entries::Ptr LevelDBStorage::select(
 }
 
 size_t LevelDBStorage::commit(
-    h256 hash, int num, const std::vector<TableData::Ptr>& datas, h256 blockHash)
+    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash)
 {
     try
     {
