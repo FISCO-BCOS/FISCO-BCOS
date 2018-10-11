@@ -290,7 +290,7 @@ install_all()
 	### install all deps
 	install_all_deps
 	### build source
-	build_source
+	#build_source
 	### init nodejs
 	nodejs_init
 	### check
