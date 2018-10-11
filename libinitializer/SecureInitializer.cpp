@@ -139,6 +139,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree &pt) {
 			LOG(DEBUG) << "Use user certificate file: " << cert;
 
 			_sslContext->use_certificate_chain_file(cert);
+			_sslContext->use_certificate_file(cert, boost::asio::ssl::context::file_format::pem);
 			_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
 		}
 		else{
