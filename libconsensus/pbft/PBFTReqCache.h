@@ -32,54 +32,56 @@ namespace consensus
 class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
-    /**
-     * @brief : specified prepareRequest exists in raw-prepare-cache or not?
-     *
-     * @param req : specified prepare request
-     * @return true : the prepare request exists in the  raw-prepare-cache
-     * @return false : the prepare request doesn't exist in the  raw-prepare-cache
-     */
+    /// specified prepareRequest exists in raw-prepare-cache or not?
+    /// @return true : the prepare request exists in the  raw-prepare-cache
+    /// @return false : the prepare request doesn't exist in the  raw-prepare-cache
     inline bool isExistPrepare(PrepareReq const& req)
     {
         return m_rawPrepareCache.block_hash == req.block_hash;
     }
 
+    /// specified SignReq exists in the sign-cache or not?
     inline bool isExistSign(SignReq const& req)
     {
         return cacheExists(m_signCache, req.block_hash, req.sig.hex());
     }
 
+    /// specified commitReq exists in the commit-cache or not?
     inline bool isExistCommit(CommitReq const& req)
     {
         return cacheExists(m_commitCache, req.block_hash, req.sig.hex());
     }
 
+    /// specified viewchangeReq exists in the viewchang-cache or not?
     inline bool isExistViewChange(ViewChangeReq const& req)
     {
-        return cacheExists(m_recvViewChangeReq, req.block_hash, req.idx);
+        return cacheExists(m_recvViewChangeReq, req.view, req.idx);
     }
 
+    /// get the size of the cached sign requests according to given block hash
     inline u256 const getSigCacheSize(h256 const& blockHash)
     {
         return u256(m_signCache[blockHash].size());
     }
+    /// get the size of the cached commit requests according to given block hash
     inline u256 const getCommitCacheSize(h256 const& blockHash)
     {
         return u256(m_commitCache[blockHash].size());
     }
 
+    /// get the size of cached viewchange requests according to given view
     inline u256 const getViewChangeSize(u256 const& toView)
     {
         return u256(m_recvViewChangeReq[toView].size());
     }
-
+    inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
     inline PrepareReq const& prepareCache() { return m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
     PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
     inline PrepareReq const& futurePrepareCache() { return m_futurePrepareCache; }
-    inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
 
-
+    /// add specified raw-prepare-request into the raw-prepare-cache
+    /// reset the prepare-cache
     inline void addRawPrepare(PrepareReq const& req)
     {
         m_rawPrepareCache = req;
@@ -88,29 +90,47 @@ public:
         m_prepareCache = PrepareReq();
     }
 
+    /// add prepare request to prepare-cache
+    /// remove cached request with the same block_hash but inconsistent view compaired with the
+    /// specified prepare-request from the sign-cache and commit-cache
     inline void addPrepareReq(PrepareReq const& req)
     {
+        std::cout << "### view of PrepareReq:" << req.view << std::endl;
         m_prepareCache = req;
         removeInvalidSignCache(req.block_hash, req.view);
         removeInvalidCommitCache(req.block_hash, req.view);
     }
+    /// add specified signReq to the sign-cache
     inline void addSignReq(SignReq const& req) { m_signCache[req.block_hash][req.sig.hex()] = req; }
+    /// add specified commit cache to the commit-cache
     inline void addCommitReq(CommitReq const& req)
     {
         m_commitCache[req.block_hash][req.sig.hex()] = req;
     }
+    /// add specified viewchange cache to the viewchange-cache
     inline void addViewChangeReq(ViewChangeReq const& req)
     {
         m_recvViewChangeReq[req.view][req.idx] = req;
     }
+    /// add future-prepare cache
+    inline void addFuturePrepareCache(PrepareReq const& req)
+    {
+        if (m_futurePrepareCache.block_hash != req.block_hash)
+        {
+            m_futurePrepareCache = req;
+            LOG(INFO) << "recvFutureBlock, blk=" << req.height << ", hash=" << req.block_hash
+                      << ", idx=" << req.idx;
+        }
+    }
+    /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
     inline void updateCommittedPrepare() { m_committedPrepareCache = m_rawPrepareCache; }
-
+    /// obtain the sig-list from m_commitCache, and append the sig-list to given block
     void generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize);
-
+    ///  determine can trigger viewchange or not
     bool canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum, u256 const& toView,
-        dev::eth::BlockHeader const& highestBlock, int64_t const& consensusBlockNumber,
-        ViewChangeReq const& req);
+        dev::eth::BlockHeader const& highestBlock, int64_t const& consensusBlockNumber);
 
+    /// trigger viewchange
     inline void triggerViewChange(u256 const& curView)
     {
         m_rawPrepareCache.clear();
@@ -119,13 +139,14 @@ public:
         m_commitCache.clear();
         removeInvalidViewChange(curView);
     }
-
+    /// delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
     void delCache(h256 const& hash);
     inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
         removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
     }
+    /// remove invalid view-change requests according to view and the current block header
     void removeInvalidViewChange(u256 const& view, dev::eth::BlockHeader const& highestBlock);
     inline void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
     {
@@ -139,10 +160,10 @@ public:
         m_recvViewChangeReq.clear();
         m_commitCache.clear();
     }
-    void addFuturePrepareCache(PrepareReq const& req);
     void resetFuturePrepare() { m_futurePrepareCache = PrepareReq(); }
 
 private:
+    /// remove invalid requests cached in cache according to curretn block
     template <typename T, typename U, typename S>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
         std::unordered_map<T, std::unordered_map<U, S>>& cache)
@@ -151,9 +172,10 @@ private:
         {
             for (auto cache_entry = it->second.begin(); cache_entry != it->second.end();)
             {
+                /// delete expired cache
                 if (cache_entry->second.height < highestBlockHeader.number())
                     cache_entry = it->second.erase(cache_entry);
-                /// in case that fake block hash
+                /// in case of faked block hash
                 else if (cache_entry->second.height == highestBlockHeader.number() &&
                          cache_entry->second.block_hash != highestBlockHeader.hash())
                     cache_entry = it->second.erase(cache_entry);
@@ -167,16 +189,25 @@ private:
         }
     }
 
-    void removeInvalidViewChange(u256 const& curView);
+    inline void removeInvalidViewChange(u256 const& curView)
+    {
+        for (auto it = m_recvViewChangeReq.begin(); it != m_recvViewChangeReq.end();)
+        {
+            if (it->first <= curView)
+                it = m_recvViewChangeReq.erase(it);
+            else
+                it++;
+        }
+    }
     /// remove sign cache according to block hash and view
     void removeInvalidSignCache(h256 const& blockHash, u256 const& view);
     /// remove commit cache according to block hash and view
     void removeInvalidCommitCache(h256 const& blockHash, u256 const& view);
 
-    template <typename T, typename S>
-    inline bool cacheExists(T cache, h256 const& blockHash, S const& key)
+    template <typename T, typename U, typename S>
+    inline bool cacheExists(T const& cache, U const& mainKey, S const& key)
     {
-        auto it = cache.find(blockHash);
+        auto it = cache.find(mainKey);
         if (it == cache.end())
             return false;
         return (it->second.find(key)) != (it->second.end());
@@ -184,15 +215,18 @@ private:
 
 private:
     /// cache for prepare request
-    PrepareReq m_prepareCache;
+    PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
     PrepareReq m_rawPrepareCache;
-    /// maps between
+    /// cache for signReq(maps between hash and sign requests)
     std::unordered_map<h256, std::unordered_map<std::string, SignReq>> m_signCache;
-    /// maps between  and view change requests
+    /// cache for received-viewChange requests(maps between view and view change requests)
     std::unordered_map<u256, std::unordered_map<u256, ViewChangeReq>> m_recvViewChangeReq;
+    /// cache for commited requests(maps between hash and commited requests)
     std::unordered_map<h256, std::unordered_map<std::string, CommitReq>> m_commitCache;
+    /// cache for prepare request need to be backup and saved
     PrepareReq m_committedPrepareCache;
+    /// cache for the future prepare cache
     PrepareReq m_futurePrepareCache;
 };
 }  // namespace consensus

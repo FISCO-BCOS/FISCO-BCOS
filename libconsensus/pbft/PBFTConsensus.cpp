@@ -708,7 +708,7 @@ void PBFTConsensus::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPa
     {
         u256 min_view = u256(0);
         bool should_trigger = m_reqCache->canTriggerViewChange(
-            min_view, m_f, m_toView, m_highestBlock, m_consensusBlockNumber, viewChange_req);
+            min_view, m_f, m_toView, m_highestBlock, m_consensusBlockNumber);
         if (should_trigger)
         {
             LOG(INFO) << "Fast start viewchange, m_to_view = " << m_toView
