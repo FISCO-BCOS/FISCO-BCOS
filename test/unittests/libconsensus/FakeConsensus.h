@@ -57,24 +57,29 @@ public:
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
     TimeManager const& timeManager() const { return m_timeManager; }
     const std::shared_ptr<dev::db::LevelDB> backupDB() const { return m_backupDB; }
-    bool const leaderFailed() const { return m_leaderFailed; }
-    int64_t const consensusBlockNumber() const { return m_consensusBlockNumber; }
-    u256 const toView() const { return m_toView; }
-    u256 const view() const { return m_view; }
+    bool const& leaderFailed() const { return m_leaderFailed; }
+    int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
+    u256 const& toView() const { return m_toView; }
+    u256 const& view() const { return m_view; }
 
     bool isDiskSpaceEnough(std::string const& path) override
     {
-        if (path == "invalid")
+        std::cout << "####callback isDiskSpaceEnough, path" << path << std::endl;
+        std::size_t pos = path.find("invalid");
+        if (pos != std::string::npos)
             return false;
-        return boost::filesystem::space(path).available < 1024;
+        std::cout << "### test filesystem space" << std::endl;
+        return boost::filesystem::space(path).available > 1024;
     }
+
+    void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
 };
 
 template <typename T>
 class FakeConsensus
 {
 public:
-    FakeConsensus(size_t minerSize, int16_t protocolID, std::string const& baseDir = "./")
+    FakeConsensus(size_t minerSize, int16_t protocolID)
     {
         /// fake blocksync
         std::shared_ptr<SyncInterface> m_sync = std::make_shared<FakeBlockSync>();

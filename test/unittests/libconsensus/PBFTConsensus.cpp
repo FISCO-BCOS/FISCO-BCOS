@@ -26,6 +26,7 @@
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libethcore/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
+#include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace dev::eth;
 using namespace dev::blockverifier;
@@ -46,6 +47,9 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->keyPair().pub() != h512());
     BOOST_CHECK(fake_pbft.consensus()->broadCastCache());
     BOOST_CHECK(fake_pbft.consensus()->reqCache());
+    /// init pbft env
+    fake_pbft.consensus()->initPBFTEnv(
+        fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
     /// check level db has already been openend
     BOOST_CHECK(fake_pbft.consensus()->backupDB());
     BOOST_CHECK(fake_pbft.consensus()->consensusBlockNumber() == 0);
@@ -66,6 +70,16 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastGarbageCollection <=
                 std::chrono::system_clock::now());
 }
+
+BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    boost::filesystem::create_directories(boost::filesystem::path("./invalid"));
+    fake_pbft.consensus()->setBaseDir("./invalid");
+    BOOST_CHECK_THROW(fake_pbft.consensus()->initPBFTEnv(1000), NotEnoughAvailableSpace);
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
