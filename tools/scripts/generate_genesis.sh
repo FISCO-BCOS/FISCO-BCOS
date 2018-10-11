@@ -74,7 +74,7 @@ done
 
 [ -z $genesis_node_dir ] && [ -z $init_miners ] && help 'Error: Please specify <genesis node dir> or <genesis node id> using -d or -i'
 [ -z $output_dirs ] && help 'Error: Please specify <output dirs> using -o'
-[ -z $god_address ] && help 'Error: Please specify <god account> using -r'
+[ -z $god_address ] && help 'Error: Please specify <god account> using -s'
 
 
 if [ $genesis_node_dir ]; then
