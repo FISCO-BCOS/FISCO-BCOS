@@ -91,23 +91,12 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	o.write_buffer_size = 100 * 1024 * 1024;
 	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
 
-
 	ldb::DB* db = nullptr;
 
-#if ETH_ODBC
-	LOG(INFO) << "state ethodbc is defined " << "\n";
-
-	db = ldb::LvlDbInterfaceFactory::create(leveldb::DBUseType::stateType);
-	if (db != nullptr)
-	{
-		LOG(INFO) << "state ethodbc is defined " << "\n";
-	}
-	else
-	{
-		LOG(INFO) << "state ethodbc is not defined " << "\n";
-		
-	}
-#else
+  if (_we == WithExisting::Rescue) {
+    ldb::Status stateStatus = leveldb::RepairDB(path + "/state", o);
+    LOG(INFO)<< "repair stateDB:" << stateStatus.ToString();
+  }
 	
 	ldb::Status status = ldb::DB::Open(o, path + "/state", &db);
 	if (!status.ok() || !db)
@@ -128,7 +117,7 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	}
 
 	LOG(TRACE) << "Opened state DB.";
-#endif
+
 	return OverlayDB(db);
 }
 
