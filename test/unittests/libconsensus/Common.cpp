@@ -21,32 +21,14 @@
  * @author: yujiechen
  * @date: 2018-10-09
  */
-#include <libconsensus/Common.h>
-#include <libconsensus/pbft/Common.h>
+#include "Common.h"
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
-#include <boost/test/unit_test.hpp>
 using namespace dev::consensus;
 namespace dev
 {
 namespace test
 {
-template <typename T>
-void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
-    int64_t const& _height = -1, u256 const& _view = Invalid256, u256 const& _idx = Invalid256,
-    u256 const& _timestamp = Invalid256, h256 const& _blockHash = h256())
-{
-    BOOST_CHECK(msg.height == _height);
-    BOOST_CHECK(msg.view == _view);
-    BOOST_CHECK(msg.idx == _idx);
-    BOOST_CHECK(msg.timestamp == _timestamp);
-    BOOST_CHECK(msg.block_hash == _blockHash);
-    if (msg.sig != Signature())
-        BOOST_CHECK(msg.sig == msg.signHash(msg.block_hash, _keyPair));
-    if (msg.sig2 != Signature())
-        BOOST_CHECK(msg.sig2 == msg.signHash(msg.fieldsWithoutBlock(), _keyPair));
-}
-
 template <typename T>
 void checkSignAndCommitReq()
 {
