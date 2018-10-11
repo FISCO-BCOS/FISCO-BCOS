@@ -55,6 +55,18 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->consensusBlockNumber() == 0);
     BOOST_CHECK(fake_pbft.consensus()->toView() == u256(0));
     BOOST_CHECK(fake_pbft.consensus()->view() == u256(0));
+    /// check resetConfig
+    BOOST_CHECK(fake_pbft.consensus()->accountType() != NodeAccountType::MinerAccount);
+    fake_pbft.m_minerList.push_back(fake_pbft.consensus()->keyPair().pub());
+    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+    fake_pbft.consensus()->resetConfig();
+    BOOST_CHECK(fake_pbft.consensus()->accountType() == NodeAccountType::MinerAccount);
+    BOOST_CHECK(fake_pbft.consensus()->nodeIdx() == u256(fake_pbft.m_minerList.size() - 1));
+    BOOST_CHECK(fake_pbft.consensus()->minerList().size() == fake_pbft.m_minerList.size());
+    BOOST_CHECK(fake_pbft.consensus()->nodeNum() == u256(fake_pbft.m_minerList.size()));
+    BOOST_CHECK(
+        fake_pbft.consensus()->f() == u256((fake_pbft.consensus()->nodeNum() - u256(1)) / u256(3)));
+
     /// check reloadMsg: empty committedPrepareCache
     checkPBFTMsg(fake_pbft.consensus()->reqCache()->committedPrepareCache());
     /// check m_timeManager
@@ -70,7 +82,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastGarbageCollection <=
                 std::chrono::system_clock::now());
 }
-
+/// test exception case of initPBFT
 BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
 {
     FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);

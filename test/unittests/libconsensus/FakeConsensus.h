@@ -64,15 +64,17 @@ public:
 
     bool isDiskSpaceEnough(std::string const& path) override
     {
-        std::cout << "####callback isDiskSpaceEnough, path" << path << std::endl;
         std::size_t pos = path.find("invalid");
         if (pos != std::string::npos)
             return false;
-        std::cout << "### test filesystem space" << std::endl;
         return boost::filesystem::space(path).available > 1024;
     }
 
     void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
+    u256 const& nodeNum() { return m_nodeNum; }
+    u256 const& f() { return m_f; }
+    bool const& cfgErr() { return m_cfgErr; }
+    void resetConfig() { PBFTConsensus::resetConfig(); }
 };
 
 template <typename T>
@@ -105,9 +107,11 @@ public:
     }
     std::shared_ptr<T> consensus() { return m_consensus; }
 
+public:
+    h512s m_minerList;
+
 private:
     std::shared_ptr<T> m_consensus;
-    h512s m_minerList;
 };
 }  // namespace test
 }  // namespace dev
