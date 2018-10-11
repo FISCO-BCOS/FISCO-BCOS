@@ -46,18 +46,16 @@ public:
     virtual std::map<std::string, Entries::Ptr>* data() override;
 
     void setStateStorage(Storage::Ptr amopDB);
-
     void setBlockHash(h256 blockHash);
     void setBlockNum(int blockNum);
 
 private:
-    Entries::Ptr processEntries(Entries::Ptr entries, Condition::Ptr condition);
+    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
 
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
     std::map<std::string, Entries::Ptr> m_cache;
-
     h256 m_blockHash;
     int m_blockNum = 0;
 };

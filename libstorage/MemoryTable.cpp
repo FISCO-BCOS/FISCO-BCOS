@@ -67,8 +67,13 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
 
             return entries;
         }
-
-        return processEntries(entries, condition);
+        auto indexes = processEntries(entries, condition);
+        Entries::Ptr resultEntries = std::make_shared<Entries>();
+        for (auto i : indexes)
+        {
+            resultEntries->addEntry(entries->get(i));
+        }
+        return resultEntries;
     }
     catch (std::exception& e)
     {
@@ -111,20 +116,26 @@ size_t dev::storage::MemoryTable::update(
             return 0;
         }
 
-        Entries::Ptr updateEntries = processEntries(entries, condition);
-        for (size_t i = 0; i < updateEntries->size(); ++i)
-        {
-            Entry::Ptr updateEntry = updateEntries->get(i);
+        auto indexes = processEntries(entries, condition);
+        std::vector<Change::Record> records;
 
+        for (auto i : indexes)
+        {
+            Entry::Ptr updateEntry = entries->get(i);
             for (auto it : *(entry->fields()))
             {
+                std::string value;
+
+                records.emplace_back(i, it.first, updateEntry->getField(it.first));
+
                 updateEntry->setField(it.first, it.second);
             }
         }
+        m_recorder(shared_from_this(), Change::Update, key, records);
 
         entries->setDirty(true);
 
-        return updateEntries->size();
+        return indexes.size();
     }
     catch (std::exception& e)
     {
@@ -159,7 +170,9 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
         {
             entries = it->second;
         }
-
+        Change::Record record(entries->size() + 1u);
+        std::vector<Change::Record> value{record};
+        m_recorder(shared_from_this(), Change::Insert, key, value);
         if (entries->size() == 0)
         {
             entries->addEntry(entry);
@@ -206,13 +219,17 @@ size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr 
         entries = it->second;
     }
 
-    Entries::Ptr updateEntries = processEntries(entries, condition);
-    for (size_t i = 0; i < updateEntries->size(); ++i)
+    auto indexes = processEntries(entries, condition);
+
+    std::vector<Change::Record> records;
+    for (auto i : indexes)
     {
-        Entry::Ptr removeEntry = updateEntries->get(i);
+        Entry::Ptr removeEntry = entries->get(i);
 
         removeEntry->setStatus(1);
+        records.emplace_back(i);
     }
+    m_recorder(shared_from_this(), Change::Remove, key, records);
 
     entries->setDirty(true);
 
@@ -274,24 +291,24 @@ void dev::storage::MemoryTable::setStateStorage(Storage::Ptr amopDB)
     m_remoteDB = amopDB;
 }
 
-Entries::Ptr MemoryTable::processEntries(Entries::Ptr entries, Condition::Ptr condition)
+std::vector<size_t> MemoryTable::processEntries(Entries::Ptr entries, Condition::Ptr condition)
 {
+    std::vector<size_t> indexes;
     if (condition->getConditions()->empty())
     {
-        return entries;
+        return indexes;
     }
 
-    Entries::Ptr result = std::make_shared<Entries>();
     for (size_t i = 0; i < entries->size(); ++i)
     {
         Entry::Ptr entry = entries->get(i);
         if (processCondition(entry, condition))
         {
-            result->addEntry(entry);
+            indexes.push_back(i);
         }
     }
 
-    return result;
+    return indexes;
 }
 
 bool dev::storage::MemoryTable::processCondition(Entry::Ptr entry, Condition::Ptr condition)
