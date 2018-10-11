@@ -183,6 +183,29 @@ bash ./chain.sh  #会提示输入相关证书信息，默认可以直接回车
 > FISCO-BCOS/scripts/nodes目录下将生成链证书相关文件，包括链证书ca.crt, 链私钥ca.key, 密钥参数server.param
 > **注意：ca.key 链私钥文件请妥善保存**
 
+	如果要使用1.3版本的agency.crt、node.crt和ca.crt的三级证书，请使用文本编辑器，将三个文件，按node.crt、agency.crt、ca.crt的顺序，合并成一个文件，作为node.crt使用
+	
+	合并前每个crt文件类似：
+	
+	```
+	-----BEGIN CERTIFICATE-----
+	<crt文件内容>
+	-----END CERTIFICATE-----
+	```
+	
+	合并后，文件内容为：
+	
+	```
+	-----BEGIN CERTIFICATE-----
+	<node.crt文件内容>
+	-----END CERTIFICATE-----
+	-----BEGIN CERTIFICATE-----
+	<agency.crt文件内容>
+	-----END CERTIFICATE-----
+	-----BEGIN CERTIFICATE-----
+	<ca.crt文件内容>
+	-----END CERTIFICATE-----
+
 ### 2.3 生成节点密钥和证书
 
 ```bash
