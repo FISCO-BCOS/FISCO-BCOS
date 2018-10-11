@@ -162,8 +162,9 @@ public:
         return m_timeManager.m_intervalBlockTime;
     }
 
-protected:
     void start() override;
+
+protected:
     void workLoop() override;
     void handleBlock() override;
     void handleFutureBlock();

@@ -114,12 +114,12 @@ public:
     bool forceSync() override { return true; };
 
     /// protocol id used when register handler to p2p module
-    int32_t const& getProtocolId() const override { return m_protocolID; };
-    void setProtocolId(uint32_t const _protocolId) override{};
+    int16_t const& getProtocolId() const override { return m_protocolID; };
+    void setProtocolId(int16_t const _protocolId) override{};
 
 private:
     SyncStatus m_status;
-    int32_t m_protocolID = 0;
+    int16_t m_protocolID = 0;
 };
 
 class FakeBlockVerifier : public BlockVerifierInterface
