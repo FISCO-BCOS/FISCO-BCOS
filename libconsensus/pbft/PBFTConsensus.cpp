@@ -77,18 +77,21 @@ void PBFTConsensus::initBackupDB()
     std::string path = getGroupBackupMsgPath();
     /// try-catch has already been considered by libdevcore/LevelDB.*
     m_backupDB = std::make_shared<LevelDB>(path);
-    if (boost::filesystem::space(path).available < 1024)
+    if (isDiskSpaceEnough(path))
     {
         LOG(ERROR) << "Not enough available space found on hard drive. Please free some up and "
                       "then re-run. Bailing.";
         BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
     }
-    // reload msg from db
-    PBFTMsg pbft_msg = m_reqCache->committedPrepareCache();
-    reloadMsg(c_backupKeyCommitted, &pbft_msg);
+    // reload msg from db to commited-prepare-cache
+    reloadMsg(c_backupKeyCommitted, m_reqCache->mutableCommittedPrepareCache());
 }
 
-/// reload msg from db
+/**
+ * @brief: reload PBFTMsg from DB to msg according to specified key
+ * @param key: key used to index the PBFTMsg
+ * @param msg: save the PBFTMsg readed from the DB
+ */
 void PBFTConsensus::reloadMsg(std::string const& key, PBFTMsg* msg)
 {
     if (!m_backupDB || !msg)

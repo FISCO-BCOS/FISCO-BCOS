@@ -149,6 +149,7 @@ public:
     {
         m_timeManager.m_intervalBlockTime = _intervalBlockTime;
     }
+
     inline unsigned const& getIntervalBlockTime() const
     {
         return m_timeManager.m_intervalBlockTime;
@@ -208,7 +209,7 @@ protected:
 protected:
     void initPBFTEnv(KeyPair const& _key_pair, unsigned _view_timeout);
     void resetConfig();
-    void initBackupDB();
+    virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
     void backupMsg(std::string const& _key, PBFTMsg const& _msg);
     inline std::string getGroupBackupMsgPath()
@@ -384,6 +385,11 @@ protected:
     u256 minValidNodes() const { return m_nodeNum - m_f; }
     void setBlock();
     void changeViewForEmptyBlock();
+
+    virtual bool isDiskSpaceEnough(std::string const& path)
+    {
+        return boost::filesystem::space(path).available < 1024;
+    }
 
 protected:
     u256 m_view = u256(0);
