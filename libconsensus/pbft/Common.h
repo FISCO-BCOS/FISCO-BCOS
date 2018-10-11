@@ -393,7 +393,7 @@ struct ViewChangeReq : public PBFTMsg
      * @param _idx: index of the node that generates this ViewChangeReq
      * @param _hash: block hash
      */
-    ViewChangeReq(KeyPair const& keyPair, uint64_t const& _height, u256 const _view,
+    ViewChangeReq(KeyPair const& keyPair, int64_t const& _height, u256 const _view,
         u256 const& _idx, h256 const& _hash)
     {
         height = _height;
