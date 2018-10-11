@@ -25,7 +25,6 @@ Usage:
 	-l <IP list>                [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
 	-f <IP list file>           split by line, "ip:nodeNum"
 	-e <FISCO-BCOS binary path> Default download from github
-	-n <Nodes per IP>           Default 1
 	-a <CA Key>                 Default Generate a new CA
 	-o <Output Dir>             Default ./nodes/
 	-p <Start Port>             Default 30300
@@ -42,10 +41,15 @@ EOF
 exit 0
 }
 
+fail_message()
+{
+	echo $1
+	false
+}
+
 while getopts "a:n:o:p:e:c:k:f:l:t:szh" option;do
 	case $option in
 	a) ca_file=$OPTARG;;
-	n) node_num=$OPTARG;;
 	f) ip_file=$OPTARG
 	   use_ip_param="false"
 	;;
@@ -93,12 +97,13 @@ fi
 #准备CA密钥
 if [ ! -e "$ca_file" ]; then
 	echo "Generting CA key..."
-	openssl ecparam -out $output_dir/ca.param -name secp256k1 #准备密钥参数
+	openssl ecparam -out $output_dir/ca.param -name secp256k1 || fail_message "openssl error!"#准备密钥参数
 	openssl genpkey -paramfile $output_dir/ca.param -out $output_dir/ca.key #生成secp256k1算法的CA密钥
 	openssl req -new -x509 -days 3650 -key $output_dir/ca.key -out $output_dir/ca.crt -batch #生成CA证书, 此处需要输入一些CA信息, 可按需要输入, 或回车跳过
 	ca_file="$output_dir/ca.key"
 else
-	openssl req -new -x509 -days 3650 -key "$ca_file" -out "$output_dir/ca.crt" -batch #生成CA证书, 此处需要输入一些CA信息, 可按需要输入, 或回车跳过
+	#生成CA证书, 此处需要输入一些CA信息, 可按需要输入, 或回车跳过
+	openssl req -new -x509 -days 3650 -key "$ca_file" -out "$output_dir/ca.crt" -batch || fail_message "openssl error!" 
 fi
 
 #准备密钥参数
@@ -157,7 +162,7 @@ for line in ${ip_array[*]};do
 
 		echo ${CLIENTCERT_PWD} > $node_dir/sdk/pwd.conf
 		openssl pkcs12 -export -name client -in "$node_dir/data/node.crt" -inkey "$node_dir/data/node.key" -out "$node_dir/data/keystore.p12" -password file:$node_dir/sdk/pwd.conf
-		keytool -importkeystore -destkeystore "$node_dir/sdk/client.keystore" -srckeystore "$node_dir/data/keystore.p12" -srcstoretype pkcs12 -alias client -srcstorepass ${CLIENTCERT_PWD} -deststorepass ${KEYSTORE_PWD} >> /dev/null 2>&1
+		keytool -importkeystore -destkeystore "$node_dir/sdk/client.keystore" -srckeystore "$node_dir/data/keystore.p12" -srcstoretype pkcs12 -alias client -srcstorepass ${CLIENTCERT_PWD} -deststorepass ${KEYSTORE_PWD} >> /dev/null 2>&1 || fail_message "java keytool error!" 
         rm $node_dir/sdk/pwd.conf
 		nodeid=$(openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
 		nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
@@ -167,7 +172,7 @@ for line in ${ip_array[*]};do
 		((++index))
 	done
 done 
-
+rm "$output_dir/node.param"
 echo "#!/bin/bash" > "$output_dir/start_all.sh"
 echo "PPath=\`pwd\`" >> "$output_dir/start_all.sh"
 echo "Generating node configuration..."
@@ -299,7 +304,6 @@ echo "FISCO-BCOS Path: $eth_path"
 echo "IP List File   : $ip_file"
 echo "IP List File   : $ip_param"
 echo "CA Key         : $ca_file"
-echo "Nodes per IP   : $node_num"
 echo "Output Dir     : $output_dir"
 echo "Start Port     : $port_start"
 echo "============================="
