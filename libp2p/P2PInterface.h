@@ -61,6 +61,9 @@ public:
 
     virtual SessionInfos sessionInfos() const = 0;
 
+    ///< Get connecting sessions by topicID which is groupID and can be got by protocolID.
+    virtual SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const = 0;
+
     ///< Quickly determine whether to connect to a particular node.
     virtual bool isConnected(NodeID const& _nodeID) const = 0;
 };

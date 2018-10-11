@@ -77,7 +77,9 @@ public:
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
 
     ///< Only connected node
-    virtual SessionInfos sessionInfos() const override;
+    SessionInfos sessionInfos() const override;
+
+    SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const override;
 
     bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
 
