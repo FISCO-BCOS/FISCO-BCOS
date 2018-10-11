@@ -256,40 +256,19 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	//add by wheatli, for optimise
 	o.write_buffer_size = 100 * 1024 * 1024;
 	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
-	//
-#if ETH_ODBC
 
-	LOG(INFO) << "state ethodbc is defined " << "\n";
-
-	m_blocksDB = nullptr;
-	m_extrasDB = nullptr;
-	m_blocksDB = ldb::LvlDbInterfaceFactory::create(leveldb::DBUseType::blockType);
-	if (m_blocksDB != nullptr)
-	{
-		LOG(INFO) << "block ethodbc is defined " << "\n";
-	}
-	else
-	{
-		LOG(INFO) << "block ethodbc is not defined " << "\n";
-	}
-
-	m_extrasDB = ldb::LvlDbInterfaceFactory::create(leveldb::DBUseType::extrasType);
-	if (m_extrasDB != nullptr)
-	{
-		LOG(INFO) << "extras ethodbc is defined " << "\n";
-	}
-	else
-	{
-		LOG(INFO) << "extras ethodbc is not defined " << "\n";
-	}
-#else
+  if (_we == WithExisting::Rescue) {
+    ldb::Status blocksStatus = leveldb::RepairDB(chainPath + "/blocks", o);
+    LOG(INFO)<< "repair blocksDB:" << blocksStatus.ToString();
+    ldb::Status extrasStatus = leveldb::RepairDB(extrasPath + "/extras", o);
+    LOG(INFO)<< "repair extrasDB:" << extrasStatus.ToString();
+  }
 
 	ldb::Status dbstatus = ldb::DB::Open(o, chainPath + "/blocks", &m_blocksDB);
 	LOG(INFO) << "open m_blocksDB result:" << dbstatus.ToString();
 	dbstatus = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
 	LOG(INFO) << "open m_extrasDB result:" << dbstatus.ToString();
 
-#endif
 //	m_writeOptions.sync = true;
 	if (!m_blocksDB || !m_extrasDB)
 	{
@@ -301,11 +280,11 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 		else
 		{
 			LOG(ERROR) <<
-			      "Database " <<
-			      (chainPath + "/blocks") <<
-			      "or " <<
-			      (extrasPath + "/extras") <<
-			      "already open. You appear to have another instance of ethereum running. Bailing.";
+						"Database " <<
+						(chainPath + "/blocks") <<
+						"or " <<
+						(extrasPath + "/extras") <<
+						"already open. You appear to have another instance of ethereum running. Bailing.";
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
 		}
 	}
