@@ -115,7 +115,7 @@ public:
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
     bool isSealed() const { return !m_currentBytes.empty(); }
-    size_t getTransactionSize() { return m_transactions.size(); }
+    size_t getTransactionSize() const { return m_transactions.size(); }
 
     /// get transactionRoot
     h256 const getTransactionRoot()

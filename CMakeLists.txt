@@ -65,7 +65,6 @@ add_subdirectory(libstorage)
 add_subdirectory(libtxpool)
 add_subdirectory(libblocksync)
 add_subdirectory(libconsensus)
-add_subdirectory(libblockmanager)
 add_subdirectory(libblockchain)
 
 if (TESTS)

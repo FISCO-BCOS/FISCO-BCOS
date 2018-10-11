@@ -25,7 +25,7 @@
  */
 
 #pragma once
-#include <libconsensus/Common.h>
+#include <libconsensus/pbft/Common.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
@@ -38,7 +38,7 @@ namespace consensus
 struct PBFTMsgCache
 {
 public:
-    bool insertByPacketType(unsigned const& type, std::string const& key)
+    inline bool insertByPacketType(unsigned const& type, std::string const& key)
     {
         switch (type)
         {
@@ -59,7 +59,7 @@ public:
         }
     }
 
-    bool exists(unsigned const& type, std::string const& key)
+    inline bool exists(unsigned const& type, std::string const& key)
     {
         switch (type)
         {
@@ -77,13 +77,16 @@ public:
         }
     }
 
-    bool inline exists(Mutex& lock, QueueSet<std::string>& queue, std::string const& key)
+    inline bool exists(Mutex& lock, QueueSet<std::string>& queue, std::string const& key)
     {
+        /// lock succ
         DEV_GUARDED(lock)
         return queue.exist(key);
+        /// lock failed
+        return false;
     }
 
-    void inline insertMessage(Mutex& lock, QueueSet<std::string>& queue, size_t const& maxCacheSize,
+    inline void insertMessage(Mutex& lock, QueueSet<std::string>& queue, size_t const& maxCacheSize,
         std::string const& key)
     {
         DEV_GUARDED(lock)
@@ -94,7 +97,7 @@ public:
         }
     }
 
-    void clearAll()
+    inline void clearAll()
     {
         DEV_GUARDED(x_knownPrepare)
         m_knownPrepare.clear();
@@ -116,30 +119,30 @@ private:
     Mutex x_knownViewChange;
     QueueSet<std::string> m_knownViewChange;
 
-    static const size_t c_knownPrepare = 1024;
-    static const size_t c_knownSign = 1024;
-    static const size_t c_knownCommit = 1024;
-    static const size_t c_knownViewChange = 1024;
+    static const unsigned c_knownPrepare = 1024;
+    static const unsigned c_knownSign = 1024;
+    static const unsigned c_knownCommit = 1024;
+    static const unsigned c_knownViewChange = 1024;
 };
 
 class PBFTBroadcastCache
 {
 public:
-    bool insertKey(h512 const& nodeId, unsigned const& type, std::string const& key)
+    inline bool insertKey(h512 const& nodeId, unsigned const& type, std::string const& key)
     {
         if (!m_broadCastKeyCache.count(nodeId))
             m_broadCastKeyCache[nodeId] = std::make_shared<PBFTMsgCache>();
         return m_broadCastKeyCache[nodeId]->insertByPacketType(type, key);
     }
 
-    bool keyExists(h512 const& nodeId, unsigned const& type, std::string const& key)
+    inline bool keyExists(h512 const& nodeId, unsigned const& type, std::string const& key)
     {
         if (!m_broadCastKeyCache.count(nodeId))
             return false;
         return m_broadCastKeyCache[nodeId]->exists(type, key);
     }
 
-    void clearAll()
+    inline void clearAll()
     {
         for (auto item : m_broadCastKeyCache)
             item.second->clearAll();
