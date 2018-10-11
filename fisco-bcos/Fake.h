@@ -40,144 +40,21 @@ using namespace dev::eth;
 using namespace dev::sync;
 using namespace dev::blockverifier;
 
-class FakeBlock
-{
-public:
-    /// for normal case test
-    FakeBlock(size_t size)
-    {
-        FakeBlockHeader();
-        FakeSigList(size);
-        FakeTransaction(size);
-        m_block.setSigList(m_sigList);
-        m_block.setTransactions(m_transaction);
-        m_blockHeaderData.clear();
-        m_blockData.clear();
-        m_blockHeader.encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
-    }
-
-    void reEncodeDecode()
-    {
-        m_blockHeader.encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
-    }
-
-    /// for empty case test
-    FakeBlock()
-    {
-        m_blockHeader.encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
-    }
-
-    /// fake block header
-    void FakeBlockHeader()
-    {
-        m_blockHeader.setParentHash(sha3("parent"));
-        m_blockHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
-        m_blockHeader.setLogBloom(LogBloom(0));
-        m_blockHeader.setNumber(int64_t(0));
-        m_blockHeader.setGasLimit(u256(3000000));
-        m_blockHeader.setGasUsed(u256(100000));
-        uint64_t current_time = utcTime();
-        m_blockHeader.setTimestamp(current_time);
-        m_blockHeader.appendExtraDataArray(jsToBytes("0x1020"));
-        m_blockHeader.setSealer(u256("0x00"));
-        std::vector<h512> sealer_list;
-        for (unsigned int i = 0; i < 10; i++)
-        {
-            sealer_list.push_back(toPublic(Secret::random()));
-        }
-        m_blockHeader.setSealerList(sealer_list);
-    }
-
-    /// fake sig list
-    void FakeSigList(size_t size)
-    {
-        /// set sig list
-        Signature sig;
-        h256 block_hash;
-        Secret sec = KeyPair::create().secret();
-        m_sigList.clear();
-        for (size_t i = 0; i < size; i++)
-        {
-            block_hash = sha3(toString("block " + i));
-            sig = sign(sec, block_hash);
-            m_sigList.push_back(std::make_pair(u256(block_hash), sig));
-        }
-    }
-
-    /// fake transactions
-    void FakeTransaction(size_t size)
-    {
-        fakeSingleTransaction();
-        RLPStream txs;
-        txs.appendList(size);
-        m_transaction.resize(size);
-        for (size_t i = 0; i < size; i++)
-        {
-            m_transaction[i] = m_singleTransaction;
-            bytes trans_data;
-            m_transaction[i].encode(trans_data);
-            txs.appendRaw(trans_data);
-        }
-        txs.swapOut(m_transactionData);
-    }
-
-    /// fake single transaction
-    void fakeSingleTransaction()
-    {
-        bytes rlpBytes = fromHex(
-            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-            "0000"
-            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-            "0000"
-            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-            "657c"
-            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
-
-        RLP rlpObj(rlpBytes);
-        bytesConstRef d = rlpObj.data();
-        m_singleTransaction = Transaction(d, eth::CheckTransaction::Everything);
-    }
-
-    Block& getBlock() { return m_block; }
-    BlockHeader& getBlockHeader() { return m_blockHeader; }
-    bytes& getBlockHeaderData() { return m_blockHeaderData; }
-    bytes& getBlockData() { return m_blockData; }
-
-public:
-    Block m_block;
-    BlockHeader m_blockHeader;
-    Transactions m_transaction;
-    Transaction m_singleTransaction;
-    std::vector<std::pair<u256, Signature>> m_sigList;
-    bytes m_blockHeaderData;
-    bytes m_blockData;
-    bytes m_transactionData;
-};
-
 class FakeBlockChain : public BlockChainInterface
 {
 public:
-    FakeBlockChain(uint64_t _blockNum) : m_blockNumber(_blockNum)
+    FakeBlockChain()
     {
-        m_blockChain.clear();
-        m_blockHash.clear();
-        for (uint64_t blockHeight = 0; blockHeight < _blockNum; blockHeight++)
-        {
-            FakeBlock fake_block(1);
-            if (blockHeight > 0)
-            {
-                fake_block.m_blockHeader.setParentHash(m_blockChain[blockHeight - 1]->headerHash());
-                fake_block.reEncodeDecode();
-            }
-            m_blockHash[fake_block.m_blockHeader.hash()] = blockHeight;
-            m_blockChain.push_back(std::make_shared<Block>(fake_block.m_block));
-        }
+        m_blockNumber = 1;
+        bytes m_blockHeaderData = bytes();
+        bytes m_blockData = bytes();
+        BlockHeader blockHeader;
+        Block block;
+        blockHeader.encode(m_blockHeaderData);
+        block.encode(m_blockData, ref(m_blockHeaderData));
+        block.decode(ref(m_blockData));
+        m_blockHash[block.blockHeaderHash()] = 0;
+        m_blockChain.push_back(std::make_shared<Block>(block));
     }
 
     ~FakeBlockChain() {}

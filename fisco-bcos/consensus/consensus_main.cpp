@@ -41,7 +41,7 @@ static void startConsensus(Params& params)
     host->setStaticNodes(params.staticNodes());
     auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
-    std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>(10);
+    std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
     std::shared_ptr<dev::txpool::TxPool> txPool =
         std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);
     std::shared_ptr<SyncInterface> blockSync = std::make_shared<FakeBlockSync>();
@@ -73,10 +73,10 @@ static void startConsensus(Params& params)
 
     ///< transaction related
     bytes rlpBytes = fromHex(
-        "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
+        "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
         "000000000000003ca576d469d7aa0244071d27eb33c5629753593e000000000000000000000000000000000000"
         "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62657c"
-        "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
+        "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
 
