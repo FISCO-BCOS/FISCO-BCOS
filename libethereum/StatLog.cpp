@@ -197,6 +197,7 @@ void ViewChangedState::handle(StatLogContext& context, const string& str, void*)
 
 void DestoriedState::handle(StatLogContext& context, const string& str, void* ext) 
 {
+#if 0
     bool err = *(bool*)ext; 
     if (err) 
     {
@@ -208,6 +209,7 @@ void DestoriedState::handle(StatLogContext& context, const string& str, void* ex
     string final_log = context.str();
     
     NormalStatLog() << final_log;
+#endif
 }
 static int init = 0;
 // tx
