@@ -118,7 +118,10 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree &pt) {
 	});
 
 	std::string keyHex(privateKeyData.get()); //取出key数据
-
+	if(keyHex.size() != 64u)
+	{
+		throw std::invalid_argument("Private Key file error! Missing bytes!");
+	}
 	_key = KeyPair(Secret(keyHex));
 
 	try {
