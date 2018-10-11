@@ -162,7 +162,7 @@ else
     LOG_INFO "---------- Generate node basic files ----------"
     execute_cmd "bash generate_node_basic.sh -o $output_dir -n $name -l $listenip -r $rpcport -p $p2pport -c $channelPort -e $peers -x $systemproxyaddress -g"
     LOG_INFO "---------- Generate node genesis file ----------"
-    execute_cmd "bash generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -r ${god_address} -g"
+    execute_cmd "bash generate_genesis.sh -o $output_dir/$name -i $genesis_node_id -s ${god_address} -g"
 fi
 
 
