@@ -54,16 +54,21 @@ void PBFTReqCache::delCache(h256 const& hash)
  * @param block: block need to append sig-list
  * @param minSigSize: minimum size of the sig list
  */
-void PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize)
+bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize)
 {
     std::vector<std::pair<u256, Signature>> sig_list;
-    for (auto item : m_commitCache[m_prepareCache.block_hash])
+    if (m_commitCache.count(m_prepareCache.block_hash) > 0)
     {
-        sig_list.push_back(std::make_pair(item.second.idx, Signature(item.first.c_str())));
+        for (auto item : m_commitCache[m_prepareCache.block_hash])
+        {
+            sig_list.push_back(std::make_pair(item.second.idx, Signature(item.first.c_str())));
+        }
+        assert(u256(sig_list.size()) >= minSigSize);
+        /// set siglist for prepare cache
+        block.setSigList(sig_list);
+        return true;
     }
-    assert(u256(sig_list.size()) >= minSigSize);
-    /// set siglist for prepare cache
-    block.setSigList(sig_list);
+    return false;
 }
 
 /**

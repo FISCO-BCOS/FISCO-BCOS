@@ -61,19 +61,27 @@ public:
     /// get the size of the cached sign requests according to given block hash
     inline u256 const getSigCacheSize(h256 const& blockHash)
     {
-        return u256(m_signCache[blockHash].size());
+        return getSizeFromCache(blockHash, m_signCache);
     }
     /// get the size of the cached commit requests according to given block hash
     inline u256 const getCommitCacheSize(h256 const& blockHash)
     {
-        return u256(m_commitCache[blockHash].size());
+        return getSizeFromCache(blockHash, m_commitCache);
     }
-
     /// get the size of cached viewchange requests according to given view
     inline u256 const getViewChangeSize(u256 const& toView)
     {
-        return u256(m_recvViewChangeReq[toView].size());
+        return getSizeFromCache(toView, m_recvViewChangeReq);
     }
+
+    template <typename T, typename S>
+    inline u256 const getSizeFromCache(T const& key, S& cache)
+    {
+        if (cache.count(key) > 0)
+            return u256(cache[key].size());
+        return u256(0);
+    }
+
     inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
     inline PrepareReq const& prepareCache() { return m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
@@ -112,6 +120,13 @@ public:
     {
         m_recvViewChangeReq[req.view][req.idx] = req;
     }
+
+    template <typename T, typename S>
+    inline void addReq(T const& req, S& cache)
+    {
+        cache[req.block_hash][req.sig.hex()] = req;
+    }
+
     /// add future-prepare cache
     inline void addFuturePrepareCache(PrepareReq const& req)
     {
@@ -125,7 +140,7 @@ public:
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
     inline void updateCommittedPrepare() { m_committedPrepareCache = m_rawPrepareCache; }
     /// obtain the sig-list from m_commitCache, and append the sig-list to given block
-    void generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize);
+    bool generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize);
     ///  determine can trigger viewchange or not
     bool canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum, u256 const& toView,
         dev::eth::BlockHeader const& highestBlock, int64_t const& consensusBlockNumber);
@@ -161,6 +176,15 @@ public:
         m_commitCache.clear();
     }
     void resetFuturePrepare() { m_futurePrepareCache = PrepareReq(); }
+    /// complemented functions for UTs
+    std::unordered_map<h256, std::unordered_map<std::string, SignReq>>& signCache()
+    {
+        return m_signCache;
+    }
+    std::unordered_map<h256, std::unordered_map<std::string, CommitReq>>& commitCache()
+    {
+        return m_commitCache;
+    }
 
 private:
     /// remove invalid requests cached in cache according to curretn block
