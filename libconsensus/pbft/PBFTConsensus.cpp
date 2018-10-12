@@ -334,7 +334,7 @@ void PBFTConsensus::broadcastViewChangeReq()
 void PBFTConsensus::broadcastMsg(unsigned const& packetType, std::string const& key,
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
-    auto sessions = m_service->sessionInfos();
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     for (auto session : sessions)
     {
         /// get node index of the miner from m_minerList failed ?
