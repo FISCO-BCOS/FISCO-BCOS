@@ -32,23 +32,39 @@ TransactionReceipt::TransactionReceipt(bytesConstRef _rlp)
     m_gasUsed = (u256)r[1];
     m_contractAddress = (Address)r[2];
     m_bloom = (LogBloom)r[3];
-    for (auto const& i : r[4])
+    m_status = (unsigned)r[4];
+    m_outputBytes = (bytes)r[5];
+    for (auto const& i : r[6])
         m_log.emplace_back(i);
 }
 
-TransactionReceipt::TransactionReceipt(
-    h256 _root, u256 _gasUsed, LogEntries const& _log, Address const& _contractAddress)
+TransactionReceipt::TransactionReceipt(h256 _root, u256 _gasUsed, LogEntries const& _log,
+    unsigned _status, bytes _bytes, Address const& _contractAddress)
 {
     m_stateRoot = (_root);
     m_gasUsed = (_gasUsed);
     m_bloom = (eth::bloom(_log));
     m_contractAddress = (_contractAddress);
     m_log = (_log);
+    m_status = _status;
+    m_outputBytes = _bytes;
 }
+
+TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
+  : m_stateRoot(_other.stateRoot()),
+    m_gasUsed(_other.gasUsed()),
+    m_bloom(_other.bloom()),
+    m_contractAddress(_other.contractAddress()),
+    m_log(_other.log()),
+    m_status(_other.status()),
+    m_outputBytes(_other.outputBytes())
+{}
 
 void TransactionReceipt::streamRLP(RLPStream& _s) const
 {
-    _s.appendList(5) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom;
+    _s.appendList(7) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom << m_status
+                     << m_outputBytes;
+    ;
     _s.appendList(m_log.size());
     for (LogEntry const& l : m_log)
         l.streamRLP(_s);

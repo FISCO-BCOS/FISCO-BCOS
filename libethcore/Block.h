@@ -24,6 +24,7 @@
 #pragma once
 #include "BlockHeader.h"
 #include "Transaction.h"
+#include "TransactionReceipt.h"
 #include <libdevcore/Common.h>
 
 namespace dev
@@ -100,6 +101,10 @@ public:
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
 
+    void appendTransactionReceipt(TransactionReceipt const& _tran) { m_receipts.push_back(_tran); }
+
+    TransactionReceipts& getTransactionReceipts() { return m_receipts; }
+
 private:
     /// encode function
     inline void encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
@@ -126,6 +131,7 @@ private:
     /// should refresh this catch when encode
     bytes m_txsCache;
     /// mutable RecursiveMutex m_txsCacheLock;
+    TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
 };
 }  // namespace eth
 }  // namespace dev
