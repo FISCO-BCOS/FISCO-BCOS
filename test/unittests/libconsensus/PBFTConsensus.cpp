@@ -16,23 +16,16 @@
  */
 
 /**
- * @brief: unit test for the base class of consensus module(libconsensus/Consensus.*)
- * @file: consensus.cpp
+ * @brief: unit test for libconsensus/pbft/PBFTConsensus.*
+ * @file: PBFTConsensus.cpp
  * @author: yujiechen
  * @date: 2018-10-09
  */
+#include "PBFTConsensus.h"
 #include "Common.h"
-#include "FakeConsensus.h"
-#include <libconsensus/pbft/PBFTConsensus.h>
-#include <libethcore/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
-using namespace dev::eth;
-using namespace dev::blockverifier;
-using namespace dev::txpool;
-using namespace dev::blockchain;
-
 namespace dev
 {
 namespace test
@@ -92,6 +85,45 @@ BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
 }
 
 
+/// test onRecvPBFTMessage
+BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
+{
+    KeyPair key_pair;
+    /// fake prepare_req
+    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    /// fake FakePBFTConsensus
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    NodeIPEndpoint endpoint;
+    /// fake session
+    std::shared_ptr<Session> session = FakeSession(key_pair.pub());
+    ///------ test invalid case(recv message from own-node)
+    /// check onreceive prepare request
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, prepare_req, PrepareReqPacket, false);
+    /// check onreceive sign request
+    SignReq sign_req(prepare_req, key_pair, prepare_req.idx + u256(100));
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, sign_req, SignReqPacket, false);
+    /// check onReceive commit request
+    CommitReq commit_req(prepare_req, key_pair, prepare_req.idx + u256(10));
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, commit_req, CommitReqPacket, false);
+    /// test viewchange case
+    ViewChangeReq viewChange_req(
+        key_pair, prepare_req.height, prepare_req.view, prepare_req.idx, prepare_req.block_hash);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session, viewChange_req, ViewChangeReqPacket, false);
+
+    KeyPair key_pair2 = KeyPair::create();
+    std::shared_ptr<Session> session2 = FakeSession(fake_pbft.m_minerList[0]);
+    /// test invalid case: this node is not miner
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, false);
+    ///----- test valid case
+    /// test recv packet from other nodes
+    FakePBFTMiner(fake_pbft);  // set this node to be miner
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, true);
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, sign_req, SignReqPacket, true);
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, commit_req, CommitReqPacket, true);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session2, viewChange_req, ViewChangeReqPacket, true);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

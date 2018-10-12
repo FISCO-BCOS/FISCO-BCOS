@@ -32,7 +32,7 @@ namespace dev
 {
 namespace test
 {
-PrepareReq FakePrepareReq(KeyPair& key_pair)
+static PrepareReq FakePrepareReq(KeyPair& key_pair)
 {
     key_pair = KeyPair::create();
     h256 block_hash = sha3("key_pair");

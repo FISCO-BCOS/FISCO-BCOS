@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
     req_cache.resetFuturePrepare();
     checkPBFTMsg(req_cache.futurePrepareCache());
 }
-
+/// test generateAndSetSigList
 BOOST_AUTO_TEST_CASE(testSigListSetting)
 {
     size_t node_num = 3;
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
         BOOST_CHECK(!!p);
     }
 }
-
+/// test collectGarbage
 BOOST_AUTO_TEST_CASE(testCollectGarbage)
 {
     PBFTReqCache req_cache;
@@ -123,8 +123,6 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     FakeInvalidSignReq<CommitReq>(req, req_cache, req_cache.mutableCommitCache(), highest,
         invalid_hash, invalidHeightNum, invalidHash, validNum);
     req_cache.collectGarbage(highest);
-    std::cout << "#### getSigCacheSize after collectGarbage:"
-              << req_cache.getSigCacheSize(req.block_hash) << std::endl;
     BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == u256(validNum));
     BOOST_CHECK(req_cache.getSigCacheSize(invalid_hash) == u256(0));
 
@@ -135,7 +133,7 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == u256(0));
     BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == u256(0));
 }
-
+/// test canTriggerViewChange
 BOOST_AUTO_TEST_CASE(testCanTriggerViewChange)
 {
     KeyPair key_pair;
@@ -241,8 +239,6 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     req_cache.clearAll();
     BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(0));
 }
-
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

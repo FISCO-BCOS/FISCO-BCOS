@@ -75,6 +75,18 @@ public:
     u256 const& f() { return m_f; }
     bool const& cfgErr() { return m_cfgErr; }
     void resetConfig() { PBFTConsensus::resetConfig(); }
+    PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
+    void onRecvPBFTMessage(
+        P2PException exception, std::shared_ptr<Session> session, Message::Ptr message)
+    {
+        return PBFTConsensus::onRecvPBFTMessage(exception, session, message);
+    }
+
+    Message::Ptr transDataToMessage(
+        bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
+    {
+        return PBFTConsensus::transDataToMessage(data, packetType, protocolId);
+    }
 };
 
 template <typename T>
