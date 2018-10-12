@@ -22,51 +22,56 @@
 #pragma once
 
 #include <string>
-#include "libstatistics/RateLimitHttpServer.h"
-#include <libethereum/Client.h>
-#include <libdevcore/easylog.h>
+#include <map>
+#include <microhttpd.h>
+#include "jsonrpccpp/server/abstractserverconnector.h"
 
 namespace dev
 {
 
-class SafeHttpServer: public jsonrpc::HttpServer
+class SafeHttpServer: public jsonrpc::AbstractServerConnector
 {
+	typedef int (*pCallBack)(void *, struct MHD_Connection *, const char *, const char *, const char *, const char *, size_t *, void **);
+
 public:
 	/// "using HttpServer" won't work with msvc 2013, so we need to copy'n'paste constructor
-	SafeHttpServer(int _port, std::string const& _sslcert = std::string(), std::string const& _sslkey = std::string(), int _threads = 50, std::string const& _config = std::string()):
-		HttpServer(_port, _sslcert, _sslkey, _threads, _config) {}
-
-	/// override HttpServer implementation
-	bool virtual SendResponse(std::string const& _response, void* _addInfo = nullptr) override;
-	bool virtual SendOptionsResponse(void* _addInfo) override;
-
-	void setAllowedOrigin(std::string const& _origin) { m_allowedOrigin = _origin; }
-	std::string const& allowedOrigin() const { return m_allowedOrigin; }
-
-	void setGroup(const std::string& group) { m_DfsNodeGroupId = group; }
-	void setNode(const std::string& node) {m_DfsNodeId = node;}
-	void setStoragePath(const std::string& storage) {m_DfsStoragePath = storage;}
-	void setEth(eth::Client* _eth) {m_eth = _eth;}
+	SafeHttpServer(std::string const& _address, int _port, std::string const& _sslcert = std::string(), std::string const& _sslkey = std::string(), int _threads = 50);
+	virtual ~SafeHttpServer() {
+	}
 
 	virtual bool StartListening();
 	virtual bool StopListening();
+	virtual bool SendResponse(std::string const& _response, void* _addInfo = nullptr);
+	virtual bool SendOptionsResponse(void* _addInfo);
 
-	static int callback(void *cls, struct MHD_Connection *connection, const char *url, const char *method, const char *version, const char *upload_data, size_t *upload_data_size, void **con_cls);
-
+	void SetUrlHandler(const std::string &url, jsonrpc::IClientConnectionHandler *handler);
+	void setAllowedOrigin(std::string const& _origin) { m_allowedOrigin = _origin; }
+	std::string const& allowedOrigin() const { return m_allowedOrigin; }
 	virtual pCallBack getCallback() {
         return SafeHttpServer::callback;
     }
-	virtual pCompletedCallbak getCompletedCallback() {
-    }
-private:
-	std::string m_allowedOrigin;
 
-	std::string m_path_sslrootca;
-	std::string m_sslrootca;
-	eth::Client* m_eth;
-	std::string m_DfsNodeGroupId;
-	std::string m_DfsNodeId;
-	std::string m_DfsStoragePath;
+private:
+    int port;
+    int threads;
+    bool running;
+    std::string path_sslcert;
+    std::string path_sslkey;
+    std::string sslcert;
+    std::string sslkey;
+
+    struct MHD_Daemon* daemon;
+
+    std::map<std::string, jsonrpc::IClientConnectionHandler*> urlhandler;
+
+    static int callback(void* cls, struct MHD_Connection* connection, const char* url,
+        const char* method, const char* version, const char* upload_data, size_t* upload_data_size,
+        void** con_cls);
+
+    jsonrpc::IClientConnectionHandler* GetHandler(const std::string& url);
+
+    std::string m_allowedOrigin;
+    std::string m_address;
 };
 
 }

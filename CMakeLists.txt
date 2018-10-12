@@ -79,7 +79,7 @@ add_subdirectory(libethcore)
 add_subdirectory(libethereum)
 add_subdirectory(libevm)
 add_subdirectory(libevmcore)
-add_subdirectory(libstatistics)
+# add_subdirectory(libstatistics)
 
 if (NOT EMSCRIPTEN)
     add_subdirectory(libp2p)
