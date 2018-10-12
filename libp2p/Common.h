@@ -78,17 +78,6 @@ DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
 DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
 DEV_SIMPLE_EXCEPTION(InvalidHostIPAddress);
 
-enum PacketType
-{
-    HelloPacket = 0,
-    DisconnectPacket,
-    PingPacket,
-    PongPacket,
-    GetPeersPacket,
-    PeersPacket,
-    UserPacket = 0x10
-};
-
 enum DisconnectReason
 {
     DisconnectRequested = 0,
@@ -179,12 +168,12 @@ public:
     void encodeAMOPBuffer(std::string const& topic);
     ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
 
-    void Print(std::string const& str)
+    void printMsgWithPrefix(std::string const& strPrefix)
     {
         std::stringstream strMsg;
-        strMsg << str << ",Message(" << m_length << "," << m_protocolID << "," << m_packetType
+        strMsg << strPrefix << "Message(" << m_length << "," << m_protocolID << "," << m_packetType
                << "," << m_seq << ",";
-        if (dev::eth::ProtocolID::AMOP != abs(m_protocolID))
+        if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
         {
             strMsg << std::string((const char*)m_buffer->data(), m_buffer->size());
         }
@@ -193,8 +182,7 @@ public:
             std::string topic;
             std::shared_ptr<bytes> temp = std::make_shared<bytes>();
             decodeAMOPBuffer(temp, topic);
-            strMsg << "Topic is " << topic << ","
-                   << std::string((const char*)temp->data(), temp->size());
+            strMsg << topic << "," << std::string((const char*)temp->data(), temp->size());
         }
         strMsg << ")";
         LOG(INFO) << strMsg.str();
@@ -207,6 +195,13 @@ private:
     uint16_t m_packetType = 0;  ///< message sub type, the second two bytes of information
     uint32_t m_seq = 0;         ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
+};
+
+enum AMOPPacketType
+{
+    SendTopicSeq = 1,
+    RequestTopics = 2,
+    SendTopics = 3
 };
 
 class P2PException : public std::exception

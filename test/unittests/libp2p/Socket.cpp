@@ -22,6 +22,7 @@
  */
 #include <libdevcore/FileSystem.h>
 #include <libp2p/Socket.h>
+#include <openssl/ssl.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -43,7 +44,8 @@ BOOST_AUTO_TEST_CASE(testSocket)
     Socket m_socket(m_io_service, m_endpoint);
     BOOST_CHECK(Socket::m_isInit == true);
     BOOST_CHECK(m_socket.isConnected() == false);
-    BOOST_CHECK(m_socket.sslref().native_handle()->verify_mode == ba::ssl::verify_peer);
+    BOOST_CHECK(
+        SSL_get_verify_mode(m_socket.sslref().native_handle()) == boost::asio::ssl::verify_peer);
     /// close socket
     m_socket.close();
     BOOST_CHECK(m_socket.isConnected() == false);

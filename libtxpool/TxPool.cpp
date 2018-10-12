@@ -154,12 +154,12 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
  */
 bool TxPool::isBlockLimitOk(Transaction const& _tx) const
 {
-    if (_tx.blockLimit() == Invalid256 || m_blockManager->number() >= _tx.blockLimit() ||
-        _tx.blockLimit() > (m_blockManager->number() + m_maxBlockLimit))
+    if (_tx.blockLimit() == Invalid256 || m_blockChain->number() >= _tx.blockLimit() ||
+        _tx.blockLimit() > (m_blockChain->number() + m_maxBlockLimit))
     {
         LOG(ERROR) << "TxPool::isBlockLimitOk Fail! t.sha3()=" << _tx.sha3()
                    << ", t.blockLimit=" << _tx.blockLimit()
-                   << ", number() = " << m_blockManager->number()
+                   << ", number() = " << m_blockChain->number()
                    << ", maxBlockLimit = " << m_maxBlockLimit;
         return false;
     }
@@ -175,7 +175,7 @@ bool TxPool::isBlockLimitOk(Transaction const& _tx) const
  */
 bool TxPool::isNonceOk(Transaction const& _tx, bool _needInsert) const
 {
-    if (_tx.nonce() == Invalid256 || (!m_blockManager->isNonceOk(_tx, _needInsert)))
+    if (_tx.nonce() == Invalid256 || (!m_nonceCheck->ok(_tx, _needInsert)))
     {
         LOG(ERROR) << "TxPool::isNonceOk Fail!  t.sha3()= " << _tx.sha3()
                    << ", t.nonce = " << _tx.nonce();
@@ -241,18 +241,27 @@ bool TxPool::drop(h256 const& _txHash)
  * @param _avoid : Transactions to avoid returning.
  * @return Transactions : up to _limit transactions
  */
-Transactions TxPool::topTransactions(unsigned _limit, h256Hash const& _avoid) const
+Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool updateAvoid)
 {
     ReadGuard l(m_lock);
     Transactions ret;
+    uint64_t i = 0;
     for (auto it = m_txsQueue.begin(); ret.size() < m_limit && it != m_txsQueue.end(); it++)
     {
         if (!_avoid.count(it->sha3()))
         {
             ret.push_back(*it);
+            if (updateAvoid)
+                _avoid.insert(it->sha3());
         }
     }
     return ret;
+}
+
+dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
+{
+    h256Hash _avoid = h256Hash();
+    return topTransactions(_limit, _avoid);
 }
 
 /// get all transactions(maybe blocksync module need this interface)

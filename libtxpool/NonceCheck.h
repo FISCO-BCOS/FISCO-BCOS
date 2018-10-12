@@ -23,8 +23,7 @@
 
 #pragma once
 
-#include "BlockManagerInterface.h"
-#include <libblockmanager/BlockManagerInterface.h>
+#include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Guards.h>
@@ -36,7 +35,7 @@
 
 using namespace std;
 using namespace dev::eth;
-using namespace dev::blockmanager;
+using namespace dev::blockchain;
 namespace dev
 {
 namespace eth
@@ -45,9 +44,10 @@ class NonceCheck
 {
 public:
     static u256 maxblocksize;
-    NonceCheck(std::shared_ptr<BlockManagerInterface> const& _blockManager)
-      : m_blockManager(_blockManager)
-    {}
+    NonceCheck(std::shared_ptr<BlockChainInterface> const& _blockChain) : m_blockChain(_blockChain)
+    {
+        init();
+    }
     ~NonceCheck();
     void init();
     bool ok(Transaction const& _transaction, bool _needinsert = false);
@@ -55,7 +55,7 @@ public:
     void delCache(Transactions const& _transcations);
 
 private:
-    std::weak_ptr<BlockManagerInterface> m_blockManager;
+    std::shared_ptr<BlockChainInterface> m_blockChain;
     std::unordered_map<std::string, bool> m_cache;
     unsigned m_startblk;
     unsigned m_endblk;

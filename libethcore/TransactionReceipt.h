@@ -21,6 +21,7 @@
 
 #pragma once
 
+
 #include <libdevcore/Address.h>
 #include <libdevcore/RLP.h>
 #include <libethcore/Common.h>
@@ -172,6 +173,5 @@ private:
 using TransactionReceipts = std::vector<TransactionReceipt>;
 
 std::ostream& operator<<(std::ostream& _out, eth::TransactionReceipt const& _r);
-
 }  // namespace eth
 }  // namespace dev

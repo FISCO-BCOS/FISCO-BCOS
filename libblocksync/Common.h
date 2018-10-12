@@ -29,5 +29,26 @@ namespace dev
 namespace sync
 {
 using NodeList = std::set<dev::p2p::NodeID>;
-}
+
+enum class SyncState
+{
+    NotSynced,  ///< Initial chain sync has not started yet
+    Idle,       ///< Initial chain sync complete. Waiting for new packets
+    Waiting,    ///< Block downloading paused. Waiting for block queue to process blocks and free
+                ///< space
+    Blocks,     ///< Downloading blocks
+    State,      ///< Downloading state
+    NewBlocks,  ///< Downloading blocks learned from NewHashes packet
+    Size        /// Must be kept last
+};
+struct SyncStatus
+{
+    SyncState state = SyncState::Idle;
+    unsigned startBlockNumber;
+    unsigned currentBlockNumber;
+    unsigned highestBlockNumber;
+    bool majorSyncing = false;
+};
+
+}  // namespace sync
 }  // namespace dev

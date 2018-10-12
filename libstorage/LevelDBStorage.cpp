@@ -95,7 +95,7 @@ Entries::Ptr LevelDBStorage::select(
 }
 
 size_t LevelDBStorage::commit(
-    h256 hash, int num, const std::vector<TableData::Ptr>& datas, h256 blockHash)
+    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash)
 {
     try
     {
@@ -114,15 +114,12 @@ size_t LevelDBStorage::commit(
 
                 for (size_t i = 0; i < dataIt.second->size(); ++i)
                 {
-                    if (dataIt.second->get(i)->dirty())
+                    Json::Value value;
+                    for (auto fieldIt : *(dataIt.second->get(i)->fields()))
                     {
-                        Json::Value value;
-                        for (auto fieldIt : *(dataIt.second->get(i)->fields()))
-                        {
-                            value[fieldIt.first] = fieldIt.second;
-                        }
-                        entry["values"].append(value);
+                        value[fieldIt.first] = fieldIt.second;
                     }
+                    entry["values"].append(value);
                 }
 
                 std::stringstream ssOut;
@@ -130,6 +127,8 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
+
+                LOG(TRACE) << "leveldb commit key:" << entryKey << " value:" << ssOut.str();
             }
         }
 

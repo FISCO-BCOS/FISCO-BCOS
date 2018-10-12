@@ -22,6 +22,7 @@
  * @author jimmyshi
  * @date 2018-09-21
  */
+#pragma once
 
 #include "StateFace.h"
 #include <libdevcore/Common.h>

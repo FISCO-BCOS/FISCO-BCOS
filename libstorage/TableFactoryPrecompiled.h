@@ -52,8 +52,8 @@ class TableFactoryPrecompiled : public Precompiled
 public:
     typedef std::shared_ptr<TableFactoryPrecompiled> Ptr;
 
+    TableFactoryPrecompiled();
     virtual ~TableFactoryPrecompiled(){};
-
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
@@ -73,10 +73,9 @@ public:
 private:
     unsigned isTableCreated(ExecutiveContext::Ptr context, const std::string& tableName,
         const std::string& keyField, const std::string& valueFiled);
-    TablePrecompiled::Ptr getSysTable(ExecutiveContext::Ptr context);
+    Address getSysTable(ExecutiveContext::Ptr context, const std::string& _tableName);
     dev::storage::MemoryTableFactory::Ptr m_MemoryTableFactory;
-    std::map<std::string, Address> m_name2Table;
-    h256 m_hash;
+    std::vector<std::string> m_sysTables;
 };
 
 }  // namespace blockverifier

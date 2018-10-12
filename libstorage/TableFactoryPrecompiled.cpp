@@ -23,7 +23,6 @@
 #include "TablePrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
-#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -33,6 +32,11 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
 
+TableFactoryPrecompiled::TableFactoryPrecompiled()
+{
+    m_sysTables.push_back("_sys_tables_");
+    m_sysTables.push_back("_sys_miners_");
+}
 
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -83,7 +87,8 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         // not exist
         if (errorCode == 0u)
         {
-            auto sysTable = getSysTable(context);
+            auto sysTable = std::dynamic_pointer_cast<TablePrecompiled>(
+                context->getPrecompiled(getSysTable(context, "_sys_tables_")));
             auto tableEntry = sysTable->getTable()->newEntry();
             tableEntry->setField("table_name", tableName);
             tableEntry->setField("key_field", keyName);
@@ -102,35 +107,36 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
     return out;
 }
 
-TablePrecompiled::Ptr TableFactoryPrecompiled::getSysTable(ExecutiveContext::Ptr context)
+Address TableFactoryPrecompiled::getSysTable(
+    ExecutiveContext::Ptr context, const std::string& _tableName)
 {
-    std::string tableName = "_sys_tables_";
-    auto it = m_name2Table.find(tableName);
-    if (it == m_name2Table.end())
+    if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), _tableName))
+        return Address();
+
+    auto address = m_MemoryTableFactory->getTable(_tableName);
+    if (address == Address())
     {
-        dev::storage::Table::Ptr table = m_MemoryTableFactory->openTable(
-            context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
+        dev::storage::Table::Ptr table = m_MemoryTableFactory->openTable(context->blockInfo().hash,
+            context->blockInfo().number.convert_to<int64_t>(), _tableName);
 
         TablePrecompiled::Ptr tablePrecompiled = std::make_shared<TablePrecompiled>();
         tablePrecompiled->setTable(table);
 
-        Address address = context->registerPrecompiled(tablePrecompiled);
-        m_name2Table.insert(std::make_pair(tableName, address));
-
-        return tablePrecompiled;
+        address = context->registerPrecompiled(tablePrecompiled);
+        m_MemoryTableFactory->insertTable(_tableName, address);
     }
-    LOG(DEBUG) << "Table _sys_tables_:" << context->blockInfo().hash
-               << " already opened:" << it->second;
-    return std::dynamic_pointer_cast<TablePrecompiled>(context->getPrecompiled(it->second));
+
+    return address;
 }
 
 unsigned TableFactoryPrecompiled::isTableCreated(ExecutiveContext::Ptr context,
     const string& tableName, const string& keyField, const string& valueFiled)
 {
-    auto it = m_name2Table.find(tableName);
-    if (it != m_name2Table.end())
+    auto address = m_MemoryTableFactory->getTable(tableName);
+    if (address != Address())
         return TABLE_ALREADY_OPEN;
-    auto sysTable = getSysTable(context);
+    auto sysTable = std::dynamic_pointer_cast<TablePrecompiled>(
+        context->getPrecompiled(getSysTable(context, "_sys_tables_")));
     auto tableEntries =
         sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
     if (tableEntries->size() == 0u)
@@ -140,62 +146,42 @@ unsigned TableFactoryPrecompiled::isTableCreated(ExecutiveContext::Ptr context,
         auto entry = tableEntries->get(i);
         if (keyField == entry->getField("key_field") &&
             valueFiled == entry->getField("value_field"))
+        {
+            LOG(DEBUG) << "TableFactory table already exists:" << tableName;
             return TABLENAME_ALREADY_EXISTS;
+        }
     }
+    LOG(DEBUG) << "TableFactory table conflict:" << tableName;
     return TABLENAME_CONFLICT;
 }
 
 Address TableFactoryPrecompiled::openTable(ExecutiveContext::Ptr context, const string& tableName)
 {
-    auto it = m_name2Table.find(tableName);
-    if (it != m_name2Table.end())
+    auto address = m_MemoryTableFactory->getTable(tableName);
+    if (address != Address())
     {
-        LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
-        return it->second;
+        LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << address;
+        return address;
     }
-    auto sysTable = getSysTable(context);
-    auto tableEntries =
-        sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
-    if (tableEntries->size() == 0u)
-        return Address();
 
-    LOG(DEBUG) << "Open new table:" << tableName;
-    dev::storage::Table::Ptr table = m_MemoryTableFactory->openTable(
-        context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
-    TablePrecompiled::Ptr tablePrecompiled = std::make_shared<TablePrecompiled>();
-    tablePrecompiled->setTable(table);
-    Address address = context->registerPrecompiled(tablePrecompiled);
-    m_name2Table.insert(std::make_pair(tableName, address));
-    return address;
+    if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), tableName))
+    {
+        auto sysTable = std::dynamic_pointer_cast<TablePrecompiled>(
+            context->getPrecompiled(getSysTable(context, "_sys_tables_")));
+        auto tableEntries =
+            sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
+        if (tableEntries->size() == 0u)
+        {
+            LOG(DEBUG) << tableName << "not exist.";
+            return Address();
+        }
+    }
+
+    LOG(DEBUG) << "Open new sys table:" << tableName;
+    return getSysTable(context, tableName);
 }
 
 h256 TableFactoryPrecompiled::hash(std::shared_ptr<ExecutiveContext> context)
 {
-    bytes data;
-
-    LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
-    for (auto tableAddress : m_name2Table)
-    {
-        TablePrecompiled::Ptr table = std::dynamic_pointer_cast<TablePrecompiled>(
-            context->getPrecompiled(tableAddress.second));
-        h256 hash = table->hash();
-        LOG(DEBUG) << "table:" << tableAddress.first << " hash:" << hash;
-        if (hash == h256())
-        {
-            continue;
-        }
-
-        bytes tableHash = table->hash().asBytes();
-        data.insert(data.end(), tableHash.begin(), tableHash.end());
-    }
-
-    if (data.empty())
-    {
-        return h256();
-    }
-
-    LOG(DEBUG) << "TableFactoryPrecompiled data:" << data << " hash:" << dev::sha256(&data);
-
-    m_hash = dev::sha256(&data);
-    return m_hash;
+    return m_MemoryTableFactory->hash(context);
 }

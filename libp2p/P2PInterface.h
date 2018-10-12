@@ -60,6 +60,9 @@ public:
     virtual std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) = 0;
 
     virtual SessionInfos sessionInfos() const = 0;
+
+    ///< Quickly determine whether to connect to a particular node.
+    virtual bool isConnected(NodeID const& _nodeID) const = 0;
 };
 
 }  // namespace p2p

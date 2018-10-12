@@ -21,12 +21,40 @@
  * @date: 2018-09-21
  */
 #pragma once
+#include <libblockverifier/BlockVerifierInterface.h>
+#include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/FixedHash.h>
+#include <libdevcore/easylog.h>
+#include <libethcore/Block.h>
 namespace dev
 {
 namespace consensus
 {
-enum ConsensusStatus
+DEV_SIMPLE_EXCEPTION(DisabledFutureTime);
+DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
+DEV_SIMPLE_EXCEPTION(ExistedBlock);
+DEV_SIMPLE_EXCEPTION(ParentNoneExist);
+DEV_SIMPLE_EXCEPTION(BlockMinerListWrong);
+
+enum NodeAccountType
 {
+    ObserverAccount = 0,
+    MinerAccount
 };
-}
+
+struct ConsensusStatus
+{
+    std::string consensusEngine;
+    dev::h512s minerList;
+};
+
+struct Sealing
+{
+    dev::eth::Block block;
+    /// hash set for filter fetched transactions
+    h256Hash m_transactionSet;
+    dev::blockverifier::ExecutiveContext::Ptr p_execContext;
+};
+
+}  // namespace consensus
 }  // namespace dev

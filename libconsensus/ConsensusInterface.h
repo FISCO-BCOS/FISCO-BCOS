@@ -21,14 +21,13 @@
  * @date: 2018-09-21
  */
 #pragma once
-#include <libdevcore/Worker.h>
-#include <libethcore/Common.h>
+#include "Common.h"
 namespace dev
 {
 class ConsensusStatus;
 namespace consensus
 {
-class ConsensusInterface : public Worker
+class ConsensusInterface
 {
 public:
     ConsensusInterface() = default;
@@ -40,16 +39,22 @@ public:
     virtual void stop() = 0;
 
     /// get miner list
-    virtual h512s getMinerList() const = 0;
+    virtual h512s minerList() const = 0;
     /// set the miner list
-    virtual void setMinerList(h512s const& _minerList) const = 0;
-
+    virtual void setMinerList(h512s const& _minerList) = 0;
+    virtual void appendMiner(h512 const& _miner) = 0;
     /// get status of consensus
-    virtual ConsensusStatus consensusStatus() const = 0;
+    virtual const ConsensusStatus consensusStatus() const = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual int32_t const& getProtocolId() const = 0;
-    virtual void setProtocolId(uint32_t const _protocolId) = 0;
+    virtual int16_t const& protocolId() const = 0;
+
+    /// get node account type
+    virtual NodeAccountType accountType() = 0;
+    /// set the node account type
+    virtual void setNodeAccountType(NodeAccountType const&) = 0;
+    virtual u256 nodeIdx() const = 0;
+    virtual void setNodeIdx(u256 const&) = 0;
 };
 }  // namespace consensus
 }  // namespace dev

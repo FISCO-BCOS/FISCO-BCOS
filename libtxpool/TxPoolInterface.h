@@ -47,8 +47,9 @@ public:
      * @return Transactions : up to _limit transactions
      */
     virtual dev::eth::Transactions topTransactions(
-        unsigned _limit, h256Hash const& _avoid = h256Hash()) const = 0;
+        uint64_t const& _limit, h256Hash& _avoid, bool updateAvoid = false) = 0;
 
+    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
     /// get all current transactions(maybe blocksync module need this interface)
     virtual dev::eth::Transactions pendingList() const = 0;
     /// get current transaction num

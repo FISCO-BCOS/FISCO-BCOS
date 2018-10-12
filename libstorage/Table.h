@@ -59,6 +59,7 @@ public:
     virtual size_t size() const;
 
     virtual void addEntry(Entry::Ptr entry);
+    virtual void removeEntry(size_t index);
 
     bool dirty() const;
     void setDirty(bool dirty);
@@ -105,6 +106,38 @@ private:
     size_t m_count = 0;
 };
 
+class Table;
+struct Change
+{
+    enum Kind : int
+    {
+        /// Change::key contains the insert key,
+        /// Change::value the insert entry.
+        Insert,
+        Update,
+        Remove,
+        Select
+    };
+    std::shared_ptr<Table> table;
+    Kind kind;  ///< The kind of the change.
+    std::string key;
+    struct Record
+    {
+        size_t index;
+        std::string key;
+        std::string oldValue;
+        Record(
+            size_t _index, std::string _key = std::string(), std::string _oldValue = std::string())
+          : index(_index), key(_key), oldValue(_oldValue)
+        {}
+    };
+    std::vector<Record> value;
+    Change(std::shared_ptr<Table> _table, Kind _kind, std::string const& _key,
+        std::vector<Record>& _value)
+      : table(_table), kind(_kind), key(_key), value(std::move(_value))
+    {}
+};
+
 // Construction of transaction execution
 class Table : public std::enable_shared_from_this<Table>
 {
@@ -120,10 +153,19 @@ public:
 
     virtual Entry::Ptr newEntry();
     virtual Condition::Ptr newCondition();
-
+    virtual void setRecorder(
+        std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+            _recorder)
+    {
+        m_recorder = _recorder;
+    }
     virtual h256 hash() = 0;
     virtual void clear() = 0;
     virtual std::map<std::string, Entries::Ptr>* data() { return NULL; }
+
+protected:
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        m_recorder;
 };
 
 // Block execution time construction
@@ -134,8 +176,8 @@ public:
 
     virtual ~StateDBFactory() {}
 
-    virtual Table::Ptr openTable(h256 blockHash, int num, const std::string& table) = 0;
-    virtual Table::Ptr createTable(h256 blockHash, int num, const std::string& tableName,
+    virtual Table::Ptr openTable(h256 blockHash, int64_t num, const std::string& table) = 0;
+    virtual Table::Ptr createTable(h256 blockHash, int64_t num, const std::string& tableName,
         const std::string& keyField, const std::vector<std::string>& valueField) = 0;
 };
 
