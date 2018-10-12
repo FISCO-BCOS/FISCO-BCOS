@@ -248,6 +248,7 @@ struct PrepareReq : public PBFTMsg
         h256 const _blockHash)
       : PBFTMsg(_keyPair, _height, _view, _idx, _blockHash), p_execContext(nullptr)
     {}
+
     /**
      * @brief: populate the prepare request from specified prepare request,
      *         given view and node index
@@ -308,6 +309,12 @@ struct PrepareReq : public PBFTMsg
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp;
     }
+
+    bool operator==(PrepareReq const& req)
+    {
+        return PBFTMsg::operator==(req) && req.block == block;
+    }
+    bool operator!=(PrepareReq const& req) { return !(operator!=(req)); }
 
     /// trans PrepareReq from object to RLPStream
     virtual void streamRLPFields(RLPStream& _s) const
