@@ -173,7 +173,6 @@ private:
     TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
     BytesMap m_txsMapCache;
     h256 m_txsRoot;
-
 };
 }  // namespace eth
 }  // namespace dev
