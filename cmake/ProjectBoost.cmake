@@ -15,7 +15,7 @@ else()
     endif()
 endif()
 
-set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
+# set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
 set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${OPENSSL_INCLUDE_DIRS})
 ExternalProject_Add(boost

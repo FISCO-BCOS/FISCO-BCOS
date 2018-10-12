@@ -1748,14 +1748,10 @@ int main(int argc, char** argv)
 				//new rpc::Debug(*web3.ethereum()),
 				//testEth
 			));
-			auto httpConnector = new SafeHttpServer(jsonRPCURL, "", "", SensibleHttpThreads, limitConfigJSON);
-			httpConnector->setNode(strNodeId);
-			httpConnector->setGroup(strGroupId);
-			httpConnector->setStoragePath(strStoragePath);
-			httpConnector->setEth(web3.ethereum());
+			auto httpConnector = new SafeHttpServer("0.0.0.0", jsonRPCURL, "", "", SensibleHttpThreads);
 			httpConnector->setAllowedOrigin(rpcCorsDomain);
 			jsonrpcHttpServer->addConnector(httpConnector);
-			jsonrpcHttpServer->setStatistics(new InterfaceStatistics(getDataDir() + "RPC", chainParams.statsInterval));
+			// jsonrpcHttpServer->setStatistics(new InterfaceStatistics(getDataDir() + "RPC", chainParams.statsInterval));
 			if ( false == jsonrpcHttpServer->StartListening() )
 			{
 				cout << "RPC StartListening Fail!!!!" << "\n";
@@ -1790,7 +1786,7 @@ int main(int argc, char** argv)
 			));
 			auto ipcConnector = new IpcServer("geth");
 			jsonrpcIpcServer->addConnector(ipcConnector);
-			jsonrpcIpcServer->setStatistics(new InterfaceStatistics(getDataDir() + "IPC", chainParams.statsInterval));
+			// jsonrpcIpcServer->setStatistics(new InterfaceStatistics(getDataDir() + "IPC", chainParams.statsInterval));
 			ipcConnector->StartListening();
 		}
 
