@@ -16,18 +16,14 @@
  */
 
 /**
- * @brief: unit test for the base class of consensus module(libconsensus/consensus.*)
- * @file: consensus.cpp
+ * @brief: unit test for libconsensus/pbft/PBFTReqCache.h
+ * @file: PBFTReqCache.cpp
  * @author: yujiechen
  * @date: 2018-10-09
  */
-#include "Common.h"
-#include <libconsensus/pbft/PBFTReqCache.h>
-#include <libethcore/BlockHeader.h>
+#include "PBFTReqCache.h"
+#include <libethcore/Block.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <boost/test/unit_test.hpp>
-using namespace dev::consensus;
-using namespace dev::eth;
 namespace dev
 {
 namespace test
@@ -37,14 +33,13 @@ BOOST_FIXTURE_TEST_SUITE(PBFTReqCacheTest, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testAddAndExistCase)
 {
     PBFTReqCache req_cache;
+    KeyPair key_pair;
     /// test addRawPrepare
-    KeyPair key_pair = KeyPair::create();
-    h256 block_hash = sha3("key_pair");
-    PrepareReq prepare_req(key_pair, 1000, u256(1), u256(134), block_hash);
+    PrepareReq prepare_req = FakePrepareReq(key_pair);
     req_cache.addRawPrepare(prepare_req);
     BOOST_CHECK(req_cache.isExistPrepare(prepare_req));
-    checkPBFTMsg(req_cache.rawPrepareCache(), key_pair, 1000, u256(1), u256(134),
-        req_cache.rawPrepareCache().timestamp, block_hash);
+    checkPBFTMsg(req_cache.rawPrepareCache(), key_pair, prepare_req.height, prepare_req.view,
+        prepare_req.idx, req_cache.rawPrepareCache().timestamp, prepare_req.block_hash);
     checkPBFTMsg(req_cache.prepareCache());
 
     /// test addSignReq
@@ -62,12 +57,76 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
     /// test addPrepareReq
     req_cache.addPrepareReq(prepare_req);
     /// test invalid signReq and commitReq removement
-    checkPBFTMsg(req_cache.prepareCache(), key_pair, 1000, u256(1), u256(134),
-        req_cache.prepareCache().timestamp, block_hash);
+    checkPBFTMsg(req_cache.prepareCache(), key_pair, prepare_req.height, prepare_req.view,
+        prepare_req.idx, req_cache.prepareCache().timestamp, prepare_req.block_hash);
     BOOST_CHECK(!req_cache.isExistSign(sign_req));
     BOOST_CHECK(!req_cache.isExistCommit(commit_req));
     BOOST_CHECK(req_cache.getSigCacheSize(sign_req.block_hash) == u256(0));
     BOOST_CHECK(req_cache.getCommitCacheSize(commit_req.block_hash) == u256(0));
+}
+
+BOOST_AUTO_TEST_CASE(testSigListSetting)
+{
+    size_t node_num = 3;
+    PBFTReqCache req_cache;
+    /// fake prepare req
+    KeyPair key_pair;
+    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    for (size_t i = 0; i < node_num; i++)
+    {
+        KeyPair key = KeyPair::create();
+        /// fake commit req from faked prepare req
+        CommitReq commit_req(prepare_req, key, prepare_req.idx);
+        req_cache.addCommitReq(commit_req);
+        BOOST_CHECK(req_cache.isExistCommit(commit_req));
+    }
+    BOOST_CHECK(req_cache.getCommitCacheSize(prepare_req.block_hash) == u256(node_num));
+    /// generateAndSetSigList
+    Block block;
+    bool ret = req_cache.generateAndSetSigList(block, u256(node_num));
+    BOOST_CHECK(ret == false);
+    /// add prepare
+    req_cache.addPrepareReq(prepare_req);
+    ret = req_cache.generateAndSetSigList(block, u256(node_num));
+    BOOST_CHECK(ret);
+    BOOST_CHECK(block.sigList().size() == node_num);
+    std::vector<std::pair<u256, Signature>> sig_list = block.sigList();
+    /// check the signature
+    for (auto item : sig_list)
+    {
+        auto p = dev::recover(item.second, prepare_req.block_hash);
+        BOOST_CHECK(!!p);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testCollectGarbage)
+{
+    PBFTReqCache req_cache;
+    PrepareReq req;
+    size_t invalidHeightNum = 2;
+    size_t invalidHash = 1;
+    size_t validNum = 3;
+    h256 invalid_hash = sha3("invalid_hash");
+    BlockHeader highest;
+    highest.setNumber(100);
+    /// test signcache
+    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.signCache(), highest, invalid_hash,
+        invalidHeightNum, invalidHash, validNum);
+    /// test commit cache
+    FakeInvalidSignReq<CommitReq>(req, req_cache, req_cache.commitCache(), highest, invalid_hash,
+        invalidHeightNum, invalidHash, validNum);
+    req_cache.collectGarbage(highest);
+    std::cout << "#### getSigCacheSize after collectGarbage:"
+              << req_cache.getSigCacheSize(req.block_hash) << std::endl;
+    BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == u256(validNum));
+    BOOST_CHECK(req_cache.getSigCacheSize(invalid_hash) == u256(0));
+
+    BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == u256(validNum));
+    BOOST_CHECK(req_cache.getCommitCacheSize(invalid_hash) == u256(0));
+    /// test delCache
+    req_cache.delCache(req.block_hash);
+    BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == u256(0));
+    BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == u256(0));
 }
 
 /// test ViewChange related functions
@@ -99,6 +158,47 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     req_cache.removeInvalidViewChange(u256(1), header);
     BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(1));
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req3));
+
+    ///
+    PrepareReq req;
+    BlockHeader highest;
+    highest.setNumber(100);
+    size_t invalidHeightNum = 2;
+    size_t invalidHash = 1;
+    size_t validNum = 3;
+    h256 invalid_hash = sha3("invalid_hash");
+    /// test signcache
+    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.signCache(), highest, invalid_hash,
+        invalidHeightNum, invalidHash, validNum);
+    /*
+    bool canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum, u256 const& toView,
+        dev::eth::BlockHeader const& highestBlock, int64_t const& consensusBlockNumber,
+        ViewChangeReq const& req);
+
+    inline void triggerViewChange(u256 const& curView)
+    {
+        m_rawPrepareCache.clear();
+        m_prepareCache.clear();
+        m_signCache.clear();
+        m_commitCache.clear();
+        removeInvalidViewChange(curView);
+    }*/
+
+    /*
+    inline void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
+    {
+        removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
+    }
+    inline void clearAll()
+    {
+        m_prepareCache.clear();
+        m_rawPrepareCache.clear();
+        m_signCache.clear();
+        m_recvViewChangeReq.clear();
+        m_commitCache.clear();
+    }
+    void addFuturePrepareCache(PrepareReq const& req);
+    void resetFuturePrepare() { m_futurePrepareCache = PrepareReq(); }*/
 }
 
 BOOST_AUTO_TEST_SUITE_END()
