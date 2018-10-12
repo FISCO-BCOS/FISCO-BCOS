@@ -70,13 +70,11 @@ target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
                                   ${Web3_WHISPER_LIBRARIES}
                                   JsonRpcCpp::Server
 				                  statistics
-                                  contract
-                                  curl
+								  contract
+								  channelserver
                                   ${OPENSSL_SSL_LIBRARIE}
-                                  ${OPENSSL_CRYPTO_LIBRARIE}
-                                  krb5
+								  ${OPENSSL_CRYPTO_LIBRARIE}
+								  ${MHD_LIBRARY}
                                   uuid
                                   z
-                                  dl
-                                  )
-target_link_libraries(web3jsonrpc channelserver)
+                                  dl)

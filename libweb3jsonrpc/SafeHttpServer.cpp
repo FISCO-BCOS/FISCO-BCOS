@@ -23,11 +23,9 @@
 #include <microhttpd.h>
 #include <sstream>
 #include "SafeHttpServer.h"
-#include "DfsFileServer.h"
 
 using namespace std;
 using namespace dev;
-using namespace dev::rpc::fs;
 /// structure copied from libjson-rpc-cpp httpserver version 0.6.0
 struct mhd_coninfo
 {
@@ -71,44 +69,13 @@ bool SafeHttpServer::SendOptionsResponse(void* _addInfo)
 }
 
 int SafeHttpServer::callback(void *cls, struct MHD_Connection *connection, const char *url, const char *method, const char *version, const char *upload_data, size_t *upload_data_size, void **con_cls) {
-	(void)version;
-	std::string account = "";
-	string strUrl(url);
-	string strMethod(method);
 
-	bool isFileProcess = DfsFileServer::getInstance()->filter(strUrl, strMethod) == 0;
-	//huanggaofeng: filter file process request
-	if (isFileProcess)
-	{
-		DfsHttpInfo objHttpInfo;
-		objHttpInfo.cls = cls;
-		objHttpInfo.connection = connection;
-		objHttpInfo.url = (char*)url;
-		objHttpInfo.method = (char*)method;
-		objHttpInfo.version = (char*)version;
-		objHttpInfo.upload_data = (char*)upload_data;
-		objHttpInfo.upload_data_size = upload_data_size;
-		objHttpInfo.ptr = con_cls;
-		int ret = DfsFileServer::getInstance()->handle(&objHttpInfo);
-		*upload_data_size = 0;
-		return ret;
-	}
 	return HttpServer::callback(cls, connection, url, method, version, upload_data, upload_data_size, con_cls);
 }
 
 bool SafeHttpServer::StartListening() {
-	if (!isRunning()) {
-		if (0 != DfsFileServer::getInstance()->init(m_DfsStoragePath, m_DfsNodeGroupId, m_DfsNodeId, m_eth))
-		{
-			LOG(INFO) << "init DfsFileServer failed !";
-			//return false;
-		}
-	}
 	return HttpServer::StartListening();
 }
 bool SafeHttpServer::StopListening() {
-	if (isRunning()) {
-		DfsFileServer::getInstance()->destory();
-	}
 	return HttpServer::StopListening();
 }
