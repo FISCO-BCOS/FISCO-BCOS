@@ -167,8 +167,7 @@ make
 
 ### 2.2 生成链证书
 
-FISCO-BCOS网络采用面向CA的准入机制，保障信息保密性、认证性、完整性、不可抵赖性。**FISCO-BCOS支持多级证书体系，可以是链、机构和节点的三级体系，也可以链和节点两级体系。**
-以链和节点两级证书体系为例，一条链拥有一个链证书及对应的链私钥，链私钥由链管理员拥有。并对每个参与该链的节点签发节点证书。节点证书是节点身份的凭证，并使用该证书与其他节点间建立SSL连接进行加密通讯。本章介绍手动搭建一个单节点的区块链网络，包括链证书、节点私钥、节点证书、配置文件的生成和配置。生成方法如下：
+FISCO-BCOS网络采用面向CA的准入机制，保障信息保密性、认证性、完整性、不可抵赖性。**FISCO-BCOS支持多级证书体系，可以是[链、机构和节点的三级体系](#76-三级证书配置)，也可以链和节点两级体系。**以链和节点两级证书体系为例，一条链拥有一个链证书及对应的链私钥，链私钥由链管理员拥有。并对每个参与该链的节点签发节点证书。节点证书是节点身份的凭证，并使用该证书与其他节点间建立SSL连接进行加密通讯。本章介绍手动搭建一个单节点的区块链网络，包括链证书、节点私钥、节点证书、配置文件的生成和配置。生成方法如下：
 
 ```bash
 # 切换到FISCO-BCOS/scripts目录下，创建nodes目录
@@ -181,30 +180,6 @@ bash chain.sh  #会提示输入相关证书信息，默认可以直接回车
 ```
 > FISCO-BCOS/scripts/nodes目录下将生成链证书相关文件，包括链证书ca.crt, 链私钥ca.key, 密钥参数server.param
 > **注意：ca.key 链私钥文件请妥善保存**
-
-	如果要使用1.3版本的三级证书，请使用文本编辑器，将三个文件：按
-	- node.crt
-	- agency.crt
-	- ca.crt
-	的顺序，合并成一个文件，作为node.crt使用
-	
-	合并前，单个crt文件内容：
-	
-		-----BEGIN CERTIFICATE-----
-		<crt文件内容>
-		-----END CERTIFICATE-----
-	
-	合并后，文件内容为：
-	
-		-----BEGIN CERTIFICATE-----
-		<node.crt文件内容>
-		-----END CERTIFICATE-----
-		-----BEGIN CERTIFICATE-----
-		<agency.crt文件内容>
-		-----END CERTIFICATE-----
-		-----BEGIN CERTIFICATE-----
-		<ca.crt文件内容>
-		-----END CERTIFICATE-----
 
 ### 2.3 生成节点密钥和证书
 
@@ -575,26 +550,25 @@ Connection closed by foreign host.
 
 ### 4.1 新加观察节点
 
-1. 请参考[第二章](#第二章-手工部署单节点区块链网络)操作准备`node-1`节点环境。**节点必须使用已有节点的链CA证书来签发节点证书**。
-1. 拷贝`node-0/config.conf,node-0/genesis.json,node-0/fisco-bcos`文件到`node-1/`
-1. 修改`node-1/config.conf`文件中监听的IP和端口
-1. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
-1. 验证节点是否已加入网络，参考[第三章](#第三章-使用控制台)中`status`和`p2p.list`。
+假设已有节点`node-0`，下面以添加`node-1`操作为例：
 
-下面以添加`node-1`操作为例：
-
-- 准备`node-1`节点环境
+1. 准备`node-1`节点环境
 
 ```bash
-# 假设当前在FISCO-BCOS/scripts目录下，已经按之前步骤建立了nodes/node-0，拷贝scripts/node.sh脚本到scripts/nodes目录下
+# 假设当前在FISCO-BCOS/scripts目录下，拷贝scripts/node.sh脚本到scripts/nodes目录下
+cp node.sh nodes/
 cd nodes
-# 生成node-1证书相关文件，node.sh同级目录下需要有ca.key和ca.crt
+# 生成node-1证书相关文件，nodes目录下需要有ca.key和ca.crt
 bash node.sh node-1
+```
+
+2. 拷贝`node-0/config.conf,node-0/genesis.json,node-0/fisco-bcos`文件到`node-1/`
+```bash
 # 拷贝node-0的配置文件
 cp node-0/* node-1/
 ```
 
-- 修改config.conf配置文件，主要修改了监听的端口，其他配置内容与`node-0/config.conf`相同。
+3. 修改`node-1/config.conf`文件中监听的IP和端口，添加[p2p].node.1，填入新节点P2P监听IP和端口。
 
 ```bash
 [rpc]
@@ -609,14 +583,13 @@ cp node-0/* node-1/
     node.1=127.0.0.1:30304
 ```
 
-- 启动节点node-1
+4. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
 ```bash
 cd node-1
 bash start.sh
 ```
 
-- 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
-- 验证节点是否已加入网络
+5. 验证节点是否已加入网络，参考[第三章](#第三章-使用控制台)中`status`和`p2p.list`。
 ```bash
 # 连接控制台
 telnet 127.0.0.1 30307
@@ -630,7 +603,6 @@ Peers number: 1
 Nodeid: d23a6bad...
 Ip: 0.0.0.0
 Port:30300
-Online: true
 ------------------------------------------------------------------------
 ```
 
@@ -638,32 +610,26 @@ Online: true
 
 在已经运行的网络中添加共识节点，参考以下步骤操作：
 1. 参考上一节[新加观察节点](#41-新加观察节点)，首先将新节点添加为观察节点
-1. 使用[控制台](#第三章-使用控制台)中`pbft.add`指令添加新节点的NodeID到网络中
-1. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)
-1. 验证节点是否是共识节点，参考[第三章](#第三章-使用控制台)中`pbft.list`。
-
-下面以将`node-1`为例操作（准备`node-1`环境以及做为观察节点加入网络不再赘述）：
+1. 使用[控制台](#第三章-使用控制台)中`pbft.add`指令添加新节点的NodeID到网络中，节点的`data/node.nodeid`文件中是节点的nodeID
 ```bash
-# 假设node-1已经按照上一节操作，作为观察节点加入了网络
-pbft.list
-========================================================================
-Consensus nodes number: 1
-------------------------------------
-Nodeid: da7ffab9...
-Ip: 0.0.0.0
-Port:30300
-Online: true
-------------------------------------
-------------------------------------------------------------------------
-```
-
-- 将`node-1`添加到共识节点列表
-```bash
+# 连接控制台 telnet IP console_port
+telnet 127.0.0.1 30303
+# 控制台中执行
 pbft.add 68af18b8665aa0737f0a435bee975d9667405ee96696c7fdeee4b2164eb51c859bffb37f54dcb1ff28aa51f45d28686605c025cb46f9f8d8a2e6c3597c55d0fe
 ========================================================================
 Tx(Add consensus node) send successfully!
 ------------------------------------------------------------------------
-# 查看共识节点列表
+```
+3. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)。
+```bash
+cd node-1
+bash start.sh
+```
+4. 验证节点是否是共识节点，参考[第三章](#第三章-使用控制台)中`pbft.list`。
+```bash
+# 连接控制台 telnet IP console_port
+telnet 127.0.0.1 30303
+# 控制台中执行pbft.list查看共识节点列表
 pbft.list
 ========================================================================
 Consensus nodes number: 2
@@ -964,10 +930,37 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | MAX_LOG_FILE_SIZE   | 最大日志文件大小                                 |
 | LOG_FLUSH_THRESHOLD | 超过多少条日志即可落盘                              |
 
+### 7.6 三级证书配置
 
-### 7.6 常见问题
+如果要使用1.3版本的三级证书，请使用文本编辑器，将三个文件：按
+	- node.crt
+	- agency.crt
+	- ca.crt
+的顺序，合并成一个文件，作为node.crt使用
 
-#### 7.6.1 脚本执行时，格式错误
+- 合并前，单个crt文件内容：
+```bash
+    -----BEGIN CERTIFICATE-----
+    <crt文件内容>
+    -----END CERTIFICATE-----
+```
+
+- 合并后，文件内容为：
+```bash
+-----BEGIN CERTIFICATE-----
+<node.crt文件内容>
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+<agency.crt文件内容>
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+<ca.crt文件内容>
+-----END CERTIFICATE-----
+```
+
+### 7.7 常见问题
+
+#### 7.7.1 脚本执行时，格式错误
 
 **现象**
 
@@ -989,21 +982,21 @@ sudo yum -y install dos2unix
 dos2unix xxxxx.sh
 ```
 
-#### 7.6.2 `build_chain.sh`执行报错
+#### 7.7.2 `build_chain.sh`执行报错
 
 ```bash
 # 报此错误是因为java环境问题，请使用OpenJDK-8以上版本
 EC KeyFactory not available
 ```
 
-#### 7.6.3 节点数据清空
+#### 7.7.3 节点数据清空
 
 - `levelDB`模式节点需要删除节点目录下`data`文件夹下的所有文件夹，注意`data`目录下的文件不能删除
 - `amop`模式节点需要删除节点目录下`data`文件夹下的所有文件夹，注意`data`目录下的文件不能删除，**除此之外还需要清空所使用的数据库中的所有数据**。
 
-#### 7.6.4 节点数据恢复
+#### 7.7.4 节点数据恢复
 
 如果节点启动时出现`DatabaseAlreadyOpen`错误，请按照以下步骤检查：
 1. 检查节点是否重复启动，如果该节点已经启动，请先停止已启动的节点
 1. 如果确认没有重复启动的节点，尝试在启动fisco-bcos时增加--rescue参数
-1. 如果仍有问题，按[7.6.3](#763-节点数据清空)的步骤，清理节点数据，再尝试重启
+1. 如果仍有问题，按[7.7.3](#763-节点数据清空)的步骤，清理节点数据，再尝试重启
