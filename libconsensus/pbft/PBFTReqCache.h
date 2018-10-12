@@ -177,11 +177,11 @@ public:
     }
     void resetFuturePrepare() { m_futurePrepareCache = PrepareReq(); }
     /// complemented functions for UTs
-    std::unordered_map<h256, std::unordered_map<std::string, SignReq>>& signCache()
+    std::unordered_map<h256, std::unordered_map<std::string, SignReq>>& mutableSignCache()
     {
         return m_signCache;
     }
-    std::unordered_map<h256, std::unordered_map<std::string, CommitReq>>& commitCache()
+    std::unordered_map<h256, std::unordered_map<std::string, CommitReq>>& mutableCommitCache()
     {
         return m_commitCache;
     }
