@@ -92,11 +92,11 @@ public:
         return genesis;
     }
 
-    static dev::h256 functionA(int64_t x) { return h256(); }
+    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
 
     static EnvInfo& createEnvInfo(u256 const gasUsed, u256 const gasLimit = u256(300000))
     {
-        static EnvInfo env_info(genBlockHeader(), functionA, gasUsed, gasLimit);
+        static EnvInfo env_info(genBlockHeader(), fakeCallBack, gasUsed, gasLimit);
         return env_info;
     }
 };
