@@ -82,13 +82,13 @@ bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& min
  * @return true: should trigger viewchange
  * @return false: can't trigger viewchange
  */
-bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum,
+bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNodeNum,
     u256 const& toView, dev::eth::BlockHeader const& highestBlock,
     int64_t const& consensusBlockNumber)
 {
     std::map<u256, u256> idx_view_map;
-    minView = u256(0);
-    int64_t min_height = 0;
+    minView = Invalid256;
+    int64_t min_height = INT64_MAX;
     for (auto viewChangeItem : m_recvViewChangeReq)
     {
         if (viewChangeItem.first > toView)
@@ -96,15 +96,15 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNod
             for (auto viewChangeEntry : viewChangeItem.second)
             {
                 auto it = idx_view_map.find(viewChangeEntry.first);
-
-                if ((it != idx_view_map.end() ||
+                if ((it == idx_view_map.end() ||
                         viewChangeItem.first > idx_view_map[viewChangeEntry.first]) &&
                     viewChangeEntry.second.height >= highestBlock.number())
                 {
-                    /// update to higher view
+                    /// update to lower view
                     idx_view_map[viewChangeEntry.first] = viewChangeItem.first;
                     if (minView > viewChangeItem.first)
                         minView = viewChangeItem.first;
+                    /// update to lower height
                     if (min_height > viewChangeEntry.second.height)
                         min_height = viewChangeEntry.second.height;
                 }
@@ -114,7 +114,7 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNod
     u256 count = u256(idx_view_map.size());
     bool flag =
         (min_height == consensusBlockNumber) && (min_height == m_committedPrepareCache.height);
-    return (count > minInvalidNodeNum) && !flag;
+    return (count > maxInvalidNodeNum) && !flag;
 }
 
 /**
