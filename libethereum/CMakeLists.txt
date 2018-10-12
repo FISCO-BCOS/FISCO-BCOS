@@ -13,10 +13,10 @@ find_package(Eth)
 target_include_directories(ethereum PRIVATE ..)
 target_include_directories(ethereum PRIVATE ../utils)
 					
-target_link_libraries(ethereum ${Eth_ETHCORE_LIBRARIES})
-target_link_libraries(ethereum ${Eth_EVM_LIBRARIES})
-target_link_libraries(ethereum ${Eth_DISKENCRYPTION_LIBRARIES})
-target_link_libraries(ethereum UTXO)
+target_link_libraries(ethereum ${Eth_ETHCORE_LIBRARIES}
+							   ${Eth_EVM_LIBRARIES}
+							   ${Eth_DISKENCRYPTION_LIBRARIES}
+							   UTXO)
 
 if (NOT EMSCRIPTEN)
 	target_link_libraries(ethereum ${Dev_P2P_LIBRARIES})
