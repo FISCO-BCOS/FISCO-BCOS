@@ -54,6 +54,7 @@ include(ProjectCryptopp)
 include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
 include(ProjectSecp256k1)
+include(ProjectMHD)
 
 if (GROUPSIG)
     include(ProjectGroupSig)
@@ -63,7 +64,7 @@ if (ZKG_VERIFY)
 include(ProjectLibZkg)
 endif()
 
-configure_project(CPUID CURL EVMJIT FATDB ROCKSDB PARANOID VMTRACE)
+configure_project(CPUID EVMJIT FATDB ROCKSDB PARANOID VMTRACE)
 
 add_subdirectory(eth)
 add_subdirectory(libdevcore)

@@ -25,7 +25,6 @@
 #include "libstatistics/RateLimitHttpServer.h"
 #include <libethereum/Client.h>
 #include <libdevcore/easylog.h>
-#include "dfs/DfsFileServer.h"
 
 namespace dev
 {
@@ -58,7 +57,6 @@ public:
         return SafeHttpServer::callback;
     }
 	virtual pCompletedCallbak getCompletedCallback() {
-        return dev::rpc::fs::DfsFileServer::request_completed;
     }
 private:
 	std::string m_allowedOrigin;

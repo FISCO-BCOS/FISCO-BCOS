@@ -155,8 +155,8 @@ ExternalProject_Add(cryptopp
         -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
         -DBUILD_SHARED=Off
         -DBUILD_TESTING=Off
-        -DCMAKE_C_FLAGS=-Wa,-march=generic64
-        -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
+        #-DCMAKE_C_FLAGS=-Wa,-march=generic64
+        #-DCMAKE_CXX_FLAGS=-Wa,-march=generic64
         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     LOG_CONFIGURE 1
