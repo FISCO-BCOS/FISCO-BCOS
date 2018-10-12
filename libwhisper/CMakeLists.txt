@@ -23,8 +23,6 @@ include_directories(../libodbc/include
 					../libodbc/include/ss_linux
 					../libodbc/include/sybase)
 
-					
-
 target_link_libraries(whisper Boost::Regex)
 target_link_libraries(whisper ${Dev_DEVCORE_LIBRARIES})
 target_link_libraries(whisper ${Dev_DEVCRYPTO_LIBRARIES})
