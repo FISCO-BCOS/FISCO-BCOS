@@ -115,7 +115,7 @@ public:
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
     bool isSealed() const { return !m_currentBytes.empty(); }
-    size_t getTransactionSize() { return m_transactions.size(); }
+    size_t getTransactionSize() const { return m_transactions.size(); }
 
     /// get transactionRoot
     h256 const getTransactionRoot()
@@ -135,6 +135,10 @@ public:
         m_txsMapCache.clear();
         m_txsRoot.clear();
     }
+
+    void appendTransactionReceipt(TransactionReceipt const& _tran) { m_receipts.push_back(_tran); }
+
+    TransactionReceipts& getTransactionReceipts() { return m_receipts; }
 
 private:
     /// encode function
@@ -165,8 +169,11 @@ private:
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     bytes m_txsCache;
+    /// mutable RecursiveMutex m_txsCacheLock;
+    TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
     BytesMap m_txsMapCache;
     h256 m_txsRoot;
+
 };
 }  // namespace eth
 }  // namespace dev

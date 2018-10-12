@@ -109,7 +109,7 @@ private:
 
 BOOST_FIXTURE_TEST_SUITE(ExecuteVMTest, ExecuteVMTestFixture)
 
-BOOST_AUTO_TEST_CASE(DeployContractTest)
+BOOST_AUTO_TEST_CASE(DeployGetSetContractTest)
 {
     /*
     pragma solidity ^0.4.2;
@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(DeployContractTest)
                "c9937238f291c672adeb0d0029") +
         string(""));
 
-    Transaction tx(value, gasPrice, gas, code);
+    Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
     tx.forceSender(caller);
     executeTransaction(tx);
 
@@ -160,6 +160,34 @@ BOOST_AUTO_TEST_CASE(DeployContractTest)
         "a165627a7a7230582093ef3ef61e120625973ff74daef914bf89008283e9c9937238f291c672adeb0d0029");
 
     BOOST_CHECK(runtimeCode == createdCode);
+
+    // set()
+    bytes callDataToSet =
+        fromHex(string("0x60fe47b1") +  // set(0xaa)
+                string("00000000000000000000000000000000000000000000000000000000000000aa"));
+    Transaction setTx(value, gasPrice, gas, newAddress, callDataToSet);  // Use message call
+                                                                         // constructor
+    setTx.forceSender(caller);
+
+    ExecutionResult setExeRes;
+    m_e.setResultRecipient(setExeRes);
+    executeTransaction(setTx);
+
+    // get()
+    bytes callDataToGet = fromHex(string("6d4ce63c") +  // get()
+                                  string(""));
+
+    Transaction getTx(value, gasPrice, gas, newAddress, callDataToGet);  // Use message call
+                                                                         // constructor
+    getTx.forceSender(caller);
+
+    ExecutionResult getExeRes;
+    m_e.setResultRecipient(getExeRes);
+    executeTransaction(getTx);
+
+    bytes compareName = fromHex("00000000000000000000000000000000000000000000000000000000000000aa");
+    cout << "get() result: " << toHex(getExeRes.output) << endl;
+    BOOST_CHECK(getExeRes.output == compareName);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

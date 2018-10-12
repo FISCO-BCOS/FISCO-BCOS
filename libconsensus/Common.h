@@ -21,167 +21,40 @@
  * @date: 2018-09-21
  */
 #pragma once
+#include <libblockverifier/BlockVerifierInterface.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/RLP.h>
-#include <libdevcore/SHA3.h>
 #include <libdevcore/easylog.h>
-#include <libdevcrypto/Common.h>
-#include <libethcore/Exceptions.h>
+#include <libethcore/Block.h>
 namespace dev
 {
 namespace consensus
 {
+DEV_SIMPLE_EXCEPTION(DisabledFutureTime);
+DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
+DEV_SIMPLE_EXCEPTION(ExistedBlock);
+DEV_SIMPLE_EXCEPTION(ParentNoneExist);
+DEV_SIMPLE_EXCEPTION(BlockMinerListWrong);
+
 enum NodeAccountType
 {
     ObserverAccount = 0,
     MinerAccount
 };
+
 struct ConsensusStatus
 {
     std::string consensusEngine;
     dev::h512s minerList;
 };
 
-// for pbft
-enum PBFTPacketType : byte
+struct Sealing
 {
-    PrepareReqPacket = 0x00,
-    SignReqPacket = 0x01,
-    CommitReqPacket = 0x02,
-    ViewChangeReqPacket = 0x03,
-    PBFTPacketCount
-};
-struct PBFTMsgPacket
-{
-    u256 node_idx;
-    h512 node_id;
-    unsigned packet_id;
-    bytes data;  // rlp data
-    u256 timestamp;
-
-    PBFTMsgPacket() : node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(utcTime()) {}
-    PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data)
-      : node_idx(_idx), node_id(_id), packet_id(_pid), data(_data.toBytes()), timestamp(utcTime())
-    {}
+    dev::eth::Block block;
+    /// hash set for filter fetched transactions
+    h256Hash m_transactionSet;
+    dev::blockverifier::ExecutiveContext::Ptr p_execContext;
 };
 
-// for pbft
-struct PBFTMsg
-{
-    u256 height = Invalid256;
-    u256 view = Invalid256;
-    u256 idx = Invalid256;
-    u256 timestamp = Invalid256;
-    h256 block_hash;
-    Signature sig;   // signature of block_hash
-    Signature sig2;  // other fileds' signature
-
-    virtual void encode(bytes& encodedBytes) const
-    {
-        RLPStream tmp;
-        streamRLPFields(tmp);
-        RLPStream list_rlp;
-        list_rlp.appendList(1).append(tmp.out());
-        list_rlp.swapOut(encodedBytes);
-    }
-
-    virtual void decode(std::string& data, size_t const& index = 0)
-    {
-        RLP rlp(data);
-        populate(rlp[index]);
-    }
-
-    void streamRLPFields(RLPStream& _s) const
-    {
-        _s << height << view << idx << timestamp << block_hash << sig.asBytes() << sig2.asBytes();
-    }
-
-    void populate(RLP const& _rlp)
-    {
-        int field = 0;
-        try
-        {
-            height = _rlp[field = 0].toInt<u256>();
-            view = _rlp[field = 1].toInt<u256>();
-            idx = _rlp[field = 2].toInt<u256>();
-            timestamp = _rlp[field = 3].toInt<u256>();
-            block_hash = _rlp[field = 4].toHash<h256>(RLP::VeryStrict);
-            sig = dev::Signature(_rlp[field = 5].toBytesConstRef());
-            sig2 = dev::Signature(_rlp[field = 6].toBytesConstRef());
-        }
-        catch (Exception const& _e)
-        {
-            _e << dev::eth::errinfo_name("invalid msg format")
-               << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
-            throw;
-        }
-    }
-
-    void clear()
-    {
-        height = Invalid256;
-        view = Invalid256;
-        idx = Invalid256;
-        timestamp = Invalid256;
-        block_hash = h256();
-        sig = Signature();
-        sig2 = Signature();
-    }
-
-    h256 fieldsWithoutBlock() const
-    {
-        RLPStream ts;
-        ts << height << view << idx << timestamp;
-        return dev::sha3(ts.out());
-    }
-};
-
-struct PrepareReq : public PBFTMsg
-{
-    bytes block;
-    virtual void encode(bytes& encodedBytes) const
-    {
-        RLPStream s;
-        streamRLPFields(s);
-        s.swapOut(encodedBytes);
-    }
-    virtual void decode(bytesConstRef data)
-    {
-        RLP rlp(data);
-        populate(rlp);
-    }
-
-    void streamRLPFields(RLPStream& _s) const
-    {
-        PBFTMsg::streamRLPFields(_s);
-        _s << block;
-    }
-
-    void populate(RLP const& _rlp)
-    {
-        PBFTMsg::populate(_rlp);
-        int field = 0;
-        try
-        {
-            block = _rlp[field = 7].toBytes();
-        }
-        catch (Exception const& _e)
-        {
-            _e << dev::eth::errinfo_name("invalid msg format")
-               << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
-            throw;
-        }
-    }
-};
-
-struct SignReq : public PBFTMsg
-{
-};
-struct CommitReq : public PBFTMsg
-{
-};
-struct ViewChangeReq : public PBFTMsg
-{
-};
 }  // namespace consensus
 }  // namespace dev

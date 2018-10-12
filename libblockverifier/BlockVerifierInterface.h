@@ -14,42 +14,42 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file storage.h
- *  @author ancelmo
+/** @file BlockVerifierInterface.h
+ *  @author mingzhenliu
  *  @date 20180921
  */
 #pragma once
 
-#include "Table.h"
-
+#include "ExecutiveContext.h"
+#include "Precompiled.h"
+#include <libdevcore/FixedHash.h>
+#include <libdevcore/easylog.h>
+#include <libdevcrypto/Common.h>
+#include <libethcore/Block.h>
+#include <libethcore/Transaction.h>
+#include <libevm/ExtVMFace.h>
+#include <libmptstate/State.h>
+#include <memory>
 namespace dev
 {
-namespace storage
+namespace eth
 {
-class TableData
+class PrecompiledContract;
+
+}  // namespace eth
+namespace blockverifier
 {
-public:
-    typedef std::shared_ptr<TableData> Ptr;
-
-    std::string tableName;
-    std::map<std::string, Entries::Ptr> data;
-};
-
-class Storage : public std::enable_shared_from_this<Storage>
+class BlockVerifierInterface
 {
 public:
-    typedef std::shared_ptr<Storage> Ptr;
+    BlockVerifierInterface(){};
 
-    virtual ~Storage(){};
+    virtual ~BlockVerifierInterface(){};
 
-    virtual TableInfo::Ptr info(const std::string& table) = 0;
-    virtual Entries::Ptr select(
-        h256 hash, int num, const std::string& table, const std::string& key) = 0;
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash) = 0;
-    virtual bool onlyDirty() = 0;
+    virtual ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, int stateType,
+        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract) = 0;
 };
 
-}  // namespace storage
+}  // namespace blockverifier
 
 }  // namespace dev
