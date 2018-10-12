@@ -118,8 +118,8 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     Transactions top_transactions = pool_test.m_txPool->topTransactions(20);
     BOOST_CHECK(top_transactions.size() == pool_test.m_txPool->pendingSize());
     h256Hash avoid;
-    for (size_t i = 0; i < pending_list.size(); i++)
-        avoid.insert(pending_list[i].sha3());
+    for (size_t i = 0; i < pool_test.m_txPool->pendingList().size(); i++)
+        avoid.insert(pool_test.m_txPool->pendingList()[i].sha3());
     top_transactions = pool_test.m_txPool->topTransactions(20, avoid);
     BOOST_CHECK(top_transactions.size() == 0);
     /// check getProtocol id
