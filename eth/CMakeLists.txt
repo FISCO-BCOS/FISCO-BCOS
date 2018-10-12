@@ -29,7 +29,7 @@ if (EVMJIT)
 endif()
 
 if (UNIX AND NOT APPLE)
-	target_link_libraries(fisco-bcos pthread)
+	target_link_libraries(fisco-bcos)
 endif()
 
 install(TARGETS fisco-bcos DESTINATION bin)
