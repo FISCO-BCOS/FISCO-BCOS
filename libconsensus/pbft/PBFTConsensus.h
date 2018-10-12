@@ -189,7 +189,7 @@ protected:
     /// broadcast view change message
     bool shouldBroadcastViewChange();
     void broadcastViewChangeReq();
-
+    /// handler called when receiving data from the network
     void onRecvPBFTMessage(
         P2PException exception, std::shared_ptr<Session> session, Message::Ptr message);
 
@@ -245,10 +245,11 @@ protected:
         bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
     {
         Message::Ptr message = std::make_shared<Message>();
-        std::shared_ptr<dev::bytes> p_data;
+        std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
         packet.packet_id = packetType;
+
         packet.encode(*p_data);
         message->setBuffer(p_data);
         message->setProtocolID(protocolId);
@@ -260,10 +261,32 @@ protected:
         return transDataToMessage(data, packetType, m_protocolId);
     }
 
-    inline bool isValidReq(Message::Ptr message, std::shared_ptr<Session> session)
+    /**
+     * @brief : the message received from the network is valid or not?
+     *      invalid cases: 1. received data is empty
+     *                     2. the message is not sended by miners
+     *                     3. the message is not receivied by miners
+     *                     4. the message is sended by the node-self
+     * @param message : message constructed from data received from the network
+     * @param session : the session related to the network data(can get informations about the
+     * sender)
+     * @return true : the network-received message is valid
+     * @return false: the network-received message is invalid
+     */
+    inline bool isValidReq(
+        Message::Ptr message, std::shared_ptr<Session> session, ssize_t& peerIndex)
     {
+        /// check message size
         if (message->buffer()->size() <= 0)
             return false;
+        /// check whether in the miner list
+        peerIndex = getIndexByMiner(session->id());
+        if (peerIndex < 0)
+        {
+            LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << session->id();
+            return false;
+        }
+        /// check whether this node is in the miner list
         h512 node_id;
         bool is_miner = getNodeIDByIndex(node_id, m_idx);
         if (!is_miner || session->id() == node_id)
@@ -271,26 +294,39 @@ protected:
         return true;
     }
 
-    /// translate network-recevied packets to requests
+    /**
+     * @brief: decode the network-received message to corresponding message(PBFTMsgPacket)
+     *
+     * @tparam T: the type of corresponding message
+     * @param req : constructed object from network-received message
+     * @param message : network-received(received from service of p2p module)
+     * @param session : session related with the received-message(can obtain information of
+     * sender-peer)
+     * @return true : decode succeed
+     * @return false : decode failed
+     */
     template <class T>
     inline bool decodeToRequests(T& req, Message::Ptr message, std::shared_ptr<Session> session)
     {
-        bool valid = isValidReq(message, session);
+        ssize_t peer_index = 0;
+        bool valid = isValidReq(message, session, peer_index);
         if (valid)
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
-            /// get index
-            ssize_t index = getIndexByMiner(session->id());
-            if (index < 0)
-            {
-                LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << session->id();
-                return false;
-            }
-            req.setOtherField(u256(index), session->id());
+            if (valid)
+                req.setOtherField(u256(peer_index), session->id());
         }
         return valid;
     }
 
+    /**
+     * @brief : decode the given data to object
+     * @tparam T : type of the object obtained from the given data
+     * @param req : the object obtained from the given data
+     * @param data : data need to be decoded into object
+     * @return true : decode succeed
+     * @return false : decode failed
+     */
     template <class T>
     inline bool decodeToRequests(T& req, bytesConstRef data)
     {

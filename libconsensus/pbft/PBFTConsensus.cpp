@@ -464,6 +464,16 @@ bool PBFTConsensus::needOmit(Sealing const& sealing)
     return false;
 }
 
+/**
+ * @brief: this function is called when receive-given-protocol related message from the network
+ *        1. check the validation of the network-received data(include the account type of the
+ * sender and receiver)
+ *        2. decode the data into PBFTMsgPacket
+ *        3. push the message into message queue to handler later by workLoop
+ * @param exception: exceptions related to the received-message
+ * @param session: the session related to the network data(can get informations about the sender)
+ * @param message: message constructed from data received from the network
+ */
 void PBFTConsensus::onRecvPBFTMessage(
     P2PException exception, std::shared_ptr<Session> session, Message::Ptr message)
 {
