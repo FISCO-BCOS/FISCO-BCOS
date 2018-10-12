@@ -117,11 +117,11 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     BlockHeader highest;
     highest.setNumber(100);
     /// test signcache
-    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.signCache(), highest, invalid_hash,
+    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     /// test commit cache
-    FakeInvalidSignReq<CommitReq>(req, req_cache, req_cache.commitCache(), highest, invalid_hash,
-        invalidHeightNum, invalidHash, validNum);
+    FakeInvalidSignReq<CommitReq>(req, req_cache, req_cache.mutableCommitCache(), highest,
+        invalid_hash, invalidHeightNum, invalidHash, validNum);
     req_cache.collectGarbage(highest);
     std::cout << "#### getSigCacheSize after collectGarbage:"
               << req_cache.getSigCacheSize(req.block_hash) << std::endl;
@@ -227,13 +227,13 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     size_t validNum = 3;
     h256 invalid_hash = sha3("invalid_hash");
     /// fake signCache and commitCache
-    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.signCache(), highest, invalid_hash,
+    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     /// trigger viewChange
     req_cache.triggerViewChange(u256(0));
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req3));
-    BOOST_CHECK(req_cache.signCache().size() == 0);
-    BOOST_CHECK(req_cache.commitCache().size() == 0);
+    BOOST_CHECK(req_cache.mutableSignCache().size() == 0);
+    BOOST_CHECK(req_cache.mutableCommitCache().size() == 0);
     checkPBFTMsg(req_cache.rawPrepareCache());
     checkPBFTMsg(req_cache.prepareCache());
 
