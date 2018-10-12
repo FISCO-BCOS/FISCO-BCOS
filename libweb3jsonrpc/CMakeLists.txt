@@ -75,6 +75,4 @@ target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
                                   ${OPENSSL_SSL_LIBRARIE}
 								  ${OPENSSL_CRYPTO_LIBRARIE}
 								  ${MHD_LIBRARY}
-                                  uuid
-                                  z
                                   dl)

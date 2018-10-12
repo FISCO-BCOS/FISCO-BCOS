@@ -158,8 +158,7 @@ Linux)
                 libgmp-dev \
                 libleveldb-dev \
                 libmicrohttpd-dev \
-                libminiupnpc-dev \
-                uuid-dev
+                libminiupnpc-dev 
             ;;
 
         Fedora)
@@ -205,7 +204,6 @@ Linux)
                 libleveldb-dev \
                 libmicrohttpd-dev \
                 libminiupnpc-dev \
-                uuid-dev \
                 $LLVM_PACKAGES
             ;;
 
