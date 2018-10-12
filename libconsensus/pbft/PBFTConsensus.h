@@ -161,7 +161,6 @@ public:
     {
         return m_timeManager.m_intervalBlockTime;
     }
-
     void start() override;
 
 protected:

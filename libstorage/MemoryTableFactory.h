@@ -51,12 +51,18 @@ public:
     Address getTable(const std::string& tableName);
     void insertTable(const std::string& _tableName, const Address& _address);
     h256 hash(std::shared_ptr<blockverifier::ExecutiveContext> context);
+    size_t savepoint() const { return m_changeLog.size(); };
+    void rollback(size_t _savepoint);
+    void commit();
+    void commitDB(std::shared_ptr<blockverifier::ExecutiveContext> context, bool commit);
 
 private:
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
     std::map<std::string, Address> m_name2Table;
+    std::vector<Change> m_changeLog;
+    h256 m_hash;
 };
 
 }  // namespace storage

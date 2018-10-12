@@ -29,6 +29,7 @@
 
 #include "Common.h"
 #include "Table.h"
+#include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
 #include <map>
 
@@ -50,7 +51,7 @@ std::string Entry::getField(const std::string& key) const
     }
     else
     {
-        throw StorageException(-1, "can‘t find key: " + key);
+        LOG(ERROR) << "Entry: " << this << " can't find key: " + key;
     }
 
     return "";
@@ -136,6 +137,11 @@ void Entries::addEntry(Entry::Ptr entry)
 {
     m_entries.push_back(entry);
     m_dirty = true;
+}
+
+void Entries::removeEntry(size_t index)
+{
+    m_entries.erase(m_entries.begin() + index);
 }
 
 bool Entries::dirty() const
