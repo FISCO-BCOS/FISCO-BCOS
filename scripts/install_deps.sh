@@ -199,6 +199,7 @@ Linux)
             $SUDO apt-get install -qy --no-install-recommends --allow-unauthenticated \
                 build-essential \
                 libboost-all-dev \
+                libsnappy-dev \
                 libcurl4-openssl-dev \
                 libgmp-dev \
                 libleveldb-dev \
