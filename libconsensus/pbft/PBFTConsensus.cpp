@@ -281,7 +281,11 @@ void PBFTConsensus::broadcastPrepareReq(Block& block)
     broadcastMsg(PrepareReqPacket, prepare_req.block_hash.hex(), ref(prepare_req_data));
     m_reqCache->addRawPrepare(prepare_req);
 }
-
+/**
+ * @brief : 1. generate and broadcast signReq according to given prepareReq,
+ *          2. add the generated signReq into the cache
+ * @param req: specified PrepareReq used to generate signReq
+ */
 void PBFTConsensus::broadcastSignReq(PrepareReq const& req)
 {
     SignReq sign_req(req, m_keyPair, m_idx);
@@ -500,10 +504,10 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepareReq, bool self)
     std::ostringstream oss;
     oss << "handlePrepareMsg: idx=" << prepareReq.idx << ",view=" << prepareReq.view
         << ",blk=" << prepareReq.height << ",hash=" << prepareReq.block_hash.abridged();
-
+    /// check the prepare request is valid or not
     if (!isValidPrepare(prepareReq, self, oss))
         return;
-    /// add block into prepare request
+    /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
     Sealing workingSealing;
     try
@@ -518,7 +522,7 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepareReq, bool self)
     /// whether to omit empty block
     if (needOmit(workingSealing))
         return;
-
+    /// generate prepare request with signature of this node to broadcast
     h256 origin_blockHash = prepareReq.block_hash;
     prepareReq.updatePrepareReq(workingSealing, m_keyPair);
     m_reqCache->addPrepareReq(prepareReq);
@@ -556,6 +560,7 @@ void PBFTConsensus::checkAndCommit()
     }
 }
 
+///
 void PBFTConsensus::checkAndSave()
 {
     u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);

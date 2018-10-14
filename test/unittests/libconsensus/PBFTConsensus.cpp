@@ -183,6 +183,40 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
                     peer3_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
     compareAsyncSendTime(fake_pbft, peer3_keyPair.pub(), 0);
 }
+
+/// test broadcastSignReq
+BOOST_AUTO_TEST_CASE(testBroadcastSignReq)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    KeyPair key_pair;
+    KeyPair peer_keyPair = KeyPair::create();
+    /// fake prepare_req
+    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    /// obtain sig of SignReq
+    SignReq tmp_req(prepare_req, fake_pbft.consensus()->keyPair(), prepare_req.idx);
+    std::string signReq_key = tmp_req.sig.hex();
+    /// append session info
+    appendSessionInfo(fake_pbft, peer_keyPair.pub());
+    /// case1: the peer node is not miner
+    fake_pbft.consensus()->broadcastSignReq(prepare_req);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), SignReqPacket, signReq_key) == false);
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
+    /// check cache
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(tmp_req));
+    /// case2: the the peer node is a miner
+    fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    FakePBFTMiner(fake_pbft);
+    fake_pbft.consensus()->broadcastSignReq(prepare_req);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), SignReqPacket, signReq_key) == true);
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(tmp_req));
+}
+/// test checkAndSave
+BOOST_AUTO_TEST_CASE(testCheckAndSave) {}
+/// test checkAndCommit
+BOOST_AUTO_TEST_CASE(testCheckAndCommit) {}
 /// test handlePrepareMsg
 BOOST_AUTO_TEST_CASE(testHandlePrepareMsg) {}
 BOOST_AUTO_TEST_SUITE_END()

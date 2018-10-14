@@ -184,9 +184,12 @@ protected:
     uint64_t calculateMaxPackTxNum() override;
     /// broadcast prepare message
     void broadcastPrepareReq(dev::eth::Block& block);
-    /// broadcast sign message
+
+    /// 1. generate and broadcast signReq according to given prepareReq
+    /// 2. add the generated signReq into the cache
     void broadcastSignReq(PrepareReq const& req);
     void broadcastSignedReq();
+
     /// broadcast commit message
     void broadcastCommitReq(PrepareReq const& req);
     /// broadcast view change message

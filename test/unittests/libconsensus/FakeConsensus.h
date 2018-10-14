@@ -99,6 +99,7 @@ public:
         return PBFTConsensus::broadcastFilter(nodeId, packetType, key);
     }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
+    void broadcastSignReq(PrepareReq const& req) { return PBFTConsensus::broadcastSignReq(req); }
 };
 
 template <typename T>
