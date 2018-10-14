@@ -73,16 +73,12 @@ target_include_directories(web3jsonrpc PUBLIC ${MHD_INCLUDE_DIR})
 #                                  ${OPENSSL_SSL_LIBRARIE}
 #                                  ${OPENSSL_CRYPTO_LIBRARIE}
 #                                  ${MHD_LIBRARY}
-#                                  uuid
-#                                  z
 #                                  dl
 #                                  )
 
 target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES})
-target_link_libraries(web3jsonrpc statistics)
 target_link_libraries(web3jsonrpc contract)
 target_link_libraries(web3jsonrpc channelserver)
 target_link_libraries(web3jsonrpc JsonRpcCpp::Server)
-target_link_libraries(web3jsonrpc uuid)
 target_link_libraries(web3jsonrpc ${MHD_LIBRARY})
-target_link_libraries(web3jsonrpc pthread)
+target_link_libraries(web3jsonrpc statistics)

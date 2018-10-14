@@ -610,7 +610,7 @@ Port:30300
 
 在已经运行的网络中添加共识节点，参考以下步骤操作：
 1. 参考上一节[新加观察节点](#41-新加观察节点)，首先将新节点添加为观察节点
-1. 使用[控制台](#第三章-使用控制台)中`pbft.add`指令添加新节点的NodeID到网络中，节点的`data/node.nodeid`文件中是节点的nodeID
+1. 使用[控制台](#第三章-使用控制台)中`pbft.add`指令添加新节点的NodeID到网络中，节点的`data/node.nodeid`文件中是节点的nodeID。
 ```bash
 # 连接控制台 telnet IP console_port
 telnet 127.0.0.1 30303
@@ -620,7 +620,7 @@ pbft.add 68af18b8665aa0737f0a435bee975d9667405ee96696c7fdeee4b2164eb51c859bffb37
 Tx(Add consensus node) send successfully!
 ------------------------------------------------------------------------
 ```
-3. 启动新节点，检查节点的运行状态，参考[2.7 验证节点启动](#27-验证节点启动)。
+3. 启动新节点。
 ```bash
 cd node-1
 bash start.sh

@@ -26,15 +26,11 @@ target_link_libraries(fisco-bcos
 	storage
 	initializer
 	abi
-	snappy
-	crypto
-	pthread
-	dl
 )
 
 #if(BUILD_BOOST)
 #target_include_directories(fisco-bcos PRIVATE ${BOOST_INCLUDE_DIR})
-#target_link_libraries(fisco-bcos Boost::Filesystem Boost::Random Boost::Thread ${MHD_LIBRARY} ssl crypto leveldb snappy idn tasn1 nettle hogweed gmp z dl pthread)
+#target_link_libraries(fisco-bcos Boost::Filesystem Boost::Random Boost::Thread ${MHD_LIBRARY} ssl crypto idn tasn1 nettle hogweed gmp z dl)
 #else()
 #find_package(Boost COMPONENTS system filesystem random thread regex REQUIRED)
 #target_link_libraries(fisco-bcos ${Boost_LIBRARIES})
