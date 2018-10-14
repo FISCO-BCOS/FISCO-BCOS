@@ -39,6 +39,7 @@ void Consensus::start()
         LOG(WARNING) << "Consensus module has already been started, return directly";
         return;
     }
+    resetSealingBlock();
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     reportBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
@@ -97,22 +98,28 @@ void Consensus::loadTransactions(uint64_t const& transToFetch)
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
 
-void Consensus::ResetSealingHeader()
+void Consensus::resetSealingHeader(BlockHeader& header)
 {
     /// import block
     resetCurrentTime();
-    m_sealing.block.header().setSealerList(minerList());
-    m_sealing.block.header().setSealer(nodeIdx());
-    m_sealing.block.header().setLogBloom(LogBloom());
-    m_sealing.block.header().setGasUsed(u256(0));
-    m_sealing.block.header().setExtraData(m_extraData);
+    header.setSealerList(minerList());
+    header.setSealer(nodeIdx());
+    header.setLogBloom(LogBloom());
+    header.setGasUsed(u256(0));
+    header.setExtraData(m_extraData);
 }
 
-void Consensus::ResetSealingBlock()
+void Consensus::resetSealingBlock(Sealing& sealing)
 {
-    m_sealing.block.resetCurrentBlock();
-    ResetSealingHeader();
-    m_sealing.m_transactionSet.clear();
+    resetBlock(sealing.block);
+    sealing.m_transactionSet.clear();
+    sealing.p_execContext = nullptr;
+}
+
+void Consensus::resetBlock(Block& block)
+{
+    block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+    resetSealingHeader(block.header());
 }
 
 void Consensus::appendSealingExtraData(bytes const& _extra)

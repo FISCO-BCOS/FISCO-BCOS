@@ -208,6 +208,8 @@ protected:
     void handleMsg(PBFTMsgPacket const& pbftMsg);
     void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
+
+    /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     void checkAndSave();
     void checkAndChangeView();
 
@@ -215,14 +217,17 @@ protected:
     {
         bool ret = (m_sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock);
         if (ret)
-            m_sealing.block.resetCurrentBlock();
+            resetSealingBlock();
         return ret;
     }
+
+    /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
-    void resetConfig();
+    /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
+    void resetConfig() override;
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
     void backupMsg(std::string const& _key, PBFTMsg const& _msg);
@@ -465,10 +470,8 @@ protected:
     void checkMinerList(dev::eth::Block const& block);
     bool execBlock();
     void execBlock(Sealing& sealing, PrepareReq& req, std::ostringstream& oss);
-    u256 minValidNodes() const { return m_nodeNum - m_f; }
     void setBlock();
     void changeViewForEmptyBlock();
-
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
         return boost::filesystem::space(path).available > 1024;
@@ -479,11 +482,6 @@ protected:
     u256 m_toView = u256(0);
     KeyPair m_keyPair;
     std::string m_baseDir;
-    /// total number of nodes
-    u256 m_nodeNum = u256(0);
-    /// at-least number of valid nodes
-    u256 m_f = u256(0);
-
     bool m_cfgErr = false;
     bool m_leaderFailed = false;
     // the block which is waiting consensus

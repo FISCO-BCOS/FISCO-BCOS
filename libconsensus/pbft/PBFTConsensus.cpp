@@ -54,6 +54,7 @@ void PBFTConsensus::initPBFTEnv(unsigned view_timeout)
     LOG(INFO) << "PBFT initEnv success";
 }
 
+/// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
 void PBFTConsensus::resetConfig()
 {
     m_idx = u256(-1);
@@ -69,9 +70,7 @@ void PBFTConsensus::resetConfig()
     auto node_num = m_minerList.size();
     m_nodeNum = u256(node_num);
     m_f = (m_nodeNum - u256(1)) / u256(3);
-    m_cfgErr = (m_idx < u256(0));
-    /// clear caches
-    m_reqCache->clearAll();
+    m_cfgErr = (m_idx == u256(-1));
     LOG(INFO) << "resetConfig: m_node_idx=" << m_idx.convert_to<ssize_t>()
               << ", m_nodeNum =" << m_nodeNum;
 }
@@ -157,7 +156,7 @@ bool PBFTConsensus::execBlock()
 
 void PBFTConsensus::setBlock()
 {
-    ResetSealingBlock();
+    resetSealingBlock();
     setSealingRoot(m_sealing.block.getTransactionRoot(), h256(Invalid256), h256(Invalid256));
 }
 
@@ -201,7 +200,7 @@ void PBFTConsensus::handleBlock()
     bool ret = execBlock();
     if (ret == false)
     {
-        m_sealing.block.resetCurrentBlock();
+        resetSealingBlock();
         return;
     }
     /// check seal
@@ -560,7 +559,8 @@ void PBFTConsensus::checkAndCommit()
     }
 }
 
-///
+/// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
+/// check whether view and height is valid, if valid, then commit the block and clear the context
 void PBFTConsensus::checkAndSave()
 {
     u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
@@ -601,6 +601,12 @@ void PBFTConsensus::checkAndSave()
     }
 }
 
+/// update the context of PBFT after commit a block into the block-chain
+/// 1. update the highest to new-committed blockHeader
+/// 2. update m_view/m_toView/m_leaderFailed/m_lastConsensusTime/m_consensusBlockNumber
+/// 3. delete invalid view-change requests according to new highestBlock
+/// 4. recalculate the m_nodeNum/m_f according to newer MinerList
+/// 5. clear all caches related to prepareReq and signReq
 void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
 {
     Guard l(m_mutex);
@@ -616,6 +622,8 @@ void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
         m_reqCache->delInvalidViewChange(m_highestBlock);
     }
     resetConfig();
+    /// clear caches
+    m_reqCache->clearAllExceptCommitCache();
     m_reqCache->delCache(m_highestBlock.hash());
     LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=" << m_highestBlock.number()
               << ",hash=" << blockHeader.hash().abridged() << ",idx=" << m_highestBlock.sealer()
