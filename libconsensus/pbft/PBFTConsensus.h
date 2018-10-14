@@ -29,6 +29,9 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libp2p/Session.h>
+#include <libp2p/SessionFace.h>
+#include <sstream>
 namespace dev
 {
 namespace consensus
@@ -130,8 +133,8 @@ using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
 class PBFTConsensus : public Consensus
 {
 public:
-    PBFTConsensus(std::shared_ptr<dev::p2p::Service> _service,
-        std::shared_ptr<dev::txpool::TxPool> _txPool,
+    PBFTConsensus(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
@@ -172,7 +175,7 @@ protected:
     bool shouldSeal() override;
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool getNodeIDByIndex(h512& nodeId, const u256& idx) const;
-    inline void checkBlockValid(Block const& block)
+    inline void checkBlockValid(dev::eth::Block const& block)
     {
         Consensus::checkBlockValid(block);
         checkMinerList(block);
@@ -180,7 +183,7 @@ protected:
     bool needOmit(Sealing const& sealing);
     uint64_t calculateMaxPackTxNum() override;
     /// broadcast prepare message
-    void broadcastPrepareReq(Block& block);
+    void broadcastPrepareReq(dev::eth::Block& block);
     /// broadcast sign message
     void broadcastSignReq(PrepareReq const& req);
     void broadcastSignedReq();
@@ -190,8 +193,8 @@ protected:
     bool shouldBroadcastViewChange();
     void broadcastViewChangeReq();
     /// handler called when receiving data from the network
-    void onRecvPBFTMessage(
-        P2PException exception, std::shared_ptr<Session> session, Message::Ptr message);
+    void onRecvPBFTMessage(dev::p2p::P2PException exception,
+        std::shared_ptr<dev::p2p::Session> session, dev::p2p::Message::Ptr message);
 
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
@@ -200,7 +203,7 @@ protected:
     void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
     void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
-    void catchupView(ViewChangeReq const& req, ostringstream& oss);
+    void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
     void checkAndSave();
     void checkAndChangeView();
@@ -212,7 +215,7 @@ protected:
             m_sealing.block.resetCurrentBlock();
         return ret;
     }
-    void reportBlock(BlockHeader const& blockHeader) override;
+    void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
@@ -223,7 +226,7 @@ protected:
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
-
+    /// broadcast specified message to all-peers with cache-filter and specified filter
     void broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>());
     inline bool broadcastFilter(
@@ -231,20 +234,55 @@ protected:
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
+
+    /**
+     * @brief: insert specified key into the cache of broadcast
+     *         used to filter the broadcasted message(in case of too-many repeated broadcast
+     * messages)
+     * @param nodeId: the node id of the message broadcasted to
+     * @param packetType: the packet type of the broadcast-message
+     * @param key: the key of the broadcast-message, is the signature of the broadcast-message in
+     * common
+     */
     inline void broadcastMark(
         h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
     inline void clearMask() { m_broadCastCache->clearAll(); }
-    ssize_t getIndexByMiner(dev::h512 node_id) const;
-    h512 getMinerByIndex(size_t index) const;
+    /// get the index of specified miner according to its node id
+    /// @param nodeId: the node id of the miner
+    /// @return : 1. >0: the index of the miner
+    ///           2. equal to -1: the node is not a miner(not exists in miner list)
+    inline ssize_t getIndexByMiner(dev::h512 const& nodeId) const
+    {
+        ssize_t index = -1;
+        for (size_t i = 0; i < m_minerList.size(); ++i)
+        {
+            if (m_minerList[i] == nodeId)
+            {
+                index = i;
+                break;
+            }
+        }
+        return index;
+    }
+    /// get the node id of specified miner according to its index
+    /// @param index: the index of the node
+    /// @return h512(): the node is not in the miner list
+    /// @return node id: the node id of the node
+    inline h512 getMinerByIndex(size_t const& index) const
+    {
+        if (index < m_minerList.size())
+            return m_minerList[index];
+        return h512();
+    }
 
     /// trans data into message
-    inline Message::Ptr transDataToMessage(
+    inline dev::p2p::Message::Ptr transDataToMessage(
         bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
     {
-        Message::Ptr message = std::make_shared<Message>();
+        dev::p2p::Message::Ptr message = std::make_shared<dev::p2p::Message>();
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
@@ -256,7 +294,7 @@ protected:
         return message;
     }
 
-    inline Message::Ptr transDataToMessage(bytesConstRef data, uint16_t const& packetType)
+    inline dev::p2p::Message::Ptr transDataToMessage(bytesConstRef data, uint16_t const& packetType)
     {
         return transDataToMessage(data, packetType, m_protocolId);
     }
@@ -273,8 +311,8 @@ protected:
      * @return true : the network-received message is valid
      * @return false: the network-received message is invalid
      */
-    inline bool isValidReq(
-        Message::Ptr message, std::shared_ptr<Session> session, ssize_t& peerIndex)
+    inline bool isValidReq(dev::p2p::Message::Ptr message,
+        std::shared_ptr<dev::p2p::Session> session, ssize_t& peerIndex)
     {
         /// check message size
         if (message->buffer()->size() <= 0)
@@ -306,7 +344,8 @@ protected:
      * @return false : decode failed
      */
     template <class T>
-    inline bool decodeToRequests(T& req, Message::Ptr message, std::shared_ptr<Session> session)
+    inline bool decodeToRequests(
+        T& req, dev::p2p::Message::Ptr message, std::shared_ptr<dev::p2p::Session> session)
     {
         ssize_t peer_index = 0;
         bool valid = isValidReq(message, session, peer_index);
@@ -342,9 +381,9 @@ protected:
         }
     }
 
-    bool isValidPrepare(PrepareReq const& req, bool self, ostringstream& oss) const;
+    bool isValidPrepare(PrepareReq const& req, bool self, std::ostringstream& oss) const;
     template <class T>
-    inline CheckResult checkReq(T const& req, ostringstream& oss) const
+    inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
@@ -376,9 +415,9 @@ protected:
         return CheckResult::VALID;
     }
 
-    bool isValidSignReq(SignReq const& req, ostringstream& oss) const;
-    bool isValidCommitReq(CommitReq const& req, ostringstream& oss) const;
-    bool isValidViewChangeReq(ViewChangeReq const& req, ostringstream& oss) const;
+    bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
+    bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
+    bool isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss) const;
 
     template <class T>
     inline bool hasConsensused(T const& req) const
@@ -420,9 +459,9 @@ protected:
         }
         return std::make_pair(true, (m_view + u256(m_highestBlock.number())) % u256(m_nodeNum));
     }
-    void checkMinerList(Block const& block);
+    void checkMinerList(dev::eth::Block const& block);
     bool execBlock();
-    void execBlock(Sealing& sealing, PrepareReq& req, ostringstream& oss);
+    void execBlock(Sealing& sealing, PrepareReq& req, std::ostringstream& oss);
     u256 minValidNodes() const { return m_nodeNum - m_f; }
     void setBlock();
     void changeViewForEmptyBlock();
@@ -448,7 +487,7 @@ protected:
     int64_t m_consensusBlockNumber;
 
     /// the latest block header
-    BlockHeader m_highestBlock;
+    dev::eth::BlockHeader m_highestBlock;
     bool m_emptyBlockFlag;
     /// whether to omit empty block
     bool m_omitEmptyBlock;

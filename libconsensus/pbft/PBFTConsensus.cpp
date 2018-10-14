@@ -28,6 +28,7 @@ using namespace dev::eth;
 using namespace dev::db;
 using namespace dev::blockverifier;
 using namespace dev::blockchain;
+using namespace dev::p2p;
 namespace dev
 {
 namespace consensus
@@ -331,6 +332,17 @@ void PBFTConsensus::broadcastViewChangeReq()
     broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
 }
 
+/**
+ * @brief: broadcast specified message to all-peers with cache-filter and specified filter
+ *         broadcast solutions:
+ *         1. peer is not the miner: stop broadcasting
+ *         2. peer is in the filter list: mark the message as broadcasted, and stop broadcasting
+ *         3. the packet has been broadcasted: stop broadcast
+ * @param packetType: the packet type of the broadcast-message
+ * @param key: the key of the broadcast-message(is the signature of the message in common)
+ * @param data: the encoded data of to be broadcasted(RLP encoder now)
+ * @param filter: the list that shouldn't be broadcasted to
+ */
 void PBFTConsensus::broadcastMsg(unsigned const& packetType, std::string const& key,
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
@@ -339,9 +351,6 @@ void PBFTConsensus::broadcastMsg(unsigned const& packetType, std::string const& 
     {
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
-            continue;
-        if (packetType != ViewChangeReqPacket &&
-            getIndexByMiner(session.nodeID) != NodeAccountType::MinerAccount)
             continue;
         /// peer is in the _filter list ?
         if (filter.count(session.nodeID))
@@ -359,28 +368,8 @@ void PBFTConsensus::broadcastMsg(unsigned const& packetType, std::string const& 
     }
 }
 
-h512 PBFTConsensus::getMinerByIndex(size_t index) const
-{
-    if (index < m_minerList.size())
-        return m_minerList[index];
-    return h512();
-}
-
-ssize_t PBFTConsensus::getIndexByMiner(dev::h512 node_id) const
-{
-    ssize_t index = -1;
-    for (size_t i = 0; i < m_minerList.size(); ++i)
-    {
-        if (m_minerList[i] == node_id)
-        {
-            index = i;
-            break;
-        }
-    }
-    return index;
-}
-
-bool PBFTConsensus::isValidPrepare(PrepareReq const& req, bool allowSelf, ostringstream& oss) const
+bool PBFTConsensus::isValidPrepare(
+    PrepareReq const& req, bool allowSelf, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistPrepare(req))
     {
@@ -442,7 +431,7 @@ void PBFTConsensus::checkMinerList(Block const& block)
     }
 }
 
-void PBFTConsensus::execBlock(Sealing& sealing, PrepareReq& req, ostringstream& oss)
+void PBFTConsensus::execBlock(Sealing& sealing, PrepareReq& req, std::ostringstream& oss)
 {
     Block working_block(req.block);
     LOG(TRACE) << "start exec tx, blk=" << req.height << ", hash = " << req.block_hash
@@ -499,21 +488,27 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket cons
     handlePrepareMsg(prepare_req);
 }
 
-void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, bool self)
+/**
+ * @brief:
+ *
+ * @param prepare_req
+ * @param self
+ */
+void PBFTConsensus::handlePrepareMsg(PrepareReq& prepareReq, bool self)
 {
     Timer t;
-    ostringstream oss;
-    oss << "handlePrepareMsg: idx=" << prepare_req.idx << ",view=" << prepare_req.view
-        << ",blk=" << prepare_req.height << ",hash=" << prepare_req.block_hash.abridged();
+    std::ostringstream oss;
+    oss << "handlePrepareMsg: idx=" << prepareReq.idx << ",view=" << prepareReq.view
+        << ",blk=" << prepareReq.height << ",hash=" << prepareReq.block_hash.abridged();
 
-    if (!isValidPrepare(prepare_req, self, oss))
+    if (!isValidPrepare(prepareReq, self, oss))
         return;
     /// add block into prepare request
-    m_reqCache->addRawPrepare(prepare_req);
+    m_reqCache->addRawPrepare(prepareReq);
     Sealing workingSealing;
     try
     {
-        execBlock(workingSealing, prepare_req, oss);
+        execBlock(workingSealing, prepareReq, oss);
     }
     catch (std::exception& e)
     {
@@ -524,13 +519,13 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, bool self)
     if (needOmit(workingSealing))
         return;
 
-    h256 origin_blockHash = prepare_req.block_hash;
-    prepare_req.updatePrepareReq(workingSealing, m_keyPair);
-    m_reqCache->addPrepareReq(prepare_req);
+    h256 origin_blockHash = prepareReq.block_hash;
+    prepareReq.updatePrepareReq(workingSealing, m_keyPair);
+    m_reqCache->addPrepareReq(prepareReq);
 
     /// broadcast the re-generated signReq
-    broadcastSignReq(prepare_req);
-    prepare_req.block_hash = origin_blockHash;
+    broadcastSignReq(prepareReq);
+    prepareReq.block_hash = origin_blockHash;
 
     LOG(INFO) << oss.str() << ",real_block_hash=" << workingSealing.block.header().hash().abridged()
               << " success";
@@ -629,7 +624,7 @@ void PBFTConsensus::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMs
     bool valid = decodeToRequests(sign_req, ref(pbftMsg.data));
     if (!valid)
         return;
-    ostringstream oss;
+    std::ostringstream oss;
     oss << "handleSignMsg: idx=" << sign_req.idx << ",view=" << sign_req.view
         << ",blk=" << sign_req.height << ",hash=" << sign_req.block_hash.abridged()
         << ", from=" << pbftMsg.node_id;
@@ -642,7 +637,7 @@ void PBFTConsensus::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMs
     LOG(DEBUG) << "handleSignMsg, timecost=" << 1000 * t.elapsed();
 }
 
-bool PBFTConsensus::isValidSignReq(SignReq const& req, ostringstream& oss) const
+bool PBFTConsensus::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistSign(req))
     {
@@ -666,7 +661,7 @@ void PBFTConsensus::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& 
     bool valid = decodeToRequests(commit_req, ref(pbftMsg.data));
     if (!valid)
         return;
-    ostringstream oss;
+    std::ostringstream oss;
     oss << "handleCommitMsg: idx=" << commit_req.idx << ",view=" << commit_req.view
         << ",blk=" << commit_req.height << ",hash=" << commit_req.block_hash.abridged()
         << ", from=" << pbftMsg.node_id;
@@ -680,7 +675,7 @@ void PBFTConsensus::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& 
     return;
 }
 
-bool PBFTConsensus::isValidCommitReq(CommitReq const& req, ostringstream& oss) const
+bool PBFTConsensus::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistCommit(req))
     {
@@ -703,7 +698,7 @@ void PBFTConsensus::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPa
     bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
     if (!valid)
         return;
-    ostringstream oss;
+    std::ostringstream oss;
     oss << "handleViewChangeMsg: idx=" << viewChange_req.idx << ",view=" << viewChange_req.view
         << ",blk=" << viewChange_req.height << ",hash=" << viewChange_req.block_hash.abridged()
         << ",from=" << pbftMsg.node_id;
@@ -730,7 +725,7 @@ void PBFTConsensus::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPa
     }
 }
 
-bool PBFTConsensus::isValidViewChangeReq(ViewChangeReq const& req, ostringstream& oss) const
+bool PBFTConsensus::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistViewChange(req))
     {
@@ -761,7 +756,7 @@ bool PBFTConsensus::isValidViewChangeReq(ViewChangeReq const& req, ostringstream
     return true;
 }
 
-void PBFTConsensus::catchupView(ViewChangeReq const& req, ostringstream& oss)
+void PBFTConsensus::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
 {
     if (req.view + u256(1) < m_toView)
     {
@@ -895,7 +890,7 @@ void PBFTConsensus::workLoop()
             else
             {
                 std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, chrono::milliseconds(5));
+                m_signalled.wait_for(l, std::chrono::milliseconds(5));
             }
             checkTimeout();
             handleFutureBlock();
