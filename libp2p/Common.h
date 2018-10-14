@@ -219,9 +219,11 @@ private:
     std::string m_msg = "";
 };
 
+class Session;
+
 #define CallbackFunc std::function<void(P2PException, Message::Ptr)>
 #define CallbackFuncWithSession \
-    std::function<void(P2PException, std::shared_ptr<Session>, Message::Ptr)>
+    std::function<void(P2PException, std::shared_ptr<dev::p2p::Session>, Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {

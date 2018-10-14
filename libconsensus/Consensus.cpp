@@ -25,6 +25,8 @@
 #include <libethcore/LogEntry.h>
 using namespace dev::sync;
 using namespace dev::blockverifier;
+using namespace dev::eth;
+using namespace dev::p2p;
 namespace dev
 {
 namespace consensus
@@ -78,7 +80,7 @@ void Consensus::doWork(bool wait)
             if (shouldWait(wait))
             {
                 std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, chrono::milliseconds(1));
+                m_signalled.wait_for(l, std::chrono::milliseconds(1));
             }
         }
     }
