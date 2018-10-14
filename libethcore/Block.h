@@ -42,7 +42,7 @@ public:
     Block(Block const& _block);
     /// assignment operator
     Block& operator=(Block const& _block);
-    ~Block() { resetCurrentBlock(); }
+    ~Block() {}
     ///-----opearator overloads of Block
     /// operator ==
     bool equalAll(Block const& _block) const
@@ -124,9 +124,9 @@ public:
         return m_txsRoot;
     }
 
-    void resetCurrentBlock()
+    void resetCurrentBlock(BlockHeader& _parent)
     {
-        m_blockHeader = BlockHeader();
+        m_blockHeader.populateFromParent(_parent);
         m_transactions.clear();
         m_transactionReceipts.clear();
         m_sigList.clear();
