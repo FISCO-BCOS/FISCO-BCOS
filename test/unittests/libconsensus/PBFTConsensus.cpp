@@ -223,6 +223,8 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     size_t invalid_hash = 3;
     size_t valid = 4;
     FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    fake_pbft.consensus()->initPBFTEnv(
+        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
     fake_pbft.consensus()->setHighest(highest);
     PrepareReq prepare_req;
     FakeValidNodeNum(fake_pbft, valid);

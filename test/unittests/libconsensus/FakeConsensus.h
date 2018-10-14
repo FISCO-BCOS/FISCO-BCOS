@@ -70,7 +70,6 @@ public:
         return boost::filesystem::space(path).available > 1024;
     }
 
-    void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
     void resetConfig() { PBFTConsensus::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
@@ -112,6 +111,7 @@ public:
     bool const& leaderFailed() { return m_leaderFailed; }
     bool const& cfgErr() { return m_cfgErr; }
     void resetBlock(dev::eth::Block& block) { return PBFTConsensus::resetBlock(block); }
+    void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
 };
 
 template <typename T>
