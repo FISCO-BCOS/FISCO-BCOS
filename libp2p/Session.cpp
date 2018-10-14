@@ -277,7 +277,7 @@ void Session::write()
 			ThreadContext tc(info().id.abridged());
 			ThreadContext tc2(info().clientVersion);
 			// must check queue, as write callback can occur following dropped()
-			if (ec)
+			if (ec && this->m_dropped)
 			{
 				LOG(DEBUG) << "Error sending: " << ec.message();
 				drop(TCPError);
