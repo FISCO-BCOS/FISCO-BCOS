@@ -75,6 +75,30 @@ public:
     u256 const& f() { return m_f; }
     bool const& cfgErr() { return m_cfgErr; }
     void resetConfig() { PBFTConsensus::resetConfig(); }
+    PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
+    void onRecvPBFTMessage(
+        P2PException exception, std::shared_ptr<Session> session, Message::Ptr message)
+    {
+        return PBFTConsensus::onRecvPBFTMessage(exception, session, message);
+    }
+
+    Message::Ptr transDataToMessage(
+        bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
+    {
+        return PBFTConsensus::transDataToMessage(data, packetType, protocolId);
+    }
+
+    void broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+        std::unordered_set<h512> const& filter = std::unordered_set<h512>())
+    {
+        return PBFTConsensus::broadcastMsg(packetType, key, data, filter);
+    }
+
+    bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)
+    {
+        return PBFTConsensus::broadcastFilter(nodeId, packetType, key);
+    }
+    std::shared_ptr<P2PInterface> mutableService() { return m_service; }
 };
 
 template <typename T>

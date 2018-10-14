@@ -16,23 +16,16 @@
  */
 
 /**
- * @brief: unit test for the base class of consensus module(libconsensus/Consensus.*)
- * @file: consensus.cpp
+ * @brief: unit test for libconsensus/pbft/PBFTConsensus.*
+ * @file: PBFTConsensus.cpp
  * @author: yujiechen
  * @date: 2018-10-09
  */
+#include "PBFTConsensus.h"
 #include "Common.h"
-#include "FakeConsensus.h"
-#include <libconsensus/pbft/PBFTConsensus.h>
-#include <libethcore/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
-using namespace dev::eth;
-using namespace dev::blockverifier;
-using namespace dev::txpool;
-using namespace dev::blockchain;
-
 namespace dev
 {
 namespace test
@@ -92,6 +85,106 @@ BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
 }
 
 
+/// test onRecvPBFTMessage
+BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
+{
+    KeyPair key_pair;
+    /// fake prepare_req
+    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    /// fake FakePBFTConsensus
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    NodeIPEndpoint endpoint;
+    /// fake session
+    std::shared_ptr<Session> session = FakeSession(key_pair.pub());
+    ///------ test invalid case(recv message from own-node)
+    /// check onreceive prepare request
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, prepare_req, PrepareReqPacket, false);
+    /// check onreceive sign request
+    SignReq sign_req(prepare_req, key_pair, prepare_req.idx + u256(100));
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, sign_req, SignReqPacket, false);
+    /// check onReceive commit request
+    CommitReq commit_req(prepare_req, key_pair, prepare_req.idx + u256(10));
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, commit_req, CommitReqPacket, false);
+    /// test viewchange case
+    ViewChangeReq viewChange_req(
+        key_pair, prepare_req.height, prepare_req.view, prepare_req.idx, prepare_req.block_hash);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session, viewChange_req, ViewChangeReqPacket, false);
+
+    KeyPair key_pair2 = KeyPair::create();
+    std::shared_ptr<Session> session2 = FakeSession(fake_pbft.m_minerList[0]);
+    /// test invalid case: this node is not miner
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, false);
+    ///----- test valid case
+    /// test recv packet from other nodes
+    FakePBFTMiner(fake_pbft);  // set this node to be miner
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, true);
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, sign_req, SignReqPacket, true);
+    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, commit_req, CommitReqPacket, true);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session2, viewChange_req, ViewChangeReqPacket, true);
+}
+/// test broadcastMsg
+BOOST_AUTO_TEST_CASE(testBroadcastMsg)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    KeyPair peer_keyPair = KeyPair::create();
+    /// append session info1
+    appendSessionInfo(fake_pbft, peer_keyPair.pub());
+    /// append session info2
+    KeyPair peer2_keyPair = KeyPair::create();
+    appendSessionInfo(fake_pbft, peer2_keyPair.pub());
+    KeyPair key_pair;
+    /// fake prepare_req
+    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    bytes data;
+    prepare_req.encode(data);
+    /// case1: all peer is not the miner, stop broadcasting
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == false);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == false);
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
+    compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
+
+    /// case2: only one peer is the miner, broadcast to one node
+    fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    FakePBFTMiner(fake_pbft);
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == false);
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
+    compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
+
+    /// case3: two nodes are all miners , but one peer is in the cache, broadcast to one node
+    fake_pbft.m_minerList.push_back(peer2_keyPair.pub());
+    FakePBFTMiner(fake_pbft);
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
+    compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 1);
+
+    /// case3: the miner-peer in the filter
+    KeyPair peer3_keyPair = KeyPair::create();
+    appendSessionInfo(fake_pbft, peer3_keyPair.pub());
+    fake_pbft.m_minerList.push_back(peer3_keyPair.pub());
+    FakePBFTMiner(fake_pbft);
+    /// fake the filter with node id of peer3
+    std::unordered_set<h512> filter;
+    filter.insert(peer3_keyPair.pub());
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data), filter);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer3_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
+    compareAsyncSendTime(fake_pbft, peer3_keyPair.pub(), 0);
+}
+/// test handlePrepareMsg
+BOOST_AUTO_TEST_CASE(testHandlePrepareMsg) {}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

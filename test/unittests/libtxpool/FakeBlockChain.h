@@ -36,6 +36,36 @@ namespace dev
 {
 namespace test
 {
+class FakeService : public Service
+{
+public:
+    FakeService(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
+      : Service(_host, _p2pMsgHandler)
+    {}
+    void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
+    SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const { return m_sessionInfos; }
+
+    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+        Options const& options = Options()) override
+    {
+        if (m_asyncSend.count(nodeID))
+            m_asyncSend[nodeID]++;
+        else
+            m_asyncSend[nodeID] = 1;
+    }
+    size_t getAsyncSendSizeByNodeID(NodeID const& nodeID)
+    {
+        if (!m_asyncSend.count(nodeID))
+            return 0;
+        return m_asyncSend[nodeID];
+    }
+
+private:
+    SessionInfos m_sessionInfos;
+    std::map<NodeID, size_t> m_asyncSend;
+};
 class FakeTxPool : public TxPool
 {
 public:
@@ -118,7 +148,7 @@ public:
         /// create p2pHandler
         m_p2pHandler = std::make_shared<P2PMsgHandler>();
         /// fake service of p2p module
-        m_topicService = std::make_shared<Service>(m_host, m_p2pHandler);
+        m_topicService = std::make_shared<FakeService>(m_host, m_p2pHandler);
         std::shared_ptr<BlockChainInterface> blockChain =
             std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
@@ -131,7 +161,7 @@ public:
             dynamic_cast<FakeSessionForTest*>(session.second.get())->setDataContent(data_content);
     }
     std::shared_ptr<FakeTxPool> m_txPool;
-    std::shared_ptr<Service> m_topicService;
+    std::shared_ptr<FakeService> m_topicService;
     std::shared_ptr<P2PMsgHandler> m_p2pHandler;
     std::shared_ptr<FakeBlockChain> m_blockChain;
     std::shared_ptr<Host> m_host;
