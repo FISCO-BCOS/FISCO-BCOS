@@ -10,5 +10,4 @@ target_include_directories(console PRIVATE ..)
 target_include_directories(console PUBLIC ${BOOST_INCLUDE_DIR})
 
 target_link_libraries(console JsonRpcCpp::Server)
-target_link_libraries(console uuid)
 target_link_libraries(console dl)

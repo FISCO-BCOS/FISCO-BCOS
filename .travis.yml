@@ -50,7 +50,7 @@ addons:
 install: #clean cache
     bash scripts/install_deps.sh
 script:
-    mkdir build && cd build && cmake -DTESTS=ON .. && make && CTEST_OUTPUT_ON_FAILURE=TRUE make test 
+    mkdir build && cd build && cmake -DTESTS=ON .. && make -j2 && CTEST_OUTPUT_ON_FAILURE=TRUE make test 
 after_success:
     bash <(curl -s https://codecov.io/bash)
 webhooks:
