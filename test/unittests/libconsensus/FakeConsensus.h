@@ -71,9 +71,6 @@ public:
     }
 
     void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
-    u256 const& nodeNum() { return m_nodeNum; }
-    u256 const& f() { return m_f; }
-    bool const& cfgErr() { return m_cfgErr; }
     void resetConfig() { PBFTConsensus::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
@@ -99,7 +96,22 @@ public:
         return PBFTConsensus::broadcastFilter(nodeId, packetType, key);
     }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
+    std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     void broadcastSignReq(PrepareReq const& req) { return PBFTConsensus::broadcastSignReq(req); }
+    u256 view() { return m_view; }
+    void setView(u256 const& _view) { m_view = _view; }
+    void checkAndSave() { return PBFTConsensus::checkAndSave(); }
+
+    void setHighest(BlockHeader const& header) { m_highestBlock = header; }
+    BlockHeader& mutableHighest() { return m_highestBlock; }
+    void setNodeNum(u256 const& nodeNum) { m_nodeNum = nodeNum; }
+    u256 const& nodeNum() { return m_nodeNum; }
+    u256 const& fValue() { return m_f; }
+    void setF(u256 const& fValue) { m_f = fValue; }
+    int64_t const& consensusBlockNumber() { return m_consensusBlockNumber; }
+    bool const& leaderFailed() { return m_leaderFailed; }
+    bool const& cfgErr() { return m_cfgErr; }
+    void resetBlock(dev::eth::Block& block) { return PBFTConsensus::resetBlock(block); }
 };
 
 template <typename T>

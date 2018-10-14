@@ -57,8 +57,8 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->nodeIdx() == u256(fake_pbft.m_minerList.size() - 1));
     BOOST_CHECK(fake_pbft.consensus()->minerList().size() == fake_pbft.m_minerList.size());
     BOOST_CHECK(fake_pbft.consensus()->nodeNum() == u256(fake_pbft.m_minerList.size()));
-    BOOST_CHECK(
-        fake_pbft.consensus()->f() == u256((fake_pbft.consensus()->nodeNum() - u256(1)) / u256(3)));
+    BOOST_CHECK(fake_pbft.consensus()->fValue() ==
+                u256((fake_pbft.consensus()->nodeNum() - u256(1)) / u256(3)));
 
     /// check reloadMsg: empty committedPrepareCache
     checkPBFTMsg(fake_pbft.consensus()->reqCache()->committedPrepareCache());
@@ -213,8 +213,38 @@ BOOST_AUTO_TEST_CASE(testBroadcastSignReq)
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(tmp_req));
 }
-/// test checkAndSave
-BOOST_AUTO_TEST_CASE(testCheckAndSave) {}
+
+/// test checkAndSave && reportBlock
+BOOST_AUTO_TEST_CASE(testCheckAndSave)
+{
+    /// fake collected commitReq and signReq
+    BlockHeader highest;
+    size_t invalid_height = 2;
+    size_t invalid_hash = 3;
+    size_t valid = 4;
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    fake_pbft.consensus()->setHighest(highest);
+    PrepareReq prepare_req;
+    FakeValidNodeNum(fake_pbft, valid);
+    FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid);
+    /// exception case: invalid view
+    fake_pbft.consensus()->setView(prepare_req.view + u256(1));
+    CheckBlockChain(fake_pbft, false);
+    /// exception case2: invalid height
+    fake_pbft.consensus()->setView(prepare_req.view);
+    fake_pbft.consensus()->mutableHighest().setNumber(prepare_req.height);
+    CheckBlockChain(fake_pbft, false);
+    /// normal case: test checkAndSave(import success)
+    fake_pbft.consensus()->mutableHighest().setNumber(prepare_req.height - 1);
+    CheckBlockChain(fake_pbft, true);
+    /// check reportBlock
+    BOOST_CHECK(fake_pbft.consensus()->mutableHighest().number() == prepare_req.height);
+    checkReportBlock(fake_pbft, highest, false);
+    /// set to miner
+    FakePBFTMiner(fake_pbft);
+    fake_pbft.consensus()->resetConfig();
+    checkResetConfig(fake_pbft, true);
+}
 /// test checkAndCommit
 BOOST_AUTO_TEST_CASE(testCheckAndCommit) {}
 /// test handlePrepareMsg

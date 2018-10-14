@@ -109,5 +109,114 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTConsensus> pbft,
         BOOST_CHECK(ret.first == false);
 }
 
+static void FakeSignAndCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft,
+    PrepareReq& prepareReq, BlockHeader& highest, size_t invalidHeightNum, size_t invalidHash,
+    size_t validNum)
+{
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    assert(p_blockChain);
+    highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    /// fake prepare req
+    KeyPair key_pair;
+    prepareReq = FakePrepareReq(key_pair);
+    prepareReq.height = highest.number() + 1;
+    Block block;
+    fake_pbft.consensus()->resetBlock(block);
+    block.encode(prepareReq.block);  /// encode block
+    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    h256 invalid_hash = sha3("invalid");
+
+    /// fake SignReq
+    FakeInvalidReq<SignReq>(prepareReq, *(fake_pbft.consensus()->reqCache().get()),
+        fake_pbft.consensus()->reqCache()->mutableSignCache(), highest, invalid_hash,
+        invalidHeightNum, invalidHash, validNum, false);
+    fake_pbft.consensus()->reqCache()->collectGarbage(highest);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq.block_hash) ==
+                u256(validNum));
+
+    /// fake commitReq
+    FakeInvalidReq<CommitReq>(prepareReq, *(fake_pbft.consensus()->reqCache().get()),
+        fake_pbft.consensus()->reqCache()->mutableCommitCache(), highest, invalid_hash,
+        invalidHeightNum, invalidHash, validNum, false);
+    fake_pbft.consensus()->reqCache()->collectGarbage(highest);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq.block_hash) ==
+                u256(validNum));
+}
+
+
+static void FakeValidNodeNum(FakeConsensus<FakePBFTConsensus>& fake_pbft, u256 validNum)
+{
+    u256 node_num = (validNum * u256(3)) / u256(2) + 1;
+    u256 f_value = (validNum) / 2 + 1;
+    fake_pbft.consensus()->setNodeNum(node_num);
+    fake_pbft.consensus()->setF(f_value);
+}
+
+/// check blockchain
+static void CheckBlockChain(FakeConsensus<FakePBFTConsensus>& fake_pbft, bool succ)
+{
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    assert(p_blockChain);
+    int64_t block_number = p_blockChain->m_blockNumber;
+    fake_pbft.consensus()->checkAndSave();
+    if (succ)
+        block_number += 1;
+    BOOST_CHECK(p_blockChain->m_blockNumber == block_number);
+    BOOST_CHECK(p_blockChain->m_blockHash.size() == (uint64_t)block_number);
+    BOOST_CHECK(p_blockChain->m_blockChain.size() == (uint64_t)block_number);
+}
+
+static inline void checkResetConfig(FakeConsensus<FakePBFTConsensus>& fake_pbft, bool isMiner)
+{
+    BOOST_CHECK(
+        fake_pbft.consensus()->nodeNum() == u256(fake_pbft.consensus()->minerList().size()));
+    if (isMiner)
+    {
+        BOOST_CHECK(fake_pbft.consensus()->nodeIdx() != u256(-1));
+        BOOST_CHECK(fake_pbft.consensus()->cfgErr() == false);
+    }
+    else
+    {
+        BOOST_CHECK(fake_pbft.consensus()->nodeIdx() >= u256(0));
+        BOOST_CHECK(fake_pbft.consensus()->nodeIdx() == u256(-1));
+        BOOST_CHECK(fake_pbft.consensus()->cfgErr() == true);
+    }
+    /// check m_f
+    BOOST_CHECK(
+        fake_pbft.consensus()->fValue() == (fake_pbft.consensus()->nodeNum() - u256(1)) / u256(3));
+}
+
+static inline void checkClearAllExceptCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft)
+{
+    checkPBFTMsg(fake_pbft.consensus()->reqCache()->prepareCache());
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->mutableSignCache().size() == 0);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->mutableViewChangeCache().size() == 0);
+}
+
+static inline void checkDelCommitCache(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, BlockHeader const& header)
+{
+    auto p_commit = fake_pbft.consensus()->reqCache()->mutableCommitCache().find(header.hash());
+    BOOST_CHECK(p_commit == fake_pbft.consensus()->reqCache()->mutableCommitCache().end());
+}
+
+static void checkReportBlock(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, BlockHeader const& highest, bool isMiner = false)
+{
+    BOOST_CHECK(fake_pbft.consensus()->consensusBlockNumber() ==
+                fake_pbft.consensus()->mutableHighest().number() + 1);
+    BOOST_CHECK(fake_pbft.consensus()->leaderFailed() == false);
+    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime > utcTime() - 100000);
+    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime <= utcTime());
+    /// check resetConfig
+    checkResetConfig(fake_pbft, isMiner);
+    /// check clearAllExceptCommitCache
+    checkClearAllExceptCommitCache(fake_pbft);
+    /// check delCommitCache
+    checkDelCommitCache(fake_pbft, highest);
+}
+
 }  // namespace test
 }  // namespace dev
