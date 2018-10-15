@@ -1,6 +1,7 @@
 #include "DBFactoryPrecompiled.h"
 #include "DBPrecompiled.h"
 #include "MemoryDB.h"
+#include "Common.h"
 #include <libdevcore/Hash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -70,7 +71,7 @@ void DBFactoryPrecompiled::afterBlock(shared_ptr<PrecompiledContext> context, bo
         }
         LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << _hash;
         _memoryDBFactory->stateStorage()->commit(context->blockInfo().hash,
-                                                 context->blockInfo().number.convert_to<int>(), datas, context->blockInfo().hash);
+            context->blockInfo().number.convert_to<int>(), datas, context->blockInfo().hash);
     }
 
     _name2Table.clear();
@@ -96,9 +97,9 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
 
     switch (func)
     {
-    case 0xc184e0ff: // openDB(string)
+    case 0xc184e0ff:  // openDB(string)
     case 0xf23f63c9:
-    { // openTable(string)
+    {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
 
@@ -109,7 +110,7 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
         break;
     }
     case 0x56004b6a:
-    { // createTable(string,string,string)
+    {  // createTable(string,string,string)
         string tableName;
         string keyName;
         string fieldNames;
@@ -118,7 +119,7 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
         LOG(DEBUG) << "DBFactory call createTable:" << tableName;
         vector<string> fieldNameList;
         boost::split(fieldNameList, fieldNames, boost::is_any_of(","));
-        for (auto &str : fieldNameList)
+        for (auto& str : fieldNameList)
             boost::trim(str);
         string valueFiled = boost::join(fieldNameList, ",");
         auto errorCode = isTableCreated(context, tableName, keyName, valueFiled);
@@ -154,6 +155,7 @@ DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr con
     {
         dev::storage::DB::Ptr db = _memoryDBFactory->openTable(
             context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
+        dynamic_pointer_cast<storage::MemoryDB>(db)->setTableInfo(getSysTableInfo(tableName));
 
         DBPrecompiled::Ptr dbPrecompiled = make_shared<DBPrecompiled>();
         dbPrecompiled->setDB(db);
@@ -169,7 +171,7 @@ DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr con
 }
 
 unsigned DBFactoryPrecompiled::isTableCreated(PrecompiledContext::Ptr context,
-                                              const string &tableName, const string &keyField, const string &valueFiled)
+    const string& tableName, const string& keyField, const string& valueFiled)
 {
     auto it = _name2Table.find(tableName);
     if (it != _name2Table.end())
@@ -192,7 +194,7 @@ unsigned DBFactoryPrecompiled::isTableCreated(PrecompiledContext::Ptr context,
     return TABLENAME_CONFLICT;
 }
 
-Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const string &tableName)
+Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const string& tableName)
 {
     auto it = _name2Table.find(tableName);
     if (it != _name2Table.end())
@@ -200,6 +202,7 @@ Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const s
         LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
         return it->second;
     }
+    // user table
     if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), tableName))
     {
         auto sysTable = getSysTable(context);
@@ -215,9 +218,11 @@ Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const s
         auto tableInfo = make_shared<storage::TableInfo>();
         auto entry = tableEntries->get(0);
         tableInfo->name = tableName;
-        tableInfo->key = entry->getField("key_filed");
+        tableInfo->key = entry->getField("key_field");
         string valueFields = entry->getField("value_field");
         boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
+        tableInfo->fields.emplace_back(storage::STORAGE_STATUS);
+        tableInfo->fields.emplace_back(tableInfo->key);
         dynamic_pointer_cast<storage::MemoryDB>(db)->setTableInfo(tableInfo);
         DBPrecompiled::Ptr dbPrecompiled = make_shared<DBPrecompiled>();
         dbPrecompiled->setDB(db);
@@ -229,14 +234,7 @@ Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const s
     LOG(DEBUG) << "Open new system table:" << tableName;
     storage::DB::Ptr db = _memoryDBFactory->openTable(
         context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
-    auto tableInfo = make_shared<storage::TableInfo>();
-    if(tableName == "_sys_miners_")
-    {
-        tableInfo->name = tableName;
-        tableInfo->key = "name";
-        tableInfo->fields = vector<string>{"type","node_id","enable_num"};
-    }
-    dynamic_pointer_cast<storage::MemoryDB>(db)->setTableInfo(tableInfo);
+    dynamic_pointer_cast<storage::MemoryDB>(db)->setTableInfo(getSysTableInfo(tableName));
     DBPrecompiled::Ptr dbPrecompiled = make_shared<DBPrecompiled>();
     dbPrecompiled->setDB(db);
     Address address = context->registerPrecompiled(dbPrecompiled);
@@ -273,4 +271,23 @@ h256 DBFactoryPrecompiled::hash(shared_ptr<PrecompiledContext> context)
 
     _hash = dev::sha256(&data);
     return _hash;
+}
+
+storage::TableInfo::Ptr DBFactoryPrecompiled::getSysTableInfo(const std::string& tableName)
+{
+    auto tableInfo = make_shared<storage::TableInfo>();
+    tableInfo->name = tableName;
+    if (tableName == "_sys_miners_")
+    {
+        tableInfo->key = "name";
+        tableInfo->fields = vector<string>{storage::STORAGE_STATUS, "type", "node_id", "enable_num"};
+    }
+    else if (tableName == "_sys_tables_")
+    {
+        tableInfo->key = "table_name";
+        tableInfo->fields = vector<string>{storage::STORAGE_STATUS, "key_field", "value_field"};
+    }
+    tableInfo->fields.emplace_back(tableInfo->key);
+
+    return tableInfo;
 }
