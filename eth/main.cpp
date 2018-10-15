@@ -596,12 +596,7 @@ int main(int argc, char** argv)
 
 	int blockNumber = 0;
 	std::string contracts;
-	//dfs related parameters
-	string strNodeId;
-	string strGroupId;
-	string strStoragePath;
-	Address fileContractAddr;
-	Address fileServerContractAddr;
+
 	for (int i = 1; i < argc; ++i)
 	{
 		string arg = argv[i];

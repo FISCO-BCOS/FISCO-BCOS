@@ -94,8 +94,7 @@ Darwin)
     # And finally install all the external dependencies.
     brew install \
         leveldb \
-        libmicrohttpd \
-        miniupnpc
+        libmicrohttpd 
 
     ;;
 
@@ -138,8 +137,7 @@ Linux)
             libtool \
             boost \
             leveldb \
-            libmicrohttpd \
-            miniupnpc
+            libmicrohttpd 
 
     elif [ -f "/etc/os-release" ]; then
 
@@ -157,8 +155,7 @@ Linux)
                 libcurl4-openssl-dev \
                 libgmp-dev \
                 libleveldb-dev \
-                libmicrohttpd-dev \
-                libminiupnpc-dev 
+                libmicrohttpd-dev 
             ;;
 
         Fedora)
@@ -204,7 +201,6 @@ Linux)
                 libgmp-dev \
                 libleveldb-dev \
                 libmicrohttpd-dev \
-                libminiupnpc-dev \
                 $LLVM_PACKAGES
             ;;
 
