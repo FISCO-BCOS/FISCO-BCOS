@@ -109,9 +109,10 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTConsensus> pbft,
         BOOST_CHECK(ret.first == false);
 }
 
+
 static void FakeSignAndCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft,
     PrepareReq& prepareReq, BlockHeader& highest, size_t invalidHeightNum, size_t invalidHash,
-    size_t validNum)
+    size_t validNum, int type)
 {
     FakeBlockChain* p_blockChain =
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
@@ -124,24 +125,31 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft,
     Block block;
     fake_pbft.consensus()->resetBlock(block);
     block.encode(prepareReq.block);  /// encode block
+    prepareReq.block_hash = block.header().hash();
+    fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
     fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
-    h256 invalid_hash = sha3("invalid");
+    h256 invalid_hash = sha3("invalid" + toString(utcTime()));
 
     /// fake SignReq
-    FakeInvalidReq<SignReq>(prepareReq, *(fake_pbft.consensus()->reqCache().get()),
-        fake_pbft.consensus()->reqCache()->mutableSignCache(), highest, invalid_hash,
-        invalidHeightNum, invalidHash, validNum, false);
-    fake_pbft.consensus()->reqCache()->collectGarbage(highest);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq.block_hash) ==
-                u256(validNum));
-
+    if (type == 0 || type == 2)
+    {
+        FakeInvalidReq<SignReq>(prepareReq, *(fake_pbft.consensus()->reqCache().get()),
+            fake_pbft.consensus()->reqCache()->mutableSignCache(), highest, invalid_hash,
+            invalidHeightNum, invalidHash, validNum, false);
+        fake_pbft.consensus()->reqCache()->collectGarbage(highest);
+        BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq.block_hash) ==
+                    u256(validNum));
+    }
     /// fake commitReq
-    FakeInvalidReq<CommitReq>(prepareReq, *(fake_pbft.consensus()->reqCache().get()),
-        fake_pbft.consensus()->reqCache()->mutableCommitCache(), highest, invalid_hash,
-        invalidHeightNum, invalidHash, validNum, false);
-    fake_pbft.consensus()->reqCache()->collectGarbage(highest);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq.block_hash) ==
-                u256(validNum));
+    if (type == 1 || type == 2)
+    {
+        FakeInvalidReq<CommitReq>(prepareReq, *(fake_pbft.consensus()->reqCache().get()),
+            fake_pbft.consensus()->reqCache()->mutableCommitCache(), highest, invalid_hash,
+            invalidHeightNum, invalidHash, validNum, false);
+        fake_pbft.consensus()->reqCache()->collectGarbage(highest);
+        BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq.block_hash) ==
+                    u256(validNum));
+    }
 }
 
 
@@ -160,12 +168,30 @@ static void CheckBlockChain(FakeConsensus<FakePBFTConsensus>& fake_pbft, bool su
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
     assert(p_blockChain);
     int64_t block_number = p_blockChain->m_blockNumber;
+
     fake_pbft.consensus()->checkAndSave();
     if (succ)
         block_number += 1;
     BOOST_CHECK(p_blockChain->m_blockNumber == block_number);
     BOOST_CHECK(p_blockChain->m_blockHash.size() == (uint64_t)block_number);
     BOOST_CHECK(p_blockChain->m_blockChain.size() == (uint64_t)block_number);
+}
+
+static int64_t obtainBlockNumber(FakeConsensus<FakePBFTConsensus>& fake_pbft)
+{
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    assert(p_blockChain);
+    return p_blockChain->m_blockNumber;
+}
+
+static void CheckBlockChain(FakeConsensus<FakePBFTConsensus>& fake_pbft, int64_t blockNumber)
+{
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    BOOST_CHECK(p_blockChain->m_blockNumber == blockNumber);
+    BOOST_CHECK(p_blockChain->m_blockHash.size() == (uint64_t)blockNumber);
+    BOOST_CHECK(p_blockChain->m_blockChain.size() == (uint64_t)blockNumber);
 }
 
 static inline void checkResetConfig(FakeConsensus<FakePBFTConsensus>& fake_pbft, bool isMiner)
@@ -216,6 +242,71 @@ static void checkReportBlock(
     checkClearAllExceptCommitCache(fake_pbft);
     /// check delCommitCache
     checkDelCommitCache(fake_pbft, highest);
+}
+
+static void checkBackupMsg(FakeConsensus<FakePBFTConsensus>& fake_pbft, std::string const& key,
+    bytes const& msgData, bool shouldClean = true)
+{
+    BOOST_CHECK(fake_pbft.consensus()->backupDB());
+    /// insert succ
+    std::string data = fake_pbft.consensus()->backupDB()->lookup(key);
+    if (msgData.size() == 0)
+        BOOST_CHECK(data.empty() == true);
+    else
+    {
+        BOOST_CHECK(data == toHex(msgData));
+        /// remove the key
+        std::string empty = "";
+        if (shouldClean)
+            fake_pbft.consensus()->backupDB()->insert(key, empty);
+    }
+}
+
+template <typename T>
+static void checkBroadcastSpecifiedMsg(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, T& tmp_req, unsigned packetType)
+{
+    KeyPair key_pair;
+    KeyPair peer_keyPair = KeyPair::create();
+    /// fake prepare_req
+    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    /// obtain sig of SignReq
+    tmp_req = T(prepare_req, fake_pbft.consensus()->keyPair(), prepare_req.idx);
+    std::string key = tmp_req.sig.hex();
+    /// append session info
+    appendSessionInfo(fake_pbft, peer_keyPair.pub());
+    /// case1: the peer node is not miner
+    if (packetType == SignReqPacket)
+    {
+        fake_pbft.consensus()->broadcastSignReq(prepare_req);
+        /// check broadcast cache
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                        peer_keyPair.pub(), SignReqPacket, key) == false);
+    }
+    if (packetType == CommitReqPacket)
+    {
+        fake_pbft.consensus()->broadcastCommitReq(prepare_req);
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                        peer_keyPair.pub(), CommitReqPacket, key) == false);
+    }
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
+
+    /// case2: the the peer node is a miner
+    fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    FakePBFTMiner(fake_pbft);
+    if (packetType == SignReqPacket)
+    {
+        fake_pbft.consensus()->broadcastSignReq(prepare_req);
+        BOOST_CHECK(
+            fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) == true);
+    }
+    if (packetType == CommitReqPacket)
+    {
+        fake_pbft.consensus()->broadcastCommitReq(prepare_req);
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                        peer_keyPair.pub(), CommitReqPacket, key) == true);
+    }
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
 }
 
 }  // namespace test

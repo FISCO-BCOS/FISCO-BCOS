@@ -184,34 +184,18 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     compareAsyncSendTime(fake_pbft, peer3_keyPair.pub(), 0);
 }
 
-/// test broadcastSignReq
-BOOST_AUTO_TEST_CASE(testBroadcastSignReq)
+/// test broadcastSignReq and broadcastCommitReq
+BOOST_AUTO_TEST_CASE(testBroadcastSignAndCommitReq)
 {
     FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
-    KeyPair key_pair;
-    KeyPair peer_keyPair = KeyPair::create();
-    /// fake prepare_req
-    PrepareReq prepare_req = FakePrepareReq(key_pair);
-    /// obtain sig of SignReq
-    SignReq tmp_req(prepare_req, fake_pbft.consensus()->keyPair(), prepare_req.idx);
-    std::string signReq_key = tmp_req.sig.hex();
-    /// append session info
-    appendSessionInfo(fake_pbft, peer_keyPair.pub());
-    /// case1: the peer node is not miner
-    fake_pbft.consensus()->broadcastSignReq(prepare_req);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), SignReqPacket, signReq_key) == false);
-    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
-    /// check cache
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(tmp_req));
-    /// case2: the the peer node is a miner
-    fake_pbft.m_minerList.push_back(peer_keyPair.pub());
-    FakePBFTMiner(fake_pbft);
-    fake_pbft.consensus()->broadcastSignReq(prepare_req);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), SignReqPacket, signReq_key) == true);
-    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(tmp_req));
+    /// check broadcastSignReq
+    SignReq sign_req;
+    checkBroadcastSpecifiedMsg(fake_pbft, sign_req, SignReqPacket);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(sign_req));
+    /// check broadcastCommitReq
+    CommitReq commit_req;
+    checkBroadcastSpecifiedMsg(fake_pbft, commit_req, CommitReqPacket);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commit_req));
 }
 
 /// test checkAndSave && reportBlock
@@ -220,7 +204,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     /// fake collected commitReq and signReq
     BlockHeader highest;
     size_t invalid_height = 2;
-    size_t invalid_hash = 3;
+    size_t invalid_hash = 0;
     size_t valid = 4;
     FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
@@ -228,7 +212,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     fake_pbft.consensus()->setHighest(highest);
     PrepareReq prepare_req;
     FakeValidNodeNum(fake_pbft, valid);
-    FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid);
+    FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid, 2);
     /// exception case: invalid view
     fake_pbft.consensus()->setView(prepare_req.view + u256(1));
     CheckBlockChain(fake_pbft, false);
@@ -248,7 +232,69 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     checkResetConfig(fake_pbft, true);
 }
 /// test checkAndCommit
-BOOST_AUTO_TEST_CASE(testCheckAndCommit) {}
+BOOST_AUTO_TEST_CASE(testCheckAndCommit)
+{
+    /// fake collected commitReq and signReq
+    BlockHeader highest;
+    size_t invalid_height = 2;
+    size_t invalid_hash = 3;
+    size_t valid = 4;
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    fake_pbft.consensus()->initPBFTEnv(
+        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+    fake_pbft.consensus()->setHighest(highest);
+    int64_t block_number = obtainBlockNumber(fake_pbft);
+    PrepareReq prepare_req;
+    FakeValidNodeNum(fake_pbft, valid);
+
+    FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid, 0);
+    KeyPair peer_keyPair = KeyPair::create();
+    fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+
+    /// case1: invalid view, return directly(import failed)
+    fake_pbft.consensus()->setView(prepare_req.view + u256(1));
+    fake_pbft.consensus()->checkAndCommit();
+    /// check submit failed
+    CheckBlockChain(fake_pbft, block_number);
+    /// check update commitedPrepareCache failed
+
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() !=
+                fake_pbft.consensus()->reqCache()->committedPrepareCache());
+
+    /// check backupMsg failed
+    bytes data = bytes();
+    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+
+    //// check no broadcast
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), CommitReqPacket, prepare_req.sig.hex()) == false);
+
+    /// case2: valid view
+    fake_pbft.consensus()->setView(prepare_req.view);
+    fake_pbft.consensus()->checkAndCommit();
+    /// check backupMsg succ
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
+                fake_pbft.consensus()->reqCache()->committedPrepareCache());
+    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    /// submit failed for collected commitReq is not enough
+    CheckBlockChain(fake_pbft, block_number);
+
+    /// case3: enough commitReq && SignReq
+    FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid, 2);
+    fake_pbft.consensus()->checkAndCommit();
+    /// check backupMsg succ
+    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    /// check submit block scc
+    CheckBlockChain(fake_pbft, block_number + 1);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
+                fake_pbft.consensus()->reqCache()->committedPrepareCache());
+    /// check reportBlock
+    checkReportBlock(fake_pbft, highest, false);
+    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastSignTime <= utcTime());
+}
 /// test handlePrepareMsg
 BOOST_AUTO_TEST_CASE(testHandlePrepareMsg) {}
 BOOST_AUTO_TEST_SUITE_END()

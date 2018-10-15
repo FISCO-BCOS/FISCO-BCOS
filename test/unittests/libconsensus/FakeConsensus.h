@@ -112,6 +112,12 @@ public:
     bool const& cfgErr() { return m_cfgErr; }
     void resetBlock(dev::eth::Block& block) { return PBFTConsensus::resetBlock(block); }
     void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
+    void checkAndCommit() { return PBFTConsensus::checkAndCommit(); }
+    static std::string const& backupKeyCommitted() { return PBFTConsensus::c_backupKeyCommitted; }
+    void broadcastCommitReq(PrepareReq const& req)
+    {
+        return PBFTConsensus::broadcastCommitReq(req);
+    }
 };
 
 template <typename T>

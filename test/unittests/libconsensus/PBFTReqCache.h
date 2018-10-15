@@ -67,7 +67,7 @@ void FakeInvalidReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cache, B
         T req(prepare_req, KeyPair::create(), prepare_req.idx);
         req.block_hash = invalid_hash;
         reqCache.addReq(req, cache);
-        BOOST_CHECK(reqCache.getSizeFromCache(req.block_hash, cache) == u256(i + 1));
+        /// BOOST_CHECK(reqCache.getSizeFromCache(req.block_hash, cache) == u256(i + 1));
     }
     for (size_t i = 0; i < validNum; i++)
     {
