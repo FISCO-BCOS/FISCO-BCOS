@@ -25,6 +25,8 @@
 #include <libethcore/LogEntry.h>
 using namespace dev::sync;
 using namespace dev::blockverifier;
+using namespace dev::eth;
+using namespace dev::p2p;
 namespace dev
 {
 namespace consensus
@@ -78,7 +80,7 @@ void Consensus::doWork(bool wait)
             if (shouldWait(wait))
             {
                 std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, chrono::milliseconds(1));
+                m_signalled.wait_for(l, std::chrono::milliseconds(1));
             }
         }
     }
@@ -123,7 +125,7 @@ dev::blockverifier::ExecutiveContext::Ptr Consensus::executeBlock(Block& block)
 {
     std::unordered_map<Address, dev::eth::PrecompiledContract> contract;
     /// reset execute context
-    return m_blockVerifier->executeBlock(block, 0, contract);
+    return m_blockVerifier->executeBlock(block);
 }
 
 void Consensus::checkBlockValid(Block const& block)

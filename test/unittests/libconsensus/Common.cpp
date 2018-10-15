@@ -149,6 +149,25 @@ BOOST_AUTO_TEST_CASE(testSignReqAndCommitReq)
     checkSignAndCommitReq<CommitReq>();
 }
 
+/// test viewchange
+BOOST_AUTO_TEST_CASE(testViewChange)
+{
+    ViewChangeReq empty_view;
+    checkPBFTMsg(empty_view);
+    KeyPair key_pair = KeyPair::create();
+    ViewChangeReq viewChange_req(key_pair, 100, u256(1000), u256(1), sha3("test_view"));
+    checkPBFTMsg(viewChange_req, key_pair, 100, u256(1000), u256(1), viewChange_req.timestamp,
+        sha3("test_view"));
+    bytes req_data;
+    BOOST_REQUIRE_NO_THROW(viewChange_req.encode(req_data));
+    ViewChangeReq tmp_req;
+    BOOST_REQUIRE_NO_THROW(tmp_req.decode(ref(req_data)));
+    BOOST_CHECK(tmp_req == viewChange_req);
+    /// test decode exception
+    req_data[0] += 1;
+    BOOST_CHECK_THROW(tmp_req.decode(ref(req_data)), std::exception);
+}
+
 /// test PBFTMsgPacket
 BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
 {
