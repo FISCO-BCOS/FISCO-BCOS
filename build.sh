@@ -189,9 +189,9 @@ build_ubuntu_source()
 	# build source
 	execute_cmd "mkdir -p build && cd build/"
 	if [ ${enable_guomi} -eq 0 ];then
-		execute_cmd "cmake -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake -DEVMJIT=OFF -DTESTS=OFF .. "
 	else
-		execute_cmd "cmake -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF .. "
 	fi
 	execute_cmd "make && sudo make install"
 }
@@ -201,9 +201,9 @@ build_centos_source()
 	# build source
 	execute_cmd "mkdir -p build && cd build/"
 	if [ ${enable_guomi} -eq 0 ];then
-		execute_cmd "cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake3 -DEVMJIT=OFF -DTESTS=OFF .. "
 	else
-		execute_cmd "cmake3 -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake3 -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF .. "
 	fi
 	execute_cmd "make && sudo make install && cd ${current_dir}"
 }
