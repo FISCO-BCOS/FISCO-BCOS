@@ -22,13 +22,13 @@ class MockAMOPDB : public dev::storage::Storage {
   virtual TableInfo::Ptr info(const std::string &table) override {
     TableInfo::Ptr info = std::make_shared<TableInfo>();
     if (table != "_sys_tables_") {
-      info->indices.push_back("姓名");
-      info->indices.push_back("资产号");
+      info->fields.push_back("姓名");
+      info->fields.push_back("资产号");
       info->key = "姓名";
       info->name = "t_test";
     } else {
-      info->indices.push_back("key_field");
-      info->indices.push_back("value_field");
+      info->fields.push_back("key_field");
+      info->fields.push_back("value_field");
       info->key = "key";
       info->name = "_sys_tables_";
     }
