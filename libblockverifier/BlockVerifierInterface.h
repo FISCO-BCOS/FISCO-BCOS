@@ -42,12 +42,11 @@ namespace blockverifier
 class BlockVerifierInterface
 {
 public:
-    BlockVerifierInterface(){};
+    BlockVerifierInterface(){} = default;
 
     virtual ~BlockVerifierInterface(){};
 
-    virtual ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, int stateType,
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract) = 0;
+    virtual ExecutiveContext::Ptr executeBlock(dev::eth::Block& block) = 0;
 };
 
 }  // namespace blockverifier

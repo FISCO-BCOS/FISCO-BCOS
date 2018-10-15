@@ -79,10 +79,7 @@ public:
         return m_precompiledContract;
     }
 
-    void setNumberHashNumberHash(NumberHashCallBackFunction _pNumberHash)
-    {
-        m_pNumberHash = _pNumberHash;
-    }
+    void setNumberHash(NumberHashCallBackFunction _pNumberHash) { m_pNumberHash = _pNumberHash; }
 
 private:
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;

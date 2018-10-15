@@ -138,7 +138,7 @@ public:
 
     void appendTransactionReceipt(TransactionReceipt const& _tran) { m_receipts.push_back(_tran); }
 
-    TransactionReceipts& getTransactionReceipts() { return m_receipts; }
+    const TransactionReceipts& getTransactionReceipts() const { return m_receipts; }
 
 private:
     /// encode function

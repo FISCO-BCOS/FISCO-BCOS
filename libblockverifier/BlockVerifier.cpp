@@ -33,11 +33,10 @@ using namespace dev::blockverifier;
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
 {
     LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size();
-    dev::blockverifier::ExecutiveContext::Ptr executiveContext =
-        std::make_shared<dev::blockverifier::ExecutiveContext>();
+    ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
     {
-        dev::blockverifier::BlockInfo blockInfo;
+        BlockInfo blockInfo;
         blockInfo.hash = block.blockHeader().hash();
         blockInfo.number = block.blockHeader().number();
         executiveContext->setPrecompiledContract(m_precompiledContract);
@@ -70,8 +69,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
 
 
 std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo const& _envInfo,
-    Transaction const& _t, OnOpFunc const& _onOp,
-    dev::blockverifier::ExecutiveContext::Ptr executiveContext)
+    Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
 {
     LOG(TRACE) << "State::execute ";
 
