@@ -62,6 +62,7 @@ public:
     virtual SessionInfos sessionInfos() const = 0;
 
     ///< Get connecting sessions by topicID which is groupID and can be got by protocolID.
+    ///< TODO: Whether the session list needs caching, especially when the consensus module calls.
     virtual SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const = 0;
 
     ///< Quickly determine whether to connect to a particular node.
