@@ -28,6 +28,10 @@ namespace dev
 {
 namespace consensus
 {
+/**
+ * @brief: delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
+ * @param hash
+ */
 void PBFTReqCache::delCache(h256 const& hash)
 {
     LOG(DEBUG) << "try to delete hash=" << hash << " from pbft cache";
@@ -44,25 +48,47 @@ void PBFTReqCache::delCache(h256 const& hash)
         m_prepareCache.clear();
 }
 
-void PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize)
+/**
+ * @brief: obtain the sig-list from m_commitCache
+ *         and append the sig-list to given block
+ * @param block: block need to append sig-list
+ * @param minSigSize: minimum size of the sig list
+ */
+bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize)
 {
     std::vector<std::pair<u256, Signature>> sig_list;
-    for (auto item : m_commitCache[m_prepareCache.block_hash])
+    if (m_commitCache.count(m_prepareCache.block_hash) > 0)
     {
-        sig_list.push_back(std::make_pair(item.second.idx, Signature(item.first.c_str())));
+        for (auto item : m_commitCache[m_prepareCache.block_hash])
+        {
+            sig_list.push_back(std::make_pair(item.second.idx, Signature(item.first.c_str())));
+        }
+        assert(u256(sig_list.size()) >= minSigSize);
+        /// set siglist for prepare cache
+        block.setSigList(sig_list);
+        return true;
     }
-    assert(u256(sig_list.size()) >= minSigSize);
-    /// set siglist for prepare cache
-    block.setSigList(sig_list);
+    return false;
 }
 
-bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum,
+/**
+ * @brief: determine can trigger viewchange or not
+ * @param minView: return value, the min view of the received-viewchange requests
+ * @param minInvalidNodeNum: the min-valid num of received-viewchange-request required by trigger
+ * viewchange
+ * @param toView: next view, used to filter the received-viewchange-request
+ * @param highestBlock: current block-header, used to filter the received-viewchange-request
+ * @param consensusBlockNumber: number of the consensused block number
+ * @return true: should trigger viewchange
+ * @return false: can't trigger viewchange
+ */
+bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNodeNum,
     u256 const& toView, dev::eth::BlockHeader const& highestBlock,
-    int64_t const& consensusBlockNumber, ViewChangeReq const& req)
+    int64_t const& consensusBlockNumber)
 {
     std::map<u256, u256> idx_view_map;
-    minView = u256(0);
-    int64_t min_height = 0;
+    minView = Invalid256;
+    int64_t min_height = INT64_MAX;
     for (auto viewChangeItem : m_recvViewChangeReq)
     {
         if (viewChangeItem.first > toView)
@@ -70,15 +96,15 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNod
             for (auto viewChangeEntry : viewChangeItem.second)
             {
                 auto it = idx_view_map.find(viewChangeEntry.first);
-
-                if ((it != idx_view_map.end() ||
+                if ((it == idx_view_map.end() ||
                         viewChangeItem.first > idx_view_map[viewChangeEntry.first]) &&
                     viewChangeEntry.second.height >= highestBlock.number())
                 {
-                    /// update to higher view
+                    /// update to lower view
                     idx_view_map[viewChangeEntry.first] = viewChangeItem.first;
                     if (minView > viewChangeItem.first)
                         minView = viewChangeItem.first;
+                    /// update to lower height
                     if (min_height > viewChangeEntry.second.height)
                         min_height = viewChangeEntry.second.height;
                 }
@@ -88,43 +114,28 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& minInvalidNod
     u256 count = u256(idx_view_map.size());
     bool flag =
         (min_height == consensusBlockNumber) && (min_height == m_committedPrepareCache.height);
-    return (count > minInvalidNodeNum) && !flag;
+    return (count > maxInvalidNodeNum) && !flag;
 }
 
+/**
+ * @brief: remove invalid view-change requests according to view and the current block header
+ * @param view
+ * @param highestBlock: the current block header
+ */
 void PBFTReqCache::removeInvalidViewChange(
     u256 const& view, dev::eth::BlockHeader const& highestBlock)
 {
-    for (auto pview = m_recvViewChangeReq[view].begin(); pview != m_recvViewChangeReq[view].end();
-         pview++)
+    for (auto pview = m_recvViewChangeReq[view].begin(); pview != m_recvViewChangeReq[view].end();)
     {
+        /// remove old received view-change
         if (pview->second.height < highestBlock.number())
             pview = m_recvViewChangeReq[view].erase(pview);
+        /// remove invalid view-change request with invalid hash
         else if (pview->second.height == highestBlock.number() &&
                  pview->second.block_hash != highestBlock.hash())
             pview = m_recvViewChangeReq[view].erase(pview);
         else
             pview++;
-    }
-}
-
-void PBFTReqCache::addFuturePrepareCache(PrepareReq const& req)
-{
-    if (m_futurePrepareCache.block_hash != req.block_hash)
-    {
-        m_futurePrepareCache = req;
-        LOG(INFO) << "recvFutureBlock, blk=" << req.height << ", hash=" << req.block_hash
-                  << ", idx=" << req.idx;
-    }
-}
-
-void PBFTReqCache::removeInvalidViewChange(u256 const& curView)
-{
-    for (auto it = m_recvViewChangeReq.begin(); it != m_recvViewChangeReq.end();)
-    {
-        if (it->first <= curView)
-            it = m_recvViewChangeReq.erase(it);
-        else
-            it++;
     }
 }
 
@@ -134,12 +145,11 @@ void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, u256 const& vie
     auto it = m_signCache.find(blockHash);
     if (it == m_signCache.end())
         return;
-    auto signCache_entry = it->second;
-    for (auto pcache = signCache_entry.begin(); pcache != signCache_entry.end();)
+    for (auto pcache = it->second.begin(); pcache != it->second.end();)
     {
         /// erase invalid view
         if (pcache->second.view != view)
-            pcache = signCache_entry.erase(pcache);
+            pcache = it->second.erase(pcache);
         else
             pcache++;
     }
@@ -150,11 +160,10 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, u256 const& v
     auto it = m_commitCache.find(blockHash);
     if (it == m_commitCache.end())
         return;
-    auto commitCache_entry = it->second;
-    for (auto pcache = commitCache_entry.begin(); pcache != commitCache_entry.end();)
+    for (auto pcache = it->second.begin(); pcache != it->second.end();)
     {
         if (pcache->second.view != view)
-            pcache = commitCache_entry.erase(pcache);
+            pcache = it->second.erase(pcache);
         else
             pcache++;
     }

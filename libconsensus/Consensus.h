@@ -28,10 +28,10 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
+#include <libethcore/Exceptions.h>
 #include <libethcore/Protocol.h>
-#include <libp2p/Service.h>
-#include <libtxpool/TxPool.h>
-
+#include <libp2p/P2PInterface.h>
+#include <libtxpool/TxPoolInterface.h>
 namespace dev
 {
 class ConsensusStatus;
@@ -49,8 +49,8 @@ public:
      * @param _protocolId: protocolId
      * @param _minerList: miners to generate and execute block
      */
-    Consensus(std::shared_ptr<dev::p2p::Service> _service,
-        std::shared_ptr<dev::txpool::TxPool> _txPool,
+    Consensus(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
@@ -66,8 +66,8 @@ public:
     {
         assert(m_service && m_txPool && m_blockSync);
         if (m_protocolId == 0)
-            BOOST_THROW_EXCEPTION(
-                InvalidProtocolID() << errinfo_comment("Protocol id must be larger than 0"));
+            BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
+                                  << errinfo_comment("Protocol id must be larger than 0"));
     }
 
     virtual ~Consensus() { stop(); }
@@ -119,7 +119,7 @@ protected:
     /// sealing block
     virtual bool shouldSeal();
     virtual bool shouldWait(bool const& wait);
-    virtual void reportBlock(BlockHeader const& blockHeader){};
+    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
     virtual uint64_t calculateMaxPackTxNum() { return m_maxBlockTransactions; }
@@ -146,7 +146,7 @@ protected:
     void appendSealingExtraData(bytes const& _extra);
     void ResetSealingHeader();
     void ResetSealingBlock();
-    dev::blockverifier::ExecutiveContext::Ptr executeBlock(Block& block);
+    dev::blockverifier::ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
     virtual void executeBlock() { m_sealing.p_execContext = executeBlock(m_sealing.block); }
     bool blockExists(h256 const& blockHash)
     {
@@ -154,21 +154,21 @@ protected:
             return false;
         return true;
     }
-    virtual void checkBlockValid(Block const& block);
+    virtual void checkBlockValid(dev::eth::Block const& block);
     bool encodeBlock(bytes& blockBytes);
     /// reset timestamp of block header
     void resetCurrentTime()
     {
         uint64_t parentTime =
             m_blockChain->getBlockByNumber(m_blockChain->number())->header().timestamp();
-        m_sealing.block.header().setTimestamp(max(parentTime + 1, utcTime()));
+        m_sealing.block.header().setTimestamp(std::max(parentTime + 1, utcTime()));
     }
 
 protected:
     /// p2p service handler
-    std::shared_ptr<dev::p2p::Service> m_service;
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler
-    std::shared_ptr<dev::txpool::TxPool> m_txPool;
+    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     /// handler of the block chain module
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     /// handler of the block-sync module
