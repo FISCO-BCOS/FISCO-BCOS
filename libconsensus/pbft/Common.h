@@ -298,8 +298,11 @@ struct PrepareReq : public PBFTMsg
      * @param sealing : object contains both block and block-execution-result
      * @param keyPair : keypair used to sign for the PrepareReq
      */
-    void updatePrepareReq(Sealing& sealing, KeyPair const& keyPair)
+    PrepareReq(PrepareReq const& req, Sealing& sealing, KeyPair const& keyPair)
     {
+        height = req.height;
+        view = req.view;
+        idx = req.idx;
         timestamp = u256(utcTime());
         block_hash = sealing.block.blockHeader().hash();
         sig = signHash(block_hash, keyPair);

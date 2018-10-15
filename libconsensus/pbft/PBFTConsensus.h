@@ -201,7 +201,7 @@ protected:
 
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
-    void handlePrepareMsg(PrepareReq& prepare_req, bool self = false);
+    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = false);
     void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
     void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
     void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
@@ -463,7 +463,7 @@ protected:
 
     inline std::pair<bool, u256> getLeader() const
     {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.number() == INT64_MAX)
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
         {
             return std::make_pair(false, Invalid256);
         }
@@ -471,7 +471,7 @@ protected:
     }
     void checkMinerList(dev::eth::Block const& block);
     bool execBlock();
-    void execBlock(Sealing& sealing, PrepareReq& req, std::ostringstream& oss);
+    void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
     void setBlock();
     void changeViewForEmptyBlock();
     virtual bool isDiskSpaceEnough(std::string const& path)
