@@ -406,6 +406,7 @@ void MemoryDB::checkFiled(Entry::Ptr entry)
   {
     if (_tableInfo->fields.end() == find(_tableInfo->fields.begin(), _tableInfo->fields.end(), it.first))
     {
+      LOG(ERROR) << "table:" << _tableInfo->name << " don't have field :" << it.first;
       throw std::invalid_argument(std::string("ERROR table:") + _tableInfo->name + " don't have field :" + it.first);
     }
   }
