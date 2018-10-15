@@ -3,15 +3,18 @@
 #include "DB.h"
 #include "Storage.h"
 
-namespace dev {
+namespace dev
+{
 
-namespace storage {
+namespace storage
+{
 
-class MemoryDB: public DB {
-public:
+class MemoryDB : public DB
+{
+  public:
 	typedef std::shared_ptr<MemoryDB> Ptr;
 
-	virtual ~MemoryDB() {};
+	virtual ~MemoryDB(){};
 
 	virtual void init(const std::string &tableName);
 	virtual Entries::Ptr select(const std::string &key, Condition::Ptr condition) override;
@@ -21,17 +24,19 @@ public:
 
 	virtual h256 hash();
 	virtual void clear();
-	virtual std::map<std::string, Entries::Ptr>* data() override;
+	virtual std::map<std::string, Entries::Ptr> *data() override;
 
 	void setStateStorage(Storage::Ptr amopDB);
 
 	void setBlockHash(h256 blockHash);
 	void setBlockNum(int blockNum);
-
-private:
+	void setTableInfo(TableInfo::Ptr tableInfo);
+	
+  private:
 	Entries::Ptr processEntries(Entries::Ptr entries, Condition::Ptr condition);
 	bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
 	bool isHash(std::string key);
+	void checkFiled(Entry::Ptr entry);
 
 	Storage::Ptr _remoteDB;
 	TableInfo::Ptr _tableInfo;
@@ -41,6 +46,6 @@ private:
 	int _blockNum = 0;
 };
 
-}
+} // namespace storage
 
-}
+} // namespace dev
