@@ -15,7 +15,7 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo> {
 
   std::string name;
   std::string key;
-  std::vector<std::string> indices;
+  std::vector<std::string> fields;
 };
 
 class Entry : public std::enable_shared_from_this<Entry> {
