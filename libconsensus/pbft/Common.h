@@ -142,13 +142,13 @@ struct PBFTMsg
         sig2 = signHash(fieldsWithoutBlock(), _keyPair);
     }
 
-    bool operator==(PBFTMsg const& req)
+    bool operator==(PBFTMsg const& req) const
     {
         return height == req.height && view == req.view && timestamp == req.timestamp &&
                block_hash == req.block_hash && sig == req.sig && sig2 == req.sig2;
     }
 
-    bool operator!=(PBFTMsg const& req) { return !operator==(req); }
+    bool operator!=(PBFTMsg const& req) const { return !operator==(req); }
     /**
      * @brief: encode the PBFTMsg into bytes
      * @param encodedBytes: the encoded bytes of specified PBFTMsg
@@ -310,11 +310,11 @@ struct PrepareReq : public PBFTMsg
                    << timestamp;
     }
 
-    bool operator==(PrepareReq const& req)
+    bool operator==(PrepareReq const& req) const
     {
         return PBFTMsg::operator==(req) && req.block == block;
     }
-    bool operator!=(PrepareReq const& req) { return !(operator!=(req)); }
+    bool operator!=(PrepareReq const& req) const { return !(operator==(req)); }
 
     /// trans PrepareReq from object to RLPStream
     virtual void streamRLPFields(RLPStream& _s) const
