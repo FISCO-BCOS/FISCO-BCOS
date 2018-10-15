@@ -1278,11 +1278,6 @@ int main(int argc, char** argv)
 	KeyManager::defaultpath = chainParams.wallet;
 	networkID = chainParams.networkId;
 
-	strNodeId = chainParams.nodeId;
-	strGroupId = chainParams.groupId;
-	strStoragePath = chainParams.storagePath;
-
-
 	if (chainParams.vmKind == "interpreter")
 		VMFactory::setKind(VMKind::Interpreter);
 	else if (chainParams.vmKind == "jit")
