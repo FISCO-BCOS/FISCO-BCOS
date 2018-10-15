@@ -110,18 +110,22 @@ struct CallParameters
 class EnvInfo
 {
 public:
-    EnvInfo(BlockHeader const& _current, LastBlockHashesFace const& _lh, u256 const& _gasUsed)
-      : m_headerInfo(_current), m_lastHashes(_lh), m_gasUsed(_gasUsed)
-    {}
+    typedef boost::function<dev::h256(int64_t x)> CallBackFunction;
+
     // Constructor with custom gasLimit - used in some synthetic scenarios like eth_estimateGas RPC
     // method
-    EnvInfo(BlockHeader const& _current, LastBlockHashesFace const& _lh, u256 const& _gasUsed,
+    EnvInfo(BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed,
         u256 const& _gasLimit)
-      : EnvInfo(_current, _lh, _gasUsed)
+      : EnvInfo(_current, _callback, _gasUsed)
     {
         /// modify the gasLimit of current blockheader with given gasLimit
         m_headerInfo.setGasLimit(_gasLimit);
     }
+
+    EnvInfo(BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed)
+      : m_headerInfo(_current), m_numberHash(_callback), m_gasUsed(_gasUsed)
+    {}
+
     /// @return block header
     BlockHeader const& header() const { return m_headerInfo; }
 
@@ -134,11 +138,11 @@ public:
     /// @return gasLimit of the block header
     u256 const& gasLimit() const { return m_headerInfo.gasLimit(); }
 
-    /// @return interfaces that can get a list of recent block hashes(256)
-    LastBlockHashesFace const& lastHashes() const { return m_lastHashes; }
 
     /// @return used gas of the evm
     u256 const& gasUsed() const { return m_gasUsed; }
+
+    dev::h256 numberHash(int64_t x) const { return m_numberHash(x); }
 
     std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine();
 
@@ -148,7 +152,7 @@ public:
 
 private:
     BlockHeader m_headerInfo;
-    LastBlockHashesFace const& m_lastHashes;
+    CallBackFunction m_numberHash;
     u256 m_gasUsed;
     std::shared_ptr<dev::blockverifier::ExecutiveContext> m_executiveEngine;
 };

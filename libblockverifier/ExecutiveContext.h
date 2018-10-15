@@ -71,19 +71,6 @@ public:
     std::shared_ptr<dev::eth::StateFace> getState();
     void setState(std::shared_ptr<dev::eth::StateFace> state);
 
-
-    void commit()
-    {
-        commitState();
-        commitPreCompiled();
-    };
-
-    void clear()
-    {
-        clearState();
-        clearPreCompiled();
-    };
-
     std::shared_ptr<dev::storage::Table> getTable(const Address& address);
 
 
@@ -95,29 +82,7 @@ public:
     void setPrecompiledContract(
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
 
-
 private:
-    void commitState(){
-        // m_stateFace.commit();
-    };
-
-    void commitPreCompiled(){
-        // TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        //    std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-        // tableFactoryPrecompiled->getmemoryTableFactory()->commit();
-    };
-
-    void clearState(){
-        // m_stateFace.clear();
-    };
-
-
-    void clearPreCompiled(){
-        // TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        //    std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-        // tableFactoryPrecompiled->getmemoryTableFactory()->clear();
-    };
-
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
     int m_addressCount = 0x10000;
     BlockInfo m_blockInfo;

@@ -248,16 +248,6 @@ void ExtVM::suicide(Address _a)
 
 h256 ExtVM::blockHash(int64_t _number)
 {
-    u256 number = u256(number);
-    u256 const currentNumber = envInfo().number();
-
-    if (number >= currentNumber || number < (std::max<u256>(256, currentNumber) - 256))
-        return h256();
-
-
-    h256 const parentHash = envInfo().header().parentHash();
-    h256s const lastHashes = envInfo().lastHashes().precedingHashes(parentHash);
-
-    assert(lastHashes.size() > (unsigned)(currentNumber - 1 - number));
-    return lastHashes[(unsigned)(currentNumber - 1 - number)];
+    return envInfo().numberHash(_number);
+    ;
 }
