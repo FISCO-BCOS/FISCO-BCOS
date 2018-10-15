@@ -1466,9 +1466,6 @@ FISCO BCOS区块链节点支持加密通信，在工具配置文件（cryptomod.
 | eventlog           | 合约日志开关（ON或OFF）                           |
 | statlog            | 统计日志开关（ON或OFF）                           |
 | logconf            | 日志配置文件路径（日志配置文件可参看日志配置文件说明）              |
-| dfsNode            | 分布式文件服务节点ID ，与节点身份NodeID一致 （可选功能配置参数）    |
-| dfsGroup           | 分布式文件服务组ID （10 - 32个字符）（可选功能配置参数）        |
-| dfsStorage         | 指定分布式文件系统所使用文件存储目录（可选功能配置参数）             |
 
 ### 12.5 log.conf说明
 

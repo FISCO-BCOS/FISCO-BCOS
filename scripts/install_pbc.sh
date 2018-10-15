@@ -60,9 +60,9 @@ function download_and_install()
 function get_cmake_cmd()
 {
     if grep -Eqi "Ubuntu" /etc/issue || grep -Eq "Ubuntu" /etc/*-release; then
-        cmake_cmd="cmake -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .."
+        cmake_cmd="cmake -DEVMJIT=OFF -DTESTS=OFF .."
     else
-        cmake_cmd="cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .."
+        cmake_cmd="cmake3 -DEVMJIT=OFF -DTESTS=OFF .."
     fi
 }
 
