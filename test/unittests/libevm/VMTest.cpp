@@ -108,7 +108,8 @@ public:
 
     BlockHeader blockHeader{initBlockHeader()};
     LastBlockHashes lastBlockHashes;
-    EnvInfo envInfo{blockHeader, lastBlockHashes, 0};
+    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+    EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
     MPTState mptState;
     StateFace& state;
@@ -263,7 +264,8 @@ public:
 
     BlockHeader blockHeader{initBlockHeader()};
     LastBlockHashes lastBlockHashes;
-    EnvInfo envInfo{blockHeader, lastBlockHashes, 0};
+    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+    EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
     Address extAddress{KeyPair::create().address()};
     MPTState mptState;

@@ -71,6 +71,14 @@ public:
     }
 
     void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
+    void loadTransactions(uint64_t const& transToFetch)
+    {
+        PBFTConsensus::loadTransactions(transToFetch);
+    }
+    bool checkTxsEnough(uint64_t maxTxsCanSeal)
+    {
+        return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
+    }
     u256 const& nodeNum() { return m_nodeNum; }
     u256 const& f() { return m_f; }
     bool const& cfgErr() { return m_cfgErr; }
@@ -105,18 +113,16 @@ template <typename T>
 class FakeConsensus
 {
 public:
-    FakeConsensus(size_t minerSize, int16_t protocolID)
+    FakeConsensus(size_t minerSize, int16_t protocolID,
+        std::shared_ptr<SyncInterface> sync = std::make_shared<FakeBlockSync>(),
+        std::shared_ptr<BlockVerifierInterface> blockVerifier =
+            std::make_shared<FakeBlockverifier>(),
+        std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5))
     {
-        /// fake blocksync
-        std::shared_ptr<SyncInterface> m_sync = std::make_shared<FakeBlockSync>();
-        /// fake blockverifier
-        std::shared_ptr<BlockVerifierInterface> m_blockVerifier =
-            std::make_shared<FakeBlockverifier>();
-        TxPoolFixture txpool_creator(5, 5);
         /// fake minerList
         FakeMinerList(minerSize);
-        m_consensus = std::make_shared<T>(txpool_creator.m_topicService, txpool_creator.m_txPool,
-            txpool_creator.m_blockChain, m_sync, m_blockVerifier, protocolID, m_minerList);
+        m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
+            txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_minerList);
     }
 
     /// fake miner list

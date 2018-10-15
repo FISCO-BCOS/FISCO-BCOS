@@ -136,6 +136,10 @@ public:
         m_txsRoot.clear();
     }
 
+    void appendTransactionReceipt(TransactionReceipt const& _tran) { m_receipts.push_back(_tran); }
+
+    const TransactionReceipts& getTransactionReceipts() const { return m_receipts; }
+
 private:
     /// encode function
     inline void encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
@@ -165,6 +169,8 @@ private:
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     bytes m_txsCache;
+    /// mutable RecursiveMutex m_txsCacheLock;
+    TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
     BytesMap m_txsMapCache;
     h256 m_txsRoot;
 };
