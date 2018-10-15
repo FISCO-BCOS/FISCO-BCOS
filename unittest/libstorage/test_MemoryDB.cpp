@@ -17,8 +17,8 @@ class MockAMOPDB : public dev::storage::AMOPStorage {
     BOOST_TEST(table == "t_test");
 
     TableInfo::Ptr info = std::make_shared<TableInfo>();
-    info->indices.push_back("姓名");
-    info->indices.push_back("资产号");
+    info->fields.push_back("姓名");
+    info->fields.push_back("资产号");
     info->key = "姓名";
     info->name = "t_test";
 
