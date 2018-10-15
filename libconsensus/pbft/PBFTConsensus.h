@@ -388,8 +388,9 @@ protected:
             return false;
         }
     }
-
+    /// check the specified prepareReq is valid or not
     bool isValidPrepare(PrepareReq const& req, bool self, std::ostringstream& oss) const;
+
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
@@ -454,6 +455,7 @@ protected:
     inline bool isValidLeader(PrepareReq const& req) const
     {
         auto leader = getLeader();
+        /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
             return false;
         return true;
@@ -461,7 +463,7 @@ protected:
 
     inline std::pair<bool, u256> getLeader() const
     {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.number() == 0)
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.number() == INT64_MAX)
         {
             return std::make_pair(false, Invalid256);
         }
