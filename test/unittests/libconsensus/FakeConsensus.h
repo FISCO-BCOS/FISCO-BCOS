@@ -78,7 +78,7 @@ public:
     {
         return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
     }
-    
+
     u256 const& f() { return m_f; }
     void resetConfig() { PBFTConsensus::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
