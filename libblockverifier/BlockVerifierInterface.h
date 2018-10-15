@@ -42,7 +42,7 @@ namespace blockverifier
 class BlockVerifierInterface
 {
 public:
-    BlockVerifierInterface(){} = default;
+    BlockVerifierInterface() = default;
 
     virtual ~BlockVerifierInterface(){};
 
