@@ -42,6 +42,7 @@ namespace test
 static void FakePBFTMiner(FakeConsensus<FakePBFTConsensus>& fake_pbft)
 {
     fake_pbft.m_minerList.push_back(fake_pbft.consensus()->keyPair().pub());
+    fake_pbft.m_secrets.push_back(fake_pbft.consensus()->keyPair().secret());
     fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
     fake_pbft.consensus()->resetConfig();
 }
@@ -231,7 +232,7 @@ static inline void checkDelCommitCache(
 static void checkReportBlock(
     FakeConsensus<FakePBFTConsensus>& fake_pbft, BlockHeader const& highest, bool isMiner = false)
 {
-    BOOST_CHECK(fake_pbft.consensus()->consensusBlockNumber() ==
+    BOOST_CHECK(fake_pbft.consensus()->mutableConsensusNumber() ==
                 fake_pbft.consensus()->mutableHighest().number() + 1);
     BOOST_CHECK(fake_pbft.consensus()->leaderFailed() == false);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime > utcTime() - 100000);
@@ -307,6 +308,139 @@ static void checkBroadcastSpecifiedMsg(
                         peer_keyPair.pub(), CommitReqPacket, key) == true);
     }
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
+}
+
+/// check isExistPrepare
+static void testIsExistPrepare(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    if (!succ)
+    {
+        fake_pbft.consensus()->reqCache()->addRawPrepare(req);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        fake_pbft.consensus()->reqCache()->clearAllExceptCommitCache();
+    }
+}
+
+/// check isFromSelf
+static void testIsFromSelf(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    if (!succ)
+    {
+        u256 origin = req.idx;
+        req.idx = fake_pbft.consensus()->nodeIdx();
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        req.idx = origin;
+    }
+}
+
+static void testIsConsensused(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    if (!succ)
+    {
+        int64_t org_height = req.height;
+        req.view = fake_pbft.consensus()->view() - u256(1);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        req.height = org_height;
+    }
+}
+
+static void testIsFuture(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    if (!succ)
+    {
+        int64_t org_height = req.height;
+        u256 org_view = req.view;
+        req.height = fake_pbft.consensus()->mutableConsensusNumber();
+        req.view = fake_pbft.consensus()->view() + u256(1);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        req.height = org_height;
+        req.view = org_view;
+    }
+}
+
+static void testIsValidLeader(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    if (!succ)
+    {
+        fake_pbft.consensus()->mutableLeaderFailed() = true;
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        fake_pbft.consensus()->mutableLeaderFailed() = false;
+    }
+}
+
+static void testIsHashSavedAfterCommit(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    if (!succ)
+    {
+        int64_t org_height = req.height;
+        h256 org_hash = req.block_hash;
+        req.height = fake_pbft.consensus()->reqCache()->committedPrepareCache().height;
+        req.block_hash = sha3("invalid");
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        req.height = org_height;
+        req.block_hash = org_hash;
+    }
+}
+
+static void testCheckSign(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    if (!succ)
+    {
+        Signature org_sig2 = req.sig2;
+        req.sig2 = Signature();
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        req.sig2 = org_sig2;
+    }
+}
+
+static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req)
+{
+    /// init the env
+    FakePBFTMiner(fake_pbft);
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    fake_pbft.consensus()->resetConfig();
+    fake_pbft.consensus()->setHighest(highest);
+    fake_pbft.consensus()->mutableConsensusNumber() = highest.number();
+    fake_pbft.consensus()->setView(u256(2));
+    req.idx = fake_pbft.consensus()->getLeader().second;
+    std::cout << "#### req.idx:" << req.idx
+              << ", leader:" << fake_pbft.consensus()->getLeader().second << std::endl;
+    req.height = fake_pbft.consensus()->mutableConsensusNumber();
+    req.view = fake_pbft.consensus()->view();
+    BOOST_CHECK(u256(fake_pbft.m_secrets.size()) > req.idx);
+    Secret sec = fake_pbft.m_secrets[req.idx.convert_to<size_t>()];
+    req.sig = dev::sign(sec, req.block_hash);
+    req.sig2 = dev::sign(sec, req.fieldsWithoutBlock());
+}
+
+static void TestIsValidPrepare(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+{
+    KeyPair key_pair;
+    req = FakePrepareReq(key_pair);
+    /// normal case: fake a valid prepare
+    fakeValidPrepare(fake_pbft, req);
+    BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == true);
+    /// exception case: prepareReq has already been cached
+    testIsExistPrepare(fake_pbft, req, succ);
+    /// exception case: allowSelf is false && the prepare generated from the node-self
+    testIsFromSelf(fake_pbft, req, succ);
+    /// exception case: hasConsensused
+    testIsConsensused(fake_pbft, req, succ);
+    /// exception case: isFutureBlock
+    testIsFuture(fake_pbft, req, succ);
+    /// exception case: isValidLeader
+    testIsValidLeader(fake_pbft, req, succ);
+    /// exception case: isHashSavedAfterCommit
+    testIsHashSavedAfterCommit(fake_pbft, req, succ);
+    /// exception case: checkSign failed
+    testCheckSign(fake_pbft, req, succ);
 }
 
 }  // namespace test

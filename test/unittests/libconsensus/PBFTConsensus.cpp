@@ -296,7 +296,13 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastSignTime <= utcTime());
 }
 /// test handlePrepareMsg
-BOOST_AUTO_TEST_CASE(testHandlePrepareMsg) {}
+BOOST_AUTO_TEST_CASE(testIsValidPrepare)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    PrepareReq req;
+    TestIsValidPrepare(fake_pbft, req, true);
+    TestIsValidPrepare(fake_pbft, req, false);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

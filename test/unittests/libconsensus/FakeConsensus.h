@@ -107,7 +107,7 @@ public:
     u256 const& nodeNum() { return m_nodeNum; }
     u256 const& fValue() { return m_f; }
     void setF(u256 const& fValue) { m_f = fValue; }
-    int64_t const& consensusBlockNumber() { return m_consensusBlockNumber; }
+    int64_t& mutableConsensusNumber() { return m_consensusBlockNumber; }
     bool const& leaderFailed() { return m_leaderFailed; }
     bool const& cfgErr() { return m_cfgErr; }
     void resetBlock(dev::eth::Block& block) { return PBFTConsensus::resetBlock(block); }
@@ -118,6 +118,13 @@ public:
     {
         return PBFTConsensus::broadcastCommitReq(req);
     }
+    bool isValidPrepare(PrepareReq const& req, bool self) const
+    {
+        std::ostringstream oss;
+        return PBFTConsensus::isValidPrepare(req, self, oss);
+    }
+    bool& mutableLeaderFailed() { return m_leaderFailed; }
+    inline std::pair<bool, u256> getLeader() const { return PBFTConsensus::getLeader(); }
 };
 
 template <typename T>
@@ -146,12 +153,14 @@ public:
         {
             KeyPair key_pair = KeyPair::create();
             m_minerList.push_back(key_pair.pub());
+            m_secrets.push_back(key_pair.secret());
         }
     }
     std::shared_ptr<T> consensus() { return m_consensus; }
 
 public:
     h512s m_minerList;
+    std::vector<Secret> m_secrets;
 
 private:
     std::shared_ptr<T> m_consensus;
