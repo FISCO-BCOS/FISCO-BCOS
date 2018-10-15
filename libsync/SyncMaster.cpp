@@ -30,14 +30,6 @@ using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::txpool;
 
-SyncMaster::SyncMaster(BlockChainInterface& _blockChain, TxPoolInterface& _txPool,
-    int16_t const _protocolId, unsigned _idleWaitMs = 30)
-  : m_blockChain(_blockChain),
-    m_txPool(_txPool),
-    m_protocolId(_protocolId),
-    SyncInterface(_protocolId, _idleWaitMs)
-{}
-
 void SyncMaster::start()
 {
     startWorking();
@@ -63,7 +55,7 @@ SyncStatus SyncMaster::status() const
     res.state = m_state;
     res.protocolId = m_protocolId;
     res.startBlockNumber = m_startingBlock;
-    res.currentBlockNumber = m_blockChain.number();
+    res.currentBlockNumber = m_blockChain->number();
     res.highestBlockNumber = m_highestBlock;
     return res;
 }

@@ -39,6 +39,7 @@ namespace eth
 class FakeBlockChain : public dev::blockchain::BlockChainInterface
 {
 public:
+    FakeBlockChain() { m_fakeBlock = std::make_shared<Block>(); }
     virtual int64_t number() const override { return m_number; }
     virtual dev::h256 numberHash(int64_t _i) const override
     {
@@ -61,7 +62,7 @@ public:
 
 private:
     int64_t m_number = 0;
-    std::shared_ptr<Block> m_fakeBlock = std::make_shared<Block>();
+    std::shared_ptr<Block> m_fakeBlock;
 };
 
 class FakeTxPool : public dev::txpool::TxPoolInterface

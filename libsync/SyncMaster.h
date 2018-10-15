@@ -51,22 +51,21 @@ public:
 class SyncMaster : public SyncInterface
 {
 public:
-    SyncMaster(dev::blockchain::BlockChainInterface& _blockChain,
-        dev::txpool::TxPoolInterface& _txPool, int16_t const _protocolId, unsigned _idleWaitMs);
-
-    template <typename T1, typename T2>
-    SyncMaster(T1 _blockChain, T2 _txPool, int16_t const _protocolId, unsigned _idleWaitMs = 30)
-      : m_blockChain(dynamic_cast<dev::blockchain::BlockChainInterface&>(_blockChain)),
-        m_txPool(dynamic_cast<dev::txpool::TxPoolInterface&>(_txPool)),
+    SyncMaster(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, int16_t const _protocolId,
+        unsigned _idleWaitMs = 30)
+      : m_blockChain(_blockChain),
+        m_txPool(_txPool),
         m_protocolId(_protocolId),
-        SyncInterface(_protocolId, _idleWaitMs){};
+        SyncInterface(_protocolId, _idleWaitMs)
+    {}
 
     virtual ~SyncMaster(){};
     /// start blockSync
     virtual void start() override;
     /// stop blockSync
     virtual void stop() override;
-
+    /// doWork every idleWaitMs
     virtual void doWork() override;
 
     /// get status of block sync
@@ -90,8 +89,8 @@ public:
 
 private:
     // Outside data
-    dev::blockchain::BlockChainInterface& m_blockChain;
-    dev::txpool::TxPoolInterface& m_txPool;
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
 
     // Internal data
     // std::map<dev::p2p::NodeID, std::shared_ptr<SyncPeer>> m_peers;

@@ -38,23 +38,28 @@ namespace test
 class SyncFixture : public TestOutputHelperFixture
 {
 public:
-    SyncFixture()
-      : fakeBlockChain(), fakeTxPool(66), fakeSyncMaster(fakeBlockChain, fakeTxPool, 66){};
-    FakeBlockChain fakeBlockChain;
-    FakeTxPool fakeTxPool;
-    SyncMaster fakeSyncMaster;
+    SyncFixture() { initFakeSyncMaster(66); }
+    void initFakeSyncMaster(int16_t const& protocolId)
+    {
+        fakeBlockChain = make_shared<FakeBlockChain>();
+        fakeTxPool = make_shared<FakeTxPool>(protocolId);
+        fakeSyncMaster = std::make_shared<SyncMaster>(fakeBlockChain, fakeTxPool, protocolId);
+    }
+    std::shared_ptr<SyncMaster> fakeSyncMaster;
+    shared_ptr<FakeBlockChain> fakeBlockChain;
+    shared_ptr<FakeTxPool> fakeTxPool;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMasterTest, SyncFixture)
 
 BOOST_AUTO_TEST_CASE(ProtocolIdTest)
 {
-    cout << "ProtocolId " << fakeSyncMaster.protocolId() << endl;
-    BOOST_CHECK(fakeSyncMaster.protocolId() == 66);
+    cout << "ProtocolId " << fakeSyncMaster->protocolId() << endl;
+    BOOST_CHECK(fakeSyncMaster->protocolId() == 66);
 
-    fakeSyncMaster.setProtocolId(55);
-    cout << "ProtocolId change to" << fakeSyncMaster.protocolId() << endl;
-    BOOST_CHECK(fakeSyncMaster.protocolId() == 55);
+    fakeSyncMaster->setProtocolId(55);
+    cout << "ProtocolId change to" << fakeSyncMaster->protocolId() << endl;
+    BOOST_CHECK(fakeSyncMaster->protocolId() == 55);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
