@@ -30,6 +30,7 @@
 #include <libethcore/Transaction.h>
 #include <libevm/ExtVMFace.h>
 #include <libmptstate/State.h>
+#include <boost/function.hpp>
 #include <memory>
 namespace dev
 {
@@ -47,15 +48,18 @@ class BlockVerifier : public std::enable_shared_from_this<BlockVerifier>
 {
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
-
+    typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
     BlockVerifier(){};
 
     virtual ~BlockVerifier(){};
 
-    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, int stateType,
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
+    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
 
-    // dev::eth::TransactionReceipt executeTransation(const dev::eth::Transaction& transaction);
+    std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> execute(
+        dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
+        dev::eth::OnOpFunc const& _onOp,
+        dev::blockverifier::ExecutiveContext::Ptr executiveContext);
+
 
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
     {
@@ -64,8 +68,23 @@ public:
 
     ExecutiveContextFactory::Ptr getExecutiveContextFactory() { return m_executiveContextFactory; }
 
+    void setPrecompiledContract(
+        std::unordered_map<Address, dev::eth::PrecompiledContract> precompiledContract)
+    {
+        m_precompiledContract = precompiledContract;
+    }
+
+    std::unordered_map<Address, dev::eth::PrecompiledContract> getPrecompiledContract()
+    {
+        return m_precompiledContract;
+    }
+
+    void setNumberHash(NumberHashCallBackFunction _pNumberHash) { m_pNumberHash = _pNumberHash; }
+
 private:
+    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
+    NumberHashCallBackFunction m_pNumberHash;
 };
 
 }  // namespace blockverifier

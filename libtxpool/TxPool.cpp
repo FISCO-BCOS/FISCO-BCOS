@@ -245,12 +245,14 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
 {
     ReadGuard l(m_lock);
     Transactions ret;
-    uint64_t i = 0;
-    for (auto it = m_txsQueue.begin(); ret.size() < m_limit && it != m_txsQueue.end(); it++)
+    uint64_t limit = min(m_limit, _limit);
+    uint64_t txCnt = 0;
+    for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
         if (!_avoid.count(it->sha3()))
         {
             ret.push_back(*it);
+            txCnt++;
             if (updateAvoid)
                 _avoid.insert(it->sha3());
         }

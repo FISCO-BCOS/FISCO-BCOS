@@ -55,10 +55,12 @@ private:
 class ExecuteVMTestFixture : public TestOutputHelperFixture
 {
 public:
+    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+
     ExecuteVMTestFixture()
       : TestOutputHelperFixture(),
         m_mptStates(u256(0), MPTState::openDB("./", h256("0x1234")), BaseState::Empty),
-        m_e(m_mptStates, EnvInfo(fakeBlockHeader(), fakeLastHashes(), 0))
+        m_e(m_mptStates, EnvInfo(fakeBlockHeader(), fakeCallBack, 0))
     {}
 
     void executeTransaction(Transaction const& _transaction)
