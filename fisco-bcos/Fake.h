@@ -127,9 +127,8 @@ class FakeBlockVerifier : public BlockVerifierInterface
 public:
     FakeBlockVerifier() { m_executiveContext = std::make_shared<ExecutiveContext>(); };
     virtual ~FakeBlockVerifier(){};
-    
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block)
-        override
+
+    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
     {
         return m_executiveContext;
     };
