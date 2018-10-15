@@ -102,13 +102,13 @@ void PBFTConsensus::reloadMsg(std::string const& key, PBFTMsg* msg)
         return;
     try
     {
-        std::string data = m_backupDB->lookup(key);
+        bytes data = fromHex(m_backupDB->lookup(key));
         if (data.empty())
         {
             LOG(ERROR) << "reloadMsg failed";
             return;
         }
-        msg->decode(data, 0);
+        msg->decode(ref(data), 0);
         LOG(INFO) << "reloadMsg, data len=" << data.size() << ", height=" << msg->height
                   << ",hash=" << msg->block_hash.abridged() << ",idx=" << msg->idx;
     }
@@ -119,6 +119,11 @@ void PBFTConsensus::reloadMsg(std::string const& key, PBFTMsg* msg)
     }
 }
 
+/**
+ * @brief: backup specified PBFTMsg with specified key into the DB
+ * @param _key: key of the PBFTMsg
+ * @param _msg : data to backup in the DB
+ */
 void PBFTConsensus::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 {
     if (!m_backupDB)
@@ -127,7 +132,7 @@ void PBFTConsensus::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     _msg.encode(message_data);
     try
     {
-        m_backupDB->insert(_key, ref(message_data).toString());
+        m_backupDB->insert(_key, toHex(message_data));
     }
     catch (std::exception& e)
     {
@@ -317,6 +322,11 @@ bool PBFTConsensus::checkSign(PBFTMsg const& req) const
     return false;
 }
 
+/**
+ * @brief: 1. generate commitReq according to prepare req
+ *         2. broadcast the commitReq
+ * @param req: the prepareReq that used to generate commitReq
+ */
 void PBFTConsensus::broadcastCommitReq(PrepareReq const& req)
 {
     CommitReq commit_req(req, m_keyPair, m_idx);
@@ -536,10 +546,11 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepareReq, bool self)
     LOG(DEBUG) << "handlePrepareMsg, timecost=" << 1000 * t.elapsed();
 }
 
+///
 void PBFTConsensus::checkAndCommit()
 {
     u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
-    if (sign_size == minValidNodes())
+    if (sign_size >= minValidNodes())
     {
         LOG(INFO) << "######### Reach enough sign for block="
                   << m_reqCache->prepareCache().block_hash << ", sign_size = " << sign_size
@@ -559,7 +570,7 @@ void PBFTConsensus::checkAndCommit()
     }
 }
 
-/// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
+/// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit blsock
 /// check whether view and height is valid, if valid, then commit the block and clear the context
 void PBFTConsensus::checkAndSave()
 {
@@ -582,10 +593,11 @@ void PBFTConsensus::checkAndSave()
         {
             Block block(m_reqCache->prepareCache().block);
             m_reqCache->generateAndSetSigList(block, minValidNodes());
-            LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[" << toString(m_reqCache->prepareCache().block_hash)
-                      << "][" << m_reqCache->prepareCache().height << "][" << utcTime() << "]["
-                      << "onSealGenerated"
-                      << "]"
+            LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[hash ="
+                      << toString(m_reqCache->prepareCache().block_hash)
+                      << "][ height=" << m_reqCache->prepareCache().height
+                      << "][time =" << utcTime() << "]["
+                      << "onSealGenerated]"
                       << ",idx=" << m_reqCache->prepareCache().idx;
             /// callback block chain to commit block
             m_blockChain->commitBlock(

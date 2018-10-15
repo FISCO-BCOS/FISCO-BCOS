@@ -102,7 +102,6 @@ public:
     /// specified prepare-request from the sign-cache and commit-cache
     inline void addPrepareReq(PrepareReq const& req)
     {
-        std::cout << "### view of PrepareReq:" << req.view << std::endl;
         m_prepareCache = req;
         removeInvalidSignCache(req.block_hash, req.view);
         removeInvalidCommitCache(req.block_hash, req.view);
