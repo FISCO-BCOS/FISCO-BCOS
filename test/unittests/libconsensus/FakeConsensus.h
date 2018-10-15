@@ -125,6 +125,12 @@ public:
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     inline std::pair<bool, u256> getLeader() const { return PBFTConsensus::getLeader(); }
+    void handlePrepareMsg(PrepareReq const& prepareReq, bool self)
+    {
+        return PBFTConsensus::handlePrepareMsg(prepareReq, self);
+    }
+
+    void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
 };
 
 template <typename T>

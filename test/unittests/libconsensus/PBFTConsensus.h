@@ -113,22 +113,30 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTConsensus> pbft,
 
 static void FakeSignAndCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft,
     PrepareReq& prepareReq, BlockHeader& highest, size_t invalidHeightNum, size_t invalidHash,
-    size_t validNum, int type)
+    size_t validNum, int type, bool shouldFake = true, bool shouldAdd = true)
 {
     FakeBlockChain* p_blockChain =
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
     assert(p_blockChain);
     highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    fake_pbft.consensus()->setHighest(highest);
     /// fake prepare req
     KeyPair key_pair;
-    prepareReq = FakePrepareReq(key_pair);
-    prepareReq.height = highest.number() + 1;
+    if (shouldFake)
+        prepareReq = FakePrepareReq(key_pair);
+    /// prepareReq.height = highest.number() + 1;
     Block block;
     fake_pbft.consensus()->resetBlock(block);
     block.encode(prepareReq.block);  /// encode block
     prepareReq.block_hash = block.header().hash();
-    fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
-    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    prepareReq.height = block.header().number();
+    fake_pbft.consensus()->mutableConsensusNumber() = block.header().number();
+    if (shouldAdd)
+    {
+        fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
+        fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    }
+
     h256 invalid_hash = sha3("invalid" + toString(utcTime()));
 
     /// fake SignReq
@@ -406,13 +414,17 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, Prepar
     BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
     fake_pbft.consensus()->resetConfig();
     fake_pbft.consensus()->setHighest(highest);
-    fake_pbft.consensus()->mutableConsensusNumber() = highest.number();
     fake_pbft.consensus()->setView(u256(2));
     req.idx = fake_pbft.consensus()->getLeader().second;
-    std::cout << "#### req.idx:" << req.idx
-              << ", leader:" << fake_pbft.consensus()->getLeader().second << std::endl;
     req.height = fake_pbft.consensus()->mutableConsensusNumber();
     req.view = fake_pbft.consensus()->view();
+    Block block;
+    fake_pbft.consensus()->resetBlock(block);
+    block.header().setSealerList(fake_pbft.consensus()->minerList());
+    block.encode(req.block);
+    req.block_hash = block.header().hash();
+    req.height = block.header().number();
+    fake_pbft.consensus()->mutableConsensusNumber() = req.height;
     BOOST_CHECK(u256(fake_pbft.m_secrets.size()) > req.idx);
     Secret sec = fake_pbft.m_secrets[req.idx.convert_to<size_t>()];
     req.sig = dev::sign(sec, req.block_hash);
