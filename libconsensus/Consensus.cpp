@@ -123,7 +123,7 @@ dev::blockverifier::ExecutiveContext::Ptr Consensus::executeBlock(Block& block)
 {
     std::unordered_map<Address, dev::eth::PrecompiledContract> contract;
     /// reset execute context
-    return m_blockVerifier->executeBlock(block, 0, contract);
+    return m_blockVerifier->executeBlock(block);
 }
 
 void Consensus::checkBlockValid(Block const& block)
