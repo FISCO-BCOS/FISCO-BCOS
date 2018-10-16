@@ -432,6 +432,31 @@ BOOST_AUTO_TEST_CASE(testHandleCommitMsg)
     PrepareReq prepareReq;
     KeyPair peer_keyPair = KeyPair::create();
     TestIsValidCommitReq(fake_pbft, pbftMsg, commitReq, prepareReq, peer_keyPair, true);
+    /// case1: without enough signReq and commitReq
+    CommitReq commitReq2;
+    int64_t block_number = obtainBlockNumber(fake_pbft);
+    fake_pbft.consensus()->handleCommitMsg(commitReq2, pbftMsg);
+    BOOST_CHECK(commitReq2 == commitReq);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commitReq2));
+    CheckBlockChain(fake_pbft, block_number);
+
+    /// case2: with enough signReq but not commitReq
+    fake_pbft.consensus()->reqCache()->clearAll();
+    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    BlockHeader highest;
+    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
+        fake_pbft.consensus()->minValidNodes().convert_to<size_t>(), 0, false, false);
+    fake_pbft.consensus()->handleCommitMsg(commitReq2, pbftMsg);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commitReq2));
+    CheckBlockChain(fake_pbft, block_number);
+
+    /// case3 : with enough signReq and commitReq
+    fake_pbft.consensus()->reqCache()->clearAll();
+    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
+        fake_pbft.consensus()->minValidNodes().convert_to<size_t>(), 2, false, false);
+    fake_pbft.consensus()->handleCommitMsg(commitReq2, pbftMsg);
+    CheckBlockChain(fake_pbft, block_number + 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

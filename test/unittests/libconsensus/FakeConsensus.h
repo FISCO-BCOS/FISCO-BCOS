@@ -154,6 +154,11 @@ public:
         std::ostringstream oss;
         return PBFTConsensus::isValidCommitReq(req, oss);
     }
+
+    void handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+    {
+        return PBFTConsensus::handleCommitMsg(commit_req, pbftMsg);
+    }
 };
 
 template <typename T>
