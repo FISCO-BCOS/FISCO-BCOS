@@ -1013,7 +1013,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 		return callback->_response;
 #endif
     }
-    catch (exception& e)
+    catch (dev::channel::ChannelException& e)
     {
         LOG(ERROR) << "ERROR:" << e.what();
 
