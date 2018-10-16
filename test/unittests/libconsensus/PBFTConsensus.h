@@ -38,14 +38,20 @@ namespace dev
 {
 namespace test
 {
+static void FakePBFTMinerByKeyPair(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, KeyPair const& key_pair)
+{
+    fake_pbft.m_minerList.push_back(key_pair.pub());
+    fake_pbft.m_secrets.push_back(key_pair.secret());
+    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+}
+
 /// update the miner list of PBFT Consensus
 static void FakePBFTMiner(FakeConsensus<FakePBFTConsensus>& fake_pbft)
 {
-    fake_pbft.m_minerList.push_back(fake_pbft.consensus()->keyPair().pub());
-    fake_pbft.m_secrets.push_back(fake_pbft.consensus()->keyPair().secret());
-    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
-    fake_pbft.consensus()->resetConfig();
+    FakePBFTMinerByKeyPair(fake_pbft, fake_pbft.consensus()->keyPair());
 }
+
 
 static void compareAsyncSendTime(
     FakeConsensus<FakePBFTConsensus>& fake_pbft, dev::h512 const& nodeID, size_t asyncSendTime)
@@ -431,6 +437,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, Prepar
     req.sig2 = dev::sign(sec, req.fieldsWithoutBlock());
 }
 
+/// test isValidPrepare
 static void TestIsValidPrepare(
     FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
 {
@@ -453,6 +460,42 @@ static void TestIsValidPrepare(
     testIsHashSavedAfterCommit(fake_pbft, req, succ);
     /// exception case: checkSign failed
     testCheckSign(fake_pbft, req, succ);
+}
+
+/// obtain the PBFTMsgPacket according to given req
+template <typename T>
+void FakePBFTMsgPacket(
+    PBFTMsgPacket& packet, T& req, unsigned const& type, u256 const& idx, h512 const& nodeId)
+{
+    req.decode(ref(packet.data));
+    packet.packet_id = type;
+    packet.setOtherField(idx, nodeId);
+}
+
+/// fake valid signReq
+static void FakeValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
+    SignReq& signReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair)
+{
+    KeyPair key_pair;
+    prepareReq = FakePrepareReq(key_pair);
+    prepareReq.idx = fake_pbft.consensus()->nodeIdx() + u256(1);
+    SignReq(prepareReq, key_pair, prepareReq.idx);
+    /// add prepareReq
+    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    /// reset current consensusNumber and View
+    fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
+    fake_pbft.consensus()->setView(prepareReq.view);
+    FakePBFTMiner(fake_pbft);
+    FakePBFTMinerByKeyPair(fake_pbft, peer_keyPair);
+    FakePBFTMsgPacket(
+        packet, signReq, SignReqPacket, u256(fake_pbft.m_minerList.size() - 1), peer_keyPair.pub());
+}
+
+/// test isValidSignReq
+static void TestIsValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
+    SignReq& signReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair, bool succ)
+{
+    FakeValidSignReq(fake_pbft, packet, signReq, prepareReq, peer_keyPair);
 }
 
 }  // namespace test

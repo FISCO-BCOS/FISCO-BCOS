@@ -84,7 +84,6 @@ BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
     BOOST_CHECK_THROW(fake_pbft.consensus()->initPBFTEnv(1000), NotEnoughAvailableSpace);
 }
 
-
 /// test onRecvPBFTMessage
 BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
 {
@@ -349,6 +348,15 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number + 1);
 }
+
+BOOST_AUTO_TEST_CASE(testIsValidSignReq) {}
+
+/// test handleSignMsg
+BOOST_AUTO_TEST_CASE(testHandleSignMsg) {}
+
+/// test handleCommitMsg
+BOOST_AUTO_TEST_CASE(testHandleCommitMsg) {}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

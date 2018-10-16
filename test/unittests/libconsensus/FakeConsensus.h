@@ -139,8 +139,16 @@ public:
     {
         return PBFTConsensus::handlePrepareMsg(prepareReq, self);
     }
-
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
+    void handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+    {
+        return PBFTConsensus::handleSignMsg(sign_req, pbftMsg);
+    }
+    bool isValidSignReq(SignReq const& req) const
+    {
+        std::ostringstream oss;
+        return PBFTConsensus::isValidSignReq(req, oss);
+    }
 };
 
 template <typename T>
