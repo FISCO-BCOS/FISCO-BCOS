@@ -233,12 +233,13 @@ int EncryptFile::writer(char* data, size_t size, size_t nmemb, std::string* writ
 
 string EncryptFile::getKeycenterResponse(const string& b64data,const string& kcUrl)
 {
+	string responseData = "";
+#ifdef USE_LIBCURL
 	CURL *curl;
 	CURLcode res;
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	curl = curl_easy_init();
 	string strJson = "{\"reqdata\": \""+ b64data + "\", \"id\": 1, \"jsonrpc\": \"2.0\"}";
-	string responseData = "";
 	if(NULL != curl)
 	{
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
@@ -259,6 +260,7 @@ string EncryptFile::getKeycenterResponse(const string& b64data,const string& kcU
 		curl_easy_cleanup(curl);
 	}
 	curl_global_cleanup();
+#endif
 	return responseData;
 }
 

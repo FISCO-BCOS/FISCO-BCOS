@@ -1,10 +1,9 @@
 # HTTP client from JSON RPC CPP requires curl library. It can find it itself,
 # but we need to know the libcurl location for static linking.
-find_package(CURL REQUIRED)
+# find_package(CURL REQUIRED)
 
 # HTTP server from JSON RPC CPP requires microhttpd library. It can find it itself,
 # but we need to know the MHD location for static linking.
-find_package(MHD REQUIRED)
 
 set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_BUILD_TYPE=Release
@@ -24,12 +23,12 @@ set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                # Select jsoncpp include prefix: <json/...> or <jsoncpp/json/...>
                -DJSONCPP_INCLUDE_PREFIX=json
                -DJSONCPP_LIBRARY=${JSONCPP_LIBRARY}
-               -DCURL_INCLUDE_DIR=${CURL_INCLUDE_DIR}
-               -DCURL_LIBRARY=${CURL_LIBRARY}
+            #    -DCURL_INCLUDE_DIR=${CURL_INCLUDE_DIR}
+            #    -DCURL_LIBRARY=${CURL_LIBRARY}
                -DMHD_INCLUDE_DIR=${MHD_INCLUDE_DIR}
                -DMHD_LIBRARY=${MHD_LIBRARY}
-               -DCMAKE_C_FLAGS=-Wa,-march=generic64
-               -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
+               #-DCMAKE_C_FLAGS=-Wa,-march=generic64
+               #-DCMAKE_CXX_FLAGS=-Wa,-march=generic64
                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                )
@@ -59,6 +58,7 @@ ExternalProject_Add(jsonrpccpp
 )
 
 add_dependencies(jsonrpccpp jsoncpp)
+add_dependencies(jsonrpccpp MHD)
 
 # Create imported libraries
 if (WIN32)
@@ -79,8 +79,8 @@ add_dependencies(JsonRpcCpp::Common jsonrpccpp)
 
 add_library(JsonRpcCpp::Client STATIC IMPORTED)
 set_property(TARGET JsonRpcCpp::Client PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsonrpccpp-client${CMAKE_STATIC_LIBRARY_SUFFIX})
-set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common ${CURL_LIBRARY})
-set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIR})
+set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common)
+set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_INCLUDE_DIRECTORIES)
 add_dependencies(JsonRpcCpp::Client jsonrpccpp)
 
 add_library(JsonRpcCpp::Server STATIC IMPORTED)

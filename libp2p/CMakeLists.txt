@@ -6,7 +6,7 @@ file(GLOB HEADERS "*.h")
 
 add_library(p2p ${SRC_LIST} ${HEADERS})
 
-eth_use(p2p OPTIONAL Miniupnpc)
+# eth_use(p2p OPTIONAL Miniupnpc)
 
 find_package(Dev)
 

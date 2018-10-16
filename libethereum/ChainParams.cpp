@@ -115,10 +115,7 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	cp.logVerbosity = obj.count("logverbosity") ? std::stoi(obj["logverbosity"].get_str()) : 4;
 	cp.evmEventLog = obj.count("eventlog") ? ( (obj["eventlog"].get_str() == "ON") ? true : false) : false;
 	cp.evmCoverLog = obj.count("coverlog") ? ( (obj["coverlog"].get_str() == "ON") ? true : false) : false;
-	//dfs related configure items
-	cp.nodeId = obj.count("dfsNode") ? obj["dfsNode"].get_str() : "";
-	cp.groupId = obj.count("dfsGroup") ? obj["dfsGroup"].get_str() : "";
-	cp.storagePath = obj.count("dfsStorage") ? obj["dfsStorage"].get_str() : "";
+
 	cp.statLog = obj.count("statlog") ? ( (obj["statlog"].get_str() == "ON") ? true : false) : false;
 	cp.broadcastToNormalNode = obj.count("broadcastToNormalNode") ? ( (obj["broadcastToNormalNode"].get_str() == "ON") ? true : false) : false;
 	// params
