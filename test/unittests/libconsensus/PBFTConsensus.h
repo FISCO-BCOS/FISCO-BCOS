@@ -129,14 +129,16 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft,
     /// fake prepare req
     KeyPair key_pair;
     if (shouldFake)
+    {
         prepareReq = FakePrepareReq(key_pair);
-    /// prepareReq.height = highest.number() + 1;
-    Block block;
-    fake_pbft.consensus()->resetBlock(block);
-    block.encode(prepareReq.block);  /// encode block
-    prepareReq.block_hash = block.header().hash();
-    prepareReq.height = block.header().number();
-    fake_pbft.consensus()->mutableConsensusNumber() = block.header().number();
+        /// prepareReq.height = highest.number() + 1;
+        Block block;
+        fake_pbft.consensus()->resetBlock(block);
+        block.encode(prepareReq.block);  /// encode block
+        prepareReq.block_hash = block.header().hash();
+        prepareReq.height = block.header().number();
+    }
+    fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
     if (shouldAdd)
     {
         fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
@@ -419,16 +421,19 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, Prepar
     FakeBlockChain* p_blockChain =
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
     BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
-    fake_pbft.consensus()->resetConfig();
+    /// fake_pbft.consensus()->resetConfig();
     fake_pbft.consensus()->setHighest(highest);
     fake_pbft.consensus()->setView(u256(2));
     req.idx = fake_pbft.consensus()->getLeader().second;
     req.height = fake_pbft.consensus()->mutableConsensusNumber();
     req.view = fake_pbft.consensus()->view();
     Block block;
+    std::cout << "###### idx of fake_pbft:" << fake_pbft.consensus()->nodeIdx() << std::endl;
     fake_pbft.consensus()->resetBlock(block);
     block.header().setSealerList(fake_pbft.consensus()->minerList());
+    block.header().setSealer(req.idx);
     block.encode(req.block);
+    std::cout << "#### idx of block:" << block.header().sealer() << std::endl;
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     fake_pbft.consensus()->mutableConsensusNumber() = req.height;
@@ -478,6 +483,8 @@ void FakePBFTMsgPacket(
 static void FakeValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
     SignReq& signReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair)
 {
+    FakePBFTMiner(fake_pbft);
+    FakePBFTMinerByKeyPair(fake_pbft, peer_keyPair);
     std::cout << "#### FakeValidSignReq" << std::endl;
     KeyPair key_pair;
     prepareReq = FakePrepareReq(key_pair);
@@ -492,8 +499,6 @@ static void FakeValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMs
     /// reset current consensusNumber and View
     fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
     fake_pbft.consensus()->setView(prepareReq.view);
-    FakePBFTMiner(fake_pbft);
-    FakePBFTMinerByKeyPair(fake_pbft, peer_keyPair);
     FakePBFTMsgPacket(
         packet, signReq, SignReqPacket, u256(fake_pbft.m_minerList.size() - 1), peer_keyPair.pub());
 }

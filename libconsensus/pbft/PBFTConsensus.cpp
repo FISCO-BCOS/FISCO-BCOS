@@ -564,10 +564,12 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     LOG(DEBUG) << "handlePrepareMsg, timecost=" << 1000 * t.elapsed();
 }
 
-///
+
 void PBFTConsensus::checkAndCommit()
 {
     u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
+    std::cout << "### sign_size:" << sign_size << " , minValidNodes:" << minValidNodes()
+              << std::endl;
     /// must be equal to minValidNodes:in case of callback checkAndCommit repeatly in a round of
     /// PBFT consensus
     if (sign_size == minValidNodes())
@@ -613,12 +615,13 @@ void PBFTConsensus::checkAndSave()
         {
             Block block(m_reqCache->prepareCache().block);
             m_reqCache->generateAndSetSigList(block, minValidNodes());
-            LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[hash ="
-                      << toString(m_reqCache->prepareCache().block_hash)
+            LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[block_hash ="
+                      << m_reqCache->prepareCache().block_hash.abridged()
                       << "][ height=" << m_reqCache->prepareCache().height
                       << "][time =" << utcTime() << "]["
                       << "onSealGenerated]"
-                      << ",idx=" << m_reqCache->prepareCache().idx;
+                      << ",idx=" << m_reqCache->prepareCache().idx
+                      << ", hash of block to commit=" << block.header().hash();
             /// callback block chain to commit block
             m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
@@ -628,7 +631,7 @@ void PBFTConsensus::checkAndSave()
         else
         {
             LOG(INFO) << "Discard this block, blk_no=" << m_reqCache->prepareCache().height
-                      << ",highest_block number=" << m_highestBlock.number();
+                      << ",highest_block.number=" << m_highestBlock.number();
         }
     }
 }
@@ -658,7 +661,8 @@ void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
     m_reqCache->clearAllExceptCommitCache();
     m_reqCache->delCache(m_highestBlock.hash());
     LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=" << m_highestBlock.number()
-              << ",hash=" << blockHeader.hash().abridged() << ",idx=" << m_highestBlock.sealer()
+              << ",hash=" << blockHeader.hash().abridged()
+              << ",m_highestBlock.idx=" << m_highestBlock.sealer()
               << ", Next: blk=" << m_consensusBlockNumber;
 }
 

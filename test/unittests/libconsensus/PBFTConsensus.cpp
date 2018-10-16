@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
     PrepareReq prepare_req;
-    FakeValidNodeNum(fake_pbft, valid);
+    FakeValidNodeNum(fake_pbft, u256(valid));
     FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid, 2);
     /// exception case: invalid view
     fake_pbft.consensus()->setView(prepare_req.view + u256(1));
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
 
-    FakeValidNodeNum(fake_pbft, valid);
+    FakeValidNodeNum(fake_pbft, u256(valid));
     FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash,
         fake_pbft.consensus()->minValidNodes().convert_to<size_t>(), 0);
 
@@ -363,11 +363,65 @@ BOOST_AUTO_TEST_CASE(testIsValidSignReq)
 BOOST_AUTO_TEST_CASE(testHandleSignMsg)
 {
     FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+
+    fake_pbft.consensus()->initPBFTEnv(
+        fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
+
     PBFTMsgPacket pbftMsg;
     SignReq signReq;
     PrepareReq prepareReq;
     KeyPair peer_keyPair = KeyPair::create();
     TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, true);
+    /// test handleSignMsg
+    /// case1: without enough signReq and commitReq, only addSign to the cache
+    SignReq signReq2;
+    int64_t block_number = obtainBlockNumber(fake_pbft);
+    fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
+    BOOST_CHECK(signReq2 == signReq);
+    /// check the signReq has been added to the cache
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(signReq2));
+    CheckBlockChain(fake_pbft, block_number);
+
+    /// case2： with enough SignReq
+    fake_pbft.consensus()->reqCache()->clearAll();
+    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    std::cout << "safdkjsld#### hash of prepare = " << prepareReq.block_hash.abridged()
+              << "#### hash of sign = " << signReq2.block_hash.abridged();
+    BlockHeader highest;
+    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
+        fake_pbft.consensus()->minValidNodes().convert_to<size_t>() - 1, 0, false, false);
+    std::cout << "#### hash of prepare = " << prepareReq.block_hash.abridged()
+              << "#### hash of sign = " << signReq2.block_hash.abridged();
+
+    std::cout << "#### 1111 fake_pbft.consensus()->minValidNodes().convert_to<size_t>():"
+              << fake_pbft.consensus()->minValidNodes().convert_to<size_t>() << std::endl;
+    fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
+
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
+                fake_pbft.consensus()->reqCache()->rawPrepareCache());
+    /// check backupMsg
+    bytes data;
+    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    CheckBlockChain(fake_pbft, block_number);
+
+    /// case3: with enough SignReq and CommitReq
+    fake_pbft.consensus()->reqCache()->clearAll();
+    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
+        fake_pbft.consensus()->minValidNodes().convert_to<size_t>() - 1, 2, false, false);
+    std::cout << "#### 2222 hash of prepare = " << prepareReq.block_hash.abridged()
+              << "#### hash of sign = " << signReq2.block_hash.abridged();
+    std::cout << "#### 2222 fake_pbft.consensus()->minValidNodes().convert_to<size_t>():"
+              << fake_pbft.consensus()->minValidNodes().convert_to<size_t>() << std::endl;
+    fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
+
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
+                fake_pbft.consensus()->reqCache()->rawPrepareCache());
+    /// check backupMsg
+    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    CheckBlockChain(fake_pbft, block_number + 1);
 }
 
 /// test handleCommitMsg
