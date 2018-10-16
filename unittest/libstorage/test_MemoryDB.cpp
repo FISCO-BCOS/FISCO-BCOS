@@ -93,12 +93,13 @@ struct MemoryDBFixture {
     info->fields.emplace_back("姓名");
     info->fields.emplace_back("资产号");
     info->fields.emplace_back("资产名");
+    info->fields.emplace_back("Exception");
     info->fields.emplace_back("_status_");
     info->key = "姓名";
     info->name = "t_test";
     memDB->setTableInfo(info);
   }
-
+  bool is_critical(std::exception const & e){ return true;}
   ~MemoryDBFixture() {
     
   }
@@ -274,6 +275,19 @@ BOOST_AUTO_TEST_CASE(data_update) {
   BOOST_TEST(entry->getField("姓名") == "张三");
   BOOST_TEST(entry->getField("资产号") == "3");
   BOOST_TEST(entry->getField("资产名") == "保时捷911");
+}
+
+BOOST_AUTO_TEST_CASE(illegal_update) {
+  initData();
+
+  Condition::Ptr condition = memDB->newCondition();
+  condition->EQ("姓名", "张三");
+  condition->EQ("资产号", "3");
+  // failed update
+  Entry::Ptr entry = memDB->newEntry();
+  entry->setField("车型", "保时捷911");
+  auto c = memDB->update("张三", entry, condition);
+  BOOST_TEST(c == 0u);
 }
 
 BOOST_AUTO_TEST_CASE(data_update_multi) {

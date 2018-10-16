@@ -1,7 +1,7 @@
 #include "DBFactoryPrecompiled.h"
 #include "DBPrecompiled.h"
-#include "MemoryDB.h"
 #include "Common.h"
+#include "MemoryDB.h"
 #include <libdevcore/Hash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -13,12 +13,6 @@
 using namespace dev;
 using namespace dev::precompiled;
 using namespace std;
-
-DBFactoryPrecompiled::DBFactoryPrecompiled()
-{
-    m_sysTables.push_back("_sys_tables_");
-    m_sysTables.push_back("_sys_miners_");
-}
 
 void DBFactoryPrecompiled::beforeBlock(shared_ptr<PrecompiledContext> context) {}
 
@@ -127,7 +121,7 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
         // not exist
         if (errorCode == 0u)
         {
-            auto sysTable = getSysTable(context);
+            auto sysTable = dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(openTable(context, storage::SYSTEM_TABLE)));
             auto tableEntry = sysTable->getDB()->newEntry();
             tableEntry->setField("table_name", tableName);
             tableEntry->setField("key_field", keyName);
@@ -147,36 +141,13 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
     return out;
 }
 
-DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr context)
-{
-    string tableName = "_sys_tables_";
-    auto it = _name2Table.find(tableName);
-    if (it == _name2Table.end())
-    {
-        dev::storage::DB::Ptr db = _memoryDBFactory->openTable(
-            context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
-        dynamic_pointer_cast<storage::MemoryDB>(db)->setTableInfo(getSysTableInfo(tableName));
-
-        DBPrecompiled::Ptr dbPrecompiled = make_shared<DBPrecompiled>();
-        dbPrecompiled->setDB(db);
-
-        Address address = context->registerPrecompiled(dbPrecompiled);
-        _name2Table.insert(make_pair(tableName, address));
-
-        return dbPrecompiled;
-    }
-    LOG(DEBUG) << "Table _sys_tables_:" << context->blockInfo().hash
-               << " already opened:" << it->second;
-    return dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(it->second));
-}
-
 unsigned DBFactoryPrecompiled::isTableCreated(PrecompiledContext::Ptr context,
                                               const string &tableName, const string &keyField, const string &valueFiled)
 {
     auto it = _name2Table.find(tableName);
     if (it != _name2Table.end())
         return TABLE_ALREADY_OPEN;
-    auto sysTable = getSysTable(context);
+    auto sysTable = dynamic_pointer_cast<DBPrecompiled>(context->getPrecompiled(openTable(context, storage::SYSTEM_TABLE)));
     auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
     if (tableEntries->size() == 0u)
         return TABLE_NOT_EXISTS;
@@ -202,39 +173,15 @@ Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const s
         LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
         return it->second;
     }
-    // user table
-    if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), tableName))
-    {
-        auto sysTable = getSysTable(context);
-        auto tableEntries = sysTable->getDB()->select(tableName, sysTable->getDB()->newCondition());
-        if (tableEntries->size() == 0u)
-        {
-            LOG(DEBUG) << tableName << "not exists.";
-            return Address();
-        }
-        LOG(DEBUG) << "Open new table:" << tableName;
-        storage::DB::Ptr db = _memoryDBFactory->openTable(
-            context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
-        auto tableInfo = make_shared<storage::TableInfo>();
-        auto entry = tableEntries->get(0);
-        tableInfo->name = tableName;
-        tableInfo->key = entry->getField("key_field");
-        string valueFields = entry->getField("value_field");
-        boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
-        tableInfo->fields.emplace_back(storage::STORAGE_STATUS);
-        tableInfo->fields.emplace_back(tableInfo->key);
-        dynamic_pointer_cast<storage::MemoryDB>(db)->setTableInfo(tableInfo);
-        DBPrecompiled::Ptr dbPrecompiled = make_shared<DBPrecompiled>();
-        dbPrecompiled->setDB(db);
-        Address address = context->registerPrecompiled(dbPrecompiled);
-        _name2Table.insert(make_pair(tableName, address));
-        return address;
-    }
-    // system table
-    LOG(DEBUG) << "Open new system table:" << tableName;
+ 
+    LOG(DEBUG) << "Open new table:" << tableName;
     storage::DB::Ptr db = _memoryDBFactory->openTable(
-        context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
-    dynamic_pointer_cast<storage::MemoryDB>(db)->setTableInfo(getSysTableInfo(tableName));
+            context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
+    if(!db) 
+    {
+        LOG(DEBUG) << "Open new table:" << tableName << " failed.";
+        return Address();
+    }
     DBPrecompiled::Ptr dbPrecompiled = make_shared<DBPrecompiled>();
     dbPrecompiled->setDB(db);
     Address address = context->registerPrecompiled(dbPrecompiled);
@@ -273,22 +220,3 @@ h256 DBFactoryPrecompiled::hash(shared_ptr<PrecompiledContext> context)
     return _hash;
 }
 
-storage::TableInfo::Ptr DBFactoryPrecompiled::getSysTableInfo(const std::string &tableName)
-{
-    auto tableInfo = make_shared<storage::TableInfo>();
-    tableInfo->name = tableName;
-    if (tableName == "_sys_miners_")
-    {
-        tableInfo->key = "name";
-        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
-    }
-    else if (tableName == "_sys_tables_")
-    {
-        tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"key_field", "value_field"};
-    }
-    tableInfo->fields.emplace_back(tableInfo->key);
-    tableInfo->fields.emplace_back(storage::STORAGE_STATUS);
-
-    return tableInfo;
-}

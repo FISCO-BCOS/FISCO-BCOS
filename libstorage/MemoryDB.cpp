@@ -46,7 +46,6 @@ Entries::Ptr dev::storage::MemoryDB::select(const std::string &key,
     if (entries.get() == NULL)
     {
       LOG(ERROR) << "No data found";
-
       return entries;
     }
 
@@ -54,7 +53,7 @@ Entries::Ptr dev::storage::MemoryDB::select(const std::string &key,
   }
   catch (std::exception &e)
   {
-    LOG(ERROR) << "Query DB error:" << e.what();
+    LOG(ERROR) << "MemoryDB error:" << e.what();
   }
 
   return Entries::Ptr();
@@ -164,7 +163,7 @@ size_t dev::storage::MemoryDB::insert(const std::string &key,
   }
   catch (std::exception &e)
   {
-    LOG(ERROR) << "Query DB error";
+    LOG(ERROR) << "MemoryDB error";
   }
 
   return 1;
@@ -407,7 +406,7 @@ void MemoryDB::checkFiled(Entry::Ptr entry)
     if (_tableInfo->fields.end() == find(_tableInfo->fields.begin(), _tableInfo->fields.end(), it.first))
     {
       LOG(ERROR) << "table:" << _tableInfo->name << " don't have field :" << it.first;
-      throw std::invalid_argument(std::string("ERROR table:") + _tableInfo->name + " don't have field :" + it.first);
+      throw std::invalid_argument(std::string("table:") + _tableInfo->name + " don't have field :" + it.first);
     }
   }
 }

@@ -1,22 +1,53 @@
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
+#include "Common.h"
 #include "MemoryDB.h"
 #include "MemoryDBFactory.h"
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 
-DB::Ptr MemoryDBFactory::openTable(h256 blockHash, int num,
-                                             const std::string &table) {
-  LOG(DEBUG) << "Open table:" << blockHash << " num:" << num
-             << " table:" << table;
+MemoryDBFactory::MemoryDBFactory()
+{
+    m_sysTables.push_back("_sys_tables_");
+    m_sysTables.push_back(SYSTEM_TABLE);
+}
 
+DB::Ptr MemoryDBFactory::openTable(h256 blockHash, int num,
+                                             const std::string &tableName) {
+  LOG(DEBUG) << "Open table:" << blockHash << " num:" << num
+             << " table:" << tableName;
+ 
+ 
+  auto tableInfo = make_shared<storage::TableInfo>();
+  if (m_sysTables.end() != find(m_sysTables.begin(), m_sysTables.end(), tableName))
+  {
+      tableInfo = getSysTableInfo(tableName);
+  }
+  else
+  {
+    auto tempSysTable = openTable(_blockHash, _blockNum, SYSTEM_TABLE);
+    auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
+    if (tableEntries->size() == 0u)
+    {
+      LOG(DEBUG) << tableName << " not exist in _sys_tables_.";
+      return nullptr;
+    }
+    auto entry = tableEntries->get(0);
+    tableInfo->name = tableName;
+    tableInfo->key = entry->getField("key_field");
+    string valueFields = entry->getField("value_field");
+    boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
+    tableInfo->fields.emplace_back(storage::STORAGE_STATUS);
+    tableInfo->fields.emplace_back(tableInfo->key);
+  }
   MemoryDB::Ptr memoryDB = std::make_shared<MemoryDB>();
   memoryDB->setStateStorage(_stateStorage);
   memoryDB->setBlockHash(_blockHash);
   memoryDB->setBlockNum(_blockNum);
-
-  memoryDB->init(table);
+  memoryDB->setTableInfo(tableInfo);
+  memoryDB->init(tableName);
 
   return memoryDB;
 }
@@ -26,8 +57,9 @@ DB::Ptr MemoryDBFactory::createTable(
     const std::string &keyField, const std::vector<std::string> &valueField) {
   LOG(DEBUG) << "Create Table:" << blockHash << " num:" << num
              << " table:" << tableName;
-
-  auto sysTable = openTable(blockHash, num, "_sys_tables_");
+#if 0
+  // this is wrong. sysTable should be regist into context
+  auto sysTable = openTable(blockHash, num, SYSTEM_TABLE);
 
   //确认表是否存在
   auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
@@ -41,6 +73,28 @@ DB::Ptr MemoryDBFactory::createTable(
   }
 
   return openTable(blockHash, num, tableName);
+#endif
+  return nullptr;
+}
+
+storage::TableInfo::Ptr MemoryDBFactory::getSysTableInfo(const std::string &tableName)
+{
+    auto tableInfo = make_shared<storage::TableInfo>();
+    tableInfo->name = tableName;
+    if (tableName == "_sys_miners_")
+    {
+        tableInfo->key = "name";
+        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
+    }
+    else if (tableName == SYSTEM_TABLE)
+    {
+        tableInfo->key = "table_name";
+        tableInfo->fields = vector<string>{"key_field", "value_field"};
+    }
+    tableInfo->fields.emplace_back(tableInfo->key);
+    tableInfo->fields.emplace_back(storage::STORAGE_STATUS);
+
+    return tableInfo;
 }
 
 void MemoryDBFactory::setBlockHash(h256 blockHash) {
