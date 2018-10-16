@@ -202,6 +202,10 @@ protected:
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     void handlePrepareMsg(PrepareReq const& prepare_req, bool self = false);
+    /// 1. decode the network-received PBFTMsgPacket to signReq
+    /// 2. check the validation of the signReq
+    /// add the signReq to the cache and
+    /// heck the size of the collected signReq is over 2/3 or not
     void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
     void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
     void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);

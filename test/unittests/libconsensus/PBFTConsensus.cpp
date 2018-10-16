@@ -385,16 +385,9 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
     /// case2： with enough SignReq
     fake_pbft.consensus()->reqCache()->clearAll();
     fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
-    std::cout << "safdkjsld#### hash of prepare = " << prepareReq.block_hash.abridged()
-              << "#### hash of sign = " << signReq2.block_hash.abridged();
     BlockHeader highest;
     FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
         fake_pbft.consensus()->minValidNodes().convert_to<size_t>() - 1, 0, false, false);
-    std::cout << "#### hash of prepare = " << prepareReq.block_hash.abridged()
-              << "#### hash of sign = " << signReq2.block_hash.abridged();
-
-    std::cout << "#### 1111 fake_pbft.consensus()->minValidNodes().convert_to<size_t>():"
-              << fake_pbft.consensus()->minValidNodes().convert_to<size_t>() << std::endl;
     fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
 
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
@@ -410,10 +403,6 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
     fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
     FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
         fake_pbft.consensus()->minValidNodes().convert_to<size_t>() - 1, 2, false, false);
-    std::cout << "#### 2222 hash of prepare = " << prepareReq.block_hash.abridged()
-              << "#### hash of sign = " << signReq2.block_hash.abridged();
-    std::cout << "#### 2222 fake_pbft.consensus()->minValidNodes().convert_to<size_t>():"
-              << fake_pbft.consensus()->minValidNodes().convert_to<size_t>() << std::endl;
     fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
 
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
@@ -424,8 +413,26 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
     CheckBlockChain(fake_pbft, block_number + 1);
 }
 
+BOOST_AUTO_TEST_CASE(testIsCommitReqValid)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    PBFTMsgPacket pbftMsg;
+    CommitReq commitReq;
+    PrepareReq prepareReq;
+    KeyPair peer_keyPair = KeyPair::create();
+    TestIsValidCommitReq(fake_pbft, pbftMsg, commitReq, prepareReq, peer_keyPair, false);
+}
+
 /// test handleCommitMsg
-BOOST_AUTO_TEST_CASE(testHandleCommitMsg) {}
+BOOST_AUTO_TEST_CASE(testHandleCommitMsg)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    PBFTMsgPacket pbftMsg;
+    CommitReq commitReq;
+    PrepareReq prepareReq;
+    KeyPair peer_keyPair = KeyPair::create();
+    TestIsValidCommitReq(fake_pbft, pbftMsg, commitReq, prepareReq, peer_keyPair, true);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

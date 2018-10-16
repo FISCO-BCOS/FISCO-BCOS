@@ -416,7 +416,6 @@ static void testCheckSign(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareRe
 static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req)
 {
     /// init the env
-    std::cout << "#### fakeValidPrepare: fakePBFTMiner" << std::endl;
     FakePBFTMiner(fake_pbft);
     FakeBlockChain* p_blockChain =
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
@@ -428,12 +427,10 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, Prepar
     req.height = fake_pbft.consensus()->mutableConsensusNumber();
     req.view = fake_pbft.consensus()->view();
     Block block;
-    std::cout << "###### idx of fake_pbft:" << fake_pbft.consensus()->nodeIdx() << std::endl;
     fake_pbft.consensus()->resetBlock(block);
     block.header().setSealerList(fake_pbft.consensus()->minerList());
     block.header().setSealer(req.idx);
     block.encode(req.block);
-    std::cout << "#### idx of block:" << block.header().sealer() << std::endl;
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     fake_pbft.consensus()->mutableConsensusNumber() = req.height;
@@ -473,34 +470,31 @@ template <typename T>
 void FakePBFTMsgPacket(
     PBFTMsgPacket& packet, T& req, unsigned const& type, u256 const& idx, h512 const& nodeId)
 {
-    std::cout << "##### encode message" << std::endl;
     req.encode(packet.data);
     packet.packet_id = type;
     packet.setOtherField(idx, nodeId);
 }
 
-/// fake valid signReq
-static void FakeValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
-    SignReq& signReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair)
+/// fake valid signReq or commitReq
+template <typename T>
+void FakeValidSignorCommitReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
+    T& req, PrepareReq& prepareReq, KeyPair const& peer_keyPair)
 {
     FakePBFTMiner(fake_pbft);
     FakePBFTMinerByKeyPair(fake_pbft, peer_keyPair);
-    std::cout << "#### FakeValidSignReq" << std::endl;
     KeyPair key_pair;
     prepareReq = FakePrepareReq(key_pair);
     fakeValidPrepare(fake_pbft, prepareReq);
     u256 node_id = (fake_pbft.consensus()->nodeIdx() + u256(1)) % fake_pbft.consensus()->nodeNum();
     KeyPair tmp_key_pair(fake_pbft.m_secrets[node_id.convert_to<size_t>()]);
-    signReq = SignReq(prepareReq, tmp_key_pair, node_id);
+    req = T(prepareReq, tmp_key_pair, node_id);
     /// add prepareReq
-    std::cout << "#### add prepare: hash = " << prepareReq.block_hash.abridged()
-              << ", sign req hash:" << signReq.block_hash.abridged() << std::endl;
     fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
     /// reset current consensusNumber and View
     fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
     fake_pbft.consensus()->setView(prepareReq.view);
     FakePBFTMsgPacket(
-        packet, signReq, SignReqPacket, u256(fake_pbft.m_minerList.size() - 1), peer_keyPair.pub());
+        packet, req, SignReqPacket, u256(fake_pbft.m_minerList.size() - 1), peer_keyPair.pub());
 }
 
 /// test isExistSign
@@ -511,6 +505,18 @@ static void testIsExistSign(FakeConsensus<FakePBFTConsensus>& fake_pbft,
     {
         fake_pbft.consensus()->reqCache()->addSignReq(signReq);
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == false);
+        fake_pbft.consensus()->reqCache()->clearAll();
+        fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    }
+}
+
+static void testIsExistCommit(FakeConsensus<FakePBFTConsensus>& fake_pbft,
+    PrepareReq const& prepareReq, CommitReq const& commitReq, bool succ)
+{
+    if (!succ)
+    {
+        fake_pbft.consensus()->reqCache()->addCommitReq(commitReq);
+        BOOST_CHECK(fake_pbft.consensus()->isValidCommitReq(commitReq) == false);
         fake_pbft.consensus()->reqCache()->clearAll();
         fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
     }
@@ -562,10 +568,18 @@ static void testCheckReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq
 static void TestIsValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
     SignReq& signReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair, bool succ)
 {
-    FakeValidSignReq(fake_pbft, packet, signReq, prepareReq, peer_keyPair);
+    FakeValidSignorCommitReq(fake_pbft, packet, signReq, prepareReq, peer_keyPair);
     BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == true);
     testIsExistSign(fake_pbft, prepareReq, signReq, succ);
     testCheckReq(fake_pbft, prepareReq, signReq, succ);
+}
+
+static void TestIsValidCommitReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
+    CommitReq& commitReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair, bool succ)
+{
+    FakeValidSignorCommitReq(fake_pbft, packet, commitReq, prepareReq, peer_keyPair);
+    BOOST_CHECK(fake_pbft.consensus()->isValidCommitReq(commitReq) == true);
+    testIsExistCommit(fake_pbft, prepareReq, commitReq, succ);
 }
 
 }  // namespace test

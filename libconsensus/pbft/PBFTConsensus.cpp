@@ -523,7 +523,7 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket cons
  *       (1) add the prepareReq to raw-prepare-cache
  *       (2) execute the block
  *       (3) sign the prepareReq and broadcast the signed prepareReq
- *       (4) callback checkAndCommit function to judge whe
+ *       (4) callback checkAndCommit function to determin can submit the block or not
  * @param prepare_req: the prepare request need to be handled
  * @param self: if generated-prepare-request need to handled, then set self to be true;
  *              else this function will filter the self-generated prepareReq
@@ -669,8 +669,8 @@ void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
 /**
  * @brief: 1. decode the network-received PBFTMsgPacket to signReq
  *         2. check the validation of the signReq
- *         3. add the signReq to the cache and
- *          check the size of the collected signReq is over 2/3 or not
+ *         3. submit the block into blockchain if the size of collected signReq and
+ *            commitReq is over 2/3
  * @param sign_req: return value, the decoded signReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
@@ -721,6 +721,14 @@ bool PBFTConsensus::isValidSignReq(SignReq const& req, std::ostringstream& oss) 
     return true;
 }
 
+/**
+ * @brief : 1. decode the network-received message into commitReq
+ *          2. check the validation of the commitReq
+ *          3. add the valid commitReq into the cache
+ *          4. submit to blockchain if the size of collected commitReq is over 2/3
+ * @param commit_req: return value, the decoded commitReq
+ * @param pbftMsg: the network-received PBFTMsgPacket
+ */
 void PBFTConsensus::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
@@ -741,6 +749,13 @@ void PBFTConsensus::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& 
     return;
 }
 
+/**
+ * @brief: check the given commitReq is valid or not
+ * @param req: the given commitReq need to be checked
+ * @param oss: info to debug
+ * @return true: the given commitReq is valid
+ * @return false: the given commitReq is invalid
+ */
 bool PBFTConsensus::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistCommit(req))

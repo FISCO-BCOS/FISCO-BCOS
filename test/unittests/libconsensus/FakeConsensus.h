@@ -149,6 +149,11 @@ public:
         std::ostringstream oss;
         return PBFTConsensus::isValidSignReq(req, oss);
     }
+    bool isValidCommitReq(CommitReq const& req) const
+    {
+        std::ostringstream oss;
+        return PBFTConsensus::isValidCommitReq(req, oss);
+    }
 };
 
 template <typename T>
