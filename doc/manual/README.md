@@ -999,4 +999,5 @@ EC KeyFactory not available
 如果节点启动时出现`DatabaseAlreadyOpen`错误，请按照以下步骤检查：
 1. 检查节点是否重复启动，如果该节点已经启动，请先停止已启动的节点
 1. 如果确认没有重复启动的节点，尝试在启动fisco-bcos时增加--rescue参数
+1. 如果失败，删除节点`data/pbftMsgBackup`目录，再次执行上一步
 1. 如果仍有问题，按[7.7.3](#763-节点数据清空)的步骤，清理节点数据，再尝试重启
