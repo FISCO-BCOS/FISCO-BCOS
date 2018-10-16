@@ -64,3 +64,56 @@ bool SyncMaster::isSyncing() const
 {
     return m_state != SyncState::Idle;
 }
+
+void SyncMaster::networkCallback(
+    P2PException _e, std::shared_ptr<dev::p2p::Session> _session, Message::Ptr _msg)
+{
+    if (!checkSession(_session))
+    {
+        _session->disconnect(LocalIdentity);
+        return;
+    }
+
+    bytesConstRef frame = ref(*(_msg->buffer()));
+    if (!checkPacket(frame))
+    {
+        LOG(WARNING) << "Received " << frame.size() << ": " << toHex(frame) << endl;
+        LOG(WARNING) << "INVALID MESSAGE RECEIVED";
+        _session->disconnect(BadProtocol);
+        return;
+    }
+
+    SyncPacketType packetType = (SyncPacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+    RLP r(frame.cropped(1));
+    bool ok = interpret(packetType, r);
+    if (!ok)
+        LOG(WARNING) << "Couldn't interpret packet. " << RLP(r);
+}
+
+bool SyncMaster::checkSession(std::shared_ptr<dev::p2p::Session> _session)
+{
+    /// TODO: denine LocalIdentity after SyncPeer finished
+    //_session->id();
+    return true;
+}
+
+bool SyncMaster::checkPacket(bytesConstRef _msg)
+{
+    if (_msg[0] > 0x7f || _msg.size() < 2)
+        return false;
+    if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
+        return false;
+    return true;
+}
+
+bool SyncMaster::interpret(SyncPacketType _id, RLP const& _r)
+{
+    switch (_id)
+    {
+    case StatusPacket:
+    case BlockPacket:
+    default:
+        return false;
+    }
+    return true;
+}

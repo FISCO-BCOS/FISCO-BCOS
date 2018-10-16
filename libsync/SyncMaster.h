@@ -23,14 +23,18 @@
 #pragma once
 #include "Common.h"
 #include "SyncInterface.h"
+#include "SyncPeer.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
+#include <libp2p/Common.h>
 #include <libp2p/P2PInterface.h>
+#include <libp2p/Session.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <queue>
 #include <vector>
+
 
 namespace dev
 {
@@ -87,6 +91,14 @@ public:
     /// protocol id used when register handler to p2p module
     virtual int16_t const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(int16_t const _protocolId) override { m_protocolId = _protocolId; };
+
+    void networkCallback(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::Session> _session,
+        dev::p2p::Message::Ptr _msg);
+
+private:
+    bool checkSession(std::shared_ptr<dev::p2p::Session> _session);
+    bool checkPacket(bytesConstRef _msg);
+    bool interpret(SyncPacketType _id, RLP const& _r);
 
 private:
     // Outside data
