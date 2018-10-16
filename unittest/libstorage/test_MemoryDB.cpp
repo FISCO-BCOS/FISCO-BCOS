@@ -88,6 +88,15 @@ struct MemoryDBFixture {
     memDB->init("t_test");
     memDB->setBlockHash(dev::h256(0x12345));
     memDB->setBlockNum(1000);
+    
+    TableInfo::Ptr info = std::make_shared<TableInfo>();
+    info->fields.emplace_back("姓名");
+    info->fields.emplace_back("资产号");
+    info->fields.emplace_back("资产名");
+    info->fields.emplace_back("_status_");
+    info->key = "姓名";
+    info->name = "t_test";
+    memDB->setTableInfo(info);
   }
 
   ~MemoryDBFixture() {
@@ -302,14 +311,6 @@ BOOST_AUTO_TEST_CASE(cache_clear) {
 
 BOOST_AUTO_TEST_CASE(multiKey) {
   initData();
-
-  std::shared_ptr<MockAMOPDBCommit> mockAMOPDB =
-      std::make_shared<MockAMOPDBCommit>();
-
-  memDB->setStateStorage(mockAMOPDB);
-  memDB->init("t_test");
-
-  mockAMOPDB->memDB = memDB;
 
   Condition::Ptr condition = memDB->newCondition();
   condition->EQ("姓名", "张三");

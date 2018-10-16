@@ -18,7 +18,6 @@ target_link_libraries(fisco-bcos
 	${Web3_WEBTHREE_LIBRARIES}
 	${Eth_DISKENCRYPTION_LIBRARIES}
 	pbftseal
-	contract
 	channelserver
 	console
 	web3jsonrpc
