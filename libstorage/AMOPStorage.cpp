@@ -252,7 +252,13 @@ Json::Value AMOPStorage::requestDB(const Json::Value &value) {
     } catch (dev::channel::ChannelException &e) {
         LOG(ERROR) << "AMDB error: " << e.what();
         LOG(ERROR) << "Retrying...";
-    }
+    } catch (StorageException &e) {
+        if(e.errorCode() == -1)
+        {
+            LOG(ERROR) << "AMDB error: " << e.what();
+            LOG(ERROR) << "Retrying...";
+        }
+     }
 
     ++retry;
     if (_maxRetry != 0 && retry >= _maxRetry) {
