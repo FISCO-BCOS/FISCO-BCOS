@@ -830,6 +830,7 @@ void Session::saveCABaseData(CABaseData* baseData)
 	m_CABaseData = baseData;
 }
 
+#if 0
 bool Session::setStatistics(dev::InterfaceStatistics *stats)
 {
 		if (stats && m_statistics.get() == nullptr)
@@ -839,3 +840,4 @@ bool Session::setStatistics(dev::InterfaceStatistics *stats)
 		}
 		return false;
 }
+#endif
