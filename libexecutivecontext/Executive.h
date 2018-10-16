@@ -150,7 +150,7 @@ public:
     /// executed.
     u256 gas() const { return m_gas; }
     unsigned status() const { return m_status; }
-    owning_bytes_ref output() const { std::move(m_output); }
+    owning_bytes_ref output() const { return std::move(m_output); }
 
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
