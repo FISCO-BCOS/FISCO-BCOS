@@ -391,6 +391,21 @@ protected:
     /// check the specified prepareReq is valid or not
     bool isValidPrepare(PrepareReq const& req, bool self, std::ostringstream& oss) const;
 
+    /**
+     * @brief: common check process when handle SignReq and CommitReq
+     *         1. the request should be existed in prepare cache,
+     *            if the request is the future request, should add it to the prepare cache
+     *         2. the sealer of the request shouldn't be the node-self
+     *         3. the view of the request must be equal to the view of the prepare cache
+     *         4. the signature of the request must be valid
+     * @tparam T: the type of the request
+     * @param req: the request should be checked
+     * @param oss: information to debug
+     * @return CheckResult:
+     *  1. CheckResult::FUTURE: the request is the future req;
+     *  2. CheckResult::INVALID: the request is invalid
+     *  3. CheckResult::VALID: the request is valid
+     */
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
@@ -406,6 +421,12 @@ protected:
                           << m_reqCache->prepareCache().block_hash.abridged();
                 return CheckResult::FUTURE;
             }
+            return CheckResult::INVALID;
+        }
+        /// check the sealer of this request
+        if (req.idx == m_idx)
+        {
+            LOG(WARNING) << oss.str() << " Discard an illegal commit, your own req";
             return CheckResult::INVALID;
         }
         /// check view

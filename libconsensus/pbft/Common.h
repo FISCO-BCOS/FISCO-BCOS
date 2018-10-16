@@ -278,8 +278,8 @@ struct PrepareReq : public PBFTMsg
      * @param _view : current view
      * @param _idx : index of the node that generates this PrepareReq
      */
-    PrepareReq(
-        dev::eth::Block& blockStruct, KeyPair const& keyPair, u256 const& _view, u256 const& _idx)
+    PrepareReq(dev::eth::Block const& blockStruct, KeyPair const& keyPair, u256 const& _view,
+        u256 const& _idx)
     {
         height = blockStruct.blockHeader().number();
         view = _view;
@@ -298,7 +298,7 @@ struct PrepareReq : public PBFTMsg
      * @param sealing : object contains both block and block-execution-result
      * @param keyPair : keypair used to sign for the PrepareReq
      */
-    PrepareReq(PrepareReq const& req, Sealing& sealing, KeyPair const& keyPair)
+    PrepareReq(PrepareReq const& req, Sealing const& sealing, KeyPair const& keyPair)
     {
         height = req.height;
         view = req.view;

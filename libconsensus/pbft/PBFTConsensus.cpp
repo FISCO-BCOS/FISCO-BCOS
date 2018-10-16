@@ -662,7 +662,14 @@ void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
               << ", Next: blk=" << m_consensusBlockNumber;
 }
 
-/// recv sign message from p2p
+/**
+ * @brief: 1. decode the network-received PBFTMsgPacket to signReq
+ *         2. check the validation of the signReq
+ *         3. add the signReq to the cache and
+ *          check the size of the collected signReq is over 2/3 or not
+ * @param sign_req: return value, the decoded signReq
+ * @param pbftMsg: the network-received PBFTMsgPacket
+ */
 void PBFTConsensus::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
@@ -682,6 +689,15 @@ void PBFTConsensus::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMs
     LOG(DEBUG) << "handleSignMsg, timecost=" << 1000 * t.elapsed();
 }
 
+/**
+ * @brief: check the given signReq is valid or not
+ *         1. the signReq shouldn't be existed in the cache
+ *         2. callback checkReq to check the validation of given request
+ * @param req: the given request to be checked
+ * @param oss: log to debug
+ * @return true: check succeed
+ * @return false: check failed
+ */
 bool PBFTConsensus::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistSign(req))
