@@ -48,7 +48,8 @@ ChainOperationParams::ChainOperationParams()
 		{"difficultyBoundDivisor", "0x0800"},
 		{"durationLimit", "0x0d"},
 		{"registrar", "5e70c0bbcd5636e0f9f9316e9f8633feb64d4050"},
-		{"networkID", "0x0"}
+		{"networkID", "0x0"},
+		{"allowFutureBlocks", "0x1"}
 	};
 	blockReward = u256("0x4563918244F40000");
 
