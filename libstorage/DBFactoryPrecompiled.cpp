@@ -71,7 +71,7 @@ void DBFactoryPrecompiled::afterBlock(shared_ptr<PrecompiledContext> context, bo
         }
         LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << _hash;
         _memoryDBFactory->stateStorage()->commit(context->blockInfo().hash,
-            context->blockInfo().number.convert_to<int>(), datas, context->blockInfo().hash);
+                                                 context->blockInfo().number.convert_to<int>(), datas, context->blockInfo().hash);
     }
 
     _name2Table.clear();
@@ -97,9 +97,9 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
 
     switch (func)
     {
-    case 0xc184e0ff:  // openDB(string)
+    case 0xc184e0ff: // openDB(string)
     case 0xf23f63c9:
-    {  // openTable(string)
+    { // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
 
@@ -110,7 +110,7 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
         break;
     }
     case 0x56004b6a:
-    {  // createTable(string,string,string)
+    { // createTable(string,string,string)
         string tableName;
         string keyName;
         string fieldNames;
@@ -119,7 +119,7 @@ bytes DBFactoryPrecompiled::call(shared_ptr<PrecompiledContext> context, bytesCo
         LOG(DEBUG) << "DBFactory call createTable:" << tableName;
         vector<string> fieldNameList;
         boost::split(fieldNameList, fieldNames, boost::is_any_of(","));
-        for (auto& str : fieldNameList)
+        for (auto &str : fieldNameList)
             boost::trim(str);
         string valueFiled = boost::join(fieldNameList, ",");
         auto errorCode = isTableCreated(context, tableName, keyName, valueFiled);
@@ -171,7 +171,7 @@ DBPrecompiled::Ptr DBFactoryPrecompiled::getSysTable(PrecompiledContext::Ptr con
 }
 
 unsigned DBFactoryPrecompiled::isTableCreated(PrecompiledContext::Ptr context,
-    const string& tableName, const string& keyField, const string& valueFiled)
+                                              const string &tableName, const string &keyField, const string &valueFiled)
 {
     auto it = _name2Table.find(tableName);
     if (it != _name2Table.end())
@@ -194,7 +194,7 @@ unsigned DBFactoryPrecompiled::isTableCreated(PrecompiledContext::Ptr context,
     return TABLENAME_CONFLICT;
 }
 
-Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const string& tableName)
+Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const string &tableName)
 {
     auto it = _name2Table.find(tableName);
     if (it != _name2Table.end())
@@ -273,21 +273,22 @@ h256 DBFactoryPrecompiled::hash(shared_ptr<PrecompiledContext> context)
     return _hash;
 }
 
-storage::TableInfo::Ptr DBFactoryPrecompiled::getSysTableInfo(const std::string& tableName)
+storage::TableInfo::Ptr DBFactoryPrecompiled::getSysTableInfo(const std::string &tableName)
 {
     auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;
     if (tableName == "_sys_miners_")
     {
         tableInfo->key = "name";
-        tableInfo->fields = vector<string>{storage::STORAGE_STATUS, "type", "node_id", "enable_num"};
+        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
     }
     else if (tableName == "_sys_tables_")
     {
         tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{storage::STORAGE_STATUS, "key_field", "value_field"};
+        tableInfo->fields = vector<string>{"key_field", "value_field"};
     }
     tableInfo->fields.emplace_back(tableInfo->key);
+    tableInfo->fields.emplace_back(storage::STORAGE_STATUS);
 
     return tableInfo;
 }

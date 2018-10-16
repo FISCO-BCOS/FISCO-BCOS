@@ -94,8 +94,7 @@ Darwin)
     # And finally install all the external dependencies.
     brew install \
         leveldb \
-        libmicrohttpd \
-        miniupnpc
+        libmicrohttpd 
 
     ;;
 
@@ -138,8 +137,7 @@ Linux)
             libtool \
             boost \
             leveldb \
-            libmicrohttpd \
-            miniupnpc
+            libmicrohttpd 
 
     elif [ -f "/etc/os-release" ]; then
 
@@ -158,7 +156,6 @@ Linux)
                 libgmp-dev \
                 libleveldb-dev \
                 libmicrohttpd-dev \
-                libminiupnpc-dev \
                 libsnappy-dev	
             ;;
 
@@ -208,7 +205,6 @@ Linux)
                 libgmp-dev \
                 libleveldb-dev \
                 libmicrohttpd-dev \
-                libminiupnpc-dev \
                 libsnappy-dev \
                 $LLVM_PACKAGES
             ;;
