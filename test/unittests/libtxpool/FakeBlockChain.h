@@ -123,6 +123,8 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
+    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+
     virtual void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
     {}
