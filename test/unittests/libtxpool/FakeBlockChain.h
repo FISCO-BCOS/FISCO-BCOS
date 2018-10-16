@@ -100,6 +100,7 @@ public:
             if (blockHeight > 0)
             {
                 fake_block.m_blockHeader.setParentHash(m_blockChain[blockHeight - 1]->headerHash());
+                fake_block.m_blockHeader.setNumber(blockHeight);
                 fake_block.reEncodeDecode();
             }
             m_blockHash[fake_block.m_blockHeader.hash()] = blockHeight;
@@ -122,13 +123,20 @@ public:
     {
         return getBlockByHash(numberHash(_i));
     }
-
+    /// fake commitBlock
     virtual void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
-    {}
-    std::map<h256, uint64_t> m_blockHash;
+    {
+        block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
+        block.header().setNumber(m_blockNumber);
+        std::shared_ptr<Block> p_block = std::make_shared<Block>(block);
+        m_blockChain.push_back(p_block);
+        m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
+        m_blockNumber += 1;
+    }
+    std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
-    uint64_t m_blockNumber;
+    int64_t m_blockNumber;
 };
 class TxPoolFixture
 {

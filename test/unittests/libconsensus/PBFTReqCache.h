@@ -41,14 +41,17 @@ static PrepareReq FakePrepareReq(KeyPair& key_pair)
 }
 /// fake the Sign/Commit request
 template <typename T, typename S>
-void FakeInvalidSignReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cache,
-    BlockHeader& highest, h256 const& invalid_hash, size_t invalidHeightNum, size_t invalidHash,
-    size_t validNum)
+void FakeInvalidReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cache, BlockHeader& highest,
+    h256 const& invalid_hash, size_t invalidHeightNum, size_t invalidHash, size_t validNum,
+    bool should_fake = true)
 {
-    KeyPair key_pair = KeyPair::create();
-    prepare_req = FakePrepareReq(key_pair);
-    prepare_req.block_hash = highest.hash();
-    prepare_req.height = highest.number();
+    if (should_fake)
+    {
+        KeyPair key_pair = KeyPair::create();
+        prepare_req = FakePrepareReq(key_pair);
+        prepare_req.block_hash = highest.hash();
+        prepare_req.height = highest.number();
+    }
     /// fake invalid block height
     for (size_t i = 0; i < invalidHeightNum; i++)
     {
@@ -64,7 +67,7 @@ void FakeInvalidSignReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cach
         T req(prepare_req, KeyPair::create(), prepare_req.idx);
         req.block_hash = invalid_hash;
         reqCache.addReq(req, cache);
-        BOOST_CHECK(reqCache.getSizeFromCache(req.block_hash, cache) == u256(i + 1));
+        /// BOOST_CHECK(reqCache.getSizeFromCache(req.block_hash, cache) == u256(i + 1));
     }
     for (size_t i = 0; i < validNum; i++)
     {

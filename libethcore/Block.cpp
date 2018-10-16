@@ -78,7 +78,7 @@ Block& Block::operator=(Block const& _block)
  * @param _out : generated block
  * @param sig_list: signature list
  */
-void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>>& sig_list)
+void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>> const& sig_list) const
 {
     /// verify blockheader
     m_blockHeader.verify(CheckEverything);
@@ -95,8 +95,8 @@ void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>>& sig_lis
  * @param _header : specified block header to generate the block
  * @param sig_list : signature list
  */
-void Block::encode(
-    bytes& _out, bytesConstRef _header, std::vector<std::pair<u256, Signature>>& sig_list)
+void Block::encode(bytes& _out, bytesConstRef _header,
+    std::vector<std::pair<u256, Signature>> const& sig_list) const
 {
     /// check validition of block header before encode
     /// _header data validition has already been checked in "populate of BlockHeader"
@@ -114,7 +114,7 @@ void Block::encode(
  * @param sig_list : signature list
  */
 void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
-    std::vector<std::pair<u256, Signature>>& sig_list)
+    std::vector<std::pair<u256, Signature>> const& sig_list) const
 {
     /// refresh transaction list cache
     bytes txsCache = encodeTransactions();
@@ -133,7 +133,7 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 }
 
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
-bytes const& Block::encodeTransactions()
+bytes const& Block::encodeTransactions() const
 {
     RLPStream txs;
     txs.appendList(m_transactions.size());
