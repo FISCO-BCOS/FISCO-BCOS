@@ -503,7 +503,7 @@ BOOST_AUTO_TEST_CASE(selectCodeAndResult)
     std::shared_ptr<MockSelectChannelRPCServerCodeAndResult> channelServer =
         std::make_shared<MockSelectChannelRPCServerCodeAndResult>();
     amopDB->setChannelRPCServer(channelServer);
-    dev::storage::Entries::Ptr entries = amopDB->select(hash, 1000, "t_test", "张三");
+    BOOST_CHECK_THROW(dev::storage::Entries::Ptr entries = amopDB->select(hash, 1000, "t_test", "张三"), StorageException);
 }
 
 BOOST_AUTO_TEST_CASE(selectMaxRetry)
