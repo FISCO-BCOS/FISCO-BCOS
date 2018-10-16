@@ -247,6 +247,10 @@ Json::Value AMOPStorage::requestDB(const Json::Value &value) {
         throw StorageException(
             1, "amdb sql error:" + boost::lexical_cast<std::string>(code));
       }
+      if (code != 0 && code != 1){
+          throw StorageException(
+                      -1, "amdb code error:" + boost::lexical_cast<std::string>(code));
+      }
 
       return responseJson;
     } catch (dev::channel::ChannelException &e) {
@@ -258,6 +262,11 @@ Json::Value AMOPStorage::requestDB(const Json::Value &value) {
             LOG(ERROR) << "AMDB error: " << e.what();
             LOG(ERROR) << "Retrying...";
         }
+        else
+        {
+            throw e;
+        }
+
      }
 
     ++retry;
