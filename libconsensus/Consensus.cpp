@@ -138,7 +138,7 @@ void Consensus::checkBlockValid(Block const& block)
 {
     h256 block_hash = block.blockHeader().hash();
     /// check the timestamp
-    if (block.blockHeader().timestamp() > u256(utcTime()) && !m_allowFutureBlocks)
+    if (block.blockHeader().timestamp() > utcTime() && !m_allowFutureBlocks)
     {
         LOG(ERROR) << "Future timestamp(now disabled) of block_hash = " << block_hash;
         BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
@@ -183,6 +183,15 @@ bool Consensus::isBlockSyncing()
     SyncStatus state = m_blockSync->status();
     return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
 }
+
+void Consensus::dropHandledTransactions(Block const& block)
+{
+    for (auto const& t : block.transactions())
+    {
+        m_txPool->drop(t.sha3());
+    }
+}
+
 
 /// stop the consensus module
 void Consensus::stop()

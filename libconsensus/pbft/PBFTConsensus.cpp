@@ -222,6 +222,11 @@ void PBFTConsensus::handleBlock()
     m_timeManager.updateTimeAfterHandleBlock(m_sealing.block.getTransactionSize(), start_exec_time);
 }
 
+/**
+ * @brief: this node can generate block or not
+ * @return true: this node can generate block
+ * @return false: this node can't generate block
+ */
 bool PBFTConsensus::shouldSeal()
 {
     if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
@@ -233,7 +238,10 @@ bool PBFTConsensus::shouldSeal()
     /// fast view change
     if (ret.second != m_idx)
     {
+        /// if the node is a miner and is not the leader, then will reset m_lastConsensusTime
+        /// and m_lastSignTime to trigger fast viewchange
         h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
+        ;
         if (node_id != h512() && m_service->isConnected(node_id))
         {
             m_timeManager.m_lastConsensusTime = 0;
@@ -253,6 +261,10 @@ bool PBFTConsensus::shouldSeal()
     return true;
 }
 
+/**
+ * @brief: rehandle the unsubmitted committedPrepare
+ * @param req: the unsubmitted committed prepareReq
+ */
 void PBFTConsensus::rehandleCommitedPrepareCache(PrepareReq const& req)
 {
     LOG(INFO) << "shouldSeal: found an committed but not saved block, post out again. hash="
@@ -568,8 +580,6 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
 void PBFTConsensus::checkAndCommit()
 {
     u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
-    std::cout << "### sign_size:" << sign_size << " , minValidNodes:" << minValidNodes()
-              << std::endl;
     /// must be equal to minValidNodes:in case of callback checkAndCommit repeatly in a round of
     /// PBFT consensus
     if (sign_size == minValidNodes())
@@ -625,6 +635,8 @@ void PBFTConsensus::checkAndSave()
             /// callback block chain to commit block
             m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            /// drop handled transactions
+            dropHandledTransactions(block);
             /// report block
             reportBlock(block.blockHeader());
         }
@@ -861,6 +873,7 @@ void PBFTConsensus::checkAndChangeView()
     }
 }
 
+/// collect all caches
 void PBFTConsensus::collectGarbage()
 {
     Guard l(m_mutex);
