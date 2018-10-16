@@ -117,11 +117,11 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     BlockHeader highest;
     highest.setNumber(100);
     /// test signcache
-    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
+    FakeInvalidReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     /// test commit cache
-    FakeInvalidSignReq<CommitReq>(req, req_cache, req_cache.mutableCommitCache(), highest,
-        invalid_hash, invalidHeightNum, invalidHash, validNum);
+    FakeInvalidReq<CommitReq>(req, req_cache, req_cache.mutableCommitCache(), highest, invalid_hash,
+        invalidHeightNum, invalidHash, validNum);
     req_cache.collectGarbage(highest);
     BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == u256(validNum));
     BOOST_CHECK(req_cache.getSigCacheSize(invalid_hash) == u256(0));
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     size_t validNum = 3;
     h256 invalid_hash = sha3("invalid_hash");
     /// fake signCache and commitCache
-    FakeInvalidSignReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
+    FakeInvalidReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     /// trigger viewChange
     req_cache.triggerViewChange(u256(0));
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     checkPBFTMsg(req_cache.prepareCache());
 
     /// test clearAll
-    req_cache.clearAll();
+    req_cache.clearAllExceptCommitCache();
     BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(0));
 }
 BOOST_AUTO_TEST_SUITE_END()
