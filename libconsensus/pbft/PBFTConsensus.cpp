@@ -709,6 +709,7 @@ bool PBFTConsensus::isValidSignReq(SignReq const& req, std::ostringstream& oss) 
     if (result == CheckResult::FUTURE)
     {
         m_reqCache->addSignReq(req);
+        LOG(INFO) << oss.str() << "Cache this sign_req";
         return false;
     }
     if (result == CheckResult::INVALID)

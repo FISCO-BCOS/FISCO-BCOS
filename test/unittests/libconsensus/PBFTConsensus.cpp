@@ -349,10 +349,26 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     CheckBlockChain(fake_pbft, block_number + 1);
 }
 
-BOOST_AUTO_TEST_CASE(testIsValidSignReq) {}
+BOOST_AUTO_TEST_CASE(testIsValidSignReq)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    PBFTMsgPacket pbftMsg;
+    SignReq signReq;
+    PrepareReq prepareReq;
+    KeyPair peer_keyPair = KeyPair::create();
+    TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, false);
+}
 
 /// test handleSignMsg
-BOOST_AUTO_TEST_CASE(testHandleSignMsg) {}
+BOOST_AUTO_TEST_CASE(testHandleSignMsg)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    PBFTMsgPacket pbftMsg;
+    SignReq signReq;
+    PrepareReq prepareReq;
+    KeyPair peer_keyPair = KeyPair::create();
+    TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, true);
+}
 
 /// test handleCommitMsg
 BOOST_AUTO_TEST_CASE(testHandleCommitMsg) {}
