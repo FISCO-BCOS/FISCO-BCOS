@@ -459,6 +459,55 @@ BOOST_AUTO_TEST_CASE(testHandleCommitMsg)
     CheckBlockChain(fake_pbft, block_number + 1);
 }
 
+BOOST_AUTO_TEST_CASE(testShouldSeal)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    /// case 1: m_cfgErr is true
+    fake_pbft.consensus()->resetConfig();
+    BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
+
+    /// case 2: the node is a miner, but getLeader failed for highest is a invalid block
+    FakePBFTMiner(fake_pbft);
+    BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
+
+    /// case 3: normal case
+    PrepareReq prepareReq;
+    TestIsValidPrepare(fake_pbft, prepareReq, true);
+
+    fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getLeader().second);
+    BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == true);
+    /// update the committedPrepareCache, callback reHandleCommitPrepareCache
+    fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
+
+    fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
+    fake_pbft.consensus()->reqCache()->updateCommittedPrepare();
+    /// update the rawPrepareReq
+    PrepareReq new_req;
+    new_req.height = fake_pbft.consensus()->mutableConsensusNumber() + 1;
+    fake_pbft.consensus()->reqCache()->addRawPrepare(new_req);
+
+    for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
+    {
+        appendSessionInfo(fake_pbft, fake_pbft.m_minerList[i]);
+    }
+    int64_t block_number = obtainBlockNumber(fake_pbft);
+    BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
+    testReHandleCommitPrepareCache(fake_pbft, prepareReq);
+
+    /// case 4: the node is not the leader
+    fake_pbft.consensus()->setNodeIdx(
+        (fake_pbft.consensus()->getLeader().second + 1) % fake_pbft.consensus()->nodeNum());
+    FakeService* fake_service =
+        dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
+    fake_service->setConnected();
+    BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
+    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime == 0);
+    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastSignTime == 0);
+}
+
+BOOST_AUTO_TEST_CASE(testCollectGarbage) {}
+BOOST_AUTO_TEST_CASE(testHandleFutureBlock) {}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

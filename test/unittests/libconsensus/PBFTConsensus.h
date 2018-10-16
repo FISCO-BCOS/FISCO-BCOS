@@ -582,5 +582,16 @@ static void TestIsValidCommitReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PB
     testIsExistCommit(fake_pbft, prepareReq, commitReq, succ);
 }
 
+static void testReHandleCommitPrepareCache(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq const& req)
+{
+    /// check callback broadcastMsg
+    for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
+    {
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+            fake_pbft.m_minerList[i], PrepareReqPacket, req.block_hash.hex()));
+    }
+}
+
 }  // namespace test
 }  // namespace dev

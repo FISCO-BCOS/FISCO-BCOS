@@ -74,6 +74,7 @@ public:
     {
         PBFTConsensus::loadTransactions(transToFetch);
     }
+
     bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
@@ -106,6 +107,7 @@ public:
     }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
+    std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
     void broadcastSignReq(PrepareReq const& req) { return PBFTConsensus::broadcastSignReq(req); }
     u256 view() { return m_view; }
     void setView(u256 const& _view) { m_view = _view; }
@@ -159,6 +161,10 @@ public:
     {
         return PBFTConsensus::handleCommitMsg(commit_req, pbftMsg);
     }
+
+    bool shouldSeal() { return PBFTConsensus::shouldSeal(); }
+
+    void setNodeIdx(u256 const& _idx) { m_idx = _idx; }
 };
 
 template <typename T>
