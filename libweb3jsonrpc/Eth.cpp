@@ -140,9 +140,18 @@ Json::Value Eth::eth_getProofMerkle(string const& _blockHash, string const& _tra
         return Json::Value(Json::nullValue);
     }
 
+    vector<LocalisedTransactionReceipt> receipts;
+    for (auto& tran : transactions) {
+    	receipts.push_back(client()->localisedTransactionReceipt(tran.sha3()));
+    }
+
     MemoryDB m;
     GenericTrieDB<MemoryDB> trieDb(&m);
     trieDb.init();
+
+    MemoryDB reciptDb;
+    GenericTrieDB<MemoryDB> receiptTrieDb(&m);
+    receiptTrieDb.init();
 
     /*
      **try to build MPT tree from transcations from block
@@ -160,6 +169,10 @@ Json::Value Eth::eth_getProofMerkle(string const& _blockHash, string const& _tra
             RLPStream txrlp;
             transaction.streamRLP(txrlp);
             trieDb.insert(k.out(), txrlp.out());
+
+            RLPStream receiptRlp;
+            receipts[i].streamRLP(receiptRlp);
+            receiptTrieDb.insert(k.out(), receiptRlp.out());
         } catch(std::exception &e)
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, e.what()));
@@ -176,16 +189,26 @@ Json::Value Eth::eth_getProofMerkle(string const& _blockHash, string const& _tra
 
         std::string targetTransactionValue = trieDb.at(key.out());
         std::vector<std::string> proofs = trieDb.proofs(key.out());
+
+        std::string targetTransactionReceipt = receiptTrieDb.at(key.out());
+        std::vector<std::string> receiptProofs = receiptTrieDb.proofs(key.out());
+
         BlockHeader blockHeader = client()->blockInfo(h);
         h256 transactionRoot = blockHeader.transactionsRoot();
         h512s nodeList = blockHeader.nodeList();
-        
+
         Json::Value result(Json::objectValue);
 
         Json::Value jsonProofs(Json::arrayValue);
         for(std::string proof : proofs)
         {
             jsonProofs.append(toHex(proof));
+        }
+
+        Json::Value receiptJsonProofs(Json::arrayValue);
+        for (std::string proof : receiptProofs)
+        {
+        	receiptJsonProofs.append(toHex(proof));
         }
 
         Json::Value jsonNodePubs(Json::arrayValue);
@@ -195,9 +218,9 @@ Json::Value Eth::eth_getProofMerkle(string const& _blockHash, string const& _tra
         }
 
         auto blockBytes = dynamic_cast<ClientBase*>(client())->blockRLP(h256(_blockHash));
-        
+
         RLP rlpBlock(blockBytes);
-        
+
         if (rlpBlock.itemCount() >= 5)
         {
             Json::Value jsonSigns(Json::arrayValue);
@@ -209,18 +232,21 @@ Json::Value Eth::eth_getProofMerkle(string const& _blockHash, string const& _tra
                 idxAndSign["sign"] = signPair.second.hex();
                 jsonSigns.append(idxAndSign);
             }
-            
+
             result["signs"] = jsonSigns;
-            
+
             h256 hash = rlpBlock[3].toHash<h256>();
             result["hash"] = hash.hex();
         }
-        
+
         result["root"] = transactionRoot.hex();
         result["proofs"] = jsonProofs;
         result["pubs"] = jsonNodePubs;
         result["key"] = _transactionIndex;
         result["value"] = sha3(targetTransactionValue).hex();
+        result["receiptHash"] = sha3(targetTransactionReceipt).hex();
+        result["receiptProofs"] = receiptJsonProofs;
+        result["receiptRoot"] = blockHeader.receiptsRoot().hex();
 
         return result;
     } catch(std::exception &e)
@@ -319,7 +345,7 @@ Json::Value Eth::eth_pendingTransactions()
 	catch (...)
 	{
 		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
-	}		
+	}
 }
 
 string Eth::eth_getTransactionCount(string const& _address, string const& _blockNumber)
@@ -686,7 +712,7 @@ Json::Value Eth::eth_jsonCall(Json::Value const& _json, std::string const& _bloc
 			//abi info
 			auto strData = libabi::SolidityCoder::getInstance()->encode(f, params.jParams);
 
-        
+
 			TransactionSkeleton t;
 			setTransactionDefaults(t);
 			//get contract address
@@ -744,11 +770,11 @@ bool Eth::isUTXOTx(Json::Value const& _json)
 
 		Json::Value json;
 		Json::Reader reader;
-		try 
+		try
 		{
 			if (reader.parse(_json["data"].asString(), json, false))
 			{
-				if (json.isMember("utxotype") && 
+				if (json.isMember("utxotype") &&
 					json["utxotype"].isInt() &&
 					json["utxotype"].asInt() > 0)
 				{
@@ -775,13 +801,13 @@ string Eth::utxoCall(Json::Value const& _json)
 
 	// [out]
 	Json::Value root;
-	Json::FastWriter writer;  
+	Json::FastWriter writer;
 
 	LOG(TRACE) << "Eth::utxoCall UTXOData:" << writer.write(_json);
 
 	if (reader.parse(_json["data"].asString(), json, false))
 	{
-		if (json.isMember("queryparams") && json["queryparams"].isArray() && 
+		if (json.isMember("queryparams") && json["queryparams"].isArray() &&
 			json.isMember("utxotype") && json["utxotype"].isInt())
 		{
 			Json::Value utxoData = json["queryparams"];
@@ -794,11 +820,11 @@ string Eth::utxoCall(Json::Value const& _json)
 					return utxo_call_registerAccount(utxoData);
 				}
 				case UTXOType::GetToken:
-				{				
+				{
 					return utxo_call_getToken(utxoData);
 				}
 				case UTXOType::GetTx:
-				{	
+				{
 					return utxo_call_getTx(utxoData);
 				}
 				case UTXOType::GetVault:
@@ -845,7 +871,7 @@ string Eth::utxoCall(Json::Value const& _json)
 bool Eth::getAccount(Json::Value const& utxoData, Address& account, string& ret)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	if (!(utxoData.isMember("account") && utxoData["account"].isString()))
 	{
@@ -856,7 +882,7 @@ bool Eth::getAccount(Json::Value const& utxoData, Address& account, string& ret)
 	}
 	else
 	{
-		try 
+		try
 		{
 			account = jsToAddress(utxoData["account"].asString());
 		}
@@ -875,7 +901,7 @@ bool Eth::getAccount(Json::Value const& utxoData, Address& account, string& ret)
 bool Eth::getValue(Json::Value const& utxoData, dev::u256& value, std::string& ret)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	if (!(utxoData.isMember("value") && utxoData["value"].isString()))
 	{
@@ -908,7 +934,7 @@ bool Eth::getValue(Json::Value const& utxoData, dev::u256& value, std::string& r
 				ret = writer.write(root);
 				return false;
 			}
-		} 
+		}
 
 		value = jsToU256(str);
 	}
@@ -944,10 +970,10 @@ UTXOModel::QueryUTXOParam Eth::getQueryParam(Json::Value const& utxoData)
 string Eth::utxo_call_registerAccount(Json::Value const& utxoData)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	// 参数个数校验
-	if (utxoData.size() != 1) 
+	if (utxoData.size() != 1)
 	{
 		root["code"] = -1;
 		root["msg"] = "The size of parameters is expected to 1.";
@@ -957,7 +983,7 @@ string Eth::utxo_call_registerAccount(Json::Value const& utxoData)
 	// 获取操作参数
 	Address account;
 	string ret;
-	if (!getAccount(utxoData[0], account, ret)) { return ret; }	
+	if (!getAccount(utxoData[0], account, ret)) { return ret; }
 
 	// 执行操作
 	pair<UTXOModel::UTXOExecuteState, string> retState =client()->getUTXOMgr()->registerAccount(account);
@@ -970,10 +996,10 @@ string Eth::utxo_call_registerAccount(Json::Value const& utxoData)
 string Eth::utxo_call_getToken(Json::Value const& utxoData)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	// 参数个数校验
-	if (utxoData.size() != 1) 
+	if (utxoData.size() != 1)
 	{
 		root["code"] = -1;
 		root["msg"] = "The size of parameters is expected to 1.";
@@ -989,7 +1015,7 @@ string Eth::utxo_call_getToken(Json::Value const& utxoData)
 	}
 	string tokenkey = (utxoData[0]["tokenkey"].asString());
 
-	// 执行查询操作				
+	// 执行查询操作
 	string ret;
 	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->getTokenByKey(tokenkey, ret);
 	LOG(TRACE) << "utxo_call_getToken ret=" << ret;
@@ -1006,10 +1032,10 @@ string Eth::utxo_call_getToken(Json::Value const& utxoData)
 string Eth::utxo_call_getTx(Json::Value const& utxoData)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	// 参数个数校验
-	if (utxoData.size() != 1) 
+	if (utxoData.size() != 1)
 	{
 		root["code"] = -1;
 		root["msg"] = "The size of parameters is expected to 1.";
@@ -1025,7 +1051,7 @@ string Eth::utxo_call_getTx(Json::Value const& utxoData)
 	}
 	string txKey = (utxoData[0]["txkey"].asString());
 
-	// 执行查询操作					
+	// 执行查询操作
 	string ret;
 	pair<UTXOModel::UTXOExecuteState, string> retState = client()->getUTXOMgr()->getTxByKey(txKey, ret);
 	LOG(TRACE) << "utxo_call_getTx ret=" << ret;
@@ -1035,27 +1061,27 @@ string Eth::utxo_call_getTx(Json::Value const& utxoData)
 		ret.pop_back();
 		root["data"] = ret;
 	}
-					
+
 	return writer.write(root);
 }
 
 string Eth::utxo_call_getVault(Json::Value const& utxoData)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	// 参数个数校验
-	if (utxoData.size() != 1) 
+	if (utxoData.size() != 1)
 	{
 		root["code"] = -1;
 		root["msg"] = "The size of parameters is expected to 1.";
 		return writer.write(root);
 	}
-	
+
 	// 获取查询参数
 	Address account;
 	string ret;
-	if (!getAccount(utxoData[0], account, ret)) { return ret; }		
+	if (!getAccount(utxoData[0], account, ret)) { return ret; }
 	u256 value;
 	if (!getValue(utxoData[0], value, ret)) { return ret; }
 	if (value >= UTXOModel::TokenState::TokenStateCnt)
@@ -1082,17 +1108,17 @@ string Eth::utxo_call_getVault(Json::Value const& utxoData)
 	root["cnt"] = (int)param.cnt;
 	root["end"] = (int)param.end;
 	root["total"] = (int)param.total;
-					
+
 	return writer.write(root);
 }
 
 string Eth::utxo_call_tokenTracking(Json::Value const& utxoData)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	// 参数个数校验
-	if (utxoData.size() != 1) 
+	if (utxoData.size() != 1)
 	{
 		root["code"] = -1;
 		root["msg"] = "The size of parameters is expected to 1.";
@@ -1124,28 +1150,28 @@ string Eth::utxo_call_tokenTracking(Json::Value const& utxoData)
 	root["cnt"] = (int)param.cnt;
 	root["end"] = (int)param.end;
 	root["total"] = (int)param.total;
-					
+
 	return writer.write(root);
 }
 
 string Eth::utxo_call_selectTokens(Json::Value const& utxoData)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	// 参数个数校验
-	if (utxoData.size() != 1) 
+	if (utxoData.size() != 1)
 	{
 		root["code"] = -1;
 		root["msg"] = "The size of parameters is expected to 1.";
 		return writer.write(root);
 	}
-	
+
 	// 获取查询参数
 	Address account;
 	u256 value;
 	string ret;
-	if (!getAccount(utxoData[0], account, ret)) { return ret; }					
+	if (!getAccount(utxoData[0], account, ret)) { return ret; }
 	if (!getValue(utxoData[0], value, ret)) { return ret; }
 	if (0 == value)
 	{
@@ -1171,23 +1197,23 @@ string Eth::utxo_call_selectTokens(Json::Value const& utxoData)
 	root["end"] = (int)param.end;
 	root["total"] = (int)param.total;
 	root["totalTokenValue"] = (int)param.totalValue;
-	
+
 	return writer.write(root);
 }
 
 string Eth::utxo_call_getBalance(Json::Value const& utxoData)
 {
 	Json::Value root;
-	Json::FastWriter writer; 
+	Json::FastWriter writer;
 
 	// 参数个数校验
-	if (utxoData.size() != 1) 
+	if (utxoData.size() != 1)
 	{
 		root["code"] = -1;
 		root["msg"] = "The size of parameters is expected to 1.";
 		return writer.write(root);
 	}
-	
+
 	// 获取查询参数
 	Address account;
 	string ret;
@@ -1789,7 +1815,7 @@ bool Eth::isOldCNSCall(const TransactionSkeleton &t, CnsParams &params, const Js
 		fromJsonGetParams(t.jData, params); //parse params
 		return true;
 	}
- 
+
 	//compatible with web3j
 	string strData = _json["data"].asString();
 	if (strData.compare(0, 2, "0x") == 0 || strData.compare(0, 2, "0X") == 0)
@@ -1852,7 +1878,7 @@ std::string Eth::eth_callDefault(TransactionSkeleton &t, std::string const& _blo
 
 std::string Eth::eth_callOldCNS(TransactionSkeleton &t, const CnsParams &params, std::string const& _blockNumber)
 {
-	LOG(DEBUG) << "eth_callOldCNS # contract|version|func|params => " 
+	LOG(DEBUG) << "eth_callOldCNS # contract|version|func|params => "
 		<< params.strContractName << "|"
 		<< params.strVersion << "|"
 		<< params.strFunc << "|"
