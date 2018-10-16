@@ -243,16 +243,31 @@ Json::Value AMOPStorage::requestDB(const Json::Value &value) {
       }
 
       int code = codeValue.asInt();
-      if (code != 0) {
+      if (code == 1) {
         throw StorageException(
-            -1, "amdb return code error:" + boost::lexical_cast<std::string>(code));
+            1, "amdb sql error:" + boost::lexical_cast<std::string>(code));
+      }
+      if (code != 0 && code != 1){
+          throw StorageException(
+                      -1, "amdb code error:" + boost::lexical_cast<std::string>(code));
       }
 
       return responseJson;
-    } catch (std::exception &e) {
-      LOG(ERROR) << "AMDB error: " << e.what();
-      LOG(ERROR) << "Retrying...";
-    }
+    } catch (dev::channel::ChannelException &e) {
+        LOG(ERROR) << "AMDB error: " << e.what();
+        LOG(ERROR) << "Retrying...";
+    } catch (StorageException &e) {
+        if(e.errorCode() == -1)
+        {
+            LOG(ERROR) << "AMDB error: " << e.what();
+            LOG(ERROR) << "Retrying...";
+        }
+        else
+        {
+            throw e;
+        }
+
+     }
 
     ++retry;
     if (_maxRetry != 0 && retry >= _maxRetry) {
