@@ -48,7 +48,7 @@ public:
     }
 };
 
-class SyncMaster : public SyncInterface
+class SyncMaster : public SyncInterface, public Worker
 {
 public:
     SyncMaster(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -57,7 +57,8 @@ public:
       : m_blockChain(_blockChain),
         m_txPool(_txPool),
         m_protocolId(_protocolId),
-        SyncInterface(_protocolId, _idleWaitMs)
+        SyncInterface(),
+        Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
     {}
 
     virtual ~SyncMaster(){};

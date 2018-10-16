@@ -28,11 +28,10 @@ namespace dev
 namespace sync
 {
 class SyncStatus;
-class SyncInterface : public Worker
+class SyncInterface
 {
 public:
-    SyncInterface(int16_t const _protocolId, unsigned _idleWaitMs)
-      : Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs){};
+    SyncInterface(){};
     virtual ~SyncInterface(){};
     /// start blockSync
     virtual void start() = 0;
