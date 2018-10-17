@@ -575,11 +575,12 @@ int main(int argc, char** argv)
 
 		logRotateByTime();
 	}
-
-	if(web3.ethereum()->isMining()) {
-		web3.ethereum()->stopSealing();
+	while (!exitHandler.shouldExit()) {
+		if(web3.ethereum()->isMining()) {
+			web3.ethereum()->stopSealing();
+		}
+		this_thread::sleep_for(chrono::milliseconds(500));
 	}
-
 	if(jsonrpcHttpServer) {
 		jsonrpcHttpServer->StopListening();
 	}

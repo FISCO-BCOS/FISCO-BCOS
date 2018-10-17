@@ -96,7 +96,7 @@ fi
 
 #准备CA密钥
 if [ ! -e "$ca_file" ]; then
-	echo "Generting CA key..."
+	echo "Generating CA key..."
 	openssl ecparam -out $output_dir/ca.param -name secp256k1 || fail_message "openssl error!"#准备密钥参数
 	openssl genpkey -paramfile $output_dir/ca.param -out $output_dir/ca.key #生成secp256k1算法的CA密钥
 	openssl req -new -x509 -days 3650 -key $output_dir/ca.key -out $output_dir/ca.crt -batch #生成CA证书, 此处需要输入一些CA信息, 可按需要输入, 或回车跳过
@@ -183,7 +183,7 @@ for line in ${ip_array[*]};do
 	num=${line#*:}
 	[ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
 	for ((i=0;i<num;++i));do
-		echo "Generating IP:${ip} ID:${index} config files..."
+		echo "Generating IP:${ip} ID:${index} files..."
 		node_dir="$output_dir/node_${ip}_${index}"
 	cat << EOF > "$node_dir/config.conf"
 [rpc]
@@ -283,7 +283,7 @@ EOF
 SHELL_FOLDER=\$(cd "\$(dirname "\$0")";pwd)
 fisco_bcos=\${SHELL_FOLDER}/fisco-bcos
 weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
-kill -9 \${weth_pid}
+kill \${weth_pid}
 EOF
 
 		chmod +x "$node_dir/start.sh"
@@ -298,12 +298,12 @@ EOF
 	chmod +x "$output_dir/start_all.sh"
 done 
 
+echo "========================================"
+echo "FISCO-BCOS Path : $eth_path"
+[ ! -z $ip_file ] && echo "IP List File    : $ip_file"
+[ ! -z $ip_param ] && echo "IP List Param   : $ip_param"
+echo "Start Port      : $port_start"
+echo "Output Dir      : $output_dir"
+echo "CA Key Path     : $ca_file"
+echo "========================================"
 echo "All completed. All files in $output_dir"
-echo "============================="
-echo "FISCO-BCOS Path: $eth_path"
-echo "IP List File   : $ip_file"
-echo "IP List File   : $ip_param"
-echo "CA Key         : $ca_file"
-echo "Output Dir     : $output_dir"
-echo "Start Port     : $port_start"
-echo "============================="
