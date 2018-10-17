@@ -45,10 +45,31 @@ void SyncMaster::doWork()
     if (!isSyncing())
     {
         cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
-        maintainTransactions();
-        // maintainBlocks
+        if (m_newTransactions)
+        {
+            m_newTransactions = false;
+            maintainTransactions();
+        }
+        if (m_newBlocks)
+        {
+            m_newBlocks = false;
+            // maintainBlocks(h);
+        }
         // download
         // bq on chain
+    }
+}
+
+void SyncMaster::workLoop()
+{
+    while (workerState() == WorkerState::Started)
+    {
+        if (idleWaitMs())
+        {
+            std::unique_lock<std::mutex> l(x_signalled);
+            m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
+        }
+        doWork();
     }
 }
 

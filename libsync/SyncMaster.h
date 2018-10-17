@@ -59,6 +59,10 @@ public:
     {
         m_data = std::make_shared<SyncData>();
         m_msgEngine = std::make_shared<SyncMsgEngine>(_txPool, _blockChain, m_data);
+
+        // signal registration
+        // txPool.onReady([=]() { this->noteNewTransactions(); });
+        // m_blockChain.onReady([=]() { this->noteNewBlocks(); });
     }
 
     virtual ~SyncMaster(){};
@@ -68,6 +72,7 @@ public:
     virtual void stop() override;
     /// doWork every idleWaitMs
     virtual void doWork() override;
+    virtual void workLoop() override;
 
     /// get status of block sync
     /// @returns Synchonization status
@@ -88,6 +93,17 @@ public:
     virtual int16_t const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(int16_t const _protocolId) override { m_protocolId = _protocolId; };
 
+    void noteNewTransactions()
+    {
+        m_newTransactions = true;
+        m_signalled.notify_all();
+    }
+    void noteNewBlocks()
+    {
+        m_newBlocks = true;
+        m_signalled.notify_all();
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -95,13 +111,10 @@ private:
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     /// handler of the block chain module
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-
     /// Block queue and peers
     std::shared_ptr<SyncData> m_data;
-
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
-
 
     // Internal data
     NodeID m_id;  ///< Nodeid of this node
@@ -111,10 +124,17 @@ private:
     unsigned m_highestBlock = 0;   ///< Highest block number seen
 
     // Internal coding variable
+    /// mutex
     mutable RecursiveMutex x_sync;
+    /// mutex to access m_signalled
+    Mutex x_signalled;
+    /// signal to notify all thread to work
+    std::condition_variable m_signalled;
 
     // sync state
     SyncState m_state = SyncState::Idle;
+    bool m_newTransactions = false;
+    bool m_newBlocks = false;
 
     // settings
     int64_t m_maxBlockDownloadQueueSize = 5;
@@ -123,7 +143,6 @@ private:
 private:
     void maintainTransactions();
     // void maintainBlocks(h256 const& _currentBlock);
-    // void
 };
 
 }  // namespace sync
