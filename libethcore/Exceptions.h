@@ -98,6 +98,7 @@ DEV_SIMPLE_EXCEPTION(TransactionReceiptVersionError);
 
 /// sync related
 DEV_SIMPLE_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
+DEV_SIMPLE_EXCEPTION(InvalidSyncPeerCreation);
 
 
 /// common exceptions

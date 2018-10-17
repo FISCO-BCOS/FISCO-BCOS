@@ -22,8 +22,9 @@
 
 #pragma once
 #include "Common.h"
+#include "SyncData.h"
 #include "SyncInterface.h"
-#include "SyncPeer.h"
+#include "SyncMsgHandler.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -32,7 +33,6 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Session.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <queue>
 #include <vector>
 
 
@@ -40,30 +40,26 @@ namespace dev
 {
 namespace sync
 {
-class DownloadingBlockQueuePiority
-{
-public:
-    bool operator()(
-        const std::shared_ptr<dev::eth::Block>& left, const std::shared_ptr<dev::eth::Block>& right)
-    {
-        if (!left || !right)
-            BOOST_THROW_EXCEPTION(dev::eth::InvalidBlockDownloadQueuePiorityInput());
-        return left->header().number() > right->header().number();
-    }
-};
-
 class SyncMaster : public SyncInterface, public Worker
 {
 public:
-    SyncMaster(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, int16_t const _protocolId,
+    SyncMaster(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        int16_t const& _protocolId, NodeID const& _id, h256 const& _genesisHash,
         unsigned _idleWaitMs = 30)
-      : m_blockChain(_blockChain),
+      : m_service(_service),
         m_txPool(_txPool),
+        m_blockChain(_blockChain),
         m_protocolId(_protocolId),
+        m_id(_id),
+        m_genesisHash(_genesisHash),
         SyncInterface(),
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
-    {}
+    {
+        m_data = std::make_shared<SyncData>();
+        m_handler = std::make_shared<SyncMsgHandler>(_txPool, _blockChain, m_data);
+    }
 
     virtual ~SyncMaster(){};
     /// start blockSync
@@ -92,24 +88,25 @@ public:
     virtual int16_t const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(int16_t const _protocolId) override { m_protocolId = _protocolId; };
 
-    void networkCallback(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::Session> _session,
-        dev::p2p::Message::Ptr _msg);
-
 private:
-    bool checkSession(std::shared_ptr<dev::p2p::Session> _session);
-    bool checkPacket(bytesConstRef _msg);
-    bool interpret(SyncPacketType _id, RLP const& _r);
-
-private:
-    // Outside data
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    /// p2p service handler
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    /// transaction pool handler
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
+    /// handler of the block chain module
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+
+    /// Block queue and peers
+    std::shared_ptr<SyncData> m_data;
+
+    /// Message handler of p2p
+    std::shared_ptr<SyncMsgHandler> m_handler;
+
 
     // Internal data
-    // std::map<dev::p2p::NodeID, std::shared_ptr<SyncPeer>> m_peers;
-    std::priority_queue<std::shared_ptr<dev::eth::Block>,
-        std::vector<std::shared_ptr<dev::eth::Block>>, DownloadingBlockQueuePiority>
-        m_downloadingBlockQueue;
+    NodeID m_id;  ///< Nodeid of this node
+    h256 m_genesisHash;
+
     unsigned m_startingBlock = 0;  ///< Last block number for the start of sync
     unsigned m_highestBlock = 0;   ///< Highest block number seen
 
@@ -122,6 +119,11 @@ private:
     // settings
     int64_t m_maxBlockDownloadQueueSize = 5;
     int16_t m_protocolId;
+
+private:
+    // void maintainTransactions();
+    // void maintainBlocks(h256 const& _currentBlock);
+    // void
 };
 
 }  // namespace sync

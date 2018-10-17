@@ -28,13 +28,16 @@
  */
 #pragma once
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/FixedHash.h>
 #include <libp2p/Common.h>
 #include <set>
+
 namespace dev
 {
 namespace sync
 {
 using NodeList = std::set<dev::p2p::NodeID>;
+using NodeID = dev::p2p::NodeID;
 
 enum SyncPacketType : byte
 {
@@ -84,6 +87,14 @@ struct SyncStatus
     unsigned currentBlockNumber;
     unsigned highestBlockNumber;
     bool majorSyncing = false;
+};
+
+struct NodeInfo
+{
+    NodeID id;
+    int64_t number;
+    h256 genesisHash;
+    h256 latestHash;
 };
 
 }  // namespace sync
