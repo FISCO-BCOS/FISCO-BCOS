@@ -49,20 +49,12 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
     unsigned i = 0;
     for (Transaction const& tr : block.transactions())
     {
-        try
-        {
-            EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
-                block.getTransactionReceipts().back().gasUsed());
-            envInfo.setPrecompiledEngine(executiveContext);
-            std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-                execute(envInfo, tr, OnOpFunc(), executiveContext);
-            block.appendTransactionReceipt(resultReceipt.second);
-        }
-        catch (Exception& ex)
-        {
-            ex << errinfo_transactionIndex(i);
-            throw;
-        }
+        EnvInfo envInfo(
+            block.blockHeader(), m_pNumberHash, block.getTransactionReceipts().back().gasUsed());
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, tr, OnOpFunc(), executiveContext);
+        block.appendTransactionReceipt(resultReceipt.second);
     }
     return executiveContext;
 }
@@ -95,5 +87,5 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
 
     return make_pair(res,
         TransactionReceipt(executiveContext->getState()->rootHash(), startGasUsed + e.gasUsed(),
-            e.logs(), e.status(), e.output().takeBytes(), e.newAddress()));
+            e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
 }
