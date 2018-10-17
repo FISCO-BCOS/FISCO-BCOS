@@ -23,7 +23,9 @@
 
 #pragma once
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
+#include <libethcore/CommonJS.h>
 #include <libp2p/CertificateServer.h>
 #include <libp2p/Host.h>
 #include <libp2p/Network.h>
@@ -35,6 +37,7 @@
 INITIALIZE_EASYLOGGINGPP
 using namespace dev;
 using namespace dev::p2p;
+using namespace dev::eth;
 namespace js = json_spirit;
 class Params
 {
@@ -51,7 +54,7 @@ public:
 
     Params(std::string const& _clientVersion, std::string const& _listenIp,
         uint16_t const& _p2pPort, std::string const& _publicIp, std::string const& _bootstrapPath,
-        uint16_t _sendMsgType)
+        std::string const& _minerPath, uint16_t _sendMsgType)
       : m_clientVersion(_clientVersion),
         m_listenIp(_listenIp),
         m_p2pPort(_p2pPort),
@@ -107,6 +110,7 @@ public:
     }
 
     std::map<NodeIPEndpoint, NodeID>& staticNodes() { return m_staticNodes; }
+    h512s const minerList() { return m_minerList; }
 
 private:
     void updateBootstrapnodes()
@@ -118,6 +122,7 @@ private:
             js::read_string(json, val);
             js::mObject jsObj = val.get_obj();
             NodeIPEndpoint m_endpoint;
+            /// obtain node related info
             if (jsObj.count("nodes"))
             {
                 for (auto node : jsObj["nodes"].get_array())
@@ -141,6 +146,21 @@ private:
                     }
                 }
             }
+            /// obtain minerList
+            if (jsObj.count("miners"))
+            {
+                m_minerList.clear();
+                for (auto miner : jsObj["miners"].get_array())
+                {
+                    std::string miner_str = miner.get_str();
+                    if (miner_str.substr(0, 2) != "0x")
+                    {
+                        miner_str = "0x" + miner_str;
+                    }
+                    m_minerList.push_back(jsToPublic(miner_str));
+                    std::cout << "##### push back miner:" << miner_str << std::endl;
+                }
+            }
         }
         catch (...)
         {
@@ -162,6 +182,7 @@ private:
     uint16_t m_p2pPort;
     std::string m_publicIp;
     std::string m_bootstrapPath;
+    h512s m_minerList;
     std::map<NodeIPEndpoint, NodeID> m_staticNodes;
 };
 

@@ -114,7 +114,7 @@ public:
     }
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
-    bool isSealed() const { return !m_currentBytes.empty(); }
+    bool isSealed() const { return (m_blockHeader.sealer() != Invalid256); }
     size_t getTransactionSize() const { return m_transactions.size(); }
 
     /// get transactionRoot
@@ -130,7 +130,6 @@ public:
         m_transactions.clear();
         m_transactionReceipts.clear();
         m_sigList.clear();
-        m_currentBytes.clear();
         m_txsCache.clear();
         m_txsMapCache.clear();
         m_txsRoot.clear();
@@ -164,8 +163,6 @@ private:
     h256 m_headerHash;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
-    /// bytes for block
-    bytes m_currentBytes;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     mutable bytes m_txsCache;

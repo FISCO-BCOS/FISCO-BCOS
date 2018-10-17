@@ -29,12 +29,12 @@ namespace dev
 {
 namespace eth
 {
-Block::Block(bytesConstRef _data) : m_currentBytes(_data.toBytes())
+Block::Block(bytesConstRef _data)
 {
     decode(_data);
 }
 
-Block::Block(bytes const& _data) : m_currentBytes(_data)
+Block::Block(bytes const& _data)
 {
     decode(ref(_data));
 }
@@ -45,7 +45,6 @@ Block::Block(Block const& _block)
     m_transactionReceipts(_block.transactionReceipts()),
     m_headerHash(_block.headerHash()),
     m_sigList(_block.sigList()),
-    m_currentBytes(_block.m_currentBytes),
     m_txsCache(_block.m_txsCache),
     m_txsMapCache(_block.m_txsMapCache),
     m_txsRoot(_block.m_txsRoot)
@@ -63,8 +62,6 @@ Block& Block::operator=(Block const& _block)
     m_transactionReceipts = _block.transactionReceipts();
     /// init sigList
     m_sigList = _block.sigList();
-    /// init m_currentBytes
-    m_currentBytes = _block.m_currentBytes;
     m_txsCache = _block.m_txsCache;
     m_txsMapCache = _block.m_txsMapCache;
     m_txsRoot = _block.m_txsRoot;
@@ -177,7 +174,6 @@ void Block::decode(bytesConstRef _block_bytes)
     m_headerHash = block_rlp[2].toHash<h256>(RLP::VeryStrict);
     /// get sig_list
     m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
-    m_currentBytes = _block_bytes.toBytes();
     noteChange();
 }
 }  // namespace eth

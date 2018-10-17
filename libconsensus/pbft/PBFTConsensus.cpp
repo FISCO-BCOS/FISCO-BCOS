@@ -23,6 +23,7 @@
  */
 #include "PBFTConsensus.h"
 #include <libdevcore/CommonJS.h>
+#include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 using namespace dev::eth;
 using namespace dev::db;
@@ -40,6 +41,7 @@ void PBFTConsensus::start()
 {
     initPBFTEnv(3 * getIntervalBlockTime());
     Consensus::start();
+    msgHandleThread();
 }
 
 void PBFTConsensus::initPBFTEnv(unsigned view_timeout)
@@ -161,7 +163,7 @@ bool PBFTConsensus::execBlock()
 
 void PBFTConsensus::setBlock()
 {
-    resetSealingBlock();
+    resetSealingHeader(m_sealing.block.header());
     setSealingRoot(m_sealing.block.getTransactionRoot(), h256(Invalid256), h256(Invalid256));
 }
 
@@ -187,9 +189,10 @@ void PBFTConsensus::broadcastSignedReq()
 void PBFTConsensus::handleBlock()
 {
     setBlock();
-    LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on" << m_sealing.block.header().hash()
-              << "#" << m_sealing.block.header().number()
-              << "tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
+    LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on: "
+              << m_sealing.block.header().hash()
+              << "#block_number:" << m_sealing.block.header().number()
+              << "#tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
     Timer t;
     broadcastPrepareReq(m_sealing.block);
     LOG(DEBUG) << "broadcast generated block, blk=" << m_sealing.block.blockHeader().number()
@@ -215,8 +218,8 @@ void PBFTConsensus::handleBlock()
         return;
     }
     /// generate sign req
-    LOG(INFO) << "************************** Generating sign on" << m_sealing.block.header().hash()
-              << "#" << m_sealing.block.header().number()
+    LOG(INFO) << "************************** Generating sign on: "
+              << m_sealing.block.header().hash() << "#" << m_sealing.block.header().number()
               << "tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
     broadcastSignedReq();
     m_timeManager.updateTimeAfterHandleBlock(m_sealing.block.getTransactionSize(), start_exec_time);
@@ -229,6 +232,7 @@ void PBFTConsensus::handleBlock()
  */
 bool PBFTConsensus::shouldSeal()
 {
+    Consensus::shouldSeal();
     if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
         return false;
     /// check leader
@@ -506,6 +510,7 @@ bool PBFTConsensus::needOmit(Sealing const& sealing)
 void PBFTConsensus::onRecvPBFTMessage(
     P2PException exception, std::shared_ptr<Session> session, Message::Ptr message)
 {
+    LOG(DEBUG) << "#### onRecvPBFTMessage";
     PBFTMsgPacket pbft_msg;
     bool valid = decodeToRequests(pbft_msg, message, session);
     if (!valid)
@@ -672,10 +677,11 @@ void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
     /// clear caches
     m_reqCache->clearAllExceptCommitCache();
     m_reqCache->delCache(m_highestBlock.hash());
-    LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=" << m_highestBlock.number()
-              << ",hash=" << blockHeader.hash().abridged()
+    LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: m_highestBlock.blk="
+              << m_highestBlock.number() << ",hash=" << blockHeader.hash().abridged()
               << ",m_highestBlock.idx=" << m_highestBlock.sealer()
               << ", Next: blk=" << m_consensusBlockNumber;
+    resetSealingBlock();
 }
 
 /**
@@ -972,30 +978,36 @@ void PBFTConsensus::handleMsg(PBFTMsgPacket const& pbftMsg)
     }
 }
 
-void PBFTConsensus::workLoop()
+/// start a new thread to handle the network-receivied message
+void PBFTConsensus::msgHandleThread()
 {
-    while (isWorking())
-    {
-        try
+    LOG(DEBUG) << "##### start the thread msgHandleThread";
+    new std::thread([&]() {
+        setThreadName("pbft");
+        while (isWorking())
         {
-            std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
-            if (ret.first)
-                handleMsg(ret.second);
-            else
+            try
             {
-                std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, std::chrono::milliseconds(5));
+                std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
+                if (ret.first)
+                    handleMsg(ret.second);
+                else
+                {
+                    std::unique_lock<std::mutex> l(x_signalled);
+                    m_signalled.wait_for(l, std::chrono::milliseconds(5));
+                }
+                checkTimeout();
+                handleFutureBlock();
+                collectGarbage();
             }
-            checkTimeout();
-            handleFutureBlock();
-            collectGarbage();
+            catch (std::exception& _e)
+            {
+                LOG(ERROR) << _e.what();
+            }
         }
-        catch (std::exception& _e)
-        {
-            LOG(ERROR) << _e.what();
-        }
-    }
+    });
 }
+
 
 /// handle the prepareReq cached in the futurePrepareCache
 void PBFTConsensus::handleFutureBlock()
