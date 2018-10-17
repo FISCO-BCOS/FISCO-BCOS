@@ -189,7 +189,8 @@ void PBFTConsensus::broadcastSignedReq()
 void PBFTConsensus::handleBlock()
 {
     setBlock();
-    LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on: " << m_sealing.block.header().hash()
+    LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on: "
+              << m_sealing.block.header().hash()
               << "#block_number:" << m_sealing.block.header().number()
               << "#tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
     Timer t;
@@ -217,8 +218,8 @@ void PBFTConsensus::handleBlock()
         return;
     }
     /// generate sign req
-    LOG(INFO) << "************************** Generating sign on: " << m_sealing.block.header().hash()
-              << "#" << m_sealing.block.header().number()
+    LOG(INFO) << "************************** Generating sign on: "
+              << m_sealing.block.header().hash() << "#" << m_sealing.block.header().number()
               << "tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
     broadcastSignedReq();
     m_timeManager.updateTimeAfterHandleBlock(m_sealing.block.getTransactionSize(), start_exec_time);
