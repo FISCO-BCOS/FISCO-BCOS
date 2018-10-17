@@ -36,10 +36,10 @@ namespace dev
 {
 namespace sync
 {
-class SyncMsgHandler
+class SyncMsgEngine
 {
 public:
-    SyncMsgHandler(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    SyncMsgEngine(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<SyncData> _data)
       : m_blockChain(_blockChain), m_txPool(_txPool), m_data(_data)
@@ -51,7 +51,10 @@ public:
 private:
     bool checkSession(std::shared_ptr<dev::p2p::Session> _session);
     bool checkPacket(bytesConstRef _msg);
-    bool interpret(SyncPacketType _id, RLP const& _r);
+    bool interpret(NodeID const& _id, SyncPacketType _type, RLP const& _r);
+
+private:
+    void onPeerTransactions(NodeID const& _id, RLP const& _r);
 
 private:
     // Outside data

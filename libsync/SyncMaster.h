@@ -24,7 +24,7 @@
 #include "Common.h"
 #include "SyncData.h"
 #include "SyncInterface.h"
-#include "SyncMsgHandler.h"
+#include "SyncMsgEngine.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -58,7 +58,7 @@ public:
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
     {
         m_data = std::make_shared<SyncData>();
-        m_handler = std::make_shared<SyncMsgHandler>(_txPool, _blockChain, m_data);
+        m_msgEngine = std::make_shared<SyncMsgEngine>(_txPool, _blockChain, m_data);
     }
 
     virtual ~SyncMaster(){};
@@ -100,7 +100,7 @@ private:
     std::shared_ptr<SyncData> m_data;
 
     /// Message handler of p2p
-    std::shared_ptr<SyncMsgHandler> m_handler;
+    std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
 
     // Internal data
@@ -121,7 +121,7 @@ private:
     int16_t m_protocolId;
 
 private:
-    // void maintainTransactions();
+    void maintainTransactions();
     // void maintainBlocks(h256 const& _currentBlock);
     // void
 };

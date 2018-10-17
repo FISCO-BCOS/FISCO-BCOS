@@ -45,7 +45,7 @@ void SyncMaster::doWork()
     if (!isSyncing())
     {
         cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
-        // maintainTransactions();
+        maintainTransactions();
         // maintainBlocks
         // download
         // bq on chain
@@ -68,9 +68,8 @@ bool SyncMaster::isSyncing() const
 {
     return m_state != SyncState::Idle;
 }
-/*
-void maintainTransactions()
+
+void SyncMaster::maintainTransactions()
 {
     cout << "maintain transactions" << endl;
 }
-*/

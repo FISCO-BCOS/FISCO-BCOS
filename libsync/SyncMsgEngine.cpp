@@ -19,7 +19,7 @@
  * @author: jimmyshi
  * @date: 2018-10-17
  */
-#include "SyncMsgHandler.h"
+#include "SyncMsgEngine.h"
 
 using namespace std;
 using namespace dev;
@@ -29,8 +29,7 @@ using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::txpool;
 
-
-void SyncMsgHandler::messageHandler(
+void SyncMsgEngine::messageHandler(
     P2PException _e, std::shared_ptr<dev::p2p::Session> _session, Message::Ptr _msg)
 {
     if (!checkSession(_session))
@@ -50,19 +49,19 @@ void SyncMsgHandler::messageHandler(
 
     SyncPacketType packetType = (SyncPacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
     RLP r(frame.cropped(1));
-    bool ok = interpret(packetType, r);
+    bool ok = interpret(_session->id(), packetType, r);
     if (!ok)
         LOG(WARNING) << "Couldn't interpret packet. " << RLP(r);
 }
 
-bool SyncMsgHandler::checkSession(std::shared_ptr<dev::p2p::Session> _session)
+bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::Session> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
     //_session->id();
     return true;
 }
 
-bool SyncMsgHandler::checkPacket(bytesConstRef _msg)
+bool SyncMsgEngine::checkPacket(bytesConstRef _msg)
 {
     if (_msg[0] > 0x7f || _msg.size() < 2)
         return false;
@@ -71,14 +70,22 @@ bool SyncMsgHandler::checkPacket(bytesConstRef _msg)
     return true;
 }
 
-bool SyncMsgHandler::interpret(SyncPacketType _id, RLP const& _r)
+bool SyncMsgEngine::interpret(NodeID const& _id, SyncPacketType _type, RLP const& _r)
 {
-    switch (_id)
+    switch (_type)
     {
-    case StatusPacket:
-    case BlockPacket:
+    case TransactionsPacket:
+        onPeerTransactions(_id, _r);
+        break;
     default:
         return false;
     }
     return true;
+}
+
+void onPeerTransactions(NodeID const& _id, RLP const& _r)
+{
+    unsigned itemCount = _r.itemCount();
+    LOG(TRACE) << "Transactions (" << dec << itemCount << "entries)";
+    // TODO m_txPool.enqueue(_r, _peer->id());
 }
