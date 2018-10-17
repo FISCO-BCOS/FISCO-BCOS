@@ -10,7 +10,7 @@ using namespace dev::storage;
 
 MemoryDBFactory::MemoryDBFactory()
 {
-    m_sysTables.push_back("_sys_tables_");
+    m_sysTables.push_back(SYSTEM_MINER);
     m_sysTables.push_back(SYSTEM_TABLE);
 }
 
@@ -81,7 +81,7 @@ storage::TableInfo::Ptr MemoryDBFactory::getSysTableInfo(const std::string &tabl
 {
     auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;
-    if (tableName == "_sys_miners_")
+    if (tableName == SYSTEM_MINER)
     {
         tableInfo->key = "name";
         tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};

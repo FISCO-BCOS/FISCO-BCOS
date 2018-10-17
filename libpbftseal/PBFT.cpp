@@ -138,7 +138,8 @@ void PBFT::resetConfig() {
 
 	LOG(INFO) << "resetConfig: m_node_idx=" << m_node_idx.convert_to<ssize_t>() << ", m_node_num=" << m_node_num;
 
-	m_cfg_err = (m_node_idx < 0);
+	m_cfg_err = (m_node_idx.convert_to<ssize_t>() == -1);
+	if(m_cfg_err) m_account_type = 0;
 }
 
 StringHashMap PBFT::jsInfo(BlockHeader const& _bi) const
