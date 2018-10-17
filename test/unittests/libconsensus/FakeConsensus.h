@@ -56,6 +56,7 @@ public:
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
     TimeManager const& timeManager() const { return m_timeManager; }
+    TimeManager mutableTimeManager() { return m_timeManager; }
     const std::shared_ptr<dev::db::LevelDB> backupDB() const { return m_backupDB; }
     bool const& leaderFailed() const { return m_leaderFailed; }
     int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
@@ -165,6 +166,8 @@ public:
     bool shouldSeal() { return PBFTConsensus::shouldSeal(); }
 
     void setNodeIdx(u256 const& _idx) { m_idx = _idx; }
+    void collectGarbage() { return PBFTConsensus::collectGarbage(); }
+    void handleFutureBlock() { return PBFTConsensus::handleFutureBlock(); }
 };
 
 template <typename T>

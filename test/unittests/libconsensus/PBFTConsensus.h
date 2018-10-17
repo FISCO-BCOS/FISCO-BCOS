@@ -362,7 +362,8 @@ static void testIsConsensused(
     }
 }
 
-static void testIsFuture(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+static void testIsFuture(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ, bool shouldFix = true)
 {
     if (!succ)
     {
@@ -371,8 +372,11 @@ static void testIsFuture(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq
         req.height = fake_pbft.consensus()->mutableConsensusNumber();
         req.view = fake_pbft.consensus()->view() + u256(1);
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
-        req.height = org_height;
-        req.view = org_view;
+        if (shouldFix)
+        {
+            req.height = org_height;
+            req.view = org_view;
+        }
     }
 }
 
