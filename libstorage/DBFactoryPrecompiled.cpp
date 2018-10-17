@@ -174,7 +174,7 @@ Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const s
         return it->second;
     }
  
-    LOG(DEBUG) << "Open new table:" << tableName;
+    LOG(DEBUG) << "Open table:" << tableName;
     storage::DB::Ptr db = _memoryDBFactory->openTable(
             context->blockInfo().hash, context->blockInfo().number.convert_to<int>(), tableName);
     if(!db) 

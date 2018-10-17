@@ -248,20 +248,11 @@ bool dev::storage::MemoryDB::isHash(std::string _key)
 {
   if (!_key.empty())
   {
-    if ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") || (_key == STORAGE_STATUS))
-    {
-      return true;
-    }
-    else
-    {
-      return false;
-    }
+    return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") || (_key == STORAGE_STATUS));
   }
-  else
-  {
-    LOG(ERROR) << "Empty key error.";
-    return false;
-  }
+  LOG(ERROR) << "Empty key error.";
+  return false;
+  
 }
 
 void dev::storage::MemoryDB::clear() { _cache.clear(); }
