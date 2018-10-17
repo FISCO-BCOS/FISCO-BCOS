@@ -13,7 +13,7 @@ void dev::storage::MemoryDB::init(const std::string &tableName)
 {
   LOG(DEBUG) << "Init MemoryDB:" << tableName;
 
-  _tableInfo = _remoteDB->info(tableName);
+  // _tableInfo = _remoteDB->info(tableName);
 }
 
 Entries::Ptr dev::storage::MemoryDB::select(const std::string &key,
