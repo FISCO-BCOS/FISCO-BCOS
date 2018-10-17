@@ -77,7 +77,7 @@ Client::Client(
 	_params.getInitializer()->rpcInitializer()->channelRPCServer()->setHost(host());
 	host().lock()->setWeb3Observer(_params.getInitializer()->rpcInitializer()->channelRPCServer()->buildObserver());
 
-	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir());
+	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir(), _forceAction);
 	UTXOModel::UTXOSharedData::getInstance()->setBlockNum(u256(number()));
 	LOG(INFO) << "UTXOSharedData->initialize() End";
 #if 0

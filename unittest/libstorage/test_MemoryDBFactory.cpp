@@ -20,13 +20,13 @@ class MockAMOPDB : public dev::storage::Storage {
     TableInfo::Ptr info = std::make_shared<TableInfo>();
     if (table != "_sys_tables_") {
       BOOST_CHECK(table == "t_test");
-      info->indices.push_back("姓名");
-      info->indices.push_back("资产号");
+      info->fields.push_back("姓名");
+      info->fields.push_back("资产号");
       info->key = "姓名";
       info->name = "t_test";
     } else {
-      info->indices.push_back("key_field");
-      info->indices.push_back("value_field");
+      info->fields.push_back("key_field");
+      info->fields.push_back("value_field");
       info->key = "key";
       info->name = "_sys_tables_";
     }
@@ -65,12 +65,7 @@ struct MemoryDBFactoryFixture {
 
 BOOST_FIXTURE_TEST_SUITE(MemoryDBFactory, MemoryDBFactoryFixture)
 
-BOOST_AUTO_TEST_CASE(openDB) {
-  MemoryDB::Ptr db = std::dynamic_pointer_cast<MemoryDB>(
-      memoryDBFactory->openTable(h256(0x12345), 1, "t_test"));
-}
-
-BOOST_AUTO_TEST_CASE(createTable) {
+BOOST_AUTO_TEST_CASE(open_Table) {
   h256 blockHash(0x0101);
   int num = 1;
   std::string tableName("t_test");
@@ -78,6 +73,8 @@ BOOST_AUTO_TEST_CASE(createTable) {
   std::vector<std::string> valueField(
       {"hash", "num", "name", "item_id", "item_name", "status"});
   memoryDBFactory->createTable(blockHash, num, tableName, keyField, valueField);
+  MemoryDB::Ptr db = std::dynamic_pointer_cast<MemoryDB>(
+      memoryDBFactory->openTable(h256(0x12345), 1, "t_test"));
 }
 
 BOOST_AUTO_TEST_CASE(setBlockHash) {
