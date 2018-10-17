@@ -69,7 +69,6 @@ target_include_directories(web3jsonrpc PUBLIC ${MHD_INCLUDE_DIR})
 #                                  ${Web3_WHISPER_LIBRARIES}
 #                                  JsonRpcCpp::Server
 #                                  statistics
-#                                  contract
 #                                  ${OPENSSL_SSL_LIBRARIE}
 #                                  ${OPENSSL_CRYPTO_LIBRARIE}
 #                                  ${MHD_LIBRARY}
@@ -77,7 +76,6 @@ target_include_directories(web3jsonrpc PUBLIC ${MHD_INCLUDE_DIR})
 #                                  )
 
 target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES})
-target_link_libraries(web3jsonrpc contract)
 target_link_libraries(web3jsonrpc channelserver)
 target_link_libraries(web3jsonrpc JsonRpcCpp::Server)
 target_link_libraries(web3jsonrpc ${MHD_LIBRARY})

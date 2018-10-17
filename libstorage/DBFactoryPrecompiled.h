@@ -31,7 +31,6 @@ contract DBFactory {
 class DBFactoryPrecompiled: public Precompiled {
 public:
 	typedef std::shared_ptr<DBFactoryPrecompiled> Ptr;
-	DBFactoryPrecompiled();
 	virtual ~DBFactoryPrecompiled() {};
 
 	virtual void beforeBlock(std::shared_ptr<PrecompiledContext>);
@@ -48,9 +47,7 @@ public:
 	Address openTable(PrecompiledContext::Ptr context, const std::string & tableName);
 private:
 	unsigned isTableCreated(PrecompiledContext::Ptr context, const std::string& tableName, const std::string &keyField, const std::string &valueFiled);
-	DBPrecompiled::Ptr getSysTable(PrecompiledContext::Ptr context);
 	dev::storage::MemoryDBFactory::Ptr _memoryDBFactory;
-	std::vector<std::string> m_sysTables;
 	std::map<std::string, Address> _name2Table;
 	h256 _hash;
 };
