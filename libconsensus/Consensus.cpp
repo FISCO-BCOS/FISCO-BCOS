@@ -43,6 +43,8 @@ void Consensus::start()
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     reportBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+    LOG(DEBUG) << "#### sealer of the highest block:"
+               << m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader().sealer();
 }
 
 bool Consensus::shouldSeal()
@@ -94,6 +96,7 @@ void Consensus::doWork(bool wait)
 void Consensus::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
+    LOG(DEBUG) << "loadTransactions, max trans:" << transToFetch;
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
