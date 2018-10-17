@@ -571,15 +571,14 @@ int main(int argc, char** argv)
 	signal(SIGINT, &ExitHandler::exitHandler);
 
 	while (!exitHandler.shouldExit()) {
-		this_thread::sleep_for(chrono::milliseconds(500));
-
+		this_thread::sleep_for(chrono::milliseconds(100));
 		logRotateByTime();
 	}
 	while (!exitHandler.shouldExit()) {
 		if(web3.ethereum()->isMining()) {
 			web3.ethereum()->stopSealing();
 		}
-		this_thread::sleep_for(chrono::milliseconds(500));
+		this_thread::sleep_for(chrono::milliseconds(100));
 	}
 	if(jsonrpcHttpServer) {
 		jsonrpcHttpServer->StopListening();
