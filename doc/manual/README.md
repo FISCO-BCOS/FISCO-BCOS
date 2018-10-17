@@ -315,7 +315,7 @@ cd nodes/node-0
 tail -f log/info* |grep ++++  
 # 若需要退出节点
 # ps -ef |grep fisco-bcos #查看进程号
-# kill -9 13432 #13432是查看到的进程号
+# kill 13432 #13432是查看到的进程号
 ```
 
 ### 2.6 验证节点启动
