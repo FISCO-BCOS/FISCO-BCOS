@@ -39,6 +39,7 @@ void Consensus::start()
         LOG(WARNING) << "Consensus module has already been started, return directly";
         return;
     }
+    resetSealingBlock();
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     reportBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
@@ -97,22 +98,28 @@ void Consensus::loadTransactions(uint64_t const& transToFetch)
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
 
-void Consensus::ResetSealingHeader()
+void Consensus::resetSealingHeader(BlockHeader& header)
 {
     /// import block
     resetCurrentTime();
-    m_sealing.block.header().setSealerList(minerList());
-    m_sealing.block.header().setSealer(nodeIdx());
-    m_sealing.block.header().setLogBloom(LogBloom());
-    m_sealing.block.header().setGasUsed(u256(0));
-    m_sealing.block.header().setExtraData(m_extraData);
+    header.setSealerList(minerList());
+    header.setSealer(nodeIdx());
+    header.setLogBloom(LogBloom());
+    header.setGasUsed(u256(0));
+    header.setExtraData(m_extraData);
 }
 
-void Consensus::ResetSealingBlock()
+void Consensus::resetSealingBlock(Sealing& sealing)
 {
-    m_sealing.block.resetCurrentBlock();
-    ResetSealingHeader();
-    m_sealing.m_transactionSet.clear();
+    resetBlock(sealing.block);
+    sealing.m_transactionSet.clear();
+    sealing.p_execContext = nullptr;
+}
+
+void Consensus::resetBlock(Block& block)
+{
+    block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+    resetSealingHeader(block.header());
 }
 
 void Consensus::appendSealingExtraData(bytes const& _extra)
@@ -123,7 +130,6 @@ void Consensus::appendSealingExtraData(bytes const& _extra)
 /// update m_sealing and receiptRoot
 dev::blockverifier::ExecutiveContext::Ptr Consensus::executeBlock(Block& block)
 {
-    std::unordered_map<Address, dev::eth::PrecompiledContract> contract;
     /// reset execute context
     return m_blockVerifier->executeBlock(block);
 }
@@ -132,7 +138,7 @@ void Consensus::checkBlockValid(Block const& block)
 {
     h256 block_hash = block.blockHeader().hash();
     /// check the timestamp
-    if (block.blockHeader().timestamp() > u256(utcTime()) && !m_allowFutureBlocks)
+    if (block.blockHeader().timestamp() > utcTime() && !m_allowFutureBlocks)
     {
         LOG(ERROR) << "Future timestamp(now disabled) of block_hash = " << block_hash;
         BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
@@ -176,6 +182,11 @@ bool Consensus::isBlockSyncing()
 {
     SyncStatus state = m_blockSync->status();
     return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
+}
+
+void Consensus::dropHandledTransactions(Block const& block)
+{
+    m_txPool->dropBlockTrans(block);
 }
 
 /// stop the consensus module

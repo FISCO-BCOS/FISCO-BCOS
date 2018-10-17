@@ -184,9 +184,12 @@ protected:
     uint64_t calculateMaxPackTxNum() override;
     /// broadcast prepare message
     void broadcastPrepareReq(dev::eth::Block& block);
-    /// broadcast sign message
+
+    /// 1. generate and broadcast signReq according to given prepareReq
+    /// 2. add the generated signReq into the cache
     void broadcastSignReq(PrepareReq const& req);
     void broadcastSignedReq();
+
     /// broadcast commit message
     void broadcastCommitReq(PrepareReq const& req);
     /// broadcast view change message
@@ -198,13 +201,19 @@ protected:
 
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
-    void handlePrepareMsg(PrepareReq& prepare_req, bool self = false);
+    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = false);
+    /// 1. decode the network-received PBFTMsgPacket to signReq
+    /// 2. check the validation of the signReq
+    /// add the signReq to the cache and
+    /// heck the size of the collected signReq is over 2/3 or not
     void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
     void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
     void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
     void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
+
+    /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     void checkAndSave();
     void checkAndChangeView();
 
@@ -212,14 +221,17 @@ protected:
     {
         bool ret = (m_sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock);
         if (ret)
-            m_sealing.block.resetCurrentBlock();
+            resetSealingBlock();
         return ret;
     }
+
+    /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
-    void resetConfig();
+    /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
+    void resetConfig() override;
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
     void backupMsg(std::string const& _key, PBFTMsg const& _msg);
@@ -380,15 +392,33 @@ protected:
             return false;
         }
     }
-
+    /// check the specified prepareReq is valid or not
     bool isValidPrepare(PrepareReq const& req, bool self, std::ostringstream& oss) const;
+
+    /**
+     * @brief: common check process when handle SignReq and CommitReq
+     *         1. the request should be existed in prepare cache,
+     *            if the request is the future request, should add it to the prepare cache
+     *         2. the sealer of the request shouldn't be the node-self
+     *         3. the view of the request must be equal to the view of the prepare cache
+     *         4. the signature of the request must be valid
+     * @tparam T: the type of the request
+     * @param req: the request should be checked
+     * @param oss: information to debug
+     * @return CheckResult:
+     *  1. CheckResult::FUTURE: the request is the future req;
+     *  2. CheckResult::INVALID: the request is invalid
+     *  3. CheckResult::VALID: the request is valid
+     */
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            LOG(WARNING) << oss.str() << " Recv a req which not in prepareCache, block_hash = "
-                         << m_reqCache->prepareCache().block_hash.abridged();
+            LOG(WARNING) << oss.str()
+                         << " Recv a req which not in prepareCache,prepareCache block_hash = "
+                         << m_reqCache->prepareCache().block_hash.abridged()
+                         << "req block_hash = " << req.block_hash;
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
@@ -397,6 +427,12 @@ protected:
                           << m_reqCache->prepareCache().block_hash.abridged();
                 return CheckResult::FUTURE;
             }
+            return CheckResult::INVALID;
+        }
+        /// check the sealer of this request
+        if (req.idx == m_idx)
+        {
+            LOG(WARNING) << oss.str() << " Discard an illegal request, your own req";
             return CheckResult::INVALID;
         }
         /// check view
@@ -446,6 +482,7 @@ protected:
     inline bool isValidLeader(PrepareReq const& req) const
     {
         auto leader = getLeader();
+        /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
             return false;
         return true;
@@ -453,7 +490,7 @@ protected:
 
     inline std::pair<bool, u256> getLeader() const
     {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.number() == 0)
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
         {
             return std::make_pair(false, Invalid256);
         }
@@ -461,11 +498,9 @@ protected:
     }
     void checkMinerList(dev::eth::Block const& block);
     bool execBlock();
-    void execBlock(Sealing& sealing, PrepareReq& req, std::ostringstream& oss);
-    u256 minValidNodes() const { return m_nodeNum - m_f; }
+    void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
     void setBlock();
     void changeViewForEmptyBlock();
-
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
         return boost::filesystem::space(path).available > 1024;
@@ -476,11 +511,6 @@ protected:
     u256 m_toView = u256(0);
     KeyPair m_keyPair;
     std::string m_baseDir;
-    /// total number of nodes
-    u256 m_nodeNum = u256(0);
-    /// at-least number of valid nodes
-    u256 m_f = u256(0);
-
     bool m_cfgErr = false;
     bool m_leaderFailed = false;
     // the block which is waiting consensus

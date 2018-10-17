@@ -75,11 +75,21 @@ public:
     void start() override;
     /// stop the consensus module
     void stop() override;
+    virtual void resetConfig() { m_nodeNum = u256(m_minerList.size()); }
+    void resetSealingBlock(Sealing& sealing);
+    void inline resetSealingBlock() { resetSealingBlock(m_sealing); }
+    void resetSealingHeader(dev::eth::BlockHeader& header);
+    void resetBlock(dev::eth::Block& block);
+    u256 minValidNodes() const { return m_nodeNum - m_f; }
 
     /// get miner list
     h512s minerList() const override { return m_minerList; }
     /// set the miner list
-    void setMinerList(h512s const& _minerList) override { m_minerList = _minerList; }
+    void setMinerList(h512s const& _minerList) override
+    {
+        m_minerList = _minerList;
+        resetConfig();
+    }
     /// append miner
     void appendMiner(h512 const& _miner) override { m_minerList.push_back(_miner); }
     /// get status of consensus
@@ -114,6 +124,7 @@ public:
     {
         m_allowFutureBlocks = isAllowFutureBlocks;
     }
+    void dropHandledTransactions(dev::eth::Block const& block);
 
 protected:
     /// sealing block
@@ -184,6 +195,11 @@ protected:
     u256 m_idx = u256(0);
     /// miner list
     h512s m_minerList;
+    /// total number of nodes
+    u256 m_nodeNum = u256(0);
+    /// at-least number of valid nodes
+    u256 m_f = u256(0);
+
     uint64_t m_maxBlockTransactions = 1000;
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;

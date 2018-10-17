@@ -234,6 +234,21 @@ bool TxPool::drop(h256 const& _txHash)
     return removeTrans(_txHash);
 }
 
+bool TxPool::dropBlockTrans(Block const& block)
+{
+    if (block.getTransactionSize() == 0)
+        return true;
+    WriteGuard l(m_lock);
+    bool succ = true;
+    for (auto t : block.transactions())
+    {
+        m_dropped.insert(t.sha3());
+        if (removeTrans(t.sha3()) == false)
+            succ = false;
+    }
+    return succ;
+}
+
 /**
  * @brief Get top transactions from the queue
  *

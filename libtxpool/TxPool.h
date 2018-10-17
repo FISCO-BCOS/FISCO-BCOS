@@ -26,6 +26,7 @@
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/easylog.h>
+#include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
@@ -87,6 +88,7 @@ public:
      * @param _txHash: transaction hash
      */
     bool drop(h256 const& _txHash) override;
+    bool dropBlockTrans(Block const& block) override;
     /**
      * @brief Get top transactions from the queue
      *

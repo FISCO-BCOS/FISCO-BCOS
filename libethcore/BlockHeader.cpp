@@ -69,7 +69,7 @@ BlockHeader::BlockHeader(BlockHeader const& _other)
     m_extraData(_other.extraData()),
     m_sealer(_other.sealer()),
     m_sealerList(_other.sealerList()),
-    m_hash(_other.hashRawRead())
+    m_hash(_other.hash())
 {
     assert(*this == _other);
 }
@@ -92,7 +92,7 @@ BlockHeader& BlockHeader::operator=(BlockHeader const& _other)
     m_sealer = _other.sealer();
     m_sealerList = _other.sealerList();
     // equal to m_hash of _other
-    h256 hash = _other.hashRawRead();
+    h256 hash = _other.hash();
     // set the real member of block header with lock protection
     {
         Guard l(m_hashLock);
