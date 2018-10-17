@@ -645,8 +645,8 @@ BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
     FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
     PrepareReq prepareReq;
     TestIsValidPrepare(fake_pbft, prepareReq, true);
-    prepareReq.height == fake_pbft.consensus()->mutableConsensusNumber();
-    prepareReq.view == fake_pbft.consensus()->view();
+    prepareReq.height = fake_pbft.consensus()->mutableConsensusNumber();
+    prepareReq.view = fake_pbft.consensus()->view();
     fake_pbft.consensus()->reqCache()->addFuturePrepareCache(prepareReq);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->futurePrepareCache().block_hash != h256());
     fake_pbft.consensus()->handleFutureBlock();

@@ -137,15 +137,15 @@ protected:
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
-        if (tx_num >= maxTxsCanSeal || reachBlockIntervalTime())
+        bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
+        if (enough)
             m_syncTxPool = false;
-        LOG(DEBUG) << "#### checkTxsEnough, tx_num:" << tx_num << ", maxTxsCanSeal"
-                   << maxTxsCanSeal;
-        return (tx_num >= maxTxsCanSeal || reachBlockIntervalTime());
+        LOG(DEBUG) << "#### checkTxsEnough, tx_num:" << tx_num << ", maxTxsCanSeal" << maxTxsCanSeal
+                   << ", reachBlockIntervalTime:" << reachBlockIntervalTime();
+        return enough;
     }
 
     virtual bool reachBlockIntervalTime() { return false; }
-
     virtual void handleBlock() {}
     virtual void doWork(bool wait);
     void doWork() override { doWork(true); }

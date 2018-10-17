@@ -84,7 +84,6 @@ static void startConsensus(Params& params)
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
-
     while (true)
     {
         tx.setNonce(tx.nonce() + 1);
@@ -94,7 +93,7 @@ static void startConsensus(Params& params)
         LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
                   << ", size:" << txPool->pendingSize();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 
