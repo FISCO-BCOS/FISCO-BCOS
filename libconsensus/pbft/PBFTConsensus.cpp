@@ -163,7 +163,7 @@ bool PBFTConsensus::execBlock()
 
 void PBFTConsensus::setBlock()
 {
-    resetSealingBlock();
+    resetSealingHeader(m_sealing.block.header());
     setSealingRoot(m_sealing.block.getTransactionRoot(), h256(Invalid256), h256(Invalid256));
 }
 
@@ -189,9 +189,9 @@ void PBFTConsensus::broadcastSignedReq()
 void PBFTConsensus::handleBlock()
 {
     setBlock();
-    LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on" << m_sealing.block.header().hash()
-              << "#" << m_sealing.block.header().number()
-              << "tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
+    LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on: " << m_sealing.block.header().hash()
+              << "#block_number:" << m_sealing.block.header().number()
+              << "#tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
     Timer t;
     broadcastPrepareReq(m_sealing.block);
     LOG(DEBUG) << "broadcast generated block, blk=" << m_sealing.block.blockHeader().number()
@@ -217,7 +217,7 @@ void PBFTConsensus::handleBlock()
         return;
     }
     /// generate sign req
-    LOG(INFO) << "************************** Generating sign on" << m_sealing.block.header().hash()
+    LOG(INFO) << "************************** Generating sign on: " << m_sealing.block.header().hash()
               << "#" << m_sealing.block.header().number()
               << "tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
     broadcastSignedReq();
