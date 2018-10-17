@@ -186,12 +186,8 @@ bool Consensus::isBlockSyncing()
 
 void Consensus::dropHandledTransactions(Block const& block)
 {
-    for (auto const& t : block.transactions())
-    {
-        m_txPool->drop(t.sha3());
-    }
+    m_txPool->dropBlockTrans(block);
 }
-
 
 /// stop the consensus module
 void Consensus::stop()

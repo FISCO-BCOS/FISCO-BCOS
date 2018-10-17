@@ -997,6 +997,7 @@ void PBFTConsensus::workLoop()
     }
 }
 
+/// handle the prepareReq cached in the futurePrepareCache
 void PBFTConsensus::handleFutureBlock()
 {
     Guard l(m_mutex);
