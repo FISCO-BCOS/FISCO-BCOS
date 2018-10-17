@@ -21,9 +21,9 @@
  * @date: 2018-10-15
  */
 
-#include "FakeSyncMaster.h"
 #include <libsync/SyncMaster.h>
 #include <test/tools/libutils/TestOutputHelper.h>
+#include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
@@ -41,13 +41,11 @@ public:
     SyncFixture() { initFakeSyncMaster(66); }
     void initFakeSyncMaster(int16_t const& protocolId)
     {
-        fakeBlockChain = make_shared<FakeBlockChain>();
-        fakeTxPool = make_shared<FakeTxPool>(protocolId);
-        fakeSyncMaster = std::make_shared<SyncMaster>(fakeBlockChain, fakeTxPool, protocolId);
+        TxPoolFixture txpool_creator(5, 5);
+        fakeSyncMaster = std::make_shared<SyncMaster>(txpool_creator.m_topicService,
+            txpool_creator.m_txPool, txpool_creator.m_blockChain, protocolId, NodeID(), h256());
     }
     std::shared_ptr<SyncMaster> fakeSyncMaster;
-    shared_ptr<FakeBlockChain> fakeBlockChain;
-    shared_ptr<FakeTxPool> fakeTxPool;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMasterTest, SyncFixture)
