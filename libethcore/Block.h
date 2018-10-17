@@ -47,14 +47,13 @@ public:
     /// operator ==
     bool equalAll(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_headerHash == _block.headerHash() &&
-               m_sigList == _block.sigList() && m_transactions == _block.transactions();
+        return m_blockHeader == _block.blockHeader() && m_sigList == _block.sigList() &&
+               m_transactions == _block.transactions();
     }
 
     bool equalWithoutSig(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_headerHash == _block.headerHash() &&
-               m_transactions == _block.transactions();
+        return m_blockHeader == _block.blockHeader() && m_transactions == _block.transactions();
     }
 
     bool equalHeader(Block const& _block) const { return m_blockHeader == _block.blockHeader(); }
@@ -77,7 +76,7 @@ public:
     Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     BlockHeader& header() { return m_blockHeader; }
-    h256 const& headerHash() const { return m_headerHash; }
+    h256 headerHash() const { return m_blockHeader.hash(); }
     std::vector<std::pair<u256, Signature>> const& sigList() const { return m_sigList; }
 
     ///-----set interfaces
@@ -159,8 +158,6 @@ private:
     /// transaction list (field 1)
     Transactions m_transactions;
     TransactionReceipts m_transactionReceipts;
-    /// hash of the block header (field 2)
-    h256 m_headerHash;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
     /// m_transactions converted bytes, when m_transactions changed,

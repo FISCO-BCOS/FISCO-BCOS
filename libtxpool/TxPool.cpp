@@ -111,7 +111,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
         /// drop the oversized transactions
         while (m_txsQueue.size() > m_limit)
         {
-            removeTrans(m_txsQueue.rbegin()->sha3());
+            removeOutOfBound(m_txsQueue.rbegin()->sha3());
         }
     }
     return verify_ret;
@@ -191,14 +191,24 @@ bool TxPool::removeTrans(h256 const& _txHash)
 {
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
+    {
+        LOG(WARNING) << "txHash = " << toHex(_txHash)
+                     << " doesn't exist in the txpool, please check again";
         return false;
+    }
     m_txsHash.erase(p_tx);
     if (m_known.count(_txHash))
         m_known.erase(_txHash);
     m_txsQueue.erase(p_tx->second);
-    LOG(WARNING) << "Dropping out of bounds transaction, TransactionQueue::removeOutofBoundsTrans: "
-                 << toString(_txHash);
     return true;
+}
+
+bool TxPool::removeOutOfBound(h256 const& _txHash)
+{
+    bool ret = removeTrans(_txHash);
+    LOG(WARNING) << "Dropping out of bounds transaction, TransactionQueue::removeOutofBoundsTrans: "
+                 << toHex(_txHash);
+    return ret;
 }
 
 /**
@@ -216,8 +226,6 @@ void TxPool::insert(Transaction const& _tx)
     m_known.insert(tx_hash);
     PriorityQueue::iterator p_tx = m_txsQueue.emplace(_tx);
     m_txsHash[tx_hash] = p_tx;
-    LOG(INFO) << " insert tx.sha3 = " << (tx_hash) << ", Randomid= " << (_tx.nonce())
-              << " , time = " << utcTime();
 }
 
 /**

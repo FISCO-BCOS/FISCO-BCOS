@@ -26,8 +26,8 @@
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
+#include <libethcore/Protocol.h>
 #include <libtxpool/TxPool.h>
-
 static void startConsensus(Params& params)
 {
     ///< initialize component
@@ -38,7 +38,16 @@ static void startConsensus(Params& params)
     std::shared_ptr<Host> host =
         std::make_shared<Host>(params.clientVersion(), CertificateServer::GetInstance().keypair(),
             *netConfig.get(), asioInterface, socketFactory, sessionFactory);
+
     host->setStaticNodes(params.staticNodes());
+    /// set the topic id
+    uint8_t group_id = 2;
+    uint16_t protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
+    std::shared_ptr<std::vector<std::string>> p_topics =
+        std::shared_ptr<std::vector<std::string>>();
+    p_topics->push_back(toString(group_id));
+    host->setTopics(p_topics);
+
     auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
     std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
@@ -67,12 +76,15 @@ static void startConsensus(Params& params)
         std::cout << "#### set miner:" << toHex(miner) << std::endl;
         minerList.push_back(miner);
     }
-
     /// minerList.push_back(toPublic(key_pair.secret()));
     ///< int pbft consensus
+    std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine =
+        std::make_shared<dev::consensus::PBFTEngine>(p2pService, txPool, blockChain, blockSync,
+            blockVerifier, protocol_id, "./", key_pair, minerList);
     std::shared_ptr<dev::consensus::PBFTConsensus> pbftConsensus =
-        std::make_shared<dev::consensus::PBFTConsensus>(p2pService, txPool, blockChain, blockSync,
-            blockVerifier, 100, "./", key_pair, minerList);
+        std::make_shared<dev::consensus::PBFTConsensus>(txPool, blockChain, blockSync, pbftEngine);
+    /// start the host
+    host->start();
     ///< start consensus
     pbftConsensus->start();
 
@@ -86,12 +98,12 @@ static void startConsensus(Params& params)
     Secret sec = key_pair.secret();
     while (true)
     {
-        tx.setNonce(tx.nonce() + 1);
+        tx.setNonce(tx.nonce() + u256(1));
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         std::pair<h256, Address> ret = txPool->submit(tx);
-        LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
-                  << ", size:" << txPool->pendingSize();
+        // LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
+        ///          << ", size:" << txPool->pendingSize();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
