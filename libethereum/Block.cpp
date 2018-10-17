@@ -866,7 +866,7 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
 		h256 hash = dbHash();
 
 		if(hash != m_currentBlock.dbHash()) {
-			LOG(ERROR) << "enact块dbHash与实际dbHash不符 enact块dbHash:" << m_currentBlock.dbHash() << " 实际dbHash:" << hash;
+			LOG(ERROR) << "enact Block's dbHash mismatch. enact block's dbHash:" << m_currentBlock.dbHash() << " 实际dbHash:" << hash;
 
 			DBHashError ex;
 			BOOST_THROW_EXCEPTION(ex);
