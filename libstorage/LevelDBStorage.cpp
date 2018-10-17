@@ -43,15 +43,9 @@ Entries::Ptr LevelDBStorage::select(h256 hash, int num,
       Json::Value valueJson;
       ssIn >> valueJson;
 
-      std::string blockHash = valueJson["blockHash"].asString();
-      int num = valueJson["num"].asInt();
-
       Json::Value values = valueJson["values"];
       for (auto it = values.begin(); it != values.end(); ++it) {
         Entry::Ptr entry = std::make_shared<Entry>();
-
-        entry->setField("_hash_", blockHash);
-        entry->setField("_num_", std::to_string(num));
         for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt) {
           entry->setField(valueIt.key().asString(), valueIt->asString());
         }
@@ -87,8 +81,6 @@ size_t LevelDBStorage::commit(h256 hash, int num,
         std::string entryKey = it->tableName + "_" + dataIt.first;
 
         Json::Value entry;
-        entry["blockHash"] = hash.hex();
-        entry["num"] = num;
 
         for (size_t i = 0; i < dataIt.second->size(); ++i) {
           //if (dataIt.second->get(i)->dirty()) {
@@ -96,6 +88,8 @@ size_t LevelDBStorage::commit(h256 hash, int num,
             for (auto fieldIt : *(dataIt.second->get(i)->fields())) {
               value[fieldIt.first] = fieldIt.second;
             }
+            value["_hash_"] = hash.hex();
+            value["_num_"] = num;
             entry["values"].append(value);
           //}
         }

@@ -17,8 +17,8 @@ class MockAMOPDB : public dev::storage::AMOPStorage {
     BOOST_TEST(table == "t_test");
 
     TableInfo::Ptr info = std::make_shared<TableInfo>();
-    info->indices.push_back("姓名");
-    info->indices.push_back("资产号");
+    info->fields.push_back("姓名");
+    info->fields.push_back("资产号");
     info->key = "姓名";
     info->name = "t_test";
 
@@ -88,8 +88,18 @@ struct MemoryDBFixture {
     memDB->init("t_test");
     memDB->setBlockHash(dev::h256(0x12345));
     memDB->setBlockNum(1000);
+    
+    TableInfo::Ptr info = std::make_shared<TableInfo>();
+    info->fields.emplace_back("姓名");
+    info->fields.emplace_back("资产号");
+    info->fields.emplace_back("资产名");
+    info->fields.emplace_back("Exception");
+    info->fields.emplace_back("_status_");
+    info->key = "姓名";
+    info->name = "t_test";
+    memDB->setTableInfo(info);
   }
-
+  bool is_critical(std::exception const & e){ return true;}
   ~MemoryDBFixture() {
     
   }
@@ -267,6 +277,19 @@ BOOST_AUTO_TEST_CASE(data_update) {
   BOOST_TEST(entry->getField("资产名") == "保时捷911");
 }
 
+BOOST_AUTO_TEST_CASE(illegal_update) {
+  initData();
+
+  Condition::Ptr condition = memDB->newCondition();
+  condition->EQ("姓名", "张三");
+  condition->EQ("资产号", "3");
+  // failed update
+  Entry::Ptr entry = memDB->newEntry();
+  entry->setField("车型", "保时捷911");
+  auto c = memDB->update("张三", entry, condition);
+  BOOST_TEST(c == 0u);
+}
+
 BOOST_AUTO_TEST_CASE(data_update_multi) {
   initData();
 
@@ -302,14 +325,6 @@ BOOST_AUTO_TEST_CASE(cache_clear) {
 
 BOOST_AUTO_TEST_CASE(multiKey) {
   initData();
-
-  std::shared_ptr<MockAMOPDBCommit> mockAMOPDB =
-      std::make_shared<MockAMOPDBCommit>();
-
-  memDB->setStateStorage(mockAMOPDB);
-  memDB->init("t_test");
-
-  mockAMOPDB->memDB = memDB;
 
   Condition::Ptr condition = memDB->newCondition();
   condition->EQ("姓名", "张三");

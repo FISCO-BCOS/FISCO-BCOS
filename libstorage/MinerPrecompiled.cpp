@@ -38,6 +38,8 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
             auto entries = db->select(PRI_KEY, condition);
             auto entry = db->newEntry();
             entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+            entry->setField("name", PRI_KEY);
+
             if (entries->size() == 0u)
             {
                 entry->setField(NODE_KEY_ENABLENUM, (context->blockInfo().number + 1).str());
@@ -73,6 +75,7 @@ bytes MinerPrecompiled::call(PrecompiledContext::Ptr context, bytesConstRef para
             auto entries = db->select(PRI_KEY, condition);
             auto entry = db->newEntry();
             entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
+            entry->setField("name", PRI_KEY);
 
             if (entries->size() == 0u)
             {

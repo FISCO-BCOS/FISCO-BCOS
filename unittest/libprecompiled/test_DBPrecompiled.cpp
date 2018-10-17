@@ -13,6 +13,7 @@
 
 using namespace dev;
 using namespace dev::precompiled;
+using namespace dev::storage;
 
 namespace test_DBPrecompiled {
 
@@ -39,7 +40,12 @@ struct DBPrecompiledFixture {
     context = std::make_shared<MockPrecompiledEngine>();
     context->setBlockInfo(blockInfo);
     dbPrecompiled = std::make_shared<dev::precompiled::DBPrecompiled>();
-    dbPrecompiled->setDB(std::make_shared<MockMemoryDB>());
+    auto db = std::make_shared<MockMemoryDB>();
+    TableInfo::Ptr info = std::make_shared<TableInfo>();
+    info->fields.emplace_back("name");
+    info->fields.emplace_back("_status_");
+    db->setTableInfo(info);
+    dbPrecompiled->setDB(db);
   }
 
   ~DBPrecompiledFixture() {
@@ -84,6 +90,7 @@ BOOST_AUTO_TEST_CASE(call_select) {
 
 BOOST_AUTO_TEST_CASE(call_insert) {
   auto entry = std::make_shared<storage::Entry>();
+  entry->setField("name", "WangWu");
   auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
   entryPrecompiled->setEntry(entry);
 
