@@ -50,6 +50,9 @@ public:
         bytes m_blockHeaderData = bytes();
         bytes m_blockData = bytes();
         BlockHeader blockHeader;
+        blockHeader.setSealer(u256(1));
+        blockHeader.setNumber(0);
+        blockHeader.setTimestamp(utcTime());
         Block block;
         blockHeader.encode(m_blockHeaderData);
         block.encode(m_blockData, ref(m_blockHeaderData));

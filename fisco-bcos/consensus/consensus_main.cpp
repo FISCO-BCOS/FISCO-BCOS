@@ -46,10 +46,9 @@ static void startConsensus(Params& params)
         std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);
     std::shared_ptr<SyncInterface> blockSync = std::make_shared<FakeBlockSync>();
     std::shared_ptr<BlockVerifierInterface> blockVerifier = std::make_shared<FakeBlockVerifier>();
-
     ///< Read the KeyPair of node from configuration file.
-    KeyPair key_pair = KeyPair::create();
     auto nodePrivate = contents(getDataDir().string() + "/node.private");
+    KeyPair key_pair;
     string pri = asString(nodePrivate);
     if (pri.size() >= 64)
     {
@@ -63,7 +62,13 @@ static void startConsensus(Params& params)
     }
     ///< TODO: Read the minerList from the configuration file.
     h512s minerList = h512s();
-    minerList.push_back(toPublic(key_pair.secret()));
+    for (auto miner : params.minerList())
+    {
+        std::cout << "#### set miner:" << toHex(miner) << std::endl;
+        minerList.push_back(miner);
+    }
+
+    /// minerList.push_back(toPublic(key_pair.secret()));
     ///< int pbft consensus
     std::shared_ptr<dev::consensus::PBFTConsensus> pbftConsensus =
         std::make_shared<dev::consensus::PBFTConsensus>(p2pService, txPool, blockChain, blockSync,
