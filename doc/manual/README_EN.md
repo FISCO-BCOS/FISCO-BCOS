@@ -468,7 +468,7 @@ fisco-bcos --genesis ./genesis.json --config ./config.json & #start the node
 tail -f log/info* |grep ++++  #view the logs
 #To stop the node
 #ps -ef |grep fisco-bcos #view the process id
-#kill -9 13432 #kill the process by process id 13432 
+#kill 13432 #kill the process by process id 13432 
 ```
 
 > Wait for a few seconds, get sealing information constantly.

@@ -43,7 +43,7 @@ void dev::channel::ChannelServer::run() {
 	_serverThread = std::make_shared<std::thread>([=]() {
 			pthread_setThreadName("ChannelServer" );
 
-			while (true) {
+			while (_acceptor && _acceptor->is_open()) {
 				try {
 					startAccept();
 					_ioService->run();
