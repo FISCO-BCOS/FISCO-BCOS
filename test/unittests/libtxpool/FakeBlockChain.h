@@ -61,10 +61,13 @@ public:
             return 0;
         return m_asyncSend[nodeID];
     }
+    void setConnected() { m_connected = true; }
+    bool isConnected(NodeID const& nodeId) const { return m_connected; }
 
 private:
     SessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
+    bool m_connected;
 };
 class FakeTxPool : public TxPool
 {
