@@ -167,12 +167,17 @@ public:
     void start() override;
 
 protected:
-    void workLoop() override;
+    void msgHandleThread();
+    /// void workLoop() override;
     void handleBlock() override;
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
     bool shouldSeal() override;
+    virtual bool reachBlockIntervalTime() override
+    {
+        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+    }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool getNodeIDByIndex(h512& nodeId, const u256& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block)

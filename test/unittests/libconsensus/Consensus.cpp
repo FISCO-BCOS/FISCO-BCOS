@@ -74,17 +74,24 @@ BOOST_AUTO_TEST_CASE(testLoadTransactions)
     ///< Load 4 transactions in txpool.
     fake_pbft.consensus()->loadTransactions(4);
     ///< The following two checks ensure that the size of transactions is 4.
+    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(4) == true);
+    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(5) == false);
     ///< Load 10 transactions in txpool, critical magnitude.
+    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
     fake_pbft.consensus()->loadTransactions(10);
     ///< The following two checks ensure that the size of transactions is 10.
+    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(10) == true);
+    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(11) == false);
     ///< Load 12 transactions in txpool, actually only 10.
     fake_pbft.consensus()->loadTransactions(12);
     ///< The following two checks ensure that the size of transactions is 10.
+    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(10) == true);
+    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(11) == false);
 }
 BOOST_AUTO_TEST_SUITE_END()
