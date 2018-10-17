@@ -202,6 +202,10 @@ protected:
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     void handlePrepareMsg(PrepareReq const& prepare_req, bool self = false);
+    /// 1. decode the network-received PBFTMsgPacket to signReq
+    /// 2. check the validation of the signReq
+    /// add the signReq to the cache and
+    /// heck the size of the collected signReq is over 2/3 or not
     void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
     void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
     void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
@@ -411,8 +415,10 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            LOG(WARNING) << oss.str() << " Recv a req which not in prepareCache, block_hash = "
-                         << m_reqCache->prepareCache().block_hash.abridged();
+            LOG(WARNING) << oss.str()
+                         << " Recv a req which not in prepareCache,prepareCache block_hash = "
+                         << m_reqCache->prepareCache().block_hash.abridged()
+                         << "req block_hash = " << req.block_hash;
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
@@ -426,7 +432,7 @@ protected:
         /// check the sealer of this request
         if (req.idx == m_idx)
         {
-            LOG(WARNING) << oss.str() << " Discard an illegal commit, your own req";
+            LOG(WARNING) << oss.str() << " Discard an illegal request, your own req";
             return CheckResult::INVALID;
         }
         /// check view

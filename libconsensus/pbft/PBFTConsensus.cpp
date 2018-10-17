@@ -222,6 +222,11 @@ void PBFTConsensus::handleBlock()
     m_timeManager.updateTimeAfterHandleBlock(m_sealing.block.getTransactionSize(), start_exec_time);
 }
 
+/**
+ * @brief: this node can generate block or not
+ * @return true: this node can generate block
+ * @return false: this node can't generate block
+ */
 bool PBFTConsensus::shouldSeal()
 {
     if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
@@ -233,7 +238,10 @@ bool PBFTConsensus::shouldSeal()
     /// fast view change
     if (ret.second != m_idx)
     {
+        /// if the node is a miner and is not the leader, then will reset m_lastConsensusTime
+        /// and m_lastSignTime to trigger fast viewchange
         h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
+        ;
         if (node_id != h512() && m_service->isConnected(node_id))
         {
             m_timeManager.m_lastConsensusTime = 0;
@@ -253,6 +261,10 @@ bool PBFTConsensus::shouldSeal()
     return true;
 }
 
+/**
+ * @brief: rehandle the unsubmitted committedPrepare
+ * @param req: the unsubmitted committed prepareReq
+ */
 void PBFTConsensus::rehandleCommitedPrepareCache(PrepareReq const& req)
 {
     LOG(INFO) << "shouldSeal: found an committed but not saved block, post out again. hash="
@@ -523,7 +535,7 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket cons
  *       (1) add the prepareReq to raw-prepare-cache
  *       (2) execute the block
  *       (3) sign the prepareReq and broadcast the signed prepareReq
- *       (4) callback checkAndCommit function to judge whe
+ *       (4) callback checkAndCommit function to determin can submit the block or not
  * @param prepare_req: the prepare request need to be handled
  * @param self: if generated-prepare-request need to handled, then set self to be true;
  *              else this function will filter the self-generated prepareReq
@@ -564,7 +576,7 @@ void PBFTConsensus::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     LOG(DEBUG) << "handlePrepareMsg, timecost=" << 1000 * t.elapsed();
 }
 
-///
+
 void PBFTConsensus::checkAndCommit()
 {
     u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
@@ -613,22 +625,25 @@ void PBFTConsensus::checkAndSave()
         {
             Block block(m_reqCache->prepareCache().block);
             m_reqCache->generateAndSetSigList(block, minValidNodes());
-            LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[hash ="
-                      << toString(m_reqCache->prepareCache().block_hash)
+            LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[block_hash ="
+                      << m_reqCache->prepareCache().block_hash.abridged()
                       << "][ height=" << m_reqCache->prepareCache().height
                       << "][time =" << utcTime() << "]["
                       << "onSealGenerated]"
-                      << ",idx=" << m_reqCache->prepareCache().idx;
+                      << ",idx=" << m_reqCache->prepareCache().idx
+                      << ", hash of block to commit=" << block.header().hash();
             /// callback block chain to commit block
             m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            /// drop handled transactions
+            dropHandledTransactions(block);
             /// report block
             reportBlock(block.blockHeader());
         }
         else
         {
             LOG(INFO) << "Discard this block, blk_no=" << m_reqCache->prepareCache().height
-                      << ",highest_block number=" << m_highestBlock.number();
+                      << ",highest_block.number=" << m_highestBlock.number();
         }
     }
 }
@@ -658,15 +673,16 @@ void PBFTConsensus::reportBlock(BlockHeader const& blockHeader)
     m_reqCache->clearAllExceptCommitCache();
     m_reqCache->delCache(m_highestBlock.hash());
     LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=" << m_highestBlock.number()
-              << ",hash=" << blockHeader.hash().abridged() << ",idx=" << m_highestBlock.sealer()
+              << ",hash=" << blockHeader.hash().abridged()
+              << ",m_highestBlock.idx=" << m_highestBlock.sealer()
               << ", Next: blk=" << m_consensusBlockNumber;
 }
 
 /**
  * @brief: 1. decode the network-received PBFTMsgPacket to signReq
  *         2. check the validation of the signReq
- *         3. add the signReq to the cache and
- *          check the size of the collected signReq is over 2/3 or not
+ *         3. submit the block into blockchain if the size of collected signReq and
+ *            commitReq is over 2/3
  * @param sign_req: return value, the decoded signReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
@@ -709,6 +725,7 @@ bool PBFTConsensus::isValidSignReq(SignReq const& req, std::ostringstream& oss) 
     if (result == CheckResult::FUTURE)
     {
         m_reqCache->addSignReq(req);
+        LOG(INFO) << oss.str() << "Cache this sign_req";
         return false;
     }
     if (result == CheckResult::INVALID)
@@ -716,6 +733,14 @@ bool PBFTConsensus::isValidSignReq(SignReq const& req, std::ostringstream& oss) 
     return true;
 }
 
+/**
+ * @brief : 1. decode the network-received message into commitReq
+ *          2. check the validation of the commitReq
+ *          3. add the valid commitReq into the cache
+ *          4. submit to blockchain if the size of collected commitReq is over 2/3
+ * @param commit_req: return value, the decoded commitReq
+ * @param pbftMsg: the network-received PBFTMsgPacket
+ */
 void PBFTConsensus::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
@@ -736,6 +761,13 @@ void PBFTConsensus::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& 
     return;
 }
 
+/**
+ * @brief: check the given commitReq is valid or not
+ * @param req: the given commitReq need to be checked
+ * @param oss: info to debug
+ * @return true: the given commitReq is valid
+ * @return false: the given commitReq is invalid
+ */
 bool PBFTConsensus::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistCommit(req))
@@ -841,6 +873,7 @@ void PBFTConsensus::checkAndChangeView()
     }
 }
 
+/// collect all caches
 void PBFTConsensus::collectGarbage()
 {
     Guard l(m_mutex);
@@ -964,6 +997,7 @@ void PBFTConsensus::workLoop()
     }
 }
 
+/// handle the prepareReq cached in the futurePrepareCache
 void PBFTConsensus::handleFutureBlock()
 {
     Guard l(m_mutex);

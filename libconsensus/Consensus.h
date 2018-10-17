@@ -124,6 +124,7 @@ public:
     {
         m_allowFutureBlocks = isAllowFutureBlocks;
     }
+    void dropHandledTransactions(dev::eth::Block const& block);
 
 protected:
     /// sealing block

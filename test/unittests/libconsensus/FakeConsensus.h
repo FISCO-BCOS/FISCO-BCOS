@@ -56,6 +56,7 @@ public:
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
     TimeManager const& timeManager() const { return m_timeManager; }
+    TimeManager& mutableTimeManager() { return m_timeManager; }
     const std::shared_ptr<dev::db::LevelDB> backupDB() const { return m_backupDB; }
     bool const& leaderFailed() const { return m_leaderFailed; }
     int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
@@ -74,6 +75,7 @@ public:
     {
         PBFTConsensus::loadTransactions(transToFetch);
     }
+
     bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
@@ -106,6 +108,7 @@ public:
     }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
+    std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
     void broadcastSignReq(PrepareReq const& req) { return PBFTConsensus::broadcastSignReq(req); }
     u256 view() { return m_view; }
     void setView(u256 const& _view) { m_view = _view; }
@@ -128,6 +131,9 @@ public:
     {
         return PBFTConsensus::broadcastCommitReq(req);
     }
+    void broadcastViewChangeReq() { return PBFTConsensus::broadcastViewChangeReq(); }
+    void checkTimeout() { return PBFTConsensus::checkTimeout(); }
+    void checkAndChangeView() { return PBFTConsensus::checkAndChangeView(); }
     bool isValidPrepare(PrepareReq const& req, bool self) const
     {
         std::ostringstream oss;
@@ -149,6 +155,22 @@ public:
         std::ostringstream oss;
         return PBFTConsensus::isValidSignReq(req, oss);
     }
+    bool isValidCommitReq(CommitReq const& req) const
+    {
+        std::ostringstream oss;
+        return PBFTConsensus::isValidCommitReq(req, oss);
+    }
+
+    void handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+    {
+        return PBFTConsensus::handleCommitMsg(commit_req, pbftMsg);
+    }
+
+    bool shouldSeal() { return PBFTConsensus::shouldSeal(); }
+
+    void setNodeIdx(u256 const& _idx) { m_idx = _idx; }
+    void collectGarbage() { return PBFTConsensus::collectGarbage(); }
+    void handleFutureBlock() { return PBFTConsensus::handleFutureBlock(); }
 };
 
 template <typename T>

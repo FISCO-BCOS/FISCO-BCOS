@@ -24,6 +24,7 @@
 
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
+#include <libethcore/Transaction.h>
 namespace dev
 {
 namespace blockverifier
@@ -39,6 +40,7 @@ public:
     virtual ~BlockChainInterface(){};
     virtual int64_t number() const = 0;
     virtual dev::h256 numberHash(int64_t _i) const = 0;
+    virtual dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
     virtual void commitBlock(

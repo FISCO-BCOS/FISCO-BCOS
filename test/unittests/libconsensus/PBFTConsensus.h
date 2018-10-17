@@ -129,14 +129,16 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft,
     /// fake prepare req
     KeyPair key_pair;
     if (shouldFake)
+    {
         prepareReq = FakePrepareReq(key_pair);
-    /// prepareReq.height = highest.number() + 1;
-    Block block;
-    fake_pbft.consensus()->resetBlock(block);
-    block.encode(prepareReq.block);  /// encode block
-    prepareReq.block_hash = block.header().hash();
-    prepareReq.height = block.header().number();
-    fake_pbft.consensus()->mutableConsensusNumber() = block.header().number();
+        /// prepareReq.height = highest.number() + 1;
+        Block block;
+        fake_pbft.consensus()->resetBlock(block);
+        block.encode(prepareReq.block);  /// encode block
+        prepareReq.block_hash = block.header().hash();
+        prepareReq.height = block.header().number();
+    }
+    fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
     if (shouldAdd)
     {
         fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
@@ -170,8 +172,8 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTConsensus>& fake_pbft,
 
 static void FakeValidNodeNum(FakeConsensus<FakePBFTConsensus>& fake_pbft, u256 validNum)
 {
-    u256 node_num = (validNum * u256(3)) / u256(2) + 1;
-    u256 f_value = (validNum) / 2 + 1;
+    u256 node_num = (validNum * u256(3)) / u256(2) + u256(1);
+    u256 f_value = (validNum) / u256(2) + u256(1);
     fake_pbft.consensus()->setNodeNum(node_num);
     fake_pbft.consensus()->setF(f_value);
 }
@@ -360,7 +362,8 @@ static void testIsConsensused(
     }
 }
 
-static void testIsFuture(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ)
+static void testIsFuture(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq& req, bool succ, bool shouldFix = true)
 {
     if (!succ)
     {
@@ -369,8 +372,11 @@ static void testIsFuture(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq
         req.height = fake_pbft.consensus()->mutableConsensusNumber();
         req.view = fake_pbft.consensus()->view() + u256(1);
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
-        req.height = org_height;
-        req.view = org_view;
+        if (shouldFix)
+        {
+            req.height = org_height;
+            req.view = org_view;
+        }
     }
 }
 
@@ -418,7 +424,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, Prepar
     FakeBlockChain* p_blockChain =
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
     BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
-    fake_pbft.consensus()->resetConfig();
+    /// fake_pbft.consensus()->resetConfig();
     fake_pbft.consensus()->setHighest(highest);
     fake_pbft.consensus()->setView(u256(2));
     req.idx = fake_pbft.consensus()->getLeader().second;
@@ -427,6 +433,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTConsensus>& fake_pbft, Prepar
     Block block;
     fake_pbft.consensus()->resetBlock(block);
     block.header().setSealerList(fake_pbft.consensus()->minerList());
+    block.header().setSealer(req.idx);
     block.encode(req.block);
     req.block_hash = block.header().hash();
     req.height = block.header().number();
@@ -467,35 +474,127 @@ template <typename T>
 void FakePBFTMsgPacket(
     PBFTMsgPacket& packet, T& req, unsigned const& type, u256 const& idx, h512 const& nodeId)
 {
-    req.decode(ref(packet.data));
+    req.encode(packet.data);
     packet.packet_id = type;
     packet.setOtherField(idx, nodeId);
 }
 
-/// fake valid signReq
-static void FakeValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
-    SignReq& signReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair)
+/// fake valid signReq or commitReq
+template <typename T>
+void FakeValidSignorCommitReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
+    T& req, PrepareReq& prepareReq, KeyPair const& peer_keyPair)
 {
+    FakePBFTMiner(fake_pbft);
+    FakePBFTMinerByKeyPair(fake_pbft, peer_keyPair);
     KeyPair key_pair;
     prepareReq = FakePrepareReq(key_pair);
-    prepareReq.idx = fake_pbft.consensus()->nodeIdx() + u256(1);
-    SignReq(prepareReq, key_pair, prepareReq.idx);
+    fakeValidPrepare(fake_pbft, prepareReq);
+    u256 node_id = (fake_pbft.consensus()->nodeIdx() + u256(1)) % fake_pbft.consensus()->nodeNum();
+    KeyPair tmp_key_pair(fake_pbft.m_secrets[node_id.convert_to<size_t>()]);
+    req = T(prepareReq, tmp_key_pair, node_id);
     /// add prepareReq
     fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
     /// reset current consensusNumber and View
     fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
     fake_pbft.consensus()->setView(prepareReq.view);
-    FakePBFTMiner(fake_pbft);
-    FakePBFTMinerByKeyPair(fake_pbft, peer_keyPair);
     FakePBFTMsgPacket(
-        packet, signReq, SignReqPacket, u256(fake_pbft.m_minerList.size() - 1), peer_keyPair.pub());
+        packet, req, SignReqPacket, u256(fake_pbft.m_minerList.size() - 1), peer_keyPair.pub());
+}
+
+/// test isExistSign
+static void testIsExistSign(FakeConsensus<FakePBFTConsensus>& fake_pbft,
+    PrepareReq const& prepareReq, SignReq& signReq, bool succ)
+{
+    if (!succ)
+    {
+        fake_pbft.consensus()->reqCache()->addSignReq(signReq);
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == false);
+        fake_pbft.consensus()->reqCache()->clearAll();
+        fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    }
+}
+
+static void testIsExistCommit(FakeConsensus<FakePBFTConsensus>& fake_pbft,
+    PrepareReq const& prepareReq, CommitReq const& commitReq, bool succ)
+{
+    if (!succ)
+    {
+        fake_pbft.consensus()->reqCache()->addCommitReq(commitReq);
+        BOOST_CHECK(fake_pbft.consensus()->isValidCommitReq(commitReq) == false);
+        fake_pbft.consensus()->reqCache()->clearAll();
+        fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+    }
+}
+
+/// test checkReq
+static void testCheckReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq const& prepareReq,
+    SignReq& signReq, bool succ)
+{
+    if (!succ)
+    {
+        /// test inconsistent with the prepareCache
+        fake_pbft.consensus()->reqCache()->clearAll();
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == false);
+        /// test is the future block
+        SignReq copiedReq = signReq;
+        copiedReq.height = fake_pbft.consensus()->mutableConsensusNumber() + 1;
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == false);
+        BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
+        /// modify the signature
+        copiedReq.sig = dev::sign(
+            fake_pbft.m_secrets[copiedReq.idx.convert_to<size_t>()], copiedReq.block_hash);
+        copiedReq.sig2 = dev::sign(fake_pbft.m_secrets[copiedReq.idx.convert_to<size_t>()],
+            copiedReq.fieldsWithoutBlock());
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == false);
+        BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == true);
+
+        fake_pbft.consensus()->reqCache()->clearAll();
+        fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
+        /// test signReq is generated by the node-self
+        u256 org_idx = signReq.idx;
+        signReq.idx = fake_pbft.consensus()->nodeIdx();
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == false);
+        signReq.idx = org_idx;
+        /// test invalid view
+        u256 org_view = signReq.view;
+        signReq.view += u256(1);
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == false);
+        signReq.view = org_view;
+        /// test invalid sign
+        Signature sig = signReq.sig;
+        signReq.sig = Signature();
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == false);
+        signReq.sig = sig;
+    }
 }
 
 /// test isValidSignReq
 static void TestIsValidSignReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
     SignReq& signReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair, bool succ)
 {
-    FakeValidSignReq(fake_pbft, packet, signReq, prepareReq, peer_keyPair);
+    FakeValidSignorCommitReq(fake_pbft, packet, signReq, prepareReq, peer_keyPair);
+    BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == true);
+    testIsExistSign(fake_pbft, prepareReq, signReq, succ);
+    testCheckReq(fake_pbft, prepareReq, signReq, succ);
+}
+
+static void TestIsValidCommitReq(FakeConsensus<FakePBFTConsensus>& fake_pbft, PBFTMsgPacket& packet,
+    CommitReq& commitReq, PrepareReq& prepareReq, KeyPair const& peer_keyPair, bool succ)
+{
+    FakeValidSignorCommitReq(fake_pbft, packet, commitReq, prepareReq, peer_keyPair);
+    BOOST_CHECK(fake_pbft.consensus()->isValidCommitReq(commitReq) == true);
+    testIsExistCommit(fake_pbft, prepareReq, commitReq, succ);
+}
+
+static void testReHandleCommitPrepareCache(
+    FakeConsensus<FakePBFTConsensus>& fake_pbft, PrepareReq const& req)
+{
+    /// check callback broadcastMsg
+    for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
+    {
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+            fake_pbft.m_minerList[i], PrepareReqPacket, req.block_hash.hex()));
+    }
 }
 
 }  // namespace test
