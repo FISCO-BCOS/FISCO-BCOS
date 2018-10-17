@@ -197,6 +197,115 @@ BOOST_AUTO_TEST_CASE(testBroadcastSignAndCommitReq)
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commit_req));
 }
 
+/// test broadcastViewChangeReq
+BOOST_AUTO_TEST_CASE(testBroadcastViewChangeReq)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    assert(p_blockChain);
+    BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    fake_pbft.consensus()->setHighest(highest);
+
+    ViewChangeReq viewChange_req(fake_pbft.consensus()->keyPair(), highest.number(),
+        fake_pbft.consensus()->toView(), 0, highest.hash());
+    std::string key = viewChange_req.sig.hex() + toJS(viewChange_req.view);
+
+    KeyPair peer_keyPair = KeyPair::create();
+    /// append session info
+    appendSessionInfo(fake_pbft, peer_keyPair.pub());
+
+    /// case1: the peer node is not miner
+    fake_pbft.consensus()->broadcastViewChangeReq();
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), ViewChangeReqPacket, key) == false);
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
+
+    /// case2: the the peer node is a miner
+    fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    FakePBFTMiner(fake_pbft);
+    fake_pbft.consensus()->broadcastViewChangeReq();
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), ViewChangeReqPacket, key) == true);
+    compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
+}
+
+/// test timeout
+BOOST_AUTO_TEST_CASE(testTimeout)
+{
+    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    fake_pbft.consensus()->initPBFTEnv(
+        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+
+    u256 oriToView = fake_pbft.consensus()->toView();
+    TimeManager& timeManager = fake_pbft.consensus()->mutableTimeManager();
+    unsigned oriChangeCycle = timeManager.m_changeCycle;
+
+    ///< expect to no timeout
+    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcTime();
+    fake_pbft.consensus()->checkTimeout();
+    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView);
+
+    ///< expect to timeout, first timeout interval is 3000 because m_changeCycle is 0
+    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcTime() - 5000;
+    fake_pbft.consensus()->checkTimeout();
+    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
+    BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);
+
+    ///< expect to no timeout
+    fake_pbft.consensus()->checkTimeout();
+    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
+    BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);
+}
+
+/// test checkAndChangeView
+BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
+{
+    // 7 nodes
+    FakeConsensus<FakePBFTConsensus> fake_pbft(7, ProtocolID::PBFT);
+    fake_pbft.consensus()->initPBFTEnv(
+        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+    fake_pbft.consensus()->resetConfig();
+
+    ///< timeout situation
+    u256 oriToView = fake_pbft.consensus()->toView();
+    TimeManager& timeManager = fake_pbft.consensus()->mutableTimeManager();
+    unsigned oriChangeCycle = timeManager.m_changeCycle;
+    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcTime() - 5000;
+    fake_pbft.consensus()->checkTimeout();
+    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
+    BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);
+
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    assert(p_blockChain);
+    BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    fake_pbft.consensus()->setHighest(highest);
+
+    ///< receiving another 4 viewchange mesages will trigger view change in consensus
+    u256 oriview = fake_pbft.consensus()->view();
+    for (size_t i = 1; i < fake_pbft.m_minerList.size(); i++)
+    {
+        ViewChangeReq viewChange_req(KeyPair(fake_pbft.m_secrets[i]), highest.number(),
+            fake_pbft.consensus()->toView(), u256(i), highest.hash());
+        fake_pbft.consensus()->reqCache()->addViewChangeReq(viewChange_req);
+        u256 size =
+            fake_pbft.consensus()->reqCache()->getViewChangeSize(fake_pbft.consensus()->toView());
+        fake_pbft.consensus()->checkAndChangeView();
+        if (3 >= size)
+        {
+            BOOST_CHECK(fake_pbft.consensus()->view() == oriview);
+        }
+        else if (4 == size)
+        {
+            ///< view change triggered, view += 1
+            BOOST_CHECK(fake_pbft.consensus()->view() == oriview + 1);
+            break;
+        }
+    }
+}
+
 /// test checkAndSave && reportBlock
 BOOST_AUTO_TEST_CASE(testCheckAndSave)
 {

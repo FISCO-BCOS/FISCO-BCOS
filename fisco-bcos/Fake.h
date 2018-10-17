@@ -81,6 +81,8 @@ public:
     void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
+        block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
+        block.header().setNumber(m_blockNumber);
         m_blockHash[block.blockHeader().hash()] = m_blockNumber;
         m_blockChain.push_back(std::make_shared<Block>(block));
         m_blockNumber += 1;
