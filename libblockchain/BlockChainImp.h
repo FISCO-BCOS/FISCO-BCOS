@@ -25,6 +25,7 @@
 #include "BlockChainInterface.h"
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
+#include <libethcore/Transaction.h>
 namespace dev
 {
 namespace blockverifier
@@ -35,6 +36,7 @@ namespace storage
 {
 class MemoryTableFactory;
 }
+
 namespace blockchain
 {
 class BlockChainImp : public BlockChainInterface
@@ -44,6 +46,7 @@ public:
     virtual ~BlockChainImp(){};
     int64_t number() const override;
     dev::h256 numberHash(int64_t _i) const override;
+    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
     void commitBlock(
@@ -62,7 +65,7 @@ private:
     const std::string m_keyValue_currentNumber = "currentNumber";
     const std::string m_ValueName_currentNumber = "value";
     const std::string m_ValueName = "value";
-    const std::string m_extraDbName_txHash2Block = "txHash2Block";
+    const std::string m_txHash2Block = "txHash2Block";
     const std::string m_number2hash = "number2hash";
     const std::string m_hash2Block = "hash2Block";
 };

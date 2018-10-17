@@ -33,6 +33,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
+#include <libethcore/Transaction.h>
 
 using namespace dev;
 using namespace dev::blockchain;
@@ -69,6 +70,8 @@ public:
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
+
+    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
     {
@@ -127,7 +130,6 @@ class FakeBlockVerifier : public BlockVerifierInterface
 public:
     FakeBlockVerifier() { m_executiveContext = std::make_shared<ExecutiveContext>(); };
     virtual ~FakeBlockVerifier(){};
-
     std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
     {
         return m_executiveContext;
