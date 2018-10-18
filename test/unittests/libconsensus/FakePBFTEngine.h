@@ -17,13 +17,14 @@
 
 /**
  * @brief:
- * @file: FakeConsensus.cpp
+ * @file: FakePBFTEngine.cpp
  * @author: yujiechen
  * @date: 2018-10-10
  */
 #pragma once
 #include <libconsensus/Consensus.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
+#include <libconsensus/pbft/PBFTEngine.h>
 #include <test/unittests/libblocksync/FakeBlockSync.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
@@ -38,17 +39,37 @@ namespace dev
 {
 namespace test
 {
+/// fake class of PBFTConsensus
 class FakePBFTConsensus : public PBFTConsensus
 {
 public:
-    FakePBFTConsensus(std::shared_ptr<dev::p2p::Service> _service,
+    FakePBFTConsensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
+        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
+      : PBFTConsensus(_txPool, _blockChain, _blockSync, _consensusEngine)
+    {}
+    void loadTransactions(uint64_t const& transToFetch)
+    {
+        return PBFTConsensus::loadTransactions(transToFetch);
+    }
+    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
+    {
+        return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
+    }
+};
+/// fake class of PBFTEngine
+class FakePBFTEngine : public PBFTEngine
+{
+public:
+    FakePBFTEngine(std::shared_ptr<dev::p2p::Service> _service,
         std::shared_ptr<dev::txpool::TxPool> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, h512s const& _minerList = h512s(),
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
-      : PBFTConsensus(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
+      : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _minerList)
     {}
 
@@ -70,49 +91,54 @@ public:
             return false;
         return boost::filesystem::space(path).available > 1024;
     }
-
-    void loadTransactions(uint64_t const& transToFetch)
+    void resetSealingHeader(BlockHeader& header)
     {
-        PBFTConsensus::loadTransactions(transToFetch);
+        /// import block
+        header.setTimestamp(utcTime());
+        header.setSealerList(minerList());
+        header.setSealer(nodeIdx());
+        header.setLogBloom(LogBloom());
+        header.setGasUsed(u256(0));
     }
 
-    bool checkTxsEnough(uint64_t maxTxsCanSeal)
+    void resetBlock(Block& block)
     {
-        return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
+        block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+        resetSealingHeader(block.header());
     }
 
     u256 const& f() { return m_f; }
-    void resetConfig() { PBFTConsensus::resetConfig(); }
+    void resetConfig() { PBFTEngine::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
         P2PException exception, std::shared_ptr<Session> session, Message::Ptr message)
     {
-        return PBFTConsensus::onRecvPBFTMessage(exception, session, message);
+        return PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }
 
     Message::Ptr transDataToMessage(
         bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
     {
-        return PBFTConsensus::transDataToMessage(data, packetType, protocolId);
+        return PBFTEngine::transDataToMessage(data, packetType, protocolId);
     }
 
     void broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>())
     {
-        return PBFTConsensus::broadcastMsg(packetType, key, data, filter);
+        return PBFTEngine::broadcastMsg(packetType, key, data, filter);
     }
 
     bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
-        return PBFTConsensus::broadcastFilter(nodeId, packetType, key);
+        return PBFTEngine::broadcastFilter(nodeId, packetType, key);
     }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
-    void broadcastSignReq(PrepareReq const& req) { return PBFTConsensus::broadcastSignReq(req); }
+    void broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
     u256 view() { return m_view; }
     void setView(u256 const& _view) { m_view = _view; }
-    void checkAndSave() { return PBFTConsensus::checkAndSave(); }
+    void checkAndSave() { return PBFTEngine::checkAndSave(); }
 
     void setHighest(BlockHeader const& header) { m_highestBlock = header; }
     BlockHeader& mutableHighest() { return m_highestBlock; }
@@ -123,54 +149,51 @@ public:
     int64_t& mutableConsensusNumber() { return m_consensusBlockNumber; }
     bool const& leaderFailed() { return m_leaderFailed; }
     bool const& cfgErr() { return m_cfgErr; }
-    void resetBlock(dev::eth::Block& block) { return PBFTConsensus::resetBlock(block); }
-    void initPBFTEnv(unsigned _view_timeout) { return PBFTConsensus::initPBFTEnv(_view_timeout); }
-    void checkAndCommit() { return PBFTConsensus::checkAndCommit(); }
-    static std::string const& backupKeyCommitted() { return PBFTConsensus::c_backupKeyCommitted; }
-    void broadcastCommitReq(PrepareReq const& req)
-    {
-        return PBFTConsensus::broadcastCommitReq(req);
-    }
-    void broadcastViewChangeReq() { return PBFTConsensus::broadcastViewChangeReq(); }
-    void checkTimeout() { return PBFTConsensus::checkTimeout(); }
-    void checkAndChangeView() { return PBFTConsensus::checkAndChangeView(); }
+
+    void initPBFTEnv(unsigned _view_timeout) { return PBFTEngine::initPBFTEnv(_view_timeout); }
+    void checkAndCommit() { return PBFTEngine::checkAndCommit(); }
+    static std::string const& backupKeyCommitted() { return PBFTEngine::c_backupKeyCommitted; }
+    void broadcastCommitReq(PrepareReq const& req) { return PBFTEngine::broadcastCommitReq(req); }
+    void broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
+    void checkTimeout() { return PBFTEngine::checkTimeout(); }
+    void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
     bool isValidPrepare(PrepareReq const& req, bool self) const
     {
         std::ostringstream oss;
-        return PBFTConsensus::isValidPrepare(req, self, oss);
+        return PBFTEngine::isValidPrepare(req, self, oss);
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
-    inline std::pair<bool, u256> getLeader() const { return PBFTConsensus::getLeader(); }
+    inline std::pair<bool, u256> getLeader() const { return PBFTEngine::getLeader(); }
     void handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     {
-        return PBFTConsensus::handlePrepareMsg(prepareReq, self);
+        return PBFTEngine::handlePrepareMsg(prepareReq, self);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
     void handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
-        return PBFTConsensus::handleSignMsg(sign_req, pbftMsg);
+        return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
     bool isValidSignReq(SignReq const& req) const
     {
         std::ostringstream oss;
-        return PBFTConsensus::isValidSignReq(req, oss);
+        return PBFTEngine::isValidSignReq(req, oss);
     }
     bool isValidCommitReq(CommitReq const& req) const
     {
         std::ostringstream oss;
-        return PBFTConsensus::isValidCommitReq(req, oss);
+        return PBFTEngine::isValidCommitReq(req, oss);
     }
 
     void handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
     {
-        return PBFTConsensus::handleCommitMsg(commit_req, pbftMsg);
+        return PBFTEngine::handleCommitMsg(commit_req, pbftMsg);
     }
 
-    bool shouldSeal() { return PBFTConsensus::shouldSeal(); }
+    bool shouldSeal() { return PBFTEngine::shouldSeal(); }
 
     void setNodeIdx(u256 const& _idx) { m_idx = _idx; }
-    void collectGarbage() { return PBFTConsensus::collectGarbage(); }
-    void handleFutureBlock() { return PBFTConsensus::handleFutureBlock(); }
+    void collectGarbage() { return PBFTEngine::collectGarbage(); }
+    void handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
 };
 
 template <typename T>
