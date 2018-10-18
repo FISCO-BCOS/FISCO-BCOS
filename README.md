@@ -16,19 +16,19 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master/LICENSE)。  
 
-## 技术文档
+## 版本选择
 
-访问[FISCO BCOS的文档](https://fisco-bcos-documentation.readthedocs.io)，内容包括：
+* 1.5
 
-* 快速入门
-* 使用指南
-* 合约调用
-* 搭链
-* 国密版
-* 特性详解
-* 应用实践
-* Wiki
-* 社区
+** [1.5.0 Pre-release] [文档]()
+
+* 1.3
+
+** [1.3.4](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.4) [文档](https://fisco-bcos-documentation.readthedocs.io)
+** [1.3.3](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.3) [文档](https://fisco-bcos-documentation.readthedocs.io)
+** [1.3.2](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.2) [文档](https://fisco-bcos-documentation.readthedocs.io)
+** [1.3.1](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.1) [文档](https://fisco-bcos-documentation.readthedocs.io)
+** [1.3.0](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.0) [文档](https://fisco-bcos-documentation.readthedocs.io)
 
 ## 技术白皮书
 
