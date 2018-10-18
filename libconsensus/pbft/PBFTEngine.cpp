@@ -393,7 +393,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     m_timeManager.m_lastExecBlockFiniTime = utcTime();
-    m_timeManager.m_lastExecFinishTime = utxTime();
+    m_timeManager.m_lastExecFinishTime = utcTime();
 }
 
 /// check whether the block is empty
