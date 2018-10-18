@@ -49,6 +49,7 @@ void PBFTConsensus::setBlock()
     resetSealingHeader(m_sealing.block.header());
     setSealingRoot(m_sealing.block.getTransactionRoot(), h256(), h256());
 }
+
 /**
  * @brief: this node can generate block or not
  * @return true: this node can generate block

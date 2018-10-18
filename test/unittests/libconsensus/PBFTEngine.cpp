@@ -610,8 +610,6 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
     fake_service->setConnected();
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
-    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime == 0);
-    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastSignTime == 0);
 }
 
 BOOST_AUTO_TEST_CASE(testCollectGarbage)

@@ -73,9 +73,14 @@ void Consensus::doWork(bool wait)
             /// load transaction from transaction queue
             if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal)
                 loadTransactions(max_blockCanSeal - tx_num);
-            /// check enough
+            /// check enough or reach block interval
             if (!checkTxsEnough(max_blockCanSeal))
+            {
+                ///< 10 milliseconds to next loop
+                std::unique_lock<std::mutex> l(x_signalled);
+                m_signalled.wait_for(l, std::chrono::milliseconds(10));
                 return;
+            }
             handleBlock();
             resetSealingBlock();
             /// wait for 1s even the block has been sealed
