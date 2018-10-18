@@ -42,19 +42,9 @@ using NodeID = dev::p2p::NodeID;
 enum SyncPacketType : byte
 {
     StatusPacket = 0x00,
-    TransactionsPacket = 0x02,
+    TransactionsPacket = 0x01,
+    BlockPacket = 0x02,
     GetBlockPacket = 0x03,
-    BlockPacket = 0x04,
-    NewBlockPacket = 0x07,
-    GetNodeDataPacket = 0x0d,
-    NodeDataPacket = 0x0e,
-    GetReceiptsPacket = 0x0f,
-    ReceiptsPacket = 0x10,
-    NodeInfoSync = 0x11,
-    DelNodeInfoSync = 0x12,
-    CustomMessage = 0x13,
-    Topics = 0x14,
-    ChannelMessage = 0x15,
     PacketCount
 };
 
