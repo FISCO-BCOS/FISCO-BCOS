@@ -121,14 +121,6 @@ BOOST_AUTO_TEST_CASE(number2hash)
     BOOST_CHECK_EQUAL(m_blockChainImp->numberHash(1), h256("0xaaabbbccc"));
 }
 
-BOOST_AUTO_TEST_CASE(number2hash)
-{
-    // int64_t number() const override;
-    // std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
-    // dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
-    BOOST_CHECK_EQUAL(m_blockChainImp->numberHash(1), h256("0xaaabbbccc"));
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
