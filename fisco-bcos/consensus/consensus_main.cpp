@@ -31,6 +31,8 @@
 static void startConsensus(Params& params)
 {
     ///< initialize component
+    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+
     std::shared_ptr<AsioInterface> asioInterface = std::make_shared<AsioInterface>();
     std::shared_ptr<NetworkConfig> netConfig = params.creatNetworkConfig();
     std::shared_ptr<SocketFactory> socketFactory = std::make_shared<SocketFactory>();
@@ -44,7 +46,6 @@ static void startConsensus(Params& params)
     uint8_t group_id = 2;
     uint16_t protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
 
-    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
     std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
     std::shared_ptr<dev::txpool::TxPool> txPool =
@@ -85,7 +86,7 @@ static void startConsensus(Params& params)
     host->start();
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
     std::shared_ptr<std::vector<std::string>> topics = host->topics();
-    topics->push_back(toString(group_id));
+    topics->push_back("GroupID:" + toString(group_id));
     std::cout << "#### before setTopic" << std::endl;
     host->setTopics(topics);
     std::cout << "##### set topic" << std::endl;
