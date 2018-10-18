@@ -20,7 +20,7 @@
  * @date: 2018-10-16
  */
 
-#include "SyncData.h"
+#include "SyncStatus.h"
 
 
 using namespace std;
@@ -31,13 +31,13 @@ using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::txpool;
 
-bool SyncData::hasPeer(NodeID const& _id)
+bool SyncMasterStatus::hasPeer(NodeID const& _id)
 {
     auto peer = m_peersData.find(_id);
     return peer != m_peersData.end();
 }
 
-bool SyncData::newSyncPeerData(NodeInfo const& _info)
+bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
 {
     if (hasPeer(_info.id))
     {
@@ -47,8 +47,8 @@ bool SyncData::newSyncPeerData(NodeInfo const& _info)
 
     try
     {
-        shared_ptr<SyncPeerData> peer = make_shared<SyncPeerData>(_info);
-        m_peersData.insert(pair<NodeID, shared_ptr<SyncPeerData>>(peer->id(), peer));
+        shared_ptr<SyncPeerStatus> peer = make_shared<SyncPeerStatus>(_info);
+        m_peersData.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->id(), peer));
     }
     catch (Exception const& e)
     {
@@ -58,7 +58,7 @@ bool SyncData::newSyncPeerData(NodeInfo const& _info)
     return true;
 }
 
-std::shared_ptr<SyncPeerData> SyncData::peerData(NodeID const& _id)
+std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerData(NodeID const& _id)
 {
     auto peer = m_peersData.find(_id);
     if (peer == m_peersData.end())
@@ -69,7 +69,8 @@ std::shared_ptr<SyncPeerData> SyncData::peerData(NodeID const& _id)
     return peer->second;
 }
 
-void SyncData::foreachPeer(std::function<bool(std::shared_ptr<SyncPeerData>)> const& _f) const
+void SyncMasterStatus::foreachPeer(
+    std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const
 {
     for (auto& peer : m_peersData)
     {

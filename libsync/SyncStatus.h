@@ -50,14 +50,24 @@ public:
     }
 };
 
-class SyncPeerData
+struct SyncStatus
+{
+    SyncState state = SyncState::Idle;
+    int16_t protocolId;
+    unsigned startBlockNumber;
+    unsigned currentBlockNumber;
+    unsigned highestBlockNumber;
+    bool majorSyncing = false;
+};
+
+class SyncPeerStatus
 {
 public:
-    SyncPeerData(
+    SyncPeerStatus(
         NodeID const& _id, int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
       : m_id(_id), m_number(_number), m_genesisHash(_genesisHash), m_latestHash(_latestHash)
     {}
-    SyncPeerData(const NodeInfo& _info)
+    SyncPeerStatus(const NodeInfo& _info)
       : m_id(_info.id),
         m_number(_info.number),
         m_genesisHash(_info.genesisHash),
@@ -76,17 +86,17 @@ private:
     h256 m_latestHash;
 };
 
-class SyncData
+class SyncMasterStatus
 {
 public:
     bool hasPeer(NodeID const& _id);
-    bool newSyncPeerData(NodeInfo const& _info);
-    std::shared_ptr<SyncPeerData> peerData(NodeID const& _id);
+    bool newSyncPeerStatus(NodeInfo const& _info);
+    std::shared_ptr<SyncPeerStatus> peerData(NodeID const& _id);
 
-    void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerData>)> const& _f) const;
+    void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 
 private:
-    std::map<NodeID, std::shared_ptr<SyncPeerData>> m_peersData;
+    std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersData;
     std::priority_queue<std::shared_ptr<dev::eth::Block>,
         std::vector<std::shared_ptr<dev::eth::Block>>, DownloadingBlockQueuePiority>
         m_downloadingBlockQueue;

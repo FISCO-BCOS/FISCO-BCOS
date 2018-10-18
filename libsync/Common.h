@@ -42,7 +42,6 @@ using NodeID = dev::p2p::NodeID;
 enum SyncPacketType : byte
 {
     StatusPacket = 0x00,
-    NewBlockHashesPacket = 0x01,
     TransactionsPacket = 0x02,
     GetBlockPacket = 0x03,
     BlockPacket = 0x04,
@@ -59,15 +58,6 @@ enum SyncPacketType : byte
     PacketCount
 };
 
-enum class Asking
-{
-    State,
-    Block,
-    NodeData,
-    Receipts,
-    Nothing
-};
-
 enum class SyncState
 {
     NotSynced,  ///< Initial chain sync has not started yet
@@ -78,15 +68,6 @@ enum class SyncState
     State,      ///< Downloading state
     NewBlocks,  ///< Downloading blocks learned from NewHashes packet
     Size        /// Must be kept last
-};
-struct SyncStatus
-{
-    SyncState state = SyncState::Idle;
-    int16_t protocolId;
-    unsigned startBlockNumber;
-    unsigned currentBlockNumber;
-    unsigned highestBlockNumber;
-    bool majorSyncing = false;
 };
 
 struct NodeInfo

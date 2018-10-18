@@ -22,7 +22,7 @@
 
 #pragma once
 #include "Common.h"
-#include "SyncData.h"
+#include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -41,7 +41,7 @@ class SyncMsgEngine
 public:
     SyncMsgEngine(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<SyncData> _data)
+        std::shared_ptr<SyncMasterStatus> _data)
       : m_blockChain(_blockChain), m_txPool(_txPool), m_data(_data)
     {}
 
@@ -60,7 +60,7 @@ private:
     // Outside data
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    std::shared_ptr<SyncData> m_data;
+    std::shared_ptr<SyncMasterStatus> m_data;
 };
 
 }  // namespace sync

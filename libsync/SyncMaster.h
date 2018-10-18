@@ -22,9 +22,9 @@
 
 #pragma once
 #include "Common.h"
-#include "SyncData.h"
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
+#include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -57,8 +57,8 @@ public:
         SyncInterface(),
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
     {
-        m_data = std::make_shared<SyncData>();
-        m_msgEngine = std::make_shared<SyncMsgEngine>(_txPool, _blockChain, m_data);
+        m_status = std::make_shared<SyncMasterStatus>();
+        m_msgEngine = std::make_shared<SyncMsgEngine>(_txPool, _blockChain, m_status);
 
         // signal registration
         // txPool.onReady([=]() { this->noteNewTransactions(); });
@@ -112,7 +112,7 @@ private:
     /// handler of the block chain module
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     /// Block queue and peers
-    std::shared_ptr<SyncData> m_data;
+    std::shared_ptr<SyncMasterStatus> m_status;
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
