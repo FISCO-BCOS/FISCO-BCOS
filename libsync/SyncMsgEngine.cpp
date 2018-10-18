@@ -38,20 +38,19 @@ void SyncMsgEngine::messageHandler(
         return;
     }
 
-    bytesConstRef frame = ref(*(_msg->buffer()));
-    if (!checkPacket(frame))
+    SyncMsgPacket packet;
+    if (!packet.decode(_session, _msg))
     {
-        LOG(WARNING) << "Received " << frame.size() << ": " << toHex(frame) << endl;
+        LOG(WARNING) << "Received " << _msg->buffer()->size() << ": " << toHex(*_msg->buffer())
+                     << endl;
         LOG(WARNING) << "INVALID MESSAGE RECEIVED";
         _session->disconnect(BadProtocol);
         return;
     }
 
-    SyncPacketType packetType = (SyncPacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
-    RLP r(frame.cropped(1));
-    bool ok = interpret(_session->id(), packetType, r);
+    bool ok = interpret(packet);
     if (!ok)
-        LOG(WARNING) << "Couldn't interpret packet. " << RLP(r);
+        LOG(WARNING) << "Couldn't interpret packet. " << RLP(packet.rlp());
 }
 
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::Session> _session)
@@ -70,12 +69,12 @@ bool SyncMsgEngine::checkPacket(bytesConstRef _msg)
     return true;
 }
 
-bool SyncMsgEngine::interpret(NodeID const& _id, SyncPacketType _type, RLP const& _r)
+bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
-    switch (_type)
+    switch (_packet.packetType)
     {
     case TransactionsPacket:
-        onPeerTransactions(_id, _r);
+        onPeerTransactions(_packet);
         break;
     default:
         return false;
@@ -83,9 +82,12 @@ bool SyncMsgEngine::interpret(NodeID const& _id, SyncPacketType _type, RLP const
     return true;
 }
 
-void onPeerTransactions(NodeID const& _id, RLP const& _r)
+void onPeerTransactions(SyncMsgPacket const& _packet)
 {
-    unsigned itemCount = _r.itemCount();
+    /*
+    RLP const& r = _packet.rlp();
+    unsigned itemCount = r.itemCount();
     LOG(TRACE) << "Transactions (" << dec << itemCount << "entries)";
-    // TODO m_txPool.enqueue(_r, _peer->id());
+    // TODO m_txPool.enqueue(r, _peer->id());
+    */
 }

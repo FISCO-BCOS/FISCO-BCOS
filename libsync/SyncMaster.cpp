@@ -44,7 +44,7 @@ void SyncMaster::doWork()
 {
     if (!isSyncing())
     {
-        cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
+        // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
         if (m_newTransactions)
         {
             m_newTransactions = false;
@@ -92,5 +92,5 @@ bool SyncMaster::isSyncing() const
 
 void SyncMaster::maintainTransactions()
 {
-    cout << "maintain transactions" << endl;
+    // cout << "maintain transactions" << endl;
 }

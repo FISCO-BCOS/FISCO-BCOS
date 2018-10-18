@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include "SyncMsgPacket.h"
 #include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -31,6 +32,7 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Session.h>
 #include <libtxpool/TxPoolInterface.h>
+
 
 namespace dev
 {
@@ -51,10 +53,10 @@ public:
 private:
     bool checkSession(std::shared_ptr<dev::p2p::Session> _session);
     bool checkPacket(bytesConstRef _msg);
-    bool interpret(NodeID const& _id, SyncPacketType _type, RLP const& _r);
+    bool interpret(SyncMsgPacket const& _packet);
 
 private:
-    void onPeerTransactions(NodeID const& _id, RLP const& _r);
+    void onPeerTransactions(SyncMsgPacket const& _packet);
 
 private:
     // Outside data
