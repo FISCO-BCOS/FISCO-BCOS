@@ -59,7 +59,7 @@ public:
         assert(m_txPool && m_blockSync && m_blockChain);
     }
 
-    virtual ~Consensus() { stop(); }
+    virtual ~Consensus() noexcept { stop(); }
     /// start the consensus module
     virtual void start();
     /// stop the consensus module

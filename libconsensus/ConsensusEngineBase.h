@@ -38,7 +38,7 @@ namespace dev
 {
 namespace consensus
 {
-class ConsensusEngineBase : public Worker, virtual ConsensusInterface
+class ConsensusEngineBase : public Worker, virtual public ConsensusInterface
 {
 public:
     ConsensusEngineBase(std::shared_ptr<dev::p2p::P2PInterface> _service,

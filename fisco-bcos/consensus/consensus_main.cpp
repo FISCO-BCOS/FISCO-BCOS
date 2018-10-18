@@ -78,7 +78,7 @@ static void startConsensus(Params& params)
     }
     /// minerList.push_back(toPublic(key_pair.secret()));
     ///< int pbft consensus
-    std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine =
+    std::shared_ptr<dev::consensus::ConsensusInterface> pbftEngine =
         std::make_shared<dev::consensus::PBFTEngine>(p2pService, txPool, blockChain, blockSync,
             blockVerifier, protocol_id, "./", key_pair, minerList);
     std::shared_ptr<dev::consensus::PBFTConsensus> pbftConsensus =

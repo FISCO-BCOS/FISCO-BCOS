@@ -204,6 +204,8 @@ void PBFTEngine::generatePrepare(Block& block)
     prepare_req.encode(pbft_msg.data);
     pbft_msg.packet_id = PrepareReqPacket;
     m_msgQueue.push(pbft_msg);
+    /// broadcast the generated preparePacket
+    broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(pbft_msg.data));
 }
 /**
  * @brief : 1. generate and broadcast signReq according to given prepareReq,

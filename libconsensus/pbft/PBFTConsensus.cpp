@@ -66,8 +66,8 @@ uint64_t PBFTConsensus::calculateMaxPackTxNum()
 
 void PBFTConsensus::start()
 {
-    Consensus::start();
     m_pbftEngine->start();
+    Consensus::start();
 }
 void PBFTConsensus::stop()
 {
