@@ -21,7 +21,7 @@
  * @author: yujiechen
  * @date: 2018-10-09
  */
-#include "PBFTConsensus.h"
+#include "PBFTEngine.h"
 #include "Common.h"
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/filesystem.hpp>
@@ -36,7 +36,7 @@ BOOST_FIXTURE_TEST_SUITE(pbftConsensusTest, TestOutputHelperFixture)
 /// test initPBFTEnv (normal case)
 BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     BOOST_CHECK(fake_pbft.consensus()->keyPair().pub() != h512());
     BOOST_CHECK(fake_pbft.consensus()->broadCastCache());
     BOOST_CHECK(fake_pbft.consensus()->reqCache());
@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
 /// test exception case of initPBFT
 BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     boost::filesystem::create_directories(boost::filesystem::path("./invalid"));
     fake_pbft.consensus()->setBaseDir("./invalid");
     BOOST_CHECK_THROW(fake_pbft.consensus()->initPBFTEnv(1000), NotEnoughAvailableSpace);
@@ -90,8 +90,8 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
     KeyPair key_pair;
     /// fake prepare_req
     PrepareReq prepare_req = FakePrepareReq(key_pair);
-    /// fake FakePBFTConsensus
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    /// fake FakePBFTEngine
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     NodeIPEndpoint endpoint;
     /// fake session
     std::shared_ptr<Session> session = FakeSession(key_pair.pub());
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
 /// test broadcastMsg
 BOOST_AUTO_TEST_CASE(testBroadcastMsg)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     KeyPair peer_keyPair = KeyPair::create();
     /// append session info1
     appendSessionInfo(fake_pbft, peer_keyPair.pub());
@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
 /// test broadcastSignReq and broadcastCommitReq
 BOOST_AUTO_TEST_CASE(testBroadcastSignAndCommitReq)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     /// check broadcastSignReq
     SignReq sign_req;
     checkBroadcastSpecifiedMsg(fake_pbft, sign_req, SignReqPacket);
@@ -200,7 +200,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastSignAndCommitReq)
 /// test broadcastViewChangeReq
 BOOST_AUTO_TEST_CASE(testBroadcastViewChangeReq)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
 
     FakeBlockChain* p_blockChain =
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
@@ -234,7 +234,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastViewChangeReq)
 /// test timeout
 BOOST_AUTO_TEST_CASE(testTimeout)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
 
@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(testTimeout)
 BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
 {
     // 7 nodes
-    FakeConsensus<FakePBFTConsensus> fake_pbft(7, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(7, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
     fake_pbft.consensus()->resetConfig();
@@ -300,7 +300,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
         else if (4 == size)
         {
             ///< view change triggered, view += 1
-            BOOST_CHECK(fake_pbft.consensus()->view() == oriview + 1);
+            BOOST_CHECK(fake_pbft.consensus()->view() == fake_pbft.consensus()->toView());
             break;
         }
     }
@@ -314,7 +314,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     size_t invalid_height = 2;
     size_t invalid_hash = 0;
     size_t valid = 4;
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
     PrepareReq prepare_req;
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     size_t invalid_height = 2;
     size_t invalid_hash = 0;
     size_t valid = 4;
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
     int64_t block_number = obtainBlockNumber(fake_pbft);
@@ -372,7 +372,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
 
     /// check backupMsg failed
     bytes data = bytes();
-    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
 
     //// check no broadcast
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
@@ -385,7 +385,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
                 fake_pbft.consensus()->reqCache()->committedPrepareCache());
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
-    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number);
 
@@ -396,7 +396,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     fake_pbft.consensus()->checkAndCommit();
     /// check backupMsg succ
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
-    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// check submit block scc
     CheckBlockChain(fake_pbft, block_number + 1);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
@@ -408,7 +408,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
 /// test isValidPrepare
 BOOST_AUTO_TEST_CASE(testIsValidPrepare)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PrepareReq req;
     TestIsValidPrepare(fake_pbft, req, true);
     TestIsValidPrepare(fake_pbft, req, false);
@@ -416,7 +416,7 @@ BOOST_AUTO_TEST_CASE(testIsValidPrepare)
 /// test handlePrepareReq
 BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
         3 * (fake_pbft.consensus()->timeManager().m_intervalBlockTime));
     PrepareReq req;
@@ -453,14 +453,14 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
                 fake_pbft.consensus()->reqCache()->committedPrepareCache());
     bytes data;
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
-    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number + 1);
 }
 
 BOOST_AUTO_TEST_CASE(testIsValidSignReq)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PBFTMsgPacket pbftMsg;
     SignReq signReq;
     PrepareReq prepareReq;
@@ -471,7 +471,7 @@ BOOST_AUTO_TEST_CASE(testIsValidSignReq)
 /// test handleSignMsg
 BOOST_AUTO_TEST_CASE(testHandleSignMsg)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
 
     fake_pbft.consensus()->initPBFTEnv(
         fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
@@ -504,7 +504,7 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
     /// check backupMsg
     bytes data;
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
-    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     CheckBlockChain(fake_pbft, block_number);
 
     /// case3: with enough SignReq and CommitReq
@@ -518,13 +518,13 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
                 fake_pbft.consensus()->reqCache()->rawPrepareCache());
     /// check backupMsg
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
-    checkBackupMsg(fake_pbft, FakePBFTConsensus::backupKeyCommitted(), data);
+    checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     CheckBlockChain(fake_pbft, block_number + 1);
 }
 
 BOOST_AUTO_TEST_CASE(testIsCommitReqValid)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PBFTMsgPacket pbftMsg;
     CommitReq commitReq;
     PrepareReq prepareReq;
@@ -535,7 +535,7 @@ BOOST_AUTO_TEST_CASE(testIsCommitReqValid)
 /// test handleCommitMsg
 BOOST_AUTO_TEST_CASE(testHandleCommitMsg)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PBFTMsgPacket pbftMsg;
     CommitReq commitReq;
     PrepareReq prepareReq;
@@ -570,7 +570,7 @@ BOOST_AUTO_TEST_CASE(testHandleCommitMsg)
 
 BOOST_AUTO_TEST_CASE(testShouldSeal)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     /// case 1: m_cfgErr is true
     fake_pbft.consensus()->resetConfig();
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
@@ -614,7 +614,7 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
 
 BOOST_AUTO_TEST_CASE(testCollectGarbage)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     BlockHeader highest;
     PrepareReq prepareReq;
     FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
@@ -640,7 +640,7 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
 /// test handle future block
 BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
 {
-    FakeConsensus<FakePBFTConsensus> fake_pbft(1, ProtocolID::PBFT);
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PrepareReq prepareReq;
     TestIsValidPrepare(fake_pbft, prepareReq, true);
     prepareReq.height = fake_pbft.consensus()->mutableConsensusNumber();

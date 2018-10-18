@@ -21,7 +21,7 @@
  * @author: yujiechen
  * @date: 2018-10-09
  */
-#include "FakeConsensus.h"
+#include "FakePBFTEngine.h"
 #include <libconsensus/Consensus.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libethcore/Protocol.h>
@@ -37,13 +37,6 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(consensusTest, TestOutputHelperFixture)
-/// test constructor (invalid ProtocolID will cause exception)
-BOOST_AUTO_TEST_CASE(testConstructor)
-{
-    BOOST_CHECK_THROW(FakeConsensus<Consensus>(1, 0), InvalidProtocolID);
-    BOOST_REQUIRE_NO_THROW(FakeConsensus<Consensus>(1, ProtocolID::PBFT));
-}
-
 BOOST_AUTO_TEST_CASE(testLoadTransactions)
 {
     std::shared_ptr<SyncInterface> sync = std::make_shared<FakeBlockSync>();
@@ -69,30 +62,33 @@ BOOST_AUTO_TEST_CASE(testLoadTransactions)
     }
     BOOST_CHECK(txpool_creator->m_txPool->pendingSize() == txCnt);
 
-    FakeConsensus<FakePBFTConsensus> fake_pbft(
+    FakeConsensus<FakePBFTEngine> fake_engine(
         1, ProtocolID::PBFT, sync, blockVerifier, txpool_creator);
+    FakePBFTConsensus fake_pbft(
+        txpool_creator->m_txPool, txpool_creator->m_blockChain, sync, fake_engine.consensus());
+
     ///< Load 4 transactions in txpool.
-    fake_pbft.consensus()->loadTransactions(4);
+    fake_pbft.loadTransactions(4);
     ///< The following two checks ensure that the size of transactions is 4.
-    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(4) == true);
-    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(5) == false);
+    fake_engine.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    BOOST_CHECK(fake_pbft.checkTxsEnough(4) == true);
+    fake_engine.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    BOOST_CHECK(fake_pbft.checkTxsEnough(5) == false);
     ///< Load 10 transactions in txpool, critical magnitude.
-    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    fake_pbft.consensus()->loadTransactions(10);
+    fake_engine.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft.loadTransactions(10);
     ///< The following two checks ensure that the size of transactions is 10.
-    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(10) == true);
-    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(11) == false);
+    fake_engine.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    BOOST_CHECK(fake_pbft.checkTxsEnough(10) == true);
+    fake_engine.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    BOOST_CHECK(fake_pbft.checkTxsEnough(11) == false);
     ///< Load 12 transactions in txpool, actually only 10.
-    fake_pbft.consensus()->loadTransactions(12);
+    fake_pbft.loadTransactions(12);
     ///< The following two checks ensure that the size of transactions is 10.
-    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(10) == true);
-    fake_pbft.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.consensus()->checkTxsEnough(11) == false);
+    fake_engine.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    BOOST_CHECK(fake_pbft.checkTxsEnough(10) == true);
+    fake_engine.consensus()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    BOOST_CHECK(fake_pbft.checkTxsEnough(11) == false);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

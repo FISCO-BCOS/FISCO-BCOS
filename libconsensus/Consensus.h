@@ -22,22 +22,19 @@
  * @date: 2018-09-27
  */
 #pragma once
-#include "ConsensusInterface.h"
+#include "ConsensusEngineBase.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblocksync/SyncInterface.h>
-#include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
-#include <libethcore/Protocol.h>
-#include <libp2p/P2PInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 namespace dev
 {
 class ConsensusStatus;
 namespace consensus
 {
-class Consensus : public Worker, virtual ConsensusInterface
+class Consensus : public Worker, public std::enable_shared_from_this<Consensus>
 {
 public:
     /**
@@ -49,54 +46,25 @@ public:
      * @param _protocolId: protocolId
      * @param _minerList: miners to generate and execute block
      */
-    Consensus(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    Consensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, h512s const& _minerList)
+        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
       : Worker("consensus", 0),
-        m_service(_service),
         m_txPool(_txPool),
-        m_blockChain(_blockChain),
         m_blockSync(_blockSync),
-        m_blockVerifier(_blockVerifier),
-        m_protocolId(_protocolId),
-        m_minerList(_minerList)
+        m_blockChain(_blockChain),
+        m_consensusEngine(_consensusEngine)
     {
-        assert(m_service && m_txPool && m_blockSync);
-        if (m_protocolId == 0)
-            BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
-                                  << errinfo_comment("Protocol id must be larger than 0"));
+        assert(m_txPool && m_blockSync && m_blockChain);
     }
 
-    virtual ~Consensus() { stop(); }
+    virtual ~Consensus() noexcept { stop(); }
     /// start the consensus module
-    void start() override;
+    virtual void start();
     /// stop the consensus module
-    void stop() override;
-    virtual void resetConfig() { m_nodeNum = u256(m_minerList.size()); }
-    void resetSealingBlock(Sealing& sealing);
-    void inline resetSealingBlock() { resetSealingBlock(m_sealing); }
-    void resetSealingHeader(dev::eth::BlockHeader& header);
-    void resetBlock(dev::eth::Block& block);
-    u256 minValidNodes() const { return m_nodeNum - m_f; }
+    virtual void stop();
 
-    /// get miner list
-    h512s minerList() const override { return m_minerList; }
-    /// set the miner list
-    void setMinerList(h512s const& _minerList) override
-    {
-        m_minerList = _minerList;
-        resetConfig();
-    }
-    /// append miner
-    void appendMiner(h512 const& _miner) override { m_minerList.push_back(_miner); }
-    /// get status of consensus
-    const ConsensusStatus consensusStatus() const override { return ConsensusStatus(); }
-
-    /// protocol id used when register handler to p2p module
-    int16_t const& protocolId() const { return m_protocolId; }
     /// set the max number of transactions in a block
     void setMaxBlockTransactions(uint64_t const& _maxBlockTransactions)
     {
@@ -104,32 +72,13 @@ public:
     }
     /// get the max number of transactions in a block
     uint64_t maxBlockTransactions() const { return m_maxBlockTransactions; }
-
-    /// get account type
-    ///@return NodeAccountType::MinerAccount: the node can generate and execute block
-    ///@return NodeAccountType::ObserveAccout: the node can only sync block from other nodes
-    NodeAccountType accountType() override { return m_accountType; }
-    /// set the node account type
-    void setNodeAccountType(dev::consensus::NodeAccountType const& _accountType) override
-    {
-        m_accountType = _accountType;
-    }
-    ///
-    u256 nodeIdx() const override { return m_idx; }
-    virtual void setNodeIdx(u256 const& _idx) override { m_idx = _idx; }
     void setExtraData(std::vector<bytes> const& _extra) { m_extraData = _extra; }
     std::vector<bytes> const& extraData() const { return m_extraData; }
-    bool const& allowFutureBlocks() const { return m_allowFutureBlocks; }
-    void setAllowFutureBlocks(bool isAllowFutureBlocks)
-    {
-        m_allowFutureBlocks = isAllowFutureBlocks;
-    }
-    void dropHandledTransactions(dev::eth::Block const& block);
 
 protected:
     /// sealing block
     virtual bool shouldSeal();
-    virtual bool shouldWait(bool const& wait);
+    virtual bool shouldWait(bool const& wait) const;
     virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
@@ -140,8 +89,6 @@ protected:
         bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
         if (enough)
             m_syncTxPool = false;
-        // LOG(DEBUG) << "#### checkTxsEnough, tx_num:" << tx_num << ", maxTxsCanSeal:" <<
-        // maxTxsCanSeal << ", reachBlockIntervalTime:" << reachBlockIntervalTime();
         return enough;
     }
 
@@ -150,27 +97,17 @@ protected:
     virtual void doWork(bool wait);
     void doWork() override { doWork(true); }
     bool isBlockSyncing();
-
+    inline void resetSealingBlock() { resetSealingBlock(m_sealing); }
+    void resetSealingBlock(Sealing& sealing);
+    void resetBlock(dev::eth::Block& block);
+    void resetSealingHeader(dev::eth::BlockHeader& header);
     /// functions for usage
-    void setSealingRoot(h256 const& trans_root, h256 const& receipt_root, h256 const& state_root)
+    void setSealingRoot(
+        dev::h256 const& transRoot, dev::h256 const& receiptRoot, dev::h256 const& stateRoot)
     {
         /// set transaction root, receipt root and state root
-        m_sealing.block.header().setRoots(trans_root, receipt_root, state_root);
+        m_sealing.block.header().setRoots(transRoot, receiptRoot, stateRoot);
     }
-
-    void appendSealingExtraData(bytes const& _extra);
-    void ResetSealingHeader();
-    void ResetSealingBlock();
-    dev::blockverifier::ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
-    virtual void executeBlock() { m_sealing.p_execContext = executeBlock(m_sealing.block); }
-    bool blockExists(h256 const& blockHash)
-    {
-        if (m_blockChain->getBlockByHash(blockHash) == nullptr)
-            return false;
-        return true;
-    }
-    virtual void checkBlockValid(dev::eth::Block const& block);
-    bool encodeBlock(bytes& blockBytes);
     /// reset timestamp of block header
     void resetCurrentTime()
     {
@@ -179,39 +116,24 @@ protected:
         m_sealing.block.header().setTimestamp(std::max(parentTime + 1, utcTime()));
     }
 
+
 protected:
-    /// p2p service handler
-    std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
-    /// handler of the block chain module
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     /// handler of the block-sync module
     std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
-    /// handler of the block-verifier module
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
-    int16_t m_protocolId;
-    /// extra data
-    std::vector<bytes> m_extraData;
-    /// type of this node (MinerAccount or ObserveAccount)
-    NodeAccountType m_accountType;
-    /// index of this node
-    u256 m_idx = u256(0);
-    /// miner list
-    h512s m_minerList;
-    /// total number of nodes
-    u256 m_nodeNum = u256(0);
-    /// at-least number of valid nodes
-    u256 m_f = u256(0);
+    /// handler of the block chain module
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<dev::consensus::ConsensusInterface> m_consensusEngine;
 
     uint64_t m_maxBlockTransactions = 1000;
-    /// allow future blocks or not
-    bool m_allowFutureBlocks = true;
-
     /// current sealing block(include block, transaction set of block and execute context)
     Sealing m_sealing;
     /// lock on m_sealing
     mutable SharedMutex x_sealing;
+    /// extra data
+    std::vector<bytes> m_extraData;
+
     /// atomic value represents that whether is calling syncTransactionQueue now
     std::atomic<bool> m_syncTxPool = {false};
     /// signal to notify all thread to work
