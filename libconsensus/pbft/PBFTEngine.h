@@ -59,6 +59,7 @@ public:
         m_keyPair(_key_pair),
         m_baseDir(_baseDir)
     {
+        std::cout << "#### register handler for PBFTEngine" << std::endl;
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();

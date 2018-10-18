@@ -86,6 +86,11 @@ void Consensus::doWork(bool wait)
             }
         }
     }
+    else
+    {
+        std::unique_lock<std::mutex> l(x_signalled);
+        m_signalled.wait_for(l, std::chrono::milliseconds(5));
+    }
 }
 
 /**

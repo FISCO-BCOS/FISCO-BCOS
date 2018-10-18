@@ -40,6 +40,7 @@ const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
 void PBFTEngine::start()
 {
     initPBFTEnv(3 * getIntervalBlockTime());
+    ConsensusEngineBase::start();
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
