@@ -140,8 +140,8 @@ protected:
         bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
         if (enough)
             m_syncTxPool = false;
-        LOG(DEBUG) << "#### checkTxsEnough, tx_num:" << tx_num << ", maxTxsCanSeal" << maxTxsCanSeal
-                   << ", reachBlockIntervalTime:" << reachBlockIntervalTime();
+        // LOG(DEBUG) << "#### checkTxsEnough, tx_num:" << tx_num << ", maxTxsCanSeal:" <<
+        // maxTxsCanSeal << ", reachBlockIntervalTime:" << reachBlockIntervalTime();
         return enough;
     }
 
