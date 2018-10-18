@@ -22,16 +22,8 @@
  * @date: 2018-09-28
  */
 #pragma once
-#include "Common.h"
 #include "PBFTEngine.h"
-#include "PBFTMsgCache.h"
-#include "PBFTReqCache.h"
 #include <libconsensus/Consensus.h>
-#include <libdevcore/FileSystem.h>
-#include <libdevcore/LevelDB.h>
-#include <libdevcore/concurrent_queue.h>
-#include <libp2p/Session.h>
-#include <libp2p/SessionFace.h>
 #include <sstream>
 namespace dev
 {
@@ -43,7 +35,7 @@ public:
     PBFTConsensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::consensus::ConsensusEngineBase> _consensusEngine)
+        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
       : Consensus(_txPool, _blockChain, _blockSync, _consensusEngine)
     {
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);

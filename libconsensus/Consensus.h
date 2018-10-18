@@ -49,7 +49,7 @@ public:
     Consensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::consensus::ConsensusEngineBase> _consensusEngine)
+        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
       : Worker("consensus", 0),
         m_txPool(_txPool),
         m_blockSync(_blockSync),
@@ -124,7 +124,7 @@ protected:
     std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
     /// handler of the block chain module
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    std::shared_ptr<dev::consensus::ConsensusEngineBase> m_consensusEngine;
+    std::shared_ptr<dev::consensus::ConsensusInterface> m_consensusEngine;
 
     uint64_t m_maxBlockTransactions = 1000;
     /// current sealing block(include block, transaction set of block and execute context)

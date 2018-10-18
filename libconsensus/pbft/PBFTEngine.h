@@ -121,7 +121,7 @@ protected:
 
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
-    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = false);
+    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
