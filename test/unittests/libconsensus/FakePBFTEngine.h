@@ -23,6 +23,7 @@
  */
 #pragma once
 #include <libconsensus/Consensus.h>
+#include <libconsensus/pbft/PBFTConsensus.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <test/unittests/libblocksync/FakeBlockSync.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
@@ -38,6 +39,26 @@ namespace dev
 {
 namespace test
 {
+/// fake class of PBFTConsensus
+class FakePBFTConsensus : public PBFTConsensus
+{
+public:
+    FakePBFTConsensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
+        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
+      : PBFTConsensus(_txPool, _blockChain, _blockSync, _consensusEngine)
+    {}
+    void loadTransactions(uint64_t const& transToFetch)
+    {
+        return PBFTConsensus::loadTransactions(transToFetch);
+    }
+    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
+    {
+        return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
+    }
+};
+/// fake class of PBFTEngine
 class FakePBFTEngine : public PBFTEngine
 {
 public:
@@ -70,17 +91,6 @@ public:
             return false;
         return boost::filesystem::space(path).available > 1024;
     }
-
-    /*void loadTransactions(uint64_t const& transToFetch)
-    {
-        PBFTEngine::loadTransactions(transToFetch);
-    }
-
-    bool checkTxsEnough(uint64_t maxTxsCanSeal)
-    {
-        return PBFTEngine::checkTxsEnough(maxTxsCanSeal);
-    }
-    */
     void resetSealingHeader(BlockHeader& header)
     {
         /// import block

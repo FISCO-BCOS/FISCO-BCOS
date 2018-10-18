@@ -115,7 +115,6 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft, std::shared_pt
         BOOST_CHECK(ret.first == false);
 }
 
-
 static void FakeSignAndCommitCache(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq& prepareReq,
     BlockHeader& highest, size_t invalidHeightNum, size_t invalidHash, size_t validNum, int type,
     bool shouldFake = true, bool shouldAdd = true)
