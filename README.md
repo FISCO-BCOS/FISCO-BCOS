@@ -20,15 +20,15 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 * 1.5
 
-- [1.5.0 Pre-release] [文档]()
+- [1.5.0 Pre-release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.5.0) [安装工具]() [源码]() [文档]() 2018-10-18
 
 * 1.3
 
-- [1.3.4](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.4) [文档](https://fisco-bcos-documentation.readthedocs.io)
-- [1.3.3](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.3) [文档](https://fisco-bcos-documentation.readthedocs.io)
-- [1.3.2](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.2) [文档](https://fisco-bcos-documentation.readthedocs.io)
-- [1.3.1](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.1) [文档](https://fisco-bcos-documentation.readthedocs.io)
-- [1.3.0](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.0) [文档](https://fisco-bcos-documentation.readthedocs.io)
+- [1.3.4 Release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.4) [源码](https://github.com/FISCO-BCOS/FISCO-BCOS/archive/v1.3.4.tar.gz) [文档](https://fisco-bcos-documentation.readthedocs.io) 2018-09-14
+- [1.3.3 Release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.3) [源码](https://github.com/FISCO-BCOS/FISCO-BCOS/archive/v1.3.3.tar.gz) [文档](https://fisco-bcos-documentation.readthedocs.io) 2018-08-22
+- [1.3.2 Release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.2) [源码](https://github.com/FISCO-BCOS/FISCO-BCOS/archive/v1.3.2.tar.gz) [文档](https://fisco-bcos-documentation.readthedocs.io) 2018-08-06
+- [1.3.1 Release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.1) [源码](https://github.com/FISCO-BCOS/FISCO-BCOS/archive/v1.3.1.tar.gz) [文档](https://fisco-bcos-documentation.readthedocs.io) 2018-07-09
+- [1.3.0 Release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.0) [源码](https://github.com/FISCO-BCOS/FISCO-BCOS/archive/v1.3.0.tar.gz) [文档](https://fisco-bcos-documentation.readthedocs.io) 2018-06-25
 
 ## 技术白皮书
 
