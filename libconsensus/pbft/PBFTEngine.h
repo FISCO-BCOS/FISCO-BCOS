@@ -55,7 +55,7 @@ public:
         int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
         h512s const& _minerList = h512s())
       : ConsensusEngineBase(
-            _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId),
+            _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
         m_keyPair(_key_pair),
         m_baseDir(_baseDir)
     {
