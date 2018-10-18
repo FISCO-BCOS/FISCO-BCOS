@@ -44,7 +44,7 @@ enum CheckResult
     FUTURE = 2
 };
 using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
-class PBFTEngine : public ConsensusEngineBase, public std::enable_shared_from_this<PBFTEngine>
+class PBFTEngine : public ConsensusEngineBase
 {
 public:
     PBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
