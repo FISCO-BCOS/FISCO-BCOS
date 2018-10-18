@@ -872,12 +872,9 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         return;
     }
     }
-    auto now_time = u256(utcTime());
-    bool time_flag = (pbft_msg.timestamp >= now_time) ||
-                     (now_time - pbft_msg.timestamp < u256(m_timeManager.m_viewTimeout));
     bool height_flag = (pbft_msg.height > m_highestBlock.number()) ||
                        (m_highestBlock.number() - pbft_msg.height < 10);
-    if (key.size() > 0 && time_flag && height_flag)
+    if (key.size() > 0 && height_flag)
     {
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);

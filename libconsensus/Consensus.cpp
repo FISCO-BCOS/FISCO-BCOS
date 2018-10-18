@@ -98,65 +98,66 @@ void Consensus::doWork(bool wait)
                 }
             }
         }
-        else
-        {
-            std::unique_lock<std::mutex> l(x_signalled);
-            m_signalled.wait_for(l, std::chrono::milliseconds(5));
-        }
     }
-
-    /**
-     * @brief: load transactions from the transaction pool
-     * @param transToFetch: max transactions to fetch
-     */
-    void Consensus::loadTransactions(uint64_t const& transToFetch)
+    else
     {
-        /// fetch transactions and update m_transactionSet
-        m_sealing.block.appendTransactions(
-            m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
+        std::unique_lock<std::mutex> l(x_signalled);
+        m_signalled.wait_for(l, std::chrono::milliseconds(5));
     }
+}
 
-    /// check whether the blocksync module is syncing
-    bool Consensus::isBlockSyncing()
-    {
-        SyncStatus state = m_blockSync->status();
-        return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
-    }
+/**
+ * @brief: load transactions from the transaction pool
+ * @param transToFetch: max transactions to fetch
+ */
+void Consensus::loadTransactions(uint64_t const& transToFetch)
+{
+    /// fetch transactions and update m_transactionSet
+    m_sealing.block.appendTransactions(
+        m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
+}
 
-    void Consensus::resetSealingBlock(Sealing & sealing)
-    {
-        resetBlock(sealing.block);
-        sealing.m_transactionSet.clear();
-        sealing.p_execContext = nullptr;
-    }
+/// check whether the blocksync module is syncing
+bool Consensus::isBlockSyncing()
+{
+    SyncStatus state = m_blockSync->status();
+    return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
+}
 
-    void Consensus::resetBlock(Block & block)
-    {
-        block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
-    }
+void Consensus::resetSealingBlock(Sealing& sealing)
+{
+    resetBlock(sealing.block);
+    sealing.m_transactionSet.clear();
+    sealing.p_execContext = nullptr;
+}
 
-    void Consensus::resetSealingHeader(BlockHeader & header)
-    {
-        /// import block
-        resetCurrentTime();
-        header.setSealerList(m_consensusEngine->minerList());
-        header.setSealer(m_consensusEngine->nodeIdx());
-        header.setLogBloom(LogBloom());
-        header.setGasUsed(u256(0));
-        header.setExtraData(m_extraData);
-    }
+void Consensus::resetBlock(Block& block)
+{
+    block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+}
 
-    /// stop the consensus module
-    void Consensus::stop()
+void Consensus::resetSealingHeader(BlockHeader& header)
+{
+    /// import block
+    resetCurrentTime();
+    header.setSealerList(m_consensusEngine->minerList());
+    header.setSealer(m_consensusEngine->nodeIdx());
+    header.setLogBloom(LogBloom());
+    header.setGasUsed(u256(0));
+    header.setExtraData(m_extraData);
+}
+
+/// stop the consensus module
+void Consensus::stop()
+{
+    if (m_startConsensus == false)
     {
-        if (m_startConsensus == false)
-        {
-            LOG(WARNING) << "Consensus module has already been stopped, return now";
-            return;
-        }
-        m_startConsensus = false;
-        doneWorking();
-        stopWorking();
+        LOG(WARNING) << "Consensus module has already been stopped, return now";
+        return;
     }
+    m_startConsensus = false;
+    doneWorking();
+    stopWorking();
+}
 }  // namespace consensus
-}  // namespace consensus
+}  // namespace dev
