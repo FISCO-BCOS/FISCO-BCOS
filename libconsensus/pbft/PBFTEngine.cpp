@@ -549,8 +549,10 @@ void PBFTEngine::checkAndSave()
             /// callback block chain to commit block
             m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            LOG(DEBUG) << "##### drop handled transactions";
             /// drop handled transactions
             dropHandledTransactions(block);
+            LOG(DEBUG) << "### REPORT BLOCK";
             /// report block
             reportBlock(block.blockHeader());
         }
@@ -570,7 +572,6 @@ void PBFTEngine::checkAndSave()
 /// 5. clear all caches related to prepareReq and signReq
 void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
 {
-    Guard l(m_mutex);
     /// update the highest block
     m_highestBlock = blockHeader;
     if (m_highestBlock.number() >= m_consensusBlockNumber)
@@ -833,6 +834,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
     case PrepareReqPacket:
     {
+        LOG(DEBUG) << "#### Handle PrepareReqPacket";
         PrepareReq prepare_req;
         handlePrepareMsg(prepare_req, pbftMsg);
         key = prepare_req.block_hash.hex();
@@ -890,30 +892,30 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
 void PBFTEngine::workLoop()
 {
     LOG(DEBUG) << "##### start the thread msgHandleThread";
-    new std::thread([&]() {
-        setThreadName("pbft");
-        while (isWorking())
+    while (isWorking())
+    {
+        try
         {
-            try
+            std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
+            if (ret.first)
             {
-                std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
-                if (ret.first)
-                    handleMsg(ret.second);
-                else
-                {
-                    std::unique_lock<std::mutex> l(x_signalled);
-                    m_signalled.wait_for(l, std::chrono::milliseconds(5));
-                }
-                checkTimeout();
-                handleFutureBlock();
-                collectGarbage();
+                LOG(DEBUG) << "##### handleMsg in workLoop";
+                handleMsg(ret.second);
             }
-            catch (std::exception& _e)
+            else
             {
-                LOG(ERROR) << _e.what();
+                std::unique_lock<std::mutex> l(x_signalled);
+                m_signalled.wait_for(l, std::chrono::milliseconds(5));
             }
+            checkTimeout();
+            handleFutureBlock();
+            collectGarbage();
         }
-    });
+        catch (std::exception& _e)
+        {
+            LOG(ERROR) << _e.what();
+        }
+    }
 }
 
 

@@ -28,6 +28,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
+#include <libtxpool/TxPool.h>
 #include <libtxpool/TxPoolInterface.h>
 namespace dev
 {
@@ -57,6 +58,10 @@ public:
         m_consensusEngine(_consensusEngine)
     {
         assert(m_txPool && m_blockSync && m_blockChain);
+        dev::txpool::TxPool* txPool = dynamic_cast<dev::txpool::TxPool*>(m_txPool.get());
+        assert(txPool);
+        /// register a handler to be called once new transactions imported
+        m_tqReady = txPool->onReady([=]() { this->onTransactionQueueReady(); });
     }
 
     virtual ~Consensus() noexcept { stop(); }
@@ -64,7 +69,12 @@ public:
     virtual void start();
     /// stop the consensus module
     virtual void stop();
-
+    /// Magically called when m_tq needs syncing. Be nice and don't block.
+    virtual void onTransactionQueueReady()
+    {
+        m_syncTxPool = true;
+        m_signalled.notify_all();
+    }
     /// set the max number of transactions in a block
     void setMaxBlockTransactions(uint64_t const& _maxBlockTransactions)
     {
@@ -116,7 +126,6 @@ protected:
         m_sealing.block.header().setTimestamp(std::max(parentTime + 1, utcTime()));
     }
 
-
 protected:
     /// transaction pool handler
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
@@ -144,6 +153,9 @@ protected:
     bool m_remoteWorking = false;
     /// True if we /should/ be sealing.
     bool m_startConsensus = false;
+
+    /// handler
+    Handler<> m_tqReady;
 };
 }  // namespace consensus
 }  // namespace dev

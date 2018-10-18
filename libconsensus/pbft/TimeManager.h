@@ -41,8 +41,7 @@ struct TimeManager
     std::chrono::system_clock::time_point m_lastGarbageCollection;
     static const unsigned kMaxChangeCycle = 20;
     static const unsigned CollectInterval = 60;
-    float m_execTimePerTx;
-    uint64_t m_leftTime;
+    float m_execTimePerTx = 0;
 
     inline void initTimerManager(unsigned view_timeout)
     {

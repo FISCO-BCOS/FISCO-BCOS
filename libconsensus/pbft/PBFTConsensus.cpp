@@ -56,6 +56,8 @@ void PBFTConsensus::setBlock()
  */
 bool PBFTConsensus::shouldSeal()
 {
+    /// LOG(DEBUG)<<"#### Consensus::shouldSeal():"<<Consensus::shouldSeal();
+    /// LOG(DEBUG)<<"#### m_pbftEngine->shouldSeal:"<<m_pbftEngine->shouldSeal();
     return Consensus::shouldSeal() && m_pbftEngine->shouldSeal();
 }
 

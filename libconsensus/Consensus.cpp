@@ -39,6 +39,9 @@ void Consensus::start()
         LOG(WARNING) << "Consensus module has already been started, return directly";
         return;
     }
+    resetSealingBlock();
+    m_consensusEngine->reportBlock(
+        m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     m_startConsensus = true;
@@ -49,10 +52,8 @@ bool Consensus::shouldSeal()
     bool sealed;
     DEV_READ_GUARDED(x_sealing)
     sealed = m_sealing.block.isSealed();
-    bool t = true;
     return (!sealed && m_startConsensus &&
-            m_consensusEngine->accountType() == NodeAccountType::MinerAccount &&
-            !isBlockSyncing() && m_syncTxPool.compare_exchange_strong(t, false));
+            m_consensusEngine->accountType() == NodeAccountType::MinerAccount && !isBlockSyncing());
 }
 
 bool Consensus::shouldWait(bool const& wait) const
@@ -70,14 +71,20 @@ void Consensus::doWork(bool wait)
             uint64_t tx_num = m_sealing.block.getTransactionSize();
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
+            bool t = true;
             /// load transaction from transaction queue
-            if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal)
+            if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal &&
+                m_syncTxPool.compare_exchange_strong(t, false))
+            {
+                /// LOG(DEBUG)<<"### load Transactions, tx_num:"<<tx_num;
                 loadTransactions(max_blockCanSeal - tx_num);
+            }
             /// check enough
             if (!checkTxsEnough(max_blockCanSeal))
                 return;
             handleBlock();
             resetSealingBlock();
+            m_syncTxPool = true;
             /// wait for 1s even the block has been sealed
             if (shouldWait(wait))
             {
@@ -121,7 +128,6 @@ void Consensus::resetSealingBlock(Sealing& sealing)
 void Consensus::resetBlock(Block& block)
 {
     block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
-    resetSealingHeader(block.header());
 }
 
 void Consensus::resetSealingHeader(BlockHeader& header)

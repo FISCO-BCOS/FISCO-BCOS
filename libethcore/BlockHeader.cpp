@@ -236,6 +236,7 @@ void BlockHeader::populateFromParent(BlockHeader const& _parent)
     m_parentHash = _parent.hash();
     m_gasLimit = _parent.m_gasLimit;
     m_gasUsed = u256(0);
+    m_sealer = Invalid256;
     noteDirty();
 }
 

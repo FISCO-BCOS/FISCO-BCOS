@@ -93,6 +93,8 @@ public:
     }
     /// broadcast prepare message
     void generatePrepare(dev::eth::Block& block);
+    /// update the context of PBFT after commit a block into the block-chain
+    void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
 
 protected:
     void workLoop() override;
@@ -137,9 +139,6 @@ protected:
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     void checkAndSave();
     void checkAndChangeView();
-
-    /// update the context of PBFT after commit a block into the block-chain
-    void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
