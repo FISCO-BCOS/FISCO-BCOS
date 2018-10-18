@@ -86,7 +86,7 @@ static void startConsensus(Params& params)
     host->start();
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
     std::shared_ptr<std::vector<std::string>> topics = host->topics();
-    topics->push_back("GroupID:" + toString(group_id));
+    topics->push_back(toString(group_id));
     std::cout << "#### before setTopic" << std::endl;
     host->setTopics(topics);
     std::cout << "##### set topic" << std::endl;
