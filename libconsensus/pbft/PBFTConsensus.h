@@ -29,7 +29,7 @@ namespace dev
 {
 namespace consensus
 {
-class PBFTConsensus : public Consensus, public std::enable_shared_from_this<PBFTConsensus>
+class PBFTConsensus : public Consensus
 {
 public:
     PBFTConsensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
