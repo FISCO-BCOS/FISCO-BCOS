@@ -29,8 +29,10 @@ namespace consensus
 {
 struct TimeManager
 {
-    /// last execution finish time
+    /// last execution finish time, only one will be used at last
+    /// the finish time of executing tx by leader
     uint64_t m_lastExecFinishTime;
+    /// the finish time of executing tx by follower
     uint64_t m_lastExecBlockFiniTime;
     unsigned m_viewTimeout;
     unsigned m_changeCycle = 0;
