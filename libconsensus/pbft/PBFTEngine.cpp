@@ -66,10 +66,10 @@ bool PBFTEngine::shouldSeal()
     /// fast view change
     if (ret.second != m_idx)
     {
-        /// if the node is a miner and is not the leader, then will reset m_lastConsensusTime
-        /// and m_lastSignTime to trigger fast viewchange
+        /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
+        /// isnot connect to leader.
         h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
-        if (node_id != h512() && m_service->isConnected(node_id))
+        if (node_id != h512() && !m_service->isConnected(node_id))
         {
             m_timeManager.m_lastConsensusTime = 0;
             m_timeManager.m_lastSignTime = 0;
@@ -392,6 +392,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     checkBlockValid(working_block);
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
+    m_timeManager.m_lastExecBlockFiniTime = utcTime();
     m_timeManager.m_lastExecFinishTime = utcTime();
 }
 
