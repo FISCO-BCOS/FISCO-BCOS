@@ -23,6 +23,7 @@
 
 #pragma once
 #include "Common.h"
+#include <libdevcore/RLP.h>
 #include <libp2p/Common.h>
 #include <libp2p/Session.h>
 
@@ -42,23 +43,27 @@ public:
     bool decode(std::shared_ptr<dev::p2p::Session> _session, dev::p2p::Message::Ptr _msg);
 
     /// encode is implement in derived class
+    /// basic encode function
+    RLPStream& prep(RLPStream& _s, unsigned _id, unsigned _args);
 
     /// Generate p2p message after encode
     dev::p2p::Message::Ptr toMessage(uint16_t _protocolId);
 
-    RLP& rlp() { return m_rlp; }
+    RLP const& rlp() { return m_rlp; }
+
+protected:
+    RLP m_rlp;              /// The result of decode
+    RLPStream m_rlpStream;  // The result of encode
 
 private:
     bool checkPacket(bytesConstRef _msg);
-
-private:
-    RLP m_rlp;              /// The result of decode
-    RLPStream m_rlpStream;  // The result of encode
 };
 
 
 class SyncStatusPacket : public SyncMsgPacket
 {
+    SyncStatusPacket() { packetType = StatusPacket; }
+    void encode(h256 const& _latestHash, h256 const& _genesisHash, int64_t _number);
 };
 
 }  // namespace sync

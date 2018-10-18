@@ -25,6 +25,7 @@
 
 
 using namespace std;
+using namespace dev;
 using namespace dev::sync;
 using namespace dev::p2p;
 using namespace dev::eth;
@@ -63,4 +64,15 @@ bool SyncMsgPacket::checkPacket(bytesConstRef _msg)
     if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
         return false;
     return true;
+}
+
+RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
+{
+    return _s.appendRaw(bytes(1, _id)).appendList(_args);
+}
+
+void SyncStatusPacket::encode(h256 const& _latestHash, h256 const& _genesisHash, int64_t _number)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, StatusPacket, 6) << _latestHash << _genesisHash << _number;
 }
