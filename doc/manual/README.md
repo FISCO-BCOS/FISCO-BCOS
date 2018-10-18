@@ -65,7 +65,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 
 ```bash
 # 假设当前在用户目录下，执行下面命令下载构建脚本
-curl -o build_chain.sh https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev-1.5/scripts/build_chain.sh && chmod a+x build_chain.sh
+curl -LO https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0/build_chain.sh
 # build_chain.sh
 # Usage:
 #	-l <IP list>                [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
@@ -123,7 +123,7 @@ tail -f log/info* |grep ++++  #查看日志输出
 
 ```bash
 # FISCO-BCOS/ 目录下操作
-curl -o fisco-bcos https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev-1.5/bin/fisco-bcos
+curl -O https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0/fisco-bcos
 # 添加可执行权限
 chmod a+x fisco-bcos
 ```
