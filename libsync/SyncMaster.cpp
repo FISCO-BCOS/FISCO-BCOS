@@ -64,12 +64,12 @@ void SyncMaster::workLoop()
 {
     while (workerState() == WorkerState::Started)
     {
+        doWork();
         if (idleWaitMs())
         {
             std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
         }
-        doWork();
     }
 }
 
