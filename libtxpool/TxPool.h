@@ -140,6 +140,7 @@ protected:
 
 private:
     bool removeTrans(h256 const& _txHash);
+    bool removeOutOfBound(h256 const& _txHash);
     void insert(Transaction const& _tx);
 
 private:

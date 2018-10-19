@@ -43,7 +43,6 @@ Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()),
     m_transactions(_block.transactions()),
     m_transactionReceipts(_block.transactionReceipts()),
-    m_headerHash(_block.headerHash()),
     m_sigList(_block.sigList()),
     m_txsCache(_block.m_txsCache),
     m_txsMapCache(_block.m_txsMapCache),
@@ -55,7 +54,6 @@ Block::Block(Block const& _block)
 Block& Block::operator=(Block const& _block)
 {
     m_blockHeader = _block.blockHeader();
-    m_headerHash = _block.headerHash();
     /// init transactions
     m_transactions = _block.transactions();
     /// init transactionReceipts
@@ -170,8 +168,6 @@ void Block::decode(bytesConstRef _block_bytes)
     {
         m_transactions[i].decode(transactions_rlp[i]);
     }
-    /// get hash of the block header
-    m_headerHash = block_rlp[2].toHash<h256>(RLP::VeryStrict);
     /// get sig_list
     m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
     noteChange();
