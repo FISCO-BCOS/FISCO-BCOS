@@ -75,11 +75,9 @@ static void startConsensus(Params& params)
     }
     /// minerList.push_back(toPublic(key_pair.secret()));
     ///< int pbft consensus
-    std::cout << "### before create pbftEngine" << std::endl;
     std::shared_ptr<dev::consensus::ConsensusInterface> pbftEngine =
         std::make_shared<dev::consensus::PBFTEngine>(p2pService, txPool, blockChain, blockSync,
             blockVerifier, protocol_id, "./", key_pair, minerList);
-    std::cout << "#### before create pbftConsensus" << std::endl;
     std::shared_ptr<dev::consensus::PBFTConsensus> pbftConsensus =
         std::make_shared<dev::consensus::PBFTConsensus>(txPool, blockChain, blockSync, pbftEngine);
     /// start the host
@@ -101,15 +99,16 @@ static void startConsensus(Params& params)
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
+    u256 maxBlockLimit = u256(1000);
     while (true)
     {
         tx.setNonce(tx.nonce() + u256(1));
+        tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         std::pair<h256, Address> ret = txPool->submit(tx);
         /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
         ///          << ", size:" << txPool->pendingSize();
-
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }

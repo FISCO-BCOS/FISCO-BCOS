@@ -89,6 +89,7 @@ public:
         m_blockHash[block.blockHeader().hash()] = m_blockNumber;
         m_blockChain.push_back(std::make_shared<Block>(block));
         m_blockNumber += 1;
+        m_onReady();
     }
 
     std::map<h256, uint64_t> m_blockHash;
