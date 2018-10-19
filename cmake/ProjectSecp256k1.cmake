@@ -16,8 +16,8 @@ ExternalProject_Add(secp256k1
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
                ${_only_release_configuration}
-               #-DCMAKE_C_FLAGS=-Wa,-march=generic64
-               #-DCMAKE_CXX_FLAGS=-Wa,-march=generic64
+               -DCMAKE_C_FLAGS=-Wa,-march=generic64
+               -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     LOG_CONFIGURE 1
