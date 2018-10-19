@@ -308,6 +308,15 @@ size_t TxPool::pendingSize()
     return m_txsQueue.size();
 }
 
+
+std::shared_ptr<Transaction> TxPool::transactionInPool(h256 const& _txHash)
+{
+    auto p_tx = m_txsHash.find(_txHash);
+    if (p_tx == m_txsHash.end())
+        return nullptr;
+    return make_shared<Transaction>(*p_tx->second);
+}
+
 /// @returns the status of the transaction queue.
 TxPoolStatus TxPool::status() const
 {
@@ -326,5 +335,6 @@ void TxPool::clear()
     m_txsQueue.clear();
     m_txsHash.clear();
 }
+
 }  // namespace txpool
 }  // namespace dev
