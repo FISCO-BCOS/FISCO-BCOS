@@ -200,6 +200,7 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 /// sealing the generated block into prepareReq and push its to msgQueue
 void PBFTEngine::generatePrepare(Block& block)
 {
+    Guard l(m_mutex);
     PrepareReq prepare_req(block, m_keyPair, m_view, m_idx);
     PBFTMsgPacket pbft_msg;
     prepare_req.encode(pbft_msg.data);
@@ -207,6 +208,8 @@ void PBFTEngine::generatePrepare(Block& block)
     m_msgQueue.push(pbft_msg);
     /// broadcast the generated preparePacket
     broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(pbft_msg.data));
+    LOG(DEBUG) << "#### broadcast prepare, hash:" << prepare_req.sig.hex()
+               << ", height:" << prepare_req.height;
 }
 /**
  * @brief : 1. generate and broadcast signReq according to given prepareReq,
@@ -262,7 +265,7 @@ void PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 void PBFTEngine::broadcastViewChangeReq()
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
-
+    LOG(DEBUG) << "##### generate view_change_data, block_hash:" << m_highestBlock.hash();
     bytes view_change_data;
     req.encode(view_change_data);
     broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
@@ -283,10 +286,8 @@ void PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    LOG(DEBUG) << "#### getsessions, m_protocolId:" << m_protocolId;
     for (auto session : sessions)
     {
-        LOG(DEBUG) << "#### session.nodeID:" << toHex(session.nodeID);
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
             continue;
@@ -835,7 +836,6 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
     case PrepareReqPacket:
     {
-        LOG(DEBUG) << "#### Handle PrepareReqPacket";
         PrepareReq prepare_req;
         handlePrepareMsg(prepare_req, pbftMsg);
         key = prepare_req.block_hash.hex();

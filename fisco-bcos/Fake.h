@@ -52,7 +52,7 @@ public:
         BlockHeader blockHeader;
         blockHeader.setSealer(u256(1));
         blockHeader.setNumber(0);
-        blockHeader.setTimestamp(utcTime());
+        blockHeader.setTimestamp(0);
         Block block;
         blockHeader.encode(m_blockHeaderData);
         block.encode(m_blockData, ref(m_blockHeaderData));

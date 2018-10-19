@@ -193,8 +193,8 @@ bool TxPool::removeTrans(h256 const& _txHash)
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
     {
-        LOG(WARNING) << "txHash = " << toHex(_txHash)
-                     << " doesn't exist in the txpool, please check again";
+        /// LOG(WARNING) << "txHash = " << toHex(_txHash)
+        ///             << " doesn't exist in the txpool, please check again";
         return false;
     }
     m_txsHash.erase(p_tx);
