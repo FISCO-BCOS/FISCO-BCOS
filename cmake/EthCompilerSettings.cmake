@@ -40,13 +40,13 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 	add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
 	add_compile_options(-DELPP_THREAD_SAFE)
 	
-	#add_compile_options(-Wa,-march=generic64)
+	add_compile_options(-Wa,-march=generic64)
 	
 	if(STATIC_BUILD)
 		SET(BUILD_SHARED_LIBRARIES OFF)
-        SET(CMAKE_EXE_LINKER_FLAGS "-static")
-    endif ()
-
+		SET(CMAKE_EXE_LINKER_FLAGS "-static")
+	endif ()
+	
 	# Disable warnings about unknown pragmas (which is enabled by -Wall).
 	add_compile_options(-Wno-unknown-pragmas)
 
