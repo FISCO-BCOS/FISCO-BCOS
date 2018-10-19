@@ -398,10 +398,11 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 	}
 	}
 
-	bool time_flag = (pbft_msg.timestamp >= now_time) || (now_time - pbft_msg.timestamp < m_view_timeout);
+	//bool time_flag = (pbft_msg.timestamp >= now_time) || (now_time - pbft_msg.timestamp < m_view_timeout);
 	bool height_flag = (pbft_msg.height > m_highest_block.number()) || (m_highest_block.number() - pbft_msg.height < 10);
 	//LOG(TRACE) << "key=" << key << ",time_flag=" << time_flag << ",height_flag=" << height_flag;
-	if (key.size() > 0 && time_flag && height_flag) {
+	//if (key.size() > 0 && time_flag && height_flag) {
+	if (key.size() > 0 && height_flag) { // omit the time_flag due to unequal sysmtem timestamp between nodes
 		std::unordered_set<h512> filter;
 		filter.insert(_node);
 		h512 gen_node_id = h512(0);
