@@ -56,7 +56,7 @@ TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
     m_contractAddress(_other.contractAddress()),
     m_bloom(_other.bloom()),
     m_status(_other.status()),
-    m_outputBytes(_other.outputBytes())，
+    m_outputBytes(_other.outputBytes()),
     m_log(_other.log())
 {}
 
