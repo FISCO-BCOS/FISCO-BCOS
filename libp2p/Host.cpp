@@ -487,17 +487,6 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
         ps->start();
         m_sessions[node_id] = ps;
         /// update the staticNodes
-        /*NodeIPEndpoint endpoint(_s->remoteEndpoint().address(), _s->remoteEndpoint().port(),
-            _s->remoteEndpoint().port());
-        LOG(DEBUG) << "### ip:" << _s->remoteEndpoint().address().to_string()
-                   << ", port:" << _s->remoteEndpoint().port();
-        auto it = m_staticNodes.find(endpoint);
-        /// modify m_staticNodes(including accept cases, namely the client endpoint)
-        if (it != m_staticNodes.end())
-        {
-            LOG(DEBUG) << "### update m_session to2:" << toHex(node_id);
-            it->second = node_id;
-        }*/
         LOG(DEBUG) << "### ip:" << _s->remoteEndpoint().address().to_string()
                    << ", port:" << _s->remoteEndpoint().port();
         updateStaticNodes(_s, node_id);
