@@ -39,6 +39,7 @@ namespace p2p
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
+    ///< _p2pMsgHandler needs to be initialized before _host
     Service(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
       : m_host(_host), m_p2pMsgHandler(_p2pMsgHandler)
     {
