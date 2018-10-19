@@ -562,7 +562,7 @@ SessionInfos Service::sessionInfos() const
 SessionInfos Service::sessionInfosByProtocolID(int16_t _protocolID) const
 {
     std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(_protocolID);
-    std::string topic = toString(ret.first);
+    std::string topic = toString(int(ret.first));
     SessionInfos infos;
     try
     {
