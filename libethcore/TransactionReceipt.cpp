@@ -57,7 +57,7 @@ TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
     m_bloom(_other.bloom()),
     m_status(_other.status()),
     m_outputBytes(_other.outputBytes())，
-    m_log(_other.log()),
+    m_log(_other.log())
 {}
 
 void TransactionReceipt::streamRLP(RLPStream& _s) const
