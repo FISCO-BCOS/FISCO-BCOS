@@ -139,7 +139,7 @@ chmod a+x fisco-bcos
 git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git
 # 切换到源码根目录
 cd FISCO-BCOS 
-git checkout master-1.5
+git checkout prerelease-1.5
 ```
 
 源码目录说明请参考[附录：源码目录结构说明](#71-源码目录结构说明)
