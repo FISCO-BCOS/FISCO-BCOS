@@ -332,7 +332,7 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	}
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t length)
+void Session::onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> data)
 {
 	try
 	{
@@ -377,12 +377,14 @@ void Session::write()
 		if (m_dropped)
 			return;
 
+		auto data = std::make_shared<bytes>();
 		bytes const* out = nullptr;
 		u256 enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
 			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
 			out = &m_writeQueue[0];
+			data->assign(out->begin(), out->end());
 			enter_time = m_writeTimeQueue[0];
 		}
 		
@@ -393,16 +395,17 @@ void Session::write()
 		}
 
 		auto session = shared_from_this();
+		auto socket = m_socket;
 		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
 		{
 			if( m_socket->isConnected())
 			{
 				
 				m_server->getIOService()->post(
-					[ = ] {
-						boost::asio::async_write(m_socket->sslref(),
-						boost::asio::buffer(*out),
-						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+					[ socket, session, data  ] {
+						boost::asio::async_write(socket->sslref(),
+						boost::asio::buffer(*data),
+						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
 					});
 			}
 			else
@@ -414,7 +417,7 @@ void Session::write()
 		}
 		else
 		{
-			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
 		}
 		
 	}
