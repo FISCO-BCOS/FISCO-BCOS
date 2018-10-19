@@ -262,6 +262,7 @@ protected:  /// protected functions
     inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
 
     void sendTopicSeq();
+    void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId);
 
 protected:  /// protected members(for unit testing)
     /// values inited by contructor
