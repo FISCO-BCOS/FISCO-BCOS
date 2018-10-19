@@ -44,8 +44,6 @@ struct TimeManager
     static const unsigned kMaxChangeCycle = 20;
     static const unsigned CollectInterval = 60;
     float m_execTimePerTx = 0;
-    uint64_t m_leftTime;
-
     inline void initTimerManager(unsigned view_timeout)
     {
         m_lastExecFinishTime = m_lastExecBlockFiniTime = m_lastConsensusTime = utcTime();

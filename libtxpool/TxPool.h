@@ -115,6 +115,12 @@ public:
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
+    /// Register a handler that will be called once there is a new transaction imported
+    template <class T>
+    Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
 
 protected:
     /**
@@ -166,6 +172,9 @@ private:
     h256Hash m_known;
     /// hash of dropped transactions
     h256Hash m_dropped;
+    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
+    ///< nice and exit fast.
+    Signal<> m_onReady;
 };  // namespace txpool
 }  // namespace txpool
 }  // namespace dev

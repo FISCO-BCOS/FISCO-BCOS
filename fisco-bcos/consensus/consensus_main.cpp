@@ -107,8 +107,8 @@ static void startConsensus(Params& params)
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         std::pair<h256, Address> ret = txPool->submit(tx);
-        LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
-                  << ", size:" << txPool->pendingSize();
+        /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
+        ///          << ", size:" << txPool->pendingSize();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
