@@ -16,7 +16,7 @@ statedb_type=leveldb #存储
 eth_path=
 make_tar=
 Download=false
-Download_Link=https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev-1.5/bin/fisco-bcos
+Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0/fisco-bcos
 
 help() {
 	echo $1
@@ -90,7 +90,7 @@ fi
 
 if [ "${Download}" = "true" ];then
 	echo "Downloading fisco-bcos binary..." 
-	curl -o ${eth_path} ${Download_Link}
+	curl -Lo ${eth_path} ${Download_Link}
   chmod a+x ${eth_path}
 fi
 
