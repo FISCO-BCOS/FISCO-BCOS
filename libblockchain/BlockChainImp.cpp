@@ -198,6 +198,7 @@ void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext>)
     writeNumber(block);
     writeTxToBlock(block);
     writeBlockInfo(block);
+    m_onReady();
 }
 
 void BlockChainImp::setMemoryTableFactory(std::shared_ptr<MemoryTableFactory> memoryTableFactory)

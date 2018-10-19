@@ -45,6 +45,13 @@ public:
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
     virtual void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
+    template <class T>
+    dev::eth::Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
+
+    dev::eth::Signal<> m_onReady;
 };
 }  // namespace blockchain
 }  // namespace dev
