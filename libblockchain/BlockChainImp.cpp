@@ -80,8 +80,10 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
         {
             auto entry = entries->get(0);
             strblock = entry->getField(m_ValueName);
+            return std::make_shared<Block>(fromHex(strblock.c_str()));
         }
     }
+
     return std::make_shared<Block>(fromHex(strblock.c_str()));
 }
 
@@ -97,19 +99,10 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
         {
             auto entry = entries->get(0);
             numberHash = entry->getField(m_ValueName);
-            tb = m_memoryTableFactory->openTable(h256(), 0, m_hash2Block);
-            if (tb)
-            {
-                entries = tb->select(numberHash, tb->newCondition());
-                if (entries->size() > 0)
-                {
-                    entry = entries->get(0);
-                    strblock = entry->getField(m_ValueName);
-                }
-            }
+            return getBlockByHash(h256(numberHash));
         }
     }
-    return std::make_shared<Block>(fromHex(strblock.c_str()));
+    return std::make_shared<Block>();
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
@@ -127,13 +120,39 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             txIndex = entry->getField("index");
         }
     }
-    std::shared_ptr<Block> pblock = std::make_shared<Block>(fromHex(strblock.c_str()));
+
+    std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
     std::vector<Transaction> txs = pblock->transactions();
-    if (txs.size() >= lexical_cast<uint>(txIndex))
+    if (txs.size() > lexical_cast<uint>(txIndex))
     {
         return txs[lexical_cast<uint>(txIndex)];
     }
     return Transaction();
+}
+
+TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
+{
+    string strblock = "";
+    string txIndex = "";
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_txHash2Block);
+    if (tb)
+    {
+        auto entries = tb->select(_txHash.hex(), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            strblock = entry->getField(m_ValueName);
+            txIndex = entry->getField("index");
+        }
+    }
+
+    std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
+    std::vector<TransactionReceipt> receipts = pblock->transactionReceipts();
+    if (receipts.size() > lexical_cast<uint>(txIndex))
+    {
+        return receipts[lexical_cast<uint>(txIndex)];
+    }
+    return TransactionReceipt();
 }
 
 void BlockChainImp::writeNumber(const Block& block)
@@ -182,7 +201,7 @@ void BlockChainImp::writeHash2Block(Block& block)
         Entry::Ptr entry = std::make_shared<Entry>();
         bytes out;
         block.encode(out);
-        entry->setField(m_ValueName, std::string(out.begin(), out.end()));
+        entry->setField(m_ValueName, toHexPrefixed(out));
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
 }

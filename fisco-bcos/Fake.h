@@ -72,6 +72,10 @@ public:
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
+    {
+        return TransactionReceipt();
+    }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
     {
