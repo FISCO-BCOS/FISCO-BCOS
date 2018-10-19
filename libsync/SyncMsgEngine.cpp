@@ -82,14 +82,23 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
     return true;
 }
 
-void onPeerTransactions(SyncMsgPacket const& _packet)
+void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 {
-    /*
-    RLP const& r = _packet.rlp();
-    unsigned itemCount = r.itemCount();
-    LOG(TRACE) << "Transactions (" << dec << itemCount << "entries)";
-    // TODO m_txPool.enqueue(r, _peer->id());
-    */
+    RLP const& rlps = _packet.rlp();
+    unsigned itemCount = rlps.itemCount();
 
-    // TODO To add from nodeid into transactions tx.addImportPeer
+    for (unsigned i = 0; i < itemCount; ++i)
+    {
+        Transaction tx;
+        tx.decode(rlps[i]);
+
+        if (ImportResult::Success == m_txPool->import(tx))
+        {
+            LOG(TRACE) << "Import transaction " << tx.sha3() << " from peer " << _packet.nodeId;
+        }
+
+        shared_ptr<Transaction> p_tx = m_txPool->transactionInPool(tx.sha3());
+        if (p_tx != nullptr)
+            p_tx->addImportPeer(_packet.nodeId);
+    }
 }

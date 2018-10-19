@@ -50,7 +50,7 @@ public:
     /// Generate p2p message after encode
     dev::p2p::Message::Ptr toMessage(uint16_t _protocolId);
 
-    RLP const& rlp() { return m_rlp; }
+    RLP const& rlp() const { return m_rlp; }
 
 protected:
     RLP m_rlp;              /// The result of decode
