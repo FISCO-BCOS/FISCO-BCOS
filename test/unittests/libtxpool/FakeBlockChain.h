@@ -124,6 +124,10 @@ public:
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
+    {
+        return TransactionReceipt();
+    }
 
     virtual void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
