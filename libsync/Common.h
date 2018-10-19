@@ -36,8 +36,11 @@ namespace dev
 {
 namespace sync
 {
+static unsigned const c_maxSendTransactions = 10;
+
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;
+using NodeIDs = std::vector<dev::p2p::NodeID>;
 
 enum SyncPacketType : byte
 {
@@ -62,7 +65,7 @@ enum class SyncState
 
 struct NodeInfo
 {
-    NodeID id;
+    NodeID nodeId;
     int64_t number;
     h256 genesisHash;
     h256 latestHash;

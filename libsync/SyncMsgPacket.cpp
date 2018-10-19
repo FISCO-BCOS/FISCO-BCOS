@@ -76,3 +76,9 @@ void SyncStatusPacket::encode(h256 const& _latestHash, h256 const& _genesisHash,
     m_rlpStream.clear();
     prep(m_rlpStream, StatusPacket, 6) << _latestHash << _genesisHash << _number;
 }
+
+void SyncTransactionsPacket::encode(unsigned _txNumber, bytes const& _txRLPs)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, TransactionsPacket, _txNumber).appendRaw(_txRLPs, txNumber);
+}

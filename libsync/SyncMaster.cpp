@@ -92,5 +92,44 @@ bool SyncMaster::isSyncing() const
 
 void SyncMaster::maintainTransactions()
 {
-    // cout << "maintain transactions" << endl;
+    unordered_map<NodeID, std::vector<size_t>> peerTransactions;
+
+    auto ts = m_txPool->topTransactions(c_maxSendTransactions, m_syncStatus->transactionsSent);
+    {
+        Guard l(x_transactions);
+        for (size_t i = 0; i < ts.size(); ++i)
+        {
+            auto const& t = ts[i];
+            NodeIDs peers;
+            unsigned _percent = t.hasImportPeers() ? 25 : 100;
+
+            peers = m_syncStatus->randomSelection(_percent,
+                [&](std::shared_ptr<SyncPeerStatus> _p) { return !t.hasImportPeer(_p->nodeId); });
+
+            for (auto const& p : peers)
+                peerTransactions[p].push_back(i);
+
+            if (!peers.empty())
+                m_syncStatus->transactionsSent.insert(t.sha3());
+        }
+    }
+
+    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        bytes txRLPs;
+        unsigned txNumber = peerTransactions[_p->nodeId].size();
+        if (0 == txNumber)
+            return true;  // No need to send
+
+        for (auto const& i : peerTransactions[_p->nodeId])
+            txRLPs += ts[i].rlp();
+
+        SyncTransactionsPacket packet;
+        packet.encode(txNumber, txRLPs);
+
+        m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
+
+        LOG(TRACE) << "Sent" << int(txNumber) << "transactions to " << _p->nodeId;
+
+        return true;
+    });
 }

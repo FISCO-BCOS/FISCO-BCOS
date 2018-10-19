@@ -57,11 +57,12 @@ public:
         SyncInterface(),
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
     {
-        m_status = std::make_shared<SyncMasterStatus>();
-        m_msgEngine = std::make_shared<SyncMsgEngine>(_txPool, _blockChain, m_status);
+        m_syncStatus = std::make_shared<SyncMasterStatus>();
+        m_msgEngine = std::make_shared<SyncMsgEngine>(_txPool, _blockChain, m_syncStatus);
 
         // signal registration
         // txPool.onReady([=]() { this->noteNewTransactions(); });
+        // txPool.onCommit()XXXX
         // m_blockChain.onReady([=]() { this->noteNewBlocks(); });
     }
 
@@ -112,7 +113,7 @@ private:
     /// handler of the block chain module
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     /// Block queue and peers
-    std::shared_ptr<SyncMasterStatus> m_status;
+    std::shared_ptr<SyncMasterStatus> m_syncStatus;
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
@@ -126,6 +127,7 @@ private:
     // Internal coding variable
     /// mutex
     mutable RecursiveMutex x_sync;
+    mutable Mutex x_transactions;
     /// mutex to access m_signalled
     Mutex x_signalled;
     /// signal to notify all thread to work

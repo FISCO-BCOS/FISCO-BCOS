@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/SHA3.h>
 #include <libdevcrypto/Common.h>
@@ -172,6 +173,15 @@ public:
     /// @returns the latest block number to be packaged for transaction.
     u256 blockLimit() const { return m_blockLimit; }
 
+    /// @return true if comes from Client, false comes from p2p
+    bool hasImportPeers() const { return !m_fromPeers.empty(); }
+
+    /// @return true if this node has received this tx comes from the _peer
+    bool hasImportPeer(h512 const& _peer) const { return !!m_fromPeers.count(_peer); }
+
+    /// Add the peer where this transaction comes from
+    void addImportPeer(h512 const& _peer) { m_fromPeers.insert(_peer); }
+
     /// @returns the utc time at which a transaction enters the queue.
     u256 importTime() const { return m_importTime; }
 
@@ -236,6 +246,8 @@ protected:
     mutable Address m_sender;                ///< Cached sender, determined from signature.
     u256 m_blockLimit;      ///< The latest block number to be packaged for transaction.
     u256 m_importTime = 0;  ///< The utc time at which a transaction enters the queue.
+
+    std::set<h512> m_fromPeers;  ///< Record the peers where the transaction comes from
 };
 
 /// Nice name for vector of Transaction.

@@ -90,4 +90,6 @@ void onPeerTransactions(SyncMsgPacket const& _packet)
     LOG(TRACE) << "Transactions (" << dec << itemCount << "entries)";
     // TODO m_txPool.enqueue(r, _peer->id());
     */
+
+    // TODO To add from nodeid into transactions tx.addImportPeer
 }

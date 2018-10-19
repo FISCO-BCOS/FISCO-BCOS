@@ -33,8 +33,8 @@ using namespace dev::txpool;
 
 bool SyncMasterStatus::hasPeer(NodeID const& _id)
 {
-    auto peer = m_peersData.find(_id);
-    return peer != m_peersData.end();
+    auto peer = m_peersStatus.find(_id);
+    return peer != m_peersStatus.end();
 }
 
 bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
@@ -48,7 +48,7 @@ bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
     try
     {
         shared_ptr<SyncPeerStatus> peer = make_shared<SyncPeerStatus>(_info);
-        m_peersData.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->id(), peer));
+        m_peersStatus.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->id(), peer));
     }
     catch (Exception const& e)
     {
@@ -60,8 +60,8 @@ bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
 
 std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerData(NodeID const& _id)
 {
-    auto peer = m_peersData.find(_id);
-    if (peer == m_peersData.end())
+    auto peer = m_peersStatus.find(_id);
+    if (peer == m_peersStatus.end())
     {
         LOG(WARNING) << "Peer data not found at id: " << _id;
         return nullptr;
@@ -72,9 +72,37 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerData(NodeID const& _id)
 void SyncMasterStatus::foreachPeer(
     std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const
 {
-    for (auto& peer : m_peersData)
+    for (auto& peer : m_peersStatus)
     {
         if (!_f(peer.second))
             break;
     }
+}
+
+NodeIDs SyncMasterStatus::randomSelection(
+    unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
+{
+    NodeIDs chosen;
+    NodeIDs allowed;
+
+    size_t peerCount = 0;
+    foreachPeer([&](std::shared_ptr<SyncPeerStatus> _p) {
+        if (_allow(_p))
+        {
+            allowed.push_back(_p->id());
+        }
+        ++peerCount;
+        return true;
+    });
+
+    // TODO optimize it by swap (no need two vectors)
+    size_t chosenSize = (peerCount * _percent + 99) / 100;
+    chosen.reserve(chosenSize);
+    for (unsigned i = chosenSize; i && allowed.size(); i--)
+    {
+        unsigned n = rand() % allowed.size();
+        chosen.push_back(std::move(allowed[n]));
+        allowed.erase(allowed.begin() + n);
+    }
+    return move(chosen);
 }

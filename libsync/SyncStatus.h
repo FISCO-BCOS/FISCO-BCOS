@@ -64,26 +64,21 @@ class SyncPeerStatus
 {
 public:
     SyncPeerStatus(
-        NodeID const& _id, int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
-      : m_id(_id), m_number(_number), m_genesisHash(_genesisHash), m_latestHash(_latestHash)
+        NodeID const& _nodeId, int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
+      : nodeId(_nodeId), number(_number), genesisHash(_genesisHash), latestHash(_latestHash)
     {}
     SyncPeerStatus(const NodeInfo& _info)
-      : m_id(_info.id),
-        m_number(_info.number),
-        m_genesisHash(_info.genesisHash),
-        m_latestHash(_info.latestHash)
+      : nodeId(_info.nodeId),
+        number(_info.number),
+        genesisHash(_info.genesisHash),
+        latestHash(_info.latestHash)
     {}
 
-    NodeID id() { return m_id; };
-    int64_t number() { return m_number; };
-    h256 genesisHash() { return m_genesisHash; };
-    h256 latestHash() { return m_latestHash; };
-
-private:
-    NodeID m_id;
-    int64_t m_number;
-    h256 m_genesisHash;
-    h256 m_latestHash;
+public:
+    NodeID nodeId;
+    int64_t number;
+    h256 genesisHash;
+    h256 latestHash;
 };
 
 class SyncMasterStatus
@@ -95,8 +90,15 @@ public:
 
     void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 
+    /// Select some peers at _percent when _allow(peer)
+    NodeIDs randomSelection(
+        unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
+
+public:
+    h256Hash transactionsSent;
+
 private:
-    std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersData;
+    std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
     std::priority_queue<std::shared_ptr<dev::eth::Block>,
         std::vector<std::shared_ptr<dev::eth::Block>>, DownloadingBlockQueuePiority>
         m_downloadingBlockQueue;

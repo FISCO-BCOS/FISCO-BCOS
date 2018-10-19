@@ -23,6 +23,7 @@
 
 #pragma once
 #include "Common.h"
+#include "SyncMsgPacket.h"
 #include <libdevcore/RLP.h>
 #include <libp2p/Common.h>
 #include <libp2p/Session.h>
@@ -62,8 +63,16 @@ private:
 
 class SyncStatusPacket : public SyncMsgPacket
 {
+public:
     SyncStatusPacket() { packetType = StatusPacket; }
     void encode(h256 const& _latestHash, h256 const& _genesisHash, int64_t _number);
+};
+
+class SyncTransactionsPacket : public SyncMsgPacket
+{
+public:
+    SyncTransactionsPacket() { packetType = TransactionsPacket; }
+    void encode(unsigned txNumber, bytes const& txRLPs);
 };
 
 }  // namespace sync
