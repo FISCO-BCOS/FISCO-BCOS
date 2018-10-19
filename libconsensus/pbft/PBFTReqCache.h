@@ -87,7 +87,6 @@ public:
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
     PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
     inline PrepareReq const& futurePrepareCache() { return m_futurePrepareCache; }
-
     /// add specified raw-prepare-request into the raw-prepare-cache
     /// reset the prepare-cache
     inline void addRawPrepare(PrepareReq const& req)
@@ -103,7 +102,6 @@ public:
     /// specified prepare-request from the sign-cache and commit-cache
     inline void addPrepareReq(PrepareReq const& req)
     {
-        std::cout << "### view of PrepareReq:" << req.view << std::endl;
         m_prepareCache = req;
         removeInvalidSignCache(req.block_hash, req.view);
         removeInvalidCommitCache(req.block_hash, req.view);
@@ -167,12 +165,17 @@ public:
     {
         removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
     }
-    inline void clearAll()
+    inline void clearAllExceptCommitCache()
     {
         m_prepareCache.clear();
-        m_rawPrepareCache.clear();
         m_signCache.clear();
         m_recvViewChangeReq.clear();
+    }
+
+    inline void clearAll()
+    {
+        m_rawPrepareCache.clear();
+        clearAllExceptCommitCache();
         m_commitCache.clear();
     }
     void resetFuturePrepare() { m_futurePrepareCache = PrepareReq(); }
@@ -184,6 +187,10 @@ public:
     std::unordered_map<h256, std::unordered_map<std::string, CommitReq>>& mutableCommitCache()
     {
         return m_commitCache;
+    }
+    std::unordered_map<u256, std::unordered_map<u256, ViewChangeReq>>& mutableViewChangeCache()
+    {
+        return m_recvViewChangeReq;
     }
 
 private:

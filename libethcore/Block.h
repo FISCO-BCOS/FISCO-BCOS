@@ -42,7 +42,7 @@ public:
     Block(Block const& _block);
     /// assignment operator
     Block& operator=(Block const& _block);
-    ~Block() { resetCurrentBlock(); }
+    ~Block() {}
     ///-----opearator overloads of Block
     /// operator ==
     bool equalAll(Block const& _block) const
@@ -62,11 +62,11 @@ public:
     explicit operator bool() const { return bool(m_blockHeader); }
 
     ///-----encode functions
-    void encode(
-        bytes& _out, bytesConstRef _header, std::vector<std::pair<u256, Signature>>& sig_list);
-    void encode(bytes& _out, bytesConstRef _header) { encode(_out, _header, m_sigList); }
-    void encode(bytes& _out, std::vector<std::pair<u256, Signature>>& sig_list);
-    void encode(bytes& _out) { encode(_out, m_sigList); }
+    void encode(bytes& _out, bytesConstRef _header,
+        std::vector<std::pair<u256, Signature>> const& sig_list) const;
+    void encode(bytes& _out, bytesConstRef _header) const { encode(_out, _header, m_sigList); }
+    void encode(bytes& _out, std::vector<std::pair<u256, Signature>> const& sig_list) const;
+    void encode(bytes& _out) const { encode(_out, m_sigList); }
 
     ///-----decode functions
     void decode(bytesConstRef _block);
@@ -124,9 +124,9 @@ public:
         return m_txsRoot;
     }
 
-    void resetCurrentBlock()
+    void resetCurrentBlock(BlockHeader& _parent)
     {
-        m_blockHeader = BlockHeader();
+        m_blockHeader.populateFromParent(_parent);
         m_transactions.clear();
         m_transactionReceipts.clear();
         m_sigList.clear();
@@ -143,7 +143,7 @@ public:
 private:
     /// encode function
     inline void encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
-        std::vector<std::pair<u256, Signature>>& sig_list);
+        std::vector<std::pair<u256, Signature>> const& sig_list) const;
     /// callback this function when transaction has changed
     void noteChange()
     {
@@ -152,7 +152,7 @@ private:
         m_txsMapCache = BytesMap();
     }
 
-    bytes const& encodeTransactions();
+    bytes const& encodeTransactions() const;
 
 private:
     /// block header of the block (field 0)
@@ -168,11 +168,11 @@ private:
     bytes m_currentBytes;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
-    bytes m_txsCache;
+    mutable bytes m_txsCache;
     /// mutable RecursiveMutex m_txsCacheLock;
     TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
-    BytesMap m_txsMapCache;
-    h256 m_txsRoot;
+    mutable BytesMap m_txsMapCache;
+    mutable h256 m_txsRoot;
 };
 }  // namespace eth
 }  // namespace dev
