@@ -390,11 +390,13 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     LOG(TRACE) << "start exec tx, blk=" << req.height
                << ", hash = " << working_block.header().hash().abridged() << ", idx = " << req.idx
                << ", time =" << utcTime();
+    auto start_exec_time = utcTime();
     checkBlockValid(working_block);
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     m_timeManager.m_lastExecBlockFiniTime = utcTime();
-    m_timeManager.m_lastExecFinishTime = utcTime();
+    /// m_timeManager.m_lastExecFinishTime = utcTime();
+    m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
 }
 
 /// check whether the block is empty
@@ -555,8 +557,6 @@ void PBFTEngine::checkAndSave()
             /// drop handled transactions
             dropHandledTransactions(block);
             LOG(DEBUG) << "### REPORT BLOCK";
-            /// report block
-            reportBlock(block.blockHeader());
         }
         else
         {
@@ -574,6 +574,7 @@ void PBFTEngine::checkAndSave()
 /// 5. clear all caches related to prepareReq and signReq
 void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
 {
+    Guard l(m_mutex);
     /// update the highest block
     m_highestBlock = blockHeader;
     if (m_highestBlock.number() >= m_consensusBlockNumber)

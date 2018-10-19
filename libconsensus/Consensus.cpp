@@ -40,8 +40,7 @@ void Consensus::start()
         return;
     }
     resetSealingBlock();
-    m_consensusEngine->reportBlock(
-        m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+    m_syncBlock = true;
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     m_startConsensus = true;
@@ -49,6 +48,7 @@ void Consensus::start()
 
 bool Consensus::shouldSeal()
 {
+    reportNewBlock();
     bool sealed;
     DEV_READ_GUARDED(x_sealing)
     sealed = m_sealing.block.isSealed();
@@ -56,9 +56,28 @@ bool Consensus::shouldSeal()
             m_consensusEngine->accountType() == NodeAccountType::MinerAccount && !isBlockSyncing());
 }
 
+void Consensus::reportNewBlock()
+{
+    bool t = true;
+    if (m_syncBlock.compare_exchange_strong(t, false))
+    {
+        /// LOG(DEBUG)<<"#### reportNewBlock compare_exchange_strong";
+        DEV_WRITE_GUARDED(x_sealing)
+        {
+            m_consensusEngine->reportBlock(
+                m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+            if (m_sealing.block.isSealed() &&
+                m_sealing.block.blockHeader().number() <= m_blockChain->number())
+            {
+                resetSealingBlock();
+            }
+        }
+    }
+}
+
 bool Consensus::shouldWait(bool const& wait) const
 {
-    return !m_syncTxPool && (wait || m_sealing.block.isSealed());
+    return !m_syncBlock && wait;
 }
 
 void Consensus::doWork(bool wait)
@@ -88,21 +107,14 @@ void Consensus::doWork(bool wait)
                     return;
                 }
                 handleBlock();
-                resetSealingBlock();
-                m_syncTxPool = true;
                 /// wait for 1s even the block has been sealed
-                if (shouldWait(wait))
-                {
-                    std::unique_lock<std::mutex> l(x_signalled);
-                    m_signalled.wait_for(l, std::chrono::milliseconds(1));
-                }
             }
         }
     }
-    else
+    if (shouldWait(wait))
     {
         std::unique_lock<std::mutex> l(x_signalled);
-        m_signalled.wait_for(l, std::chrono::milliseconds(5));
+        m_signalled.wait_for(l, std::chrono::milliseconds(1));
     }
 }
 

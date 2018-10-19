@@ -80,6 +80,17 @@ public:
 
     /// protocol id used when register handler to p2p module
     virtual int16_t const& getProtocolId() const = 0;
+    /// Register a handler that will be called once there is a new transaction imported
+    template <class T>
+    dev::eth::Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
+
+protected:
+    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
+    ///< nice and exit fast.
+    dev::eth::Signal<> m_onReady;
 };
 }  // namespace txpool
 }  // namespace dev

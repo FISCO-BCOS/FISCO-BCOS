@@ -58,10 +58,9 @@ public:
         m_consensusEngine(_consensusEngine)
     {
         assert(m_txPool && m_blockSync && m_blockChain);
-        dev::txpool::TxPool* txPool = dynamic_cast<dev::txpool::TxPool*>(m_txPool.get());
-        assert(txPool);
         /// register a handler to be called once new transactions imported
-        m_tqReady = txPool->onReady([=]() { this->onTransactionQueueReady(); });
+        m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
+        m_blockSubmitted = m_blockChain->onReady([=]() { this->onBlockChanged(); });
     }
 
     virtual ~Consensus() noexcept { stop(); }
@@ -75,6 +74,8 @@ public:
         m_syncTxPool = true;
         m_signalled.notify_all();
     }
+    virtual void onBlockChanged() { m_syncBlock = true; }
+
     /// set the max number of transactions in a block
     void setMaxBlockTransactions(uint64_t const& _maxBlockTransactions)
     {
@@ -86,6 +87,7 @@ public:
     std::vector<bytes> const& extraData() const { return m_extraData; }
 
 protected:
+    void reportNewBlock();
     /// sealing block
     virtual bool shouldSeal();
     virtual bool shouldWait(bool const& wait) const;
@@ -144,11 +146,14 @@ protected:
     std::vector<bytes> m_extraData;
 
     /// atomic value represents that whether is calling syncTransactionQueue now
-    std::atomic<bool> m_syncTxPool = {false};
     /// signal to notify all thread to work
     std::condition_variable m_signalled;
     /// mutex to access m_signalled
     Mutex x_signalled;
+    std::atomic<bool> m_syncTxPool = {false};
+    /// a new block has been submitted to the blockchain
+    std::atomic<bool> m_syncBlock = {false};
+
     ///< Has the remote worker recently been reset?
     bool m_remoteWorking = false;
     /// True if we /should/ be sealing.
@@ -156,6 +161,7 @@ protected:
 
     /// handler
     Handler<> m_tqReady;
+    Handler<> m_blockSubmitted;
 };
 }  // namespace consensus
 }  // namespace dev
