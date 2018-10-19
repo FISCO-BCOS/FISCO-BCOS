@@ -39,16 +39,16 @@ bool SyncMasterStatus::hasPeer(NodeID const& _id)
 
 bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
 {
-    if (hasPeer(_info.id))
+    if (hasPeer(_info.nodeId))
     {
-        LOG(WARNING) << "Peer " << _info.id << " is exist, no need to create.";
+        LOG(WARNING) << "Peer " << _info.nodeId << " is exist, no need to create.";
         return false;
     }
 
     try
     {
         shared_ptr<SyncPeerStatus> peer = make_shared<SyncPeerStatus>(_info);
-        m_peersStatus.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->id(), peer));
+        m_peersStatus.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->nodeId, peer));
     }
     catch (Exception const& e)
     {
@@ -89,7 +89,7 @@ NodeIDs SyncMasterStatus::randomSelection(
     foreachPeer([&](std::shared_ptr<SyncPeerStatus> _p) {
         if (_allow(_p))
         {
-            allowed.push_back(_p->id());
+            allowed.push_back(_p->nodeId);
         }
         ++peerCount;
         return true;

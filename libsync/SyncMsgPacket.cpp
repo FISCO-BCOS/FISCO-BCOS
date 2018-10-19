@@ -80,5 +80,5 @@ void SyncStatusPacket::encode(h256 const& _latestHash, h256 const& _genesisHash,
 void SyncTransactionsPacket::encode(unsigned _txNumber, bytes const& _txRLPs)
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, TransactionsPacket, _txNumber).appendRaw(_txRLPs, txNumber);
+    prep(m_rlpStream, TransactionsPacket, _txNumber).appendRaw(_txRLPs, _txNumber);
 }
