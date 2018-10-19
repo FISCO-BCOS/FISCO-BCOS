@@ -80,6 +80,11 @@ public:
 
     /// protocol id used when register handler to p2p module
     virtual int16_t const& getProtocolId() const = 0;
+
+    virtual std::shared_ptr<dev::eth::Transaction> transactionInPool(h256 const& _txHash)
+    {
+        return nullptr;
+    };
 };
 }  // namespace txpool
 }  // namespace dev
