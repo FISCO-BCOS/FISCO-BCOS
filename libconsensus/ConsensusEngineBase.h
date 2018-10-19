@@ -101,10 +101,10 @@ public:
     }
 
     u256 minValidNodes() const { return m_nodeNum - m_f; }
-
-protected:
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::BlockHeader const& blockHeader) {}
+
+protected:
     virtual void resetConfig() { m_nodeNum = u256(m_minerList.size()); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
     /// get the node id of specified miner according to its index
