@@ -68,6 +68,7 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     {
         return make_pair(_tx.sha3(), Address(2));
     }
+    m_onReady();
     return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
 }
 
@@ -101,7 +102,7 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
  */
 ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
 {
-    _tx.setImportTime(utcTime());
+    _tx.setImportTime(u256(utcTime()));
     UpgradableGuard l(m_lock);
     ImportResult verify_ret = verify(_tx);
     if (verify_ret == ImportResult::Success)
@@ -113,6 +114,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
         {
             removeOutOfBound(m_txsQueue.rbegin()->sha3());
         }
+        m_onReady();
     }
     return verify_ret;
 }
@@ -192,8 +194,8 @@ bool TxPool::removeTrans(h256 const& _txHash)
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
     {
-        LOG(WARNING) << "txHash = " << toHex(_txHash)
-                     << " doesn't exist in the txpool, please check again";
+        /// LOG(WARNING) << "txHash = " << toHex(_txHash)
+        ///             << " doesn't exist in the txpool, please check again";
         return false;
     }
     m_txsHash.erase(p_tx);
