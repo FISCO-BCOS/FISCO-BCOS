@@ -67,12 +67,13 @@ protected:
     virtual ~Worker() { terminate(); }
 
     /// Allows changing worker name if work is stopped.
-    void setName(std::string _n)
+    void setName(std::string const& _n)
     {
         if (!isWorking())
             m_name = _n;
     }
 
+    std::string const& name() const { return m_name; }
     /// Starts worker thread; causes startedWorking() to be called.
     void startWorking();
 

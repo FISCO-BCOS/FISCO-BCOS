@@ -86,7 +86,7 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_asioInterface(_asioInterface),
     m_socketFactory(_socketFactory),
     m_sessionFactory(_sessionFactory),
-    m_lastSendTopicSeq(chrono::steady_clock::time_point::min()),
+    m_lastSendTopicSeq(std::chrono::milliseconds(0)),
     m_topicSeq(0)
 {
     LOG(INFO) << "Id:" << id();
@@ -114,6 +114,8 @@ void Host::start()
     /// network start successfully
     if (isWorking())
         return;
+    /// set the thread pool for the session
+    m_threadPool = std::make_shared<dev::ThreadPool>("SessionCallBackThreadPool", 8);
     /// network start failed
     LOG(WARNING) << "Network start failed!";
     /// clean resources (include both network, socket resources) when stop working
@@ -481,6 +483,7 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             ps->disconnect(TooManyPeers);
             return;
         }
+        ps->setThreadPool(m_threadPool);
         /// set P2PMsgHandler to session before start session
         ps->setP2PMsgHandler(m_p2pMsgHandler);
         /// start session and modify m_sessions
@@ -488,12 +491,12 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
         m_sessions[node_id] = ps;
         /// update the staticNodes
         LOG(DEBUG) << "### ip:" << _s->remoteEndpoint().address().to_string()
-                   << ", port:" << _s->remoteEndpoint().port();
+                   << ", port:" << _s->remoteEndpoint().port() << " , node_id" << node_id;
         updateStaticNodes(_s, node_id);
     }
     LOG(INFO) << "start a new peer: " << node_id;
     /// trigger send topic seq after starting a new peer
-    m_lastSendTopicSeq = chrono::steady_clock::time_point::min();
+    /// m_lastSendTopicSeq = chrono::steady_clock::time_point::min();
 }
 
 /**
@@ -645,7 +648,6 @@ void Host::sendTopicSeq()
         for (auto const& i : sessions())
             i.second->send(msgBuf);
     }
-
     m_lastSendTopicSeq = chrono::steady_clock::now();
 }
 

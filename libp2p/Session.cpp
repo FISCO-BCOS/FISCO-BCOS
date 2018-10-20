@@ -109,7 +109,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     bool doWrite = false;
     DEV_GUARDED(x_framing)
     {
-        m_writeQueue.push(make_pair(_msg, utcTime()));
+        m_writeQueue.push(make_pair(_msg, u256(utcTime())));
         doWrite = (m_writeQueue.size() == 1);
     }
     if (doWrite)
@@ -158,7 +158,7 @@ void Session::write()
     try
     {
         std::pair<std::shared_ptr<bytes>, u256> task;
-        u256 enter_time = 0;
+        u256 enter_time = u256(0);
         DEV_GUARDED(x_framing)
         {
             task = m_writeQueue.top();
@@ -218,8 +218,11 @@ void Session::drop(DisconnectReason _reason)
             ///< TODO: use threadPool
             P2PException e(
                 P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
-            it.second->callbackFunc(e, Message::Ptr());
-            eraseCallbackBySeq(it.first);
+            /// it.second->callbackFunc(e, Message::Ptr());
+            m_threadPool->enqueue([=]() {
+                it.second->callbackFunc(e, Message::Ptr());
+                eraseCallbackBySeq(it.first);
+            });
         }
     }
 

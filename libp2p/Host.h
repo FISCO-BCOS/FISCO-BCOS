@@ -31,6 +31,7 @@
 #include "SessionFace.h"
 #include "Socket.h"
 #include <libdevcore/Guards.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/ECDHE.h>
@@ -85,6 +86,7 @@ public:
     size_t peerCount() const;
     /// get session map
     std::unordered_map<NodeID, std::shared_ptr<SessionFace>>& sessions() { return m_sessions; }
+
     /// get mutex of sessions
     RecursiveMutex& mutexSessions() { return x_sessions; }
     /// get m_staticNodes
@@ -215,6 +217,7 @@ public:
         m_topics = _topics;
         m_topicSeq++;
     }
+
     std::shared_ptr<std::vector<std::string>> topics() const { return m_topics; };
     uint32_t topicSeq() const { return m_topicSeq; }
 
@@ -335,6 +338,7 @@ protected:  /// protected members(for unit testing)
     ///< m_topicSeq.
     uint32_t m_topicSeq;
 
+    std::shared_ptr<dev::ThreadPool> m_threadPool;
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;
 };

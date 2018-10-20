@@ -21,6 +21,7 @@
  * @date 2018-09-10
  */
 #pragma once
+#include <libdevcore/ThreadPool.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
@@ -51,6 +52,8 @@ public:
         m_start = true;
         m_disconnect = false;
     }
+
+    void setThreadPool(std::shared_ptr<dev::ThreadPool> thread) {}
     void disconnect(DisconnectReason _reason) { m_disconnect = true; }
     bool isConnected() const { return !m_disconnect; }
     NodeID id() const { return NodeID(m_peer->id()); }
