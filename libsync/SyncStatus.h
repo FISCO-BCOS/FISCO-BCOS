@@ -21,6 +21,7 @@
  */
 #pragma once
 #include "Common.h"
+#include "DownloadingBlockQueue.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -31,6 +32,7 @@
 #include <libtxpool/TxPoolInterface.h>
 #include <map>
 #include <queue>
+#include <set>
 #include <vector>
 
 
@@ -38,18 +40,6 @@ namespace dev
 {
 namespace sync
 {
-class DownloadingBlockQueuePiority
-{
-public:
-    bool operator()(
-        const std::shared_ptr<dev::eth::Block>& left, const std::shared_ptr<dev::eth::Block>& right)
-    {
-        if (!left || !right)
-            BOOST_THROW_EXCEPTION(dev::eth::InvalidBlockDownloadQueuePiorityInput());
-        return left->header().number() > right->header().number();
-    }
-};
-
 struct SyncStatus
 {
     SyncState state = SyncState::Idle;
@@ -105,9 +95,9 @@ public:
 private:
     mutable Mutex x_peerStatus;
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
-    std::priority_queue<std::shared_ptr<dev::eth::Block>,
-        std::vector<std::shared_ptr<dev::eth::Block>>, DownloadingBlockQueuePiority>
-        m_downloadingBlockQueue;
+
+    mutable Mutex x_downloadingBlockQueue;
+    DownloadingBlockQueue m_downloadingBlockQueue;
 };
 
 }  // namespace sync
