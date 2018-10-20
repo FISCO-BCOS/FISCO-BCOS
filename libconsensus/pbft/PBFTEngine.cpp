@@ -67,10 +67,11 @@ bool PBFTEngine::shouldSeal()
     if (ret.second != m_idx)
     {
         /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
-        /// isnot connect to leader.
+        /// is not connect to leader.
         h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
         if (node_id != h512() && !m_service->isConnected(node_id))
         {
+            LOG(DEBUG) << "To notify all";
             m_timeManager.m_lastConsensusTime = 0;
             m_timeManager.m_lastSignTime = 0;
             m_signalled.notify_all();
@@ -198,31 +199,46 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
-void PBFTEngine::generatePrepare(Block& block)
+bool PBFTEngine::generatePrepare(Block& block)
 {
+    /// Guard l(m_mutex);
+    /* if(block.getTransactionSize() == 0 && m_omitEmptyBlock)
+    {
+        m_timeManager.changeView();
+        m_leaderFailed = true;
+        m_signalled.notify_all();
+    }*/
     Guard l(m_mutex);
     PrepareReq prepare_req(block, m_keyPair, m_view, m_idx);
     PBFTMsgPacket pbft_msg;
+    bytes prepare_data;
     prepare_req.encode(pbft_msg.data);
     pbft_msg.packet_id = PrepareReqPacket;
-    m_msgQueue.push(pbft_msg);
     /// broadcast the generated preparePacket
-    broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(pbft_msg.data));
-    LOG(DEBUG) << "#### broadcast prepare, hash:" << prepare_req.sig.hex()
-               << ", height:" << prepare_req.height;
+    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(pbft_msg.data));
+    if (succ)
+    {
+        handlePrepareMsg(prepare_req);
+    }
+    /// m_msgQueue.push(pbft_msg);
+    LOG(DEBUG) << "#### broadcast-local-prepare, succ=" << succ
+               << ", hash:" << prepare_req.sig.hex() << ", height:" << prepare_req.height;
+    return succ;
 }
 /**
  * @brief : 1. generate and broadcast signReq according to given prepareReq,
  *          2. add the generated signReq into the cache
  * @param req: specified PrepareReq used to generate signReq
  */
-void PBFTEngine::broadcastSignReq(PrepareReq const& req)
+bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
 {
     SignReq sign_req(req, m_keyPair, m_idx);
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
-    broadcastMsg(SignReqPacket, sign_req.sig.hex(), ref(sign_req_data));
-    m_reqCache->addSignReq(sign_req);
+    bool succ = broadcastMsg(SignReqPacket, sign_req.sig.hex(), ref(sign_req_data));
+    if (succ)
+        m_reqCache->addSignReq(sign_req);
+    return succ;
 }
 
 bool PBFTEngine::getNodeIDByIndex(h512& nodeID, const u256& idx) const
@@ -253,22 +269,24 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
  *         2. broadcast the commitReq
  * @param req: the prepareReq that used to generate commitReq
  */
-void PBFTEngine::broadcastCommitReq(PrepareReq const& req)
+bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 {
     CommitReq commit_req(req, m_keyPair, m_idx);
     bytes commit_req_data;
     commit_req.encode(commit_req_data);
-    broadcastMsg(CommitReqPacket, commit_req.sig.hex(), ref(commit_req_data));
-    m_reqCache->addCommitReq(commit_req);
+    bool succ = broadcastMsg(CommitReqPacket, commit_req.sig.hex(), ref(commit_req_data));
+    if (succ)
+        m_reqCache->addCommitReq(commit_req);
+    return succ;
 }
 
-void PBFTEngine::broadcastViewChangeReq()
+bool PBFTEngine::broadcastViewChangeReq()
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
     LOG(DEBUG) << "##### generate view_change_data, block_hash:" << m_highestBlock.hash();
     bytes view_change_data;
     req.encode(view_change_data);
-    broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
+    return broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
 }
 
 /**
@@ -282,12 +300,19 @@ void PBFTEngine::broadcastViewChangeReq()
  * @param data: the encoded data of to be broadcasted(RLP encoder now)
  * @param filter: the list that shouldn't be broadcasted to
  */
-void PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
+bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    u256 min_session = u256(0);
+    if (minValidNodes() >= u256(1) + u256(filter.size()))
+        min_session = minValidNodes() - u256(1) - u256(filter.size());
+    LOG(DEBUG) << "##### broadcast message, min_session=" << min_session;
+    if (sessions.size() < min_session)
+        return false;
     for (auto session : sessions)
     {
+        LOG(DEBUG) << "#### session id:" << session.nodeID;
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
             continue;
@@ -305,6 +330,7 @@ void PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
             session.nodeID, transDataToMessage(data, packetType), nullptr);
         broadcastMark(session.nodeID, packetType, key);
     }
+    return true;
 }
 
 /**
@@ -487,7 +513,10 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
     m_reqCache->addPrepareReq(sign_prepare);
     /// broadcast the re-generated signReq(add the signReq to cache)
-    broadcastSignReq(sign_prepare);
+    if (!broadcastSignReq(sign_prepare))
+    {
+        LOG(WARNING) << oss.str() << "broadcastSignReq failed";
+    }
     LOG(INFO) << oss.str() << ",real_block_hash=" << workingSealing.block.header().hash().abridged()
               << " success";
     checkAndCommit();
@@ -514,7 +543,10 @@ void PBFTEngine::checkAndCommit()
         /// update and backup the commit cache
         m_reqCache->updateCommittedPrepare();
         backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache());
-        broadcastCommitReq(m_reqCache->prepareCache());
+        if (!broadcastCommitReq(m_reqCache->prepareCache()))
+        {
+            LOG(WARNING) << "broadcastCommitReq failed";
+        }
         m_timeManager.m_lastSignTime = utcTime();
         checkAndSave();
     }
@@ -553,10 +585,8 @@ void PBFTEngine::checkAndSave()
             /// callback block chain to commit block
             m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
-            LOG(DEBUG) << "##### drop handled transactions";
             /// drop handled transactions
             dropHandledTransactions(block);
-            LOG(DEBUG) << "### REPORT BLOCK";
         }
         else
         {
@@ -579,9 +609,11 @@ void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
     m_highestBlock = blockHeader;
     if (m_highestBlock.number() >= m_consensusBlockNumber)
     {
+        LOG(DEBUG) << "#### RESET VIEW to 0";
         m_view = m_toView = u256(0);
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
+        m_timeManager.m_changeCycle = 0;
         m_consensusBlockNumber = m_highestBlock.number() + 1;
         /// delete invalid view change requests from the cache
         m_reqCache->delInvalidViewChange(m_highestBlock);
@@ -716,7 +748,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
     valid = isValidViewChangeReq(viewChange_req, oss);
     if (!valid)
         return;
-    catchupView(viewChange_req, oss);
+
     m_reqCache->addViewChangeReq(viewChange_req);
     if (viewChange_req.view == m_toView)
         checkAndChangeView();
@@ -736,13 +768,19 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
     }
 }
 
-bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss) const
+bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistViewChange(req))
     {
         LOG(ERROR) << oss.str() << ", Discard duplicated view change request";
         return false;
     }
+    if (req.idx == m_idx)
+    {
+        LOG(WARNING) << oss.str() << "Discard an illegal viewchange, your own req";
+        return false;
+    }
+    catchupView(req, oss);
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
@@ -752,7 +790,8 @@ bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstre
         return false;
     }
     /// check block hash
-    if (req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash())
+    if (req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash() &&
+        m_blockChain->getBlockByHash(req.block_hash) == nullptr)
     {
         LOG(ERROR) << oss.str()
                    << ", Discard an illegal viewchange for block hash diff, req.block_hash="
@@ -810,9 +849,9 @@ void PBFTEngine::collectGarbage()
 
 void PBFTEngine::checkTimeout()
 {
+    Guard l(m_mutex);
     if (m_timeManager.isTimeout())
     {
-        Guard l(m_mutex);
         Timer t;
         m_toView += u256(1);
         m_leaderFailed = true;
@@ -821,7 +860,8 @@ void PBFTEngine::checkTimeout()
         m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
         LOG(INFO) << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
                   << " , view = " << m_view << ", to_view:" << m_toView;
-        broadcastViewChangeReq();
+        if (!broadcastViewChangeReq())
+            return;
         checkAndChangeView();
         LOG(DEBUG) << "checkTimeout timecost=" << t.elapsed() << ", m_view=" << m_view
                    << ",m_toView=" << m_toView;
@@ -877,6 +917,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
                        (m_highestBlock.number() - pbft_msg.height < 10);
     if (key.size() > 0 && height_flag)
     {
+        LOG(DEBUG) << "#### forwared-broadcast";
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);
         /// get the origin gen node id of the request
@@ -898,7 +939,8 @@ void PBFTEngine::workLoop()
             std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
             if (ret.first)
             {
-                LOG(DEBUG) << "##### handleMsg in workLoop";
+                LOG(DEBUG) << "##### handleMsg network-received message in workLoop, type:"
+                           << ret.second.packet_id;
                 handleMsg(ret.second);
             }
             else

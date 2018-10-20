@@ -48,7 +48,6 @@ void Consensus::start()
 
 bool Consensus::shouldSeal()
 {
-    reportNewBlock();
     bool sealed;
     DEV_READ_GUARDED(x_sealing)
     sealed = m_sealing.block.isSealed();
@@ -82,6 +81,7 @@ bool Consensus::shouldWait(bool const& wait) const
 
 void Consensus::doWork(bool wait)
 {
+    reportNewBlock();
     if (shouldSeal())
     {
         DEV_WRITE_GUARDED(x_sealing)

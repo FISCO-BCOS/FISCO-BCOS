@@ -92,9 +92,13 @@ public:
         return m_timeManager.calculateMaxPackTxNum(maxTransactions, m_view);
     }
     /// broadcast prepare message
-    void generatePrepare(dev::eth::Block& block);
+    bool generatePrepare(dev::eth::Block& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
+    /// broadcast specified message to all-peers with cache-filter and specified filter
+    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+        std::unordered_set<h512> const& filter = std::unordered_set<h512>());
+    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
 
 protected:
     void workLoop() override;
@@ -110,21 +114,20 @@ protected:
     bool needOmit(Sealing const& sealing);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
-    void broadcastSignReq(PrepareReq const& req);
-    void broadcastSignedReq();
+    bool broadcastSignReq(PrepareReq const& req);
 
     /// broadcast commit message
-    void broadcastCommitReq(PrepareReq const& req);
+    bool broadcastCommitReq(PrepareReq const& req);
     /// broadcast view change message
     bool shouldBroadcastViewChange();
-    void broadcastViewChangeReq();
+    bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::P2PException exception,
         std::shared_ptr<dev::p2p::Session> session, dev::p2p::Message::Ptr message);
 
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
-    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
+
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
@@ -150,9 +153,6 @@ protected:
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
-    /// broadcast specified message to all-peers with cache-filter and specified filter
-    void broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>());
     inline bool broadcastFilter(
         h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
@@ -317,7 +317,7 @@ protected:
 
     bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
     bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
-    bool isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss) const;
+    bool isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss);
 
     template <class T>
     inline bool hasConsensused(T const& req) const
@@ -385,7 +385,7 @@ protected:
     dev::eth::BlockHeader m_highestBlock;
     bool m_emptyBlockFlag;
     /// whether to omit empty block
-    bool m_omitEmptyBlock;
+    bool m_omitEmptyBlock = false;
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
 
@@ -398,7 +398,6 @@ protected:
     std::shared_ptr<PBFTReqCache> m_reqCache;
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;
-
     mutable Mutex m_mutex;
 
     std::condition_variable m_signalled;

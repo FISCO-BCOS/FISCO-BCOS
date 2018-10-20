@@ -100,7 +100,10 @@ protected:
         uint64_t tx_num = m_sealing.block.getTransactionSize();
         bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
         if (enough)
+        {
+            LOG(DEBUG) << "##### tx enough, tx_num = " << tx_num;
             m_syncTxPool = false;
+        }
         return enough;
     }
 
@@ -126,6 +129,11 @@ protected:
         uint64_t parentTime =
             m_blockChain->getBlockByNumber(m_blockChain->number())->header().timestamp();
         m_sealing.block.header().setTimestamp(std::max(parentTime + 1, utcTime()));
+    }
+    /// return the pointer of ConsensusInterface to access common interfaces
+    std::shared_ptr<dev::consensus::ConsensusInterface> const consensusEngine()
+    {
+        return m_consensusEngine;
     }
 
 protected:

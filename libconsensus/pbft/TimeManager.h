@@ -47,6 +47,7 @@ struct TimeManager
     inline void initTimerManager(unsigned view_timeout)
     {
         m_lastExecFinishTime = m_lastExecBlockFiniTime = m_lastConsensusTime = utcTime();
+        m_lastSignTime = 0;
         m_viewTimeout = view_timeout;
         m_changeCycle = 0;
         m_lastGarbageCollection = std::chrono::system_clock::now();
@@ -56,7 +57,7 @@ struct TimeManager
     {
         m_lastConsensusTime = 0;
         m_lastSignTime = 0;
-        m_changeCycle = 0;
+        /// m_changeCycle = 0;
     }
 
     inline void updateChangeCycle()
@@ -69,6 +70,7 @@ struct TimeManager
         auto now = utcTime();
         auto last = std::max(m_lastConsensusTime, m_lastSignTime);
         auto interval = (uint64_t)(m_viewTimeout * std::pow(1.5, m_changeCycle));
+        /// LOG(DEBUG) << "##### interval:"<< interval;
         return (now - last >= interval);
     }
 

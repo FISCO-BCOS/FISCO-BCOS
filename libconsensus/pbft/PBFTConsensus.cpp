@@ -41,7 +41,24 @@ void PBFTConsensus::handleBlock()
               << m_sealing.block.header().hash()
               << "#block_number:" << m_sealing.block.header().number()
               << "#tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
-    m_pbftEngine->generatePrepare(m_sealing.block);
+
+    /*PrepareReq prepare_req(m_sealing.block, m_pbftEngine->keyPair(), m_pbftEngine->view(),
+    m_pbftEngine->nodeIdx());
+    PBFTMsgPacket pbft_msg;
+    bytes prepare_data;
+    prepare_req.encode(pbft_msg.data);
+    pbft_msg.packet_id = PrepareReqPacket;
+    ///m_msgQueue.push(pbft_msg);
+    m_pbftEngine->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(prepare_data));
+    m_pbftEngine->handlePrepareMsg(prepare_req, true);
+    /// broadcast the generated preparePacket
+    LOG(DEBUG) << "#### broadcast prepare, hash:" << prepare_req.sig.hex()
+               << ", height:" << prepare_req.height;*/
+    bool ret = m_pbftEngine->generatePrepare(m_sealing.block);
+    if (!ret)
+    {
+        resetSealingBlock();
+    }
 }
 
 void PBFTConsensus::setBlock()

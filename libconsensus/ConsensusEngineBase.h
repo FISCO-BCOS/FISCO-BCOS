@@ -77,7 +77,7 @@ public:
     /// append miner
     void appendMiner(h512 const& _miner) override { m_minerList.push_back(_miner); }
     /// get status of consensus
-    const ConsensusStatus consensusStatus() const override { return ConsensusStatus(); }
+    const std::string consensusStatus() const override {}
 
     /// protocol id used when register handler to p2p module
     int16_t const& protocolId() const override { return m_protocolId; }
@@ -213,7 +213,6 @@ protected:
     dev::h512s m_minerList;
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;
-
     bool m_startConsensusEngine = false;
 };
 }  // namespace consensus

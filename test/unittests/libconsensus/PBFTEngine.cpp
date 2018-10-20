@@ -117,6 +117,7 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
     ///----- test valid case
     /// test recv packet from other nodes
     FakePBFTMiner(fake_pbft);  // set this node to be miner
+
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, true);
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, sign_req, SignReqPacket, true);
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, commit_req, CommitReqPacket, true);
