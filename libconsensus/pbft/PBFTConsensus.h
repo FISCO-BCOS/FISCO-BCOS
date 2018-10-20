@@ -40,6 +40,15 @@ public:
     {
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
         assert(m_pbftEngine != nullptr);
+        m_pbftEngine->onViewChange([this]() {
+            DEV_WRITE_GUARDED(x_sealing)
+            {
+                if (m_sealing.block.isSealed())
+                {
+                    resetSealingBlock();
+                }
+            }
+        });
     }
     void start() override;
     void stop() override;

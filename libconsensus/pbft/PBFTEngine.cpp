@@ -849,23 +849,29 @@ void PBFTEngine::collectGarbage()
 
 void PBFTEngine::checkTimeout()
 {
-    Guard l(m_mutex);
-    if (m_timeManager.isTimeout())
+    bool flag = false;
     {
-        Timer t;
-        m_toView += u256(1);
-        m_leaderFailed = true;
-        m_timeManager.updateChangeCycle();
-        m_timeManager.m_lastConsensusTime = utcTime();
-        m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
-        LOG(INFO) << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
-                  << " , view = " << m_view << ", to_view:" << m_toView;
-        if (!broadcastViewChangeReq())
-            return;
-        checkAndChangeView();
-        LOG(DEBUG) << "checkTimeout timecost=" << t.elapsed() << ", m_view=" << m_view
-                   << ",m_toView=" << m_toView;
+        Guard l(m_mutex);
+        if (m_timeManager.isTimeout())
+        {
+            Timer t;
+            m_toView += u256(1);
+            m_leaderFailed = true;
+            m_timeManager.updateChangeCycle();
+            m_timeManager.m_lastConsensusTime = utcTime();
+            flag = true;
+            m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
+            LOG(INFO) << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
+                      << " , view = " << m_view << ", to_view:" << m_toView;
+            if (!broadcastViewChangeReq())
+                return;
+            checkAndChangeView();
+            LOG(DEBUG) << "checkTimeout timecost=" << t.elapsed() << ", m_view=" << m_view
+                       << ",m_toView=" << m_toView;
+        }
     }
+    if (flag && m_onViewChange)
+        m_onViewChange();
 }
 
 void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
@@ -940,7 +946,7 @@ void PBFTEngine::workLoop()
             if (ret.first)
             {
                 LOG(DEBUG) << "##### handleMsg network-received message in workLoop, type:"
-                           << ret.second.packet_id;
+                           << ret.second.packet_id << ", source:" << ret.second.node_idx;
                 handleMsg(ret.second);
             }
             else

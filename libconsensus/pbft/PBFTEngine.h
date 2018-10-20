@@ -95,10 +95,7 @@ public:
     bool generatePrepare(dev::eth::Block& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
-    /// broadcast specified message to all-peers with cache-filter and specified filter
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>());
-    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
+    void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
 
 protected:
     void workLoop() override;
@@ -112,6 +109,10 @@ protected:
         checkMinerList(block);
     }
     bool needOmit(Sealing const& sealing);
+
+    /// broadcast specified message to all-peers with cache-filter and specified filter
+    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+        std::unordered_set<h512> const& filter = std::unordered_set<h512>());
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -124,10 +125,9 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::P2PException exception,
         std::shared_ptr<dev::p2p::Session> session, dev::p2p::Message::Ptr message);
-
+    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
-
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
@@ -402,6 +402,8 @@ protected:
 
     std::condition_variable m_signalled;
     Mutex x_signalled;
+
+    std::function<void()> m_onViewChange;
 };
 }  // namespace consensus
 }  // namespace dev
