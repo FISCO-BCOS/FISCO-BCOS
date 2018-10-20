@@ -71,10 +71,10 @@ RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
     return _s.appendRaw(bytes(1, _id)).appendList(_args);
 }
 
-void SyncStatusPacket::encode(h256 const& _latestHash, h256 const& _genesisHash, int64_t _number)
+void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, StatusPacket, 6) << _latestHash << _genesisHash << _number;
+    prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
 }
 
 void SyncTransactionsPacket::encode(unsigned _txNumber, bytes const& _txRLPs)

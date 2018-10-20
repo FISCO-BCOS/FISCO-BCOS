@@ -73,13 +73,30 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
     switch (_packet.packetType)
     {
+    case StatusPacket:
+        onPeerStatus(_packet);
+        break;
     case TransactionsPacket:
         onPeerTransactions(_packet);
         break;
+    case BlockPacket:
+    case GetBlockPacket:
     default:
         return false;
     }
     return true;
+}
+
+void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
+{
+    shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
+    NodeInfo info{_packet.nodeId, _packet.rlp()[0].toInt<int64_t>(),
+        _packet.rlp()[1].toHash<h256>(), _packet.rlp()[2].toHash<h256>()};
+
+    if (status == nullptr)
+        m_syncStatus->newSyncPeerStatus(info);
+    else
+        status->update(info);
 }
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)

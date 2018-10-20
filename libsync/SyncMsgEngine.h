@@ -41,11 +41,22 @@ namespace sync
 class SyncMsgEngine
 {
 public:
-    SyncMsgEngine(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    SyncMsgEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<SyncMasterStatus> _data)
-      : m_blockChain(_blockChain), m_txPool(_txPool), m_data(_data)
-    {}
+        std::shared_ptr<SyncMasterStatus> _syncStatus, int16_t const& _protocolId,
+        NodeID const& _nodeId, h256 const& _genesisHash)
+      : m_service(_service),
+        m_blockChain(_blockChain),
+        m_txPool(_txPool),
+        m_syncStatus(_syncStatus),
+        m_protocolId(_protocolId),
+        m_nodeId(_nodeId),
+        m_genesisHash(_genesisHash)
+    {
+        m_service->registerHandlerByProtoclID(
+            m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
+    }
 
     void messageHandler(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::Session> _session,
         dev::p2p::Message::Ptr _msg);
@@ -56,13 +67,20 @@ private:
     bool interpret(SyncMsgPacket const& _packet);
 
 private:
+    void onPeerStatus(SyncMsgPacket const& _packet);
     void onPeerTransactions(SyncMsgPacket const& _packet);
 
 private:
     // Outside data
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    std::shared_ptr<SyncMasterStatus> m_data;
+    std::shared_ptr<SyncMasterStatus> m_syncStatus;
+
+    // Internal data
+    NodeID m_nodeId;  ///< Nodeid of this node
+    h256 m_genesisHash;
+    int16_t m_protocolId;
 };
 
 }  // namespace sync

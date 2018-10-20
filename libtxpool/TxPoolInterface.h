@@ -23,7 +23,9 @@
  */
 #pragma once
 #include <libethcore/Block.h>
+#include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
+
 namespace dev
 {
 namespace txpool
@@ -88,10 +90,23 @@ public:
     /// protocol id used when register handler to p2p module
     virtual int16_t const& getProtocolId() const = 0;
 
+    /// Get transaction in TxPool, return nullptr when not found
     virtual std::shared_ptr<dev::eth::Transaction const> transactionInPool(h256 const& _txHash)
     {
         return nullptr;
     };
+
+    /// Register a handler that will be called once there is a new transaction imported
+    template <class T>
+    dev::eth::Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
+
+protected:
+    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
+    ///< nice and exit fast.
+    dev::eth::Signal<> m_onReady;
 };
 }  // namespace txpool
 }  // namespace dev

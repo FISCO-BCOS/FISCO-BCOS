@@ -46,23 +46,23 @@ public:
     SyncMaster(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        int16_t const& _protocolId, NodeID const& _id, h256 const& _genesisHash,
+        int16_t const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned _idleWaitMs = 30)
       : m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_protocolId(_protocolId),
-        m_id(_id),
+        m_nodeId(_nodeId),
         m_genesisHash(_genesisHash),
         SyncInterface(),
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
     {
         m_syncStatus = std::make_shared<SyncMasterStatus>();
-        m_msgEngine = std::make_shared<SyncMsgEngine>(_txPool, _blockChain, m_syncStatus);
+        m_msgEngine = std::make_shared<SyncMsgEngine>(
+            _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 
         // signal registration
-        // txPool.onReady([=]() { this->noteNewTransactions(); });
-        // txPool.onCommit()XXXX
+        m_txPool->onReady([=]() { this->noteNewTransactions(); });
         // m_blockChain.onReady([=]() { this->noteNewBlocks(); });
     }
 
@@ -97,12 +97,12 @@ public:
     void noteNewTransactions()
     {
         m_newTransactions = true;
-        m_signalled.notify_all();
+        m_signalled.notify_all();  // awake doWork
     }
     void noteNewBlocks()
     {
         m_newBlocks = true;
-        m_signalled.notify_all();
+        m_signalled.notify_all();  // awake doWork
     }
 
 private:
@@ -118,7 +118,7 @@ private:
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
     // Internal data
-    NodeID m_id;  ///< Nodeid of this node
+    NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 
     unsigned m_startingBlock = 0;  ///< Last block number for the start of sync
@@ -144,7 +144,7 @@ private:
 
 private:
     void maintainTransactions();
-    // void maintainBlocks(h256 const& _currentBlock);
+    void maintainBlocks();
 };
 
 }  // namespace sync

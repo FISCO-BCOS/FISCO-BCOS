@@ -36,10 +36,6 @@ class SyncMsgPacket
 {
 public:
     SyncMsgPacket() {}
-
-    SyncPacketType packetType;
-    NodeID nodeId;
-
     /// Extract data by decoding the message
     bool decode(std::shared_ptr<dev::p2p::Session> _session, dev::p2p::Message::Ptr _msg);
 
@@ -51,6 +47,10 @@ public:
     dev::p2p::Message::Ptr toMessage(uint16_t _protocolId);
 
     RLP const& rlp() const { return m_rlp; }
+
+public:
+    SyncPacketType packetType;
+    NodeID nodeId;
 
 protected:
     RLP m_rlp;              /// The result of decode
@@ -65,7 +65,7 @@ class SyncStatusPacket : public SyncMsgPacket
 {
 public:
     SyncStatusPacket() { packetType = StatusPacket; }
-    void encode(h256 const& _latestHash, h256 const& _genesisHash, int64_t _number);
+    void encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash);
 };
 
 class SyncTransactionsPacket : public SyncMsgPacket

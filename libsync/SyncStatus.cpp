@@ -48,6 +48,8 @@ bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
     try
     {
         shared_ptr<SyncPeerStatus> peer = make_shared<SyncPeerStatus>(_info);
+
+        Guard l(x_peerStatus);
         m_peersStatus.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->nodeId, peer));
     }
     catch (Exception const& e)
@@ -58,7 +60,7 @@ bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
     return true;
 }
 
-std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerData(NodeID const& _id)
+std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
 {
     auto peer = m_peersStatus.find(_id);
     if (peer == m_peersStatus.end())

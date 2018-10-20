@@ -53,7 +53,7 @@ void SyncMaster::doWork()
         if (m_newBlocks)
         {
             m_newBlocks = false;
-            // maintainBlocks(h);
+            maintainBlocks();
         }
         // download
         // bq on chain
@@ -130,8 +130,25 @@ void SyncMaster::maintainTransactions()
         packet.encode(txNumber, txRLPs);
 
         m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
+        LOG(TRACE) << "Send" << int(txNumber) << "transactions to " << _p->nodeId;
 
-        LOG(TRACE) << "Sent" << int(txNumber) << "transactions to " << _p->nodeId;
+        return true;
+    });
+}
+
+void SyncMaster::maintainBlocks()
+{
+    int64_t number = m_blockChain->number();
+    h256 const& currentHash = m_blockChain->numberHash(number);
+
+    // Just broadcast status
+    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        SyncStatusPacket packet;
+        packet.encode(number, m_genesisHash, currentHash);
+
+        m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
+        LOG(TRACE) << "Send status (" << int(number) << "," << m_genesisHash << "," << currentHash
+                   << ") to " << _p->nodeId;
 
         return true;
     });

@@ -74,6 +74,14 @@ public:
         latestHash(_info.latestHash)
     {}
 
+    void update(const NodeInfo& _info)
+    {
+        nodeId = _info.nodeId;
+        number = _info.number;
+        genesisHash = _info.genesisHash;
+        latestHash = _info.latestHash;
+    }
+
 public:
     NodeID nodeId;
     int64_t number;
@@ -86,7 +94,7 @@ class SyncMasterStatus
 public:
     bool hasPeer(NodeID const& _id);
     bool newSyncPeerStatus(NodeInfo const& _info);
-    std::shared_ptr<SyncPeerStatus> peerData(NodeID const& _id);
+    std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
     void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 
@@ -95,6 +103,7 @@ public:
         unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
 private:
+    mutable Mutex x_peerStatus;
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
     std::priority_queue<std::shared_ptr<dev::eth::Block>,
         std::vector<std::shared_ptr<dev::eth::Block>>, DownloadingBlockQueuePiority>
