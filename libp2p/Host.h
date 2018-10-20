@@ -144,9 +144,12 @@ public:
     {
         m_staticNodes = staticNodes;
     }
-
     /// set max peer counts
     void setMaxPeerCount(unsigned max_peer_count) { m_maxPeerCount = max_peer_count; }
+    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
+    {
+        m_threadPool = threadPool;
+    }
 
     ///------ Network and worker threads related ------
     /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
