@@ -351,7 +351,8 @@ void Session::onMessage(
             LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
             ///< execute funtion, send response packet by user in callbackFunc
             ///< TODO: use threadPool
-            m_threadPool->enqueue([=]() { callbackFunc(e, session, message); });
+            m_threadPool->enqueue(
+                [callbackFunc, e, session, message]() { callbackFunc(e, session, message); });
         }
         else
         {
@@ -373,7 +374,8 @@ void Session::onMessage(
             {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
                 ///< TODO: use threadPool
-                m_threadPool->enqueue([=]() { callback->callbackFunc(e, message); });
+                m_threadPool->enqueue(
+                    [callback, e, message]() { callback->callbackFunc(e, message); });
             }
             else
             {

@@ -104,6 +104,8 @@ Host::~Host()
 void Host::start()
 {
     DEV_TIMED_FUNCTION_ABOVE(500);
+    /// set the thread pool for the session
+    m_threadPool = std::make_shared<dev::ThreadPool>("SessionCallBackThreadPool", 8);
     /// implemented by the parent class Worker(libdevcore/Worker.*)
     startWorking();
     /// check the network and worker thread status
@@ -114,8 +116,6 @@ void Host::start()
     /// network start successfully
     if (isWorking())
         return;
-    /// set the thread pool for the session
-    m_threadPool = std::make_shared<dev::ThreadPool>("SessionCallBackThreadPool", 8);
     /// network start failed
     LOG(WARNING) << "Network start failed!";
     /// clean resources (include both network, socket resources) when stop working

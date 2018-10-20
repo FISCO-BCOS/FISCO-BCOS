@@ -107,7 +107,12 @@ public:
     ///< interface to set topicSeq/topics of counter node
     void setTopicsAndTopicSeq(NodeID const& nodeID,
         std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq);
-    void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) { m_threadPool = threadPool; }
+    void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
+    {
+        LOG(DEBUG) << "#### setThreadPool";
+        assert(threadPool);
+        m_threadPool = threadPool;
+    }
 
 protected:
     /// Perform a read on the socket.

@@ -21,7 +21,6 @@
  * @date 2018-09-10
  */
 #pragma once
-#include <libdevcore/ThreadPool.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>

@@ -30,6 +30,7 @@
 #include <iostream>
 #include <memory>
 
+using namespace std;
 namespace dev
 {
 class ThreadPool
