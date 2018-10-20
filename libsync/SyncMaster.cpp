@@ -94,23 +94,26 @@ void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
-    auto ts = m_txPool->topTransactions(c_maxSendTransactions, m_syncStatus->transactionsSent);
+    auto ts = m_txPool->topTransactionsCondition(
+        c_maxSendTransactions, [&](Transaction const& _tx) { return !_tx.hasSent(); });
+
+
     {
         Guard l(x_transactions);
         for (size_t i = 0; i < ts.size(); ++i)
         {
             auto const& t = ts[i];
             NodeIDs peers;
-            unsigned _percent = t.hasImportPeers() ? 25 : 100;
+            unsigned _percent = t->hasImportPeers() ? 25 : 100;
 
             peers = m_syncStatus->randomSelection(_percent,
-                [&](std::shared_ptr<SyncPeerStatus> _p) { return !t.hasImportPeer(_p->nodeId); });
+                [&](std::shared_ptr<SyncPeerStatus> _p) { return !t->hasImportPeer(_p->nodeId); });
 
             for (auto const& p : peers)
                 peerTransactions[p].push_back(i);
 
             if (!peers.empty())
-                m_syncStatus->transactionsSent.insert(t.sha3());
+                t->setHasSent();
         }
     }
 
@@ -121,7 +124,7 @@ void SyncMaster::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs += ts[i].rlp();
+            txRLPs += ts[i]->rlp();
 
         SyncTransactionsPacket packet;
         packet.encode(txNumber, txRLPs);

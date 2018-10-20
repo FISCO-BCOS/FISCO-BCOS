@@ -97,7 +97,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
             LOG(TRACE) << "Import transaction " << tx.sha3() << " from peer " << _packet.nodeId;
         }
 
-        shared_ptr<Transaction> p_tx = m_txPool->transactionInPool(tx.sha3());
+        auto p_tx = m_txPool->transactionInPool(tx.sha3());
         if (p_tx != nullptr)
             p_tx->addImportPeer(_packet.nodeId);
     }

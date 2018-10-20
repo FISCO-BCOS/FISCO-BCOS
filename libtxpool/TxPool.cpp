@@ -68,7 +68,6 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     {
         return make_pair(_tx.sha3(), Address(2));
     }
-    m_onReady();
     return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
 }
 
@@ -84,6 +83,7 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
 ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
 {
     Transaction tx;
+
     tx.decode(_txBytes, CheckTransaction::Everything);
     /// check sha3
     if (sha3(_txBytes.toBytes()) != tx.sha3())
@@ -101,7 +101,7 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
  */
 ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
 {
-    _tx.setImportTime(u256(utcTime()));
+    _tx.setImportTime(utcTime());
     UpgradableGuard l(m_lock);
     ImportResult verify_ret = verify(_tx);
     if (verify_ret == ImportResult::Success)
@@ -113,7 +113,6 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
         {
             removeOutOfBound(m_txsQueue.rbegin()->sha3());
         }
-        m_onReady();
     }
     return verify_ret;
 }
@@ -193,8 +192,8 @@ bool TxPool::removeTrans(h256 const& _txHash)
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
     {
-        /// LOG(WARNING) << "txHash = " << toHex(_txHash)
-        ///             << " doesn't exist in the txpool, please check again";
+        LOG(WARNING) << "txHash = " << toHex(_txHash)
+                     << " doesn't exist in the txpool, please check again";
         return false;
     }
     m_txsHash.erase(p_tx);
@@ -263,9 +262,16 @@ bool TxPool::dropBlockTrans(Block const& block)
  *
  * @param _limit : _limit Max number of transactions to return.
  * @param _avoid : Transactions to avoid returning.
+ * @param _condition : The function return false to avoid transaction to return.
  * @return Transactions : up to _limit transactions
  */
-Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool updateAvoid)
+dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
+{
+    h256Hash _avoid = h256Hash();
+    return topTransactions(_limit, _avoid);
+}
+
+Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
 {
     ReadGuard l(m_lock);
     Transactions ret;
@@ -277,17 +283,29 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
         {
             ret.push_back(*it);
             txCnt++;
-            if (updateAvoid)
+            if (_updateAvoid)
                 _avoid.insert(it->sha3());
         }
     }
     return ret;
 }
 
-dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
+std::vector<std::shared_ptr<Transaction const>> TxPool::topTransactionsCondition(
+    uint64_t const& _limit, std::function<bool(Transaction const&)> const& _condition)
 {
-    h256Hash _avoid = h256Hash();
-    return topTransactions(_limit, _avoid);
+    ReadGuard l(m_lock);
+    std::vector<std::shared_ptr<Transaction const>> ret;
+    uint64_t limit = min(m_limit, _limit);
+    uint64_t txCnt = 0;
+    for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
+    {
+        if (_condition(*it))
+        {
+            ret.push_back(shared_ptr<Transaction const>(&(*it)));
+            txCnt++;
+        }
+    }
+    return ret;
 }
 
 /// get all transactions(maybe blocksync module need this interface)
@@ -310,12 +328,12 @@ size_t TxPool::pendingSize()
 }
 
 
-std::shared_ptr<Transaction> TxPool::transactionInPool(h256 const& _txHash)
+std::shared_ptr<Transaction const> TxPool::transactionInPool(h256 const& _txHash)
 {
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
         return nullptr;
-    return make_shared<Transaction>(*p_tx->second);
+    return shared_ptr<Transaction const>(&(*p_tx->second));
 }
 
 /// @returns the status of the transaction queue.

@@ -94,9 +94,6 @@ public:
     NodeIDs randomSelection(
         unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
-public:
-    h256Hash transactionsSent;
-
 private:
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
     std::priority_queue<std::shared_ptr<dev::eth::Block>,
