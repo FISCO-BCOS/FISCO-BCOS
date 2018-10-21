@@ -38,6 +38,7 @@ namespace sync
 {
 static unsigned const c_maxSendTransactions = 10;
 static size_t const c_maxDownloadingBlockQueueSize = 1000;
+static size_t const c_maxDownloadingBlockQueueBufferSize = 1000;
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;

@@ -23,6 +23,7 @@
 #pragma once
 #include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
+#include <climits>
 #include <queue>
 #include <set>
 #include <vector>
@@ -47,14 +48,13 @@ public:
 
     size_t size();
 
-    /// Pop the block sequent
+    /// Pop the block sequent, erase blocks smaller than _startNumber
     BlockPtrVec popSequent(int64_t _startNumber, int64_t _limit);
 
-    /// Erase unused blocks
-    // void clearUnused(int64_t _currentNumber);
 
 private:
-    std::map<int64_t, BlockPtr> m_blocks;   //
+    std::map<int64_t, BlockPtr, std::greater<int64_t>> m_blocks;  //
+    int64_t m_minNumberInQueue = LONG_LONG_MAX;
     std::shared_ptr<BlockPtrVec> m_buffer;  // use buffer for faster push return
 
     mutable RecursiveMutex x_blocks;

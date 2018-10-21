@@ -32,12 +32,12 @@ using namespace dev::sync;
 /// Push a block
 void DownloadingBlockQueue::push(BlockPtr _block)
 {
-    if (size() >= c_maxDownloadingBlockQueueSize)
+    RecursiveGuard l(x_buffer);
+    if (m_buffer->size() >= c_maxDownloadingBlockQueueBufferSize)
     {
-        LOG(WARNING) << "DownloadingBlockQueue is full with size " << size();
+        LOG(WARNING) << "DownloadingBlockQueueBuffer is full with size " << m_buffer->size();
         return;
     }
-    RecursiveGuard l(x_buffer);
     m_buffer->emplace_back(_block);
 }
 
@@ -74,19 +74,44 @@ DownloadingBlockQueue::BlockPtrVec DownloadingBlockQueue::popSequent(
     RecursiveGuard l(x_blocks);
     for (BlockPtr block : *localBuffer)
     {
+        if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to control
+                                                                // insert
+        {
+            LOG(WARNING) << "DownloadingBlockQueueBuffer is full with size " << m_blocks.size();
+            break;
+        }
+
         int64_t number = block->header().number();
+
+        if (number < _startNumber)
+            continue;  // ignore smaller blocks
+
         auto p = m_blocks.find(number);
         if (p == m_blocks.end())
+        {
             m_blocks.insert(pair<int64_t, BlockPtr>(number, block));
+            m_minNumberInQueue = min(m_minNumberInQueue, number);
+        }
+    }
+
+    // delete smaller blocks in queue
+    for (; m_minNumberInQueue < _startNumber; ++m_minNumberInQueue)
+    {
+        auto p = m_blocks.find(m_minNumberInQueue);
+        if (p != m_blocks.end())
+            m_blocks.erase(p);
     }
 
     // generate a queue
     BlockPtrVec ret;
-    for (int64_t i = 0; i < _limit; ++i)
+    for (; m_minNumberInQueue < _startNumber + _limit; ++m_minNumberInQueue)
     {
-        auto p = m_blocks.find(_startNumber + i);
+        auto p = m_blocks.find(m_minNumberInQueue);
         if (p != m_blocks.end())
+        {
             ret.emplace_back(p->second);
+            m_blocks.erase(p);
+        }
         else
             break;
     }
