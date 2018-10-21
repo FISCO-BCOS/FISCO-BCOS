@@ -47,4 +47,3 @@ std::string dev::toUUID(h128 const& _uuid)
 		ret.insert(ret.begin() + i, '-');
 	return ret;
 }
-

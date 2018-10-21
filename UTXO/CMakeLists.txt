@@ -6,8 +6,6 @@ file(GLOB HEADERS "*.h")
 
 add_library(UTXO ${SRC_LIST} ${HEADERS})
 
-eth_use(UTXO OPTIONAL Miniupnpc)
-
 target_include_directories(UTXO PRIVATE ..)
 target_link_libraries(UTXO ${Dev_DEVCORE_LIBRARIES})
 target_link_libraries(UTXO devcore)

@@ -1,7 +1,7 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-set(BOOST_CXXFLAGS "")
+set(BOOST_CXXFLAGS "cxxflags=-fPIC")
 if (WIN32)
     set(BOOST_BOOTSTRAP_COMMAND bootstrap.bat)
     set(BOOST_BUILD_TOOL b2.exe)
@@ -15,7 +15,7 @@ else()
     endif()
 endif()
 
-set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
+# set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
 set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${OPENSSL_INCLUDE_DIRS})
 ExternalProject_Add(boost
