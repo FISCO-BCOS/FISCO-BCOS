@@ -55,4 +55,3 @@ build: off # temporarily
 
     #- call build_jsonrpccpp.bat
     #- call bundle_jsonrpccpp.bat
-
