@@ -29,6 +29,7 @@
 #pragma once
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Block.h>
 #include <libp2p/Common.h>
 #include <set>
 
@@ -43,6 +44,8 @@ static size_t const c_maxDownloadingBlockQueueBufferSize = 1000;
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;
 using NodeIDs = std::vector<dev::p2p::NodeID>;
+using BlockPtr = std::shared_ptr<dev::eth::Block>;
+using BlockPtrVec = std::vector<BlockPtr>;
 
 enum SyncPacketType : byte
 {
@@ -55,14 +58,11 @@ enum SyncPacketType : byte
 
 enum class SyncState
 {
-    NotSynced,  ///< Initial chain sync has not started yet
-    Idle,       ///< Initial chain sync complete. Waiting for new packets
-    Waiting,    ///< Block downloading paused. Waiting for block queue to process blocks and free
-                ///< space
-    Blocks,     ///< Downloading blocks
-    State,      ///< Downloading state
-    NewBlocks,  ///< Downloading blocks learned from NewHashes packet
-    Size        /// Must be kept last
+    Idle,     ///< Initial chain sync complete. Waiting for new packets
+    Waiting,  ///< Block downloading paused. Waiting for block queue to process blocks and free
+              ///< space
+    Blocks,   ///< Downloading blocks
+    Size      /// Must be kept last
 };
 
 struct NodeInfo

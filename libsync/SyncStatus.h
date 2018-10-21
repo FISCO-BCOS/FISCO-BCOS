@@ -82,6 +82,7 @@ public:
 class SyncMasterStatus
 {
 public:
+    SyncMasterStatus() {}
     bool hasPeer(NodeID const& _id);
     bool newSyncPeerStatus(NodeInfo const& _info);
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
@@ -91,6 +92,11 @@ public:
     /// Select some peers at _percent when _allow(peer)
     NodeIDs randomSelection(
         unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
+
+    DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
+
+public:
+    int64_t knownHighestNumber;
 
 private:
     mutable Mutex x_peerStatus;

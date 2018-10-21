@@ -21,6 +21,7 @@
  */
 
 #pragma once
+#include "Common.h"
 #include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
 #include <climits>
@@ -35,9 +36,6 @@ namespace sync
 {
 class DownloadingBlockQueue
 {
-    using BlockPtr = std::shared_ptr<dev::eth::Block>;
-    using BlockPtrVec = std::vector<BlockPtr>;
-
 public:
     DownloadingBlockQueue() : m_blocks(), m_buffer() {}
     /// Push a block
@@ -60,5 +58,6 @@ private:
     mutable RecursiveMutex x_blocks;
     mutable RecursiveMutex x_buffer;
 };
+
 }  // namespace sync
 }  // namespace dev

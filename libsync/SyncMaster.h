@@ -145,6 +145,7 @@ private:
 private:
     void maintainTransactions();
     void maintainBlocks();
+    bool maintainDownloadingQueue();  /// return true if downloading finish
 };
 
 }  // namespace sync

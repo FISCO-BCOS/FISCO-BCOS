@@ -55,8 +55,14 @@ void SyncMaster::doWork()
             m_newBlocks = false;
             maintainBlocks();
         }
-        // download
-        // bq on chain
+        // need download? ->set syncing and knownHighestNumber
+    }
+
+    if (isSyncing())
+    {
+        bool finished = maintainDownloadingQueue();
+        if (finished)
+            m_state = SyncState::Idle;
     }
 }
 
@@ -152,4 +158,20 @@ void SyncMaster::maintainBlocks()
 
         return true;
     });
+}
+
+
+bool SyncMaster::maintainDownloadingQueue()
+{
+    int64_t currentNumber = m_blockChain->number();
+    if (currentNumber < m_syncStatus->knownHighestNumber)
+    {
+        BlockPtrVec blocks =
+            m_syncStatus->bq().popSequent(currentNumber + 1, m_syncStatus->knownHighestNumber);
+        // for (auto block : blocks)
+        // m_blockChain->commitBlock(*blocks, );  // How to use executiveContext)
+    }
+
+    currentNumber = m_blockChain->number();
+    return currentNumber >= m_syncStatus->knownHighestNumber;
 }

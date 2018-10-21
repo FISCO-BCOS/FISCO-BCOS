@@ -60,8 +60,7 @@ size_t DownloadingBlockQueue::size()
 }
 
 /// pop the block sequent
-DownloadingBlockQueue::BlockPtrVec DownloadingBlockQueue::popSequent(
-    int64_t _startNumber, int64_t _limit)
+BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _limit)
 {
     shared_ptr<BlockPtrVec> localBuffer;
     {
