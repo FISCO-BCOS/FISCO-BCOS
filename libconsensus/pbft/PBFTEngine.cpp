@@ -199,32 +199,32 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
-bool PBFTEngine::generatePrepare(Block& block)
+bool PBFTEngine::generatePrepare(Block const& block)
 {
-    /// Guard l(m_mutex);
-    /* if(block.getTransactionSize() == 0 && m_omitEmptyBlock)
-    {
-        m_timeManager.changeView();
-        m_leaderFailed = true;
-        m_signalled.notify_all();
-    }*/
     Guard l(m_mutex);
     PrepareReq prepare_req(block, m_keyPair, m_view, m_idx);
-    PBFTMsgPacket pbft_msg;
     bytes prepare_data;
-    prepare_req.encode(pbft_msg.data);
-    pbft_msg.packet_id = PrepareReqPacket;
+    prepare_req.encode(prepare_data);
     /// broadcast the generated preparePacket
-    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(pbft_msg.data));
+    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(prepare_data));
     if (succ)
     {
+        if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
+        {
+            m_timeManager.changeView();
+            m_leaderFailed = true;
+            m_signalled.notify_all();
+        }
         handlePrepareMsg(prepare_req);
     }
-    /// m_msgQueue.push(pbft_msg);
+    /// reset the block according to broadcast result
+    /// m_onGeneratePrepare(succ);
     LOG(DEBUG) << "#### broadcast-local-prepare, succ=" << succ
-               << ", hash:" << prepare_req.sig.hex() << ", height:" << prepare_req.height;
+               << ", prepare_req.block_hash:" << prepare_req.block_hash
+               << ", height:" << prepare_req.height;
     return succ;
 }
+
 /**
  * @brief : 1. generate and broadcast signReq according to given prepareReq,
  *          2. add the generated signReq into the cache
@@ -420,8 +420,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     checkBlockValid(working_block);
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
-    m_timeManager.m_lastExecBlockFiniTime = utcTime();
-    /// m_timeManager.m_lastExecFinishTime = utcTime();
+    m_timeManager.m_lastExecFinishTime = utcTime();
     m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
 }
 
@@ -507,7 +506,13 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     }
     /// whether to omit empty block
     if (needOmit(workingSealing))
+    {
+        m_timeManager.changeView();
+        m_timeManager.m_changeCycle = 0;
+        m_signalled.notify_all();
         return;
+    }
+
     /// generate prepare request with signature of this node to broadcast
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
@@ -790,7 +795,7 @@ bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstre
         return false;
     }
     /// check block hash
-    if (req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash() &&
+    if (req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash() ||
         m_blockChain->getBlockByHash(req.block_hash) == nullptr)
     {
         LOG(ERROR) << oss.str()

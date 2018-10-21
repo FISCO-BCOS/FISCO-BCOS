@@ -66,8 +66,6 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastExecFinishTime > 0);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastExecFinishTime <= utcTime());
     BOOST_CHECK((fake_pbft.consensus()->timeManager().m_lastExecFinishTime) ==
-                (fake_pbft.consensus()->timeManager().m_lastExecBlockFiniTime));
-    BOOST_CHECK((fake_pbft.consensus()->timeManager().m_lastExecFinishTime) ==
                 (fake_pbft.consensus()->timeManager().m_lastConsensusTime));
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_viewTimeout ==
                 fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);

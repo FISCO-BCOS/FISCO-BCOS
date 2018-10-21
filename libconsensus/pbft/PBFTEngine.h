@@ -92,10 +92,14 @@ public:
         return m_timeManager.calculateMaxPackTxNum(maxTransactions, m_view);
     }
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block& block);
+    bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
     void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
+    bool inline shouldReset(dev::eth::Block const& block)
+    {
+        return block.getTransactionSize() == 0 && m_omitEmptyBlock;
+    }
 
 protected:
     void workLoop() override;
@@ -347,6 +351,7 @@ protected:
     {
         auto leader = getLeader();
         LOG(DEBUG) << "### req.idx:" << req.idx << ", leader.second:" << leader.second;
+        LOG(DEBUG) << "#### m_view:" << m_view << ", highest number:" << m_highestBlock.number();
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
             return false;

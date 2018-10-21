@@ -63,7 +63,7 @@ public:
 
     ~FakeBlockChain() {}
 
-    int64_t number() const { return m_blockNumber - 1; }
+    int64_t number() const { return m_blockChain.size() - 1; }
 
     dev::h256 numberHash(int64_t _i) const { return m_blockChain[_i]->headerHash(); }
 
@@ -84,11 +84,10 @@ public:
     void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        /// block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
-        /// block.header().setNumber(m_blockNumber);
-        m_blockHash[block.blockHeader().hash()] = m_blockNumber;
+        std::cout << "##### commitBlock:" << block.blockHeader().number() << std::endl;
+        m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
         m_blockChain.push_back(std::make_shared<Block>(block));
-        m_blockNumber += 1;
+        m_blockNumber = block.blockHeader().number() + 1;
         m_onReady();
     }
 

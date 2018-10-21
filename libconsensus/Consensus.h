@@ -74,7 +74,11 @@ public:
         m_syncTxPool = true;
         m_signalled.notify_all();
     }
-    virtual void onBlockChanged() { m_syncBlock = true; }
+    virtual void onBlockChanged()
+    {
+        m_syncBlock = true;
+        m_signalled.notify_all();
+    }
 
     /// set the max number of transactions in a block
     void setMaxBlockTransactions(uint64_t const& _maxBlockTransactions)
@@ -85,6 +89,12 @@ public:
     uint64_t maxBlockTransactions() const { return m_maxBlockTransactions; }
     void setExtraData(std::vector<bytes> const& _extra) { m_extraData = _extra; }
     std::vector<bytes> const& extraData() const { return m_extraData; }
+
+    bool inline shouldResetSealing()
+    {
+        return (m_sealing.block.isSealed() ||
+                m_sealing.block.blockHeader().number() <= m_blockChain->number());
+    }
 
 protected:
     void reportNewBlock();

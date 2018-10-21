@@ -41,13 +41,21 @@ void PBFTConsensus::handleBlock()
               << m_sealing.block.header().hash()
               << "#block_number:" << m_sealing.block.header().number()
               << "#tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
-    bool ret = m_pbftEngine->generatePrepare(m_sealing.block);
-    if (!ret)
+    bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
+    if (!succ)
     {
+        LOG(DEBUG) << "#### after generateprepare, resetSealingBlock";
         resetSealingBlock();
+        /// notify to re-generate the block
+        m_signalled.notify_all();
+    }
+    else if (m_pbftEngine->shouldReset(m_sealing.block))
+    {
+        LOG(DEBUG) << "##### omit the empty block, resetSealingBlock";
+        resetSealingBlock();
+        m_signalled.notify_all();
     }
 }
-
 void PBFTConsensus::setBlock()
 {
     resetSealingHeader(m_sealing.block.header());
