@@ -32,12 +32,15 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>        
+#include <boost/range/algorithm/remove_if.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/random.hpp>
 #include <libethereum/EthereumHost.h>
 #include <libdevcore/easylog.h>
-#include <uuid/uuid.h>
 #include "JsonHelper.h"
 #include <libweb3jsonrpc/RPCallback.h>
 
@@ -899,10 +902,10 @@ dev::channel::TopicMessage::Ptr ChannelRPCServer::pushChannelMessage(dev::channe
 }
 
 std::string ChannelRPCServer::newSeq() {
-	uuid_t uuid;
-	uuid_generate(uuid);
-
-	return toHex(uuid);
+    static boost::uuids::random_generator uuidGenerator;
+    std::string s = to_string(uuidGenerator());
+    s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
+    return s;
 }
 
 h512 ChannelRPCServer::sendChannelMessageToNode(std::string topic, dev::channel::Message::Ptr message, const std::set<h512> &exclude) {

@@ -1530,9 +1530,6 @@ Instructions for node configurations fiile *config.json*:
 | eventlog           | Switch for the Eventlog (ON or OFF)      |
 | statlog            | Switch for the Statlog (ON or OFF)       |
 | logconf            | path of the log configuration file(refer to the instructions for *log.conf* ) |
-| dfsNode            | Distributed file service node ID, keep it in accordance with node ID(optional) |
-| dfsGroup           | Distributed file service group ID (10 - 32 characters)(optional) |
-| dfsStorage         | Storage directory for the distributed file system(optional) |
 
 <br>
 

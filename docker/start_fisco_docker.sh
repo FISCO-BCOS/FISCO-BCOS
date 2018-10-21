@@ -18,7 +18,7 @@ if [ "" = "`grep 0.0.0.0 -rl $local_dir/node1/data/bootstrapnodes.json`" ];
 then
     echo "Please Confirm Host Is Right Which In $local_dir/node1/data/bootstrapnodes.json !"
 else
-    sed -i "s/0.0.0.0/$local_ip/g" `grep 0.0.0.0 -rl $local_dir/node1/data/bootstrapnodes.json `
+    sed -i "s/0.0.0.0/$local_ip/g" $local_dir/node1/data/bootstrapnodes.json
 fi
 
 echo -e "--------------FISCO-BCOS Docker Node Info--------------"
