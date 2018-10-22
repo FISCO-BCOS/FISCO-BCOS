@@ -16,7 +16,7 @@ statedb_type=leveldb #存储
 eth_path=
 make_tar=
 Download=false
-Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0/fisco-bcos
+Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0-pre-release/fisco-bcos
 
 help() {
 	echo $1
