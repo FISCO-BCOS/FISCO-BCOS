@@ -29,12 +29,12 @@ namespace dev
 {
 namespace eth
 {
-Block::Block(bytesConstRef _data) : m_currentBytes(_data.toBytes())
+Block::Block(bytesConstRef _data)
 {
     decode(_data);
 }
 
-Block::Block(bytes const& _data) : m_currentBytes(_data)
+Block::Block(bytes const& _data)
 {
     decode(ref(_data));
 }
@@ -43,9 +43,7 @@ Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()),
     m_transactions(_block.transactions()),
     m_transactionReceipts(_block.transactionReceipts()),
-    m_headerHash(_block.headerHash()),
     m_sigList(_block.sigList()),
-    m_currentBytes(_block.m_currentBytes),
     m_txsCache(_block.m_txsCache),
     m_txsMapCache(_block.m_txsMapCache),
     m_txsRoot(_block.m_txsRoot)
@@ -56,15 +54,12 @@ Block::Block(Block const& _block)
 Block& Block::operator=(Block const& _block)
 {
     m_blockHeader = _block.blockHeader();
-    m_headerHash = _block.headerHash();
     /// init transactions
     m_transactions = _block.transactions();
     /// init transactionReceipts
     m_transactionReceipts = _block.transactionReceipts();
     /// init sigList
     m_sigList = _block.sigList();
-    /// init m_currentBytes
-    m_currentBytes = _block.m_currentBytes;
     m_txsCache = _block.m_txsCache;
     m_txsMapCache = _block.m_txsMapCache;
     m_txsRoot = _block.m_txsRoot;
@@ -78,7 +73,7 @@ Block& Block::operator=(Block const& _block)
  * @param _out : generated block
  * @param sig_list: signature list
  */
-void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>>& sig_list)
+void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>> const& sig_list) const
 {
     /// verify blockheader
     m_blockHeader.verify(CheckEverything);
@@ -95,8 +90,8 @@ void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>>& sig_lis
  * @param _header : specified block header to generate the block
  * @param sig_list : signature list
  */
-void Block::encode(
-    bytes& _out, bytesConstRef _header, std::vector<std::pair<u256, Signature>>& sig_list)
+void Block::encode(bytes& _out, bytesConstRef _header,
+    std::vector<std::pair<u256, Signature>> const& sig_list) const
 {
     /// check validition of block header before encode
     /// _header data validition has already been checked in "populate of BlockHeader"
@@ -114,7 +109,7 @@ void Block::encode(
  * @param sig_list : signature list
  */
 void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
-    std::vector<std::pair<u256, Signature>>& sig_list)
+    std::vector<std::pair<u256, Signature>> const& sig_list) const
 {
     /// refresh transaction list cache
     bytes txsCache = encodeTransactions();
@@ -133,7 +128,7 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 }
 
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
-bytes const& Block::encodeTransactions()
+bytes const& Block::encodeTransactions() const
 {
     RLPStream txs;
     txs.appendList(m_transactions.size());
@@ -173,11 +168,8 @@ void Block::decode(bytesConstRef _block_bytes)
     {
         m_transactions[i].decode(transactions_rlp[i]);
     }
-    /// get hash of the block header
-    m_headerHash = block_rlp[2].toHash<h256>(RLP::VeryStrict);
     /// get sig_list
     m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
-    m_currentBytes = _block_bytes.toBytes();
     noteChange();
 }
 }  // namespace eth

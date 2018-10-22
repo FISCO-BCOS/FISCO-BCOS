@@ -26,6 +26,7 @@
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/easylog.h>
+#include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
@@ -87,6 +88,7 @@ public:
      * @param _txHash: transaction hash
      */
     bool drop(h256 const& _txHash) override;
+    bool dropBlockTrans(Block const& block) override;
     /**
      * @brief Get top transactions from the queue
      *
@@ -110,6 +112,12 @@ public:
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
+    /// Register a handler that will be called once there is a new transaction imported
+    template <class T>
+    Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
 
 protected:
     /**
@@ -138,6 +146,7 @@ protected:
 
 private:
     bool removeTrans(h256 const& _txHash);
+    bool removeOutOfBound(h256 const& _txHash);
     void insert(Transaction const& _tx);
 
 private:
@@ -160,6 +169,9 @@ private:
     h256Hash m_known;
     /// hash of dropped transactions
     h256Hash m_dropped;
+    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
+    ///< nice and exit fast.
+    Signal<> m_onReady;
 };  // namespace txpool
 }  // namespace txpool
 }  // namespace dev

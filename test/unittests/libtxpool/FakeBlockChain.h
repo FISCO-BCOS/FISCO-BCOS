@@ -36,6 +36,39 @@ namespace dev
 {
 namespace test
 {
+class FakeService : public Service
+{
+public:
+    FakeService(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
+      : Service(_host, _p2pMsgHandler)
+    {}
+    void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
+    SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const { return m_sessionInfos; }
+
+    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+        Options const& options = Options()) override
+    {
+        if (m_asyncSend.count(nodeID))
+            m_asyncSend[nodeID]++;
+        else
+            m_asyncSend[nodeID] = 1;
+    }
+    size_t getAsyncSendSizeByNodeID(NodeID const& nodeID)
+    {
+        if (!m_asyncSend.count(nodeID))
+            return 0;
+        return m_asyncSend[nodeID];
+    }
+    void setConnected() { m_connected = true; }
+    bool isConnected(NodeID const& nodeId) const { return m_connected; }
+
+private:
+    SessionInfos m_sessionInfos;
+    std::map<NodeID, size_t> m_asyncSend;
+    bool m_connected;
+};
 class FakeTxPool : public TxPool
 {
 public:
@@ -70,6 +103,7 @@ public:
             if (blockHeight > 0)
             {
                 fake_block.m_blockHeader.setParentHash(m_blockChain[blockHeight - 1]->headerHash());
+                fake_block.m_blockHeader.setNumber(blockHeight);
                 fake_block.reEncodeDecode();
             }
             m_blockHash[fake_block.m_blockHeader.hash()] = blockHeight;
@@ -93,12 +127,22 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
+    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+    /// fake commitBlock
+
     virtual void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
-    {}
-    std::map<h256, uint64_t> m_blockHash;
+    {
+        block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
+        block.header().setNumber(m_blockNumber);
+        std::shared_ptr<Block> p_block = std::make_shared<Block>(block);
+        m_blockChain.push_back(p_block);
+        m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
+        m_blockNumber += 1;
+    }
+    std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
-    uint64_t m_blockNumber;
+    int64_t m_blockNumber;
 };
 class TxPoolFixture
 {
@@ -118,7 +162,7 @@ public:
         /// create p2pHandler
         m_p2pHandler = std::make_shared<P2PMsgHandler>();
         /// fake service of p2p module
-        m_topicService = std::make_shared<Service>(m_host, m_p2pHandler);
+        m_topicService = std::make_shared<FakeService>(m_host, m_p2pHandler);
         std::shared_ptr<BlockChainInterface> blockChain =
             std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
@@ -131,7 +175,7 @@ public:
             dynamic_cast<FakeSessionForTest*>(session.second.get())->setDataContent(data_content);
     }
     std::shared_ptr<FakeTxPool> m_txPool;
-    std::shared_ptr<Service> m_topicService;
+    std::shared_ptr<FakeService> m_topicService;
     std::shared_ptr<P2PMsgHandler> m_p2pHandler;
     std::shared_ptr<FakeBlockChain> m_blockChain;
     std::shared_ptr<Host> m_host;

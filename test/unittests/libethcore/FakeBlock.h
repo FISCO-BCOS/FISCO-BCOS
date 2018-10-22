@@ -128,7 +128,7 @@ public:
         uint64_t current_time = utcTime();
         m_blockHeader.setTimestamp(current_time);
         m_blockHeader.appendExtraDataArray(jsToBytes("0x1020"));
-        m_blockHeader.setSealer(u256("0x00"));
+        m_blockHeader.setSealer(u256(12));
         std::vector<h512> sealer_list;
         for (unsigned int i = 0; i < 10; i++)
         {

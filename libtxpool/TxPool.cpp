@@ -68,6 +68,7 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     {
         return make_pair(_tx.sha3(), Address(2));
     }
+    m_onReady();
     return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
 }
 
@@ -83,7 +84,6 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
 ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
 {
     Transaction tx;
-
     tx.decode(_txBytes, CheckTransaction::Everything);
     /// check sha3
     if (sha3(_txBytes.toBytes()) != tx.sha3())
@@ -101,7 +101,7 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
  */
 ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
 {
-    _tx.setImportTime(utcTime());
+    _tx.setImportTime(u256(utcTime()));
     UpgradableGuard l(m_lock);
     ImportResult verify_ret = verify(_tx);
     if (verify_ret == ImportResult::Success)
@@ -111,8 +111,9 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
         /// drop the oversized transactions
         while (m_txsQueue.size() > m_limit)
         {
-            removeTrans(m_txsQueue.rbegin()->sha3());
+            removeOutOfBound(m_txsQueue.rbegin()->sha3());
         }
+        m_onReady();
     }
     return verify_ret;
 }
@@ -191,14 +192,24 @@ bool TxPool::removeTrans(h256 const& _txHash)
 {
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
+    {
+        /// LOG(WARNING) << "txHash = " << toHex(_txHash)
+        ///             << " doesn't exist in the txpool, please check again";
         return false;
+    }
     m_txsHash.erase(p_tx);
     if (m_known.count(_txHash))
         m_known.erase(_txHash);
     m_txsQueue.erase(p_tx->second);
-    LOG(WARNING) << "Dropping out of bounds transaction, TransactionQueue::removeOutofBoundsTrans: "
-                 << toString(_txHash);
     return true;
+}
+
+bool TxPool::removeOutOfBound(h256 const& _txHash)
+{
+    bool ret = removeTrans(_txHash);
+    LOG(WARNING) << "Dropping out of bounds transaction, TransactionQueue::removeOutofBoundsTrans: "
+                 << toHex(_txHash);
+    return ret;
 }
 
 /**
@@ -216,8 +227,6 @@ void TxPool::insert(Transaction const& _tx)
     m_known.insert(tx_hash);
     PriorityQueue::iterator p_tx = m_txsQueue.emplace(_tx);
     m_txsHash[tx_hash] = p_tx;
-    LOG(INFO) << " insert tx.sha3 = " << (tx_hash) << ", Randomid= " << (_tx.nonce())
-              << " , time = " << utcTime();
 }
 
 /**
@@ -234,6 +243,21 @@ bool TxPool::drop(h256 const& _txHash)
     return removeTrans(_txHash);
 }
 
+bool TxPool::dropBlockTrans(Block const& block)
+{
+    if (block.getTransactionSize() == 0)
+        return true;
+    WriteGuard l(m_lock);
+    bool succ = true;
+    for (auto t : block.transactions())
+    {
+        m_dropped.insert(t.sha3());
+        if (removeTrans(t.sha3()) == false)
+            succ = false;
+    }
+    return succ;
+}
+
 /**
  * @brief Get top transactions from the queue
  *
@@ -245,12 +269,14 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
 {
     ReadGuard l(m_lock);
     Transactions ret;
-    uint64_t i = 0;
-    for (auto it = m_txsQueue.begin(); ret.size() < m_limit && it != m_txsQueue.end(); it++)
+    uint64_t limit = min(m_limit, _limit);
+    uint64_t txCnt = 0;
+    for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
         if (!_avoid.count(it->sha3()))
         {
             ret.push_back(*it);
+            txCnt++;
             if (updateAvoid)
                 _avoid.insert(it->sha3());
         }
