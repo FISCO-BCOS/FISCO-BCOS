@@ -24,6 +24,7 @@
  */
 
 #pragma once
+#include "easylog.h"
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/thread/thread.hpp>
@@ -50,7 +51,7 @@ public:
 #endif
 
             _workers.create_thread([&] {
-                pthread_setThreadName(_threadName);
+                dev::pthread_setThreadName(_threadName);
                 _ioService.run();
             });
         }
