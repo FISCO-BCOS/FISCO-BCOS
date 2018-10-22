@@ -15,8 +15,8 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file ABI.h
- * @author Gav Wood <i@gavwood.com>, jimmyshi
- * @date 2018
+ * @author Gav Wood <i@gavwood.com>
+ * @date 2014
  */
 
 #pragma once
@@ -25,7 +25,6 @@
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/SHA3.h>
-#include <iostream>
 
 #include <libdevcore/easylog.h>
 
@@ -38,21 +37,17 @@ class ContractABI
 public:
     void serialise(u256 const& _t) { fixedItems.push_back(h256(_t).asBytes()); }
 
-    void serialise(byte const& _t)
-    {
-        fixedItems.push_back(bytes(31, 0) + bytes(1, _t));
-    }  // Fix bug here, declare size of bytes
+    void serialise(byte const& _t) { fixedItems.push_back(bytes(31, 0) + bytes(_t)); }
 
     void serialise(u160 const& _t) { fixedItems.push_back(bytes(12, 0) + h160(_t).asBytes()); }
 
     void serialise(string32 const& _t)
     {
-        bytes ret(32, 0);  // Fix bugs, declare size here
+        bytes ret(32);
         bytesConstRef((byte const*)_t.data(), 32).populate(bytesRef(&ret));
 
         fixedItems.push_back(ret);
     }
-
 
     void serialise(string64 const& _t)
     {
@@ -72,7 +67,7 @@ public:
         item.data = ret;
         item.offset = fixedItems.size();
 
-        serialise(u256(0));  // Fill in a zero before filling the offset
+        serialise(u256(0));
 
         dynamicItems.push_back(item);
     }
@@ -98,7 +93,7 @@ public:
 
         for (auto it = dynamicItems.begin(); it != dynamicItems.end(); ++it)
         {
-            fixedItems[it->offset] = h256(offset).asBytes();  // Fill the offset
+            fixedItems[it->offset] = h256(offset).asBytes();
 
             offset += it->data.size();
         }
@@ -111,7 +106,14 @@ public:
         for (auto it = dynamicItems.begin(); it != dynamicItems.end(); ++it)
             dynamic += it->data;
 
-        return sha3(_id).ref().cropped(0, 4).toBytes() + fixed + dynamic;
+        if (_id.empty())
+        {
+            return fixed + dynamic;
+        }
+        else
+        {
+            return sha3(_id).ref().cropped(0, 4).toBytes() + fixed + dynamic;
+        }
     }
 
     template <unsigned N>
@@ -129,8 +131,12 @@ public:
 
     void deserialise(string32& out)
     {
-        // fix bug here, starting offset modify from 0 to getOffset()
-        data.cropped(getOffset(), 32).populate(bytesRef((byte*)out.data(), 32));
+        data.cropped(0, 32).populate(bytesRef((byte*)out.data(), 32));
+    }
+
+    void deserialise(string64& out)
+    {
+        data.cropped(0, 64).populate(bytesRef((byte*)out.data(), 64));
     }
 
     void deserialise(bool& out)
@@ -192,6 +198,154 @@ inline string32 toString32(std::string const& _s)
     for (unsigned i = 0; i < 32; ++i)
         ret[i] = i < _s.size() ? _s[i] : 0;
     return ret;
+}
+
+template <class T>
+struct ABISerialiser
+{
+};
+template <unsigned N>
+struct ABISerialiser<FixedHash<N>>
+{
+    static bytes serialise(FixedHash<N> const& _t)
+    {
+        static_assert(N <= 32, "Cannot serialise hash > 32 bytes.");
+        static_assert(N > 0, "Cannot serialise zero-length hash.");
+        return bytes(32 - N, 0) + _t.asBytes();
+    }
+};
+template <>
+struct ABISerialiser<u256>
+{
+    static bytes serialise(u256 const& _t) { return h256(_t).asBytes(); }
+};
+template <>
+struct ABISerialiser<u160>
+{
+    static bytes serialise(u160 const& _t) { return bytes(12, 0) + h160(_t).asBytes(); }
+};
+template <>
+struct ABISerialiser<string32>
+{
+    static bytes serialise(string32 const& _t)
+    {
+        bytes ret;
+        bytesConstRef((byte const*)_t.data(), 32).populate(bytesRef(&ret));
+        return ret;
+    }
+};
+template <>
+struct ABISerialiser<std::string>
+{
+    static bytes serialise(std::string const& _t)
+    {
+        bytes ret = h256(u256(32)).asBytes() + h256(u256(_t.size())).asBytes();
+        ret.resize(ret.size() + (_t.size() + 31) / 32 * 32);
+        bytesConstRef(&_t).populate(bytesRef(&ret).cropped(64));
+        return ret;
+    }
+};
+inline bytes abiInAux()
+{
+    return {};
+}
+template <class T, class... U>
+bytes abiInAux(T const& _t, U const&... _u)
+{
+    return ABISerialiser<T>::serialise(_t) + abiInAux(_u...);
+}
+
+template <class... T>
+bytes abiIn(std::string _id, T const&... _t)
+{
+    return sha3(_id).ref().cropped(0, 4).toBytes() + abiInAux(_t...);
+}
+
+template <class T>
+struct ABIDeserialiser
+{
+};
+template <unsigned N>
+struct ABIDeserialiser<FixedHash<N>>
+{
+    static FixedHash<N> deserialise(bytesConstRef& io_t)
+    {
+        static_assert(N <= 32, "Parameter sizes must be at most 32 bytes.");
+        FixedHash<N> ret;
+        io_t.cropped(32 - N, N).populate(ret.ref());
+        io_t = io_t.cropped(32);
+        return ret;
+    }
+};
+template <>
+struct ABIDeserialiser<u256>
+{
+    static u256 deserialise(bytesConstRef& io_t)
+    {
+        u256 ret = fromBigEndian<u256>(io_t.cropped(0, 32));
+        io_t = io_t.cropped(32);
+        return ret;
+    }
+};
+template <>
+struct ABIDeserialiser<u160>
+{
+    static u160 deserialise(bytesConstRef& io_t)
+    {
+        u160 ret = fromBigEndian<u160>(io_t.cropped(12, 20));
+        io_t = io_t.cropped(32);
+        return ret;
+    }
+};
+template <>
+struct ABIDeserialiser<string32>
+{
+    static string32 deserialise(bytesConstRef& io_t)
+    {
+        string32 ret;
+        io_t.cropped(0, 32).populate(bytesRef((byte*)ret.data(), 32));
+        io_t = io_t.cropped(32);
+        return ret;
+    }
+};
+
+template <>
+struct ABIDeserialiser<bool>
+{
+    static bool deserialise(bytesConstRef& io_t)
+    {
+        u256 ret = fromBigEndian<u256>(io_t.cropped(0, 32));
+        io_t = io_t.cropped(32);
+        return ret > 0 ? true : false;
+    }
+};
+
+template <>
+struct ABIDeserialiser<std::string>
+{
+    static std::string deserialise(bytesConstRef& io_t)
+    {
+        unsigned o = (uint16_t)u256(h256(io_t.cropped(0, 32)));
+        unsigned s = (uint16_t)u256(h256(io_t.cropped(o, 32)));
+        std::string ret;
+        ret.resize(s);
+        io_t.cropped(o + 32, s).populate(bytesRef((byte*)ret.data(), s));
+        io_t = io_t.cropped(32);
+        return ret;
+    }
+};
+
+template <class T>
+T abiOut(bytes const& _data)
+{
+    bytesConstRef o(&_data);
+    return ABIDeserialiser<T>::deserialise(o);
+}
+
+template <class T>
+T abiOut(bytesConstRef& _data)
+{
+    return ABIDeserialiser<T>::deserialise(_data);
 }
 
 }  // namespace eth
