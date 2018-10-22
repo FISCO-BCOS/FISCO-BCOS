@@ -34,6 +34,8 @@
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <unistd.h>
+#include <ctime>
 
 using namespace dev;
 using namespace dev::blockchain;
@@ -133,10 +135,16 @@ private:
 class FakeBlockVerifier : public BlockVerifierInterface
 {
 public:
-    FakeBlockVerifier() { m_executiveContext = std::make_shared<ExecutiveContext>(); };
+    FakeBlockVerifier()
+    {
+        m_executiveContext = std::make_shared<ExecutiveContext>();
+        std::srand(std::time(nullptr));
+    };
     virtual ~FakeBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
     {
+        /// execute time: 1000
+        usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
 

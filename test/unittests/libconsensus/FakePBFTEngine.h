@@ -217,7 +217,7 @@ public:
     {
         FakeService* service = dynamic_cast<FakeService*>(m_consensus->mutableService().get());
         service->clearSessionInfo();
-        for (int i = 0; i < m_minerList.size(); i++)
+        for (size_t i = 0; i < m_minerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
             SessionInfo info(m_minerList[i], m_endpoint, std::vector<std::string>());

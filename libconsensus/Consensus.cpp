@@ -94,11 +94,10 @@ void Consensus::doWork(bool wait)
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
             bool t = true;
             /// load transaction from transaction queue
-            if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal &&
-                m_syncTxPool.compare_exchange_strong(t, false))
+            if (m_syncTxPool.compare_exchange_strong(t, false))
             {
-                LOG(DEBUG) << "### load Transactions, tx_num:" << tx_num;
-                LOG(DEBUG) << "### load Transactions, max_blockCanSeal:" << max_blockCanSeal;
+                /// LOG(DEBUG) << "### load Transactions, tx_num:" << tx_num;
+                /// LOG(DEBUG) << "### load Transactions, max_blockCanSeal:" << max_blockCanSeal;
                 loadTransactions(max_blockCanSeal - tx_num);
                 /// check enough or reach block interval
                 if (!checkTxsEnough(max_blockCanSeal))
@@ -148,9 +147,9 @@ void Consensus::resetSealingBlock(Sealing& sealing)
 void Consensus::resetBlock(Block& block)
 {
     block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
-    LOG(DEBUG) << "##### m_blockChain->getBlockByNumber(m_blockChain->number():"
-               << m_blockChain->number();
-    LOG(DEBUG) << "##### block number after reset:" << block.header().number();
+    /// LOG(DEBUG) << "##### m_blockChain->getBlockByNumber(m_blockChain->number():"
+    ///           << m_blockChain->number();
+    /// LOG(DEBUG) << "##### block number after reset:" << block.header().number();
 }
 
 void Consensus::resetSealingHeader(BlockHeader& header)

@@ -412,15 +412,14 @@ void PBFTEngine::checkMinerList(Block const& block)
 
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
+    auto start_exec_time = utcTime();
     Block working_block(req.block);
     LOG(TRACE) << "start exec tx, blk=" << req.height
                << ", hash = " << working_block.header().hash().abridged() << ", idx = " << req.idx
                << ", time =" << utcTime();
-    auto start_exec_time = utcTime();
     checkBlockValid(working_block);
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
-    m_timeManager.m_lastExecFinishTime = utcTime();
     m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
 }
 
@@ -795,8 +794,8 @@ bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstre
         return false;
     }
     /// check block hash
-    if (req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash() ||
-        m_blockChain->getBlockByHash(req.block_hash) == nullptr)
+    if ((req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash()) ||
+        (m_blockChain->getBlockByHash(req.block_hash) == nullptr))
     {
         LOG(ERROR) << oss.str()
                    << ", Discard an illegal viewchange for block hash diff, req.block_hash="

@@ -496,7 +496,7 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
     }
     LOG(INFO) << "start a new peer: " << node_id;
     /// trigger send topic seq after starting a new peer
-    /// m_lastSendTopicSeq = chrono::steady_clock::time_point::min();
+    m_lastSendTopicSeq = chrono::steady_clock::time_point::min();
 }
 
 /**
