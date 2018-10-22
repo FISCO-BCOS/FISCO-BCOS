@@ -44,6 +44,9 @@ public:
     {
         m_ping = m_lastReceived = m_connectionTime = chrono::steady_clock::now();
         m_disconnect = false;
+        std::shared_ptr<dev::ThreadPool> threadPool =
+            std::make_shared<ThreadPool>("SessionCallBackThreadPool", 1);
+        setThreadPool(threadPool);
     }
     void start() override
     {
@@ -111,7 +114,7 @@ public:
     }
     virtual void doRead()
     {
-        setProtocolId(dev::eth::ProtocolID::TxPool);
+        setProtocolId(0);
         EncodeData();
         if (m_read == 1)
             return;

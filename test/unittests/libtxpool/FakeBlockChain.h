@@ -16,8 +16,8 @@
  */
 
 /**
- * @brief: fake block manager
- * @file: FakeBlockManager.h
+ * @brief: fake block-chain
+ * @file: FakeBlockChain.h
  * @author: yujiechen
  * @date: 2018-09-25
  */

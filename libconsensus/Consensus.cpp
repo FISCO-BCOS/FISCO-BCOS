@@ -94,22 +94,17 @@ void Consensus::doWork(bool wait)
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
             bool t = true;
             /// load transaction from transaction queue
-            if (m_syncTxPool.compare_exchange_strong(t, false) || checkTxsEnough(max_blockCanSeal))
-            {
-                /// LOG(DEBUG) << "### load Transactions, tx_num:" << tx_num;
-                /// LOG(DEBUG) << "### load Transactions, max_blockCanSeal:" << max_blockCanSeal;
+            if (m_syncTxPool.compare_exchange_strong(t, false) && !reachBlockIntervalTime())
                 loadTransactions(max_blockCanSeal - tx_num);
-                /// check enough or reach block interval
-                if (!checkTxsEnough(max_blockCanSeal))
-                {
-                    ///< 10 milliseconds to next loop
-                    std::unique_lock<std::mutex> l(x_signalled);
-                    m_signalled.wait_for(l, std::chrono::milliseconds(1));
-                    return;
-                }
-                handleBlock();
-                /// wait for 1s even the block has been sealed
+            /// check enough or reach block interval
+            if (!checkTxsEnough(max_blockCanSeal))
+            {
+                ///< 10 milliseconds to next loop
+                std::unique_lock<std::mutex> l(x_signalled);
+                m_signalled.wait_for(l, std::chrono::milliseconds(1));
+                return;
             }
+            handleBlock();
         }
     }
     if (shouldWait(wait))

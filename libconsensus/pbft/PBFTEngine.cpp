@@ -356,17 +356,17 @@ bool PBFTEngine::isValidPrepare(
 {
     if (m_reqCache->isExistPrepare(req))
     {
-        LOG(ERROR) << oss.str() << " , Discard an illegal prepare, duplicated";
+        LOG(WARNING) << oss.str() << " , Discard an illegal prepare, duplicated";
         return false;
     }
     if (!allowSelf && req.idx == m_idx)
     {
-        LOG(ERROR) << oss.str() << ", Discard an illegal prepare, your own req";
+        LOG(WARNING) << oss.str() << ", Discard an illegal prepare, your own req";
         return false;
     }
     if (hasConsensused(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard an illegal prepare, maybe consensused";
+        LOG(WARNING) << oss.str() << ", Discard an illegal prepare, maybe consensused";
         return false;
     }
 
@@ -378,18 +378,19 @@ bool PBFTEngine::isValidPrepare(
     }
     if (!isValidLeader(req))
     {
-        LOG(ERROR) << oss.str() << "Recv an illegal prepare, err leader";
+        LOG(WARNING) << oss.str() << "Recv an illegal prepare, err leader";
         return false;
     }
     if (!isHashSavedAfterCommit(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard an illegal prepare req, commited but not saved hash="
-                   << m_reqCache->committedPrepareCache().block_hash.abridged();
+        LOG(WARNING) << oss.str()
+                     << ", Discard an illegal prepare req, commited but not saved hash="
+                     << m_reqCache->committedPrepareCache().block_hash.abridged();
         return false;
     }
     if (!checkSign(req))
     {
-        LOG(ERROR) << oss.str() << ",CheckSign failed";
+        LOG(WARNING) << oss.str() << ",CheckSign failed";
         return false;
     }
     return true;
@@ -462,7 +463,7 @@ void PBFTEngine::onRecvPBFTMessage(
     }
     else
     {
-        LOG(ERROR) << "Recv an illegal msg, id = " << pbft_msg.packet_id;
+        LOG(WARNING) << "Recv an illegal msg, id = " << pbft_msg.packet_id;
     }
 }
 
@@ -676,7 +677,7 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
 {
     if (m_reqCache->isExistSign(req))
     {
-        LOG(ERROR) << oss.str() << "Discard a duplicated sign";
+        LOG(WARNING) << oss.str() << "Discard a duplicated sign";
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -730,7 +731,7 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistCommit(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard duplicated commit request";
+        LOG(WARNING) << oss.str() << ", Discard duplicated commit request";
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -780,7 +781,7 @@ bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstre
 {
     if (m_reqCache->isExistViewChange(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard duplicated view change request";
+        LOG(WARNING) << oss.str() << ", Discard duplicated view change request";
         return false;
     }
     if (req.idx == m_idx)
@@ -792,23 +793,23 @@ bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstre
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
-        LOG(ERROR) << oss.str() << ", Discard illegal viewchange, req.height=" << req.height
-                   << ", m_highestBlock.height=" << m_highestBlock.number()
-                   << ", req.view=" << req.view << ", m_view=" << m_view;
+        LOG(WARNING) << oss.str() << ", Discard illegal viewchange, req.height=" << req.height
+                     << ", m_highestBlock.height=" << m_highestBlock.number()
+                     << ", req.view=" << req.view << ", m_view=" << m_view;
         return false;
     }
     /// check block hash
     if ((req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash()) ||
         (m_blockChain->getBlockByHash(req.block_hash) == nullptr))
     {
-        LOG(ERROR) << oss.str()
-                   << ", Discard an illegal viewchange for block hash diff, req.block_hash="
-                   << req.block_hash << ", m_highestBlock.hash()=" << m_highestBlock.hash();
+        LOG(INFO) << oss.str()
+                  << ", Discard an illegal viewchange for block hash diff, req.block_hash="
+                  << req.block_hash << ", m_highestBlock.hash()=" << m_highestBlock.hash();
         return false;
     }
     if (!checkSign(req))
     {
-        LOG(ERROR) << oss.str() << ", CheckSign failed";
+        LOG(WARNING) << oss.str() << ", CheckSign failed";
         return false;
     }
     return true;
@@ -923,7 +924,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     }
     default:
     {
-        LOG(ERROR) << "Recv error msg, id=" << pbftMsg.node_idx;
+        LOG(WARNING) << "Recv error msg, id=" << pbftMsg.node_idx;
         return;
     }
     }

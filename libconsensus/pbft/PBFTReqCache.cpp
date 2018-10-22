@@ -174,8 +174,6 @@ void PBFTReqCache::getCacheConsensusStatus(json_spirit::Array& status_array) con
 {
     /// prepare cache
     getCacheStatus(status_array, "prepareCache", m_prepareCache);
-    /// void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache)
-    /// const
     /// raw prepare cache
     getCacheStatus(status_array, "rawPrepareCache", m_rawPrepareCache);
     /// commited prepare cache
@@ -185,7 +183,7 @@ void PBFTReqCache::getCacheConsensusStatus(json_spirit::Array& status_array) con
     /// signCache
     getCollectedCacheStatus(status_array, "signCache", m_signCache);
     getCollectedCacheStatus(status_array, "commitCache", m_commitCache);
-    /// statusObj.push_back(status_array);
+    getCollectedCacheStatus(status_array, "viewChangeCache", m_recvViewChangeReq);
 }
 
 }  // namespace consensus

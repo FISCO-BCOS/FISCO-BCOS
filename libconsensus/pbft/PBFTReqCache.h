@@ -25,6 +25,7 @@
 #pragma once
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libconsensus/pbft/Common.h>
+#include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
 namespace dev
 {
@@ -269,7 +270,7 @@ private:
         for (auto i : cache)
         {
             json_spirit::Object entry;
-            entry.push_back(json_spirit::Pair(key + ".key", toHex(i.first)));
+            entry.push_back(json_spirit::Pair(key + ".key", dev::toJS(i.first)));
             entry.push_back(json_spirit::Pair(key + ".collected_size", i.second.size()));
             cacheJsonArray.push_back(entry);
         }

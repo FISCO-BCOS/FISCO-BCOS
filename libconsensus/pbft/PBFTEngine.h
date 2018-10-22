@@ -251,7 +251,7 @@ protected:
         peerIndex = getIndexByMiner(session->id());
         if (peerIndex < 0)
         {
-            LOG(ERROR) << "Recv an pbft msg from unknown peer id=" << session->id();
+            LOG(WARNING) << "Recv an pbft msg from unknown peer id=" << session->id();
             return false;
         }
         /// check whether this node is in the miner list
@@ -308,14 +308,14 @@ protected:
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            LOG(ERROR) << oss.str()
-                       << ", Discard a req of which view is not equal to prepare.view = "
-                       << m_reqCache->prepareCache().view;
+            LOG(WARNING) << oss.str()
+                         << ", Discard a req of which view is not equal to prepare.view = "
+                         << m_reqCache->prepareCache().view;
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            LOG(ERROR) << oss.str() << ", CheckSign failed";
+            LOG(WARNING) << oss.str() << ", CheckSign failed";
             return CheckResult::INVALID;
         }
         return CheckResult::VALID;
