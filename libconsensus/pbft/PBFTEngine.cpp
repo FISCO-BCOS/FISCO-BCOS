@@ -308,12 +308,6 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = u256(sessions.size());
-    u256 min_session = u256(0);
-    if (minValidNodes() >= u256(1) + u256(filter.size()))
-        min_session = minValidNodes() - u256(1) - u256(filter.size());
-    LOG(DEBUG) << "##### broadcast message, min_session=" << min_session;
-    if (sessions.size() < min_session)
-        return false;
     for (auto session : sessions)
     {
         LOG(DEBUG) << "#### session id:" << session.nodeID;
