@@ -220,6 +220,10 @@ public:
 
     shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
 
+    MessageFactory::Ptr messageFactory() { return m_messageFactory; }
+
+    void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
+
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
     virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());
@@ -336,6 +340,8 @@ protected:  /// protected members(for unit testing)
 
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;
+
+    MessageFactory::Ptr m_messageFactory;
 };
 }  // namespace p2p
 

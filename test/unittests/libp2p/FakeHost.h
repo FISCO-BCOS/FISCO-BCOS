@@ -71,6 +71,8 @@ public:
     ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) { return make_shared<ResponseCallback>(); }
     bool eraseCallbackBySeq(uint32_t seq) { return true; }
     NodeIPEndpoint nodeIPEndpoint() const override { return NodeIPEndpoint(); }
+	MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
+	void setMessageFactory (MessageFactory::Ptr _messageFactory) override { m_messageFactory = _messageFactory; }
 
 public:
     bool m_start = false;
@@ -81,6 +83,7 @@ public:
     std::chrono::steady_clock::time_point m_connectionTime;
     std::chrono::steady_clock::time_point m_lastReceived;
     std::chrono::steady_clock::time_point m_ping;
+    MessageFactory::Ptr m_messageFactory;
 };
 
 class FakeSessionForTest : public Session
@@ -138,10 +141,11 @@ class FakeSessionFactory : public SessionFactory
 {
     virtual std::shared_ptr<SessionFace> create_session(Host* _server,
         std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
-        PeerSessionInfo _info)
+        PeerSessionInfo _info, MessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<SessionFace> m_session =
             std::make_shared<FakeSessionForHost>(_server, _peer, _info, _socket);
+        m_session->setMessageFactory(_messageFactory);
         return m_session;
     }
 };
