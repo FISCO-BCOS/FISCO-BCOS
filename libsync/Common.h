@@ -38,9 +38,10 @@ namespace dev
 namespace sync
 {
 static unsigned const c_maxSendTransactions = 10;
-static size_t const c_maxDownloadingBlockQueueSize = 1000;
-static size_t const c_maxDownloadingBlockQueueBufferSize = 1000;
+static size_t const c_maxDownloadingBlockQueueSize = 4096;
+static size_t const c_maxDownloadingBlockQueueBufferSize = 4096;
 static int64_t const c_maxRequestBlocks = 1024;
+static int64_t const c_maxCommitBlocks = 2048;
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;
@@ -52,8 +53,8 @@ enum SyncPacketType : byte
 {
     StatusPacket = 0x00,
     TransactionsPacket = 0x01,
-    BlockPacket = 0x02,
-    ReqBlockPacket = 0x03,
+    BlocksPacket = 0x02,
+    ReqBlocskPacket = 0x03,
     PacketCount
 };
 

@@ -72,14 +72,21 @@ class SyncTransactionsPacket : public SyncMsgPacket
 {
 public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
-    void encode(unsigned _txNumber, bytes const& txRLPs);
+    void encode(unsigned _txsSize, bytes const& txRLPs);
+};
+
+class SyncBlocksPacket : public SyncMsgPacket
+{
+public:
+    SyncBlocksPacket() { packetType = BlocksPacket; }
+    void encode(std::vector<dev::bytes> const& _blockRLPs);
 };
 
 class SyncReqBlockPacket : public SyncMsgPacket
 {
 public:
-    SyncReqBlockPacket() { packetType = ReqBlockPacket; }
-    void encode(int64_t _from, int64_t _to);  // [from, to]
+    SyncReqBlockPacket() { packetType = ReqBlocskPacket; }
+    void encode(int64_t _from, unsigned _size);
 };
 
 

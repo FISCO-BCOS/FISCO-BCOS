@@ -29,6 +29,7 @@ using namespace dev::sync;
 using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::txpool;
+using namespace dev::blockverifier;
 
 void SyncMaster::start()
 {
@@ -132,18 +133,18 @@ void SyncMaster::maintainTransactions()
 
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         bytes txRLPs;
-        unsigned txNumber = peerTransactions[_p->nodeId].size();
-        if (0 == txNumber)
+        unsigned txsSize = peerTransactions[_p->nodeId].size();
+        if (0 == txsSize)
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
             txRLPs += ts[i]->rlp();
 
         SyncTransactionsPacket packet;
-        packet.encode(txNumber, txRLPs);
+        packet.encode(txsSize, txRLPs);
 
         m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
-        LOG(TRACE) << "Send" << int(txNumber) << "transactions to " << _p->nodeId;
+        LOG(TRACE) << "Send" << int(txsSize) << "transactions to " << _p->nodeId;
 
         return true;
     });
@@ -172,21 +173,31 @@ void SyncMaster::maintainPeersStatus()
     // need download? ->set syncing and knownHighestNumber
     int64_t currentNumber = m_blockChain->number();
     int64_t maxPeerNumber = 0;
+    h256 latestHash;
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        maxPeerNumber = max(_p->number, maxPeerNumber);
+        if (_p->number > maxPeerNumber)
+        {
+            latestHash = _p->latestHash;
+            maxPeerNumber = _p->number;
+        }
         return true;
     });
 
     if (currentNumber >= maxPeerNumber)
         return;  // no need to sync
     else
+    {
+        RecursiveGuard l(m_syncStatus->x_known);
+        m_syncStatus->knownHighestNumber = maxPeerNumber;
+        m_syncStatus->knownLatestHash = latestHash;
         noteDownloadingBegin();
+    }
 
     // Select some peers to request blocks by c_maxRequestBlocks
     for (int64_t from = currentNumber; from < maxPeerNumber + 1; from += c_maxRequestBlocks)
     {
         // [from, to)
-        int64_t to = min(currentNumber + c_maxRequestBlocks, maxPeerNumber + 1);
+        int64_t to = min(from + c_maxRequestBlocks, maxPeerNumber + 1);
 
         // Select 1 node to request
         NodeIDs peers = m_syncStatus->randomSelectionSize(
@@ -195,7 +206,8 @@ void SyncMaster::maintainPeersStatus()
         for (auto peer : peers)
         {
             SyncReqBlockPacket packet;
-            packet.encode(from, to - 1);  // [from, to - 1]
+            unsigned size = to - from;
+            packet.encode(from, size);
             m_service->asyncSendMessageByNodeID(peer, packet.toMessage(m_protocolId));
             LOG(TRACE) << "Request blocks [" << from << ", " << to << "] to " << peer;
         }
@@ -208,12 +220,21 @@ bool SyncMaster::maintainDownloadingQueue()
     int64_t currentNumber = m_blockChain->number();
     if (currentNumber < m_syncStatus->knownHighestNumber)
     {
-        BlockPtrVec blocks =
-            m_syncStatus->bq().popSequent(currentNumber + 1, m_syncStatus->knownHighestNumber);
-        // for (auto block : blocks)
-        // m_blockChain->commitBlock(*blocks, );  // How to use executiveContext)
+        BlockPtrVec blocks = m_syncStatus->bq().popSequent(currentNumber + 1, c_maxCommitBlocks);
+        for (auto block : blocks)
+        {
+            // TODO: verify transaction signature before blockVerifier
+            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block);
+            m_blockChain->commitBlock(*block, exeCtx);
+        }
     }
 
     currentNumber = m_blockChain->number();
-    return currentNumber >= m_syncStatus->knownHighestNumber;
+    if (currentNumber >= m_syncStatus->knownHighestNumber)
+    {
+        assert(m_syncStatus->knownLatestHash ==
+               m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash());
+        return true;
+    }
+    return false;
 }

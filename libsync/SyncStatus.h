@@ -100,7 +100,9 @@ public:
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
 public:
+    mutable RecursiveMutex x_known;
     int64_t knownHighestNumber;
+    h256 knownLatestHash;
 
 private:
     mutable Mutex x_peerStatus;

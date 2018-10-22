@@ -26,6 +26,7 @@
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
+#include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
@@ -46,11 +47,13 @@ public:
     SyncMaster(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned _idleWaitMs = 30)
       : m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
+        m_blockVerifier(_blockVerifier),
         m_protocolId(_protocolId),
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash),
@@ -63,7 +66,7 @@ public:
 
         // signal registration
         m_txPool->onReady([=]() { this->noteNewTransactions(); });
-        // m_blockChain.onReady([=]() { this->noteNewBlocks(); });
+        m_blockChain->onReady([=]() { this->noteNewBlocks(); });
     }
 
     virtual ~SyncMaster(){};
@@ -125,6 +128,8 @@ private:
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     /// handler of the block chain module
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    /// block verifier
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
     /// Block queue and peers
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
     /// Message handler of p2p

@@ -69,6 +69,8 @@ private:
 private:
     void onPeerStatus(SyncMsgPacket const& _packet);
     void onPeerTransactions(SyncMsgPacket const& _packet);
+    void onPeerBlocks(SyncMsgPacket const& _packet);
+    void onPeerRequestBlocks(SyncMsgPacket const& _packet);
 
 private:
     // Outside data

@@ -79,8 +79,12 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
     case TransactionsPacket:
         onPeerTransactions(_packet);
         break;
-    case BlockPacket:
-    case ReqBlockPacket:
+    case BlocksPacket:
+        onPeerBlocks(_packet);
+        break;
+    case ReqBlocskPacket:
+        onPeerRequestBlocks(_packet);
+        break;
     default:
         return false;
     }
@@ -118,4 +122,41 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         if (p_tx != nullptr)
             p_tx->addImportPeer(_packet.nodeId);
     }
+}
+
+void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
+{
+    RLP const& rlps = _packet.rlp();
+    unsigned itemCount = rlps.itemCount();
+    for (unsigned i = 0; i < itemCount; ++i)
+    {
+        shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
+        // TODO check minerlist sig
+        m_syncStatus->bq().push(block);
+    }
+}
+
+void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
+{
+    RLP const& rlp = _packet.rlp();
+
+    // request
+    int64_t from = rlp[0].toInt<int64_t>();
+    unsigned size = rlp[1].toInt<unsigned>();
+
+    vector<bytes> blockRLPs;
+    for (int64_t number = from; number < from + size; ++number)
+    {
+        shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
+        if (!block || block->header().number() != number)
+            break;
+        blockRLPs.emplace_back(block->rlp());
+    }
+
+    SyncBlocksPacket retPacket;
+    retPacket.encode(blockRLPs);
+
+    m_service->asyncSendMessageByNodeID(_packet.nodeId, retPacket.toMessage(m_protocolId));
+    LOG(TRACE) << "Send blocks [" << from << ", " << from + blockRLPs.size() << "] to "
+               << _packet.nodeId;
 }

@@ -77,14 +77,23 @@ void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 co
     prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
 }
 
-void SyncTransactionsPacket::encode(unsigned _txNumber, bytes const& _txRLPs)
+void SyncTransactionsPacket::encode(unsigned _txsSize, bytes const& _txRLPs)
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, TransactionsPacket, _txNumber).appendRaw(_txRLPs, _txNumber);
+    prep(m_rlpStream, TransactionsPacket, _txsSize).appendRaw(_txRLPs, _txsSize);
 }
 
-void SyncReqBlockPacket::encode(int64_t _from, int64_t _to)  // [from, to]
+void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, ReqBlockPacket, 2) << _from << _to;
+    unsigned size = _blockRLPs.size();
+    prep(m_rlpStream, BlocksPacket, size);
+    for (bytes const& bs : _blockRLPs)
+        m_rlpStream.append(bs);
+}
+
+void SyncReqBlockPacket::encode(int64_t _from, unsigned _size)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, ReqBlocskPacket, 2) << _from << _size;
 }
