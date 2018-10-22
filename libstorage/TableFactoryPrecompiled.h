@@ -30,10 +30,6 @@ namespace dev
 {
 namespace blockverifier
 {
-const unsigned TABLE_NOT_EXISTS = 0;
-const unsigned TABLE_ALREADY_OPEN = 1;
-const unsigned TABLENAME_ALREADY_EXISTS = 2;
-const unsigned TABLENAME_CONFLICT = 101;
 #if 0
 {
     "56004b6a": "createTable(string,string,string)",
@@ -52,7 +48,6 @@ class TableFactoryPrecompiled : public Precompiled
 public:
     typedef std::shared_ptr<TableFactoryPrecompiled> Ptr;
 
-    TableFactoryPrecompiled();
     virtual ~TableFactoryPrecompiled(){};
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
@@ -61,21 +56,15 @@ public:
 
     void setMemoryTableFactory(dev::storage::MemoryTableFactory::Ptr MemoryTableFactory)
     {
-        m_MemoryTableFactory = MemoryTableFactory;
+        m_memoryTableFactory = MemoryTableFactory;
     }
 
-    dev::storage::MemoryTableFactory::Ptr getmemoryTableFactory() { return m_MemoryTableFactory; }
+    dev::storage::MemoryTableFactory::Ptr getmemoryTableFactory() { return m_memoryTableFactory; }
 
     h256 hash(std::shared_ptr<ExecutiveContext> context);
 
-    Address openTable(ExecutiveContext::Ptr context, const std::string& tableName);
-
 private:
-    unsigned isTableCreated(ExecutiveContext::Ptr context, const std::string& tableName,
-        const std::string& keyField, const std::string& valueFiled);
-    Address getSysTable(ExecutiveContext::Ptr context, const std::string& _tableName);
-    dev::storage::MemoryTableFactory::Ptr m_MemoryTableFactory;
-    std::vector<std::string> m_sysTables;
+    dev::storage::MemoryTableFactory::Ptr m_memoryTableFactory;
 };
 
 }  // namespace blockverifier

@@ -32,15 +32,9 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
 
-TableFactoryPrecompiled::TableFactoryPrecompiled()
-{
-    m_sysTables.push_back("_sys_tables_");
-    m_sysTables.push_back("_sys_miners_");
-}
-
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
-    return "Tableactory";
+    return "TableFactory";
 }
 
 bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
@@ -65,35 +59,43 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         abi.abiOut(data, tableName);
 
         LOG(DEBUG) << "DBFactory open table:" << tableName;
+        Address address;
+        auto table = m_memoryTableFactory->openTable(context->blockInfo().hash,
+            context->blockInfo().number.convert_to<int64_t>(), tableName);
+        if (table)
+        {
+            TablePrecompiled::Ptr tablePrecompiled = make_shared<TablePrecompiled>();
+            tablePrecompiled->setTable(table);
+            address = context->registerPrecompiled(tablePrecompiled);
+        }
+        else
+        {
+            LOG(DEBUG) << "Open new table:" << tableName << " failed.";
+        }
 
-        Address address = openTable(context, tableName);
         out = abi.abiIn("", address);
         break;
     }
     case 0x56004b6a:
     {  // createTable(string,string,string)
         string tableName;
-        string keyName;
-        string fieldNames;
+        string keyField;
+        string valueFiled;
 
-        abi.abiOut(data, tableName, keyName, fieldNames);
+        abi.abiOut(data, tableName, keyField, valueFiled);
         vector<string> fieldNameList;
-        boost::split(fieldNameList, fieldNames, boost::is_any_of(","));
+        boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
         for (auto& str : fieldNameList)
             boost::trim(str);
-        string valueFiled = boost::join(fieldNameList, ",");
-        auto errorCode = isTableCreated(context, tableName, keyName, valueFiled);
-
-        // not exist
-        if (errorCode == 0u)
+        valueFiled = boost::join(fieldNameList, ",");
+        auto table = m_memoryTableFactory->createTable(context->blockInfo().hash,
+            context->blockInfo().number.convert_to<int64_t>(), tableName, keyField, valueFiled);
+        // tableName already exist 
+        unsigned errorCode = 0;
+        if (!table == 0u)
         {
-            auto sysTable = std::dynamic_pointer_cast<TablePrecompiled>(
-                context->getPrecompiled(getSysTable(context, "_sys_tables_")));
-            auto tableEntry = sysTable->getTable()->newEntry();
-            tableEntry->setField("table_name", tableName);
-            tableEntry->setField("key_field", keyName);
-            tableEntry->setField("value_field", valueFiled);
-            sysTable->getTable()->insert(tableName, tableEntry);
+            LOG(ERROR) << "table:" << tableName << " conflict.";
+            errorCode = 1;
         }
         out = abi.abiIn("", errorCode);
         break;
@@ -107,81 +109,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
     return out;
 }
 
-Address TableFactoryPrecompiled::getSysTable(
-    ExecutiveContext::Ptr context, const std::string& _tableName)
-{
-    if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), _tableName))
-        return Address();
-
-    auto address = m_MemoryTableFactory->getTable(_tableName);
-    if (address == Address())
-    {
-        dev::storage::Table::Ptr table = m_MemoryTableFactory->openTable(context->blockInfo().hash,
-            context->blockInfo().number.convert_to<int64_t>(), _tableName);
-
-        TablePrecompiled::Ptr tablePrecompiled = std::make_shared<TablePrecompiled>();
-        tablePrecompiled->setTable(table);
-
-        address = context->registerPrecompiled(tablePrecompiled);
-        m_MemoryTableFactory->insertTable(_tableName, address);
-    }
-
-    return address;
-}
-
-unsigned TableFactoryPrecompiled::isTableCreated(ExecutiveContext::Ptr context,
-    const string& tableName, const string& keyField, const string& valueFiled)
-{
-    auto address = m_MemoryTableFactory->getTable(tableName);
-    if (address != Address())
-        return TABLE_ALREADY_OPEN;
-    auto sysTable = std::dynamic_pointer_cast<TablePrecompiled>(
-        context->getPrecompiled(getSysTable(context, "_sys_tables_")));
-    auto tableEntries =
-        sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
-    if (tableEntries->size() == 0u)
-        return TABLE_NOT_EXISTS;
-    for (size_t i = 0; i < tableEntries->size(); ++i)
-    {
-        auto entry = tableEntries->get(i);
-        if (keyField == entry->getField("key_field") &&
-            valueFiled == entry->getField("value_field"))
-        {
-            LOG(DEBUG) << "TableFactory table already exists:" << tableName;
-            return TABLENAME_ALREADY_EXISTS;
-        }
-    }
-    LOG(DEBUG) << "TableFactory table conflict:" << tableName;
-    return TABLENAME_CONFLICT;
-}
-
-Address TableFactoryPrecompiled::openTable(ExecutiveContext::Ptr context, const string& tableName)
-{
-    auto address = m_MemoryTableFactory->getTable(tableName);
-    if (address != Address())
-    {
-        LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << address;
-        return address;
-    }
-
-    if (m_sysTables.end() == find(m_sysTables.begin(), m_sysTables.end(), tableName))
-    {
-        auto sysTable = std::dynamic_pointer_cast<TablePrecompiled>(
-            context->getPrecompiled(getSysTable(context, "_sys_tables_")));
-        auto tableEntries =
-            sysTable->getTable()->select(tableName, sysTable->getTable()->newCondition());
-        if (tableEntries->size() == 0u)
-        {
-            LOG(DEBUG) << tableName << "not exist.";
-            return Address();
-        }
-    }
-
-    LOG(DEBUG) << "Open new sys table:" << tableName;
-    return getSysTable(context, tableName);
-}
-
 h256 TableFactoryPrecompiled::hash(std::shared_ptr<ExecutiveContext> context)
 {
-    return m_MemoryTableFactory->hash(context);
+    return m_memoryTableFactory->hash(context);
 }
