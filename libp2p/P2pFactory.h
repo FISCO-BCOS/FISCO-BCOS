@@ -21,11 +21,11 @@
  * @date 2018-09-17
  */
 #pragma once
+#include "Common.h"
 #include "Session.h"
 #include "SessionFace.h"
 #include "Socket.h"
 #include "SocketFace.h"
-#include "Common.h"
 namespace dev
 {
 namespace p2p

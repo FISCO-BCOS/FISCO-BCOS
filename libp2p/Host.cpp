@@ -444,7 +444,8 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
 
     shared_ptr<SessionFace> ps = m_sessionFactory->create_session(this, _s, p,
         PeerSessionInfo(
-            {node_id, p->endpoint().address.to_string(), chrono::steady_clock::duration(), 0}), m_messageFactory);
+            {node_id, p->endpoint().address.to_string(), chrono::steady_clock::duration(), 0}),
+        m_messageFactory);
     {
         RecursiveGuard l(x_sessions);
         if (m_sessions.count(node_id))
