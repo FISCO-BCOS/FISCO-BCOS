@@ -103,8 +103,8 @@ void Consensus::doWork(bool wait)
                 if (!checkTxsEnough(max_blockCanSeal))
                 {
                     ///< 10 milliseconds to next loop
-                    /// std::unique_lock<std::mutex> l(x_signalled);
-                    /// m_signalled.wait_for(l, std::chrono::milliseconds(1));
+                    std::unique_lock<std::mutex> l(x_signalled);
+                    m_signalled.wait_for(l, std::chrono::milliseconds(1));
                     return;
                 }
                 handleBlock();
