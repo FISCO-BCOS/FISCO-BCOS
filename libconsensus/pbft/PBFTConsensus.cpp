@@ -89,6 +89,5 @@ void PBFTConsensus::stop()
     Consensus::stop();
     m_pbftEngine->stop();
 }
-
 }  // namespace consensus
 }  // namespace dev

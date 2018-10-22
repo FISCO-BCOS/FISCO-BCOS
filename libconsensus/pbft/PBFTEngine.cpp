@@ -22,6 +22,7 @@
  * @date: 2018-09-28
  */
 #include "PBFTEngine.h"
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
@@ -41,6 +42,7 @@ void PBFTEngine::start()
 {
     initPBFTEnv(3 * getIntervalBlockTime());
     ConsensusEngineBase::start();
+    LOG(DEBUG) << "### pbft after initEnv:" << consensusStatus();
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
@@ -52,6 +54,7 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_leaderFailed = false;
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
+    m_connectedNode = m_nodeNum;
     LOG(INFO) << "PBFT initEnv success";
 }
 
@@ -304,6 +307,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    m_connectedNode = u256(sessions.size());
     u256 min_session = u256(0);
     if (minValidNodes() >= u256(1) + u256(filter.size()))
         min_session = minValidNodes() - u256(1) - u256(filter.size());
@@ -981,6 +985,32 @@ void PBFTEngine::handleFutureBlock()
         handlePrepareMsg(future_req);
         m_reqCache->resetFuturePrepare();
     }
+}
+
+/// get the status of PBFT consensus
+const std::string PBFTEngine::consensusStatus() const
+{
+    json_spirit::Array status;
+    json_spirit::Object statusObj;
+    getBasicConsensusStatus(statusObj);
+    /// get other informations related to PBFT
+    /// get connected node
+    statusObj.push_back(
+        json_spirit::Pair("connectedNodes", m_connectedNode.convert_to<uint64_t>()));
+    /// get the current view
+    statusObj.push_back(json_spirit::Pair("currentView", m_view.convert_to<uint64_t>()));
+    /// get toView
+    statusObj.push_back(json_spirit::Pair("toView", m_toView.convert_to<uint64_t>()));
+    /// get leader failed or not
+    statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
+    statusObj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
+    statusObj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
+    status.push_back(statusObj);
+    /// get cache-related informations
+    m_reqCache->getCacheConsensusStatus(status);
+    json_spirit::Value value(status);
+    std::string status_str = json_spirit::write_string(value, true);
+    return status_str;
 }
 
 }  // namespace consensus

@@ -90,7 +90,9 @@ static void startConsensus(Params& params)
     std::cout << "##### set topic" << std::endl;
     ///< start consensus
     pbftConsensus->start();
-
+    /// test pbft status
+    std::cout << "#### pbft consensus:" << pbftConsensus->consensusEngine()->consensusStatus()
+              << std::endl;
     ///< transaction related
     bytes rlpBytes = fromHex(
         "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
@@ -100,6 +102,10 @@ static void startConsensus(Params& params)
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
     u256 maxBlockLimit = u256(1000);
+    /// get the consensus status
+
+    /// m_txSpeed default is 10
+    uint16_t sleep_interval = (uint16_t)(1000.0 / params.txSpeed());
     while (true)
     {
         tx.setNonce(tx.nonce() + u256(1));
@@ -109,7 +115,7 @@ static void startConsensus(Params& params)
         std::pair<h256, Address> ret = txPool->submit(tx);
         /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
         ///          << ", size:" << txPool->pendingSize();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
 }
 

@@ -94,7 +94,7 @@ void Consensus::doWork(bool wait)
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
             bool t = true;
             /// load transaction from transaction queue
-            if (m_syncTxPool.compare_exchange_strong(t, false))
+            if (m_syncTxPool.compare_exchange_strong(t, false) || checkTxsEnough(max_blockCanSeal))
             {
                 /// LOG(DEBUG) << "### load Transactions, tx_num:" << tx_num;
                 /// LOG(DEBUG) << "### load Transactions, max_blockCanSeal:" << max_blockCanSeal;

@@ -169,5 +169,24 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, u256 const& v
     }
 }
 
+/// get the consensus status
+void PBFTReqCache::getCacheConsensusStatus(json_spirit::Array& status_array) const
+{
+    /// prepare cache
+    getCacheStatus(status_array, "prepareCache", m_prepareCache);
+    /// void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache)
+    /// const
+    /// raw prepare cache
+    getCacheStatus(status_array, "rawPrepareCache", m_rawPrepareCache);
+    /// commited prepare cache
+    getCacheStatus(status_array, "committedPrepareCache", m_committedPrepareCache);
+    /// future prepare cache
+    getCacheStatus(status_array, "futureCache", m_futurePrepareCache);
+    /// signCache
+    getCollectedCacheStatus(status_array, "signCache", m_signCache);
+    getCollectedCacheStatus(status_array, "commitCache", m_commitCache);
+    /// statusObj.push_back(status_array);
+}
+
 }  // namespace consensus
 }  // namespace dev

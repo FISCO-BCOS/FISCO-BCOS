@@ -101,6 +101,8 @@ public:
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
 
+    const std::string consensusStatus() const override;
+
 protected:
     void workLoop() override;
     void handleFutureBlock();
@@ -379,18 +381,14 @@ protected:
 protected:
     u256 m_view = u256(0);
     u256 m_toView = u256(0);
+    u256 m_connectedNode;
     KeyPair m_keyPair;
     std::string m_baseDir;
     bool m_cfgErr = false;
     bool m_leaderFailed = false;
-    // the block which is waiting consensus
-    int64_t m_consensusBlockNumber;
 
-    /// the latest block header
-    dev::eth::BlockHeader m_highestBlock;
-    bool m_emptyBlockFlag;
     /// whether to omit empty block
-    bool m_omitEmptyBlock = false;
+    bool m_omitEmptyBlock = true;
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
 
