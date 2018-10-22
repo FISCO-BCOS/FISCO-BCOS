@@ -93,6 +93,10 @@ public:
     NodeIDs randomSelection(
         unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
+    /// Select some peers at _selectSize when _allow(peer)
+    NodeIDs randomSelectionSize(
+        size_t _maxChosenSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
+
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
 public:

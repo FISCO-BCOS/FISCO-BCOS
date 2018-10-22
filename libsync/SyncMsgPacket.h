@@ -72,8 +72,16 @@ class SyncTransactionsPacket : public SyncMsgPacket
 {
 public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
-    void encode(unsigned txNumber, bytes const& txRLPs);
+    void encode(unsigned _txNumber, bytes const& txRLPs);
 };
+
+class SyncReqBlockPacket : public SyncMsgPacket
+{
+public:
+    SyncReqBlockPacket() { packetType = ReqBlockPacket; }
+    void encode(int64_t _from, int64_t _to);  // [from, to]
+};
+
 
 }  // namespace sync
 }  // namespace dev

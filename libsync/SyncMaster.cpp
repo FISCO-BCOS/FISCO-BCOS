@@ -42,6 +42,7 @@ void SyncMaster::stop()
 
 void SyncMaster::doWork()
 {
+    // Idle do
     if (!isSyncing())
     {
         // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
@@ -55,15 +56,21 @@ void SyncMaster::doWork()
             m_newBlocks = false;
             maintainBlocks();
         }
-        // need download? ->set syncing and knownHighestNumber
     }
 
+    // Not Idle do
     if (isSyncing())
     {
-        bool finished = maintainDownloadingQueue();
-        if (finished)
-            m_state = SyncState::Idle;
+        if (m_state == SyncState::Downloading)
+        {
+            bool finished = maintainDownloadingQueue();
+            if (finished)
+                noteDownloadingFinish();
+        }
     }
+
+    // Always do
+    maintainPeersStatus();
 }
 
 void SyncMaster::workLoop()
@@ -158,6 +165,41 @@ void SyncMaster::maintainBlocks()
 
         return true;
     });
+}
+
+void SyncMaster::maintainPeersStatus()
+{
+    // need download? ->set syncing and knownHighestNumber
+    int64_t currentNumber = m_blockChain->number();
+    int64_t maxPeerNumber = 0;
+    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        maxPeerNumber = max(_p->number, maxPeerNumber);
+        return true;
+    });
+
+    if (currentNumber >= maxPeerNumber)
+        return;  // no need to sync
+    else
+        noteDownloadingBegin();
+
+    // Select some peers to request blocks by c_maxRequestBlocks
+    for (int64_t from = currentNumber; from < maxPeerNumber + 1; from += c_maxRequestBlocks)
+    {
+        // [from, to)
+        int64_t to = min(currentNumber + c_maxRequestBlocks, maxPeerNumber + 1);
+
+        // Select 1 node to request
+        NodeIDs peers = m_syncStatus->randomSelectionSize(
+            1, [&](std::shared_ptr<SyncPeerStatus> _p) { return _p->number < to; });
+
+        for (auto peer : peers)
+        {
+            SyncReqBlockPacket packet;
+            packet.encode(from, to - 1);  // [from, to - 1]
+            m_service->asyncSendMessageByNodeID(peer, packet.toMessage(m_protocolId));
+            LOG(TRACE) << "Request blocks [" << from << ", " << to << "] to " << peer;
+        }
+    }
 }
 
 

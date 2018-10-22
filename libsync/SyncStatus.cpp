@@ -108,3 +108,29 @@ NodeIDs SyncMasterStatus::randomSelection(
     }
     return move(chosen);
 }
+
+NodeIDs SyncMasterStatus::randomSelectionSize(
+    size_t _maxChosenSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
+{
+    NodeIDs chosen;
+    NodeIDs allowed;
+
+    size_t peerCount = 0;
+    foreachPeer([&](std::shared_ptr<SyncPeerStatus> _p) {
+        if (_allow(_p))
+        {
+            allowed.push_back(_p->nodeId);
+        }
+        ++peerCount;
+        return true;
+    });
+
+    chosen.reserve(_maxChosenSize);
+    for (unsigned i = _maxChosenSize; i && allowed.size(); i--)
+    {
+        unsigned n = rand() % allowed.size();
+        chosen.push_back(std::move(allowed[n]));
+        allowed.erase(allowed.begin() + n);
+    }
+    return move(chosen);
+}

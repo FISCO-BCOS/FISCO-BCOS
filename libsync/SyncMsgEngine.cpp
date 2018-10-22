@@ -80,7 +80,7 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
         onPeerTransactions(_packet);
         break;
     case BlockPacket:
-    case GetBlockPacket:
+    case ReqBlockPacket:
     default:
         return false;
     }

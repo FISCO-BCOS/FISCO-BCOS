@@ -82,3 +82,9 @@ void SyncTransactionsPacket::encode(unsigned _txNumber, bytes const& _txRLPs)
     m_rlpStream.clear();
     prep(m_rlpStream, TransactionsPacket, _txNumber).appendRaw(_txRLPs, _txNumber);
 }
+
+void SyncReqBlockPacket::encode(int64_t _from, int64_t _to)  // [from, to]
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, ReqBlockPacket, 2) << _from << _to;
+}

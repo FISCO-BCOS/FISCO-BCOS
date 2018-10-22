@@ -40,6 +40,7 @@ namespace sync
 static unsigned const c_maxSendTransactions = 10;
 static size_t const c_maxDownloadingBlockQueueSize = 1000;
 static size_t const c_maxDownloadingBlockQueueBufferSize = 1000;
+static int64_t const c_maxRequestBlocks = 1024;
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;
@@ -52,17 +53,15 @@ enum SyncPacketType : byte
     StatusPacket = 0x00,
     TransactionsPacket = 0x01,
     BlockPacket = 0x02,
-    GetBlockPacket = 0x03,
+    ReqBlockPacket = 0x03,
     PacketCount
 };
 
 enum class SyncState
 {
-    Idle,     ///< Initial chain sync complete. Waiting for new packets
-    Waiting,  ///< Block downloading paused. Waiting for block queue to process blocks and free
-              ///< space
-    Blocks,   ///< Downloading blocks
-    Size      /// Must be kept last
+    Idle,         ///< Initial chain sync complete. Waiting for new packets
+    Downloading,  ///< Downloading blocks
+    Size          /// Must be kept last
 };
 
 struct NodeInfo

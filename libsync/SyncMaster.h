@@ -99,10 +99,23 @@ public:
         m_newTransactions = true;
         m_signalled.notify_all();  // awake doWork
     }
+
     void noteNewBlocks()
     {
         m_newBlocks = true;
         m_signalled.notify_all();  // awake doWork
+    }
+
+    void noteDownloadingBegin()
+    {
+        if (m_state == SyncState::Idle)
+            m_state = SyncState::Downloading;
+    }
+
+    void noteDownloadingFinish()
+    {
+        if (m_state == SyncState::Downloading)
+            m_state = SyncState::Idle;
     }
 
 private:
@@ -145,6 +158,7 @@ private:
 private:
     void maintainTransactions();
     void maintainBlocks();
+    void maintainPeersStatus();
     bool maintainDownloadingQueue();  /// return true if downloading finish
 };
 
