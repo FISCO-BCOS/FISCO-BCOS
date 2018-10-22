@@ -559,6 +559,35 @@ SessionInfos Service::sessionInfos() const
     return infos;
 }
 
+SessionInfos Service::sessionInfosByProtocolID(int16_t _protocolID) const
+{
+    std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(_protocolID);
+    std::string topic = toString(int(ret.first));
+    SessionInfos infos;
+    try
+    {
+        RecursiveGuard l(m_host->mutexSessions());
+        auto s = m_host->sessions();
+        for (auto const& i : s)
+        {
+            for (auto j : *(i.second->topics()))
+            {
+                if (j == topic)
+                {
+                    infos.push_back(
+                        SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
+                    break;
+                }
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
+    }
+    return infos;
+}
+
 NodeIDs Service::getPeersByTopic(std::string const& topic)
 {
     NodeIDs nodeList;

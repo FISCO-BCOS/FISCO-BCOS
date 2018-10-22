@@ -15,26 +15,40 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file BlockVerifierInterface.h
- *  @author yujiechen
- *  @date 2018-10-09
+ *  @author mingzhenliu
+ *  @date 20180921
  */
 #pragma once
+
+#include "ExecutiveContext.h"
+#include "Precompiled.h"
+#include <libdevcore/FixedHash.h>
+#include <libdevcore/easylog.h>
+#include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
+#include <libethcore/Transaction.h>
+#include <libevm/ExtVMFace.h>
+#include <libmptstate/State.h>
 #include <memory>
 namespace dev
 {
+namespace eth
+{
+class PrecompiledContract;
+
+}  // namespace eth
 namespace blockverifier
 {
-class ExecutiveContext;
-class PrecompiledContract;
-class BlockVerifierInterface : public std::enable_shared_from_this<BlockVerifierInterface>
+class BlockVerifierInterface
 {
 public:
-    typedef std::shared_ptr<BlockVerifierInterface> Ptr;
     BlockVerifierInterface() = default;
+
     virtual ~BlockVerifierInterface(){};
-    virtual std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block, int stateType,
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract) = 0;
+
+    virtual ExecutiveContext::Ptr executeBlock(dev::eth::Block& block) = 0;
 };
+
 }  // namespace blockverifier
+
 }  // namespace dev

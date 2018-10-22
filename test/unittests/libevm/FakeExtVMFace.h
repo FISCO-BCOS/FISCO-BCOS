@@ -1,3 +1,4 @@
+#pragma once
 #include <evmc/helpers.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/SHA3.h>
@@ -64,6 +65,7 @@ public:
     virtual void clear() {}
 };
 
+
 class InitEnvInfo
 {
 public:
@@ -90,11 +92,11 @@ public:
         return genesis;
     }
 
+    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
 
     static EnvInfo& createEnvInfo(u256 const gasUsed, u256 const gasLimit = u256(300000))
     {
-        FakeLastBlockHashes lh;
-        static EnvInfo env_info(genBlockHeader(), lh, gasUsed, gasLimit);
+        static EnvInfo env_info(genBlockHeader(), fakeCallBack, gasUsed, gasLimit);
         return env_info;
     }
 };

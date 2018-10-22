@@ -33,10 +33,14 @@ namespace test
 /// simple fake of blocksync
 class FakeBlockverifier : public BlockVerifierInterface
 {
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block, int stateType,
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract)
-        override
-    {}
+public:
+    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
+    {
+        return m_execContext;
+    }
+
+private:
+    std::shared_ptr<ExecutiveContext> m_execContext;
 };
 }  // namespace test
 }  // namespace dev

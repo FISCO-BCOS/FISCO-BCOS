@@ -20,6 +20,8 @@
  * @author: yujiechen
  * @date 2018-09-10
  */
+
+#include <fisco-bcos/ParamParse.h>
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libp2p/CertificateServer.h>
@@ -30,179 +32,9 @@
 #include <boost/program_options.hpp>
 #include <memory>
 
-INITIALIZE_EASYLOGGINGPP
 using namespace dev;
 using namespace dev::p2p;
 namespace js = json_spirit;
-class Params
-{
-public:
-    Params()
-      : m_clientVersion("2.0"),
-        m_listenIp("127.0.0.1"),
-        m_p2pPort(30303),
-        m_publicIp("127.0.0.1"),
-        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json"),
-        m_sendMsgType(0)
-    {
-        updateBootstrapnodes();
-    }
-
-    Params(std::string const& _clientVersion, std::string const& _listenIp,
-        uint16_t const& _p2pPort, std::string const& _publicIp, std::string const& _bootstrapPath,
-        uint16_t _sendMsgType)
-      : m_clientVersion(_clientVersion),
-        m_listenIp(_listenIp),
-        m_p2pPort(_p2pPort),
-        m_publicIp(_publicIp),
-        m_bootstrapPath(_bootstrapPath),
-        m_sendMsgType(_sendMsgType)
-    {
-        updateBootstrapnodes();
-    }
-
-    Params(boost::program_options::variables_map const& vm,
-        boost::program_options::options_description const& option)
-      : m_clientVersion("2.0"),
-        m_listenIp("127.0.0.1"),
-        m_p2pPort(30303),
-        m_publicIp("127.0.0.1"),
-        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json"),
-        m_sendMsgType(0)
-    {
-        initParams(vm, option);
-        updateBootstrapnodes();
-    }
-
-    void initParams(boost::program_options::variables_map const& vm,
-        boost::program_options::options_description const& option)
-    {
-        if (vm.count("client_version") || vm.count("v"))
-            m_clientVersion = vm["client_version"].as<std::string>();
-        if (vm.count("public_ip") || vm.count("i"))
-            m_publicIp = vm["public_ip"].as<std::string>();
-        if (vm.count("listen_ip") || vm.count("l"))
-            m_listenIp = vm["listen_ip"].as<std::string>();
-        if (vm.count("p2p_port") || vm.count("p"))
-            m_p2pPort = vm["p2p_port"].as<uint16_t>();
-        if (vm.count("bootstrap") || vm.count("b"))
-            m_bootstrapPath = vm["bootstrap"].as<std::string>();
-        if (vm.count("send_msg_type") || vm.count("s"))
-            m_sendMsgType = vm["send_msg_type"].as<uint16_t>();
-    }
-    /// --- set interfaces ---
-    void setClientVersion(std::string const& _clientVersion) { m_clientVersion = _clientVersion; }
-    void setListenIp(std::string const& _listenIp) { m_listenIp = _listenIp; }
-    void setP2pPort(uint16_t const& _p2pPort) { m_p2pPort = _p2pPort; }
-    void setPublicIp(std::string const& _publicIp) { m_publicIp = _publicIp; }
-    void setSendMsgType(uint16_t const& _sendMsgType) { m_sendMsgType = _sendMsgType; }
-    /// --- get interfaces ---
-    const std::string& clientVersion() const { return m_clientVersion; }
-    const std::string& listenIp() const { return m_listenIp; }
-    const uint16_t& p2pPort() const { return m_p2pPort; }
-    const std::string& publicIp() const { return m_publicIp; }
-    const uint16_t& sendMsgType() const { return m_sendMsgType; }
-
-    /// --- init NetworkConfig ----
-    std::shared_ptr<NetworkConfig> creatNetworkConfig()
-    {
-        std::shared_ptr<NetworkConfig> network_config =
-            std::make_shared<NetworkConfig>(m_publicIp, m_listenIp, m_p2pPort);
-        return network_config;
-    }
-
-    std::map<NodeIPEndpoint, NodeID>& staticNodes() { return m_staticNodes; }
-
-private:
-    void updateBootstrapnodes()
-    {
-        try
-        {
-            std::string json = asString(contents(boost::filesystem::path(m_bootstrapPath)));
-            js::mValue val;
-            js::read_string(json, val);
-            js::mObject jsObj = val.get_obj();
-            NodeIPEndpoint m_endpoint;
-            if (jsObj.count("nodes"))
-            {
-                for (auto node : jsObj["nodes"].get_array())
-                {
-                    if (node.get_obj()["host"].get_str().empty() ||
-                        node.get_obj()["p2pport"].get_str().empty())
-                        continue;
-
-                    string host;
-                    uint16_t p2pport = -1;
-                    host = node.get_obj()["host"].get_str();
-                    p2pport = uint16_t(std::stoi(node.get_obj()["p2pport"].get_str()));
-
-                    LOG(INFO) << "bootstrapnodes host :" << host << ",p2pport :" << p2pport;
-                    m_endpoint.address = bi::address::from_string(host);
-                    m_endpoint.tcpPort = p2pport;
-                    m_endpoint.udpPort = p2pport;
-                    if (m_endpoint.address.to_string() != "0.0.0.0")
-                    {
-                        m_staticNodes.insert(std::make_pair(NodeIPEndpoint(m_endpoint), NodeID()));
-                    }
-                }
-            }
-        }
-        catch (...)
-        {
-            LOG(ERROR) << "p2p_main Parse bootstrapnodes.json Fail! ";
-            exit(-1);
-        }
-        if (m_staticNodes.size())
-            LOG(INFO) << "p2p_main Parse bootstrapnodes.json Suc! " << m_staticNodes.size();
-        else
-        {
-            LOG(INFO) << "p2p_main Parse bootstrapnodes.json Empty! Please Add "
-                         "Some Node Message!";
-        }
-    }
-
-private:
-    std::string m_clientVersion;
-    std::string m_listenIp;
-    uint16_t m_p2pPort;
-    std::string m_publicIp;
-    std::string m_bootstrapPath;
-    std::map<NodeIPEndpoint, NodeID> m_staticNodes;
-    uint16_t m_sendMsgType;
-};
-
-static Params initCommandLine(int argc, const char* argv[])
-{
-    boost::program_options::options_description server_options("p2p module of FISCO-BCOS");
-    server_options.add_options()("client_version,v", boost::program_options::value<std::string>(),
-        "client version, default is 2.0")(
-        "public_ip,i", boost::program_options::value<std::string>(), "public ip address")(
-        "listen_ip,l", boost::program_options::value<std::string>(), "listen ip address")(
-        "p2p_port,p", boost::program_options::value<uint16_t>(), "p2p port")("bootstrap, b",
-        boost::program_options::value<std::string>(),
-        "path of bootstrapnodes.json")("help,h", "help of p2p module of FISCO-BCOS")(
-        "send_msg_type,s", boost::program_options::value<uint16_t>(), "sendMessageType");
-
-    boost::program_options::variables_map vm;
-    try
-    {
-        boost::program_options::store(
-            boost::program_options::parse_command_line(argc, argv, server_options), vm);
-    }
-    catch (...)
-    {
-        std::cout << "invalid input" << std::endl;
-        exit(0);
-    }
-    /// help information
-    if (vm.count("help") || vm.count("h"))
-    {
-        std::cout << server_options << std::endl;
-        exit(0);
-    }
-    Params m_params(vm, server_options);
-    return m_params;
-}
 
 static h512 node1 = h512(
     "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aebf474"
