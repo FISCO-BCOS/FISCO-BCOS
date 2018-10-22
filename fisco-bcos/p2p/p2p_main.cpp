@@ -36,12 +36,11 @@ using namespace dev;
 using namespace dev::p2p;
 namespace js = json_spirit;
 
-class P2PMessageFactory: public MessageFactory {
+class P2PMessageFactory : public MessageFactory
+{
 public:
-	virtual ~P2PMessageFactory() {}
-	virtual Message::Ptr buildMessage() override {
-		return std::make_shared<Message>();
-	}
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
 };
 
 static h512 node1 = h512(

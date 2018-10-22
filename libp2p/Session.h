@@ -107,9 +107,12 @@ public:
     void setTopicsAndTopicSeq(NodeID const& nodeID,
         std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq);
 
-	MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
+    MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
 
-	void setMessageFactory (MessageFactory::Ptr _messageFactory) override { m_messageFactory = _messageFactory; }
+    void setMessageFactory(MessageFactory::Ptr _messageFactory) override
+    {
+        m_messageFactory = _messageFactory;
+    }
 
     const size_t bufferLength = 1024;
 

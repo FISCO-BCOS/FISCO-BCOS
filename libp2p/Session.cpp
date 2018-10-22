@@ -264,14 +264,14 @@ void Session::doRead()
         return;
     auto self(shared_from_this());
     auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
-
-        LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
-        m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer+bytesTransferred);
+        LOG(TRACE) << "Read: " << bytesTransferred
+                   << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
+        m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
         ThreadContext tc(info().id.abridged());
         ThreadContext tc2(info().host);
 
-        while(true)
+        while (true)
         {
             Message::Ptr message = m_messageFactory->buildMessage();
             ssize_t result = message->decode(m_data.data(), m_data.size());
@@ -280,7 +280,7 @@ void Session::doRead()
             {
                 LOG(TRACE) << "Decode success: " << result;
                 P2PException e(
-                        P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
+                    P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
                 onMessage(e, self, message);
                 m_data.erase(m_data.begin(), m_data.begin() + result);
             }
@@ -289,19 +289,20 @@ void Session::doRead()
                 doRead();
                 break;
             }
-            else {
-            	P2PException e(P2PExceptionType::ProtocolError,
-            			g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
+            else
+            {
+                P2PException e(P2PExceptionType::ProtocolError,
+                    g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
                 onMessage(e, self, message);
                 break;
             }
         }
-
     };
     if (m_socket->isConnected())
     {
         LOG(TRACE) << "Start read:" << bufferLength;
-        m_server->asioInterface()->async_read_some(m_socket, *m_strand, boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
+        m_server->asioInterface()->async_read_some(
+            m_socket, *m_strand, boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
     }
     else
     {

@@ -222,7 +222,10 @@ public:
 
     MessageFactory::Ptr messageFactory() { return m_messageFactory; }
 
-    void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
+    void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    {
+        m_messageFactory = _messageFactory;
+    }
 
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections

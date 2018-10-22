@@ -71,8 +71,11 @@ public:
     ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) { return make_shared<ResponseCallback>(); }
     bool eraseCallbackBySeq(uint32_t seq) { return true; }
     NodeIPEndpoint nodeIPEndpoint() const override { return NodeIPEndpoint(); }
-	MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
-	void setMessageFactory (MessageFactory::Ptr _messageFactory) override { m_messageFactory = _messageFactory; }
+    MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
+    void setMessageFactory(MessageFactory::Ptr _messageFactory) override
+    {
+        m_messageFactory = _messageFactory;
+    }
 
 public:
     bool m_start = false;
