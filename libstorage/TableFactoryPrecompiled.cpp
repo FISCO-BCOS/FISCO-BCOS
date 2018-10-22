@@ -90,7 +90,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         valueFiled = boost::join(fieldNameList, ",");
         auto table = m_memoryTableFactory->createTable(context->blockInfo().hash,
             context->blockInfo().number.convert_to<int64_t>(), tableName, keyField, valueFiled);
-        // tableName already exist 
+        // tableName already exist
         unsigned errorCode = 0;
         if (!table == 0u)
         {
