@@ -48,7 +48,7 @@ bool DownloadingBlockQueue::empty()
     {
         ReadGuard l1(x_buffer);
         ReadGuard l2(x_blocks);
-        res = m_blocks.empty() && m_buffer->empty();
+        res = m_blocks.empty() && (!m_buffer || m_buffer->empty());
     }
     return res;
 }
@@ -57,7 +57,7 @@ size_t DownloadingBlockQueue::size()
 {
     ReadGuard l1(x_buffer);
     ReadGuard l2(x_blocks);
-    size_t s = m_buffer->size() + m_blocks.size();
+    size_t s = (!m_buffer ? 0 : m_buffer->size()) + m_blocks.size();
     return s;
 }
 
