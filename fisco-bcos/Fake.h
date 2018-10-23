@@ -50,6 +50,9 @@ public:
         bytes m_blockHeaderData = bytes();
         bytes m_blockData = bytes();
         BlockHeader blockHeader;
+        blockHeader.setSealer(u256(1));
+        blockHeader.setNumber(0);
+        blockHeader.setTimestamp(0);
         Block block;
         blockHeader.encode(m_blockHeaderData);
         block.encode(m_blockData, ref(m_blockHeaderData));
@@ -85,6 +88,8 @@ public:
     void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
+        /// block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
+        /// block.header().setNumber(m_blockNumber);
         m_blockHash[block.blockHeader().hash()] = m_blockNumber;
         m_blockChain.push_back(std::make_shared<Block>(block));
         m_blockNumber += 1;

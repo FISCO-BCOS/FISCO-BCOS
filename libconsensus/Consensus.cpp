@@ -40,9 +40,11 @@ void Consensus::start()
         return;
     }
     resetSealingBlock();
+    m_consensusEngine->reportBlock(
+        m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
-    reportBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+    m_startConsensus = true;
 }
 
 bool Consensus::shouldSeal()
@@ -50,12 +52,11 @@ bool Consensus::shouldSeal()
     bool sealed;
     DEV_READ_GUARDED(x_sealing)
     sealed = m_sealing.block.isSealed();
-    bool t = true;
-    return (!sealed && m_startConsensus && accountType() == NodeAccountType::MinerAccount &&
-            !isBlockSyncing() && m_syncTxPool.compare_exchange_strong(t, false));
+    return (!sealed && m_startConsensus &&
+            m_consensusEngine->accountType() == NodeAccountType::MinerAccount && !isBlockSyncing());
 }
 
-bool Consensus::shouldWait(bool const& wait)
+bool Consensus::shouldWait(bool const& wait) const
 {
     return !m_syncTxPool && (wait || m_sealing.block.isSealed());
 }
@@ -70,20 +71,38 @@ void Consensus::doWork(bool wait)
             uint64_t tx_num = m_sealing.block.getTransactionSize();
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
+            bool t = true;
             /// load transaction from transaction queue
-            if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal)
-                loadTransactions(max_blockCanSeal - tx_num);
-            /// check enough
-            if (!checkTxsEnough(max_blockCanSeal))
-                return;
-            handleBlock();
-            /// wait for 1s even the block has been sealed
-            if (shouldWait(wait))
+            if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal &&
+                m_syncTxPool.compare_exchange_strong(t, false))
             {
-                std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, std::chrono::milliseconds(1));
+                /// LOG(DEBUG)<<"### load Transactions, tx_num:"<<tx_num;
+                loadTransactions(max_blockCanSeal - tx_num);
+
+                /// check enough or reach block interval
+                if (!checkTxsEnough(max_blockCanSeal))
+                {
+                    ///< 10 milliseconds to next loop
+                    std::unique_lock<std::mutex> l(x_signalled);
+                    m_signalled.wait_for(l, std::chrono::milliseconds(10));
+                    return;
+                }
+                handleBlock();
+                resetSealingBlock();
+                m_syncTxPool = true;
+                /// wait for 1s even the block has been sealed
+                if (shouldWait(wait))
+                {
+                    std::unique_lock<std::mutex> l(x_signalled);
+                    m_signalled.wait_for(l, std::chrono::milliseconds(1));
+                }
             }
         }
+    }
+    else
+    {
+        std::unique_lock<std::mutex> l(x_signalled);
+        m_signalled.wait_for(l, std::chrono::milliseconds(5));
     }
 }
 
@@ -98,15 +117,11 @@ void Consensus::loadTransactions(uint64_t const& transToFetch)
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
 
-void Consensus::resetSealingHeader(BlockHeader& header)
+/// check whether the blocksync module is syncing
+bool Consensus::isBlockSyncing()
 {
-    /// import block
-    resetCurrentTime();
-    header.setSealerList(minerList());
-    header.setSealer(nodeIdx());
-    header.setLogBloom(LogBloom());
-    header.setGasUsed(u256(0));
-    header.setExtraData(m_extraData);
+    SyncStatus state = m_blockSync->status();
+    return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
 }
 
 void Consensus::resetSealingBlock(Sealing& sealing)
@@ -119,74 +134,27 @@ void Consensus::resetSealingBlock(Sealing& sealing)
 void Consensus::resetBlock(Block& block)
 {
     block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
-    resetSealingHeader(block.header());
 }
 
-void Consensus::appendSealingExtraData(bytes const& _extra)
+void Consensus::resetSealingHeader(BlockHeader& header)
 {
-    m_sealing.block.header().appendExtraDataArray(_extra);
-}
-
-/// update m_sealing and receiptRoot
-dev::blockverifier::ExecutiveContext::Ptr Consensus::executeBlock(Block& block)
-{
-    /// reset execute context
-    return m_blockVerifier->executeBlock(block);
-}
-
-void Consensus::checkBlockValid(Block const& block)
-{
-    h256 block_hash = block.blockHeader().hash();
-    /// check the timestamp
-    if (block.blockHeader().timestamp() > u256(utcTime()) && !m_allowFutureBlocks)
-    {
-        LOG(ERROR) << "Future timestamp(now disabled) of block_hash = " << block_hash;
-        BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
-    }
-    /// check the block number
-    if (block.blockHeader().number() <= m_blockChain->number())
-    {
-        LOG(ERROR) << "Old Block Height, block_hash = " << block_hash;
-        BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
-    }
-    /// check existence of this block (Must non-exist)
-    if (blockExists(block_hash))
-    {
-        LOG(ERROR) << "Block Already Existed, drop now, block_hash = " << block_hash;
-        BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
-    }
-    /// check the existence of the parent block (Must exist)
-    if (!blockExists(block.blockHeader().parentHash()))
-    {
-        LOG(ERROR) << "Parent Block Doesn't Exist, drop now, block_hash = " << block_hash;
-        BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
-    }
-}
-
-bool Consensus::encodeBlock(bytes& blockBytes)
-{
-    try
-    {
-        m_sealing.block.encode(blockBytes);
-        return true;
-    }
-    catch (std::exception& e)
-    {
-        LOG(ERROR) << "ERROR: sealBlock failed";
-        return false;
-    }
-}
-
-/// check whether the blocksync module is syncing
-bool Consensus::isBlockSyncing()
-{
-    SyncStatus state = m_blockSync->status();
-    return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
+    /// import block
+    resetCurrentTime();
+    header.setSealerList(m_consensusEngine->minerList());
+    header.setSealer(m_consensusEngine->nodeIdx());
+    header.setLogBloom(LogBloom());
+    header.setGasUsed(u256(0));
+    header.setExtraData(m_extraData);
 }
 
 /// stop the consensus module
 void Consensus::stop()
 {
+    if (m_startConsensus == false)
+    {
+        LOG(WARNING) << "Consensus module has already been stopped, return now";
+        return;
+    }
     m_startConsensus = false;
     doneWorking();
     stopWorking();

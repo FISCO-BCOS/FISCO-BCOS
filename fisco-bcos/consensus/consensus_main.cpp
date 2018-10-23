@@ -26,11 +26,13 @@
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
+#include <libethcore/Protocol.h>
 #include <libtxpool/TxPool.h>
-
 static void startConsensus(Params& params)
 {
     ///< initialize component
+    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+
     std::shared_ptr<AsioInterface> asioInterface = std::make_shared<AsioInterface>();
     std::shared_ptr<NetworkConfig> netConfig = params.creatNetworkConfig();
     std::shared_ptr<SocketFactory> socketFactory = std::make_shared<SocketFactory>();
@@ -38,18 +40,21 @@ static void startConsensus(Params& params)
     std::shared_ptr<Host> host =
         std::make_shared<Host>(params.clientVersion(), CertificateServer::GetInstance().keypair(),
             *netConfig.get(), asioInterface, socketFactory, sessionFactory);
+
     host->setStaticNodes(params.staticNodes());
-    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+    /// set the topic id
+    uint8_t group_id = 2;
+    uint16_t protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
+
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
     std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
     std::shared_ptr<dev::txpool::TxPool> txPool =
         std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);
     std::shared_ptr<SyncInterface> blockSync = std::make_shared<FakeBlockSync>();
     std::shared_ptr<BlockVerifierInterface> blockVerifier = std::make_shared<FakeBlockVerifier>();
-
     ///< Read the KeyPair of node from configuration file.
-    KeyPair key_pair = KeyPair::create();
     auto nodePrivate = contents(getDataDir().string() + "/node.private");
+    KeyPair key_pair;
     string pri = asString(nodePrivate);
     if (pri.size() >= 64)
     {
@@ -63,11 +68,28 @@ static void startConsensus(Params& params)
     }
     ///< TODO: Read the minerList from the configuration file.
     h512s minerList = h512s();
-    minerList.push_back(toPublic(key_pair.secret()));
+    for (auto miner : params.minerList())
+    {
+        std::cout << "#### set miner:" << toHex(miner) << std::endl;
+        minerList.push_back(miner);
+    }
+    /// minerList.push_back(toPublic(key_pair.secret()));
     ///< int pbft consensus
+    std::cout << "### before create pbftEngine" << std::endl;
+    std::shared_ptr<dev::consensus::ConsensusInterface> pbftEngine =
+        std::make_shared<dev::consensus::PBFTEngine>(p2pService, txPool, blockChain, blockSync,
+            blockVerifier, protocol_id, "./", key_pair, minerList);
+    std::cout << "#### before create pbftConsensus" << std::endl;
     std::shared_ptr<dev::consensus::PBFTConsensus> pbftConsensus =
-        std::make_shared<dev::consensus::PBFTConsensus>(p2pService, txPool, blockChain, blockSync,
-            blockVerifier, 100, "./", key_pair, minerList);
+        std::make_shared<dev::consensus::PBFTConsensus>(txPool, blockChain, blockSync, pbftEngine);
+    /// start the host
+    host->start();
+    std::cout << "#### protocol_id:" << protocol_id << std::endl;
+    std::shared_ptr<std::vector<std::string>> topics = host->topics();
+    topics->push_back(toString(group_id));
+    std::cout << "#### before setTopic" << std::endl;
+    host->setTopics(topics);
+    std::cout << "##### set topic" << std::endl;
     ///< start consensus
     pbftConsensus->start();
 
@@ -79,17 +101,16 @@ static void startConsensus(Params& params)
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
-
     while (true)
     {
-        tx.setNonce(tx.nonce() + 1);
+        tx.setNonce(tx.nonce() + u256(1));
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         std::pair<h256, Address> ret = txPool->submit(tx);
-        LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
-                  << ", size:" << txPool->pendingSize();
+        /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
+        ///          << ", size:" << txPool->pendingSize();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 

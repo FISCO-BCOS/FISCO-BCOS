@@ -47,14 +47,13 @@ public:
     /// operator ==
     bool equalAll(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_headerHash == _block.headerHash() &&
-               m_sigList == _block.sigList() && m_transactions == _block.transactions();
+        return m_blockHeader == _block.blockHeader() && m_sigList == _block.sigList() &&
+               m_transactions == _block.transactions();
     }
 
     bool equalWithoutSig(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_headerHash == _block.headerHash() &&
-               m_transactions == _block.transactions();
+        return m_blockHeader == _block.blockHeader() && m_transactions == _block.transactions();
     }
 
     bool equalHeader(Block const& _block) const { return m_blockHeader == _block.blockHeader(); }
@@ -71,13 +70,21 @@ public:
     ///-----decode functions
     void decode(bytesConstRef _block);
 
+    /// @returns the RLP serialisation of this block.
+    bytes rlp() const
+    {
+        bytes out;
+        encode(out);
+        return out;
+    }
+
     ///-----get interfaces
     Transactions const& transactions() const { return m_transactions; }
     TransactionReceipts const& transactionReceipts() const { return m_transactionReceipts; }
     Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     BlockHeader& header() { return m_blockHeader; }
-    h256 const& headerHash() const { return m_headerHash; }
+    h256 headerHash() const { return m_blockHeader.hash(); }
     std::vector<std::pair<u256, Signature>> const& sigList() const { return m_sigList; }
 
     ///-----set interfaces
@@ -114,7 +121,7 @@ public:
     }
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
-    bool isSealed() const { return !m_currentBytes.empty(); }
+    bool isSealed() const { return (m_blockHeader.sealer() != Invalid256); }
     size_t getTransactionSize() const { return m_transactions.size(); }
 
     /// get transactionRoot
@@ -130,7 +137,6 @@ public:
         m_transactions.clear();
         m_transactionReceipts.clear();
         m_sigList.clear();
-        m_currentBytes.clear();
         m_txsCache.clear();
         m_txsMapCache.clear();
         m_txsRoot.clear();
@@ -160,12 +166,8 @@ private:
     /// transaction list (field 1)
     Transactions m_transactions;
     TransactionReceipts m_transactionReceipts;
-    /// hash of the block header (field 2)
-    h256 m_headerHash;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
-    /// bytes for block
-    bytes m_currentBytes;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
     mutable bytes m_txsCache;
