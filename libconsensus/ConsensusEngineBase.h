@@ -124,7 +124,6 @@ public:
     }
     /// get the node index if the node is a miner
     u256 nodeIdx() const override { return m_idx; }
-    void setNodeIdx(u256 const& _idx) override { m_idx = _idx; }
 
     bool const& allowFutureBlocks() const { return m_allowFutureBlocks; }
     void setAllowFutureBlocks(bool isAllowFutureBlocks)

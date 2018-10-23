@@ -21,9 +21,6 @@
  * @date: 2018-10-23
  */
 #pragma once
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libethcore/Transaction.h>
 #include <memory>
 #include <vector>
 namespace dev
@@ -56,6 +53,7 @@ public:
     virtual TxPoolParam const& txPoolParam() const = 0;
     virtual ConsensusParam const& consensusParam() const = 0;
     virtual BlockChainParam const& blockChainParam() const = 0;
+    virtual int16_t const& groupId() const = 0;
 
 protected:
     virtual void initLedgerParams() = 0;
