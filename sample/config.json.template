@@ -13,6 +13,6 @@
 	"networkid":"{networkid}",
 	"logverbosity":"4",
 	"coverlog":"OFF",
-	"eventlog":"ON",
+	"eventlog":"OFF",
 	"logconf":"{nodedir}log.conf"
 }
