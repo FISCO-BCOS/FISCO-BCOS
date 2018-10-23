@@ -23,7 +23,9 @@
  * @date: 2018-09-30
  */
 #pragma once
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <libconsensus/pbft/Common.h>
+#include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
 namespace dev
 {
@@ -192,6 +194,7 @@ public:
     {
         return m_recvViewChangeReq;
     }
+    void getCacheConsensusStatus(json_spirit::Array& statusArray) const;
 
 private:
     /// remove invalid requests cached in cache according to curretn block
@@ -242,6 +245,35 @@ private:
         if (it == cache.end())
             return false;
         return (it->second.find(key)) != (it->second.end());
+    }
+
+    /// get the status of specified cache into the json object
+    /// (maily for prepareCache, m_committedPrepareCache, m_futurePrepareCache and rawPrepareCache)
+    template <typename T>
+    void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache) const
+    {
+        json_spirit::Object cacheStatus;
+        cacheStatus.push_back(json_spirit::Pair(key + ".block_hash", toHex(cache.block_hash)));
+        cacheStatus.push_back(json_spirit::Pair(key + ".height", cache.height));
+        cacheStatus.push_back(json_spirit::Pair(key + ".idx", toString(cache.idx)));
+        cacheStatus.push_back(json_spirit::Pair(key + ".view", toString(cache.view)));
+        jsonArray.push_back(cacheStatus);
+    }
+
+    template <typename T>
+    void getCollectedCacheStatus(
+        json_spirit::Array& cacheJsonArray, std::string const& key, T const& cache) const
+    {
+        json_spirit::Object tmp_obj;
+        tmp_obj.push_back(json_spirit::Pair(key + ".cachedBlockSize", toString(cache.size())));
+        cacheJsonArray.push_back(tmp_obj);
+        for (auto i : cache)
+        {
+            json_spirit::Object entry;
+            entry.push_back(json_spirit::Pair(key + ".key", dev::toJS(i.first)));
+            entry.push_back(json_spirit::Pair(key + ".collected_size", i.second.size()));
+            cacheJsonArray.push_back(entry);
+        }
     }
 
 private:

@@ -32,8 +32,6 @@ struct TimeManager
     /// last execution finish time, only one will be used at last
     /// the finish time of executing tx by leader
     uint64_t m_lastExecFinishTime;
-    /// the finish time of executing tx by follower
-    uint64_t m_lastExecBlockFiniTime;
     unsigned m_viewTimeout;
     unsigned m_changeCycle = 0;
     uint64_t m_lastSignTime = 0;
@@ -46,7 +44,8 @@ struct TimeManager
     float m_execTimePerTx = 0;
     inline void initTimerManager(unsigned view_timeout)
     {
-        m_lastExecFinishTime = m_lastExecBlockFiniTime = m_lastConsensusTime = utcTime();
+        m_lastExecFinishTime = m_lastConsensusTime = utcTime();
+        m_lastSignTime = 0;
         m_viewTimeout = view_timeout;
         m_changeCycle = 0;
         m_lastGarbageCollection = std::chrono::system_clock::now();
@@ -56,7 +55,7 @@ struct TimeManager
     {
         m_lastConsensusTime = 0;
         m_lastSignTime = 0;
-        m_changeCycle = 0;
+        /// m_changeCycle = 0;
     }
 
     inline void updateChangeCycle()
@@ -69,6 +68,7 @@ struct TimeManager
         auto now = utcTime();
         auto last = std::max(m_lastConsensusTime, m_lastSignTime);
         auto interval = (uint64_t)(m_viewTimeout * std::pow(1.5, m_changeCycle));
+        /// LOG(DEBUG) << "##### interval:"<< interval << " , real-time:"<<(now-last);
         return (now - last >= interval);
     }
 
@@ -77,16 +77,16 @@ struct TimeManager
         m_lastExecFinishTime = utcTime();
         if (txNum != 0)
         {
-            float execTime_per_tx = (float)(m_lastExecFinishTime - startExecTime);
+            float execTime_per_tx = (float)(m_lastExecFinishTime - startExecTime) / txNum;
             m_execTimePerTx = (m_execTimePerTx + execTime_per_tx) / 2;
-            if (m_execTimePerTx >= m_intervalBlockTime)
-                m_execTimePerTx = m_intervalBlockTime;
+            if (m_execTimePerTx >= (float)m_intervalBlockTime)
+                m_execTimePerTx = (float)m_intervalBlockTime;
         }
     }
 
     inline uint64_t calculateMaxPackTxNum(uint64_t defaultMaxTxNum, u256 const& view)
     {
-        auto last_exec_finish_time = std::max(m_lastExecFinishTime, m_lastExecBlockFiniTime);
+        auto last_exec_finish_time = m_lastExecFinishTime;
         unsigned passed_time = 0;
         if (view != u256(0))
             passed_time = utcTime() - m_lastConsensusTime;

@@ -42,6 +42,7 @@ void Consensus::start()
     resetSealingBlock();
     m_consensusEngine->reportBlock(
         m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+    m_syncBlock = false;
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     m_startConsensus = true;
@@ -56,13 +57,33 @@ bool Consensus::shouldSeal()
             m_consensusEngine->accountType() == NodeAccountType::MinerAccount && !isBlockSyncing());
 }
 
+void Consensus::reportNewBlock()
+{
+    bool t = true;
+    if (m_syncBlock.compare_exchange_strong(t, false))
+    {
+        LOG(DEBUG) << "#### reportNewBlock compare_exchange_strong";
+        DEV_WRITE_GUARDED(x_sealing)
+        {
+            m_consensusEngine->reportBlock(
+                m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+            if (shouldResetSealing())
+            {
+                LOG(DEBUG) << "##### resetSealingBlock";
+                resetSealingBlock();
+            }
+        }
+    }
+}
+
 bool Consensus::shouldWait(bool const& wait) const
 {
-    return !m_syncTxPool && (wait || m_sealing.block.isSealed());
+    return !m_syncBlock && wait;
 }
 
 void Consensus::doWork(bool wait)
 {
+    reportNewBlock();
     if (shouldSeal())
     {
         DEV_WRITE_GUARDED(x_sealing)
@@ -73,36 +94,23 @@ void Consensus::doWork(bool wait)
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
             bool t = true;
             /// load transaction from transaction queue
-            if (max_blockCanSeal > 0 && tx_num < max_blockCanSeal &&
-                m_syncTxPool.compare_exchange_strong(t, false))
-            {
-                /// LOG(DEBUG)<<"### load Transactions, tx_num:"<<tx_num;
+            if (m_syncTxPool.compare_exchange_strong(t, false) && !reachBlockIntervalTime())
                 loadTransactions(max_blockCanSeal - tx_num);
-
-                /// check enough or reach block interval
-                if (!checkTxsEnough(max_blockCanSeal))
-                {
-                    ///< 10 milliseconds to next loop
-                    std::unique_lock<std::mutex> l(x_signalled);
-                    m_signalled.wait_for(l, std::chrono::milliseconds(10));
-                    return;
-                }
-                handleBlock();
-                resetSealingBlock();
-                m_syncTxPool = true;
-                /// wait for 1s even the block has been sealed
-                if (shouldWait(wait))
-                {
-                    std::unique_lock<std::mutex> l(x_signalled);
-                    m_signalled.wait_for(l, std::chrono::milliseconds(1));
-                }
+            /// check enough or reach block interval
+            if (!checkTxsEnough(max_blockCanSeal))
+            {
+                ///< 10 milliseconds to next loop
+                std::unique_lock<std::mutex> l(x_signalled);
+                m_signalled.wait_for(l, std::chrono::milliseconds(1));
+                return;
             }
+            handleBlock();
         }
     }
-    else
+    if (shouldWait(wait))
     {
         std::unique_lock<std::mutex> l(x_signalled);
-        m_signalled.wait_for(l, std::chrono::milliseconds(5));
+        m_signalled.wait_for(l, std::chrono::milliseconds(10));
     }
 }
 
@@ -134,6 +142,9 @@ void Consensus::resetSealingBlock(Sealing& sealing)
 void Consensus::resetBlock(Block& block)
 {
     block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+    /// LOG(DEBUG) << "##### m_blockChain->getBlockByNumber(m_blockChain->number():"
+    ///           << m_blockChain->number();
+    /// LOG(DEBUG) << "##### block number after reset:" << block.header().number();
 }
 
 void Consensus::resetSealingHeader(BlockHeader& header)

@@ -44,7 +44,7 @@ public:
     virtual void setMinerList(h512s const& _minerList) = 0;
     virtual void appendMiner(h512 const& _miner) = 0;
     /// get status of consensus
-    virtual const ConsensusStatus consensusStatus() const = 0;
+    virtual const std::string consensusStatus() const = 0;
 
     /// protocol id used when register handler to p2p module
     virtual int16_t const& protocolId() const = 0;
