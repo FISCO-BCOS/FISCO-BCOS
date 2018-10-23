@@ -91,7 +91,7 @@ BOOST_FIXTURE_TEST_SUITE(DBFactoryPrecompiled, DBFactoryPrecompiledFixture)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_CHECK_EQUAL((dbFactoryPrecompiled->toString(context) == "DBFactory"), true);
+    BOOST_CHECK_EQUAL((dbFactoryPrecompiled->toString(context) == "Tableactory"), true);
 }
 
 BOOST_AUTO_TEST_CASE(openDB)

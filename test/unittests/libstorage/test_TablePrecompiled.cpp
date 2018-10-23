@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(hash)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_CHECK_EQUAL(dbPrecompiled->toString(context), "DB");
+    BOOST_CHECK_EQUAL(dbPrecompiled->toString(context), "Table");
 }
 
 BOOST_AUTO_TEST_CASE(call_select)
