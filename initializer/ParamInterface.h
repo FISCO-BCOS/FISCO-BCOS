@@ -32,6 +32,7 @@ namespace initializer
 struct TxPoolParam;
 struct ConsensusParam;
 struct BlockChainParam;
+struct SyncParam;
 struct P2pParam;
 class LedgerParamInterface;
 using LedgerParams = std::vector<LedgerParamInterface>;
@@ -54,6 +55,7 @@ public:
     virtual TxPoolParam const& txPoolParam() const = 0;
     virtual ConsensusParam const& consensusParam() const = 0;
     virtual BlockChainParam const& blockChainParam() const = 0;
+    virtual SyncParam const syncParam() const = 0;
     virtual int16_t const& groupId() const = 0;
 
 protected:

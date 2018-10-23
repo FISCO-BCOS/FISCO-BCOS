@@ -22,10 +22,10 @@
  * @date: 2018-10-23
  */
 #pragma once
-#include "LedgerParamInterface.h"
+#include "ParamInterface.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
-#include <libp2p/Common.h>
+#include <libp2p/Network.h>
 #include <memory>
 #include <vector>
 namespace dev
@@ -48,9 +48,14 @@ struct BlockChainParam
     /// TODO: gensis related config
 };
 
+struct SyncParam
+{
+    /// TODO: syncParam related
+};
+
 struct P2pParam
 {
-    dev::p2p::NetWorkConfig networkConfig;
+    dev::p2p::NetworkConfig networkConfig;
 };
 
 class LedgerParam : public LedgerParamInterface
@@ -59,6 +64,7 @@ public:
     TxPoolParam const& txPoolParam() const override { return m_txPoolParam; }
     ConsensusParam const& consensusParam() const override { return m_consensusParam; }
     BlockChainParam const& blockChainParam() const override { return m_blockChainParam; }
+    SyncParam const syncParam() const override { return m_syncParam; }
     int16_t const& groupId() const override { return m_groupId; }
 
 protected:
@@ -68,6 +74,7 @@ private:
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
     BlockChainParam m_blockChainParam;
+    SyncParam m_syncParam;
     uint16_t m_groupId;
 };
 }  // namespace initializer

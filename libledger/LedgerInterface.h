@@ -24,10 +24,10 @@
 #pragma once
 #include <initializer/ParamInterface.h>
 #include <libblockchain/BlockChainInterface.h>
-#include <libblocksync/SyncInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libconsensus/Consensus.h>
 #include <libconsensus/ConsensusInterface.h>
+#include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <memory>
 namespace dev

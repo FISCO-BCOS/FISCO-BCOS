@@ -23,6 +23,7 @@
  */
 #pragma once
 #include "LedgerInterface.h"
+#include <initializer/Param.h>
 namespace dev
 {
 namespace ledger
@@ -35,6 +36,7 @@ public:
     /// init the ledger(called by initializer)
     bool initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> param) override;
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
+
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
         return m_blockVerifier;
@@ -48,6 +50,13 @@ public:
         return m_consensus->consensusEngine();
     }
     std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
+
+protected:
+    virtual bool initTxPool(dev::initializer::TxPoolParam const& param);
+    virtual bool initBlockVerifier();
+    virtual bool initBlockChain(dev::initializer::BlockChainParam const& param);
+    virtual bool initConsensus(dev::initializer::ConsensusParam const& param);
+    virtual bool initSync(dev::initializer::SyncParam const& param);
 
 private:
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;

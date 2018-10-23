@@ -28,12 +28,13 @@
 
 #pragma once
 #include <libblockchain/BlockChainInterface.h>
-#include <libblocksync/SyncInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libsync/SyncInterface.h>
+#include <libsync/SyncStatus.h>
 #include <unistd.h>
 #include <ctime>
 
@@ -112,19 +113,9 @@ public:
     /// @returns Synchonization status
     SyncStatus status() const override { return m_status; };
     bool isSyncing() const override { return false; };
-    h256 latestBlockSent() override { return h256(); };
-
-    /// for rpc && sdk: broad cast transaction to all nodes
-    void broadCastTransactions() override{};
-    /// for p2p: broad cast transaction to specified nodes
-    void sendTransactions(NodeList const& _nodes) override{};
-
-    /// abort sync and reset all status of blockSyncs
-    void reset() override{};
-    bool forceSync() override { return true; };
 
     /// protocol id used when register handler to p2p module
-    int16_t const& getProtocolId() const override { return m_protocolID; };
+    int16_t const& protocolId() const override { return m_protocolID; };
     void setProtocolId(int16_t const _protocolId) override{};
 
 private:

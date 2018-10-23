@@ -36,14 +36,14 @@ public:
         std::vector<std::shared_ptr<dev::initializer::LedgerParamInterface>> allLedgerParams);
     virtual bool initSignleLedger(
         std::shared_ptr<dev::initializer::LedgerParamInterface> ledgerParam);
-
+    /// get pointer of txPool by group id
     inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(uint16_t groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->txPool();
     }
-
+    /// get pointer of blockverifier by group id
     inline std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
         uint16_t groupId)
     {
@@ -51,19 +51,21 @@ public:
             return nullptr;
         return m_ledgerMap[groupId]->blockVerifier();
     }
-
+    /// get pointer of blockchain by group id
     inline std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(uint16_t groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockChain();
     }
+    /// get pointer of consensus by group id
     inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(uint16_t groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->consensus();
     }
+    /// get pointer of blocksync by group id
     inline std::shared_ptr<dev::sync::SyncInterface> sync(uint16_t groupId)
     {
         if (!m_ledgerMap.count(groupId))
