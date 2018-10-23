@@ -74,7 +74,7 @@ switch (filename){
         var key=options[4];
         var instance=getAction("ConfigAction");
         var value=instance.get(key,  initializer);
-        console.log(key+"="+value[0].toString()+","+value[1].toString());
+        console.log(key+"="+parseInt(value[0], 16)+","+value[1].toString());
 
         break;
       }
@@ -85,7 +85,7 @@ switch (filename){
           break;
         }
         var key=options[4];
-        var value=options[5];
+        var value=parseInt(options[5]).toString(16);
         
         var instance=getAction("ConfigAction");
 
