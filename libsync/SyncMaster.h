@@ -164,6 +164,7 @@ private:
     void maintainBlocks();
     void maintainPeersStatus();
     bool maintainDownloadingQueue();  /// return true if downloading finish
+    void maintainPeersConnection();
 };
 
 }  // namespace sync

@@ -71,6 +71,7 @@ void SyncMaster::doWork()
     }
 
     // Always do
+    maintainPeersConnection();
     maintainPeersStatus();
 }
 
@@ -251,4 +252,14 @@ bool SyncMaster::maintainDownloadingQueue()
         return true;
     }
     return false;
+}
+
+void SyncMaster::maintainPeersConnection()
+{
+    NodeIDs nodeIds = m_syncStatus->peers();
+    for (NodeID const& id : nodeIds)
+    {
+        if (!m_service->isConnected(id))
+            m_syncStatus->deletePeer(id);
+    }
 }
