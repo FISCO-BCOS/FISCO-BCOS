@@ -241,7 +241,7 @@ struct PrepareReq : public PBFTMsg
     bytes block;
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
-    dev::blockverifier::ExecutiveContext::Ptr p_execContext;
+    dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
     /// default constructor
     PrepareReq() = default;
     PrepareReq(KeyPair const& _keyPair, int64_t const& _height, u256 const& _view, u256 const& _idx,

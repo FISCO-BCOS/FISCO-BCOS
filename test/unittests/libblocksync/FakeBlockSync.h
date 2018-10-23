@@ -23,8 +23,10 @@
  */
 #pragma once
 #include <libblocksync/SyncInterface.h>
+#include <libethcore/Block.h>
 #include <memory>
 using namespace dev::sync;
+using namespace dev::eth;
 
 namespace dev
 {
@@ -33,18 +35,26 @@ namespace test
 /// simple fake of blocksync
 class FakeBlockSync : public SyncInterface
 {
+public:
     void start() override {}
     void stop() override {}
-    SyncStatus status() const override {}
-    bool isSyncing() const override {}
-    h256 latestBlockSent() override {}
+    SyncStatus status() const override { return m_syncStatus; }
+    bool isSyncing() const override { return m_isSyncing; }
+    h256 latestBlockSent() override { return m_latestSentBlock.headerHash(); }
     void broadCastTransactions() override {}
     /// for p2p: broad cast transaction to specified nodes
     void sendTransactions(NodeList const& _nodes) override {}
-    int16_t const& getProtocolId() const override{};
-    void setProtocolId(int16_t const _protocolId) override{};
+    int16_t const& getProtocolId() const override { return m_protocolId; };
+    void setProtocolId(int16_t const _protocolId) override { m_protocolId = _protocolId; };
     void reset() override{};
-    bool forceSync() override{};
+    bool forceSync() override { return m_forceSync; }
+
+private:
+    SyncStatus m_syncStatus;
+    bool m_isSyncing;
+    bool m_forceSync;
+    Block m_latestSentBlock;
+    int16_t m_protocolId;
 };
 }  // namespace test
 }  // namespace dev

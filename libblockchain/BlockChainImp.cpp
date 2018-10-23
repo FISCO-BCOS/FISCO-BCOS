@@ -84,6 +84,10 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
         }
     }
 
+
+    if (strblock.size() == 0)
+        return nullptr;
+
     return std::make_shared<Block>(fromHex(strblock.c_str()));
 }
 
@@ -103,6 +107,11 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
         }
     }
     return std::make_shared<Block>();
+
+    if (strblock.size() == 0)
+        return nullptr;
+
+    return std::make_shared<Block>(fromHex(strblock.c_str()));
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
@@ -217,6 +226,7 @@ void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext>)
     writeNumber(block);
     writeTxToBlock(block);
     writeBlockInfo(block);
+    m_onReady();
 }
 
 void BlockChainImp::setMemoryTableFactory(std::shared_ptr<MemoryTableFactory> memoryTableFactory)
