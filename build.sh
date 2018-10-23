@@ -278,12 +278,12 @@ Usage()
 	cat << EOF
 Usage:
 Optional:
-    -b If set, build fisco-bcos from source and install. Default download fisco-bcos from ${binary_link}
-    -g If set, build guomi-fisco-bcos build and install
-    -h Help
+    -b       Compile from source code 
+    -g       Compile fisco-bcos with guomi algorithms
+    -h       Help
 Example: 
     bash build.sh 
-	bash build.sh -g
+    bash build.sh -g
 EOF
 	exit 0
 }
