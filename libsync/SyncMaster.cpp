@@ -111,24 +111,20 @@ void SyncMaster::maintainTransactions()
     auto ts = m_txPool->topTransactionsCondition(
         c_maxSendTransactions, [&](Transaction const& _tx) { return !_tx.hasSent(); });
 
-
+    for (size_t i = 0; i < ts.size(); ++i)
     {
-        Guard l(x_transactions);
-        for (size_t i = 0; i < ts.size(); ++i)
-        {
-            auto const& t = ts[i];
-            NodeIDs peers;
-            unsigned _percent = t->hasImportPeers() ? 25 : 100;
+        auto const& t = ts[i];
+        NodeIDs peers;
+        unsigned _percent = t->hasImportPeers() ? 25 : 100;
 
-            peers = m_syncStatus->randomSelection(_percent,
-                [&](std::shared_ptr<SyncPeerStatus> _p) { return !t->hasImportPeer(_p->nodeId); });
+        peers = m_syncStatus->randomSelection(_percent,
+            [&](std::shared_ptr<SyncPeerStatus> _p) { return !t->hasImportPeer(_p->nodeId); });
 
-            for (auto const& p : peers)
-                peerTransactions[p].push_back(i);
+        for (auto const& p : peers)
+            peerTransactions[p].push_back(i);
 
-            if (!peers.empty())
-                t->setHasSent();
-        }
+        if (!peers.empty())
+            t->setHasSent();
     }
 
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
