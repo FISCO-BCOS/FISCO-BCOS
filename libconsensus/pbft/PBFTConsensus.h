@@ -39,7 +39,19 @@ public:
       : Consensus(_txPool, _blockChain, _blockSync, _consensusEngine)
     {
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
-        assert(m_pbftEngine != nullptr);
+        m_pbftEngine->onViewChange([this]() {
+            DEV_WRITE_GUARDED(x_sealing)
+            {
+                LOG(DEBUG) << "#### callbacked after viewchange";
+                if (shouldResetSealing())
+                {
+                    LOG(DEBUG) << "#### reset the sealing, number = "
+                               << m_sealing.block.header().number();
+                    resetSealingBlock();
+                }
+                m_signalled.notify_all();
+            }
+        });
     }
     void start() override;
     void stop() override;

@@ -75,11 +75,9 @@ static void startConsensus(Params& params)
     }
     /// minerList.push_back(toPublic(key_pair.secret()));
     ///< int pbft consensus
-    std::cout << "### before create pbftEngine" << std::endl;
     std::shared_ptr<dev::consensus::ConsensusInterface> pbftEngine =
         std::make_shared<dev::consensus::PBFTEngine>(p2pService, txPool, blockChain, blockSync,
             blockVerifier, protocol_id, "./", key_pair, minerList);
-    std::cout << "#### before create pbftConsensus" << std::endl;
     std::shared_ptr<dev::consensus::PBFTConsensus> pbftConsensus =
         std::make_shared<dev::consensus::PBFTConsensus>(txPool, blockChain, blockSync, pbftEngine);
     /// start the host
@@ -90,7 +88,9 @@ static void startConsensus(Params& params)
     p2pService->setGroupID2NodeList(groudID2NodeList);
     ///< start consensus
     pbftConsensus->start();
-
+    /// test pbft status
+    std::cout << "#### pbft consensus:" << pbftConsensus->consensusEngine()->consensusStatus()
+              << std::endl;
     ///< transaction related
     bytes rlpBytes = fromHex(
         "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
@@ -99,16 +99,21 @@ static void startConsensus(Params& params)
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
+    u256 maxBlockLimit = u256(1000);
+    /// get the consensus status
+
+    /// m_txSpeed default is 10
+    uint16_t sleep_interval = (uint16_t)(1000.0 / params.txSpeed());
     while (true)
     {
         tx.setNonce(tx.nonce() + u256(1));
+        tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         std::pair<h256, Address> ret = txPool->submit(tx);
         /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
         ///          << ", size:" << txPool->pendingSize();
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
 }
 

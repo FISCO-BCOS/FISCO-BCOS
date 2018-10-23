@@ -30,6 +30,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
+#include <libdevcore/ThreadPool.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
@@ -106,6 +107,7 @@ public:
     ///< interface to set topicSeq/topics of counter node
     void setTopicsAndTopicSeq(NodeID const& nodeID,
         std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq);
+    void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) { m_threadPool = threadPool; }
 
 protected:
     /// Perform a read on the socket.
@@ -187,6 +189,7 @@ private:
     ///< A call B, the function to call after the response is received by A.
     mutable RecursiveMutex x_seq2Callback;
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
+    std::shared_ptr<dev::ThreadPool> m_threadPool;
 };
 
 }  // namespace p2p

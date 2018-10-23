@@ -34,6 +34,8 @@
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <unistd.h>
+#include <ctime>
 
 using namespace dev;
 using namespace dev::blockchain;
@@ -63,7 +65,7 @@ public:
 
     ~FakeBlockChain() {}
 
-    int64_t number() const { return m_blockNumber - 1; }
+    int64_t number() const { return m_blockChain.size() - 1; }
 
     dev::h256 numberHash(int64_t _i) const { return m_blockChain[_i]->headerHash(); }
 
@@ -84,11 +86,11 @@ public:
     void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        /// block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
-        /// block.header().setNumber(m_blockNumber);
-        m_blockHash[block.blockHeader().hash()] = m_blockNumber;
+        std::cout << "##### commitBlock:" << block.blockHeader().number() << std::endl;
+        m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
         m_blockChain.push_back(std::make_shared<Block>(block));
-        m_blockNumber += 1;
+        m_blockNumber = block.blockHeader().number() + 1;
+        m_onReady();
     }
 
     std::map<h256, uint64_t> m_blockHash;
@@ -133,10 +135,16 @@ private:
 class FakeBlockVerifier : public BlockVerifierInterface
 {
 public:
-    FakeBlockVerifier() { m_executiveContext = std::make_shared<ExecutiveContext>(); };
+    FakeBlockVerifier()
+    {
+        m_executiveContext = std::make_shared<ExecutiveContext>();
+        std::srand(std::time(nullptr));
+    };
     virtual ~FakeBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
     {
+        /// execute time: 1000
+        usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
 
