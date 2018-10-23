@@ -86,11 +86,9 @@ void Service::asyncSendMessageByNodeID(
         auto s = m_host->sessions();
         for (auto const& i : s)
         {
-            LOG(INFO) << "Service::asyncSendMessageByNodeID traversed nodeID = " << toJS(i.first);
             if (i.first == nodeID)
             {
                 std::shared_ptr<SessionFace> p = i.second;
-                LOG(INFO) << "Service::asyncSendMessageByNodeID get session success.";
                 uint32_t seq = ++m_seq;
                 if (callback)
                 {
@@ -562,29 +560,33 @@ SessionInfos Service::sessionInfos() const
 SessionInfos Service::sessionInfosByProtocolID(int16_t _protocolID) const
 {
     std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(_protocolID);
-    std::string topic = toString(int(ret.first));
+    h512s nodeList;
     SessionInfos infos;
-    try
+
+    if (true == m_host->getNodeListByGroupID(int(ret.first), nodeList))
     {
-        RecursiveGuard l(m_host->mutexSessions());
-        auto s = m_host->sessions();
-        for (auto const& i : s)
+        LOG(INFO) << "Service::sessionInfosByProtocolID, getNodeListByGroupID list size:"
+                  << nodeList.size();
+        try
         {
-            for (auto j : *(i.second->topics()))
+            RecursiveGuard l(m_host->mutexSessions());
+            auto s = m_host->sessions();
+            for (auto const& i : s)
             {
-                if (j == topic)
+                if (find(nodeList.begin(), nodeList.end(), i.first) != nodeList.end())
                 {
                     infos.push_back(
                         SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
-                    break;
                 }
             }
         }
+        catch (std::exception& e)
+        {
+            LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
+        }
     }
-    catch (std::exception& e)
-    {
-        LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
-    }
+
+    LOG(INFO) << "Service::sessionInfosByProtocolID, return list size:" << infos.size();
     return infos;
 }
 

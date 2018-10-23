@@ -84,6 +84,11 @@ public:
 
     bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
 
+    void setGroupID2NodeList(std::map<int32_t, h512s> const& _groupID2NodeList)
+    {
+        m_host->setGroupID2NodeList(_groupID2NodeList);
+    }
+
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,
         std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,

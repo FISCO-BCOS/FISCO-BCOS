@@ -220,6 +220,24 @@ public:
 
     shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
 
+    void setGroupID2NodeList(std::map<int32_t, h512s> const& _groupID2NodeList)
+    {
+        m_groupID2NodeList = _groupID2NodeList;
+    }
+
+    ///< If I joined this group, return true and node members for this group.
+    ///< If didnot, return false.
+    bool getNodeListByGroupID(int32_t const& _groupID, h512s& _nodeList) const
+    {
+        std::map<int32_t, h512s>::const_iterator it = m_groupID2NodeList.find(_groupID);
+        if (it == m_groupID2NodeList.end())
+        {
+            return false;
+        }
+        _nodeList = it->second;
+        return true;
+    }
+
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
     virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());
@@ -336,6 +354,11 @@ protected:  /// protected members(for unit testing)
 
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;
+
+    ///< key is the group that the node joins
+    ///< value is the list of node members for the group
+    ///< the data is currently statically loaded and not synchronized between nodes
+    std::map<int32_t, h512s> m_groupID2NodeList;
 };
 }  // namespace p2p
 

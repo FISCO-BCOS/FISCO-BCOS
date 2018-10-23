@@ -68,6 +68,9 @@ public:
 
     ///< Quickly determine whether to connect to a particular node.
     virtual bool isConnected(NodeID const& _nodeID) const = 0;
+
+    ///< One-time loading the list of node members for a group.
+    virtual void setGroupID2NodeList(std::map<int32_t, h512s> const& _groupID2NodeList) = 0;
 };
 
 }  // namespace p2p

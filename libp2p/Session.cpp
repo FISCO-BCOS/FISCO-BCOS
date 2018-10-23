@@ -27,6 +27,7 @@
 #include "P2PMsgHandler.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
+#include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
@@ -333,12 +334,39 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
+bool Session::CheckGroupIDAndSender(int16_t protocolID, std::shared_ptr<Session> session)
+{
+    std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(protocolID);
+    h512s nodeList;
+    if (m_server->getNodeListByGroupID(int(ret.first), nodeList))
+    {
+        if (find(nodeList.begin(), nodeList.end(), session->id()) == nodeList.end())
+        {
+            ///< The message sender is not a member of the group
+            LOG(ERROR) << "Session::onMessage, The message sender is not a member of the group!";
+            return false;
+        }
+    }
+    else
+    {
+        ///< I didn't join the group
+        LOG(ERROR) << "Session::onMessage, I didn't join the group!";
+        return false;
+    }
+
+    return true;
+}
+
 void Session::onMessage(
     P2PException const& e, std::shared_ptr<Session> session, Message::Ptr message)
 {
     int16_t protocolID = message->protocolID();
     if (message->isRequestPacket())
     {
+        ///< Whitelist mechanism, check groupID and sender of this message
+        if (false == CheckGroupIDAndSender(protocolID, session))
+            return;
+
         ///< request package, get callback by protocolID
         CallbackFuncWithSession callbackFunc;
 
