@@ -42,7 +42,6 @@ public:
 
     virtual ~Storage(){};
 
-    virtual TableInfo::Ptr info(const std::string& table) = 0;
     virtual Entries::Ptr select(
         h256 hash, int num, const std::string& table, const std::string& key) = 0;
     virtual size_t commit(

@@ -91,6 +91,7 @@ target_link_libraries(test-fisco-bcos blockchain)
 target_link_libraries(test-fisco-bcos blocksync)
 target_link_libraries(test-fisco-bcos blockverifier)
 target_link_libraries(test-fisco-bcos consensus)
+target_link_libraries(test-fisco-bcos sync)
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 
