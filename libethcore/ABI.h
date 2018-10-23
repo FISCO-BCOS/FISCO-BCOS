@@ -15,8 +15,8 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file ABI.h
- * @author Gav Wood <i@gavwood.com>, jimmyshi
- * @date 2018
+ * @author Gav Wood <i@gavwood.com>
+ * @date 2014
  */
 
 #pragma once
@@ -25,7 +25,6 @@
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/SHA3.h>
-#include <iostream>
 
 #include <libdevcore/easylog.h>
 
@@ -47,19 +46,22 @@ public:
 
     void serialise(string32 const& _t)
     {
-        bytes ret(32, 0);  // Fix bugs, declare size here
+        bytes ret(32, 0);
         bytesConstRef((byte const*)_t.data(), 32).populate(bytesRef(&ret));
 
         fixedItems.push_back(ret);
     }
 
-
     void serialise(string64 const& _t)
     {
-        bytes ret(64);
-        bytesConstRef((byte const*)_t.data(), 64).populate(bytesRef(&ret));
+        bytes ret1(32, 0);
+        bytesConstRef((byte const*)_t.data(), 32).populate(bytesRef(&ret1));
 
-        fixedItems.push_back(ret);
+        bytes ret2(32, 0);
+        bytesConstRef((byte const*)_t.data() + 32, 32).populate(bytesRef(&ret2));
+
+        fixedItems.push_back(ret1);
+        fixedItems.push_back(ret2);
     }
 
     void serialise(std::string const& _t)
@@ -72,7 +74,7 @@ public:
         item.data = ret;
         item.offset = fixedItems.size();
 
-        serialise(u256(0));  // Fill in a zero before filling the offset
+        serialise(u256(0));
 
         dynamicItems.push_back(item);
     }
@@ -98,7 +100,7 @@ public:
 
         for (auto it = dynamicItems.begin(); it != dynamicItems.end(); ++it)
         {
-            fixedItems[it->offset] = h256(offset).asBytes();  // Fill the offset
+            fixedItems[it->offset] = h256(offset).asBytes();
 
             offset += it->data.size();
         }
@@ -111,35 +113,62 @@ public:
         for (auto it = dynamicItems.begin(); it != dynamicItems.end(); ++it)
             dynamic += it->data;
 
-        return sha3(_id).ref().cropped(0, 4).toBytes() + fixed + dynamic;
+        if (_id.empty())
+        {
+            return fixed + dynamic;
+        }
+        else
+        {
+            return sha3(_id).ref().cropped(0, 4).toBytes() + fixed + dynamic;
+        }
     }
 
     template <unsigned N>
-    void deserialise(FixedHash<N>& out)
+    size_t deserialise(FixedHash<N>& out)
     {
         static_assert(N <= 32, "Parameter sizes must be at most 32 bytes.");
         data.cropped(getOffset() + 32 - N, N).populate(out.ref());
+        return 1;
     }
 
-    void deserialise(u256& out) { out = fromBigEndian<u256>(data.cropped(getOffset(), 32)); }
-
-    void deserialise(u160& out) { out = fromBigEndian<u160>(data.cropped(getOffset() + 12, 20)); }
-
-    void deserialise(byte& out) { out = fromBigEndian<byte>(data.cropped(getOffset() + 31, 1)); }
-
-    void deserialise(string32& out)
+    size_t deserialise(u256& out)
     {
-        // fix bug here, starting offset modify from 0 to getOffset()
-        data.cropped(getOffset(), 32).populate(bytesRef((byte*)out.data(), 32));
+        out = fromBigEndian<u256>(data.cropped(getOffset(), 32));
+        return 1;
     }
 
-    void deserialise(bool& out)
+    size_t deserialise(u160& out)
+    {
+        out = fromBigEndian<u160>(data.cropped(getOffset() + 12, 20));
+        return 1;
+    }
+
+    size_t deserialise(byte& out)
+    {
+        out = fromBigEndian<byte>(data.cropped(getOffset() + 31, 1));
+        return 1;
+    }
+
+    size_t deserialise(string32& out)
+    {
+        data.cropped(getOffset(), 32).populate(bytesRef((byte*)out.data(), 32));
+        return 1;
+    }
+
+    size_t deserialise(string64& out)
+    {
+        data.cropped(getOffset(), 64).populate(bytesRef((byte*)out.data(), 64));
+        return 2;
+    }
+
+    size_t deserialise(bool& out)
     {
         u256 ret = fromBigEndian<u256>(data.cropped(0, 32));
         out = ret > 0 ? true : false;
+        return 1;
     }
 
-    void deserialise(std::string& out)
+    size_t deserialise(std::string& out)
     {
         u256 offset = fromBigEndian<u256>(data.cropped(getOffset(), 32));
         u256 len = fromBigEndian<u256>(data.cropped(static_cast<size_t>(offset), 32));
@@ -147,6 +176,7 @@ public:
         auto stringData = data.cropped(static_cast<size_t>(offset) + 32, static_cast<size_t>(len));
 
         out.assign((const char*)stringData.data(), stringData.size());
+        return 1;
     }
 
     inline void abiOutAux() { return; }
@@ -154,8 +184,8 @@ public:
     template <class T, class... U>
     void abiOutAux(T& _t, U&... _u)
     {
-        deserialise(_t);
-        ++decodeOffset;
+        size_t offset = deserialise(_t);
+        decodeOffset += offset;
 
         abiOutAux(_u...);
     }
@@ -193,6 +223,5 @@ inline string32 toString32(std::string const& _s)
         ret[i] = i < _s.size() ? _s[i] : 0;
     return ret;
 }
-
 }  // namespace eth
 }  // namespace dev

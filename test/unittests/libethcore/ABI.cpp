@@ -58,6 +58,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest)
     string compareYs;
     string32 compareStr32;
     byte compareB;
+
     ct.abiOut(serial, compareB, compareXs, compareX, compareStr32, compareY, compareYs);
     BOOST_CHECK_EQUAL(x, compareX);
     BOOST_CHECK_EQUAL(y, compareY);
