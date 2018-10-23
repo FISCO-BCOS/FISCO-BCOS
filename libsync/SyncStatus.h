@@ -57,14 +57,14 @@ public:
         NodeID const& _nodeId, int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
       : nodeId(_nodeId), number(_number), genesisHash(_genesisHash), latestHash(_latestHash)
     {}
-    SyncPeerStatus(const NodeInfo& _info)
+    SyncPeerStatus(const SyncPeerInfo& _info)
       : nodeId(_info.nodeId),
         number(_info.number),
         genesisHash(_info.genesisHash),
         latestHash(_info.latestHash)
     {}
 
-    void update(const NodeInfo& _info)
+    void update(const SyncPeerInfo& _info)
     {
         nodeId = _info.nodeId;
         number = _info.number;
@@ -86,7 +86,7 @@ public:
 
     bool hasPeer(NodeID const& _id);
 
-    bool newSyncPeerStatus(NodeInfo const& _info);
+    bool newSyncPeerStatus(SyncPeerInfo const& _info);
 
     void deletePeer(NodeID const& _id);
 

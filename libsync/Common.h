@@ -65,7 +65,7 @@ enum class SyncState
     Size          /// Must be kept last
 };
 
-struct NodeInfo
+struct SyncPeerInfo
 {
     NodeID nodeId;
     int64_t number;

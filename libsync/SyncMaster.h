@@ -136,6 +136,7 @@ private:
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
     // Internal data
+    int16_t m_protocolId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 
@@ -157,7 +158,6 @@ private:
 
     // settings
     int64_t m_maxBlockDownloadQueueSize = 5;
-    int16_t m_protocolId;
 
 private:
     void maintainTransactions();

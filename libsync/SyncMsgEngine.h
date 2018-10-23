@@ -61,6 +61,9 @@ public:
     void messageHandler(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::Session> _session,
         dev::p2p::Message::Ptr _msg);
 
+public:
+    mutable SharedMutex x_transactions;
+
 private:
     bool checkSession(std::shared_ptr<dev::p2p::Session> _session);
     bool checkPacket(bytesConstRef _msg);

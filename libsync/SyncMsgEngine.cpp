@@ -56,7 +56,8 @@ void SyncMsgEngine::messageHandler(
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::Session> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
-    //_session->id();
+    if (_session->id() == m_nodeId)
+        return false;
     return true;
 }
 
@@ -94,7 +95,7 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
-    NodeInfo info{_packet.nodeId, _packet.rlp()[0].toInt<int64_t>(),
+    SyncPeerInfo info{_packet.nodeId, _packet.rlp()[0].toInt<int64_t>(),
         _packet.rlp()[1].toHash<h256>(), _packet.rlp()[2].toHash<h256>()};
 
     if (status == nullptr)
@@ -120,7 +121,10 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 
         auto p_tx = m_txPool->transactionInPool(tx.sha3());
         if (p_tx != nullptr)
+        {
+            WriteGuard l(x_transactions);
             p_tx->addImportPeer(_packet.nodeId);
+        }
     }
 }
 

@@ -29,7 +29,6 @@
 #include <set>
 #include <vector>
 
-
 namespace dev
 {
 namespace sync
@@ -37,7 +36,9 @@ namespace sync
 class DownloadingBlockQueue
 {
 public:
-    DownloadingBlockQueue() : m_blocks() { m_buffer = std::make_shared<BlockPtrVec>(); }
+    DownloadingBlockQueue() : m_blocks(), m_buffer(std::make_shared<BlockPtrVec>()) {
+        
+    }
     /// Push a block
     void push(BlockPtr _block);
 

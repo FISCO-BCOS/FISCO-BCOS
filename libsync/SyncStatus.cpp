@@ -38,7 +38,7 @@ bool SyncMasterStatus::hasPeer(NodeID const& _id)
     return peer != m_peersStatus.end();
 }
 
-bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
+bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)
 {
     if (hasPeer(_info.nodeId))
     {
