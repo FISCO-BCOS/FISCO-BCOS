@@ -94,15 +94,23 @@ public:
      *
      * @param _limit : _limit Max number of transactions to return.
      * @param _avoid : Transactions to avoid returning.
+     * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    Transactions topTransactions(
-        uint64_t const& _limit, h256Hash& _avoid, bool update_void = false) override;
-    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit);
+    virtual Transactions topTransactions(uint64_t const& _limit) override;
+    virtual Transactions topTransactions(
+        uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override;
+    virtual std::vector<std::shared_ptr<Transaction const>> topTransactionsCondition(
+        uint64_t const& _limit,
+        std::function<bool(Transaction const&)> const& _condition = nullptr) override;
+
     /// get all transactions(maybe blocksync module need this interface)
     Transactions pendingList() const override;
     /// get current transaction num
     size_t pendingSize() override;
+
+    /// Get transaction in TxPool, return nullptr when not found
+    std::shared_ptr<Transaction const> transactionInPool(h256 const& _txHash) override;
 
     /// @returns the status of the transaction queue.
     TxPoolStatus status() const override;

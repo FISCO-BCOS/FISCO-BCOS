@@ -67,6 +67,7 @@ add_subdirectory(libtxpool)
 add_subdirectory(libblocksync)
 add_subdirectory(libconsensus)
 add_subdirectory(libblockchain)
+add_subdirectory(libsync)
 
 if (TESTS)
         enable_testing()
