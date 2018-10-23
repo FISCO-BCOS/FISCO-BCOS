@@ -11,7 +11,8 @@ current_dir=`pwd`
 
 enable_guomi=0
 build_source=0
-binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.3.5/fisco-bcos
+version=`cat release_note.txt| sed "s/^[vV]//"`
+binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -276,11 +277,13 @@ Usage()
 	echo $1
 	cat << EOF
 Usage:
-	-b If set, build fisco-bcos from source and install. Default download fisco-bcos from ${binary_link}
-	-g If set, build guomi-fisco-bcos build and install
-	-h Help
-e.g 
+Optional:
+    -b If set, build fisco-bcos from source and install. Default download fisco-bcos from ${binary_link}
+    -g If set, build guomi-fisco-bcos build and install
+    -h Help
+Example: 
     bash build.sh 
+	bash build.sh -g
 EOF
 	exit 0
 }
