@@ -144,8 +144,7 @@ private:
 
     // Internal coding variable
     /// mutex
-    mutable RecursiveMutex x_sync;
-    mutable Mutex x_transactions;
+    mutable SharedMutex x_sync;
     /// mutex to access m_signalled
     Mutex x_signalled;
     /// signal to notify all thread to work

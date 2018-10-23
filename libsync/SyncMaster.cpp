@@ -89,7 +89,7 @@ void SyncMaster::workLoop()
 
 SyncStatus SyncMaster::status() const
 {
-    RecursiveGuard l(x_sync);
+    ReadGuard l(x_sync);
     SyncStatus res;
     res.state = m_state;
     res.protocolId = m_protocolId;
@@ -187,29 +187,47 @@ void SyncMaster::maintainPeersStatus()
         return;  // no need to sync
     else
     {
-        RecursiveGuard l(m_syncStatus->x_known);
+        WriteGuard l(m_syncStatus->x_known);
         m_syncStatus->knownHighestNumber = maxPeerNumber;
         m_syncStatus->knownLatestHash = latestHash;
         noteDownloadingBegin();
     }
 
-    // Select some peers to request blocks by c_maxRequestBlocks
-    for (int64_t from = currentNumber; from < maxPeerNumber + 1; from += c_maxRequestBlocks)
+    // Sharding by c_maxRequestBlocks to request blocks
+    size_t shardNumber = (maxPeerNumber + 1 - currentNumber) / c_maxRequestBlocks;
+    size_t shard = 0;
+    while (shard < shardNumber)
     {
-        // [from, to)
-        int64_t to = min(from + c_maxRequestBlocks, maxPeerNumber + 1);
+        bool thisTurnFound = false;
+        m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+            // shard: [from, to]
+            int64_t from = currentNumber + shard * c_maxRequestBlocks;
+            int64_t to = min(from + c_maxRequestBlocks - 1, maxPeerNumber);
 
-        // Select 1 node to request
-        NodeIDs peers = m_syncStatus->randomSelectionSize(
-            1, [&](std::shared_ptr<SyncPeerStatus> _p) { return _p->number < to; });
+            if (_p->number < to)
+                return true;  // exit, to next peer
 
-        for (auto peer : peers)
-        {
+            // found a peer
+            thisTurnFound = true;
             SyncReqBlockPacket packet;
-            unsigned size = to - from;
+            unsigned size = to - from + 1;
             packet.encode(from, size);
-            m_service->asyncSendMessageByNodeID(peer, packet.toMessage(m_protocolId));
-            LOG(TRACE) << "Request blocks [" << from << ", " << to << "] to " << peer;
+            m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
+            LOG(TRACE) << "Request blocks [" << from << ", " << to << "] to " << _p->nodeId;
+
+            ++shard;  // shard move
+
+            return shard < shardNumber;
+        });
+
+        if (!thisTurnFound)
+        {
+            int64_t from = currentNumber + shard * c_maxRequestBlocks;
+            int64_t to = min(from + c_maxRequestBlocks - 1, maxPeerNumber);
+
+            LOG(ERROR) << "Couldn't find any peers to request blocks [" << from << ", " << to
+                       << "]";
+            break;
         }
     }
 }
