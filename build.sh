@@ -10,6 +10,8 @@
 current_dir=`pwd`
 
 enable_guomi=0
+build_source=0
+binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.3.5/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -223,6 +225,13 @@ build_source()
 	fi
 }
 
+download_binary()
+{
+	execute_cmd "curl -LO ${binary_link}"
+	execute_cmd "chmod a+x fisco-bcos"
+	execute_cmd "sudo mv fisco-bcos /usr/bin/"
+}
+
 nodejs_init()
 {
 	cd ${current_dir}
@@ -264,37 +273,39 @@ check()
 
 Usage()
 {
-	LOG_INFO "sudo ./build.sh: \tfisco-bcos build and install"
-	LOG_INFO "sudo ./build.sh -g: \tguomi-fisco-bcos build and install"
-	LOG_INFO "sudo ./build.sh -h: \tprint help info"
+	echo $1
+	cat << EOF
+Usage:
+	-b If set, build fisco-bcos from source and install. Default download fisco-bcos from ${binary_link}
+	-g If set, build guomi-fisco-bcos build and install
+	-h Help
+e.g 
+    bash build.sh 
+EOF
 	exit 0
 }
 
-check_input_param()
+parse_param()
 {
-	if [ $# -ge 1 ] && [ "${1}" != "-g" ] && [ "${1}" != "-g" ] && [ "${1}" != "-h" ] && [ "${1}" != "--help" ];then
-		Usage
-	fi
-
-	if [ "${1}" = "-h" ] || [ "${1}" = "--help" ];then
-		Usage
-	fi
-
-	if [ "${1}" = "-g" ] || [ "${1}" = "--guomi" ];then
-		enable_guomi=1
-	fi
+	while getopts "hgb" option;do
+		case $option in
+		b) build_source=1;;
+		g) enable_guomi=1;;
+		h) Usage;;
+		esac
+	done
 }
 
 install_all()
 {
-	### install all deps
 	install_all_deps
-	### build source
-	build_source
-	### init nodejs
+	if [ ${build_source} -eq 0 ];then
+		download_binary
+	else
+		build_source
+	fi
 	nodejs_init
-	### check
 	check
 }
-check_input_param "$@"
+parse_param "$@"
 install_all
