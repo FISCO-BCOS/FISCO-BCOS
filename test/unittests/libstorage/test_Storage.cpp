@@ -46,8 +46,6 @@ BOOST_AUTO_TEST_CASE(entryTest)
 
     BOOST_TEST_TRUE(entry->dirty() == true);
 
-    BOOST_CHECK_THROW(entry->getField("key1"), dev::storage::StorageException);
-    // BOOST_TEST(entry->getField("key1") == "");
 
     entry->setDirty(false);
     BOOST_TEST_TRUE(entry->dirty() == false);

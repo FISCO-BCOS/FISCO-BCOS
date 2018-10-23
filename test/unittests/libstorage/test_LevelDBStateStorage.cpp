@@ -199,12 +199,6 @@ struct LevelDBFixture
 
 BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture);
 
-BOOST_AUTO_TEST_CASE(info)
-{
-    std::string tableName = "test";
-    TableInfo::Ptr tableInfo = levelDB->info(tableName);
-    BOOST_CHECK_EQUAL(tableInfo->name, tableName);
-}
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
 {

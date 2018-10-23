@@ -17,32 +17,10 @@ class MockAMOPDB : public dev::storage::Storage
 public:
     virtual ~MockAMOPDB() {}
 
-    virtual TableInfo::Ptr info(const std::string& table) override
-    {
-        TableInfo::Ptr info = std::make_shared<TableInfo>();
-        if (table != "_sys_tables_")
-        {
-            BOOST_CHECK(table == "t_test");
-            // info->fields.push_back("姓名");
-            // info->fields.push_back("资产号");
-            info->key = "姓名";
-            info->name = "t_test";
-        }
-        else
-        {
-            // info->fields.push_back("key_field");
-            // info->fields.push_back("value_field");
-            info->key = "key";
-            info->name = "_sys_tables_";
-        }
-        return info;
-    }
 
     virtual Entries::Ptr select(
         h256 hash, int num, const std::string& table, const std::string& key) override
     {
-        // BOOST_TEST(table == "t_test");
-
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
@@ -79,7 +57,7 @@ BOOST_AUTO_TEST_CASE(open_Table)
     int num = 1;
     std::string tableName("t_test");
     std::string keyField("hash");
-    std::vector<std::string> valueField{"hash", "num", "name", "item_id", "item_name", "status"};
+    std::string valueField("hash");
     memoryDBFactory->createTable(blockHash, num, tableName, keyField, valueField);
     MemoryTable::Ptr db = std::dynamic_pointer_cast<MemoryTable>(
         memoryDBFactory->openTable(h256(0x12345), 1, "t_test"));

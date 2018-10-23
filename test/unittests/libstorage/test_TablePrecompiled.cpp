@@ -40,9 +40,9 @@ struct DBPrecompiledFixture
         dbPrecompiled = std::make_shared<dev::blockverifier::TablePrecompiled>();
         auto db = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
-        // info->fields.emplace_back("name");
-        // info->fields.emplace_back("_status_");
-        // db->setTableInfo(info);
+        info->fields.emplace_back("name");
+        info->fields.emplace_back("_status_");
+        db->setTableInfo(info);
         dbPrecompiled->setTable(db);
     }
 
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(call_newEntry)
     bytes out2 = abi.abiIn("", address);
     BOOST_CHECK(out1 == out2);
 }
-
+/*
 BOOST_AUTO_TEST_CASE(call_remove)
 {
     storage::Condition::Ptr condition = std::make_shared<storage::Condition>();
@@ -137,7 +137,7 @@ BOOST_AUTO_TEST_CASE(call_remove)
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);
     BOOST_TEST_TRUE(num == 0u);
-}
+}*/
 
 BOOST_AUTO_TEST_CASE(call_update2)
 {
