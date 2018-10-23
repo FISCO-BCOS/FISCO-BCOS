@@ -19,6 +19,7 @@
  *  @date 20180921
  */
 #include "MemoryTableFactory.h"
+#include "Common.h"
 #include "MemoryTable.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
@@ -30,42 +31,79 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const string& table)
+MemoryTableFactory::MemoryTableFactory()
 {
-    LOG(DEBUG) << "Open table:" << blockHash << " num:" << num << " table:" << table;
+    m_sysTables.push_back(SYS_MINERS);
+    m_sysTables.push_back(SYS_TABLES);
+}
 
-    MemoryTable::Ptr memoryTable = make_shared<MemoryTable>();
+Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const string& tableName)
+{
+    LOG(DEBUG) << "Open table:" << blockHash << " num:" << num << " table:" << tableName;
+    auto it = m_name2Table.find(tableName);
+    if (it != m_name2Table.end())
+    {
+        LOG(DEBUG) << "Table:" << tableName << " already open:" << it->second;
+        return it->second;
+    }
+    auto tableInfo = make_shared<storage::TableInfo>();
+
+    if (m_sysTables.end() != find(m_sysTables.begin(), m_sysTables.end(), tableName))
+    {
+        tableInfo = getSysTableInfo(tableName);
+    }
+    else
+    {
+        auto tempSysTable = openTable(m_blockHash, m_blockNum, SYS_TABLES);
+        auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
+        if (tableEntries->size() == 0u)
+        {
+            LOG(DEBUG) << tableName << " not exist in _sys_tables_.";
+            return nullptr;
+        }
+        auto entry = tableEntries->get(0);
+        tableInfo->name = tableName;
+        tableInfo->key = entry->getField("key_field");
+        string valueFields = entry->getField("value_field");
+        boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
+        tableInfo->fields.emplace_back(STATUS);
+        tableInfo->fields.emplace_back(tableInfo->key);
+    }
+    MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
+    memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
                                  vector<Change::Record>& _records) {
         m_changeLog.emplace_back(_table, _kind, _key, _records);
     });
 
-    memoryTable->init(table);
+    memoryTable->init(tableName);
 
     return memoryTable;
 }
 
 Table::Ptr MemoryTableFactory::createTable(h256 blockHash, int64_t num, const string& tableName,
-    const string& keyField, const vector<string>& valueField)
+    const string& keyField, const std::string& valueField)
 {
     LOG(DEBUG) << "Create Table:" << blockHash << " num:" << num << " table:" << tableName;
 
-    auto sysTable = openTable(blockHash, num, "_sys_tables_");
+    auto sysTable = openTable(blockHash, num, SYS_MINERS);
 
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
-    if (tableEntries->size() == 0)
+    if (tableEntries->size() != 0)
     {
-        // Write table entry
-        auto tableEntry = sysTable->newEntry();
-        // tableEntry->setField("name", tableName);
-        tableEntry->setField("key_field", keyField);
-        tableEntry->setField("value_field", boost::join(valueField, ","));
-        sysTable->insert(tableName, tableEntry);
+        LOG(ERROR) << "tableName " << tableName << " already exist in " << SYS_TABLES;
+        return nullptr;
     }
+    // Write table entry
+    auto tableEntry = sysTable->newEntry();
+    tableEntry->setField("table_name", tableName);
+    tableEntry->setField("key_field", keyField);
+    tableEntry->setField("value_field", valueField);
+    sysTable->insert(tableName, tableEntry);
 
     return openTable(blockHash, num, tableName);
 }
@@ -80,32 +118,15 @@ void MemoryTableFactory::setBlockNum(int blockNum)
     m_blockNum = blockNum;
 }
 
-Address MemoryTableFactory::getTable(const string& tableName)
-{
-    auto it = m_name2Table.find(tableName);
-    if (it == m_name2Table.end())
-    {
-        return Address();
-    }
-    return it->second;
-}
-
-void MemoryTableFactory::insertTable(const string& _tableName, const Address& _address)
-{
-    m_name2Table.insert(make_pair(_tableName, _address));
-}
-
 h256 MemoryTableFactory::hash(shared_ptr<blockverifier::ExecutiveContext> context)
 {
     bytes data;
     LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
-    for (auto tableAddress : m_name2Table)
+    for (auto& it : m_name2Table)
     {
-        blockverifier::TablePrecompiled::Ptr table =
-            dynamic_pointer_cast<blockverifier::TablePrecompiled>(
-                context->getPrecompiled(tableAddress.second));
+        auto table = it.second;
         h256 hash = table->hash();
-        LOG(DEBUG) << "table:" << tableAddress.first << " hash:" << hash;
+        LOG(DEBUG) << "table:" << it.first << " hash:" << hash;
         if (hash == h256())
         {
             continue;
@@ -190,15 +211,13 @@ void MemoryTableFactory::commitDB(shared_ptr<blockverifier::ExecutiveContext> co
 
     for (auto dbIt : m_name2Table)
     {
-        blockverifier::TablePrecompiled::Ptr tablePrecompiled =
-            dynamic_pointer_cast<blockverifier::TablePrecompiled>(
-                context->getPrecompiled(dbIt.second));
+        auto table = dbIt.second;
 
         dev::storage::TableData::Ptr tableData = make_shared<dev::storage::TableData>();
         tableData->tableName = dbIt.first;
 
         bool dirtyTable = false;
-        for (auto it : *(tablePrecompiled->getTable()->data()))
+        for (auto it : *(table->data()))
         {
             tableData->data.insert(make_pair(it.first, it.second));
 
@@ -228,4 +247,24 @@ void MemoryTableFactory::commitDB(shared_ptr<blockverifier::ExecutiveContext> co
 
     m_name2Table.clear();
     m_changeLog.clear();
+}
+
+storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& tableName)
+{
+    auto tableInfo = make_shared<storage::TableInfo>();
+    tableInfo->name = tableName;
+    if (tableName == SYS_MINERS)
+    {
+        tableInfo->key = "name";
+        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
+    }
+    else if (tableName == SYS_TABLES)
+    {
+        tableInfo->key = "table_name";
+        tableInfo->fields = vector<string>{"key_field", "value_field"};
+    }
+    tableInfo->fields.emplace_back(tableInfo->key);
+    tableInfo->fields.emplace_back(STATUS);
+
+    return tableInfo;
 }

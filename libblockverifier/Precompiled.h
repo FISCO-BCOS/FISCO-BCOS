@@ -42,7 +42,6 @@ public:
 
     virtual ~Precompiled(){};
 
-
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) { return ""; }
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param) = 0;

@@ -36,14 +36,13 @@ contract Miner {
 }
 #endif
 
-/// \brief Miner Node
-const static char* const MINER_TYPE_MINER = "miner";
-/// \brief Observer Node
-const static char* const MINER_TYPE_OBSERVER = "observer";
-const static char* const MINER_KEY_NODEID = "node_id";
-const static char* const MINER_KEY_ENABLENUM = "enable_num";
-/// \brief Node type key
-const static char* const MINER_PRIME_KEY = "type";
+/// \brief Sign of the miner is valid or not
+const char* const NODE_TYPE = "type";
+const char* const NODE_TYPE_MINER = "miner";
+const char* const NODE_TYPE_OBSERVER = "observer";
+const char* const NODE_KEY_NODEID = "node_id";
+const char* const NODE_KEY_ENABLENUM = "enable_num";
+const char* const PRI_KEY = "node";
 
 class MinerPrecompiled : public CRUDPrecompiled
 {
