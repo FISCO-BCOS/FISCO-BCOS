@@ -148,7 +148,7 @@ generate_config() {
         "networkid":"12345",
         "logverbosity":"4",
         "coverlog":"OFF",
-        "eventlog":"ON",
+        "eventlog":"OFF",
         "statlog":"ON",
         "logconf":"./log.conf"
 }' > $out_file
