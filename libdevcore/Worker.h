@@ -108,6 +108,9 @@ protected:
     /// derived classes.
     void terminate();
 
+    std::atomic<WorkerState>& workerState() { return m_state; }
+    unsigned idleWaitMs() { return m_idleWaitMs; }
+
 private:
     std::string m_name;
 

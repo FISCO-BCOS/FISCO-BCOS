@@ -45,6 +45,18 @@ public:
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
     virtual void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
+
+    /// Register a handler that will be called once there is a new transaction imported
+    template <class T>
+    dev::eth::Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
+
+protected:
+    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
+    ///< nice and exit fast.
+    dev::eth::Signal<> m_onReady;
 };
 }  // namespace blockchain
 }  // namespace dev

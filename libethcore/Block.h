@@ -70,6 +70,14 @@ public:
     ///-----decode functions
     void decode(bytesConstRef _block);
 
+    /// @returns the RLP serialisation of this block.
+    bytes rlp() const
+    {
+        bytes out;
+        encode(out);
+        return out;
+    }
+
     ///-----get interfaces
     Transactions const& transactions() const { return m_transactions; }
     TransactionReceipts const& transactionReceipts() const { return m_transactionReceipts; }
