@@ -83,11 +83,20 @@ class SyncMasterStatus
 {
 public:
     SyncMasterStatus() {}
+
     bool hasPeer(NodeID const& _id);
+
     bool newSyncPeerStatus(NodeInfo const& _info);
+
+    void deletePeer(NodeID const& _id);
+
+    NodeIDs peers();
+
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
     void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
+
+    void foreachPeerRandom(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 
     /// Select some peers at _percent when _allow(peer)
     NodeIDs randomSelection(
@@ -100,15 +109,14 @@ public:
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
 public:
-    mutable RecursiveMutex x_known;
+    mutable SharedMutex x_known;
     int64_t knownHighestNumber;
     h256 knownLatestHash;
 
 private:
-    mutable Mutex x_peerStatus;
+    mutable SharedMutex x_peerStatus;
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
 
-    mutable Mutex x_downloadingBlockQueue;
     DownloadingBlockQueue m_downloadingBlockQueue;
 };
 
