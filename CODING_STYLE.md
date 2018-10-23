@@ -28,7 +28,7 @@ Use clang-format tool to format your changes, see [CONTRIBUTING](CONTRIBUTING.md
    - Copyright.
    - License.
 
-2. Never use `#ifdef`/`#define`/`#endif` file guards. Prefer `#pragma` once as first line below file comment.
+2. Never use `#ifdef`/`#define`/`#endif` file guards. Prefer `#pragma once` as first line below file comment.
 3. Prefer static const variable to value macros.
 4. Prefer inline constexpr functions to function macros.
 
