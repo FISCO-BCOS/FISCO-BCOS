@@ -26,11 +26,13 @@ namespace dev
 {
 namespace ledger
 {
+/// TODO:
 bool LedgerManager::initAllLedgers(
     std::vector<std::shared_ptr<dev::initializer::LedgerParamInterface>> allLedgerParams)
 {
     return true;
 }
+/// TODO:
 bool LedgerManager::initSignleLedger(
     std::shared_ptr<dev::initializer::LedgerParamInterface> ledgerParam)
 {
