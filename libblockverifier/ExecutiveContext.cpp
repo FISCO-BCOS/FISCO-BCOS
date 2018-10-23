@@ -103,13 +103,7 @@ std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& addres
     std::string tableName = "_contract_data_" + address.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-    auto addr = tableFactoryPrecompiled->openTable(shared_from_this(), tableName);
-    if (addr == Address())
-        return nullptr;
-    TablePrecompiled::Ptr tablePrecompiled =
-        std::dynamic_pointer_cast<TablePrecompiled>(getPrecompiled(addr));
-    auto table = tablePrecompiled->getTable();
-    return table;
+    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(h256(), 0, tableName);
 }
 
 std::shared_ptr<dev::eth::StateFace> ExecutiveContext::getState()
