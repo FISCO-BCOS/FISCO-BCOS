@@ -37,7 +37,7 @@ namespace sync
 class DownloadingBlockQueue
 {
 public:
-    DownloadingBlockQueue() : m_blocks(), m_buffer() {}
+    DownloadingBlockQueue() : m_blocks(), m_buffer(make_shared<BlockPtrVec>()) {}
     /// Push a block
     void push(BlockPtr _block);
 
