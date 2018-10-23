@@ -139,6 +139,7 @@ enum transaction_status_code
 class TransactionReceipt
 {
 public:
+    TransactionReceipt(){};
     TransactionReceipt(bytesConstRef _rlp);
     TransactionReceipt(h256 _root, u256 _gasUsed, LogEntries const& _log, unsigned _status,
         bytes _bytes, Address const& _contractAddress = Address());

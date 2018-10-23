@@ -260,7 +260,8 @@ private:  /// private function fileds
 private:  /// private data fields
     /// -------structure of block header------
     h256 m_parentHash;
-    h256 m_stateRoot;
+    h256 m_stateRoot;  // from state
+    h256 m_dbHash;     // from MemoryTableFactory
     h256 m_transactionsRoot;
     h256 m_receiptsRoot;
     LogBloom m_logBloom;
