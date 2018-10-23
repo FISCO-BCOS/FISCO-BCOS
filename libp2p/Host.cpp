@@ -86,7 +86,7 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_asioInterface(_asioInterface),
     m_socketFactory(_socketFactory),
     m_sessionFactory(_sessionFactory),
-    m_lastSendTopicSeq(chrono::steady_clock::time_point::min()),
+    m_lastSendTopicSeq(std::chrono::milliseconds(0)),
     m_topicSeq(0)
 {
     LOG(INFO) << "Id:" << id();
@@ -104,6 +104,8 @@ Host::~Host()
 void Host::start()
 {
     DEV_TIMED_FUNCTION_ABOVE(500);
+    /// set the thread pool for the session
+    m_threadPool = std::make_shared<dev::ThreadPool>("SessionCallBackThreadPool", 8);
     /// implemented by the parent class Worker(libdevcore/Worker.*)
     startWorking();
     /// check the network and worker thread status
@@ -384,6 +386,20 @@ void Host::handshakeServer(const boost::system::error_code& error,
     runAcceptor();
 }
 
+void Host::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId)
+{
+    /// update the staticNodes
+    NodeIPEndpoint endpoint(
+        _s->remoteEndpoint().address(), _s->remoteEndpoint().port(), _s->remoteEndpoint().port());
+    auto it = m_staticNodes.find(endpoint);
+    /// modify m_staticNodes(including accept cases, namely the client endpoint)
+    if (it != m_staticNodes.end())
+    {
+        LOG(DEBUG) << "### update m_staticNodes to:" << toHex(nodeId);
+        it->second = nodeId;
+    }
+}
+
 /**
  * @brief: start peer sessions after handshake succeed(called by RLPxHandshake),
  *         mainly include four functions:
@@ -453,17 +469,12 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             /// disconnect already-connected session
             if (s->isConnected())
             {
+                LOG(DEBUG) << "#### reconnect ip:" << _s->remoteEndpoint().address().to_string();
+                LOG(DEBUG) << "#### reconnect port:" << _s->remoteEndpoint().port();
+                updateStaticNodes(_s, node_id);
                 LOG(WARNING) << "Session already exists for peer with id: " << node_id;
                 ps->disconnect(DisconnectReason::DuplicatePeer);
                 return;
-            }
-            NodeIPEndpoint endpoint(_s->remoteEndpoint().address(), _s->remoteEndpoint().port(),
-                _s->remoteEndpoint().port());
-            auto it = m_staticNodes.find(endpoint);
-            /// modify m_staticNodes(including accept cases, namely the client endpoint)
-            if (it != m_staticNodes.end())
-            {
-                it->second = node_id;
             }
         }
         if (!peerSlotsAvailable())
@@ -472,11 +483,16 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             ps->disconnect(TooManyPeers);
             return;
         }
+        ps->setThreadPool(m_threadPool);
         /// set P2PMsgHandler to session before start session
         ps->setP2PMsgHandler(m_p2pMsgHandler);
         /// start session and modify m_sessions
         ps->start();
         m_sessions[node_id] = ps;
+        /// update the staticNodes
+        LOG(DEBUG) << "### ip:" << _s->remoteEndpoint().address().to_string()
+                   << ", port:" << _s->remoteEndpoint().port() << " , node_id" << node_id;
+        updateStaticNodes(_s, node_id);
     }
     LOG(INFO) << "start a new peer: " << node_id;
     /// trigger send topic seq after starting a new peer
@@ -581,6 +597,8 @@ void Host::reconnectAllNodes()
                 it.first.address == m_tcpClient.address()) &&
             it.first.tcpPort == m_netConfigs.listenPort)
         {
+            if (it.second == NodeID())
+                it.second = id();
             LOG(DEBUG) << "Ignore connect self" << it.first;
             continue;
         }
@@ -589,6 +607,8 @@ void Host::reconnectAllNodes()
             LOG(DEBUG) << "Ignore connect self: " << it.first;
             continue;
         }
+        LOG(DEBUG) << "##### determine node id:" << toHex(it.second);
+        LOG(DEBUG) << "##### determine node id, isconnected:" << isConnected(it.second);
         /// use node id as the key to avoid repeated connection
         if (it.second != NodeID() && isConnected(it.second))
         {
@@ -609,7 +629,7 @@ void Host::sendTopicSeq()
 {
     if (chrono::steady_clock::now() - c_sendTopicSeqInterval < m_lastSendTopicSeq)
         return;
-    LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
+    /// LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
 
     Message::Ptr msg = std::make_shared<Message>();
     msg->setProtocolID(dev::eth::ProtocolID::AMOP);
@@ -628,7 +648,6 @@ void Host::sendTopicSeq()
         for (auto const& i : sessions())
             i.second->send(msgBuf);
     }
-
     m_lastSendTopicSeq = chrono::steady_clock::now();
 }
 
@@ -715,6 +734,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
         auto it = m_staticNodes.find(_nodeIPEndpoint);
         if (it != m_staticNodes.end())
         {
+            LOG(DEBUG) << "### modify node id of m_staticNodes:" << toHex(node_id);
             it->second = node_id;  // modify node ID
         }
         socket->close();
