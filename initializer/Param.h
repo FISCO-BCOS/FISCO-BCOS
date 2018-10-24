@@ -39,9 +39,9 @@ struct TxPoolParam
 };
 struct ConsensusParam
 {
-    dev::h256s minerList;
+    std::string consensusType;
+    dev::h512s minerList;
     unsigned intervalBlockTime;
-    dev::KeyPair keyPair;
 };
 struct BlockChainParam
 {
@@ -51,11 +51,17 @@ struct BlockChainParam
 struct SyncParam
 {
     /// TODO: syncParam related
+    unsigned idleWaitMs;
 };
 
 struct P2pParam
 {
     dev::p2p::NetworkConfig networkConfig;
+};
+
+struct GenesisParam
+{
+    dev::h256 genesisHash;
 };
 
 class LedgerParam : public LedgerParamInterface
@@ -64,8 +70,11 @@ public:
     TxPoolParam const& txPoolParam() const override { return m_txPoolParam; }
     ConsensusParam const& consensusParam() const override { return m_consensusParam; }
     BlockChainParam const& blockChainParam() const override { return m_blockChainParam; }
-    SyncParam const syncParam() const override { return m_syncParam; }
+    SyncParam const& syncParam() const override { return m_syncParam; }
     dev::eth::GroupID const& groupId() const override { return m_groupId; }
+    std::string const& baseDir() const override { return m_baseDir; }
+    dev::KeyPair const& keyPair() const override { return m_keypair; }
+    GenesisParam const& genesisParam() const override { return m_genesisParam; }
 
 protected:
     virtual void initLedgerParams(){};
@@ -75,7 +84,10 @@ private:
     ConsensusParam m_consensusParam;
     BlockChainParam m_blockChainParam;
     SyncParam m_syncParam;
+    GenesisParam m_genesisParam;
     dev::eth::GroupID m_groupId;
+    std::string m_baseDir;
+    dev::KeyPair m_keypair;
 };
 }  // namespace initializer
 }  // namespace dev
