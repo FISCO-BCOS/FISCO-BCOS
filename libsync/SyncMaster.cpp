@@ -109,8 +109,11 @@ void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
-    auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions,
-        [&](Transaction const& _tx) { return !m_txPool->isTransactionKonwnBySomeone(_tx.sha3()); });
+    auto ts =
+        m_txPool->topTransactionsCondition(c_maxSendTransactions, [&](Transaction const& _tx) {
+            bool unsent = !m_txPool->isTransactionKonwnBy(_tx.sha3(), m_nodeId);
+            return unsent;
+        });
 
     LOG(DEBUG) << ts.size() << " transactions need to broadcast";
     {
@@ -122,13 +125,15 @@ void SyncMaster::maintainTransactions()
 
             peers =
                 m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
-                    return !m_txPool->isTransactionKonwnBy(t.sha3(), _p->nodeId);
+                    bool unsent = !m_txPool->isTransactionKonwnBy(t.sha3(), m_nodeId);
+                    return unsent || !m_txPool->isTransactionKonwnBy(t.sha3(), _p->nodeId);
                 });
 
             for (auto const& p : peers)
             {
                 peerTransactions[p].push_back(i);
                 m_txPool->transactionIsKonwnBy(t.sha3(), p);
+                m_txPool->transactionIsKonwnBy(t.sha3(), m_nodeId);
             }
         }
     }
@@ -198,16 +203,16 @@ void SyncMaster::maintainPeersStatus()
     }
 
     // Sharding by c_maxRequestBlocks to request blocks
-    size_t shardNumber = (maxPeerNumber + 1 - currentNumber) / c_maxRequestBlocks;
+    size_t shardNumber =
+        (maxPeerNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
     size_t shard = 0;
     while (shard < shardNumber)
     {
         bool thisTurnFound = false;
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
             // shard: [from, to]
-            int64_t from = currentNumber + shard * c_maxRequestBlocks;
+            int64_t from = currentNumber + 1 + shard * c_maxRequestBlocks;
             int64_t to = min(from + c_maxRequestBlocks - 1, maxPeerNumber);
-
             if (_p->number < to)
                 return true;  // exit, to next peer
 
@@ -235,7 +240,6 @@ void SyncMaster::maintainPeersStatus()
         }
     }
 }
-
 
 bool SyncMaster::maintainDownloadingQueue()
 {
