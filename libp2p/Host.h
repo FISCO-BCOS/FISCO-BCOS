@@ -228,6 +228,11 @@ public:
 
     void setGroupID2NodeList(std::map<int32_t, h512s> const& _groupID2NodeList)
     {
+        if (m_groupID2NodeList.find(0) != m_groupID2NodeList.end())
+        {
+            LOG(INFO) << "Host::setGroupID2NodeList, groupID can not be 0!";
+            return;
+        }
         m_groupID2NodeList = _groupID2NodeList;
     }
 

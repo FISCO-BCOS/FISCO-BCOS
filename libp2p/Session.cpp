@@ -340,6 +340,10 @@ bool Session::checkRead(boost::system::error_code _ec)
 bool Session::CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Session> session)
 {
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(protocolID);
+    if (0 == ret.first)
+    {
+        return true;
+    }
     h512s nodeList;
     if (m_server->getNodeListByGroupID(int(ret.first), nodeList))
     {
