@@ -68,7 +68,8 @@ public:
 
     void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
 
-    void registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
+    void registerHandlerByProtoclID(
+        PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
 
     void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
 
