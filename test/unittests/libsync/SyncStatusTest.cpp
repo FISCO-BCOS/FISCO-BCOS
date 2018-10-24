@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(PeerStatusTest)
     BOOST_CHECK_EQUAL(peerStatus->genesisHash, node.genesisHash);
     BOOST_CHECK_EQUAL(peerStatus->latestHash, node.latestHash);
 }
-/*
+
 BOOST_AUTO_TEST_CASE(ForeachPeerTest)
 {
     for (unsigned id = 0; id < 10; id++)
@@ -102,6 +102,7 @@ BOOST_AUTO_TEST_CASE(ForeachPeerTest)
         BOOST_CHECK_EQUAL(peerStatus->number, _p->number);
         BOOST_CHECK_EQUAL(peerStatus->genesisHash, _p->genesisHash);
         BOOST_CHECK_EQUAL(peerStatus->latestHash, _p->latestHash);
+        return true;
     });
     BOOST_CHECK_EQUAL(peerCnt, 10);
 }
@@ -125,10 +126,11 @@ BOOST_AUTO_TEST_CASE(ForeachPeerRandomTest)
         BOOST_CHECK_EQUAL(peerStatus->number, _p->number);
         BOOST_CHECK_EQUAL(peerStatus->genesisHash, _p->genesisHash);
         BOOST_CHECK_EQUAL(peerStatus->latestHash, _p->latestHash);
+        return true;
     });
     BOOST_CHECK_EQUAL(peers.size(), 10);
 }
-*/
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
