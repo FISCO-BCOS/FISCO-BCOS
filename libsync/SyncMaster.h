@@ -50,15 +50,15 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned _idleWaitMs = 30)
-      : m_service(_service),
+      : SyncInterface(),
+        Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs),
+        m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_blockVerifier(_blockVerifier),
         m_protocolId(_protocolId),
         m_nodeId(_nodeId),
-        m_genesisHash(_genesisHash),
-        SyncInterface(),
-        Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
+        m_genesisHash(_genesisHash)
     {
         m_syncStatus = std::make_shared<SyncMasterStatus>();
         m_msgEngine = std::make_shared<SyncMsgEngine>(

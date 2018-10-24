@@ -47,8 +47,8 @@ public:
         std::shared_ptr<SyncMasterStatus> _syncStatus, int16_t const& _protocolId,
         NodeID const& _nodeId, h256 const& _genesisHash)
       : m_service(_service),
-        m_blockChain(_blockChain),
         m_txPool(_txPool),
+        m_blockChain(_blockChain),
         m_syncStatus(_syncStatus),
         m_protocolId(_protocolId),
         m_nodeId(_nodeId),
@@ -83,9 +83,9 @@ private:
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
 
     // Internal data
+    int16_t m_protocolId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
-    int16_t m_protocolId;
 };
 
 }  // namespace sync
