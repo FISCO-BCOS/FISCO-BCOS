@@ -122,7 +122,7 @@ public:
         return PBFTEngine::transDataToMessage(data, packetType, protocolId);
     }
 
-    void broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>())
     {
         return PBFTEngine::broadcastMsg(packetType, key, data, filter);
@@ -135,7 +135,7 @@ public:
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
-    void broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
+    bool broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
     u256 view() { return m_view; }
     void setView(u256 const& _view) { m_view = _view; }
     void checkAndSave() { return PBFTEngine::checkAndSave(); }
@@ -153,8 +153,8 @@ public:
     void initPBFTEnv(unsigned _view_timeout) { return PBFTEngine::initPBFTEnv(_view_timeout); }
     void checkAndCommit() { return PBFTEngine::checkAndCommit(); }
     static std::string const& backupKeyCommitted() { return PBFTEngine::c_backupKeyCommitted; }
-    void broadcastCommitReq(PrepareReq const& req) { return PBFTEngine::broadcastCommitReq(req); }
-    void broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
+    bool broadcastCommitReq(PrepareReq const& req) { return PBFTEngine::broadcastCommitReq(req); }
+    bool broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
     void checkTimeout() { return PBFTEngine::checkTimeout(); }
     void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
     bool isValidPrepare(PrepareReq const& req, bool self) const
@@ -210,6 +210,19 @@ public:
         FakeMinerList(minerSize);
         m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
             txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_minerList);
+        resetSessionInfo();
+    }
+
+    void resetSessionInfo()
+    {
+        FakeService* service = dynamic_cast<FakeService*>(m_consensus->mutableService().get());
+        service->clearSessionInfo();
+        for (size_t i = 0; i < m_minerList.size(); i++)
+        {
+            NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+            SessionInfo info(m_minerList[i], m_endpoint, std::vector<std::string>());
+            service->appendSessionInfo(info);
+        }
     }
 
     /// fake miner list

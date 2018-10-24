@@ -170,6 +170,13 @@ public:
         m_hashWith = h256(0);
     }
 
+    void setBlockLimit(u256 const& _blockLimit)
+    {
+        clearSignature();
+        m_blockLimit = _blockLimit;
+        m_hashWith = h256(0);
+    }
+
     /// @returns the latest block number to be packaged for transaction.
     u256 blockLimit() const { return m_blockLimit; }
 

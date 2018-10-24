@@ -24,6 +24,7 @@
 #pragma once
 #include "Common.h"
 #include "ConsensusInterface.h"
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblocksync/SyncInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
@@ -75,9 +76,40 @@ public:
         resetConfig();
     }
     /// append miner
-    void appendMiner(h512 const& _miner) override { m_minerList.push_back(_miner); }
+    void appendMiner(h512 const& _miner) override
+    {
+        m_minerList.push_back(_miner);
+        resetConfig();
+    }
+
+    const std::string consensusStatus() const override
+    {
+        json_spirit::Object status_obj;
+        getBasicConsensusStatus(status_obj);
+        json_spirit::Value value(status_obj);
+        std::string status_str = json_spirit::write_string(value, true);
+        return status_str;
+    }
     /// get status of consensus
-    const ConsensusStatus consensusStatus() const override { return ConsensusStatus(); }
+    void getBasicConsensusStatus(json_spirit::Object& status_obj) const
+    {
+        status_obj.push_back(json_spirit::Pair("nodeNum", m_nodeNum.convert_to<size_t>()));
+        status_obj.push_back(json_spirit::Pair("f", m_f.convert_to<size_t>()));
+        status_obj.push_back(json_spirit::Pair("consensusedBlockNumber", m_consensusBlockNumber));
+        status_obj.push_back(
+            json_spirit::Pair("highestBlockHeader.blockNumber", m_highestBlock.number()));
+        status_obj.push_back(
+            json_spirit::Pair("highestBlockHeader.blockHash", toHex(m_highestBlock.hash())));
+        status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
+        status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
+        std::string miner_list;
+        for (auto miner : m_minerList)
+        {
+            miner_list = toHex(miner) + "#";
+        }
+        status_obj.push_back(json_spirit::Pair("minerList", miner_list));
+        status_obj.push_back(json_spirit::Pair("allowFutureBlocks", m_allowFutureBlocks));
+    }
 
     /// protocol id used when register handler to p2p module
     int16_t const& protocolId() const override { return m_protocolId; }
@@ -213,7 +245,6 @@ protected:
     dev::h512s m_minerList;
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;
-
     bool m_startConsensusEngine = false;
 };
 }  // namespace consensus
