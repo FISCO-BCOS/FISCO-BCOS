@@ -204,6 +204,15 @@ enum AMOPPacketType
     SendTopics = 3
 };
 
+class MessageFactory : public std::enable_shared_from_this<MessageFactory>
+{
+public:
+    typedef std::shared_ptr<MessageFactory> Ptr;
+
+    virtual ~MessageFactory(){};
+    virtual Message::Ptr buildMessage() = 0;
+};
+
 class P2PException : public std::exception
 {
 public:

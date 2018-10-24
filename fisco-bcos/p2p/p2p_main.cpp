@@ -36,6 +36,13 @@ using namespace dev;
 using namespace dev::p2p;
 namespace js = json_spirit;
 
+class P2PMessageFactory : public MessageFactory
+{
+public:
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+};
+
 static h512 node1 = h512(
     "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aebf474"
     "6846c0db2604adebf9c70c7f418d4d5a61");
@@ -70,6 +77,7 @@ static void InitNetwork(Params& m_params)
         std::make_shared<Host>(m_params.clientVersion(), CertificateServer::GetInstance().keypair(),
             *m_netConfig.get(), m_asioInterface, m_socketFactory, m_sessionFactory);
     m_host->setStaticNodes(m_params.staticNodes());
+    m_host->setMessageFactory(std::make_shared<P2PMessageFactory>());
     /// set the period for nodes to update topics
     uint32_t counter = 0;
     uint32_t interval = 0;
