@@ -43,21 +43,21 @@ TransactionReceipt::TransactionReceipt(h256 _root, u256 _gasUsed, LogEntries con
 {
     m_stateRoot = (_root);
     m_gasUsed = (_gasUsed);
-    m_bloom = (eth::bloom(_log));
     m_contractAddress = (_contractAddress);
-    m_log = (_log);
+    m_bloom = (eth::bloom(_log));
     m_status = _status;
     m_outputBytes = _bytes;
+    m_log = (_log);
 }
 
 TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
   : m_stateRoot(_other.stateRoot()),
     m_gasUsed(_other.gasUsed()),
-    m_bloom(_other.bloom()),
     m_contractAddress(_other.contractAddress()),
-    m_log(_other.log()),
+    m_bloom(_other.bloom()),
     m_status(_other.status()),
-    m_outputBytes(_other.outputBytes())
+    m_outputBytes(_other.outputBytes()),
+    m_log(_other.log())
 {}
 
 void TransactionReceipt::streamRLP(RLPStream& _s) const
