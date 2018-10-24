@@ -266,53 +266,52 @@ void Session::doRead()
     if (m_dropped)
         return;
     auto self(shared_from_this());
-    if (!m_test)
-        m_data.resize(sizeof(uint32_t));
-    auto asyncRead = [this, self](boost::system::error_code ec, std::size_t length) {
-        if (!checkRead(ec))
+    auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
+        if (ec)
+        {
+            LOG(WARNING) << "Error sending: " << ec.message();
+            drop(TCPError);
             return;
-        uint32_t fullLength = ntohl(*((uint32_t*)m_data.data()));
-        m_data.resize(fullLength);
-        LOG(INFO) << "Session::doRead fullLength=" << fullLength;
+        }
+        LOG(TRACE) << "Read: " << bytesTransferred
+                   << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
+        m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
-        auto _asyncRead = [this, self](boost::system::error_code ec, std::size_t length) {
-            ThreadContext tc(info().id.abridged());
-            ThreadContext tc2(info().host);
-            if (!checkRead(ec))
-                return;
+        ThreadContext tc(info().id.abridged());
+        ThreadContext tc2(info().host);
 
-            Message::Ptr message = std::make_shared<Message>();
+        while (true)
+        {
+            Message::Ptr message = m_messageFactory->buildMessage();
             ssize_t result = message->decode(m_data.data(), m_data.size());
+            LOG(TRACE) << "Parse result: " << result;
             if (result > 0)
             {
+                LOG(TRACE) << "Decode success: " << result;
                 P2PException e(
                     P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
                 onMessage(e, self, message);
+                m_data.erase(m_data.begin(), m_data.begin() + result);
+            }
+            else if (result == 0)
+            {
+                doRead();
+                break;
             }
             else
             {
                 P2PException e(P2PExceptionType::ProtocolError,
                     g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
                 onMessage(e, self, message);
+                break;
             }
-            doRead();
-        };
-        if (m_socket->isConnected())
-            m_server->asioInterface()->async_read(m_socket, *m_strand,
-                boost::asio::buffer(
-                    m_data.data() + sizeof(uint32_t), fullLength - sizeof(uint32_t)),
-                _asyncRead);
-        else
-        {
-            LOG(WARNING) << "Error Reading ssl socket is close!";
-            drop(TCPError);
-            return;
         }
     };
     if (m_socket->isConnected())
     {
-        m_server->asioInterface()->async_read(
-            m_socket, *m_strand, boost::asio::buffer(m_data, sizeof(uint32_t)), asyncRead);
+        LOG(TRACE) << "Start read:" << bufferLength;
+        m_server->asioInterface()->async_read_some(
+            m_socket, *m_strand, boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
     }
     else
     {
