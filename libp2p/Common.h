@@ -189,10 +189,10 @@ public:
     }
 
 private:
-    uint32_t m_length = 0;         ///< m_length = HEADER_LENGTH + length(m_buffer)
-    PROTOCOL_ID m_protocolID = 0;  ///< message type, the first two bytes of information, when
-                                   ///< greater than 0 is the ID of the request package.
-    PACKET_TYPE m_packetType = 0;        ///< message sub type, the second two bytes of information
+    uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
+    PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
+                                      ///< greater than 0 is the ID of the request package.
+    PACKET_TYPE m_packetType = 0;     ///< message sub type, the second two bytes of information
     uint32_t m_seq = 0;               ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
 };
