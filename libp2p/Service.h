@@ -97,6 +97,11 @@ public:
 
     std::shared_ptr<std::vector<std::string>> topics() const override { return m_host->topics(); }
 
+    void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    {
+        m_host->setMessageFactory(_messageFactory);
+    }
+
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,
         std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,

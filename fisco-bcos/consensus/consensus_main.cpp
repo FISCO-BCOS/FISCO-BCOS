@@ -28,6 +28,14 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libtxpool/TxPool.h>
+
+class P2PMessageFactory : public MessageFactory
+{
+public:
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+};
+
 static void startConsensus(Params& params)
 {
     ///< initialize component
@@ -47,6 +55,7 @@ static void startConsensus(Params& params)
     PROTOCOL_ID protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
 
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
+    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
     std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
     std::shared_ptr<dev::txpool::TxPool> txPool =
         std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);

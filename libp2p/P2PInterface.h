@@ -75,6 +75,8 @@ public:
     ///< interface to set and get topics
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
     virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
+
+    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
 };
 
 }  // namespace p2p
