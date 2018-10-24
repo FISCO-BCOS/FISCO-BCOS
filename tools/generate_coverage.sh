@@ -10,7 +10,6 @@
 
 #!/bin/sh
 
-set -x
 
 current_dir=`pwd`"/.."
 prev_dir=`pwd`
