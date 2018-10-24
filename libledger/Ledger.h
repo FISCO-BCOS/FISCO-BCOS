@@ -22,8 +22,9 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include "DBInitializer.h"
 #include "LedgerInterface.h"
-#include <initializer/Param.h>
+#include <initializer/ParamInterface.h>
 #include <libethcore/Common.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
@@ -36,17 +37,18 @@ class Ledger : public LedgerInterface
 public:
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service,
         std::shared_ptr<dev::initializer::LedgerParamInterface> param)
-      : m_service(service)
+      : m_service(service), m_param(param)
     {
         assert(m_service);
-        initLedger(param);
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(param);
     }
 
     virtual ~Ledger(){};
     /// init the ledger(called by initializer)
-    void initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> param) override;
+    void initLedger(
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile,
+        dev::blockverifier::BlockVerifier::NumberHashCallBackFunction const& pFunc) override;
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
-
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
         return m_blockVerifier;
@@ -63,28 +65,29 @@ public:
     virtual dev::eth::GroupID const& groupId() const { return m_groupId; }
 
 protected:
-    virtual void initTxPool(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void initTxPool();
     /// init blockverifier related
-    virtual void initBlockVerifier(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
-    virtual void initBlockChain(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void initBlockVerifier(
+        dev::blockverifier::BlockVerifier::NumberHashCallBackFunction const& pFunc);
+    virtual void initBlockChain();
     /// create consensus moudle
-    virtual void consensusInitFactory(
-        std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void consensusInitFactory();
     /// init the blockSync
-    virtual void initSync(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void initSync();
 
 private:
     /// create PBFTConsensus
-    virtual std::shared_ptr<dev::consensus::Consensus> createPBFTConsensus(
-        std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    std::shared_ptr<dev::consensus::Consensus> createPBFTConsensus();
 
 private:
+    std::shared_ptr<dev::initializer::LedgerParamInterface> m_param = nullptr;
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::consensus::Consensus> m_consensus = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
+    std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     dev::eth::GroupID m_groupId;
 };
 }  // namespace ledger

@@ -24,7 +24,7 @@
 #pragma once
 #include <initializer/ParamInterface.h>
 #include <libblockchain/BlockChainInterface.h>
-#include <libblockverifier/BlockVerifierInterface.h>
+#include <libblockverifier/BlockVerifier.h>
 #include <libconsensus/Consensus.h>
 #include <libconsensus/ConsensusInterface.h>
 #include <libethcore/Common.h>
@@ -41,7 +41,10 @@ public:
     LedgerInterface() = default;
     virtual ~LedgerInterface(){};
     /// init the ledger(called by initializer)
-    virtual void initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> param) = 0;
+    virtual void initLedger(
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile,
+        dev::blockverifier::BlockVerifier::NumberHashCallBackFunction const& pFunc) = 0;
+
     virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const = 0;
     virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const = 0;
     virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const = 0;

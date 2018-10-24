@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "BlockVerifierInterface.h"
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
 #include "Precompiled.h"
@@ -44,7 +45,8 @@ class LastBlockHashesFace;
 }  // namespace eth
 namespace blockverifier
 {
-class BlockVerifier : public std::enable_shared_from_this<BlockVerifier>
+class BlockVerifier : public BlockVerifierInterface,
+                      public std::enable_shared_from_this<BlockVerifier>
 {
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;

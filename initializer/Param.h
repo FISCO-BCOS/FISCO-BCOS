@@ -35,23 +35,26 @@ namespace initializer
 /// forward class declaration
 struct TxPoolParam
 {
-    uint64_t txPoolLimit;
+    uint64_t txPoolLimit = 102400;
 };
 struct ConsensusParam
 {
-    std::string consensusType;
-    dev::h512s minerList;
-    unsigned intervalBlockTime;
+    std::string consensusType = "pbft";
+    dev::h512s minerList = dev::h512s();
+    uint64_t maxTransactions = 1000;
+    unsigned intervalBlockTime = 1000;
 };
-struct BlockChainParam
+struct AMDBParam
 {
-    /// TODO: gensis related config
+    std::string topic;
+    int retryInterval = 1;
+    int maxRetry = 0;
 };
 
 struct SyncParam
 {
     /// TODO: syncParam related
-    unsigned idleWaitMs;
+    unsigned idleWaitMs = 30;
 };
 
 struct P2pParam
@@ -61,7 +64,7 @@ struct P2pParam
 
 struct GenesisParam
 {
-    dev::h256 genesisHash;
+    dev::h256 genesisHash = dev::h256();
 };
 
 class LedgerParam : public LedgerParamInterface
@@ -69,12 +72,14 @@ class LedgerParam : public LedgerParamInterface
 public:
     TxPoolParam const& txPoolParam() const override { return m_txPoolParam; }
     ConsensusParam const& consensusParam() const override { return m_consensusParam; }
-    BlockChainParam const& blockChainParam() const override { return m_blockChainParam; }
     SyncParam const& syncParam() const override { return m_syncParam; }
     dev::eth::GroupID const& groupId() const override { return m_groupId; }
     std::string const& baseDir() const override { return m_baseDir; }
     dev::KeyPair const& keyPair() const override { return m_keypair; }
     GenesisParam const& genesisParam() const override { return m_genesisParam; }
+    AMDBParam const& amdbParam() const override { return m_amdbParam; }
+    virtual std::string const& dbType() const override { return m_dbType; }
+    virtual bool enableMpt() const override { return m_enableMpt; }
 
 protected:
     virtual void initLedgerParams(){};
@@ -82,12 +87,14 @@ protected:
 private:
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
-    BlockChainParam m_blockChainParam;
     SyncParam m_syncParam;
     GenesisParam m_genesisParam;
+    AMDBParam m_amdbParam;
     dev::eth::GroupID m_groupId;
     std::string m_baseDir;
     dev::KeyPair m_keypair;
+    std::string m_dbType = "AMDB";
+    bool m_enableMpt = true;
 };
 }  // namespace initializer
 }  // namespace dev

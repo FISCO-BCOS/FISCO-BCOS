@@ -162,6 +162,16 @@ inline u256 s2u(s256 _u)
     else
         return u256(c_end + _u);
 }
+
+inline int stringCmpIgnoreCase(const std::string& lhs, const std::string& rhs)
+{
+#if defined(_WIN32)
+    return _stricmp(lhs.c_str(), rhs.c_str());
+#else
+    return strcasecmp(lhs.c_str(), rhs.c_str());
+#endif
+}
+
 //-----------Common Convertions and Calcultations--------------------
 
 template <size_t n>
