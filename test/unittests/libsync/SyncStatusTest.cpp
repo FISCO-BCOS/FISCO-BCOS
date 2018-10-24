@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(PeerStatusTest)
     BOOST_CHECK_EQUAL(peerStatus->genesisHash, node.genesisHash);
     BOOST_CHECK_EQUAL(peerStatus->latestHash, node.latestHash);
 }
-/*
+
 BOOST_AUTO_TEST_CASE(ForeachPeerTest)
 {
     for (unsigned id = 0; id < 10; id++)
@@ -102,6 +102,7 @@ BOOST_AUTO_TEST_CASE(ForeachPeerTest)
         BOOST_CHECK_EQUAL(peerStatus->number, _p->number);
         BOOST_CHECK_EQUAL(peerStatus->genesisHash, _p->genesisHash);
         BOOST_CHECK_EQUAL(peerStatus->latestHash, _p->latestHash);
+        return true;
     });
     BOOST_CHECK_EQUAL(peerCnt, 10);
 }
@@ -116,7 +117,6 @@ BOOST_AUTO_TEST_CASE(ForeachPeerRandomTest)
 
     set<NodeID> peers;
     shared_ptr<SyncPeerStatus> peerStatus;
-    cout << "foreachPeerRandom: " << endl;
     status.foreachPeerRandom([&](shared_ptr<SyncPeerStatus> _p) {
         peers.insert(_p->nodeId);
         cout << _p->nodeId << endl;
@@ -125,10 +125,64 @@ BOOST_AUTO_TEST_CASE(ForeachPeerRandomTest)
         BOOST_CHECK_EQUAL(peerStatus->number, _p->number);
         BOOST_CHECK_EQUAL(peerStatus->genesisHash, _p->genesisHash);
         BOOST_CHECK_EQUAL(peerStatus->latestHash, _p->latestHash);
+        return true;
     });
     BOOST_CHECK_EQUAL(peers.size(), 10);
 }
-*/
+
+BOOST_AUTO_TEST_CASE(RandomSelectionTest)
+{
+    for (unsigned id = 0; id < 10; id++)
+    {
+        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        status.newSyncPeerStatus(node);
+    }
+
+    NodeIDs peers;
+    shared_ptr<SyncPeerStatus> peerStatus;
+    peers = status.randomSelection(70, [&](shared_ptr<SyncPeerStatus> _p) {
+        peerStatus = status.peerStatus(_p->nodeId);
+        BOOST_CHECK_EQUAL(peerStatus->nodeId, _p->nodeId);
+        BOOST_CHECK_EQUAL(peerStatus->number, _p->number);
+        BOOST_CHECK_EQUAL(peerStatus->genesisHash, _p->genesisHash);
+        BOOST_CHECK_EQUAL(peerStatus->latestHash, _p->latestHash);
+        return true;
+    });
+    BOOST_CHECK_EQUAL(peers.size(), 7);
+
+    set<NodeID> peersSet;
+    for (auto peer : peers)
+        peersSet.insert(peer);
+    BOOST_CHECK_EQUAL(peersSet.size(), 7);
+}
+
+
+BOOST_AUTO_TEST_CASE(RandomSelectionSizeTest)
+{
+    for (unsigned id = 0; id < 10; id++)
+    {
+        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        status.newSyncPeerStatus(node);
+    }
+
+    NodeIDs peers;
+    shared_ptr<SyncPeerStatus> peerStatus;
+    peers = status.randomSelectionSize(3, [&](shared_ptr<SyncPeerStatus> _p) {
+        peerStatus = status.peerStatus(_p->nodeId);
+        BOOST_CHECK_EQUAL(peerStatus->nodeId, _p->nodeId);
+        BOOST_CHECK_EQUAL(peerStatus->number, _p->number);
+        BOOST_CHECK_EQUAL(peerStatus->genesisHash, _p->genesisHash);
+        BOOST_CHECK_EQUAL(peerStatus->latestHash, _p->latestHash);
+        return true;
+    });
+    BOOST_CHECK_EQUAL(peers.size(), 3);
+
+    set<NodeID> peersSet;
+    for (auto peer : peers)
+        peersSet.insert(peer);
+    BOOST_CHECK_EQUAL(peersSet.size(), 3);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

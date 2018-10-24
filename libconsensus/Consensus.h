@@ -24,10 +24,10 @@
 #pragma once
 #include "ConsensusEngineBase.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libblocksync/SyncInterface.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
+#include <libsync/SyncInterface.h>
 #include <libtxpool/TxPool.h>
 #include <libtxpool/TxPoolInterface.h>
 namespace dev
