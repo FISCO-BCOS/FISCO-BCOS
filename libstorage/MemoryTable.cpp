@@ -19,7 +19,7 @@
  *  @date 20180921
  */
 #include "MemoryTable.h"
-
+#include "Common.h"
 #include "Table.h"
 #include <json/json.h>
 #include <libdevcore/easylog.h>
@@ -32,8 +32,6 @@ using namespace dev::storage;
 void dev::storage::MemoryTable::init(const std::string& tableName)
 {
     LOG(DEBUG) << "Init MemoryTable:" << tableName;
-
-    m_tableInfo = m_remoteDB->info(tableName);
 }
 
 Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
@@ -115,7 +113,7 @@ size_t dev::storage::MemoryTable::update(
 
             return 0;
         }
-
+        checkFiled(entry);
         auto indexes = processEntries(entries, condition);
         std::vector<Change::Record> records;
 
@@ -139,7 +137,7 @@ size_t dev::storage::MemoryTable::update(
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Access DB failed for:" << e.what();
+        LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
     }
 
     return 0;
@@ -170,6 +168,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
         {
             entries = it->second;
         }
+        checkFiled(entry);
         Change::Record record(entries->size() + 1u);
         std::vector<Change::Record> value{record};
         m_recorder(shared_from_this(), Change::Insert, key, value);
@@ -190,7 +189,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Access DB failed";
+        LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
     }
 
     return 1;
@@ -250,13 +249,11 @@ h256 dev::storage::MemoryTable::hash()
                 {
                     for (auto fieldIt : *(it.second->get(i)->fields()))
                     {
-                        data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-
-                        data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
-
-                        // std::string status =
-                        // boost::lexical_cast<std::string>(fieldIt.second->getStatus());
-                        // data.insert(data.end(), status.begin(), status.end());
+                        if (isHashField(fieldIt.first))
+                        {
+                            data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+                            data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
+                        }
                     }
                 }
             }
@@ -414,4 +411,37 @@ void MemoryTable::setBlockHash(h256 blockHash)
 void MemoryTable::setBlockNum(int blockNum)
 {
     m_blockNum = blockNum;
+}
+
+bool MemoryTable::isHashField(const std::string& _key)
+{
+    if (!_key.empty())
+    {
+        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
+                (_key == STATUS));
+    }
+    else
+    {
+        LOG(ERROR) << "Empty key error.";
+        return false;
+    }
+}
+
+void MemoryTable::setTableInfo(TableInfo::Ptr _tableInfo)
+{
+    m_tableInfo = _tableInfo;
+}
+
+void MemoryTable::checkFiled(Entry::Ptr entry)
+{
+    for (auto& it : *(entry->fields()))
+    {
+        if (m_tableInfo->fields.end() ==
+            find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
+        {
+            LOG(ERROR) << "table:" << m_tableInfo->name << " doesn't have field:" << it.first;
+            throw std::invalid_argument(
+                std::string("table:") + m_tableInfo->name + " doesn't have field:" + it.first);
+        }
+    }
 }

@@ -30,6 +30,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
+#include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 using namespace dev::eth;
 using namespace dev::p2p;
@@ -56,7 +57,7 @@ struct PriorityCompare
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
 {
 public:
-    TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
+    TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         int16_t const& _protocolId, uint64_t const& _limit = 102400)
       : m_service(_p2pService),
@@ -153,7 +154,7 @@ private:
 
 private:
     /// p2p module
-    std::shared_ptr<dev::p2p::Service> m_service;
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<dev::eth::NonceCheck> m_nonceCheck;
     /// Max number of pending transactions

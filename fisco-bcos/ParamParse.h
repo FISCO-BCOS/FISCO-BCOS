@@ -58,6 +58,7 @@ public:
       : m_clientVersion(_clientVersion),
         m_listenIp(_listenIp),
         m_p2pPort(_p2pPort),
+        m_txSpeed(10),
         m_publicIp(_publicIp),
         m_bootstrapPath(_bootstrapPath)
     {
@@ -69,6 +70,7 @@ public:
       : m_clientVersion("2.0"),
         m_listenIp("127.0.0.1"),
         m_p2pPort(30303),
+        m_txSpeed(10),
         m_publicIp("127.0.0.1"),
         m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json")
     {
@@ -89,6 +91,8 @@ public:
             m_p2pPort = vm["p2p_port"].as<uint16_t>();
         if (vm.count("bootstrap") || vm.count("b"))
             m_bootstrapPath = vm["bootstrap"].as<std::string>();
+        if (vm.count("txSpeed") || vm.count("t"))
+            m_txSpeed = vm["txSpeed"].as<float>();
     }
     /// --- set interfaces ---
     void setClientVersion(std::string const& _clientVersion) { m_clientVersion = _clientVersion; }
@@ -111,6 +115,7 @@ public:
 
     std::map<NodeIPEndpoint, NodeID>& staticNodes() { return m_staticNodes; }
     h512s const minerList() { return m_minerList; }
+    float txSpeed() { return m_txSpeed; }
 
 private:
     void updateBootstrapnodes()
@@ -180,6 +185,7 @@ private:
     std::string m_clientVersion;
     std::string m_listenIp;
     uint16_t m_p2pPort;
+    float m_txSpeed;
     std::string m_publicIp;
     std::string m_bootstrapPath;
     h512s m_minerList;
@@ -190,12 +196,13 @@ static Params initCommandLine(int argc, const char* argv[])
 {
     boost::program_options::options_description server_options("p2p module of FISCO-BCOS");
     server_options.add_options()("client_version,v", boost::program_options::value<std::string>(),
-        "client version, default is 2.0")(
-        "public_ip,i", boost::program_options::value<std::string>(), "public ip address")(
-        "listen_ip,l", boost::program_options::value<std::string>(), "listen ip address")(
-        "p2p_port,p", boost::program_options::value<uint16_t>(), "p2p port")("bootstrap, b",
+        "client version, default is 2.0")("public_ip,i",
         boost::program_options::value<std::string>(),
-        "path of bootstrapnodes.json")("help,h", "help of p2p module of FISCO-BCOS");
+        "public ip address")("listen_ip,l", boost::program_options::value<std::string>(),
+        "listen ip address")("p2p_port,p", boost::program_options::value<uint16_t>(), "p2p port")(
+        "bootstrap,b", boost::program_options::value<std::string>(), "path of bootstrapnodes.json")(
+        "txSpeed,t", boost::program_options::value<float>(), "transaction generate speed")(
+        "help,h", "help of p2p module of FISCO-BCOS");
 
     boost::program_options::variables_map vm;
     try

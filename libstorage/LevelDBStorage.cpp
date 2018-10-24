@@ -29,14 +29,6 @@
 using namespace dev;
 using namespace dev::storage;
 
-TableInfo::Ptr LevelDBStorage::info(const std::string& table)
-{
-    TableInfo::Ptr tableInfo = std::make_shared<TableInfo>();
-    tableInfo->name = table;
-
-    return tableInfo;
-}
-
 Entries::Ptr LevelDBStorage::select(
     h256 hash, int num, const std::string& table, const std::string& key)
 {

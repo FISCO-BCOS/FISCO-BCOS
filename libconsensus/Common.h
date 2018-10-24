@@ -41,13 +41,6 @@ enum NodeAccountType
     ObserverAccount = 0,
     MinerAccount
 };
-
-struct ConsensusStatus
-{
-    std::string consensusEngine;
-    dev::h512s minerList;
-};
-
 struct Sealing
 {
     dev::eth::Block block;
