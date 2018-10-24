@@ -75,6 +75,8 @@ using Nonce = h64;
 using BlockNumber = int64_t;
 /// define GroupID
 using GroupID = int16_t;
+/// define ProtocolID
+using PROTOCOL_ID = int16_t;
 enum class BlockPolarity
 {
     Unknown,

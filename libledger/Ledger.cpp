@@ -22,43 +22,84 @@
  * @date: 2018-10-23
  */
 #include "Ledger.h"
+#include <libblockchain/BlockChainImp.h>
+#include <libblockverifier/BlockVerifier.h>
+#include <libconsensus/pbft/PBFTConsensus.h>
+#include <libconsensus/pbft/PBFTEngine.h>
+#include <libdevcore/OverlayDB.h>
+#include <libethcore/Protocol.h>
+#include <libsync/SyncInterface.h>
+#include <libsync/SyncMaster.h>
+#include <libtxpool/TxPool.h>
+using namespace dev::blockverifier;
+using namespace dev::blockchain;
+using namespace dev::consensus;
+using namespace dev::initializer;
+using namespace dev::sync;
+using namespace dev::db;
 namespace dev
 {
 namespace ledger
 {
-bool Ledger::initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> param)
+void Ledger::initLedger(std::shared_ptr<LedgerParamInterface> param)
 {
-    return true;
+    assert(param);
+    m_groupId = param->groupId();
+    /// TODO: init blockChain
+    initBlockChain(param);
+    /// TODO: intit blockVerifier
+    initBlockVerifier(param);
+    initTxPool(param);
+    initSync(param);
+    consensusInitFactory(param);
 }
 
 /// init txpool
-bool Ledger::initTxPool(dev::initializer::TxPoolParam const& param)
+void Ledger::initTxPool(std::shared_ptr<LedgerParamInterface> param)
 {
-    return true;
+    assert(m_blockChain);
+    dev::eth::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
+    m_txPool = std::make_shared<dev::txpool::TxPool>(
+        m_service, m_blockChain, protocol_id, param->txPoolParam().txPoolLimit);
 }
 
-/// init blockVerifier
-bool Ledger::initBlockVerifier()
-{
-    return true;
-}
+/// TODO: init blockVerifier
+void Ledger::initBlockVerifier(std::shared_ptr<LedgerParamInterface> param) {}
 
-/// init blockchain
-bool Ledger::initBlockChain(dev::initializer::BlockChainParam const& param)
+/// TODO: init blockchain
+void Ledger::initBlockChain(std::shared_ptr<LedgerParamInterface> param) {}
+
+/**
+ * @brief: create PBFTEngine
+ *
+ * @param param: Ledger related params
+ * @return std::shared_ptr<ConsensusInterface>: created consensus engine
+ */
+std::shared_ptr<Consensus> Ledger::createPBFTConsensus(std::shared_ptr<LedgerParamInterface> param)
 {
-    return true;
+    assert(m_txPool && m_blockChain && m_sync && m_blockVerifier);
+    dev::eth::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
+    /// create consensus engine according to "consensusType"
+    std::shared_ptr<Consensus> pbftConsensus =
+        std::make_shared<PBFTConsensus>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
+            protocol_id, param->baseDir(), param->keyPair(), param->consensusParam().minerList);
+    return pbftConsensus;
 }
 
 /// init consensus
-bool Ledger::initConsensus(dev::initializer::ConsensusParam const& param)
+void Ledger::consensusInitFactory(std::shared_ptr<LedgerParamInterface> param)
 {
-    return true;
+    /// default create pbft consensus
+    m_consensus = createPBFTConsensus(param);
 }
 
-bool Ledger::initSync(dev::initializer::SyncParam const& param)
+void Ledger::initSync(std::shared_ptr<LedgerParamInterface> param)
 {
-    return true;
+    assert(m_txPool && m_blockChain && m_blockVerifier);
+    dev::eth::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
+    m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
+        protocol_id, param->keyPair().pub(), param->genesisParam().genesisHash,
+        param->syncParam().idleWaitMs);
 }
-
 }  // namespace ledger
 }  // namespace dev
