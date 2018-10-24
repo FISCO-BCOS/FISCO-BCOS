@@ -119,7 +119,7 @@ public:
 protected:
     /// Perform a read on the socket.
     virtual void doRead();
-    void setTest(bool const& _test) { m_test = _test; }
+    //    void setTest(bool const& _test) { m_test = _test; }
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
     byte m_recvBuffer[1024];
 
@@ -186,7 +186,7 @@ private:
     boost::asio::io_service::strand* m_strand;
 
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
-    bool m_test = false;  /// for unit test
+    //    bool m_test = false;  /// for unit test
 
     uint32_t m_topicSeq = 0;  ///< Represents the topics situation at a certain stage. When topics
                               ///< change, increase m_topicSeq.

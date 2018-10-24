@@ -28,6 +28,7 @@
 #include <libp2p/SessionFace.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace dev;
 using namespace dev::p2p;
 namespace dev
@@ -96,7 +97,7 @@ public:
         std::shared_ptr<Peer> const& _n, PeerSessionInfo const& _info)
       : Session(_server, _s, _n, _info)
     {
-        setTest(true);
+        //        setTest(true);
     }
 
     void setProtocolId(int16_t const& protocol_id) { m_protocolId = protocol_id; }
@@ -392,11 +393,43 @@ public:
     {
         handler(ec, transferred_bytes);
     }
+    /// default implementation of async_read_some
+    virtual void async_read_some(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::io_service::strand& m_strand, boost::asio::mutable_buffers_1 buffers,
+        ReadWriteHandler handler, std::size_t transferred_bytes = 0,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        if (count == 2)
+        {
+            ec = boost::asio::error::eof;
+            handler(ec, transferred_bytes);
+        }
+        if (count == 1)
+        {
+            count++;
+            std::shared_ptr<Message> message = std::make_shared<Message>();
+            std::string s(32, 'a');
+            bytes data;
+            data.assign(s.begin(), s.end());
+            message->encode(data);
+            buffers = boost::asio::mutable_buffers_1(message.get(), message->length());
+            transferred_bytes = data.size();
+            handler(ec, transferred_bytes);
+        }
+        else
+        {
+            count++;
+            handler(ec, transferred_bytes);
+        }
+    }
     /// fake implementation of m_strand.post
     virtual void strand_post(boost::asio::io_service::strand& m_strand, Base_Handler handler)
     {
         handler();
     }
+
+private:
+    int count = 0;
 };
 
 /// create Host with specified session factory

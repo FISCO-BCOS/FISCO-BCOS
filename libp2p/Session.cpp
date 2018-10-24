@@ -264,6 +264,12 @@ void Session::doRead()
         return;
     auto self(shared_from_this());
     auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
+        if (ec)
+        {
+            LOG(WARNING) << "Error sending: " << ec.message();
+            drop(TCPError);
+            return;
+        }
         LOG(TRACE) << "Read: " << bytesTransferred
                    << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
         m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
