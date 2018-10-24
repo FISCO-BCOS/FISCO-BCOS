@@ -2,6 +2,7 @@
 
 #include "ExecutiveContext.h"
 #include <libdevcore/OverlayDB.h>
+#include <libexecutivecontext/StateFactoryInterface.h>
 #include <libstorage/Storage.h>
 namespace dev
 {
@@ -17,11 +18,17 @@ public:
     virtual void initExecutiveContext(BlockInfo blockInfo, ExecutiveContext::Ptr context);
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
-    virtual void setOverlayDB(OverlayDB& db);
+
+    virtual void setStateFactory(
+        std::shared_ptr<dev::eth::StateFactoryInterface> stateFactoryInterface);
+
+    void setPrecompiledContract(
+        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
 
 private:
     dev::storage::Storage::Ptr m_stateStorage;
-    OverlayDB m_db;
+    std::shared_ptr<dev::eth::StateFactoryInterface> m_stateFactoryInterface;
+    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 };
 
 }  // namespace blockverifier
