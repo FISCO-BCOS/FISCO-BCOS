@@ -121,6 +121,16 @@ public:
             m_state = SyncState::Idle;
     }
 
+    int64_t protocolId() { return m_protocolId; }
+
+    NodeID nodeId() { return m_nodeId; }
+
+    h256 genesisHash() { return m_genesisHash; }
+
+    std::shared_ptr<SyncMasterStatus> syncStatus() { return m_syncStatus; }
+
+    std::shared_ptr<SyncMsgEngine> msgEngine() { return m_msgEngine; }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -159,7 +169,7 @@ private:
     // settings
     int64_t m_maxBlockDownloadQueueSize = 5;
 
-private:
+public:
     void maintainTransactions();
     void maintainBlocks();
     void maintainPeersStatus();

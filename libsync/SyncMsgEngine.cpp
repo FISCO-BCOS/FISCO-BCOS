@@ -119,12 +119,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
             LOG(TRACE) << "Import transaction " << tx.sha3() << " from peer " << _packet.nodeId;
         }
 
-        auto p_tx = m_txPool->transactionInPool(tx.sha3());
-        if (p_tx != nullptr)
-        {
-            WriteGuard l(x_transactions);
-            p_tx->addImportPeer(_packet.nodeId);
-        }
+        m_txPool->transactionIsKonwnBy(tx.sha3(), _packet.nodeId);
     }
 }
 

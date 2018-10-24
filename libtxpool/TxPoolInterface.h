@@ -54,11 +54,10 @@ public:
     virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
     virtual dev::eth::Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
-    virtual std::vector<std::shared_ptr<dev::eth::Transaction const>> topTransactionsCondition(
-        uint64_t const& _limit,
+    virtual dev::eth::Transactions topTransactionsCondition(uint64_t const& _limit,
         std::function<bool(dev::eth::Transaction const&)> const& _condition = nullptr)
     {
-        return std::vector<std::shared_ptr<dev::eth::Transaction const>>();
+        return dev::eth::Transactions();
     };
 
     /// get all current transactions(maybe blocksync module need this interface)
@@ -95,6 +94,15 @@ public:
     {
         return nullptr;
     };
+
+    /// Set transaction is known by a node
+    virtual void transactionIsKonwnBy(h256 const& _txHash, h512 const& _nodeId){};
+
+    /// Is the transaction is known by the node ?
+    virtual bool isTransactionKonwnBy(h256 const& _txHash, h512 const& _nodeId) { return false; };
+
+    /// Is the transaction is known by someone
+    virtual bool isTransactionKonwnBySomeone(h256 const& _txHash) { return false; };
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>

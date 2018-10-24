@@ -109,26 +109,27 @@ void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
-    auto ts = m_txPool->topTransactionsCondition(
-        c_maxSendTransactions, [&](Transaction const& _tx) { return !_tx.hasSent(); });
+    auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions,
+        [&](Transaction const& _tx) { return !m_txPool->isTransactionKonwnBySomeone(_tx.sha3()); });
 
-
+    LOG(DEBUG) << ts.size() << " transactions need to broadcast";
     {
-        ReadGuard l(m_msgEngine->x_transactions);
         for (size_t i = 0; i < ts.size(); ++i)
         {
             auto const& t = ts[i];
             NodeIDs peers;
-            unsigned _percent = t->hasImportPeers() ? 25 : 100;
+            unsigned _percent = m_txPool->isTransactionKonwnBySomeone(t.sha3()) ? 25 : 100;
 
-            peers = m_syncStatus->randomSelection(_percent,
-                [&](std::shared_ptr<SyncPeerStatus> _p) { return !t->hasImportPeer(_p->nodeId); });
+            peers =
+                m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
+                    return !m_txPool->isTransactionKonwnBy(t.sha3(), _p->nodeId);
+                });
 
             for (auto const& p : peers)
+            {
                 peerTransactions[p].push_back(i);
-
-            if (!peers.empty())
-                t->setHasSent();
+                m_txPool->transactionIsKonwnBy(t.sha3(), p);
+            }
         }
     }
 
@@ -139,7 +140,7 @@ void SyncMaster::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs += ts[i]->rlp();
+            txRLPs += ts[i].rlp();
 
         SyncTransactionsPacket packet;
         packet.encode(txsSize, txRLPs);
@@ -149,6 +150,8 @@ void SyncMaster::maintainTransactions()
 
         return true;
     });
+
+    LOG(DEBUG) << " maintain transaction finish";
 }
 
 void SyncMaster::maintainBlocks()

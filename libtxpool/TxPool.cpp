@@ -199,6 +199,7 @@ bool TxPool::removeTrans(h256 const& _txHash)
         return false;
     }
     m_txsHash.erase(p_tx);
+    removeTransactionKnowBy(_txHash);  // Remove the record of transaction know by some peers
     if (m_known.count(_txHash))
         m_known.erase(_txHash);
     m_txsQueue.erase(p_tx->second);
@@ -292,18 +293,18 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
     return ret;
 }
 
-std::vector<std::shared_ptr<Transaction const>> TxPool::topTransactionsCondition(
+Transactions TxPool::topTransactionsCondition(
     uint64_t const& _limit, std::function<bool(Transaction const&)> const& _condition)
 {
     ReadGuard l(m_lock);
-    std::vector<std::shared_ptr<Transaction const>> ret;
+    Transactions ret;
     uint64_t limit = min(m_limit, _limit);
     uint64_t txCnt = 0;
     for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
         if (_condition(*it))
         {
-            ret.push_back(shared_ptr<Transaction const>(&(*it)));
+            ret.push_back(*it);
             txCnt++;
         }
     }
@@ -355,6 +356,41 @@ void TxPool::clear()
     m_known.clear();
     m_txsQueue.clear();
     m_txsHash.clear();
+}
+
+/// Set transaction is known by a node
+void TxPool::transactionIsKonwnBy(h256 const& _txHash, h512 const& _nodeId)
+{
+    WriteGuard l(x_transactionKnownBy);
+    m_transactionKnownBy[_txHash].insert(_nodeId);
+}
+
+/// Is the transaction is known by the node ?
+bool TxPool::isTransactionKonwnBy(h256 const& _txHash, h512 const& _nodeId)
+{
+    ReadGuard l(x_transactionKnownBy);
+    auto p = m_transactionKnownBy.find(_txHash);
+    if (p == m_transactionKnownBy.end())
+        return false;
+    return p->second.find(_nodeId) != p->second.end();
+}
+
+/// Is the transaction is known by someone
+bool TxPool::isTransactionKonwnBySomeone(h256 const& _txHash)
+{
+    ReadGuard l(x_transactionKnownBy);
+    auto p = m_transactionKnownBy.find(_txHash);
+    if (p == m_transactionKnownBy.end())
+        return false;
+    return !p->second.empty();
+}
+
+void TxPool::removeTransactionKnowBy(h256 const& _txHash)
+{
+    WriteGuard l(x_transactionKnownBy);
+    auto p = m_transactionKnownBy.find(_txHash);
+    if (p != m_transactionKnownBy.end())
+        m_transactionKnownBy.erase(p);
 }
 
 }  // namespace txpool
