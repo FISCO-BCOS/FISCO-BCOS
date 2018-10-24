@@ -16,17 +16,17 @@
  */
 
 /**
- * @brief : doownloading block queue test
+ * @brief : downloading block queue test
  * @author: catli
  * @date: 2018-10-23
  */
 
 #include <libsync/DownloadingBlockQueue.h>
-#include <test/unittests/libethcore/FakeBlock.h>
 #include <test/tools/libutils/TestOutputHelper.h>
+#include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
-#include <memory>
 #include <iostream>
+#include <memory>
 
 using namespace std;
 using namespace dev;
@@ -37,53 +37,83 @@ namespace dev
 {
 namespace test
 {
-    BOOST_FIXTURE_TEST_SUITE(DownloadingBlockQueueTest, TestOutputHelperFixture)
-    
-    BOOST_AUTO_TEST_CASE(EmptyTest)
-    {
-        DownloadingBlockQueue fakeQueue;
-        bool isEmpty = fakeQueue.empty();
-        BOOST_CHECK(isEmpty == true);
+BOOST_FIXTURE_TEST_SUITE(DownloadingBlockQueueTest, TestOutputHelperFixture)
 
-        FakeBlock fakeBlock;
-        shared_ptr<Block> blockPtr = make_shared<Block>(fakeBlock.getBlock());
-        fakeQueue.push(blockPtr);
-        isEmpty = fakeQueue.empty();
-        BOOST_CHECK(isEmpty == false);
-    }
+BOOST_AUTO_TEST_CASE(EmptyTest)
+{
+    DownloadingBlockQueue fakeQueue;
+    bool isEmpty = fakeQueue.empty();
+    BOOST_CHECK(isEmpty == true);
 
-    BOOST_AUTO_TEST_CASE(PushAndPopTest)
-    {
-        DownloadingBlockQueue fakeQueue;
-        BOOST_CHECK(fakeQueue.size() == 0);
+    FakeBlock fakeBlock;
+    shared_ptr<Block> blockPtr = make_shared<Block>(fakeBlock.getBlock());
+    fakeQueue.push(blockPtr);
+    isEmpty = fakeQueue.empty();
+    BOOST_CHECK(isEmpty == false);
+}
 
-        BlockPtrVec fakeBlocks;
-        for(auto i = 0; i < 5; ++i)
-        {
-            FakeBlock fakeBlock;
-            fakeBlock.getBlock().header().setNumber(static_cast<int64_t>(i));
-            shared_ptr<Block> blockPtr = make_shared<Block>(fakeBlock.getBlock());
-            fakeQueue.push(blockPtr);
-        }
+BOOST_AUTO_TEST_CASE(PushAndPopTest)
+{
+    DownloadingBlockQueue fakeQueue;
+    BOOST_CHECK(fakeQueue.size() == 0);
+    BlockPtrVec blocks = fakeQueue.popSequent(0, 5);
+    BOOST_CHECK(blocks.size() == 0);
 
-        BOOST_CHECK(fakeQueue.size() == 5);
-        fakeQueue.popSequent(0, 3);
-        BOOST_CHECK(fakeQueue.size() == 2);
+    BlockPtrVec fakeBlocks;
+    auto pushFunc =
+        [&fakeQueue](int start, int end) {
+            for (auto i = start; i < end; ++i)
+            {
+                FakeBlock fakeBlock;
+                fakeBlock.getBlock().header().setNumber(static_cast<int64_t>(i));
+                shared_ptr<Block> blockPtr = make_shared<Block>(fakeBlock.getBlock());
+                fakeQueue.push(blockPtr);
+            }
+        };
 
-        for(auto i = 7; i < 10; ++i)
-        {
-            FakeBlock fakeBlock;
-            fakeBlock.getBlock().header().setNumber(static_cast<int64_t>(i));
-            shared_ptr<Block> blockPtr = make_shared<Block>(fakeBlock.getBlock());
-            fakeQueue.push(blockPtr);
-        }
+    pushFunc(0, 5);
+    // 0, 1, 2, 3, 4 should in queue
+    BOOST_CHECK(fakeQueue.size() == 5);
+    blocks = fakeQueue.popSequent(0, 3);
+    // 3, 4 should in queue
+    BOOST_CHECK(fakeQueue.size() == 2);
+    BOOST_CHECK(blocks.size() == 3);
+    BOOST_CHECK(blocks[0]->header().number() == 0);
+    BOOST_CHECK(blocks[1]->header().number() == 1);
+    BOOST_CHECK(blocks[2]->header().number() == 2);
 
-        BOOST_CHECK(fakeQueue.size() == 5);
-        fakeQueue.popSequent(3, 3);
-        cout << fakeQueue.size() << endl;
-        BOOST_CHECK(fakeQueue.size() == 3);
-    }
+    pushFunc(7, 10);
+    // 3, 4, 7, 8, 9 should in queue
+    BOOST_CHECK(fakeQueue.size() == 5);
+    blocks = fakeQueue.popSequent(3, 3);
+    // 7, 8, 9 should in queue
+    BOOST_CHECK(fakeQueue.size() == 3);
+    BOOST_CHECK(blocks.size() == 2);
+    BOOST_CHECK(blocks[0]->header().number() == 3);
+    BOOST_CHECK(blocks[1]->header().number() == 4);
 
-    BOOST_AUTO_TEST_SUITE_END()
+    blocks = fakeQueue.popSequent(8, 1);
+    // 9 should in queue
+    BOOST_CHECK(fakeQueue.size() == 1);
+    BOOST_CHECK(blocks.size() == 1);
+    BOOST_CHECK(blocks[0]->header().number() == 8);
+
+    blocks = fakeQueue.popSequent(9, 1);
+    // queue should be empty
+    BOOST_CHECK(fakeQueue.size() == 0);
+    BOOST_CHECK(blocks.size() == 1);
+    BOOST_CHECK(blocks[0]->header().number() == 9);
+
+    pushFunc(0, c_maxDownloadingBlockQueueBufferSize);
+    BOOST_CHECK(fakeQueue.size() == c_maxDownloadingBlockQueueBufferSize);
+    pushFunc(c_maxDownloadingBlockQueueBufferSize, c_maxDownloadingBlockQueueBufferSize + 1);
+    // queue is full
+    BOOST_CHECK(fakeQueue.size() == c_maxDownloadingBlockQueueBufferSize);
+    blocks = fakeQueue.popSequent(0, c_maxDownloadingBlockQueueBufferSize);
+    BOOST_CHECK(fakeQueue.size() == 0);
+    BOOST_CHECK(blocks.size() == c_maxDownloadingBlockQueueBufferSize);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

@@ -39,7 +39,6 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
         BlockInfo blockInfo;
         blockInfo.hash = block.blockHeader().hash();
         blockInfo.number = block.blockHeader().number();
-        executiveContext->setPrecompiledContract(m_precompiledContract);
         m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
     }
     catch (exception& e)

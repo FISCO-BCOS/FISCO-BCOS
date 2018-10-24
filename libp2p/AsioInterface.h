@@ -80,6 +80,15 @@ public:
         ba::async_read(socket->sslref(), buffers, m_strand.wrap(handler));
     }
 
+    /// default implementation of async_read_some
+    virtual void async_read_some(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::io_service::strand& m_strand, boost::asio::mutable_buffers_1 buffers,
+        ReadWriteHandler handler, std::size_t transferred_bytes = 0,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        socket->sslref().async_read_some(buffers, m_strand.wrap(handler));
+    }
+
     /// default implementation of async_handshake
     virtual void async_handshake(std::shared_ptr<SocketFace> const& socket,
         boost::asio::io_service::strand& m_strand, ba::ssl::stream_base::handshake_type const& type,
