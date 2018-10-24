@@ -217,9 +217,9 @@ Json::Value toJson(dev::eth::LocalisedTransactionReceipt const& _t)
 {
 	Json::Value res;
 	res["transactionHash"] = toJS(_t.hash());
-	res["transactionIndex"] = toJS(_t.transactionIndex());
+	res["transactionIndex"] = _t.transactionIndex();
 	res["blockHash"] = toJS(_t.blockHash());
-	res["blockNumber"] = toJS(_t.blockNumber());
+	res["blockNumber"] = _t.blockNumber();
 	res["cumulativeGasUsed"] = toJS(_t.gasUsed()); // TODO: check if this is fine
 	res["gasUsed"] = toJS(_t.gasUsed());
 	res["contractAddress"] = toJS(_t.contractAddress());
@@ -294,7 +294,7 @@ Json::Value toJson(dev::eth::LocalisedLogEntry const& _e)
 		if (_e.mined)
 		{
 			res["type"] = "mined";
-			res["blockNumber"] = toJS(_e.blockNumber);
+			res["blockNumber"] = _e.blockNumber;
 			res["blockHash"] = toJS(_e.blockHash);
 			res["logIndex"] = _e.logIndex;
 			res["transactionHash"] = toJS(_e.transactionHash);
@@ -335,7 +335,7 @@ Json::Value toJson(std::unordered_map<h256, dev::eth::LocalisedLogEntries> const
 		if (entry.mined)
 		{
 
-			currentBlock["blockNumber"] = toJS(entry.blockNumber);
+			currentBlock["blockNumber"] = entry.blockNumber;
 			currentBlock["blockHash"] = toJS(entry.blockHash);
 			currentBlock["type"] = "mined";
 		}
@@ -348,8 +348,8 @@ Json::Value toJson(std::unordered_map<h256, dev::eth::LocalisedLogEntries> const
 		for (LocalisedLogEntry const& e: entries)
 		{
 			Json::Value log(Json::objectValue);
-			log["logIndex"] = toJS(e.logIndex);
-			log["transactionIndex"] = toJS(e.transactionIndex);
+			log["logIndex"] = e.logIndex;
+			log["transactionIndex"] = e.transactionIndex;
 			log["transactionHash"] = toJS(e.transactionHash);
 			log["address"] = toJS(e.address);
 			log["data"] = toJS(e.data);
