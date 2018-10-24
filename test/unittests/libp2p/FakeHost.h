@@ -45,6 +45,9 @@ public:
     {
         m_ping = m_lastReceived = m_connectionTime = chrono::steady_clock::now();
         m_disconnect = false;
+        std::shared_ptr<dev::ThreadPool> threadPool =
+            std::make_shared<ThreadPool>("SessionCallBackThreadPool", 1);
+        setThreadPool(threadPool);
     }
     void start() override
     {
@@ -52,6 +55,8 @@ public:
         m_start = true;
         m_disconnect = false;
     }
+
+    void setThreadPool(std::shared_ptr<dev::ThreadPool> thread) {}
     void disconnect(DisconnectReason _reason) { m_disconnect = true; }
     bool isConnected() const { return !m_disconnect; }
     NodeID id() const { return NodeID(m_peer->id()); }
@@ -116,7 +121,7 @@ public:
     }
     virtual void doRead()
     {
-        setProtocolId(dev::eth::ProtocolID::TxPool);
+        setProtocolId(0);
         EncodeData();
         if (m_read == 1)
             return;

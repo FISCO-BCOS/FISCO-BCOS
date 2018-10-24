@@ -31,6 +31,7 @@
 #include "SessionFace.h"
 #include "Socket.h"
 #include <libdevcore/Guards.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/ECDHE.h>
@@ -85,6 +86,7 @@ public:
     size_t peerCount() const;
     /// get session map
     std::unordered_map<NodeID, std::shared_ptr<SessionFace>>& sessions() { return m_sessions; }
+
     /// get mutex of sessions
     RecursiveMutex& mutexSessions() { return x_sessions; }
     /// get m_staticNodes
@@ -142,9 +144,12 @@ public:
     {
         m_staticNodes = staticNodes;
     }
-
     /// set max peer counts
     void setMaxPeerCount(unsigned max_peer_count) { m_maxPeerCount = max_peer_count; }
+    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
+    {
+        m_threadPool = threadPool;
+    }
 
     ///------ Network and worker threads related ------
     /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
@@ -215,6 +220,7 @@ public:
         m_topics = _topics;
         m_topicSeq++;
     }
+
     std::shared_ptr<std::vector<std::string>> topics() const { return m_topics; };
     uint32_t topicSeq() const { return m_topicSeq; }
 
@@ -269,6 +275,7 @@ protected:  /// protected functions
     inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
 
     void sendTopicSeq();
+    void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId);
 
 protected:  /// protected members(for unit testing)
     /// values inited by contructor
@@ -341,6 +348,7 @@ protected:  /// protected members(for unit testing)
     ///< m_topicSeq.
     uint32_t m_topicSeq;
 
+    std::shared_ptr<dev::ThreadPool> m_threadPool;
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;
 

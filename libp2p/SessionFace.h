@@ -27,6 +27,8 @@
  */
 
 #pragma once
+#include <libdevcore/ThreadPool.h>
+#include <memory>
 namespace dev
 {
 namespace p2p
@@ -74,9 +76,11 @@ public:
     virtual bool eraseCallbackBySeq(uint32_t seq) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
+
     virtual MessageFactory::Ptr messageFactory() const = 0;
     virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
-};
 
+    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) = 0;
+};
 }  // namespace p2p
 }  // namespace dev

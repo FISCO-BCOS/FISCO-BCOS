@@ -44,6 +44,7 @@ static void FakePBFTMinerByKeyPair(
     fake_pbft.m_minerList.push_back(key_pair.pub());
     fake_pbft.m_secrets.push_back(key_pair.secret());
     fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+    fake_pbft.resetSessionInfo();
 }
 
 /// update the miner list of PBFT Consensus
