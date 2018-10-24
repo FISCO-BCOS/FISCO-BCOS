@@ -95,7 +95,10 @@ public:
 
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
-    virtual void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
+    virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
+    {
+        m_protocolId = _protocolId;
+    };
 
     void noteNewTransactions()
     {

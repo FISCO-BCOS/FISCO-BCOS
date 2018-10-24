@@ -41,7 +41,8 @@ bool P2PMsgHandler::addProtocolID2Handler(
     }
 }
 
-bool P2PMsgHandler::getHandlerByProtocolID(PROTOCOL_ID protocolID, CallbackFuncWithSession& callback)
+bool P2PMsgHandler::getHandlerByProtocolID(
+    PROTOCOL_ID protocolID, CallbackFuncWithSession& callback)
 {
     RecursiveGuard l(x_protocolID2Handler);
     auto it = m_protocolID2Handler->find(protocolID);
