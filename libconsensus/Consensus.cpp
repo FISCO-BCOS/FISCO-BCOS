@@ -23,6 +23,7 @@
  */
 #include "Consensus.h"
 #include <libethcore/LogEntry.h>
+#include <libsync/SyncStatus.h>
 using namespace dev::sync;
 using namespace dev::blockverifier;
 using namespace dev::eth;
@@ -129,7 +130,7 @@ void Consensus::loadTransactions(uint64_t const& transToFetch)
 bool Consensus::isBlockSyncing()
 {
     SyncStatus state = m_blockSync->status();
-    return (state.state != SyncState::Idle && state.state != SyncState::NewBlocks);
+    return (state.state != SyncState::Idle);
 }
 
 void Consensus::resetSealingBlock(Sealing& sealing)
