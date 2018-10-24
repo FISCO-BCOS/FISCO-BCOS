@@ -22,8 +22,9 @@
  * @date: 2018-10-10
  */
 #pragma once
-#include <libblocksync/SyncInterface.h>
 #include <libethcore/Block.h>
+#include <libsync/SyncInterface.h>
+#include <libsync/SyncStatus.h>
 #include <memory>
 using namespace dev::sync;
 using namespace dev::eth;
@@ -40,14 +41,8 @@ public:
     void stop() override {}
     SyncStatus status() const override { return m_syncStatus; }
     bool isSyncing() const override { return m_isSyncing; }
-    h256 latestBlockSent() override { return m_latestSentBlock.headerHash(); }
-    void broadCastTransactions() override {}
-    /// for p2p: broad cast transaction to specified nodes
-    void sendTransactions(NodeList const& _nodes) override {}
-    PROTOCOL_ID const& getProtocolId() const override { return m_protocolId; };
+    PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
-    void reset() override{};
-    bool forceSync() override { return m_forceSync; }
 
 private:
     SyncStatus m_syncStatus;

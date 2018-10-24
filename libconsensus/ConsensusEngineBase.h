@@ -26,13 +26,13 @@
 #include "ConsensusInterface.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockchain/BlockChainInterface.h>
-#include <libblocksync/SyncInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Session.h>
+#include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 
 namespace dev
@@ -124,7 +124,6 @@ public:
     }
     /// get the node index if the node is a miner
     u256 nodeIdx() const override { return m_idx; }
-    void setNodeIdx(u256 const& _idx) override { m_idx = _idx; }
 
     bool const& allowFutureBlocks() const { return m_allowFutureBlocks; }
     void setAllowFutureBlocks(bool isAllowFutureBlocks)

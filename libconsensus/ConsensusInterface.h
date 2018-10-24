@@ -55,7 +55,6 @@ public:
     /// set the node account type
     virtual void setNodeAccountType(NodeAccountType const&) = 0;
     virtual u256 nodeIdx() const = 0;
-    virtual void setNodeIdx(u256 const&) = 0;
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::BlockHeader const& blockHeader) = 0;
 };
