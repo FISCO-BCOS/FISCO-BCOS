@@ -22,6 +22,7 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
 #include <memory>
 #include <vector>
@@ -35,6 +36,7 @@ struct ConsensusParam;
 struct BlockChainParam;
 struct SyncParam;
 struct P2pParam;
+class GenesisParam;
 class LedgerParamInterface;
 using LedgerParams = std::vector<LedgerParamInterface>;
 /// interface for the systemParam
@@ -56,8 +58,11 @@ public:
     virtual TxPoolParam const& txPoolParam() const = 0;
     virtual ConsensusParam const& consensusParam() const = 0;
     virtual BlockChainParam const& blockChainParam() const = 0;
-    virtual SyncParam const syncParam() const = 0;
+    virtual SyncParam const& syncParam() const = 0;
+    virtual GenesisParam const& genesisParam() const = 0;
     virtual dev::eth::GroupID const& groupId() const = 0;
+    virtual std::string const& baseDir() const = 0;
+    virtual dev::KeyPair const& keyPair() const = 0;
 
 protected:
     virtual void initLedgerParams() = 0;

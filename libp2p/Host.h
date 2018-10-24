@@ -249,6 +249,13 @@ public:
         return true;
     }
 
+    MessageFactory::Ptr messageFactory() { return m_messageFactory; }
+
+    void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    {
+        m_messageFactory = _messageFactory;
+    }
+
 protected:  /// protected functions
     /// called by 'startedWorking' to accept connections
     virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());
@@ -372,6 +379,8 @@ protected:  /// protected members(for unit testing)
     ///< value is the list of node members for the group
     ///< the data is currently statically loaded and not synchronized between nodes
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
+
+    MessageFactory::Ptr m_messageFactory;
 };
 }  // namespace p2p
 
