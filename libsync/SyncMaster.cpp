@@ -260,10 +260,22 @@ bool SyncMaster::maintainDownloadingQueue()
 
 void SyncMaster::maintainPeersConnection()
 {
+    // Delete inactive peers
     NodeIDs nodeIds = m_syncStatus->peers();
     for (NodeID const& id : nodeIds)
     {
         if (!m_service->isConnected(id))
             m_syncStatus->deletePeer(id);
+    }
+
+    // Add new peers
+    SessionInfos sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    for (auto const& session : sessions)
+    {
+        if (!m_syncStatus->hasPeer(session.nodeID))
+        {
+            SyncPeerInfo newPeer{session.nodeID, 0, m_genesisHash, m_genesisHash};
+            m_syncStatus->newSyncPeerStatus(newPeer);
+        }
     }
 }
