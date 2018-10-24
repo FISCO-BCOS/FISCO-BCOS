@@ -109,11 +109,21 @@ public:
         std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq);
     void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) { m_threadPool = threadPool; }
 
+    MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
+
+    void setMessageFactory(MessageFactory::Ptr _messageFactory) override
+    {
+        m_messageFactory = _messageFactory;
+    }
+
+    const size_t bufferLength = 1024;
+
 protected:
     /// Perform a read on the socket.
     virtual void doRead();
-    void setTest(bool const& _test) { m_test = _test; }
+    //    void setTest(bool const& _test) { m_test = _test; }
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
+    byte m_recvBuffer[1024];
 
 private:
     struct Header
@@ -139,6 +149,7 @@ private:
     Host* m_server;                        ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
     Mutex x_framing;                       ///< Mutex for the write queue.
+    MessageFactory::Ptr m_messageFactory;
 
 #if 0
 	std::deque<bytes> m_writeQueue;			///< The write queue.
@@ -177,7 +188,7 @@ private:
     boost::asio::io_service::strand* m_strand;
 
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
-    bool m_test = false;  /// for unit test
+    //    bool m_test = false;  /// for unit test
 
     uint32_t m_topicSeq = 0;  ///< Represents the topics situation at a certain stage. When topics
                               ///< change, increase m_topicSeq.
