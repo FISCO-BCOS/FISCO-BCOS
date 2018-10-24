@@ -53,12 +53,14 @@ inline PROTOCOL_ID getGroupProtoclID(GROUP_ID groupID, MODULE_ID moduleID)
     if (groupID < 0)
         return 0;
     else
-        return (groupID << 8) | moduleID;
+        return (groupID << (8 * sizeof(MODULE_ID))) | moduleID;
 }
 
 inline std::pair<GROUP_ID, MODULE_ID> getGroupAndProtocol(PROTOCOL_ID id)
 {
-    return std::make_pair((id >> 8) & 0xff, id & 0xff);
+    int32_t high = (2 << (8 * sizeof(GROUP_ID))) - 1;
+    int32_t low = (2 << (8 * sizeof(MODULE_ID))) - 1;
+    return std::make_pair((id >> (8 * sizeof(MODULE_ID))) & high, id & low);
 }
 
 }  // namespace eth
