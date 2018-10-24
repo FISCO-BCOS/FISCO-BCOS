@@ -84,6 +84,7 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
 ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
 {
     Transaction tx;
+
     tx.decode(_txBytes, CheckTransaction::Everything);
     /// check sha3
     if (sha3(_txBytes.toBytes()) != tx.sha3())
@@ -263,9 +264,16 @@ bool TxPool::dropBlockTrans(Block const& block)
  *
  * @param _limit : _limit Max number of transactions to return.
  * @param _avoid : Transactions to avoid returning.
+ * @param _condition : The function return false to avoid transaction to return.
  * @return Transactions : up to _limit transactions
  */
-Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool updateAvoid)
+dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
+{
+    h256Hash _avoid = h256Hash();
+    return topTransactions(_limit, _avoid);
+}
+
+Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
 {
     ReadGuard l(m_lock);
     Transactions ret;
@@ -277,17 +285,29 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
         {
             ret.push_back(*it);
             txCnt++;
-            if (updateAvoid)
+            if (_updateAvoid)
                 _avoid.insert(it->sha3());
         }
     }
     return ret;
 }
 
-dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
+std::vector<std::shared_ptr<Transaction const>> TxPool::topTransactionsCondition(
+    uint64_t const& _limit, std::function<bool(Transaction const&)> const& _condition)
 {
-    h256Hash _avoid = h256Hash();
-    return topTransactions(_limit, _avoid);
+    ReadGuard l(m_lock);
+    std::vector<std::shared_ptr<Transaction const>> ret;
+    uint64_t limit = min(m_limit, _limit);
+    uint64_t txCnt = 0;
+    for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
+    {
+        if (_condition(*it))
+        {
+            ret.push_back(shared_ptr<Transaction const>(&(*it)));
+            txCnt++;
+        }
+    }
+    return ret;
 }
 
 /// get all transactions(maybe blocksync module need this interface)
@@ -309,6 +329,15 @@ size_t TxPool::pendingSize()
     return m_txsQueue.size();
 }
 
+
+std::shared_ptr<Transaction const> TxPool::transactionInPool(h256 const& _txHash)
+{
+    auto p_tx = m_txsHash.find(_txHash);
+    if (p_tx == m_txsHash.end())
+        return nullptr;
+    return shared_ptr<Transaction const>(&(*p_tx->second));
+}
+
 /// @returns the status of the transaction queue.
 TxPoolStatus TxPool::status() const
 {
@@ -327,5 +356,6 @@ void TxPool::clear()
     m_txsQueue.clear();
     m_txsHash.clear();
 }
+
 }  // namespace txpool
 }  // namespace dev

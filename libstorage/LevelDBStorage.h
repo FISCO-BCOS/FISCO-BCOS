@@ -37,7 +37,6 @@ public:
 
     virtual ~LevelDBStorage(){};
 
-    virtual TableInfo::Ptr info(const std::string& table) override;
     virtual Entries::Ptr select(
         h256 hash, int num, const std::string& table, const std::string& key) override;
     virtual size_t commit(
