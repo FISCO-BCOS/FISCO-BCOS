@@ -10,8 +10,11 @@
 
 #!/bin/sh
 
+set -x
+
 current_dir=`pwd`"/.."
 prev_dir=`pwd`
+logical_core_num=`cat /proc/cpuinfo | grep "processor" | sort -u |  uniq | wc -l`
 
 [ -z $1 ] && echo "Usage: sh $0 <coverage_result_name>" && exit 
 [ $2 ] && echo "Usage: sh $0 <coverage_result_name>" && exit
@@ -131,7 +134,7 @@ build_ubuntu_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake .. -DCOVERAGE=ON"
-    execute_cmd "make"
+    execute_cmd "make -j${logical_core_num}"
     #execute_cmd "make install && cd ${current_dir}"
 }
 
@@ -139,7 +142,7 @@ build_centos_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
     execute_cmd "cmake3 .. -DCOVERAGE=ON"
-    execute_cmd "make"
+    execute_cmd "make -j${logical_core_num}"
     #execute_cmd "make install && cd ${current_dir}"
 }
 
@@ -173,7 +176,6 @@ gen_coverage_html() {
     execute_cmd "tar -zcf $filename.tar.gz bcos_coverage/*"
     execute_cmd "mv $filename.tar.gz $prev_dir"
     execute_cmd "rm -rf coverage_in bcos_coverage coverage "
-
 }
 
 check_deps
