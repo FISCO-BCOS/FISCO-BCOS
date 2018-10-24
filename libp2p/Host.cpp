@@ -629,7 +629,7 @@ void Host::sendTopicSeq()
 {
     if (chrono::steady_clock::now() - c_sendTopicSeqInterval < m_lastSendTopicSeq)
         return;
-    /// LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
+    LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
 
     Message::Ptr msg = std::make_shared<Message>();
     msg->setProtocolID(dev::eth::ProtocolID::AMOP);

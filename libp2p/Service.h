@@ -85,10 +85,17 @@ public:
 
     bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
 
-    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList)
+    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) override
     {
         m_host->setGroupID2NodeList(_groupID2NodeList);
     }
+
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    {
+        m_host->setTopics(_topics);
+    }
+
+    std::shared_ptr<std::vector<std::string>> topics() const override { return m_host->topics(); }
 
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,

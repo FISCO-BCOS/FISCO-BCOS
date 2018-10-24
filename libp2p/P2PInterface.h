@@ -71,6 +71,10 @@ public:
 
     ///< One-time loading the list of node members for a group.
     virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) = 0;
+
+    ///< interface to set and get topics
+    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
+    virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
 };
 
 }  // namespace p2p
