@@ -226,7 +226,7 @@ public:
 
     shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
 
-    void setGroupID2NodeList(std::map<int32_t, h512s> const& _groupID2NodeList)
+    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList)
     {
         if (m_groupID2NodeList.find(0) != m_groupID2NodeList.end())
         {
@@ -238,9 +238,9 @@ public:
 
     ///< If I joined this group, return true and node members for this group.
     ///< If didnot, return false.
-    bool getNodeListByGroupID(int32_t const& _groupID, h512s& _nodeList) const
+    bool getNodeListByGroupID(GROUP_ID const& _groupID, h512s& _nodeList) const
     {
-        std::map<int32_t, h512s>::const_iterator it = m_groupID2NodeList.find(_groupID);
+        std::map<GROUP_ID, h512s>::const_iterator it = m_groupID2NodeList.find(_groupID);
         if (it == m_groupID2NodeList.end())
         {
             return false;
@@ -371,7 +371,7 @@ protected:  /// protected members(for unit testing)
     ///< key is the group that the node joins
     ///< value is the list of node members for the group
     ///< the data is currently statically loaded and not synchronized between nodes
-    std::map<int32_t, h512s> m_groupID2NodeList;
+    std::map<GROUP_ID, h512s> m_groupID2NodeList;
 };
 }  // namespace p2p
 
