@@ -22,6 +22,7 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include <libethcore/Common.h>
 #include <memory>
 #include <vector>
 namespace dev
@@ -56,7 +57,7 @@ public:
     virtual ConsensusParam const& consensusParam() const = 0;
     virtual BlockChainParam const& blockChainParam() const = 0;
     virtual SyncParam const syncParam() const = 0;
-    virtual int16_t const& groupId() const = 0;
+    virtual dev::eth::GroupID const& groupId() const = 0;
 
 protected:
     virtual void initLedgerParams() = 0;

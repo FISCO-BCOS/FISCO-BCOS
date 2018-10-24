@@ -65,7 +65,7 @@ public:
     ConsensusParam const& consensusParam() const override { return m_consensusParam; }
     BlockChainParam const& blockChainParam() const override { return m_blockChainParam; }
     SyncParam const syncParam() const override { return m_syncParam; }
-    int16_t const& groupId() const override { return m_groupId; }
+    dev::eth::GroupID const& groupId() const override { return m_groupId; }
 
 protected:
     virtual void initLedgerParams(){};
@@ -75,7 +75,7 @@ private:
     ConsensusParam m_consensusParam;
     BlockChainParam m_blockChainParam;
     SyncParam m_syncParam;
-    uint16_t m_groupId;
+    dev::eth::GroupID m_groupId;
 };
 }  // namespace initializer
 }  // namespace dev

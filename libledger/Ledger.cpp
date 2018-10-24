@@ -30,21 +30,26 @@ bool Ledger::initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> 
 {
     return true;
 }
+
+/// init txpool
 bool Ledger::initTxPool(dev::initializer::TxPoolParam const& param)
 {
     return true;
 }
 
+/// init blockVerifier
 bool Ledger::initBlockVerifier()
 {
     return true;
 }
 
+/// init blockchain
 bool Ledger::initBlockChain(dev::initializer::BlockChainParam const& param)
 {
     return true;
 }
 
+/// init consensus
 bool Ledger::initConsensus(dev::initializer::ConsensusParam const& param)
 {
     return true;

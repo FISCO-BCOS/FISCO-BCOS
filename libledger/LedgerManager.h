@@ -24,6 +24,7 @@
 #pragma once
 #include "LedgerInterface.h"
 #include <initializer/ParamInterface.h>
+#include <libethcore/Common.h>
 #include <map>
 namespace dev
 {
@@ -37,7 +38,7 @@ public:
     virtual bool initSignleLedger(
         std::shared_ptr<dev::initializer::LedgerParamInterface> ledgerParam);
     /// get pointer of txPool by group id
-    inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(uint16_t groupId)
+    inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::eth::GroupID groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
@@ -45,28 +46,29 @@ public:
     }
     /// get pointer of blockverifier by group id
     inline std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
-        uint16_t groupId)
+        dev::eth::GroupID groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockVerifier();
     }
     /// get pointer of blockchain by group id
-    inline std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(uint16_t groupId)
+    inline std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(
+        dev::eth::GroupID groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockChain();
     }
     /// get pointer of consensus by group id
-    inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(uint16_t groupId)
+    inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(dev::eth::GroupID groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->consensus();
     }
     /// get pointer of blocksync by group id
-    inline std::shared_ptr<dev::sync::SyncInterface> sync(uint16_t groupId)
+    inline std::shared_ptr<dev::sync::SyncInterface> sync(dev::eth::GroupID groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
@@ -74,7 +76,7 @@ public:
     }
 
 private:
-    std::map<int16_t, std::shared_ptr<LedgerInterface>> m_ledgerMap;
+    std::map<dev::eth::GroupID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
 };
 }  // namespace ledger
 }  // namespace dev

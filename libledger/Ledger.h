@@ -24,6 +24,8 @@
 #pragma once
 #include "LedgerInterface.h"
 #include <initializer/Param.h>
+#include <libp2p/P2PInterface.h>
+#include <libp2p/Service.h>
 namespace dev
 {
 namespace ledger
@@ -31,7 +33,11 @@ namespace ledger
 class Ledger : public LedgerInterface
 {
 public:
-    Ledger() = default;
+    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service) : m_service(service)
+    {
+        assert(m_service);
+    }
+
     virtual ~Ledger(){};
     /// init the ledger(called by initializer)
     bool initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> param) override;
@@ -64,6 +70,7 @@ private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<dev::consensus::Consensus> m_consensus;
     std::shared_ptr<dev::sync::SyncInterface> m_sync;
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
 };
 }  // namespace ledger
 }  // namespace dev
