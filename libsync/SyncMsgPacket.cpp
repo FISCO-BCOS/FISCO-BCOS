@@ -30,7 +30,7 @@ using namespace dev::sync;
 using namespace dev::p2p;
 using namespace dev::eth;
 
-bool SyncMsgPacket::decode(std::shared_ptr<dev::p2p::Session> _session, dev::p2p::Message::Ptr _msg)
+bool SyncMsgPacket::decode(std::shared_ptr<dev::p2p::SessionFace> _session, dev::p2p::Message::Ptr _msg)
 {
     if (_msg == nullptr)
         return false;
@@ -59,7 +59,7 @@ Message::Ptr SyncMsgPacket::toMessage(uint16_t _protocolId)
 
 bool SyncMsgPacket::checkPacket(bytesConstRef _msg)
 {
-    if (_msg[0] > 0x7f || _msg.size() < 2)
+    if (_msg.size() < 2 || _msg[0] > 0x7f)
         return false;
     if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
         return false;
