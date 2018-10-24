@@ -22,6 +22,7 @@
  * @date: 2018-09-28
  */
 #include "PBFTEngine.h"
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
@@ -41,6 +42,7 @@ void PBFTEngine::start()
 {
     initPBFTEnv(3 * getIntervalBlockTime());
     ConsensusEngineBase::start();
+    LOG(DEBUG) << "### pbft after initEnv:" << consensusStatus();
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
@@ -52,6 +54,7 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_leaderFailed = false;
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
+    m_connectedNode = m_nodeNum;
     LOG(INFO) << "PBFT initEnv success";
 }
 
@@ -67,10 +70,11 @@ bool PBFTEngine::shouldSeal()
     if (ret.second != m_idx)
     {
         /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
-        /// isnot connect to leader.
+        /// is not connect to leader.
         h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
         if (node_id != h512() && !m_service->isConnected(node_id))
         {
+            LOG(DEBUG) << "To notify all";
             m_timeManager.m_lastConsensusTime = 0;
             m_timeManager.m_lastSignTime = 0;
             m_signalled.notify_all();
@@ -198,31 +202,46 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
-void PBFTEngine::generatePrepare(Block& block)
+bool PBFTEngine::generatePrepare(Block const& block)
 {
     Guard l(m_mutex);
     PrepareReq prepare_req(block, m_keyPair, m_view, m_idx);
-    PBFTMsgPacket pbft_msg;
-    prepare_req.encode(pbft_msg.data);
-    pbft_msg.packet_id = PrepareReqPacket;
-    m_msgQueue.push(pbft_msg);
+    bytes prepare_data;
+    prepare_req.encode(prepare_data);
     /// broadcast the generated preparePacket
-    broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(pbft_msg.data));
-    LOG(DEBUG) << "#### broadcast prepare, hash:" << prepare_req.sig.hex()
+    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(prepare_data));
+    if (succ)
+    {
+        if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
+        {
+            m_timeManager.changeView();
+            m_leaderFailed = true;
+            m_signalled.notify_all();
+        }
+        handlePrepareMsg(prepare_req);
+    }
+    /// reset the block according to broadcast result
+    /// m_onGeneratePrepare(succ);
+    LOG(DEBUG) << "#### broadcast-local-prepare, succ=" << succ
+               << ", prepare_req.block_hash:" << prepare_req.block_hash
                << ", height:" << prepare_req.height;
+    return succ;
 }
+
 /**
  * @brief : 1. generate and broadcast signReq according to given prepareReq,
  *          2. add the generated signReq into the cache
  * @param req: specified PrepareReq used to generate signReq
  */
-void PBFTEngine::broadcastSignReq(PrepareReq const& req)
+bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
 {
     SignReq sign_req(req, m_keyPair, m_idx);
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
-    broadcastMsg(SignReqPacket, sign_req.sig.hex(), ref(sign_req_data));
-    m_reqCache->addSignReq(sign_req);
+    bool succ = broadcastMsg(SignReqPacket, sign_req.sig.hex(), ref(sign_req_data));
+    if (succ)
+        m_reqCache->addSignReq(sign_req);
+    return succ;
 }
 
 bool PBFTEngine::getNodeIDByIndex(h512& nodeID, const u256& idx) const
@@ -253,22 +272,24 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
  *         2. broadcast the commitReq
  * @param req: the prepareReq that used to generate commitReq
  */
-void PBFTEngine::broadcastCommitReq(PrepareReq const& req)
+bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 {
     CommitReq commit_req(req, m_keyPair, m_idx);
     bytes commit_req_data;
     commit_req.encode(commit_req_data);
-    broadcastMsg(CommitReqPacket, commit_req.sig.hex(), ref(commit_req_data));
-    m_reqCache->addCommitReq(commit_req);
+    bool succ = broadcastMsg(CommitReqPacket, commit_req.sig.hex(), ref(commit_req_data));
+    if (succ)
+        m_reqCache->addCommitReq(commit_req);
+    return succ;
 }
 
-void PBFTEngine::broadcastViewChangeReq()
+bool PBFTEngine::broadcastViewChangeReq()
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
     LOG(DEBUG) << "##### generate view_change_data, block_hash:" << m_highestBlock.hash();
     bytes view_change_data;
     req.encode(view_change_data);
-    broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
+    return broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
 }
 
 /**
@@ -282,12 +303,14 @@ void PBFTEngine::broadcastViewChangeReq()
  * @param data: the encoded data of to be broadcasted(RLP encoder now)
  * @param filter: the list that shouldn't be broadcasted to
  */
-void PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
+bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    m_connectedNode = u256(sessions.size());
     for (auto session : sessions)
     {
+        LOG(DEBUG) << "#### session id:" << session.nodeID;
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
             continue;
@@ -305,6 +328,7 @@ void PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
             session.nodeID, transDataToMessage(data, packetType), nullptr);
         broadcastMark(session.nodeID, packetType, key);
     }
+    return true;
 }
 
 /**
@@ -326,17 +350,17 @@ bool PBFTEngine::isValidPrepare(
 {
     if (m_reqCache->isExistPrepare(req))
     {
-        LOG(ERROR) << oss.str() << " , Discard an illegal prepare, duplicated";
+        LOG(WARNING) << oss.str() << " , Discard an illegal prepare, duplicated";
         return false;
     }
     if (!allowSelf && req.idx == m_idx)
     {
-        LOG(ERROR) << oss.str() << ", Discard an illegal prepare, your own req";
+        LOG(WARNING) << oss.str() << ", Discard an illegal prepare, your own req";
         return false;
     }
     if (hasConsensused(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard an illegal prepare, maybe consensused";
+        LOG(WARNING) << oss.str() << ", Discard an illegal prepare, maybe consensused";
         return false;
     }
 
@@ -348,18 +372,19 @@ bool PBFTEngine::isValidPrepare(
     }
     if (!isValidLeader(req))
     {
-        LOG(ERROR) << oss.str() << "Recv an illegal prepare, err leader";
+        LOG(WARNING) << oss.str() << "Recv an illegal prepare, err leader";
         return false;
     }
     if (!isHashSavedAfterCommit(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard an illegal prepare req, commited but not saved hash="
-                   << m_reqCache->committedPrepareCache().block_hash.abridged();
+        LOG(WARNING) << oss.str()
+                     << ", Discard an illegal prepare req, commited but not saved hash="
+                     << m_reqCache->committedPrepareCache().block_hash.abridged();
         return false;
     }
     if (!checkSign(req))
     {
-        LOG(ERROR) << oss.str() << ",CheckSign failed";
+        LOG(WARNING) << oss.str() << ",CheckSign failed";
         return false;
     }
     return true;
@@ -386,6 +411,7 @@ void PBFTEngine::checkMinerList(Block const& block)
 
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
+    auto start_exec_time = utcTime();
     Block working_block(req.block);
     LOG(TRACE) << "start exec tx, blk=" << req.height
                << ", hash = " << working_block.header().hash().abridged() << ", idx = " << req.idx
@@ -393,8 +419,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     checkBlockValid(working_block);
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
-    m_timeManager.m_lastExecBlockFiniTime = utcTime();
-    m_timeManager.m_lastExecFinishTime = utcTime();
+    m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
 }
 
 /// check whether the block is empty
@@ -432,7 +457,7 @@ void PBFTEngine::onRecvPBFTMessage(
     }
     else
     {
-        LOG(ERROR) << "Recv an illegal msg, id = " << pbft_msg.packet_id;
+        LOG(WARNING) << "Recv an illegal msg, id = " << pbft_msg.packet_id;
     }
 }
 
@@ -479,13 +504,22 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     }
     /// whether to omit empty block
     if (needOmit(workingSealing))
+    {
+        m_timeManager.changeView();
+        m_timeManager.m_changeCycle = 0;
+        m_signalled.notify_all();
         return;
+    }
+
     /// generate prepare request with signature of this node to broadcast
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
     m_reqCache->addPrepareReq(sign_prepare);
     /// broadcast the re-generated signReq(add the signReq to cache)
-    broadcastSignReq(sign_prepare);
+    if (!broadcastSignReq(sign_prepare))
+    {
+        LOG(WARNING) << oss.str() << "broadcastSignReq failed";
+    }
     LOG(INFO) << oss.str() << ",real_block_hash=" << workingSealing.block.header().hash().abridged()
               << " success";
     checkAndCommit();
@@ -512,7 +546,10 @@ void PBFTEngine::checkAndCommit()
         /// update and backup the commit cache
         m_reqCache->updateCommittedPrepare();
         backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache());
-        broadcastCommitReq(m_reqCache->prepareCache());
+        if (!broadcastCommitReq(m_reqCache->prepareCache()))
+        {
+            LOG(WARNING) << "broadcastCommitReq failed";
+        }
         m_timeManager.m_lastSignTime = utcTime();
         checkAndSave();
     }
@@ -551,12 +588,8 @@ void PBFTEngine::checkAndSave()
             /// callback block chain to commit block
             m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
-            LOG(DEBUG) << "##### drop handled transactions";
             /// drop handled transactions
             dropHandledTransactions(block);
-            LOG(DEBUG) << "### REPORT BLOCK";
-            /// report block
-            reportBlock(block.blockHeader());
         }
         else
         {
@@ -574,13 +607,16 @@ void PBFTEngine::checkAndSave()
 /// 5. clear all caches related to prepareReq and signReq
 void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
 {
+    Guard l(m_mutex);
     /// update the highest block
     m_highestBlock = blockHeader;
     if (m_highestBlock.number() >= m_consensusBlockNumber)
     {
+        LOG(DEBUG) << "#### RESET VIEW to 0";
         m_view = m_toView = u256(0);
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
+        m_timeManager.m_changeCycle = 0;
         m_consensusBlockNumber = m_highestBlock.number() + 1;
         /// delete invalid view change requests from the cache
         m_reqCache->delInvalidViewChange(m_highestBlock);
@@ -635,7 +671,7 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
 {
     if (m_reqCache->isExistSign(req))
     {
-        LOG(ERROR) << oss.str() << "Discard a duplicated sign";
+        LOG(WARNING) << oss.str() << "Discard a duplicated sign";
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -689,7 +725,7 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistCommit(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard duplicated commit request";
+        LOG(WARNING) << oss.str() << ", Discard duplicated commit request";
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -715,7 +751,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
     valid = isValidViewChangeReq(viewChange_req, oss);
     if (!valid)
         return;
-    catchupView(viewChange_req, oss);
+
     m_reqCache->addViewChangeReq(viewChange_req);
     if (viewChange_req.view == m_toView)
         checkAndChangeView();
@@ -735,32 +771,39 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
     }
 }
 
-bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss) const
+bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistViewChange(req))
     {
-        LOG(ERROR) << oss.str() << ", Discard duplicated view change request";
+        LOG(WARNING) << oss.str() << ", Discard duplicated view change request";
         return false;
     }
+    if (req.idx == m_idx)
+    {
+        LOG(WARNING) << oss.str() << "Discard an illegal viewchange, your own req";
+        return false;
+    }
+    catchupView(req, oss);
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
-        LOG(ERROR) << oss.str() << ", Discard illegal viewchange, req.height=" << req.height
-                   << ", m_highestBlock.height=" << m_highestBlock.number()
-                   << ", req.view=" << req.view << ", m_view=" << m_view;
+        LOG(WARNING) << oss.str() << ", Discard illegal viewchange, req.height=" << req.height
+                     << ", m_highestBlock.height=" << m_highestBlock.number()
+                     << ", req.view=" << req.view << ", m_view=" << m_view;
         return false;
     }
     /// check block hash
-    if (req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash())
+    if ((req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash()) ||
+        (m_blockChain->getBlockByHash(req.block_hash) == nullptr))
     {
-        LOG(ERROR) << oss.str()
-                   << ", Discard an illegal viewchange for block hash diff, req.block_hash="
-                   << req.block_hash << ", m_highestBlock.hash()=" << m_highestBlock.hash();
+        LOG(INFO) << oss.str()
+                  << ", Discard an illegal viewchange for block hash diff, req.block_hash="
+                  << req.block_hash << ", m_highestBlock.hash()=" << m_highestBlock.hash();
         return false;
     }
     if (!checkSign(req))
     {
-        LOG(ERROR) << oss.str() << ", CheckSign failed";
+        LOG(WARNING) << oss.str() << ", CheckSign failed";
         return false;
     }
     return true;
@@ -809,22 +852,29 @@ void PBFTEngine::collectGarbage()
 
 void PBFTEngine::checkTimeout()
 {
-    if (m_timeManager.isTimeout())
+    bool flag = false;
     {
         Guard l(m_mutex);
-        Timer t;
-        m_toView += u256(1);
-        m_leaderFailed = true;
-        m_timeManager.updateChangeCycle();
-        m_timeManager.m_lastConsensusTime = utcTime();
-        m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
-        LOG(INFO) << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
-                  << " , view = " << m_view << ", to_view:" << m_toView;
-        broadcastViewChangeReq();
-        checkAndChangeView();
-        LOG(DEBUG) << "checkTimeout timecost=" << t.elapsed() << ", m_view=" << m_view
-                   << ",m_toView=" << m_toView;
+        if (m_timeManager.isTimeout())
+        {
+            Timer t;
+            m_toView += u256(1);
+            m_leaderFailed = true;
+            m_timeManager.updateChangeCycle();
+            m_timeManager.m_lastConsensusTime = utcTime();
+            flag = true;
+            m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
+            LOG(INFO) << "Ready to broadcastViewChangeReq, blk = " << m_highestBlock.number()
+                      << " , view = " << m_view << ", to_view:" << m_toView;
+            if (!broadcastViewChangeReq())
+                return;
+            checkAndChangeView();
+            LOG(DEBUG) << "checkTimeout timecost=" << t.elapsed() << ", m_view=" << m_view
+                       << ",m_toView=" << m_toView;
+        }
     }
+    if (flag && m_onViewChange)
+        m_onViewChange();
 }
 
 void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
@@ -868,7 +918,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     }
     default:
     {
-        LOG(ERROR) << "Recv error msg, id=" << pbftMsg.node_idx;
+        LOG(WARNING) << "Recv error msg, id=" << pbftMsg.node_idx;
         return;
     }
     }
@@ -876,6 +926,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
                        (m_highestBlock.number() - pbft_msg.height < 10);
     if (key.size() > 0 && height_flag)
     {
+        LOG(DEBUG) << "#### forwared-broadcast";
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);
         /// get the origin gen node id of the request
@@ -897,7 +948,8 @@ void PBFTEngine::workLoop()
             std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
             if (ret.first)
             {
-                LOG(DEBUG) << "##### handleMsg in workLoop";
+                LOG(DEBUG) << "##### handleMsg network-received message in workLoop, type:"
+                           << ret.second.packet_id << ", source:" << ret.second.node_idx;
                 handleMsg(ret.second);
             }
             else
@@ -928,6 +980,32 @@ void PBFTEngine::handleFutureBlock()
         handlePrepareMsg(future_req);
         m_reqCache->resetFuturePrepare();
     }
+}
+
+/// get the status of PBFT consensus
+const std::string PBFTEngine::consensusStatus() const
+{
+    json_spirit::Array status;
+    json_spirit::Object statusObj;
+    getBasicConsensusStatus(statusObj);
+    /// get other informations related to PBFT
+    /// get connected node
+    statusObj.push_back(
+        json_spirit::Pair("connectedNodes", m_connectedNode.convert_to<uint64_t>()));
+    /// get the current view
+    statusObj.push_back(json_spirit::Pair("currentView", m_view.convert_to<uint64_t>()));
+    /// get toView
+    statusObj.push_back(json_spirit::Pair("toView", m_toView.convert_to<uint64_t>()));
+    /// get leader failed or not
+    statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
+    statusObj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
+    statusObj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
+    status.push_back(statusObj);
+    /// get cache-related informations
+    m_reqCache->getCacheConsensusStatus(status);
+    json_spirit::Value value(status);
+    std::string status_str = json_spirit::write_string(value, true);
+    return status_str;
 }
 
 }  // namespace consensus

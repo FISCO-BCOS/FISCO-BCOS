@@ -16,8 +16,8 @@
  */
 
 /**
- * @brief: fake block manager
- * @file: FakeBlockManager.h
+ * @brief: fake block-chain
+ * @file: FakeBlockChain.h
  * @author: yujiechen
  * @date: 2018-09-25
  */
@@ -44,7 +44,8 @@ public:
     {}
     void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
-    SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const { return m_sessionInfos; }
+    void clearSessionInfo() { m_sessionInfos.clear(); }
+    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
     void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
         CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},

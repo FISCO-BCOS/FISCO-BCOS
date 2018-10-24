@@ -110,7 +110,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     bool doWrite = false;
     DEV_GUARDED(x_framing)
     {
-        m_writeQueue.push(make_pair(_msg, utcTime()));
+        m_writeQueue.push(make_pair(_msg, u256(utcTime())));
         doWrite = (m_writeQueue.size() == 1);
     }
     if (doWrite)
@@ -159,7 +159,7 @@ void Session::write()
     try
     {
         std::pair<std::shared_ptr<bytes>, u256> task;
-        u256 enter_time = 0;
+        u256 enter_time = u256(0);
         DEV_GUARDED(x_framing)
         {
             task = m_writeQueue.top();
@@ -219,8 +219,11 @@ void Session::drop(DisconnectReason _reason)
             ///< TODO: use threadPool
             P2PException e(
                 P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
-            it.second->callbackFunc(e, Message::Ptr());
-            eraseCallbackBySeq(it.first);
+            /// it.second->callbackFunc(e, Message::Ptr());
+            m_threadPool->enqueue([=]() {
+                it.second->callbackFunc(e, Message::Ptr());
+                eraseCallbackBySeq(it.first);
+            });
         }
     }
 
@@ -334,9 +337,9 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
-bool Session::CheckGroupIDAndSender(int16_t protocolID, std::shared_ptr<Session> session)
+bool Session::CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Session> session)
 {
-    std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(protocolID);
+    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(protocolID);
     h512s nodeList;
     if (m_server->getNodeListByGroupID(int(ret.first), nodeList))
     {
@@ -360,7 +363,7 @@ bool Session::CheckGroupIDAndSender(int16_t protocolID, std::shared_ptr<Session>
 void Session::onMessage(
     P2PException const& e, std::shared_ptr<Session> session, Message::Ptr message)
 {
-    int16_t protocolID = message->protocolID();
+    PROTOCOL_ID protocolID = message->protocolID();
     if (message->isRequestPacket())
     {
         ///< Whitelist mechanism, check groupID and sender of this message
@@ -376,7 +379,8 @@ void Session::onMessage(
             LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
             ///< execute funtion, send response packet by user in callbackFunc
             ///< TODO: use threadPool
-            callbackFunc(e, session, message);
+            m_threadPool->enqueue(
+                [callbackFunc, e, session, message]() { callbackFunc(e, session, message); });
         }
         else
         {
@@ -398,7 +402,8 @@ void Session::onMessage(
             {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
                 ///< TODO: use threadPool
-                callback->callbackFunc(e, message);
+                m_threadPool->enqueue(
+                    [callback, e, message]() { callback->callbackFunc(e, message); });
             }
             else
             {

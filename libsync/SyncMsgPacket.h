@@ -44,7 +44,7 @@ public:
     RLPStream& prep(RLPStream& _s, unsigned _id, unsigned _args);
 
     /// Generate p2p message after encode
-    dev::p2p::Message::Ptr toMessage(uint16_t _protocolId);
+    dev::p2p::Message::Ptr toMessage(PROTOCOL_ID _protocolId);
 
     RLP const& rlp() const { return m_rlp; }
 

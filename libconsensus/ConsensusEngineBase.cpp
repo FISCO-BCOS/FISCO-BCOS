@@ -68,25 +68,25 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     /// check the timestamp
     if (block.blockHeader().timestamp() > utcTime() && !m_allowFutureBlocks)
     {
-        LOG(ERROR) << "Future timestamp(now disabled) of block_hash = " << block_hash;
+        LOG(WARNING) << "Future timestamp(now disabled) of block_hash = " << block_hash;
         BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
     }
     /// check the block number
     if (block.blockHeader().number() <= m_blockChain->number())
     {
-        LOG(ERROR) << "Old Block Height, block_hash = " << block_hash;
+        LOG(WARNING) << "Old Block Height, block_hash = " << block_hash;
         BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
     }
     /// check existence of this block (Must non-exist)
     if (blockExists(block_hash))
     {
-        LOG(ERROR) << "Block Already Existed, drop now, block_hash = " << block_hash;
+        LOG(WARNING) << "Block Already Existed, drop now, block_hash = " << block_hash;
         BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
     }
     /// check the existence of the parent block (Must exist)
     if (!blockExists(block.blockHeader().parentHash()))
     {
-        LOG(ERROR) << "Parent Block Doesn't Exist, drop now, block_hash = " << block_hash;
+        LOG(WARNING) << "Parent Block Doesn't Exist, drop now, block_hash = " << block_hash;
         BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
     }
 }

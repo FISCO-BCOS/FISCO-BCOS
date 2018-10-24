@@ -427,7 +427,7 @@ void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options
     }
 }
 
-void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler)
+void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler)
 {
     m_p2pMsgHandler->addProtocolID2Handler(protocolID, handler);
 }
@@ -557,9 +557,9 @@ SessionInfos Service::sessionInfos() const
     return infos;
 }
 
-SessionInfos Service::sessionInfosByProtocolID(int16_t _protocolID) const
+SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
 {
-    std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(_protocolID);
+    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(_protocolID);
     h512s nodeList;
     SessionInfos infos;
 

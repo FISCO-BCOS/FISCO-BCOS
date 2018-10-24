@@ -68,7 +68,7 @@ public:
 
     void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
 
-    void registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler) override;
+    void registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
 
     void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
 
@@ -80,7 +80,7 @@ public:
     ///< Only connected node
     SessionInfos sessionInfos() const override;
 
-    SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const override;
+    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const override;
 
     bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
 
