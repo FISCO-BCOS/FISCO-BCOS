@@ -80,7 +80,7 @@ void Ledger::initConfig(std::string const& configPath)
         std::string error_info =
             "init config failed for " + toString(m_groupId) + " failed, error_msg:" + e.what();
         LOG(ERROR) << error_info;
-        BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFaled() << errinfo_comment(error_info));
+        BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
 }
 
