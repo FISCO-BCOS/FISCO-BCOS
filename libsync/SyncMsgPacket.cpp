@@ -39,7 +39,7 @@ bool SyncMsgPacket::decode(std::shared_ptr<dev::p2p::SessionFace> _session, dev:
     if (!checkPacket(frame))
         return false;
 
-    packetType = (SyncPacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+    packetType = (SyncPacketType)(RLP(frame.cropped(0, 1)).toInt<unsigned>() - c_syncPacketIDBase);
     nodeId = _session->id();
     m_rlp = RLP(frame.cropped(1));
 
@@ -68,7 +68,7 @@ bool SyncMsgPacket::checkPacket(bytesConstRef _msg)
 
 RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
 {
-    return _s.appendRaw(bytes(1, _id)).appendList(_args);
+    return _s.appendRaw(bytes(1, _id + c_syncPacketIDBase)).appendList(_args);
 }
 
 void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
