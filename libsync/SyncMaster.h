@@ -60,7 +60,7 @@ public:
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash)
     {
-        m_syncStatus = std::make_shared<SyncMasterStatus>();
+        m_syncStatus = std::make_shared<SyncMasterStatus>(_genesisHash);
         m_msgEngine = std::make_shared<SyncMsgEngine>(
             _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 

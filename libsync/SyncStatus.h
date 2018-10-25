@@ -82,7 +82,9 @@ public:
 class SyncMasterStatus
 {
 public:
-    SyncMasterStatus() {}
+    SyncMasterStatus(h256 const& _genesisHash)
+      : knownHighestNumber(0), knownLatestHash(_genesisHash)
+    {}
 
     bool hasPeer(NodeID const& _id);
 
