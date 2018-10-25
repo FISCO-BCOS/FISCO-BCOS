@@ -42,6 +42,7 @@ static size_t const c_maxDownloadingBlockQueueSize = 4096;
 static size_t const c_maxDownloadingBlockQueueBufferSize = 4096;
 static int64_t const c_maxRequestBlocks = 1024;
 static int64_t const c_maxCommitBlocks = 2048;
+static unsigned const c_syncPacketIDBase = 1;
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;
@@ -65,7 +66,7 @@ enum class SyncState
     Size          /// Must be kept last
 };
 
-struct NodeInfo
+struct SyncPeerInfo
 {
     NodeID nodeId;
     int64_t number;

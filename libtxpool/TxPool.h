@@ -101,8 +101,7 @@ public:
     virtual Transactions topTransactions(uint64_t const& _limit) override;
     virtual Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override;
-    virtual std::vector<std::shared_ptr<Transaction const>> topTransactionsCondition(
-        uint64_t const& _limit,
+    virtual Transactions topTransactionsCondition(uint64_t const& _limit,
         std::function<bool(Transaction const&)> const& _condition = nullptr) override;
 
     /// get all transactions(maybe blocksync module need this interface)
@@ -121,6 +120,15 @@ public:
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
+
+    /// Set transaction is known by a node
+    virtual void transactionIsKonwnBy(h256 const& _txHash, h512 const& _nodeId) override;
+
+    /// Is the transaction is known by the node ?
+    virtual bool isTransactionKonwnBy(h256 const& _txHash, h512 const& _nodeId) override;
+
+    /// Is the transaction is known by someone
+    virtual bool isTransactionKonwnBySomeone(h256 const& _txHash) override;
 
 protected:
     /**
@@ -151,6 +159,7 @@ private:
     bool removeTrans(h256 const& _txHash);
     bool removeOutOfBound(h256 const& _txHash);
     void insert(Transaction const& _tx);
+    void removeTransactionKnowBy(h256 const& _txHash);
 
 private:
     /// p2p module
@@ -172,6 +181,11 @@ private:
     h256Hash m_known;
     /// hash of dropped transactions
     h256Hash m_dropped;
+
+    /// Transaction is known by some peers
+    mutable SharedMutex x_transactionKnownBy;
+    std::map<h256, std::set<h512>> m_transactionKnownBy;
+
 };  // namespace txpool
 }  // namespace txpool
 }  // namespace dev

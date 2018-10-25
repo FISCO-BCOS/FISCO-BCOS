@@ -30,7 +30,7 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 
 void SyncMsgEngine::messageHandler(
-    P2PException _e, std::shared_ptr<dev::p2p::Session> _session, Message::Ptr _msg)
+    P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session, Message::Ptr _msg)
 {
     if (!checkSession(_session))
     {
@@ -53,16 +53,17 @@ void SyncMsgEngine::messageHandler(
         LOG(WARNING) << "Couldn't interpret packet. " << RLP(packet.rlp());
 }
 
-bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::Session> _session)
+bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::SessionFace> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
-    //_session->id();
+    if (_session->id() == m_nodeId)
+        return false;
     return true;
 }
 
 bool SyncMsgEngine::checkPacket(bytesConstRef _msg)
 {
-    if (_msg[0] > 0x7f || _msg.size() < 2)
+    if (_msg.size() < 2 || _msg[0] > 0x7f)
         return false;
     if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
         return false;
@@ -94,7 +95,7 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
-    NodeInfo info{_packet.nodeId, _packet.rlp()[0].toInt<int64_t>(),
+    SyncPeerInfo info{_packet.nodeId, _packet.rlp()[0].toInt<int64_t>(),
         _packet.rlp()[1].toHash<h256>(), _packet.rlp()[2].toHash<h256>()};
 
     if (status == nullptr)
@@ -118,9 +119,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
             LOG(TRACE) << "Import transaction " << tx.sha3() << " from peer " << _packet.nodeId;
         }
 
-        auto p_tx = m_txPool->transactionInPool(tx.sha3());
-        if (p_tx != nullptr)
-            p_tx->addImportPeer(_packet.nodeId);
+        m_txPool->transactionIsKonwnBy(tx.sha3(), _packet.nodeId);
     }
 }
 

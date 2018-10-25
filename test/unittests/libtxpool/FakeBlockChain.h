@@ -55,6 +55,7 @@ public:
             m_asyncSend[nodeID]++;
         else
             m_asyncSend[nodeID] = 1;
+        m_asyncSendMsgs[nodeID] = message;
     }
     size_t getAsyncSendSizeByNodeID(NodeID const& nodeID)
     {
@@ -62,12 +63,22 @@ public:
             return 0;
         return m_asyncSend[nodeID];
     }
+
+    Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    {
+        auto msg = m_asyncSendMsgs.find(nodeID);
+        if (msg == m_asyncSendMsgs.end())
+            return nullptr;
+        return msg->second;
+    }
+
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const& nodeId) const { return m_connected; }
 
 private:
     SessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
+    std::map<NodeID, Message::Ptr> m_asyncSendMsgs;
     bool m_connected;
 };
 class FakeTxPool : public TxPool
