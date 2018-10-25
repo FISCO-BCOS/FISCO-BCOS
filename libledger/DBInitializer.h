@@ -22,7 +22,7 @@
  * @date: 2018-10-23
  */
 #pragma once
-#include <initializer/ParamInterface.h>
+#include "LedgerParamInterface.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutivecontext/StateFactoryInterface.h>
@@ -36,7 +36,7 @@ namespace ledger
 class DBInitializer
 {
 public:
-    DBInitializer(std::shared_ptr<dev::initializer::LedgerParamInterface> param) : m_param(param) {}
+    DBInitializer(std::shared_ptr<LedgerParamInterface> param) : m_param(param) {}
 
     virtual void initDBModules(
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile)
@@ -90,7 +90,7 @@ private:
     void initLevelDB(){};
 
 private:
-    std::shared_ptr<dev::initializer::LedgerParamInterface> m_param;
+    std::shared_ptr<LedgerParamInterface> m_param;
     std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> m_executiveContextFac;
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFac;
     std::shared_ptr<dev::eth::StateFactoryInterface> m_stateFactory;

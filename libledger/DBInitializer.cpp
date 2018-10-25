@@ -22,9 +22,8 @@
  * @date: 2018-10-23
  */
 #include "DBInitializer.h"
-#include <initializer/Param.h>
+#include "LedgerParam.h"
 #include <libmptstate/State.h>
-using namespace dev::initializer;
 using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::db;
@@ -56,7 +55,7 @@ void DBInitializer::initAMDB() {}
 void DBInitializer::openMPTStateDB()
 {
     m_mptStateDB = State::openDB(
-        boost::filesystem::path(m_param->baseDir()), m_param->genesisParam().genesisHash);
+        boost::filesystem::path(m_param->baseDir()), m_param->mutableGenesisParam().genesisHash);
 }
 /// create ExecutiveContextFactory
 void DBInitializer::createExecutiveContext(

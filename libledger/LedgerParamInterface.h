@@ -28,7 +28,7 @@
 #include <vector>
 namespace dev
 {
-namespace initializer
+namespace ledger
 {
 /// forward class declaration
 struct TxPoolParam;
@@ -38,37 +38,25 @@ struct SyncParam;
 struct P2pParam;
 struct GenesisParam;
 struct AMDBParam;
-class LedgerParamInterface;
-using LedgerParams = std::vector<LedgerParamInterface>;
-/// interface for the systemParam
-class SystemParamInterface
-{
-public:
-    SystemParamInterface() = default;
-    virtual ~SystemParamInterface() {}
-    virtual LedgerParams const& getLedgerParams() const = 0;
-    virtual LedgerParamInterface const& getLedgerParamByGroupId(uint16_t groupId) const = 0;
-    virtual P2pParam const& getP2pParamByGroupId(uint16_t groupId) const = 0;
-};
-
 class LedgerParamInterface
 {
 public:
     LedgerParamInterface() = default;
     virtual ~LedgerParamInterface() {}
-    virtual TxPoolParam const& txPoolParam() const = 0;
-    virtual ConsensusParam const& consensusParam() const = 0;
-    virtual SyncParam const& syncParam() const = 0;
-    virtual GenesisParam const& genesisParam() const = 0;
-    virtual dev::eth::GroupID const& groupId() const = 0;
-    virtual std::string const& baseDir() const = 0;
-    virtual dev::KeyPair const& keyPair() const = 0;
-    virtual AMDBParam const& amdbParam() const = 0;
+    virtual TxPoolParam& mutableTxPoolParam() = 0;
+    virtual ConsensusParam& mutableConsensusParam() = 0;
+    virtual SyncParam& mutableSyncParam() = 0;
+    virtual GenesisParam& mutableGenesisParam() = 0;
+    virtual AMDBParam& mutableAMDBParam() = 0;
     virtual std::string const& dbType() const = 0;
     virtual bool enableMpt() const = 0;
+    virtual void setMptState(bool mptState) = 0;
+    virtual void setDBType(std::string const& dbType) = 0;
+    virtual std::string const& baseDir() const = 0;
+    virtual void setBaseDir(std::string const& baseDir) = 0;
 
 protected:
     virtual void initLedgerParams() = 0;
 };
-}  // namespace initializer
+}  // namespace ledger
 }  // namespace dev

@@ -22,28 +22,28 @@
  * @date: 2018-10-23
  */
 #pragma once
-#include "ParamInterface.h"
+#include "LedgerParamInterface.h"
 #include <libdevcore/FixedHash.h>
-#include <libdevcrypto/Common.h>
 #include <libp2p/Network.h>
 #include <memory>
 #include <vector>
 namespace dev
 {
-namespace initializer
+namespace ledger
 {
 /// forward class declaration
 struct TxPoolParam
 {
-    uint64_t txPoolLimit = 102400;
+    uint64_t txPoolLimit;
 };
 struct ConsensusParam
 {
-    std::string consensusType = "pbft";
+    std::string consensusType;
     dev::h512s minerList = dev::h512s();
-    uint64_t maxTransactions = 1000;
-    unsigned intervalBlockTime = 1000;
+    uint64_t maxTransactions;
+    unsigned intervalBlockTime;
 };
+
 struct AMDBParam
 {
     std::string topic;
@@ -54,32 +54,28 @@ struct AMDBParam
 struct SyncParam
 {
     /// TODO: syncParam related
-    unsigned idleWaitMs = 30;
+    unsigned idleWaitMs;
 };
-
-struct P2pParam
-{
-    dev::p2p::NetworkConfig networkConfig;
-};
-
 struct GenesisParam
 {
-    dev::h256 genesisHash = dev::h256();
+    dev::h256 genesisHash;
 };
 
 class LedgerParam : public LedgerParamInterface
 {
 public:
-    TxPoolParam const& txPoolParam() const override { return m_txPoolParam; }
-    ConsensusParam const& consensusParam() const override { return m_consensusParam; }
-    SyncParam const& syncParam() const override { return m_syncParam; }
-    dev::eth::GroupID const& groupId() const override { return m_groupId; }
+    TxPoolParam& mutableTxPoolParam() override { return m_txPoolParam; }
+    ConsensusParam& mutableConsensusParam() override { return m_consensusParam; }
+    SyncParam& mutableSyncParam() override { return m_syncParam; }
+    GenesisParam& mutableGenesisParam() override { return m_genesisParam; }
+    AMDBParam& mutableAMDBParam() override { return m_amdbParam; }
+    std::string const& dbType() const override { return m_dbType; }
+    bool enableMpt() const override { return m_enableMpt; }
+    void setMptState(bool mptState) override { m_enableMpt = mptState; }
+    void setDBType(std::string const& dbType) override { m_dbType = dbType; }
+
     std::string const& baseDir() const override { return m_baseDir; }
-    dev::KeyPair const& keyPair() const override { return m_keypair; }
-    GenesisParam const& genesisParam() const override { return m_genesisParam; }
-    AMDBParam const& amdbParam() const override { return m_amdbParam; }
-    virtual std::string const& dbType() const override { return m_dbType; }
-    virtual bool enableMpt() const override { return m_enableMpt; }
+    void setBaseDir(std::string const& baseDir) override { m_baseDir = baseDir; }
 
 protected:
     virtual void initLedgerParams(){};
@@ -90,11 +86,9 @@ private:
     SyncParam m_syncParam;
     GenesisParam m_genesisParam;
     AMDBParam m_amdbParam;
-    dev::eth::GroupID m_groupId;
+    std::string m_dbType;
+    bool m_enableMpt;
     std::string m_baseDir;
-    dev::KeyPair m_keypair;
-    std::string m_dbType = "AMDB";
-    bool m_enableMpt = true;
 };
-}  // namespace initializer
+}  // namespace ledger
 }  // namespace dev

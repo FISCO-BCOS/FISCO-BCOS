@@ -22,22 +22,27 @@
  * @date: 2018-10-23
  */
 #include "LedgerManager.h"
+#include <libdevcore/easylog.h>
 
 namespace dev
 {
 namespace ledger
 {
-/// TODO:
-bool LedgerManager::initAllLedgers(
-    std::vector<std::shared_ptr<dev::initializer::LedgerParamInterface>> allLedgerParams)
+bool LedgerManager::initSingleLedger(std::shared_ptr<dev::p2p::P2PInterface> service,
+    dev::eth::GroupID const& _groupId, dev::KeyPair const& _keyPair, std::string const& _baseDir)
 {
-    return true;
-}
-/// TODO:
-bool LedgerManager::initSignleLedger(
-    std::shared_ptr<dev::initializer::LedgerParamInterface> ledgerParam)
-{
-    return true;
+    if (m_ledgerMap.count(_groupId) == 0)
+    {
+        std::shared_ptr<LedgerInterface> ledger =
+            std::make_shared<Ledger>(service, _groupId, _keyPair, _baseDir);
+        m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+        return true;
+    }
+    else
+    {
+        LOG(WARNING) << "Group " << _groupId << " has been created already";
+        return false;
+    }
 }
 
 }  // namespace ledger

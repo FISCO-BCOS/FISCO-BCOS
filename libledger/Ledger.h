@@ -24,10 +24,14 @@
 #pragma once
 #include "DBInitializer.h"
 #include "LedgerInterface.h"
-#include <initializer/ParamInterface.h>
+#include "LedgerParamInterface.h"
+#include <libconsensus/Consensus.h>
+#include <libdevcore/Exceptions.h>
+#include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
+#include <boost/property_tree/ptree.hpp>
 namespace dev
 {
 namespace ledger
@@ -35,19 +39,22 @@ namespace ledger
 class Ledger : public LedgerInterface
 {
 public:
-    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service,
-        std::shared_ptr<dev::initializer::LedgerParamInterface> param)
-      : m_service(service), m_param(param)
+    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::eth::GroupID const& _groupId,
+        dev::KeyPair const& _keyPair, std::string const& _baseDir)
+      : m_service(service), m_groupId(_groupId), m_keyPair(_keyPair)
     {
         assert(m_service);
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(param);
+        std::string configPath = _baseDir + "/" + toString(_groupId) + "/ " + m_configFileName;
+        initConfig(configPath);
+        m_param->setBaseDir(_baseDir);
     }
 
     virtual ~Ledger(){};
+    void initConfig(std::string const& configPath) override;
+
     /// init the ledger(called by initializer)
     void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile,
-        dev::blockverifier::BlockVerifier::NumberHashCallBackFunction const& pFunc) override;
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override;
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
@@ -67,8 +74,7 @@ public:
 protected:
     virtual void initTxPool();
     /// init blockverifier related
-    virtual void initBlockVerifier(
-        dev::blockverifier::BlockVerifier::NumberHashCallBackFunction const& pFunc);
+    virtual void initBlockVerifier();
     virtual void initBlockChain();
     /// create consensus moudle
     virtual void consensusInitFactory();
@@ -78,17 +84,27 @@ protected:
 private:
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Consensus> createPBFTConsensus();
+    /// init configurations
+    void initCommonConfig(boost::property_tree::ptree const& pt);
+    void initTxPoolConfig(boost::property_tree::ptree const& pt);
+    void initConsensusConfig(boost::property_tree::ptree const& pt);
+    void initSyncConfig(boost::property_tree::ptree const& pt);
+    void initDBConfig(boost::property_tree::ptree const& pt);
+    void initGenesisConfig(boost::property_tree::ptree const& pt);
 
 private:
-    std::shared_ptr<dev::initializer::LedgerParamInterface> m_param = nullptr;
+    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
+    dev::eth::GroupID m_groupId;
+    dev::KeyPair m_keyPair;
+    std::string m_configFileName = "config.ini";
+    std::shared_ptr<LedgerParamInterface> m_param = nullptr;
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::consensus::Consensus> m_consensus = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
-    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
+
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
-    dev::eth::GroupID m_groupId;
 };
 }  // namespace ledger
 }  // namespace dev

@@ -22,8 +22,8 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include "Ledger.h"
 #include "LedgerInterface.h"
-#include <initializer/ParamInterface.h>
 #include <libethcore/Common.h>
 #include <map>
 namespace dev
@@ -33,10 +33,10 @@ namespace ledger
 class LedgerManager
 {
 public:
-    virtual bool initAllLedgers(
-        std::vector<std::shared_ptr<dev::initializer::LedgerParamInterface>> allLedgerParams);
-    virtual bool initSignleLedger(
-        std::shared_ptr<dev::initializer::LedgerParamInterface> ledgerParam);
+    virtual bool initSingleLedger(std::shared_ptr<dev::p2p::P2PInterface> service,
+        dev::eth::GroupID const& _groupId, dev::KeyPair const& _keyPair,
+        std::string const& _baseDir);
+
     /// get pointer of txPool by group id
     inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::eth::GroupID groupId)
     {
