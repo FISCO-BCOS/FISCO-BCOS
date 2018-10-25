@@ -59,7 +59,7 @@ public:
     /// keypair and network config
     Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-        shared_ptr<SessionFactory>& _sessionFactory);
+        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext);
     virtual ~Host();
 
     /// ------get interfaces ------
@@ -327,6 +327,7 @@ protected:  /// protected members(for unit testing)
     shared_ptr<AsioInterface> m_asioInterface;
     shared_ptr<SocketFactory> m_socketFactory;
     shared_ptr<SessionFactory> m_sessionFactory;
+    shared_ptr<ba::ssl::context> m_sslContext;
 
     bool m_run = false;
     ///< Start/stop mutex.(mutex for m_run)

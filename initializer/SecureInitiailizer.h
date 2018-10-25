@@ -23,7 +23,12 @@
 #pragma once
 
 #include "Common.h"
+#include <libp2p/CertificateServer.h>
+#include <boost/asio.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl.hpp>
 
+namespace bas = boost::asio::ssl;
 namespace dev
 {
 namespace initializer
@@ -35,7 +40,10 @@ public:
 
     void initConfig(boost::property_tree::ptree const& _pt);
 
+    std::shared_ptr<bas::context> SSLContext() { return m_SSLContext; }
+
 private:
+    std::shared_ptr<bas::context> m_SSLContext;
 };
 
 }  // namespace initializer

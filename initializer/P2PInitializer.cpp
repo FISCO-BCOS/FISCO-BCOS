@@ -79,7 +79,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     auto socketFactory = std::make_shared<SocketFactory>();
     auto sessionFactory = std::make_shared<SessionFactory>();
     auto host = std::make_shared<Host>("2.0", CertificateServer::GetInstance().keypair(),
-        network_config, asioInterface, socketFactory, sessionFactory);
+        network_config, asioInterface, socketFactory, sessionFactory, m_SSLContext);
     host->setStaticNodes(nodes);
     m_p2pService = std::make_shared<Service>(host, p2pMsgHandler);
 
