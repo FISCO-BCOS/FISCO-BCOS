@@ -25,8 +25,8 @@
 #include <libconsensus/Consensus.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libconsensus/pbft/PBFTEngine.h>
-#include <test/unittests/libblocksync/FakeBlockSync.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
+#include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <memory>
 using namespace dev::eth;
