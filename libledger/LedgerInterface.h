@@ -50,6 +50,7 @@ public:
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const = 0;
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const = 0;
     virtual dev::eth::GroupID const& groupId() const = 0;
+    virtual std::shared_ptr<LedgerParamInterface> getParam() const = 0;
     virtual void startAll() = 0;
     virtual void stopAll() = 0;
 };

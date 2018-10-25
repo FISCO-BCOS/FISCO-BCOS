@@ -89,7 +89,7 @@ static std::shared_ptr<Session> FakeSession(Public node_id)
 /// fake message
 template <typename T>
 Message::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& req,
-    uint16_t const& packetType, uint16_t const& protocolId)
+    PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
 {
     bytes data;
     req.encode(data);
@@ -99,7 +99,7 @@ Message::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& req,
 /// check the data received from the network
 template <typename T>
 void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft, std::shared_ptr<Session> session,
-    T const& req, uint16_t const& packetType, bool const& valid = false)
+    T const& req, PACKET_TYPE const& packetType, bool const& valid = false)
 {
     Message::Ptr message_ptr = FakeReqMessage(pbft, req, packetType, ProtocolID::PBFT);
     pbft->onRecvPBFTMessage(P2PException(), session, message_ptr);

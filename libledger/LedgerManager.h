@@ -80,7 +80,7 @@ public:
             item.second->stopAll();
     }
     /// get pointer of txPool by group id
-    inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::eth::GroupID groupId)
+    inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::eth::GroupID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
@@ -89,7 +89,7 @@ public:
 
     /// get pointer of blockverifier by group id
     inline std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
-        dev::eth::GroupID groupId)
+        dev::eth::GroupID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
@@ -97,25 +97,33 @@ public:
     }
     /// get pointer of blockchain by group id
     inline std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(
-        dev::eth::GroupID groupId)
+        dev::eth::GroupID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockChain();
     }
     /// get pointer of consensus by group id
-    inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(dev::eth::GroupID groupId)
+    inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(
+        dev::eth::GroupID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->consensus();
     }
     /// get pointer of blocksync by group id
-    inline std::shared_ptr<dev::sync::SyncInterface> sync(dev::eth::GroupID groupId)
+    inline std::shared_ptr<dev::sync::SyncInterface> sync(dev::eth::GroupID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->sync();
+    }
+
+    inline std::shared_ptr<LedgerParamInterface> getParamByGroupId(dev::eth::GroupID const& groupId)
+    {
+        if (!m_ledgerMap.count(groupId))
+            return nullptr;
+        return m_ledgerMap[groupId]->getParam();
     }
 
 private:

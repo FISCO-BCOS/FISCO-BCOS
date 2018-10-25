@@ -85,6 +85,7 @@ public:
     }
     std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
     virtual dev::eth::GroupID const& groupId() const { return m_groupId; }
+    std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
 protected:
     virtual void initTxPool();

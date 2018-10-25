@@ -30,7 +30,16 @@
 #include <libethcore/Protocol.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
+
 using namespace dev::ledger;
+
+class P2PMessageFactory : public MessageFactory
+{
+public:
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+};
+
 static void startConsensus(Params& params)
 {
     ///< initialize component
@@ -47,8 +56,7 @@ static void startConsensus(Params& params)
     host->setStaticNodes(params.staticNodes());
     /// set the topic id
     GroupID group_id = 2;
-    uint16_t protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
-
+    PROTOCOL_ID protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
     ///< Read the KeyPair of node from configuration file.
     auto nodePrivate = contents(getDataDir().string() + "/node.private");
@@ -67,15 +75,17 @@ static void startConsensus(Params& params)
     /// init all the modules through ledger
     std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
         std::make_shared<LedgerManager<FakeLedger>>();
-    ledgerManager->initSingleLedger(p2pService, 2, key_pair, "fisco-bcos-data");
+    ledgerManager->initSingleLedger(p2pService, group_id, key_pair, "fisco-bcos-data");
     /// start the host
     host->start();
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
     std::shared_ptr<std::vector<std::string>> topics = host->topics();
     topics->push_back(toString(group_id));
-    std::cout << "#### before setTopic" << std::endl;
     host->setTopics(topics);
-    std::cout << "##### set topic" << std::endl;
+    std::map<GROUP_ID, h512s> groudID2NodeList;
+    groudID2NodeList[int(group_id)] =
+        ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList;
+    p2pService->setGroupID2NodeList(groudID2NodeList);
     /// start all the modules through ledger
     ledgerManager->startAll();
     /// test pbft status

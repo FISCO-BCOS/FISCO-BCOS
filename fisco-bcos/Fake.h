@@ -119,12 +119,12 @@ public:
     bool isSyncing() const override { return false; };
 
     /// protocol id used when register handler to p2p module
-    int16_t const& protocolId() const override { return m_protocolID; };
-    void setProtocolId(int16_t const _protocolId) override{};
+    PROTOCOL_ID const& protocolId() const override { return m_protocolID; };
+    void setProtocolId(PROTOCOL_ID const _protocolId) override{};
 
 private:
     SyncStatus m_status;
-    int16_t m_protocolID = 0;
+    PROTOCOL_ID m_protocolID = 0;
 };
 
 class FakeBlockVerifier : public BlockVerifierInterface
