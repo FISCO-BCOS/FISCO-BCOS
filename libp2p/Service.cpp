@@ -86,11 +86,9 @@ void Service::asyncSendMessageByNodeID(
         auto s = m_host->sessions();
         for (auto const& i : s)
         {
-            LOG(INFO) << "Service::asyncSendMessageByNodeID traversed nodeID = " << toJS(i.first);
             if (i.first == nodeID)
             {
                 std::shared_ptr<SessionFace> p = i.second;
-                LOG(INFO) << "Service::asyncSendMessageByNodeID get session success.";
                 uint32_t seq = ++m_seq;
                 if (callback)
                 {
@@ -429,7 +427,7 @@ void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options
     }
 }
 
-void Service::registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler)
+void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler)
 {
     m_p2pMsgHandler->addProtocolID2Handler(protocolID, handler);
 }
@@ -559,32 +557,36 @@ SessionInfos Service::sessionInfos() const
     return infos;
 }
 
-SessionInfos Service::sessionInfosByProtocolID(int16_t _protocolID) const
+SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
 {
-    std::pair<int8_t, uint8_t> ret = getGroupAndProtocol(_protocolID);
-    std::string topic = toString(int(ret.first));
+    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(_protocolID);
+    h512s nodeList;
     SessionInfos infos;
-    try
+
+    if (true == m_host->getNodeListByGroupID(int(ret.first), nodeList))
     {
-        RecursiveGuard l(m_host->mutexSessions());
-        auto s = m_host->sessions();
-        for (auto const& i : s)
+        LOG(INFO) << "Service::sessionInfosByProtocolID, getNodeListByGroupID list size:"
+                  << nodeList.size();
+        try
         {
-            for (auto j : *(i.second->topics()))
+            RecursiveGuard l(m_host->mutexSessions());
+            auto s = m_host->sessions();
+            for (auto const& i : s)
             {
-                if (j == topic)
+                if (find(nodeList.begin(), nodeList.end(), i.first) != nodeList.end())
                 {
                     infos.push_back(
                         SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
-                    break;
                 }
             }
         }
+        catch (std::exception& e)
+        {
+            LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
+        }
     }
-    catch (std::exception& e)
-    {
-        LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
-    }
+
+    LOG(INFO) << "Service::sessionInfosByProtocolID, return list size:" << infos.size();
     return infos;
 }
 

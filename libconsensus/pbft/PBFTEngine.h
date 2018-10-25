@@ -52,7 +52,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
         h512s const& _minerList = h512s())
       : ConsensusEngineBase(
             _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
@@ -210,7 +210,7 @@ protected:
 
     /// trans data into message
     inline dev::p2p::Message::Ptr transDataToMessage(
-        bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
+        bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
     {
         dev::p2p::Message::Ptr message = std::make_shared<dev::p2p::Message>();
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
@@ -224,7 +224,8 @@ protected:
         return message;
     }
 
-    inline dev::p2p::Message::Ptr transDataToMessage(bytesConstRef data, uint16_t const& packetType)
+    inline dev::p2p::Message::Ptr transDataToMessage(
+        bytesConstRef data, PACKET_TYPE const& packetType)
     {
         return transDataToMessage(data, packetType, m_protocolId);
     }

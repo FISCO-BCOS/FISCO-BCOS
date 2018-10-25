@@ -101,8 +101,8 @@ void Message::encode(bytes& buffer)
     m_length = HEADER_LENGTH + m_buffer->size();
 
     uint32_t length = htonl(m_length);
-    int16_t protocolID = htons(m_protocolID);
-    uint16_t packetType = htons(m_packetType);
+    PROTOCOL_ID protocolID = htons(m_protocolID);
+    PACKET_TYPE packetType = htons(m_packetType);
     uint32_t seq = htonl(m_seq);
 
     buffer.insert(buffer.end(), (byte*)&length, (byte*)&length + sizeof(length));
@@ -119,7 +119,8 @@ ssize_t Message::decode(const byte* buffer, size_t size)
         return PACKET_INCOMPLETE;
     }
 
-    m_length = ntohl(*((uint32_t*)&buffer[0]));
+    int32_t offset = 0;
+    m_length = ntohl(*((uint32_t*)&buffer[offset]));
 
     if (m_length > MAX_LENGTH)
     {
@@ -131,9 +132,12 @@ ssize_t Message::decode(const byte* buffer, size_t size)
         return PACKET_INCOMPLETE;
     }
 
-    m_protocolID = ntohs(*((int16_t*)&buffer[4]));
-    m_packetType = ntohs(*((uint16_t*)&buffer[6]));
-    m_seq = ntohl(*((uint32_t*)&buffer[8]));
+    offset += sizeof(m_length);
+    m_protocolID = ntohs(*((PROTOCOL_ID*)&buffer[offset]));
+    offset += sizeof(m_protocolID);
+    m_packetType = ntohs(*((PACKET_TYPE*)&buffer[offset]));
+    offset += sizeof(m_packetType);
+    m_seq = ntohl(*((uint32_t*)&buffer[offset]));
     ///< TODO: assign to std::move
     m_buffer->assign(&buffer[HEADER_LENGTH], &buffer[HEADER_LENGTH] + m_length - HEADER_LENGTH);
 

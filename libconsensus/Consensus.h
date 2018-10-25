@@ -48,13 +48,12 @@ public:
      */
     Consensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
+        std::shared_ptr<dev::sync::SyncInterface> _blockSync)
       : Worker("consensus", 0),
         m_txPool(_txPool),
         m_blockSync(_blockSync),
         m_blockChain(_blockChain),
-        m_consensusEngine(_consensusEngine)
+        m_consensusEngine(nullptr)
     {
         assert(m_txPool && m_blockSync && m_blockChain);
         /// register a handler to be called once new transactions imported

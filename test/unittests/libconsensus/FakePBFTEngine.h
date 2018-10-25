@@ -39,35 +39,16 @@ namespace dev
 {
 namespace test
 {
-/// fake class of PBFTConsensus
-class FakePBFTConsensus : public PBFTConsensus
-{
-public:
-    FakePBFTConsensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
-      : PBFTConsensus(_txPool, _blockChain, _blockSync, _consensusEngine)
-    {}
-    void loadTransactions(uint64_t const& transToFetch)
-    {
-        return PBFTConsensus::loadTransactions(transToFetch);
-    }
-    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
-    {
-        return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
-    }
-};
 /// fake class of PBFTEngine
 class FakePBFTEngine : public PBFTEngine
 {
 public:
-    FakePBFTEngine(std::shared_ptr<dev::p2p::Service> _service,
-        std::shared_ptr<dev::txpool::TxPool> _txPool,
+    FakePBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, h512s const& _minerList = h512s(),
+        PROTOCOL_ID const& _protocolId, h512s const& _minerList = h512s(),
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _minerList)
@@ -117,7 +98,7 @@ public:
     }
 
     Message::Ptr transDataToMessage(
-        bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
+        bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
     {
         return PBFTEngine::transDataToMessage(data, packetType, protocolId);
     }
@@ -200,7 +181,7 @@ template <typename T>
 class FakeConsensus
 {
 public:
-    FakeConsensus(size_t minerSize, int16_t protocolID,
+    FakeConsensus(size_t minerSize, PROTOCOL_ID protocolID,
         std::shared_ptr<SyncInterface> sync = std::make_shared<FakeBlockSync>(),
         std::shared_ptr<BlockVerifierInterface> blockVerifier =
             std::make_shared<FakeBlockverifier>(),
@@ -244,6 +225,42 @@ public:
 
 private:
     std::shared_ptr<T> m_consensus;
+};
+
+/// fake class of PBFTConsensus
+class FakePBFTConsensus : public PBFTConsensus
+{
+public:
+    FakePBFTConsensus(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
+        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+        int16_t const& _protocolId, std::string const& _baseDir = "",
+        KeyPair const& _key_pair = KeyPair::create(), h512s const& _minerList = h512s())
+      : PBFTConsensus(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
+            _baseDir, _key_pair, _minerList)
+    {
+        m_pbftEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain, _blockSync,
+            _blockVerifier, _protocolId, _minerList, _baseDir, _key_pair);
+    }
+
+    void loadTransactions(uint64_t const& transToFetch)
+    {
+        return PBFTConsensus::loadTransactions(transToFetch);
+    }
+    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
+    {
+        return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
+    }
+
+    std::shared_ptr<FakePBFTEngine> engine()
+    {
+        std::shared_ptr<FakePBFTEngine> fake_pbft =
+            std::dynamic_pointer_cast<FakePBFTEngine>(m_pbftEngine);
+        assert(fake_pbft);
+        return fake_pbft;
+    }
 };
 }  // namespace test
 }  // namespace dev
