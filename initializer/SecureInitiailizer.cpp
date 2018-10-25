@@ -22,6 +22,7 @@
 
 #include "SecureInitiailizer.h"
 #include <boost/algorithm/string/replace.hpp>
+#include <sstream>
 
 using namespace dev;
 using namespace dev::initializer;
@@ -106,14 +107,16 @@ void SecureInitiailizer::loadFile(boost::property_tree::ptree const& _pt)
     m_node = asString(contents(nodeCert));
     m_nodeKey = asString(contents(nodeKey));
 
-    LOG(INFO) << "caCert:" << caCert << "," << m_ca;
-    LOG(INFO) << "agencyCert:" << agencyCert << "," << m_agency;
-    LOG(INFO) << "nodeCert:" << nodeCert << "," << m_node;
-    LOG(INFO) << "nodePri:" << nodeKey << "," << m_nodeKey;
-
     if (m_ca.empty() || m_agency.empty() || m_node.empty() || m_nodeKey.empty())
     {
-        LOG(ERROR) << "Init Fail! ca.crt or agency.crt or node.crt or node.key File !";
+        std::stringstream str;
+        str << "caCert:" << caCert << "," << m_ca << "\n";
+        str << "agencyCert:" << agencyCert << "," << m_agency << "\n";
+        str << "nodeCert:" << nodeCert << "," << m_node << "\n";
+        str << "nodePri:" << nodeKey << "," << m_nodeKey << "\n";
+        LOG(ERROR) << "Init Fail! ca.crt or agency.crt or node.crt or node.key File!"
+                   << "\n"
+                   << str.str();
         exit(-1);
     }
 
