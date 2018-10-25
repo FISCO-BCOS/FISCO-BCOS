@@ -26,7 +26,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
-#include <libp2p/CertificateServer.h>
 #include <libp2p/Host.h>
 #include <libp2p/Network.h>
 #include <libp2p/P2pFactory.h>

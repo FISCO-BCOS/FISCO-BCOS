@@ -23,7 +23,6 @@
 #pragma once
 
 #include "Common.h"
-#include <libp2p/CertificateServer.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
@@ -41,9 +40,22 @@ public:
     void initConfig(boost::property_tree::ptree const& _pt);
 
     std::shared_ptr<bas::context> SSLContext() { return m_SSLContext; }
+    const KeyPair& keyPair() { return m_keyPair; }
+    void setDataPath(std::string const& _dataPath) { m_dataPath = _dataPath; }
 
 private:
+    void loadFile(boost::property_tree::ptree const& _pt);
+    void completePath(std::string& _path);
+
     std::shared_ptr<bas::context> m_SSLContext;
+
+    std::string m_dataPath;
+
+    std::string m_ca;
+    std::string m_agency;
+    std::string m_node;
+    std::string m_nodeKey;
+    KeyPair m_keyPair;
 };
 
 }  // namespace initializer
