@@ -31,6 +31,9 @@ class InitializerInterface
 public:
     InitializerInterface() = default;
     virtual ~InitializerInterface(){};
+
+    virtual void init(std::string const& _path) = 0;
+
     /// init all the ledgers according to the configuration
     virtual void initSystemParams() = 0;
     virtual bool startSystem() = 0;

@@ -39,7 +39,7 @@ class SyncFixture : public TestOutputHelperFixture
 {
 public:
     SyncFixture() { initFakeSyncMaster(66); }
-    void initFakeSyncMaster(int16_t const& protocolId)
+    void initFakeSyncMaster(PROTOCOL_ID const& protocolId)
     {
         TxPoolFixture txpool_creator(5, 5);
         // fakeSyncMaster = std::make_shared<SyncMaster>(txpool_creator.m_topicService,

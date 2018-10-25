@@ -48,7 +48,7 @@ public:
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
+        PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned _idleWaitMs = 30)
       : m_service(_service),
         m_txPool(_txPool),
@@ -94,8 +94,11 @@ public:
     // virtual bool forceSync() override;
 
     /// protocol id used when register handler to p2p module
-    virtual int16_t const& protocolId() const override { return m_protocolId; };
-    virtual void setProtocolId(int16_t const _protocolId) override { m_protocolId = _protocolId; };
+    virtual PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
+    virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
+    {
+        m_protocolId = _protocolId;
+    };
 
     void noteNewTransactions()
     {
@@ -158,7 +161,7 @@ private:
 
     // settings
     int64_t m_maxBlockDownloadQueueSize = 5;
-    int16_t m_protocolId;
+    PROTOCOL_ID m_protocolId;
 
 private:
     void maintainTransactions();

@@ -105,7 +105,7 @@ public:
         //        setTest(true);
     }
 
-    void setProtocolId(int16_t const& protocol_id) { m_protocolId = protocol_id; }
+    void setProtocolId(PROTOCOL_ID const& protocol_id) { m_protocolId = protocol_id; }
 
     void setDataContent(std::string const& data_content) { m_dataContent = data_content; }
     void EncodeData()
@@ -129,7 +129,7 @@ public:
         Session::doRead();
     }
     unsigned m_read = 0;
-    int16_t m_protocolId = 0;
+    PROTOCOL_ID m_protocolId = 0;
     std::string m_dataContent;
 };
 

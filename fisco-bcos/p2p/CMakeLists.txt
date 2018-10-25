@@ -34,6 +34,7 @@ target_link_libraries(mini-p2p devcore)
 target_link_libraries(mini-p2p devcrypto)
 target_link_libraries(mini-p2p ethcore)
 target_link_libraries(mini-p2p p2p)
+target_link_libraries(mini-p2p initializer)
 
 if (UNIX)
 target_link_libraries(mini-p2p pthread)
