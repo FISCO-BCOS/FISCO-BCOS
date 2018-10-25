@@ -67,12 +67,13 @@ protected:
     virtual ~Worker() { terminate(); }
 
     /// Allows changing worker name if work is stopped.
-    void setName(std::string _n)
+    void setName(std::string const& _n)
     {
         if (!isWorking())
             m_name = _n;
     }
 
+    std::string const& name() const { return m_name; }
     /// Starts worker thread; causes startedWorking() to be called.
     void startWorking();
 
@@ -107,6 +108,9 @@ protected:
     /// thread will try to lookup vptrs. It's OK to call terminate() in destructors of multiple
     /// derived classes.
     void terminate();
+
+    std::atomic<WorkerState>& workerState() { return m_state; }
+    unsigned idleWaitMs() { return m_idleWaitMs; }
 
 private:
     std::string m_name;

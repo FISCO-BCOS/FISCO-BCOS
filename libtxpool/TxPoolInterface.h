@@ -23,6 +23,8 @@
  */
 #pragma once
 #include <libethcore/Block.h>
+#include <libethcore/Common.h>
+#include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 namespace dev
 {
@@ -46,12 +48,19 @@ public:
      *
      * @param _limit : _limit Max number of transactions to return.
      * @param _avoid : Transactions to avoid returning.
+     * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    virtual dev::eth::Transactions topTransactions(
-        uint64_t const& _limit, h256Hash& _avoid, bool updateAvoid = false) = 0;
-
     virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
+    virtual dev::eth::Transactions topTransactions(
+        uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
+    virtual std::vector<std::shared_ptr<dev::eth::Transaction const>> topTransactionsCondition(
+        uint64_t const& _limit,
+        std::function<bool(dev::eth::Transaction const&)> const& _condition = nullptr)
+    {
+        return std::vector<std::shared_ptr<dev::eth::Transaction const>>();
+    };
+
     /// get all current transactions(maybe blocksync module need this interface)
     virtual dev::eth::Transactions pendingList() const = 0;
     /// get current transaction num
@@ -79,7 +88,25 @@ public:
     virtual TxPoolStatus status() const = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual int16_t const& getProtocolId() const = 0;
+    virtual PROTOCOL_ID const& getProtocolId() const = 0;
+
+    /// Get transaction in TxPool, return nullptr when not found
+    virtual std::shared_ptr<dev::eth::Transaction const> transactionInPool(h256 const& _txHash)
+    {
+        return nullptr;
+    };
+
+    /// Register a handler that will be called once there is a new transaction imported
+    template <class T>
+    dev::eth::Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
+
+protected:
+    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
+    ///< nice and exit fast.
+    dev::eth::Signal<> m_onReady;
 };
 }  // namespace txpool
 }  // namespace dev

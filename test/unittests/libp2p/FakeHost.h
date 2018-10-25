@@ -28,6 +28,7 @@
 #include <libp2p/SessionFace.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace dev;
 using namespace dev::p2p;
 namespace dev
@@ -44,6 +45,9 @@ public:
     {
         m_ping = m_lastReceived = m_connectionTime = chrono::steady_clock::now();
         m_disconnect = false;
+        std::shared_ptr<dev::ThreadPool> threadPool =
+            std::make_shared<ThreadPool>("SessionCallBackThreadPool", 1);
+        setThreadPool(threadPool);
     }
     void start() override
     {
@@ -51,6 +55,8 @@ public:
         m_start = true;
         m_disconnect = false;
     }
+
+    void setThreadPool(std::shared_ptr<dev::ThreadPool> thread) {}
     void disconnect(DisconnectReason _reason) { m_disconnect = true; }
     bool isConnected() const { return !m_disconnect; }
     NodeID id() const { return NodeID(m_peer->id()); }
@@ -71,6 +77,11 @@ public:
     ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) { return make_shared<ResponseCallback>(); }
     bool eraseCallbackBySeq(uint32_t seq) { return true; }
     NodeIPEndpoint nodeIPEndpoint() const override { return NodeIPEndpoint(); }
+    MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
+    void setMessageFactory(MessageFactory::Ptr _messageFactory) override
+    {
+        m_messageFactory = _messageFactory;
+    }
 
 public:
     bool m_start = false;
@@ -81,6 +92,7 @@ public:
     std::chrono::steady_clock::time_point m_connectionTime;
     std::chrono::steady_clock::time_point m_lastReceived;
     std::chrono::steady_clock::time_point m_ping;
+    MessageFactory::Ptr m_messageFactory;
 };
 
 class FakeSessionForTest : public Session
@@ -90,10 +102,10 @@ public:
         std::shared_ptr<Peer> const& _n, PeerSessionInfo const& _info)
       : Session(_server, _s, _n, _info)
     {
-        setTest(true);
+        //        setTest(true);
     }
 
-    void setProtocolId(int16_t const& protocol_id) { m_protocolId = protocol_id; }
+    void setProtocolId(PROTOCOL_ID const& protocol_id) { m_protocolId = protocol_id; }
 
     void setDataContent(std::string const& data_content) { m_dataContent = data_content; }
     void EncodeData()
@@ -109,7 +121,7 @@ public:
     }
     virtual void doRead()
     {
-        setProtocolId(dev::eth::ProtocolID::TxPool);
+        setProtocolId(0);
         EncodeData();
         if (m_read == 1)
             return;
@@ -117,7 +129,7 @@ public:
         Session::doRead();
     }
     unsigned m_read = 0;
-    int16_t m_protocolId = 0;
+    PROTOCOL_ID m_protocolId = 0;
     std::string m_dataContent;
 };
 
@@ -138,10 +150,11 @@ class FakeSessionFactory : public SessionFactory
 {
     virtual std::shared_ptr<SessionFace> create_session(Host* _server,
         std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
-        PeerSessionInfo _info)
+        PeerSessionInfo _info, MessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<SessionFace> m_session =
             std::make_shared<FakeSessionForHost>(_server, _peer, _info, _socket);
+        m_session->setMessageFactory(_messageFactory);
         return m_session;
     }
 };
@@ -385,11 +398,43 @@ public:
     {
         handler(ec, transferred_bytes);
     }
+    /// default implementation of async_read_some
+    virtual void async_read_some(std::shared_ptr<SocketFace> const& socket,
+        boost::asio::io_service::strand& m_strand, boost::asio::mutable_buffers_1 buffers,
+        ReadWriteHandler handler, std::size_t transferred_bytes = 0,
+        boost::system::error_code ec = boost::system::error_code())
+    {
+        if (count == 2)
+        {
+            ec = boost::asio::error::eof;
+            handler(ec, transferred_bytes);
+        }
+        if (count == 1)
+        {
+            count++;
+            std::shared_ptr<Message> message = std::make_shared<Message>();
+            std::string s(32, 'a');
+            bytes data;
+            data.assign(s.begin(), s.end());
+            message->encode(data);
+            buffers = boost::asio::mutable_buffers_1(message.get(), message->length());
+            transferred_bytes = data.size();
+            handler(ec, transferred_bytes);
+        }
+        else
+        {
+            count++;
+            handler(ec, transferred_bytes);
+        }
+    }
     /// fake implementation of m_strand.post
     virtual void strand_post(boost::asio::io_service::strand& m_strand, Base_Handler handler)
     {
         handler();
     }
+
+private:
+    int count = 0;
 };
 
 /// create Host with specified session factory

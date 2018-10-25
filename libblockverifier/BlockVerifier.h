@@ -65,24 +65,10 @@ public:
     {
         m_executiveContextFactory = executiveContextFactory;
     }
-
     ExecutiveContextFactory::Ptr getExecutiveContextFactory() { return m_executiveContextFactory; }
-
-    void setPrecompiledContract(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> precompiledContract)
-    {
-        m_precompiledContract = precompiledContract;
-    }
-
-    std::unordered_map<Address, dev::eth::PrecompiledContract> getPrecompiledContract()
-    {
-        return m_precompiledContract;
-    }
-
     void setNumberHash(NumberHashCallBackFunction _pNumberHash) { m_pNumberHash = _pNumberHash; }
 
 private:
-    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
 };

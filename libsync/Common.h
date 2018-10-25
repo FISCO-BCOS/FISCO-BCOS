@@ -20,34 +20,57 @@
  * @author: yujiechen
  * @date: 2018-09-21
  */
+
+/**
+ * @brief : common functions and types of Blocksync modules
+ * @author: jimmyshi
+ * @date: 2018-10-15
+ */
 #pragma once
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/FixedHash.h>
+#include <libethcore/Block.h>
 #include <libp2p/Common.h>
 #include <set>
+
 namespace dev
 {
 namespace sync
 {
+static unsigned const c_maxSendTransactions = 10;
+static size_t const c_maxDownloadingBlockQueueSize = 4096;
+static size_t const c_maxDownloadingBlockQueueBufferSize = 4096;
+static int64_t const c_maxRequestBlocks = 1024;
+static int64_t const c_maxCommitBlocks = 2048;
+
 using NodeList = std::set<dev::p2p::NodeID>;
+using NodeID = dev::p2p::NodeID;
+using NodeIDs = std::vector<dev::p2p::NodeID>;
+using BlockPtr = std::shared_ptr<dev::eth::Block>;
+using BlockPtrVec = std::vector<BlockPtr>;
+
+enum SyncPacketType : byte
+{
+    StatusPacket = 0x00,
+    TransactionsPacket = 0x01,
+    BlocksPacket = 0x02,
+    ReqBlocskPacket = 0x03,
+    PacketCount
+};
 
 enum class SyncState
 {
-    NotSynced,  ///< Initial chain sync has not started yet
-    Idle,       ///< Initial chain sync complete. Waiting for new packets
-    Waiting,    ///< Block downloading paused. Waiting for block queue to process blocks and free
-                ///< space
-    Blocks,     ///< Downloading blocks
-    State,      ///< Downloading state
-    NewBlocks,  ///< Downloading blocks learned from NewHashes packet
-    Size        /// Must be kept last
+    Idle,         ///< Initial chain sync complete. Waiting for new packets
+    Downloading,  ///< Downloading blocks
+    Size          /// Must be kept last
 };
-struct SyncStatus
+
+struct NodeInfo
 {
-    SyncState state = SyncState::Idle;
-    unsigned startBlockNumber;
-    unsigned currentBlockNumber;
-    unsigned highestBlockNumber;
-    bool majorSyncing = false;
+    NodeID nodeId;
+    int64_t number;
+    h256 genesisHash;
+    h256 latestHash;
 };
 
 }  // namespace sync

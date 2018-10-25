@@ -48,9 +48,9 @@ public:
     ///< Add, Get, Erase interface of protocolID2Handler.
     ///< The return true indicates that the operation was successful.
     ///< The return false indicates that the operation failed.
-    bool addProtocolID2Handler(int16_t protocolID, CallbackFuncWithSession const& callback);
-    bool getHandlerByProtocolID(int16_t protocolID, CallbackFuncWithSession& callback);
-    bool eraseHandlerByProtocolID(int16_t protocolID);
+    bool addProtocolID2Handler(PROTOCOL_ID protocolID, CallbackFuncWithSession const& callback);
+    bool getHandlerByProtocolID(PROTOCOL_ID protocolID, CallbackFuncWithSession& callback);
+    bool eraseHandlerByProtocolID(PROTOCOL_ID protocolID);
 
     ///< Add, Get, Erase interface of topic2Handler.
     ///< The return true indicates that the operation was successful.

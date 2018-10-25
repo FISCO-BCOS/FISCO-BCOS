@@ -72,23 +72,11 @@ static const u256 shannon = exp10<9>();
 static const u256 wei = exp10<0>();
 
 using Nonce = h64;
-
-using BlockNumber = unsigned;
-
-static const BlockNumber LatestBlock = (BlockNumber)-2;
-static const BlockNumber PendingBlock = (BlockNumber)-1;
-static const h256 LatestBlockHash = h256(2);
-static const h256 EarliestBlockHash = h256(1);
-static const h256 PendingBlockHash = h256(0);
-
-static const u256 DefaultBlockGasLimit = 4712388;
-
-enum class RelativeBlock : BlockNumber
-{
-    Latest = LatestBlock,
-    Pending = PendingBlock
-};
-
+using BlockNumber = int64_t;
+/// define GroupID
+using GroupID = int16_t;
+/// define ProtocolID
+using PROTOCOL_ID = int16_t;
 enum class BlockPolarity
 {
     Unknown,

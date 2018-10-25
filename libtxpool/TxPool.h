@@ -30,6 +30,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
+#include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 using namespace dev::eth;
 using namespace dev::p2p;
@@ -56,9 +57,9 @@ struct PriorityCompare
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
 {
 public:
-    TxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
+    TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        int16_t const& _protocolId, uint64_t const& _limit = 102400)
+        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400)
       : m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
@@ -94,30 +95,32 @@ public:
      *
      * @param _limit : _limit Max number of transactions to return.
      * @param _avoid : Transactions to avoid returning.
+     * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    Transactions topTransactions(
-        uint64_t const& _limit, h256Hash& _avoid, bool update_void = false) override;
-    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit);
+    virtual Transactions topTransactions(uint64_t const& _limit) override;
+    virtual Transactions topTransactions(
+        uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override;
+    virtual std::vector<std::shared_ptr<Transaction const>> topTransactionsCondition(
+        uint64_t const& _limit,
+        std::function<bool(Transaction const&)> const& _condition = nullptr) override;
+
     /// get all transactions(maybe blocksync module need this interface)
     Transactions pendingList() const override;
     /// get current transaction num
     size_t pendingSize() override;
 
+    /// Get transaction in TxPool, return nullptr when not found
+    std::shared_ptr<Transaction const> transactionInPool(h256 const& _txHash) override;
+
     /// @returns the status of the transaction queue.
     TxPoolStatus status() const override;
 
     /// protocol id used when register handler to p2p module
-    virtual int16_t const& getProtocolId() const { return m_protocolId; }
+    virtual PROTOCOL_ID const& getProtocolId() const { return m_protocolId; }
     virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
     virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
-    /// Register a handler that will be called once there is a new transaction imported
-    template <class T>
-    Handler<> onReady(T const& _t)
-    {
-        return m_onReady.add(_t);
-    }
 
 protected:
     /**
@@ -151,14 +154,14 @@ private:
 
 private:
     /// p2p module
-    std::shared_ptr<dev::p2p::Service> m_service;
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<dev::eth::NonceCheck> m_nonceCheck;
     /// Max number of pending transactions
     uint64_t m_limit;
     mutable SharedMutex m_lock;
     /// protocolId
-    int16_t m_protocolId;
+    PROTOCOL_ID m_protocolId;
     /// max block limit
     u256 m_maxBlockLimit = u256(1000);
     /// transaction queue
@@ -169,9 +172,6 @@ private:
     h256Hash m_known;
     /// hash of dropped transactions
     h256Hash m_dropped;
-    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
-    ///< nice and exit fast.
-    Signal<> m_onReady;
 };  // namespace txpool
 }  // namespace txpool
 }  // namespace dev

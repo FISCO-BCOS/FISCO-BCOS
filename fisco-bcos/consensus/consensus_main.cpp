@@ -28,6 +28,14 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libtxpool/TxPool.h>
+
+class P2PMessageFactory : public MessageFactory
+{
+public:
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+};
+
 static void startConsensus(Params& params)
 {
     ///< initialize component
@@ -43,10 +51,11 @@ static void startConsensus(Params& params)
 
     host->setStaticNodes(params.staticNodes());
     /// set the topic id
-    uint8_t group_id = 2;
-    uint16_t protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
+    GROUP_ID group_id = 2;
+    PROTOCOL_ID protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
 
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
+    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
     std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
     std::shared_ptr<dev::txpool::TxPool> txPool =
         std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);
@@ -75,24 +84,20 @@ static void startConsensus(Params& params)
     }
     /// minerList.push_back(toPublic(key_pair.secret()));
     ///< int pbft consensus
-    std::cout << "### before create pbftEngine" << std::endl;
-    std::shared_ptr<dev::consensus::ConsensusInterface> pbftEngine =
-        std::make_shared<dev::consensus::PBFTEngine>(p2pService, txPool, blockChain, blockSync,
+    std::shared_ptr<dev::consensus::Consensus> pbftConsensus =
+        std::make_shared<dev::consensus::PBFTConsensus>(p2pService, txPool, blockChain, blockSync,
             blockVerifier, protocol_id, "./", key_pair, minerList);
-    std::cout << "#### before create pbftConsensus" << std::endl;
-    std::shared_ptr<dev::consensus::PBFTConsensus> pbftConsensus =
-        std::make_shared<dev::consensus::PBFTConsensus>(txPool, blockChain, blockSync, pbftEngine);
     /// start the host
     host->start();
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
-    std::shared_ptr<std::vector<std::string>> topics = host->topics();
-    topics->push_back(toString(group_id));
-    std::cout << "#### before setTopic" << std::endl;
-    host->setTopics(topics);
-    std::cout << "##### set topic" << std::endl;
+    std::map<GROUP_ID, h512s> groudID2NodeList;
+    groudID2NodeList[int(group_id)] = minerList;
+    p2pService->setGroupID2NodeList(groudID2NodeList);
     ///< start consensus
     pbftConsensus->start();
-
+    /// test pbft status
+    std::cout << "#### pbft consensus:" << pbftConsensus->consensusEngine()->consensusStatus()
+              << std::endl;
     ///< transaction related
     bytes rlpBytes = fromHex(
         "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
@@ -101,16 +106,21 @@ static void startConsensus(Params& params)
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
+    u256 maxBlockLimit = u256(1000);
+    /// get the consensus status
+
+    /// m_txSpeed default is 10
+    uint16_t sleep_interval = (uint16_t)(1000.0 / params.txSpeed());
     while (true)
     {
         tx.setNonce(tx.nonce() + u256(1));
+        tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         std::pair<h256, Address> ret = txPool->submit(tx);
         /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
         ///          << ", size:" << txPool->pendingSize();
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
 }
 

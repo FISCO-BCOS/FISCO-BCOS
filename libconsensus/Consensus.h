@@ -24,15 +24,14 @@
 #pragma once
 #include "ConsensusEngineBase.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libblocksync/SyncInterface.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
+#include <libsync/SyncInterface.h>
 #include <libtxpool/TxPool.h>
 #include <libtxpool/TxPoolInterface.h>
 namespace dev
 {
-class ConsensusStatus;
 namespace consensus
 {
 class Consensus : public Worker, public std::enable_shared_from_this<Consensus>
@@ -49,19 +48,17 @@ public:
      */
     Consensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
+        std::shared_ptr<dev::sync::SyncInterface> _blockSync)
       : Worker("consensus", 0),
         m_txPool(_txPool),
         m_blockSync(_blockSync),
         m_blockChain(_blockChain),
-        m_consensusEngine(_consensusEngine)
+        m_consensusEngine(nullptr)
     {
         assert(m_txPool && m_blockSync && m_blockChain);
-        dev::txpool::TxPool* txPool = dynamic_cast<dev::txpool::TxPool*>(m_txPool.get());
-        assert(txPool);
         /// register a handler to be called once new transactions imported
-        m_tqReady = txPool->onReady([=]() { this->onTransactionQueueReady(); });
+        m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
+        m_blockSubmitted = m_blockChain->onReady([=]() { this->onBlockChanged(); });
     }
 
     virtual ~Consensus() noexcept { stop(); }
@@ -75,6 +72,12 @@ public:
         m_syncTxPool = true;
         m_signalled.notify_all();
     }
+    virtual void onBlockChanged()
+    {
+        m_syncBlock = true;
+        m_signalled.notify_all();
+    }
+
     /// set the max number of transactions in a block
     void setMaxBlockTransactions(uint64_t const& _maxBlockTransactions)
     {
@@ -85,7 +88,19 @@ public:
     void setExtraData(std::vector<bytes> const& _extra) { m_extraData = _extra; }
     std::vector<bytes> const& extraData() const { return m_extraData; }
 
+    bool inline shouldResetSealing()
+    {
+        return (m_sealing.block.isSealed() ||
+                m_sealing.block.blockHeader().number() <= m_blockChain->number());
+    }
+    /// return the pointer of ConsensusInterface to access common interfaces
+    std::shared_ptr<dev::consensus::ConsensusInterface> const consensusEngine()
+    {
+        return m_consensusEngine;
+    }
+
 protected:
+    void reportNewBlock();
     /// sealing block
     virtual bool shouldSeal();
     virtual bool shouldWait(bool const& wait) const;
@@ -98,7 +113,9 @@ protected:
         uint64_t tx_num = m_sealing.block.getTransactionSize();
         bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
         if (enough)
+        {
             m_syncTxPool = false;
+        }
         return enough;
     }
 
@@ -144,11 +161,14 @@ protected:
     std::vector<bytes> m_extraData;
 
     /// atomic value represents that whether is calling syncTransactionQueue now
-    std::atomic<bool> m_syncTxPool = {false};
     /// signal to notify all thread to work
     std::condition_variable m_signalled;
     /// mutex to access m_signalled
     Mutex x_signalled;
+    std::atomic<bool> m_syncTxPool = {false};
+    /// a new block has been submitted to the blockchain
+    std::atomic<bool> m_syncBlock = {false};
+
     ///< Has the remote worker recently been reset?
     bool m_remoteWorking = false;
     /// True if we /should/ be sealing.
@@ -156,6 +176,7 @@ protected:
 
     /// handler
     Handler<> m_tqReady;
+    Handler<> m_blockSubmitted;
 };
 }  // namespace consensus
 }  // namespace dev

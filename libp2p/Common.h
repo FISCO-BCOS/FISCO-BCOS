@@ -137,10 +137,10 @@ public:
     uint32_t length() { return m_length; }
     void setLength(uint32_t _length) { m_length = _length; }
 
-    int16_t protocolID() { return m_protocolID; }
-    void setProtocolID(int16_t _protocolID) { m_protocolID = _protocolID; }
-    uint16_t packetType() { return m_packetType; }
-    void setPacketType(uint16_t _packetType) { m_packetType = _packetType; }
+    PROTOCOL_ID protocolID() { return m_protocolID; }
+    void setProtocolID(PROTOCOL_ID _protocolID) { m_protocolID = _protocolID; }
+    PACKET_TYPE packetType() { return m_packetType; }
+    void setPacketType(PACKET_TYPE _packetType) { m_packetType = _packetType; }
 
     uint32_t seq() { return m_seq; }
     void setSeq(uint32_t _seq) { m_seq = _seq; }
@@ -149,7 +149,7 @@ public:
     void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
 
     bool isRequestPacket() { return (m_protocolID > 0); }
-    int16_t getResponceProtocolID()
+    PROTOCOL_ID getResponceProtocolID()
     {
         if (isRequestPacket())
             return -m_protocolID;
@@ -189,11 +189,11 @@ public:
     }
 
 private:
-    uint32_t m_length = 0;      ///< m_length = HEADER_LENGTH + length(m_buffer)
-    int16_t m_protocolID = 0;   ///< message type, the first two bytes of information, when greater
-                                ///< than 0 is the ID of the request package.
-    uint16_t m_packetType = 0;  ///< message sub type, the second two bytes of information
-    uint32_t m_seq = 0;         ///< the message identify
+    uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
+    PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
+                                      ///< greater than 0 is the ID of the request package.
+    PACKET_TYPE m_packetType = 0;     ///< message sub type, the second two bytes of information
+    uint32_t m_seq = 0;               ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
 };
 
@@ -202,6 +202,15 @@ enum AMOPPacketType
     SendTopicSeq = 1,
     RequestTopics = 2,
     SendTopics = 3
+};
+
+class MessageFactory : public std::enable_shared_from_this<MessageFactory>
+{
+public:
+    typedef std::shared_ptr<MessageFactory> Ptr;
+
+    virtual ~MessageFactory(){};
+    virtual Message::Ptr buildMessage() = 0;
 };
 
 class P2PException : public std::exception

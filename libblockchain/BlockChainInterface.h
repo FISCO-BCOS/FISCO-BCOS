@@ -41,10 +41,23 @@ public:
     virtual int64_t number() const = 0;
     virtual dev::h256 numberHash(int64_t _i) const = 0;
     virtual dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) = 0;
+    virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
     virtual void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
+
+    /// Register a handler that will be called once there is a new transaction imported
+    template <class T>
+    dev::eth::Handler<> onReady(T const& _t)
+    {
+        return m_onReady.add(_t);
+    }
+
+protected:
+    ///< Called when a subsequent call to import transactions will return a non-empty container. Be
+    ///< nice and exit fast.
+    dev::eth::Signal<> m_onReady;
 };
 }  // namespace blockchain
 }  // namespace dev

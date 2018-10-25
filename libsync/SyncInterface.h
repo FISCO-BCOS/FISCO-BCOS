@@ -16,7 +16,7 @@
  */
 /**
  * @brief : external interfaces of BlockSync module called by RPC and p2p
- * @author: yujiechen
+ * @author: yujiechen, jimmyshi
  * @date: 2018-09-21
  */
 #pragma once
@@ -28,10 +28,10 @@ namespace dev
 namespace sync
 {
 class SyncStatus;
-class SyncInterface : public Worker
+class SyncInterface
 {
 public:
-    SyncInterface() = default;
+    SyncInterface(){};
     virtual ~SyncInterface(){};
     /// start blockSync
     virtual void start() = 0;
@@ -42,20 +42,20 @@ public:
     /// @returns Synchonization status
     virtual SyncStatus status() const = 0;
     virtual bool isSyncing() const = 0;
-    virtual h256 latestBlockSent() = 0;
+    /*    virtual h256 latestBlockSent() = 0;
 
-    /// for rpc && sdk: broad cast transaction to all nodes
-    virtual void broadCastTransactions() = 0;
-    /// for p2p: broad cast transaction to specified nodes
-    virtual void sendTransactions(NodeList const& _nodes) = 0;
+        /// for rpc && sdk: broad cast transaction to all nodes
+        virtual void broadCastTransactions() = 0;
+        /// for p2p: broad cast transaction to specified nodes
+        virtual void sendTransactions(NodeList const& _nodes) = 0;
 
-    /// abort sync and reset all status of blockSyncs
-    virtual void reset() = 0;
-    virtual bool forceSync() = 0;
-
+        /// abort sync and reset all status of blockSyncs
+        virtual void reset() = 0;
+        virtual bool forceSync() = 0;
+    */
     /// protocol id used when register handler to p2p module
-    virtual int16_t const& getProtocolId() const = 0;
-    virtual void setProtocolId(int16_t const _protocolId) = 0;
+    virtual PROTOCOL_ID const& protocolId() const = 0;
+    virtual void setProtocolId(PROTOCOL_ID const _protocolId) = 0;
 };
 
 }  // namespace sync

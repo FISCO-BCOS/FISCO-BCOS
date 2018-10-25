@@ -32,14 +32,31 @@ namespace consensus
 class PBFTConsensus : public Consensus
 {
 public:
-    PBFTConsensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    PBFTConsensus(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::consensus::ConsensusInterface> _consensusEngine)
-      : Consensus(_txPool, _blockChain, _blockSync, _consensusEngine)
+        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+        int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        h512s const& _minerList = h512s())
+      : Consensus(_txPool, _blockChain, _blockSync)
     {
+        m_consensusEngine = std::make_shared<PBFTEngine>(_service, _txPool, _blockChain, _blockSync,
+            _blockVerifier, _protocolId, _baseDir, _key_pair, _minerList);
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
-        assert(m_pbftEngine != nullptr);
+        m_pbftEngine->onViewChange([this]() {
+            DEV_WRITE_GUARDED(x_sealing)
+            {
+                LOG(DEBUG) << "#### callbacked after viewchange";
+                if (shouldResetSealing())
+                {
+                    LOG(DEBUG) << "#### reset the sealing, number = "
+                               << m_sealing.block.header().number();
+                    resetSealingBlock();
+                }
+                m_signalled.notify_all();
+            }
+        });
     }
     void start() override;
     void stop() override;

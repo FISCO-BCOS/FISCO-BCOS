@@ -93,9 +93,15 @@ DEV_SIMPLE_EXCEPTION(InvalidLogBloom);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
 
+
 /// transactionReceipt related
 DEV_SIMPLE_EXCEPTION(InvalidTransactionReceiptFormat);
 DEV_SIMPLE_EXCEPTION(TransactionReceiptVersionError);
+
+/// sync related
+DEV_SIMPLE_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
+DEV_SIMPLE_EXCEPTION(InvalidSyncPeerCreation);
+
 
 /// common exceptions
 DEV_SIMPLE_EXCEPTION(InvalidNonce);

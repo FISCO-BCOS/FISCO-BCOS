@@ -27,6 +27,7 @@
 #include "P2PMsgHandler.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
+#include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
@@ -109,7 +110,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     bool doWrite = false;
     DEV_GUARDED(x_framing)
     {
-        m_writeQueue.push(make_pair(_msg, utcTime()));
+        m_writeQueue.push(make_pair(_msg, u256(utcTime())));
         doWrite = (m_writeQueue.size() == 1);
     }
     if (doWrite)
@@ -158,7 +159,7 @@ void Session::write()
     try
     {
         std::pair<std::shared_ptr<bytes>, u256> task;
-        u256 enter_time = 0;
+        u256 enter_time = u256(0);
         DEV_GUARDED(x_framing)
         {
             task = m_writeQueue.top();
@@ -218,8 +219,11 @@ void Session::drop(DisconnectReason _reason)
             ///< TODO: use threadPool
             P2PException e(
                 P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
-            it.second->callbackFunc(e, Message::Ptr());
-            eraseCallbackBySeq(it.first);
+            /// it.second->callbackFunc(e, Message::Ptr());
+            m_threadPool->enqueue([=]() {
+                it.second->callbackFunc(e, Message::Ptr());
+                eraseCallbackBySeq(it.first);
+            });
         }
     }
 
@@ -263,53 +267,52 @@ void Session::doRead()
     if (m_dropped)
         return;
     auto self(shared_from_this());
-    if (!m_test)
-        m_data.resize(sizeof(uint32_t));
-    auto asyncRead = [this, self](boost::system::error_code ec, std::size_t length) {
-        if (!checkRead(ec))
+    auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
+        if (ec)
+        {
+            LOG(WARNING) << "Error sending: " << ec.message();
+            drop(TCPError);
             return;
-        uint32_t fullLength = ntohl(*((uint32_t*)m_data.data()));
-        m_data.resize(fullLength);
-        LOG(INFO) << "Session::doRead fullLength=" << fullLength;
+        }
+        LOG(TRACE) << "Read: " << bytesTransferred
+                   << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
+        m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
-        auto _asyncRead = [this, self](boost::system::error_code ec, std::size_t length) {
-            ThreadContext tc(info().id.abridged());
-            ThreadContext tc2(info().host);
-            if (!checkRead(ec))
-                return;
+        ThreadContext tc(info().id.abridged());
+        ThreadContext tc2(info().host);
 
-            Message::Ptr message = std::make_shared<Message>();
+        while (true)
+        {
+            Message::Ptr message = m_messageFactory->buildMessage();
             ssize_t result = message->decode(m_data.data(), m_data.size());
+            LOG(TRACE) << "Parse result: " << result;
             if (result > 0)
             {
+                LOG(TRACE) << "Decode success: " << result;
                 P2PException e(
                     P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
                 onMessage(e, self, message);
+                m_data.erase(m_data.begin(), m_data.begin() + result);
+            }
+            else if (result == 0)
+            {
+                doRead();
+                break;
             }
             else
             {
                 P2PException e(P2PExceptionType::ProtocolError,
                     g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
                 onMessage(e, self, message);
+                break;
             }
-            doRead();
-        };
-        if (m_socket->isConnected())
-            m_server->asioInterface()->async_read(m_socket, *m_strand,
-                boost::asio::buffer(
-                    m_data.data() + sizeof(uint32_t), fullLength - sizeof(uint32_t)),
-                _asyncRead);
-        else
-        {
-            LOG(WARNING) << "Error Reading ssl socket is close!";
-            drop(TCPError);
-            return;
         }
     };
     if (m_socket->isConnected())
     {
-        m_server->asioInterface()->async_read(
-            m_socket, *m_strand, boost::asio::buffer(m_data, sizeof(uint32_t)), asyncRead);
+        LOG(TRACE) << "Start read:" << bufferLength;
+        m_server->asioInterface()->async_read_some(
+            m_socket, *m_strand, boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
     }
     else
     {
@@ -333,12 +336,43 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
+bool Session::CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Session> session)
+{
+    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(protocolID);
+    if (0 == ret.first)
+    {
+        return true;
+    }
+    h512s nodeList;
+    if (m_server->getNodeListByGroupID(int(ret.first), nodeList))
+    {
+        if (find(nodeList.begin(), nodeList.end(), session->id()) == nodeList.end())
+        {
+            ///< The message sender is not a member of the group
+            LOG(ERROR) << "Session::onMessage, The message sender is not a member of the group!";
+            return false;
+        }
+    }
+    else
+    {
+        ///< I didn't join the group
+        LOG(ERROR) << "Session::onMessage, I didn't join the group!";
+        return false;
+    }
+
+    return true;
+}
+
 void Session::onMessage(
     P2PException const& e, std::shared_ptr<Session> session, Message::Ptr message)
 {
-    int16_t protocolID = message->protocolID();
+    PROTOCOL_ID protocolID = message->protocolID();
     if (message->isRequestPacket())
     {
+        ///< Whitelist mechanism, check groupID and sender of this message
+        if (false == CheckGroupIDAndSender(protocolID, session))
+            return;
+
         ///< request package, get callback by protocolID
         CallbackFuncWithSession callbackFunc;
 
@@ -348,7 +382,8 @@ void Session::onMessage(
             LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
             ///< execute funtion, send response packet by user in callbackFunc
             ///< TODO: use threadPool
-            callbackFunc(e, session, message);
+            m_threadPool->enqueue(
+                [callbackFunc, e, session, message]() { callbackFunc(e, session, message); });
         }
         else
         {
@@ -370,7 +405,8 @@ void Session::onMessage(
             {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
                 ///< TODO: use threadPool
-                callback->callbackFunc(e, message);
+                m_threadPool->enqueue(
+                    [callback, e, message]() { callback->callbackFunc(e, message); });
             }
             else
             {
