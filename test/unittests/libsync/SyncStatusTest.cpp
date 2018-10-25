@@ -43,7 +43,7 @@ namespace test
 class SyncStatusFixture : public TestOutputHelperFixture
 {
 public:
-    SyncStatusFixture() {}
+    SyncStatusFixture() : status(h256(111)) {}
     SyncMasterStatus status;
 };
 
