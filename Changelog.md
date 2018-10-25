@@ -1,3 +1,28 @@
+### V1.3.5
+
+(2018-10-25)
+
+* Update
+
+1. systemcontract的ConfigAction用tool.js设置时，默认10进制
+2. 搭链时生成的节点，默认eventlog关闭
+3. RPC接看eth_getTransactionReceipt的返回字段，带上16进制前缀"0x"
+
+* Add
+
+1. 增加静态编译的fisco-bcos程序，安装时默认采用静态程序
+
+* Fix
+
+1. 修复readthedocs文档问题
+2. 修复Session::write可能造成coredomp的问题
+3. 修复PBFT转发包时，时间戳较大无法转发的问题
+
+* Delete
+
+1. 删除dfs和minupnp
+
+
 ### V1.3.4
 
 (2018-09-14)
