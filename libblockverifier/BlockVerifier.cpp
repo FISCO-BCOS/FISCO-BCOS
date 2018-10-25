@@ -48,8 +48,10 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
     unsigned i = 0;
     for (Transaction const& tr : block.transactions())
     {
-        EnvInfo envInfo(
-            block.blockHeader(), m_pNumberHash, block.getTransactionReceipts().back().gasUsed());
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
+            block.getTransactionReceipts().size() > 0 ?
+                block.getTransactionReceipts().back().gasUsed() :
+                0);
         envInfo.setPrecompiledEngine(executiveContext);
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
             execute(envInfo, tr, OnOpFunc(), executiveContext);

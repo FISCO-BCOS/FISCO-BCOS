@@ -66,7 +66,10 @@ public:
         m_executiveContextFactory = executiveContextFactory;
     }
     ExecutiveContextFactory::Ptr getExecutiveContextFactory() { return m_executiveContextFactory; }
-    void setNumberHash(NumberHashCallBackFunction _pNumberHash) { m_pNumberHash = _pNumberHash; }
+    void setNumberHash(const NumberHashCallBackFunction& _pNumberHash)
+    {
+        m_pNumberHash = _pNumberHash;
+    }
 
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
