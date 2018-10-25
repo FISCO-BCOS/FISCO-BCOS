@@ -30,13 +30,55 @@ namespace dev
 {
 namespace ledger
 {
+template <typename T>
 class LedgerManager
 {
 public:
-    virtual bool initSingleLedger(std::shared_ptr<dev::p2p::P2PInterface> service,
+    virtual inline bool initSingleLedger(std::shared_ptr<dev::p2p::P2PInterface> service,
         dev::eth::GroupID const& _groupId, dev::KeyPair const& _keyPair,
-        std::string const& _baseDir);
+        std::string const& _baseDir)
+    {
+        if (m_ledgerMap.count(_groupId) == 0)
+        {
+            std::shared_ptr<LedgerInterface> ledger =
+                std::make_shared<T>(service, _groupId, _keyPair, _baseDir);
+            m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+            return true;
+        }
+        else
+        {
+            LOG(WARNING) << "Group " << _groupId << " has been created already";
+            return false;
+        }
+    }
 
+    virtual inline bool startByGroupID(dev::eth::GroupID const& groupId)
+    {
+        if (!m_ledgerMap.count(groupId))
+            return false;
+        m_ledgerMap[groupId]->startAll();
+        return true;
+    }
+
+    virtual inline bool stopByGroupID(dev::eth::GroupID const& groupId)
+    {
+        if (!m_ledgerMap.count(groupId))
+            return false;
+        m_ledgerMap[groupId]->stopAll();
+        return true;
+    }
+
+    virtual inline void startAll()
+    {
+        for (auto item : m_ledgerMap)
+            item.second->startAll();
+    }
+
+    virtual inline void stopAll()
+    {
+        for (auto item : m_ledgerMap)
+            item.second->stopAll();
+    }
     /// get pointer of txPool by group id
     inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::eth::GroupID groupId)
     {
@@ -44,6 +86,7 @@ public:
             return nullptr;
         return m_ledgerMap[groupId]->txPool();
     }
+
     /// get pointer of blockverifier by group id
     inline std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
         dev::eth::GroupID groupId)

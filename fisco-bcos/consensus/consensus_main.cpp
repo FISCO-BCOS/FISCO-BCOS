@@ -21,13 +21,16 @@
  * @date 2018-10-09
  */
 
+#include "FakeLedger.h"
 #include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
+#include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
+using namespace dev::ledger;
 static void startConsensus(Params& params)
 {
     ///< initialize component
@@ -43,15 +46,10 @@ static void startConsensus(Params& params)
 
     host->setStaticNodes(params.staticNodes());
     /// set the topic id
-    uint8_t group_id = 2;
+    GroupID group_id = 2;
     uint16_t protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
 
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
-    std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
-    std::shared_ptr<dev::txpool::TxPool> txPool =
-        std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);
-    std::shared_ptr<SyncInterface> blockSync = std::make_shared<FakeBlockSync>();
-    std::shared_ptr<BlockVerifierInterface> blockVerifier = std::make_shared<FakeBlockVerifier>();
     ///< Read the KeyPair of node from configuration file.
     auto nodePrivate = contents(getDataDir().string() + "/node.private");
     KeyPair key_pair;
@@ -66,18 +64,10 @@ static void startConsensus(Params& params)
         LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
         exit(-1);
     }
-    ///< TODO: Read the minerList from the configuration file.
-    h512s minerList = h512s();
-    for (auto miner : params.minerList())
-    {
-        std::cout << "#### set miner:" << toHex(miner) << std::endl;
-        minerList.push_back(miner);
-    }
-    /// minerList.push_back(toPublic(key_pair.secret()));
-    ///< int pbft consensus
-    std::shared_ptr<dev::consensus::Consensus> pbftConsensus =
-        std::make_shared<dev::consensus::PBFTConsensus>(p2pService, txPool, blockChain, blockSync,
-            blockVerifier, protocol_id, "./", key_pair, minerList);
+    /// init all the modules through ledger
+    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
+        std::make_shared<LedgerManager<FakeLedger>>();
+    ledgerManager->initSingleLedger(p2pService, 2, key_pair, "fisco-bcos-data");
     /// start the host
     host->start();
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
@@ -86,10 +76,10 @@ static void startConsensus(Params& params)
     std::cout << "#### before setTopic" << std::endl;
     host->setTopics(topics);
     std::cout << "##### set topic" << std::endl;
-    ///< start consensus
-    pbftConsensus->start();
+    /// start all the modules through ledger
+    ledgerManager->startAll();
     /// test pbft status
-    std::cout << "#### pbft consensus:" << pbftConsensus->consensusEngine()->consensusStatus()
+    std::cout << "#### pbft consensus:" << ledgerManager->consensus(group_id)->consensusStatus()
               << std::endl;
     ///< transaction related
     bytes rlpBytes = fromHex(
@@ -107,10 +97,10 @@ static void startConsensus(Params& params)
     while (true)
     {
         tx.setNonce(tx.nonce() + u256(1));
-        tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
+        tx.setBlockLimit(u256(ledgerManager->blockChain(group_id)->number()) + maxBlockLimit);
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
-        std::pair<h256, Address> ret = txPool->submit(tx);
+        std::pair<h256, Address> ret = ledgerManager->txPool(group_id)->submit(tx);
         /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
         ///          << ", size:" << txPool->pendingSize();
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));

@@ -22,7 +22,6 @@
  * @date: 2018-10-23
  */
 #include "Ledger.h"
-#include "LedgerParam.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
@@ -46,7 +45,6 @@ namespace ledger
 void Ledger::initLedger(
     std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile)
 {
-    m_param = std::make_shared<LedgerParam>();
     assert(m_param);
     /// init dbInitializer
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
@@ -121,6 +119,8 @@ void Ledger::initDBConfig(ptree const& pt)
     /// init the basic config
     m_param->setDBType(pt.get<std::string>("statedb.dbType", "AMDB"));
     m_param->setMptState(pt.get<bool>("statedb.mpt", true));
+    std::string baseDir = m_param->baseDir() + pt.get<std::string>("statedb.dbpath", "data");
+    m_param->setBaseDir(baseDir);
 }
 
 void Ledger::initGenesisConfig(ptree const& pt)
@@ -143,6 +143,9 @@ void Ledger::initBlockVerifier()
     m_blockVerifier = blockVerifier;
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
+    std::shared_ptr<BlockChainImp> blockChain =
+        std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
+    blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
 }
 
 /// TODO: init blockchain

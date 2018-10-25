@@ -24,6 +24,7 @@
 #pragma once
 #include "DBInitializer.h"
 #include "LedgerInterface.h"
+#include "LedgerParam.h"
 #include "LedgerParamInterface.h"
 #include <libconsensus/Consensus.h>
 #include <libdevcore/Exceptions.h>
@@ -43,10 +44,23 @@ public:
         dev::KeyPair const& _keyPair, std::string const& _baseDir)
       : m_service(service), m_groupId(_groupId), m_keyPair(_keyPair)
     {
+        m_param = std::make_shared<LedgerParam>();
+        m_param->setBaseDir(_baseDir);
         assert(m_service);
         std::string configPath = _baseDir + "/" + toString(_groupId) + "/ " + m_configFileName;
         initConfig(configPath);
-        m_param->setBaseDir(_baseDir);
+    }
+
+    void startAll() override
+    {
+        m_sync->start();
+        m_consensus->start();
+    }
+
+    void stopAll() override
+    {
+        m_consensus->stop();
+        m_sync->stop();
     }
 
     virtual ~Ledger(){};
@@ -55,6 +69,7 @@ public:
     /// init the ledger(called by initializer)
     void initLedger(
         std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override;
+
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
@@ -92,7 +107,7 @@ private:
     void initDBConfig(boost::property_tree::ptree const& pt);
     void initGenesisConfig(boost::property_tree::ptree const& pt);
 
-private:
+protected:
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
     dev::eth::GroupID m_groupId;
     dev::KeyPair m_keyPair;
