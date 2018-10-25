@@ -12,7 +12,8 @@ current_dir=`pwd`
 enable_guomi=0
 build_source=0
 version=`cat release_note.txt| sed "s/^[vV]//"`
-binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/fisco-bcos
+# binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/fisco-bcos
+binary_link=https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/release-1.3.5/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -230,7 +231,7 @@ download_binary()
 {
 	execute_cmd "curl -LO ${binary_link}"
 	execute_cmd "chmod a+x fisco-bcos"
-	execute_cmd "sudo mv fisco-bcos /usr/bin/"
+	execute_cmd "sudo mv fisco-bcos /usr/local/bin/"
 }
 
 nodejs_init()
