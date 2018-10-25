@@ -139,6 +139,32 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
     return Transaction();
 }
 
+LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
+{
+    string strblock = "";
+    string txIndex = "";
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_txHash2Block);
+    if (tb)
+    {
+        auto entries = tb->select(_txHash.hex(), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            strblock = entry->getField(m_ValueName);
+            txIndex = entry->getField("index");
+        }
+    }
+
+    std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
+    std::vector<Transaction> txs = pblock->transactions();
+    if (txs.size() > lexical_cast<uint>(txIndex))
+    {
+        return LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], pblock->headerHash(),
+            lexical_cast<unsigned>(txIndex), pblock->blockHeader().number());
+    }
+    return LocalisedTransaction(Transaction(), h256(0), -1);
+}
+
 TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
 {
     string strblock = "";
