@@ -32,7 +32,7 @@ namespace ledger
 class FakeLedger : public Ledger
 {
 public:
-    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::eth::GroupID const& _groupId,
+    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
       : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {}

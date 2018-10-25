@@ -40,7 +40,7 @@ namespace ledger
 class Ledger : public LedgerInterface
 {
 public:
-    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::eth::GroupID const& _groupId,
+    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir,
         std::string const& configFileName)
       : m_service(service),
@@ -49,11 +49,15 @@ public:
         m_configFileName(configFileName)
     {
         m_param = std::make_shared<LedgerParam>();
-        std::string prefix = _baseDir + "/group" + toString(_groupId);
+        std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
+        if (_baseDir == "")
+            prefix = "./group" + std::to_string(_groupId);
         m_param->setBaseDir(prefix);
         assert(m_service);
         if (m_configFileName == "")
-            m_configFileName = "./config.group" + toString(_groupId) + m_postfix;
+            m_configFileName = "./config.group" + std::to_string(_groupId) + m_postfix;
+        LOG(DEBUG) << "### config file path:" << m_configFileName;
+        LOG(DEBUG) << "### basedir:" << m_param->baseDir();
         initConfig(m_configFileName);
     }
 
@@ -91,7 +95,7 @@ public:
         return m_consensus->consensusEngine();
     }
     std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    virtual dev::eth::GroupID const& groupId() const { return m_groupId; }
+    virtual dev::GROUP_ID const& groupId() const { return m_groupId; }
     std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
 protected:
@@ -119,7 +123,7 @@ protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
-    dev::eth::GroupID m_groupId;
+    dev::GROUP_ID m_groupId;
     dev::KeyPair m_keyPair;
     std::string m_configFileName = "config";
     std::string m_postfix = ".ini";

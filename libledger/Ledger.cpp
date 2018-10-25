@@ -28,7 +28,6 @@
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libdevcore/OverlayDB.h>
 #include <libdevcore/easylog.h>
-#include <libethcore/Protocol.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
@@ -61,17 +60,25 @@ void Ledger::initLedger(
     /// init consensus
     consensusInitFactory();
 }
-/// init ini configuration
+
+/**
+ * @brief: init configuration related to the ledger with specified configuration file
+ * @param configPath: the path of the config file
+ */
 void Ledger::initConfig(std::string const& configPath)
 {
     try
     {
         ptree pt;
-        /// read the configuration file for a group
+        /// read the configuration file for a specified group
         read_ini(configPath, pt);
+        /// init params related to txpool
         initTxPoolConfig(pt);
+        /// init params related to consensus
         initConsensusConfig(pt);
+        /// init params related to sync
         initSyncConfig(pt);
+        /// db params initialization
         initDBConfig(pt);
         initGenesisConfig(pt);
     }
@@ -143,7 +150,7 @@ void Ledger::initGenesisConfig(ptree const& pt)
 void Ledger::initTxPool()
 {
     assert(m_blockChain);
-    dev::eth::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
     m_txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
 }
@@ -176,7 +183,7 @@ void Ledger::initBlockChain()
 std::shared_ptr<Consensus> Ledger::createPBFTConsensus()
 {
     assert(m_txPool && m_blockChain && m_sync && m_blockVerifier);
-    dev::eth::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
     LOG(DEBUG) << "create PBFTConsensus, baseDir:" << m_param->baseDir();
     std::shared_ptr<Consensus> pbftConsensus =
@@ -213,7 +220,7 @@ void Ledger::consensusInitFactory()
 void Ledger::initSync()
 {
     assert(m_txPool && m_blockChain && m_blockVerifier);
-    dev::eth::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), m_param->mutableGenesisParam().genesisHash,
         m_param->mutableSyncParam().idleWaitMs);
