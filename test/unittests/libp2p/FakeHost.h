@@ -21,11 +21,15 @@
  * @date 2018-09-10
  */
 #pragma once
+
+#include <initializer/SecureInitiailizer.h>
+#include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Session.h>
 #include <libp2p/SessionFace.h>
+#include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -165,8 +169,9 @@ class FakeHost : public Host
 public:
     FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         std::shared_ptr<AsioInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-        shared_ptr<SessionFactory>& _sessionFactory)
-      : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory)
+        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext)
+      : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory,
+            _sslContext)
     {
         setLastPing(chrono::steady_clock::now());
         m_run = true;
@@ -444,10 +449,15 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
+    setDataDir(dev::test::getTestPath().string() + "/fisco-bcos-data");
+    boost::property_tree::ptree pt;
+    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
+    secureInitiailizer->initConfig(pt);
+    auto sslContext = secureInitiailizer->SSLContext();
     /// create m_socketFactory
     std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<FakeSocketFactory>();
     FakeHost* m_host = new FakeHost(client_version, key_pair, network_config, m_asioInterface,
-        m_socketFactory, m_sessionFactory);
+        m_socketFactory, m_sessionFactory, sslContext);
     return m_host;
 }
 
