@@ -23,12 +23,16 @@
 
 #include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
+#include <initializer/Initializer.h>
+#include <initializer/P2PInitializer.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libtxpool/TxPool.h>
 
+using namespace dev;
+using namespace dev::initializer;
 class P2PMessageFactory : public MessageFactory
 {
 public:
@@ -39,23 +43,17 @@ public:
 static void startConsensus(Params& params)
 {
     ///< initialize component
-    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+    auto initialize = std::make_shared<Initializer>();
+    initialize->init("./config.conf");
 
-    std::shared_ptr<AsioInterface> asioInterface = std::make_shared<AsioInterface>();
-    std::shared_ptr<NetworkConfig> netConfig = params.creatNetworkConfig();
-    std::shared_ptr<SocketFactory> socketFactory = std::make_shared<SocketFactory>();
-    std::shared_ptr<SessionFactory> sessionFactory = std::make_shared<SessionFactory>();
-    std::shared_ptr<Host> host =
-        std::make_shared<Host>(params.clientVersion(), CertificateServer::GetInstance().keypair(),
-            *netConfig.get(), asioInterface, socketFactory, sessionFactory);
+    auto p2pInitializer = initialize->p2pInitializer();
+    auto p2pService = p2pInitializer->p2pService();
+    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
 
-    host->setStaticNodes(params.staticNodes());
     /// set the topic id
     GROUP_ID group_id = 2;
     PROTOCOL_ID protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
 
-    std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
-    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
     std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
     std::shared_ptr<dev::txpool::TxPool> txPool =
         std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);
@@ -87,8 +85,7 @@ static void startConsensus(Params& params)
     std::shared_ptr<dev::consensus::Consensus> pbftConsensus =
         std::make_shared<dev::consensus::PBFTConsensus>(p2pService, txPool, blockChain, blockSync,
             blockVerifier, protocol_id, "./", key_pair, minerList);
-    /// start the host
-    host->start();
+
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
     std::map<GROUP_ID, h512s> groudID2NodeList;
     groudID2NodeList[int(group_id)] = minerList;
