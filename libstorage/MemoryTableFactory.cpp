@@ -118,7 +118,7 @@ void MemoryTableFactory::setBlockNum(int blockNum)
     m_blockNum = blockNum;
 }
 
-h256 MemoryTableFactory::hash(shared_ptr<blockverifier::ExecutiveContext> context)
+h256 MemoryTableFactory::hash()
 {
     bytes data;
     LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
@@ -195,17 +195,9 @@ void MemoryTableFactory::rollback(size_t _savepoint)
 
 void MemoryTableFactory::commit() {}
 
-void MemoryTableFactory::commitDB(shared_ptr<blockverifier::ExecutiveContext> context, bool commit)
+void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
-    if (!commit)
-    {
-        LOG(DEBUG) << "Clear m_name2Table: " << m_name2Table.size();
-        m_name2Table.clear();
-        return;
-    }
-
     LOG(DEBUG) << "Submiting TablePrecompiled";
-
 
     vector<dev::storage::TableData::Ptr> datas;
 
@@ -238,11 +230,10 @@ void MemoryTableFactory::commitDB(shared_ptr<blockverifier::ExecutiveContext> co
     {
         if (m_hash == h256())
         {
-            hash(context);
+            hash();
         }
         LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
-        stateStorage()->commit(context->blockInfo().hash,
-            context->blockInfo().number.convert_to<int64_t>(), datas, context->blockInfo().hash);
+        stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
     }
 
     m_name2Table.clear();

@@ -109,7 +109,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
     return out;
 }
 
-h256 TableFactoryPrecompiled::hash(std::shared_ptr<ExecutiveContext> context)
+h256 TableFactoryPrecompiled::hash()
 {
-    return m_memoryTableFactory->hash(context);
+    return m_memoryTableFactory->hash();
 }

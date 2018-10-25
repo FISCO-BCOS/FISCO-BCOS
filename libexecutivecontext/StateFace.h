@@ -138,7 +138,7 @@ public:
 
     /// Commit levelDB data into hardisk or commit AMDB data into database (Called after commit())
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.
-    virtual void dbCommit() = 0;
+    virtual void dbCommit(h256 const& _blockHash, int64_t _blockNumber) = 0;
 
     /// Resets any uncommitted changes to the cache. Return a new root in params &root
     virtual void setRoot(h256 const& _root) = 0;

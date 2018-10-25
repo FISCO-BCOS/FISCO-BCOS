@@ -112,7 +112,7 @@ public:
 
     virtual void commit() override;
 
-    virtual void dbCommit() override;
+    virtual void dbCommit(h256 const& _blockHash, int64_t _blockNumber) override;
 
     virtual void setRoot(h256 const& _root) override;
 

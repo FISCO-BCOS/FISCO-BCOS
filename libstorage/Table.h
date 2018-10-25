@@ -66,7 +66,7 @@ public:
 
 private:
     std::vector<Entry::Ptr> m_entries;
-    bool m_dirty;
+    bool m_dirty = false;
 };
 
 class Condition : public std::enable_shared_from_this<Condition>

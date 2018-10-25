@@ -150,7 +150,7 @@ void MPTState::commit()
     m_state.commit();
 }
 
-void MPTState::dbCommit()
+void MPTState::dbCommit(h256 const&, int64_t)
 {
     m_state.db().commit();
 }

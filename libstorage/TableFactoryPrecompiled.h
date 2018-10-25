@@ -61,7 +61,7 @@ public:
 
     dev::storage::MemoryTableFactory::Ptr getmemoryTableFactory() { return m_memoryTableFactory; }
 
-    h256 hash(std::shared_ptr<ExecutiveContext> context);
+    h256 hash();
 
 private:
     dev::storage::MemoryTableFactory::Ptr m_memoryTableFactory;
