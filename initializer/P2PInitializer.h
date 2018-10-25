@@ -41,9 +41,12 @@ public:
 
     void setSSLContext(std::shared_ptr<bas::context> _SSLContext) { m_SSLContext = _SSLContext; }
 
+    void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
+
 private:
     std::shared_ptr<Service> m_p2pService;
     std::shared_ptr<bas::context> m_SSLContext;
+    KeyPair m_keyPair;
 };
 
 }  // namespace initializer
