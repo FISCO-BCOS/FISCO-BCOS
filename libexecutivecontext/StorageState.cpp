@@ -253,7 +253,7 @@ size_t StorageState::codeSize(Address const& _address) const
 
 void StorageState::createContract(Address const& _address)
 {
-    createAccount(_address, u256(0));
+    createAccount(_address, requireAccountStartNonce());
 }
 
 void StorageState::incNonce(Address const& _address)
@@ -271,6 +271,8 @@ void StorageState::incNonce(Address const& _address)
             table->update(ACCOUNT_NONCE, entry, table->newCondition());
         }
     }
+    else
+        createAccount(_address, requireAccountStartNonce() + 1);
 }
 
 void StorageState::setNonce(Address const& _address, u256 const& _newNonce)
@@ -286,6 +288,8 @@ void StorageState::setNonce(Address const& _address, u256 const& _newNonce)
             table->update(ACCOUNT_NONCE, entry, table->newCondition());
         }
     }
+    else
+        createAccount(_address, _newNonce);
 }
 
 u256 StorageState::getNonce(Address const& _address) const

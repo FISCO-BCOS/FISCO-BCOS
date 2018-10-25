@@ -31,7 +31,7 @@ namespace dev
 {
 namespace eth
 {
-enum StateType
+enum class StateType
 {
     MptState,
     StorageState
