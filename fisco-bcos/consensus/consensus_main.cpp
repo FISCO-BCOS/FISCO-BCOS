@@ -73,7 +73,7 @@ static void startConsensus(Params& params)
         LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
         exit(-1);
     }
-  
+
     /// init all the modules through ledger
     std::unordered_map<dev::Address, dev::eth::PrecompiledContract> preCompile;
     std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
