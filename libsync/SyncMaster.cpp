@@ -126,7 +126,7 @@ void SyncMaster::maintainTransactions()
             peers =
                 m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
                     bool unsent = !m_txPool->isTransactionKonwnBy(t.sha3(), m_nodeId);
-                    return unsent || !m_txPool->isTransactionKonwnBy(t.sha3(), _p->nodeId);
+                    return unsent && !m_txPool->isTransactionKonwnBy(t.sha3(), _p->nodeId);
                 });
 
             for (auto const& p : peers)
@@ -258,8 +258,11 @@ bool SyncMaster::maintainDownloadingQueue()
     currentNumber = m_blockChain->number();
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
-        assert(m_syncStatus->knownLatestHash ==
-               m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash());
+        h256 const& latestHash =
+            m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
+        LOG(TRACE) << "Download finish. Latest hash: " << latestHash
+                   << " Expected hash: " << m_syncStatus->knownLatestHash;
+        assert(m_syncStatus->knownLatestHash == latestHash);
         return true;
     }
     return false;
