@@ -41,18 +41,25 @@ class Ledger : public LedgerInterface
 {
 public:
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::eth::GroupID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir)
-      : m_service(service), m_groupId(_groupId), m_keyPair(_keyPair)
+        dev::KeyPair const& _keyPair, std::string const& _baseDir,
+        std::string const& configFileName)
+      : m_service(service),
+        m_groupId(_groupId),
+        m_keyPair(_keyPair),
+        m_configFileName(configFileName)
     {
         m_param = std::make_shared<LedgerParam>();
-        m_param->setBaseDir(_baseDir);
+        std::string prefix = _baseDir + "/group" + toString(_groupId);
+        m_param->setBaseDir(prefix);
         assert(m_service);
-        std::string configPath = _baseDir + "/" + toString(_groupId) + "/ " + m_configFileName;
-        initConfig(configPath);
+        if (m_configFileName == "")
+            m_configFileName = "./config.group" + toString(_groupId) + m_postfix;
+        initConfig(m_configFileName);
     }
 
     void startAll() override
     {
+        assert(m_sync && m_consensus);
         m_sync->start();
         m_consensus->start();
     }
@@ -109,11 +116,13 @@ private:
     void initGenesisConfig(boost::property_tree::ptree const& pt);
 
 protected:
+    std::shared_ptr<LedgerParamInterface> m_param = nullptr;
+
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
     dev::eth::GroupID m_groupId;
     dev::KeyPair m_keyPair;
-    std::string m_configFileName = "config.ini";
-    std::shared_ptr<LedgerParamInterface> m_param = nullptr;
+    std::string m_configFileName = "config";
+    std::string m_postfix = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;

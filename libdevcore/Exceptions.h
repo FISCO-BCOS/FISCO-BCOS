@@ -90,7 +90,7 @@ DEV_SIMPLE_EXCEPTION(InterfaceNotSupported);
 DEV_SIMPLE_EXCEPTION(ExternalFunctionFailure);
 DEV_SIMPLE_EXCEPTION(ConnectionToSelfException);
 DEV_SIMPLE_EXCEPTION(InitLedgerConfigFaled);
-
+DEV_SIMPLE_EXCEPTION(InvalidConsensusType);
 /**
  * @brief : error information to be added to exceptions
  */

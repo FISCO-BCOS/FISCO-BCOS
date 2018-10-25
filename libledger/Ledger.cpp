@@ -87,6 +87,7 @@ void Ledger::initConfig(std::string const& configPath)
 void Ledger::initTxPoolConfig(ptree const& pt)
 {
     m_param->mutableTxPoolParam().txPoolLimit = pt.get<uint64_t>("txPool.limit", 102400);
+    LOG(DEBUG) << "### init txPool.limit = " << m_param->mutableTxPoolParam().txPoolLimit;
 }
 
 /// init consensus confit
@@ -94,10 +95,19 @@ void Ledger::initConsensusConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().consensusType =
         pt.get<std::string>("consensus.consensusType", "pbft");
+    LOG(DEBUG) << "Init consensus.consensusType = "
+               << m_param->mutableConsensusParam().consensusType;
+
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.maxTransNum", 1000);
+    LOG(DEBUG) << "Init consensus.maxTransNum = "
+               << m_param->mutableConsensusParam().maxTransactions;
+
     m_param->mutableConsensusParam().intervalBlockTime =
         pt.get<unsigned>("consensus.intervalBlockTime", 1000);
+
+    LOG(DEBUG) << "init consensus.intervalBlockTime ="
+               << m_param->mutableConsensusParam().intervalBlockTime;
     for (auto it : pt.get_child("consensus"))
     {
         if (it.first.find("miner.") == 0)
@@ -112,6 +122,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 void Ledger::initSyncConfig(ptree const& pt)
 {
     m_param->mutableSyncParam().idleWaitMs = pt.get<unsigned>("sync.idleWaitMs", 30);
+    LOG(DEBUG) << "Init Sync.idleWaitMs = " << m_param->mutableSyncParam().idleWaitMs;
 }
 
 void Ledger::initDBConfig(ptree const& pt)
@@ -119,8 +130,9 @@ void Ledger::initDBConfig(ptree const& pt)
     /// init the basic config
     m_param->setDBType(pt.get<std::string>("statedb.dbType", "AMDB"));
     m_param->setMptState(pt.get<bool>("statedb.mpt", true));
-    std::string baseDir = m_param->baseDir() + pt.get<std::string>("statedb.dbpath", "data");
+    std::string baseDir = m_param->baseDir() + "/" + pt.get<std::string>("statedb.dbpath", "data");
     m_param->setBaseDir(baseDir);
+    LOG(DEBUG) << "### baseDir:" << m_param->baseDir();
 }
 
 void Ledger::initGenesisConfig(ptree const& pt)
@@ -166,6 +178,7 @@ std::shared_ptr<Consensus> Ledger::createPBFTConsensus()
     assert(m_txPool && m_blockChain && m_sync && m_blockVerifier);
     dev::eth::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
+    LOG(DEBUG) << "create PBFTConsensus, baseDir:" << m_param->baseDir();
     std::shared_ptr<Consensus> pbftConsensus =
         std::make_shared<PBFTConsensus>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             protocol_id, m_param->baseDir(), m_keyPair, m_param->mutableConsensusParam().minerList);
@@ -180,9 +193,20 @@ std::shared_ptr<Consensus> Ledger::createPBFTConsensus()
 /// init consensus
 void Ledger::consensusInitFactory()
 {
+    LOG(DEBUG) << "#### Configurated Consensus type:"
+               << m_param->mutableConsensusParam().consensusType;
     /// default create pbft consensus
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    {
         m_consensus = createPBFTConsensus();
+    }
+    else
+    {
+        std::string error_msg =
+            "Unsupported Consensus type:" + m_param->mutableConsensusParam().consensusType;
+        LOG(ERROR) << error_msg;
+        BOOST_THROW_EXCEPTION(dev::InvalidConsensusType() << errinfo_comment(error_msg));
+    }
 }
 
 /// init sync

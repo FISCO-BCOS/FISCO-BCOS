@@ -73,19 +73,28 @@ static void startConsensus(Params& params)
         exit(-1);
     }
     /// init all the modules through ledger
+    std::unordered_map<dev::Address, dev::eth::PrecompiledContract> preCompile;
     std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
         std::make_shared<LedgerManager<FakeLedger>>();
-    ledgerManager->initSingleLedger(p2pService, group_id, key_pair, "fisco-bcos-data");
+    ledgerManager->initSingleLedger(preCompile, p2pService, group_id, key_pair, ".");
+
     /// start the host
     host->start();
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
     std::shared_ptr<std::vector<std::string>> topics = host->topics();
     topics->push_back(toString(group_id));
     host->setTopics(topics);
+    std::cout << "##### after setTopics" << std::endl;
+    for (auto i : ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList)
+    {
+        std::cout << "#### miner:" << toHex(i) << std::endl;
+        ;
+    }
     std::map<GROUP_ID, h512s> groudID2NodeList;
     groudID2NodeList[int(group_id)] =
         ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList;
     p2pService->setGroupID2NodeList(groudID2NodeList);
+    std::cout << "##### before startAll" << std::endl;
     /// start all the modules through ledger
     ledgerManager->startAll();
     /// test pbft status

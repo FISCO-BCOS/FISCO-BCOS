@@ -140,6 +140,11 @@ void PBFTEngine::initBackupDB()
 {
     /// try-catch has already been considered by libdevcore/LevelDB.*
     std::string path = getBackupMsgPath();
+    boost::filesystem::path path_handler = boost::filesystem::path(path);
+    if (!boost::filesystem::exists(path_handler))
+    {
+        boost::filesystem::create_directories(path_handler);
+    }
     m_backupDB = std::make_shared<LevelDB>(path);
     if (!isDiskSpaceEnough(path))
     {
