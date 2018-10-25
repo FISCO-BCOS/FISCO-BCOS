@@ -71,7 +71,7 @@ std::chrono::milliseconds const c_keepAliveTimeOut = std::chrono::milliseconds(1
 
 Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
     shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-    shared_ptr<SessionFactory>& _sessionFactory)
+    shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext)
   : Worker("p2p", 0),
     m_clientVersion(_clientVersion),
     m_netConfigs(_n),
@@ -86,6 +86,7 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_asioInterface(_asioInterface),
     m_socketFactory(_socketFactory),
     m_sessionFactory(_sessionFactory),
+    m_sslContext(_sslContext),
     m_lastSendTopicSeq(std::chrono::milliseconds(0)),
     m_topicSeq(0)
 {
@@ -178,7 +179,7 @@ void Host::runAcceptor(boost::system::error_code boost_error)
         LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_tcpPublic
                   << "), P2P Start Accept";
         std::shared_ptr<SocketFace> socket =
-            m_socketFactory->create_socket(m_ioService, NodeIPEndpoint());
+            m_socketFactory->create_socket(m_ioService, *m_sslContext, NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
         /// define callback after accept connections
         m_asioInterface->async_accept(m_tcp4Acceptor, socket, m_strand,
@@ -630,7 +631,7 @@ void Host::sendTopicSeq()
 {
     if (chrono::steady_clock::now() - c_sendTopicSeqInterval < m_lastSendTopicSeq)
         return;
-    /// LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
+    LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
 
     Message::Ptr msg = std::make_shared<Message>();
     msg->setProtocolID(dev::eth::ProtocolID::AMOP);
@@ -670,7 +671,7 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
     LOG(INFO) << "Attempting connection to node "
               << "@" << _nodeIPEndpoint.name() << "," << _nodeIPEndpoint.host << " from " << id();
     std::shared_ptr<SocketFace> socket =
-        m_socketFactory->create_socket(m_ioService, _nodeIPEndpoint);
+        m_socketFactory->create_socket(m_ioService, *m_sslContext, _nodeIPEndpoint);
     // socket.reset(socket);
     m_tcpClient = socket->remoteEndpoint();
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);

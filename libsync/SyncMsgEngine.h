@@ -44,7 +44,7 @@ public:
     SyncMsgEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<SyncMasterStatus> _syncStatus, int16_t const& _protocolId,
+        std::shared_ptr<SyncMasterStatus> _syncStatus, PROTOCOL_ID const& _protocolId,
         NodeID const& _nodeId, h256 const& _genesisHash)
       : m_service(_service),
         m_txPool(_txPool),
@@ -80,7 +80,7 @@ private:
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
 
     // Internal data
-    int16_t m_protocolId;
+    PROTOCOL_ID m_protocolId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 };

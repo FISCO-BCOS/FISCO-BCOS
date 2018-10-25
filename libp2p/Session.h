@@ -146,6 +146,8 @@ private:
     /// call by doRead() to deal with mesage
     void onMessage(P2PException const& e, std::shared_ptr<Session> session, Message::Ptr message);
 
+    bool CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Session> session);
+
     Host* m_server;                        ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
     Mutex x_framing;                       ///< Mutex for the write queue.

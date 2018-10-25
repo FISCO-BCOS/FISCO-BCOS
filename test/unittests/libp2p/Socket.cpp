@@ -20,6 +20,8 @@
  * @author: yujiechen
  * @date 2018-09-19
  */
+
+#include <initializer/SecureInitiailizer.h>
 #include <libdevcore/FileSystem.h>
 #include <libp2p/Socket.h>
 #include <openssl/ssl.h>
@@ -41,8 +43,13 @@ BOOST_AUTO_TEST_CASE(testSocket)
     int port = 30303;
     NodeIPEndpoint m_endpoint(address, port, port);
     setDataDir(getTestPath().string() + "/fisco-bcos-data");
-    Socket m_socket(m_io_service, m_endpoint);
-    BOOST_CHECK(Socket::m_isInit == true);
+
+    boost::property_tree::ptree pt;
+    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
+    secureInitiailizer->initConfig(pt);
+    auto sslContext = secureInitiailizer->SSLContext();
+
+    Socket m_socket(m_io_service, *sslContext, m_endpoint);
     BOOST_CHECK(m_socket.isConnected() == false);
     BOOST_CHECK(
         SSL_get_verify_mode(m_socket.sslref().native_handle()) == boost::asio::ssl::verify_peer);

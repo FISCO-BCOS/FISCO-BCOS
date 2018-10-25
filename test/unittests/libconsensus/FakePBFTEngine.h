@@ -48,7 +48,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, h512s const& _minerList = h512s(),
+        PROTOCOL_ID const& _protocolId, h512s const& _minerList = h512s(),
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _minerList)
@@ -98,7 +98,7 @@ public:
     }
 
     Message::Ptr transDataToMessage(
-        bytesConstRef data, uint16_t const& packetType, uint16_t const& protocolId)
+        bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
     {
         return PBFTEngine::transDataToMessage(data, packetType, protocolId);
     }
@@ -181,7 +181,7 @@ template <typename T>
 class FakeConsensus
 {
 public:
-    FakeConsensus(size_t minerSize, int16_t protocolID,
+    FakeConsensus(size_t minerSize, PROTOCOL_ID protocolID,
         std::shared_ptr<SyncInterface> sync = std::make_shared<FakeBlockSync>(),
         std::shared_ptr<BlockVerifierInterface> blockVerifier =
             std::make_shared<FakeBlockverifier>(),

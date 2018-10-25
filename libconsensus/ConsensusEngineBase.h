@@ -47,7 +47,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, dev::h512s const& _minerList = dev::h512s())
+        PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
       : Worker("ConsensusEngineBase", 0),
         m_service(_service),
         m_txPool(_txPool),
@@ -112,7 +112,7 @@ public:
     }
 
     /// protocol id used when register handler to p2p module
-    int16_t const& protocolId() const override { return m_protocolId; }
+    PROTOCOL_ID const& protocolId() const override { return m_protocolId; }
     /// get account type
     ///@return NodeAccountType::MinerAccount: the node can generate and execute block
     ///@return NodeAccountType::ObserveAccout: the node can only sync block from other nodes
@@ -235,7 +235,7 @@ protected:
     /// at-least number of valid nodes
     u256 m_f = u256(0);
 
-    int16_t m_protocolId;
+    PROTOCOL_ID m_protocolId;
     /// type of this node (MinerAccount or ObserveAccount)
     NodeAccountType m_accountType;
     /// index of this node

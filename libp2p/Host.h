@@ -59,7 +59,7 @@ public:
     /// keypair and network config
     Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-        shared_ptr<SessionFactory>& _sessionFactory);
+        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext);
     virtual ~Host();
 
     /// ------get interfaces ------
@@ -226,6 +226,29 @@ public:
 
     shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
 
+    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList)
+    {
+        if (m_groupID2NodeList.find(0) != m_groupID2NodeList.end())
+        {
+            LOG(INFO) << "Host::setGroupID2NodeList, groupID can not be 0!";
+            return;
+        }
+        m_groupID2NodeList = _groupID2NodeList;
+    }
+
+    ///< If I joined this group, return true and node members for this group.
+    ///< If didnot, return false.
+    bool getNodeListByGroupID(GROUP_ID const& _groupID, h512s& _nodeList) const
+    {
+        std::map<GROUP_ID, h512s>::const_iterator it = m_groupID2NodeList.find(_groupID);
+        if (it == m_groupID2NodeList.end())
+        {
+            return false;
+        }
+        _nodeList = it->second;
+        return true;
+    }
+
     MessageFactory::Ptr messageFactory() { return m_messageFactory; }
 
     void setMessageFactory(MessageFactory::Ptr _messageFactory)
@@ -304,6 +327,7 @@ protected:  /// protected members(for unit testing)
     shared_ptr<AsioInterface> m_asioInterface;
     shared_ptr<SocketFactory> m_socketFactory;
     shared_ptr<SessionFactory> m_sessionFactory;
+    shared_ptr<ba::ssl::context> m_sslContext;
 
     bool m_run = false;
     ///< Start/stop mutex.(mutex for m_run)
@@ -351,6 +375,11 @@ protected:  /// protected members(for unit testing)
     std::shared_ptr<dev::ThreadPool> m_threadPool;
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;
+
+    ///< key is the group that the node joins
+    ///< value is the list of node members for the group
+    ///< the data is currently statically loaded and not synchronized between nodes
+    std::map<GROUP_ID, h512s> m_groupID2NodeList;
 
     MessageFactory::Ptr m_messageFactory;
 };

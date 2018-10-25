@@ -47,7 +47,7 @@ bool SyncMsgPacket::decode(
     return true;
 }
 
-Message::Ptr SyncMsgPacket::toMessage(uint16_t _protocolId)
+Message::Ptr SyncMsgPacket::toMessage(PROTOCOL_ID _protocolId)
 {
     Message::Ptr msg = std::make_shared<Message>();
 
