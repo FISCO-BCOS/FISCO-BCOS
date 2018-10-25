@@ -285,6 +285,7 @@ inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
 class LocalisedTransaction : public Transaction
 {
 public:
+    LocalisedTransaction() {}
     LocalisedTransaction(Transaction const& _t, h256 const& _blockHash, unsigned _transactionIndex,
         BlockNumber _blockNumber = 0)
       : Transaction(_t),
@@ -296,6 +297,7 @@ public:
     h256 const& blockHash() const { return m_blockHash; }
     unsigned transactionIndex() const { return m_transactionIndex; }
     BlockNumber blockNumber() const { return m_blockNumber; }
+
 
 private:
     h256 m_blockHash;

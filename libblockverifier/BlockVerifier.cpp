@@ -60,6 +60,26 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
     return executiveContext;
 }
 
+std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction(
+    const BlockHeader& blockHeader, dev::eth::Transaction const& _t)
+{
+    ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
+    try
+    {
+        BlockInfo blockInfo;
+        blockInfo.hash = blockHeader.hash();
+        blockInfo.number = blockHeader.number();
+        m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
+    }
+    catch (exception& e)
+    {
+        LOG(ERROR) << "Error:" << e.what();
+    }
+
+    EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
+    envInfo.setPrecompiledEngine(executiveContext);
+    return execute(envInfo, _t, OnOpFunc(), executiveContext);
+}
 
 std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo const& _envInfo,
     Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)

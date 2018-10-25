@@ -28,7 +28,9 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
+#include <libethcore/TransactionReceipt.h>
 #include <libevm/ExtVMFace.h>
+#include <libexecutivecontext/ExecutionResult.h>
 #include <libmptstate/State.h>
 #include <boost/function.hpp>
 #include <memory>
@@ -54,6 +56,9 @@ public:
     virtual ~BlockVerifier(){};
 
     ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
+
+    std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
 
     std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> execute(
         dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
