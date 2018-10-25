@@ -26,7 +26,7 @@
 #include <fisco-bcos/ParamParse.h>
 #include <initializer/Initializer.h>
 #include <initializer/P2PInitializer.h>
-#include <lib#include <libconsensus/pbft/PBFTConsensus.h>
+#include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libledger/LedgerManager.h>
@@ -93,10 +93,6 @@ static void initSingleGroup(std::shared_ptr<Service> p2pService,
     {
         LOG(DEBUG) << "#### miner:" << toHex(i) << std::endl;
     }
-    std::map<GROUP_ID, h512s> groudID2NodeList;
-    groudID2NodeList[int(group_id)] =
-        ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList;
-    p2pService->setGroupID2NodeList(groudID2NodeList);
     std::cout << "##### before startAll" << std::endl;
     /// test pbft status
     std::cout << "#### pbft consensus:" << ledgerManager->consensus(group_id)->consensusStatus()
@@ -127,24 +123,28 @@ static void startConsensus(Params& params)
         LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
         exit(-1);
     }
-
-    GROUP_ID groupSize = 2;
     std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
         std::make_shared<LedgerManager<FakeLedger>>();
+    std::map<GROUP_ID, h512s> groudID2NodeList;
+    LOG(DEBUG) << "### group size:" << params.groupSize();
     /// init all the modules through ledger
-    for (GROUP_ID i = 1; i <= groupSize; i++)
+    for (int i = 1; i <= params.groupSize(); i++)
     {
         LOG(DEBUG) << "### init group:" << std::to_string(i);
         initSingleGroup(p2pService, ledgerManager, i, key_pair);
+        groudID2NodeList[int(i)] =
+            ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
+        LOG(DEBUG) << "## push back minerList:"
+                   << ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
     }
+    p2pService->setGroupID2NodeList(groudID2NodeList);
     /// start all the modules through ledger
     ledgerManager->startAll();
     /// create transaction
-    /*for (GROUP_ID i = 1; i <= groupSize; i++)
+    for (GROUP_ID i = 1; i <= params.groupSize(); i++)
     {
         createTx(ledgerManager, i, params.txSpeed(), key_pair);
-    }*/
-    createTx(ledgerManager, 1, params.txSpeed(), key_pair);
+    }
     while (true)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
