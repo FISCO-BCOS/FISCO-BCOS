@@ -33,6 +33,10 @@ void Initializer::init(std::string const& _path)
     m_commonInitializer = std::make_shared<CommonInitializer>();
     m_commonInitializer->initConfig(pt);
 
+    m_secureInitiailizer = std::make_shared<SecureInitiailizer>();
+    m_secureInitiailizer->initConfig(pt);
+
     m_p2pInitializer = std::make_shared<P2PInitializer>();
+    m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
     m_p2pInitializer->initConfig(pt);
 }

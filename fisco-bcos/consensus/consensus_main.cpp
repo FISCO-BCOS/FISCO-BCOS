@@ -24,6 +24,8 @@
 #include "FakeLedger.h"
 #include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
+#include <initializer/Initializer.h>
+#include <initializer/P2PInitializer.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
@@ -31,8 +33,10 @@
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
 
-using namespace dev::ledger;
 
+using namespace dev;
+using namespace dev::ledger;
+using namespace dev::initializer;
 class P2PMessageFactory : public MessageFactory
 {
 public:
@@ -43,20 +47,17 @@ public:
 static void startConsensus(Params& params)
 {
     ///< initialize component
-    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+    auto initialize = std::make_shared<Initializer>();
+    initialize->init("./config.conf");
 
-    std::shared_ptr<AsioInterface> asioInterface = std::make_shared<AsioInterface>();
-    std::shared_ptr<NetworkConfig> netConfig = params.creatNetworkConfig();
-    std::shared_ptr<SocketFactory> socketFactory = std::make_shared<SocketFactory>();
-    std::shared_ptr<SessionFactory> sessionFactory = std::make_shared<SessionFactory>();
-    std::shared_ptr<Host> host =
-        std::make_shared<Host>(params.clientVersion(), CertificateServer::GetInstance().keypair(),
-            *netConfig.get(), asioInterface, socketFactory, sessionFactory);
+    auto p2pInitializer = initialize->p2pInitializer();
+    auto p2pService = p2pInitializer->p2pService();
+    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
 
-    host->setStaticNodes(params.staticNodes());
     /// set the topic id
-    GroupID group_id = 2;
+    GroupID group_id = 1;
     PROTOCOL_ID protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
+
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
     ///< Read the KeyPair of node from configuration file.
     auto nodePrivate = contents(getDataDir().string() + "/node.private");
@@ -72,14 +73,17 @@ static void startConsensus(Params& params)
         LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
         exit(-1);
     }
+  
     /// init all the modules through ledger
     std::unordered_map<dev::Address, dev::eth::PrecompiledContract> preCompile;
     std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
         std::make_shared<LedgerManager<FakeLedger>>();
+    /// init all modules related to the ledger
     ledgerManager->initSingleLedger(preCompile, p2pService, group_id, key_pair, ".");
 
     /// start the host
     host->start();
+
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
     std::shared_ptr<std::vector<std::string>> topics = host->topics();
     topics->push_back(toString(group_id));
