@@ -34,12 +34,12 @@ class Host;
 class SocketFactory
 {
 public:
-    virtual std::shared_ptr<SocketFace> create_socket(
-        ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
+    virtual std::shared_ptr<SocketFace> create_socket(ba::io_service& _ioService,
+        ba::ssl::context& _sslContext, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
     {
         /// default create Session
         std::shared_ptr<SocketFace> m_socket =
-            std::make_shared<Socket>(_ioService, _nodeIPEndpoint);
+            std::make_shared<Socket>(_ioService, _sslContext, _nodeIPEndpoint);
         return m_socket;
     }
 };

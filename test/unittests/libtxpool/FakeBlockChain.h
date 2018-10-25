@@ -49,7 +49,7 @@ public:
 
     void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
         CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        Options const& options = Options()) override
+        dev::p2p::Options const& options = dev::p2p::Options()) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
