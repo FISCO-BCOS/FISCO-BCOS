@@ -16,10 +16,10 @@
  */
 
 /**
- * @brief : external interface of libledger
- * @file: LedgerInterface.h
+ * @brief : initializer for DB
+ * @file: DBInitializer.h
  * @author: yujiechen
- * @date: 2018-10-23
+ * @date: 2018-10-24
  */
 #pragma once
 #include "LedgerParamInterface.h"

@@ -16,8 +16,8 @@
  */
 
 /**
- * @brief : concrete implementation of ParamInterface
- * @file : Param.h
+ * @brief : concrete implementation of LedgerParamInterface
+ * @file : LedgerParam.h
  * @author: yujiechen
  * @date: 2018-10-23
  */
