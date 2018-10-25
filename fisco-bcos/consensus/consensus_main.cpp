@@ -28,6 +28,14 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libtxpool/TxPool.h>
+
+class P2PMessageFactory : public MessageFactory
+{
+public:
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+};
+
 static void startConsensus(Params& params)
 {
     ///< initialize component
@@ -43,10 +51,11 @@ static void startConsensus(Params& params)
 
     host->setStaticNodes(params.staticNodes());
     /// set the topic id
-    uint8_t group_id = 2;
-    uint16_t protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
+    GROUP_ID group_id = 2;
+    PROTOCOL_ID protocol_id = getGroupProtoclID(group_id, ProtocolID::PBFT);
 
     std::shared_ptr<Service> p2pService = std::make_shared<Service>(host, p2pMsgHandler);
+    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
     std::shared_ptr<BlockChainInterface> blockChain = std::make_shared<FakeBlockChain>();
     std::shared_ptr<dev::txpool::TxPool> txPool =
         std::make_shared<dev::txpool::TxPool>(p2pService, blockChain, dev::eth::ProtocolID::TxPool);
@@ -81,11 +90,9 @@ static void startConsensus(Params& params)
     /// start the host
     host->start();
     std::cout << "#### protocol_id:" << protocol_id << std::endl;
-    std::shared_ptr<std::vector<std::string>> topics = host->topics();
-    topics->push_back(toString(group_id));
-    std::cout << "#### before setTopic" << std::endl;
-    host->setTopics(topics);
-    std::cout << "##### set topic" << std::endl;
+    std::map<GROUP_ID, h512s> groudID2NodeList;
+    groudID2NodeList[int(group_id)] = minerList;
+    p2pService->setGroupID2NodeList(groudID2NodeList);
     ///< start consensus
     pbftConsensus->start();
     /// test pbft status

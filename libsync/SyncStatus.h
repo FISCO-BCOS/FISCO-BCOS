@@ -43,7 +43,7 @@ namespace sync
 struct SyncStatus
 {
     SyncState state = SyncState::Idle;
-    int16_t protocolId;
+    PROTOCOL_ID protocolId;
     unsigned startBlockNumber;
     unsigned currentBlockNumber;
     unsigned highestBlockNumber;
