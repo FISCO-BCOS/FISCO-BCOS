@@ -47,8 +47,8 @@ public:
         std::shared_ptr<SyncMasterStatus> _syncStatus, PROTOCOL_ID const& _protocolId,
         NodeID const& _nodeId, h256 const& _genesisHash)
       : m_service(_service),
-        m_blockChain(_blockChain),
         m_txPool(_txPool),
+        m_blockChain(_blockChain),
         m_syncStatus(_syncStatus),
         m_protocolId(_protocolId),
         m_nodeId(_nodeId),
@@ -58,11 +58,11 @@ public:
             m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
     }
 
-    void messageHandler(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::Session> _session,
+    void messageHandler(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session,
         dev::p2p::Message::Ptr _msg);
 
 private:
-    bool checkSession(std::shared_ptr<dev::p2p::Session> _session);
+    bool checkSession(std::shared_ptr<dev::p2p::SessionFace> _session);
     bool checkPacket(bytesConstRef _msg);
     bool interpret(SyncMsgPacket const& _packet);
 
@@ -80,9 +80,9 @@ private:
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
 
     // Internal data
+    PROTOCOL_ID m_protocolId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
-    PROTOCOL_ID m_protocolId;
 };
 
 }  // namespace sync

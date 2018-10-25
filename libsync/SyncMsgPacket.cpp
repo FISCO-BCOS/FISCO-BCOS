@@ -30,7 +30,8 @@ using namespace dev::sync;
 using namespace dev::p2p;
 using namespace dev::eth;
 
-bool SyncMsgPacket::decode(std::shared_ptr<dev::p2p::Session> _session, dev::p2p::Message::Ptr _msg)
+bool SyncMsgPacket::decode(
+    std::shared_ptr<dev::p2p::SessionFace> _session, dev::p2p::Message::Ptr _msg)
 {
     if (_msg == nullptr)
         return false;
@@ -39,7 +40,7 @@ bool SyncMsgPacket::decode(std::shared_ptr<dev::p2p::Session> _session, dev::p2p
     if (!checkPacket(frame))
         return false;
 
-    packetType = (SyncPacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+    packetType = (SyncPacketType)(RLP(frame.cropped(0, 1)).toInt<unsigned>() - c_syncPacketIDBase);
     nodeId = _session->id();
     m_rlp = RLP(frame.cropped(1));
 
@@ -59,7 +60,7 @@ Message::Ptr SyncMsgPacket::toMessage(PROTOCOL_ID _protocolId)
 
 bool SyncMsgPacket::checkPacket(bytesConstRef _msg)
 {
-    if (_msg[0] > 0x7f || _msg.size() < 2)
+    if (_msg.size() < 2 || _msg[0] > 0x7f)
         return false;
     if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
         return false;
@@ -68,7 +69,7 @@ bool SyncMsgPacket::checkPacket(bytesConstRef _msg)
 
 RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
 {
-    return _s.appendRaw(bytes(1, _id)).appendList(_args);
+    return _s.appendRaw(bytes(1, _id + c_syncPacketIDBase)).appendList(_args);
 }
 
 void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)

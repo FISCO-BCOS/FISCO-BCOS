@@ -32,7 +32,7 @@ using namespace dev::sync;
 /// Push a block
 void DownloadingBlockQueue::push(BlockPtr _block)
 {
-    RecursiveGuard l(x_buffer);
+    WriteGuard l(x_buffer);
     if (m_buffer->size() >= c_maxDownloadingBlockQueueBufferSize)
     {
         LOG(WARNING) << "DownloadingBlockQueueBuffer is full with size " << m_buffer->size();
@@ -46,16 +46,18 @@ bool DownloadingBlockQueue::empty()
 {
     bool res;
     {
-        RecursiveGuard l(x_buffer);
-        res = m_blocks.empty() && m_buffer->empty();
+        ReadGuard l1(x_buffer);
+        ReadGuard l2(x_blocks);
+        res = m_blocks.empty() && (!m_buffer || m_buffer->empty());
     }
     return res;
 }
 
 size_t DownloadingBlockQueue::size()
 {
-    RecursiveGuard l1(x_buffer), l2(x_blocks);
-    size_t s = m_buffer->size() + m_blocks.size();
+    ReadGuard l1(x_buffer);
+    ReadGuard l2(x_blocks);
+    size_t s = (!m_buffer ? 0 : m_buffer->size()) + m_blocks.size();
     return s;
 }
 
@@ -64,13 +66,13 @@ BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _lim
 {
     shared_ptr<BlockPtrVec> localBuffer;
     {
-        RecursiveGuard l(x_buffer);
+        WriteGuard l(x_buffer);
         localBuffer = m_buffer;                 //
         m_buffer = make_shared<BlockPtrVec>();  // m_buffer point to a new vector
     }
 
     // pop buffer into queue
-    RecursiveGuard l(x_blocks);
+    WriteGuard l(x_blocks);
     for (BlockPtr block : *localBuffer)
     {
         if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to control
