@@ -328,8 +328,8 @@ public:
 class FakeSocketFactory : public SocketFactory
 {
 public:
-    virtual std::shared_ptr<SocketFace> create_socket(
-        ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
+    virtual std::shared_ptr<SocketFace> create_socket(ba::io_service& _ioService,
+        ba::ssl::context& _sslContext, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
     {
         std::shared_ptr<SocketFace> m_socket =
             std::make_shared<FakeSocket>(_ioService, _nodeIPEndpoint);
