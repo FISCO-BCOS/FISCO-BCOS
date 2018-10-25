@@ -30,7 +30,7 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 
 void SyncMsgEngine::messageHandler(
-    P2PException _e, std::shared_ptr<dev::p2p::Session> _session, Message::Ptr _msg)
+    P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session, Message::Ptr _msg)
 {
     if (!checkSession(_session))
     {
@@ -63,7 +63,7 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::Session> _session)
 
 bool SyncMsgEngine::checkPacket(bytesConstRef _msg)
 {
-    if (_msg[0] > 0x7f || _msg.size() < 2)
+    if (_msg.size() < 2 || _msg[0] > 0x7f)
         return false;
     if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
         return false;

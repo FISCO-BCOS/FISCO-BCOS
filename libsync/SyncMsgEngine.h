@@ -58,7 +58,7 @@ public:
             m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
     }
 
-    void messageHandler(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::Session> _session,
+    void messageHandler(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session,
         dev::p2p::Message::Ptr _msg);
 
 private:
