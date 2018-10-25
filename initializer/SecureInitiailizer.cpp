@@ -21,6 +21,7 @@
  */
 
 #include "SecureInitiailizer.h"
+#include <boost/algorithm/string/replace.hpp>
 
 using namespace dev;
 using namespace dev::initializer;
@@ -29,13 +30,7 @@ void SecureInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 {
     m_SSLContext = std::make_shared<bas::context>(bas::context::tlsv12);
 
-    vector<pair<string, Public> > certificates;
-    string nodePrivateKey;
-
-    m_SSLContext->set_options(bas::context::default_workarounds | bas::context::no_sslv2 |
-                              bas::context::no_sslv3 | bas::context::no_tlsv1);
-
-    CertificateServer::GetInstance().getCertificateList(certificates, nodePrivateKey);
+    loadFile(_pt);
 
 #if defined(SSL_CTX_set_ecdh_auto)
     SSL_CTX_set_ecdh_auto(m_SSLContext->native_handle(), 1);
@@ -50,51 +45,92 @@ void SecureInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
     m_SSLContext->set_verify_depth(3);
     m_SSLContext->set_verify_mode(bas::verify_peer);
 
-    //-------------------------------------------
-    // certificates[0]: root certificate
-    // certificates[1]: sign certificate of agency
-    // certificates[2]: sign certificate of node
-    //--------------------------------------------
     //==== add root certificate to authority
-    if (certificates[0].first != "")
+    if (m_ca != "")
     {
         m_SSLContext->add_certificate_authority(
-            boost::asio::const_buffer(certificates[0].first.c_str(), certificates[0].first.size()));
+            boost::asio::const_buffer(m_ca.c_str(), m_ca.size()));
     }
     else
     {
         LOG(ERROR) << "SecureInitiailizer::initConfig fail! Please Check ca.crt!";
         exit(-1);
     }
-    if (certificates[1].first == "")
+    if (m_agency == "")
     {
         LOG(ERROR) << "SecureInitiailizer::initConfig fail! Please Check agency.crt!";
         exit(-1);
     }
-    if (certificates[2].first == "")
+    if (m_node == "")
     {
         LOG(ERROR) << "SecureInitiailizer::initConfig fail! Please Check node.crt!";
         exit(-1);
     }
     //===== set certificates chain:
     // root certificate <--- sign certificate of agency
-    string chain = certificates[0].first + certificates[1].first;
+    std::string chain = m_ca + m_agency;
     m_SSLContext->use_certificate_chain(boost::asio::const_buffer(chain.c_str(), chain.size()));
     //==== load sign certificate of node
     m_SSLContext->use_certificate(
-        boost::asio::const_buffer(certificates[2].first.c_str(), certificates[2].first.size()),
-        bas::context::file_format::pem);
+        boost::asio::const_buffer(m_node.c_str(), m_node.size()), bas::context::file_format::pem);
 
-    if (nodePrivateKey != "")
+    if (m_nodeKey != "")
     {
         //=== load private key of node certificate
         m_SSLContext->use_private_key(
-            boost::asio::const_buffer(nodePrivateKey.c_str(), nodePrivateKey.size()),
-            bas::context_base::pem);
+            boost::asio::const_buffer(m_nodeKey.c_str(), m_nodeKey.size()), bas::context_base::pem);
     }
     else
     {
         LOG(ERROR) << "SecureInitiailizer::initConfig fail! Please Check node.key!";
         exit(-1);
     }
+}
+
+void SecureInitiailizer::loadFile(boost::property_tree::ptree const& _pt)
+{
+    std::string caCert = _pt.get<std::string>("secure.ca_cert", "${DATAPATH}/ca.crt");
+    std::string agencyCert = _pt.get<std::string>("secure.agency_cert", "${DATAPATH}/agency.crt");
+    std::string nodeCert = _pt.get<std::string>("secure.node_cert", "${DATAPATH}/node.crt");
+    std::string nodeKey = _pt.get<std::string>("secure.node_key", "${DATAPATH}/node.key");
+    std::string nodePri = _pt.get<std::string>("secure.node_pri", "${DATAPATH}/node.private");
+
+    completePath(caCert);
+    completePath(agencyCert);
+    completePath(nodeCert);
+    completePath(nodeKey);
+    completePath(nodePri);
+
+    m_ca = asString(contents(caCert));
+    m_agency = asString(contents(agencyCert));
+    m_node = asString(contents(nodeCert));
+    m_nodeKey = asString(contents(nodeKey));
+
+    LOG(INFO) << "caCert:" << caCert << "," << m_ca;
+    LOG(INFO) << "agencyCert:" << agencyCert << "," << m_agency;
+    LOG(INFO) << "nodeCert:" << nodeCert << "," << m_node;
+    LOG(INFO) << "nodePri:" << nodeKey << "," << m_nodeKey;
+
+    if (m_ca.empty() || m_agency.empty() || m_node.empty() || m_nodeKey.empty())
+    {
+        LOG(ERROR) << "Init Fail! ca.crt or agency.crt or node.crt or node.key File !";
+        exit(-1);
+    }
+
+    std::string pri = asString(contents(nodePri));
+    if (pri.size() >= 64)
+    {
+        m_keyPair = KeyPair(Secret(fromHex(pri.substr(0, 64))));
+        LOG(INFO) << "Load KeyPair " << toPublic(m_keyPair.secret());
+    }
+    else
+    {
+        LOG(ERROR) << "Load KeyPair Fail! Please Check node.private File.";
+        exit(-1);
+    }
+}
+
+void SecureInitiailizer::completePath(std::string& _path)
+{
+    boost::algorithm::replace_first(_path, "${DATAPATH}", m_dataPath + "/");
 }

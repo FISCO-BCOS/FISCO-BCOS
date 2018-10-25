@@ -34,9 +34,11 @@ void Initializer::init(std::string const& _path)
     m_commonInitializer->initConfig(pt);
 
     m_secureInitiailizer = std::make_shared<SecureInitiailizer>();
+    m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
     m_secureInitiailizer->initConfig(pt);
 
     m_p2pInitializer = std::make_shared<P2PInitializer>();
     m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
+    m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
     m_p2pInitializer->initConfig(pt);
 }
