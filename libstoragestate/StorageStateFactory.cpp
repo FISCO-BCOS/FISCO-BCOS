@@ -17,6 +17,20 @@
 
 /**
  * @brief : StorageStateFactory
- * @author: mingzhenliu
- * @date: 2018-09-21
+ * @author: xingqiangbai
+ * @date: 2018-10-26
  */
+
+#include "StorageStateFactory.h"
+#include "StorageState.h"
+
+using namespace std;
+using namespace dev;
+using namespace dev::storagestate;
+
+std::shared_ptr<eth::StateFace> StorageStateFactory::getState()
+{
+    auto storageState = make_shared<StorageState>(m_accountStartNonce);
+    // storageState->setMemoryTableFactory(_factory);
+    return storageState;
+}

@@ -32,6 +32,9 @@ namespace storage
 {
 class Table;
 class MemoryTableFactory;
+}  // namespace storage
+namespace storagestate
+{
 const char* const STORAGE_KEY = "key";
 const char* const STORAGE_VALUE = "value";
 const char* const ACCOUNT_BALANCE = "balance";
@@ -39,10 +42,7 @@ const char* const ACCOUNT_CODE_HASH = "codeHash";
 const char* const ACCOUNT_CODE = "code";
 const char* const ACCOUNT_NONCE = "nonce";
 const char* const ACCOUNT_ALIVE = "alive";
-}  // namespace storage
-namespace eth
-{
-class StorageState : public StateFace
+class StorageState : public eth::StateFace
 {
 public:
     explicit StorageState(u256 const& _accountStartNonce)
@@ -180,5 +180,5 @@ private:
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
 };
 
-}  // namespace eth
+}  // namespace storagestate
 }  // namespace dev
