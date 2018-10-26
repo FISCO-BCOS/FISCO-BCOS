@@ -42,22 +42,12 @@ public:
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile)
     {
         assert(m_param);
-        if (m_param->enableMpt())
-            openMPTStateDB();
         /// init the storage DB
         initStorageDB();
-        /// create state storage handler
-        createStateStorage();
-        /// create stateFactory
+        /// create state storage
         createStateFactory();
-        createMemoryTable();
+        /// create executive context
         createExecutiveContext(preCompile);
-    }
-
-    std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory() const
-    {
-        assert(m_memoryTableFac);
-        return m_memoryTableFac;
     }
 
     dev::storage::Storage::Ptr storage() const
@@ -73,30 +63,32 @@ public:
     }
 
 protected:
-    virtual void openMPTStateDB();
+    /// create storage DB(must be storage)
+    ///  must be open before init
     virtual void initStorageDB();
-    /// create stateStorage
-    virtual void createStateStorage();
+
+    /// mpt && storagestate(2选1)
+    /// TODO:storageStateFactory( mpt && storage 2 选1)
+    /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory();
-    /// create memoryTableFactory
-    virtual void createMemoryTable();
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile);
+        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompile);
 
 private:
     /// TODO: init AMDB storage
-    void initAMDB();
-    /// TODO: init levelDB storage
-    void initLevelDB(){};
+    void initAMDBStorage();
+    /// TOTEST: init levelDB storage
+    void initLevelDBStorage();
+    /// TODO: create AMDB/mpt stateStorage
+    void createStorageState();
+    void createMptState();
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;
-    std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> m_executiveContextFac;
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFac;
     std::shared_ptr<dev::eth::StateFactoryInterface> m_stateFactory;
     dev::storage::Storage::Ptr m_storage = nullptr;
-    dev::OverlayDB m_mptStateDB;
+    std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> m_executiveContextFac;
 };
 }  // namespace ledger
 }  // namespace dev

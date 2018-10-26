@@ -156,6 +156,7 @@ void Ledger::initDBConfig(ptree const& pt)
 void Ledger::initGenesisConfig(ptree const& pt)
 {
     m_param->mutableGenesisParam().genesisHash = pt.get<dev::h256>("genesis.hash", h256());
+    m_param->mutableGenesisParam().accountStartNonce = pt.get<u256>("genesis.nonce", u256(0x0));
 }
 
 /// init txpool
@@ -184,7 +185,6 @@ void Ledger::initBlockChain()
 {
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     m_blockChain = std::shared_ptr<BlockChainInterface>(blockChain.get());
-    blockChain->setMemoryTableFactory(m_dbInitializer->memoryTableFactory());
 }
 
 /**

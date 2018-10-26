@@ -23,7 +23,7 @@
  * @author: yujiechen
  * @date 2018-10-24
  */
-#include <fisco-bcos/consensus/FakeLedger.h>
+#include <libinitializer/Fake.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <test/tools/libutils/Common.h>
@@ -90,6 +90,7 @@ void checkParam(std::shared_ptr<LedgerParam> param)
     /// check genesis param
     BOOST_CHECK(toHex(param->mutableGenesisParam().genesisHash) ==
                 "633f252b048f5ac81a07f8696d9d806fae1baa2c8f665a6a07f07d7f683996ab");
+    BOOST_CHECK(param->mutableGenesisParam().accountStartNonce == u256(20));
 }
 /// test initConfig
 BOOST_AUTO_TEST_CASE(testInitConfig)

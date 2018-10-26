@@ -21,6 +21,7 @@
  *         fake BlockChainInterface
  *         fake SyncInterface
  *         fake BlockVerifierInterface
+ *         fake Ledger
  * @file: Fake.h
  * @author: chaychen
  * @date: 2018-10-08
@@ -33,6 +34,8 @@
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libledger/Ledger.h>
+#include <libledger/LedgerParam.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
 #include <unistd.h>
@@ -43,7 +46,7 @@ using namespace dev::blockchain;
 using namespace dev::eth;
 using namespace dev::sync;
 using namespace dev::blockverifier;
-
+using namespace dev::ledger;
 class FakeBlockChain : public BlockChainInterface
 {
 public:
@@ -155,4 +158,36 @@ public:
 
 private:
     std::shared_ptr<ExecutiveContext> m_executiveContext;
+};
+
+class FakeLedger : public Ledger
+{
+public:
+    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
+        dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
+      : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
+    {}
+    /// init the ledger(called by initializer)
+    void initLedger(
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override
+    {
+        /// init dbInitializer
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        /// init blockChain
+        initBlockChain();
+        /// intit blockVerifier
+        initBlockVerifier();
+        /// init txPool
+        initTxPool();
+        /// init sync
+        initSync();
+        /// init consensus
+        Ledger::consensusInitFactory();
+    }
+
+    /// init blockverifier related
+    void initBlockVerifier() override { m_blockVerifier = std::make_shared<FakeBlockVerifier>(); }
+    void initBlockChain() override { m_blockChain = std::make_shared<FakeBlockChain>(); }
+    /// init the blockSync
+    void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
 };
