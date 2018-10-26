@@ -21,10 +21,11 @@
  * @date 2018-10-09
  */
 
-#include "FakeLedger.h"
 #include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
+#include <initializer/SecureInitiailizer.h>
 #include <initializer/Initializer.h>
+#include <initializer/LedgerInitiailizer.h>
 #include <initializer/P2PInitializer.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/easylog.h>
@@ -108,38 +109,10 @@ static void startConsensus(Params& params)
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
     p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+    auto secureInitiailizer = initialize->secureInitiailizer();
+    KeyPair key_pair = secureInitiailizer->keyPair();
+    auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
 
-    ///< Read the KeyPair of node from configuration file.
-    auto nodePrivate = contents(getDataDir().string() + "/node.private");
-    KeyPair key_pair;
-    string pri = asString(nodePrivate);
-    if (pri.size() >= 64)
-    {
-        key_pair = KeyPair(Secret(fromHex(pri.substr(0, 64))));
-        LOG(INFO) << "Consensus Load KeyPair " << toPublic(key_pair.secret());
-    }
-    else
-    {
-        LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
-        exit(-1);
-    }
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
-        std::make_shared<LedgerManager<FakeLedger>>();
-    std::map<GROUP_ID, h512s> groudID2NodeList;
-    LOG(DEBUG) << "### group size:" << params.groupSize();
-    /// init all the modules through ledger
-    for (int i = 1; i <= params.groupSize(); i++)
-    {
-        LOG(DEBUG) << "### init group:" << std::to_string(i);
-        initSingleGroup(p2pService, ledgerManager, i, key_pair);
-        groudID2NodeList[int(i)] =
-            ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
-        LOG(DEBUG) << "## push back minerList:"
-                   << ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
-    }
-    p2pService->setGroupID2NodeList(groudID2NodeList);
-    /// start all the modules through ledger
-    ledgerManager->startAll();
     /// create transaction
     for (GROUP_ID i = 1; i <= params.groupSize(); i++)
     {

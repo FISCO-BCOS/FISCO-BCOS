@@ -22,7 +22,14 @@
 
 #pragma once
 
+///< TODO: We're using the 'Fake.h' and 'FakeLedger' to run demo, we will delete that later.
+#include "../fisco-bcos/Fake.h"
 #include "Common.h"
+#include <libethcore/PrecompiledContract.h>
+#include <libledger/LedgerManager.h>
+#include <libp2p/Service.h>
+
+using namespace dev::ledger;
 
 namespace dev
 {
@@ -35,7 +42,25 @@ public:
 
     void initConfig(boost::property_tree::ptree const& _pt);
 
+    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager() { return m_ledgerManager; }
+
+    void setPreCompile(std::unordered_map<Address, eth::PrecompiledContract> const& _preCompile)
+    {
+        m_preCompile = _preCompile;
+    }
+    void setP2PService(std::shared_ptr<Service> _p2pService) { m_p2pService = _p2pService; }
+    void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
+
 private:
+    void initSingleGroup(std::shared_ptr<LedgerManager<FakeLedger>> _ledgerManager,
+        GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList);
+
+    std::shared_ptr<LedgerManager<FakeLedger>> m_ledgerManager;
+
+    std::unordered_map<Address, eth::PrecompiledContract> m_preCompile;
+    std::shared_ptr<p2p::Service> m_p2pService;
+    KeyPair m_keyPair;
+    std::string m_groupDataDir;
 };
 
 }  // namespace initializer
