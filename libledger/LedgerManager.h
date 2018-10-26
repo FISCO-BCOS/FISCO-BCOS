@@ -22,31 +22,79 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include "Ledger.h"
 #include "LedgerInterface.h"
-#include <initializer/ParamInterface.h>
-#include <libethcore/Common.h>
+#include <libethcore/Protocol.h>
 #include <map>
 namespace dev
 {
 namespace ledger
 {
+template <typename T>
 class LedgerManager
 {
 public:
-    virtual bool initAllLedgers(
-        std::vector<std::shared_ptr<dev::initializer::LedgerParamInterface>> allLedgerParams);
-    virtual bool initSignleLedger(
-        std::shared_ptr<dev::initializer::LedgerParamInterface> ledgerParam);
+    virtual inline bool initSingleLedger(
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile,
+        std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
+        dev::KeyPair const& _keyPair, std::string const& _baseDir = "data",
+        std::string const& configFileName = "")
+    {
+        if (m_ledgerMap.count(_groupId) == 0)
+        {
+            std::shared_ptr<LedgerInterface> ledger =
+                std::make_shared<T>(service, _groupId, _keyPair, _baseDir, configFileName);
+            LOG(DEBUG) << "Init Ledger for group:" << _groupId;
+            ledger->initLedger(preCompile);
+
+            m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+            return true;
+        }
+        else
+        {
+            LOG(WARNING) << "Group " << _groupId << " has been created already";
+            return false;
+        }
+    }
+
+    virtual inline bool startByGroupID(dev::GROUP_ID const& groupId)
+    {
+        if (!m_ledgerMap.count(groupId))
+            return false;
+        m_ledgerMap[groupId]->startAll();
+        return true;
+    }
+
+    virtual inline bool stopByGroupID(dev::GROUP_ID const& groupId)
+    {
+        if (!m_ledgerMap.count(groupId))
+            return false;
+        m_ledgerMap[groupId]->stopAll();
+        return true;
+    }
+
+    virtual inline void startAll()
+    {
+        for (auto item : m_ledgerMap)
+            item.second->startAll();
+    }
+
+    virtual inline void stopAll()
+    {
+        for (auto item : m_ledgerMap)
+            item.second->stopAll();
+    }
     /// get pointer of txPool by group id
-    inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::eth::GroupID groupId)
+    inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->txPool();
     }
+
     /// get pointer of blockverifier by group id
     inline std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
-        dev::eth::GroupID groupId)
+        dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
@@ -54,29 +102,37 @@ public:
     }
     /// get pointer of blockchain by group id
     inline std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(
-        dev::eth::GroupID groupId)
+        dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockChain();
     }
     /// get pointer of consensus by group id
-    inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(dev::eth::GroupID groupId)
+    inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(
+        dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->consensus();
     }
     /// get pointer of blocksync by group id
-    inline std::shared_ptr<dev::sync::SyncInterface> sync(dev::eth::GroupID groupId)
+    inline std::shared_ptr<dev::sync::SyncInterface> sync(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->sync();
     }
 
+    inline std::shared_ptr<LedgerParamInterface> getParamByGroupId(dev::GROUP_ID const& groupId)
+    {
+        if (!m_ledgerMap.count(groupId))
+            return nullptr;
+        return m_ledgerMap[groupId]->getParam();
+    }
+
 private:
-    std::map<dev::eth::GroupID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
+    std::map<dev::GROUP_ID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
 };
 }  // namespace ledger
 }  // namespace dev

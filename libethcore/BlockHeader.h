@@ -76,6 +76,7 @@ class BlockHeader
     friend class BlockChain;
 
 public:
+    static const BlockNumber MaxBlockNumber = INT64_MAX;
     static const unsigned BasicFields = 12;
     BlockHeader();
     /// construct block or block header according to input params

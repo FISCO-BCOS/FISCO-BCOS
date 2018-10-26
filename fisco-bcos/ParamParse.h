@@ -26,6 +26,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
+#include <libethcore/Protocol.h>
 #include <libp2p/Host.h>
 #include <libp2p/Network.h>
 #include <libp2p/P2pFactory.h>
@@ -46,7 +47,8 @@ public:
         m_listenIp("127.0.0.1"),
         m_p2pPort(30303),
         m_publicIp("127.0.0.1"),
-        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json")
+        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json"),
+        m_groupSize(1)
     {
         updateBootstrapnodes();
     }
@@ -59,7 +61,8 @@ public:
         m_p2pPort(_p2pPort),
         m_txSpeed(10),
         m_publicIp(_publicIp),
-        m_bootstrapPath(_bootstrapPath)
+        m_bootstrapPath(_bootstrapPath),
+        m_groupSize(1)
     {
         updateBootstrapnodes();
     }
@@ -71,7 +74,8 @@ public:
         m_p2pPort(30303),
         m_txSpeed(10),
         m_publicIp("127.0.0.1"),
-        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json")
+        m_bootstrapPath(getDataDir().string() + "/bootstrapnodes.json"),
+        m_groupSize(1)
     {
         initParams(vm, option);
         updateBootstrapnodes();
@@ -92,6 +96,8 @@ public:
             m_bootstrapPath = vm["bootstrap"].as<std::string>();
         if (vm.count("txSpeed") || vm.count("t"))
             m_txSpeed = vm["txSpeed"].as<float>();
+        if (vm.count("groupSize") || vm.count("n"))
+            m_groupSize = vm["groupSize"].as<int>();
     }
     /// --- set interfaces ---
     void setClientVersion(std::string const& _clientVersion) { m_clientVersion = _clientVersion; }
@@ -103,7 +109,7 @@ public:
     const std::string& listenIp() const { return m_listenIp; }
     const uint16_t& p2pPort() const { return m_p2pPort; }
     const std::string& publicIp() const { return m_publicIp; }
-
+    const int groupSize() const { return m_groupSize; }
     /// --- init NetworkConfig ----
     std::shared_ptr<NetworkConfig> creatNetworkConfig()
     {
@@ -189,6 +195,7 @@ private:
     std::string m_bootstrapPath;
     h512s m_minerList;
     std::map<NodeIPEndpoint, NodeID> m_staticNodes;
+    dev::GROUP_ID m_groupSize;
 };
 
 static Params initCommandLine(int argc, const char* argv[])
@@ -201,6 +208,7 @@ static Params initCommandLine(int argc, const char* argv[])
         "listen ip address")("p2p_port,p", boost::program_options::value<uint16_t>(), "p2p port")(
         "bootstrap,b", boost::program_options::value<std::string>(), "path of bootstrapnodes.json")(
         "txSpeed,t", boost::program_options::value<float>(), "transaction generate speed")(
+        "groupSize,n", boost::program_options::value<int>(), "group size")(
         "help,h", "help of p2p module of FISCO-BCOS");
 
     boost::program_options::variables_map vm;
