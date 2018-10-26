@@ -21,13 +21,14 @@
  * @date 2018-10-09
  */
 
-#include "FakeLedger.h"
-#include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
+#include <libinitializer/Fake.h>
 #include <libinitializer/Initializer.h>
+#include <libinitializer/LedgerInitiailizer.h>
 #include <libinitializer/P2PInitializer.h>
+#include <libinitializer/SecureInitiailizer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
 
@@ -75,26 +76,6 @@ static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
     }
 }
 
-/// init a single group
-static void initSingleGroup(std::shared_ptr<Service> p2pService,
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager, GROUP_ID const& group_id,
-    KeyPair const& key_pair)
-{
-    std::unordered_map<dev::Address, dev::eth::PrecompiledContract> preCompile;
-    /// init all modules related to the ledger
-    ledgerManager->initSingleLedger(preCompile, p2pService, group_id, key_pair);
-    LOG(DEBUG) << "##### Group id:" << std::to_string(group_id) << std::endl;
-
-    for (auto i : ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList)
-    {
-        LOG(DEBUG) << "#### miner:" << toHex(i) << std::endl;
-    }
-    std::cout << "##### before startAll" << std::endl;
-    /// test pbft status
-    std::cout << "#### pbft consensus:" << ledgerManager->consensus(group_id)->consensusStatus()
-              << std::endl;
-}
-
 static void startConsensus(Params& params)
 {
     ///< initialize component
@@ -104,38 +85,10 @@ static void startConsensus(Params& params)
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
     p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+    auto secureInitiailizer = initialize->secureInitiailizer();
+    KeyPair key_pair = secureInitiailizer->keyPair();
+    auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
 
-    ///< Read the KeyPair of node from configuration file.
-    auto nodePrivate = contents(getDataDir().string() + "/node.private");
-    KeyPair key_pair;
-    string pri = asString(nodePrivate);
-    if (pri.size() >= 64)
-    {
-        key_pair = KeyPair(Secret(fromHex(pri.substr(0, 64))));
-        LOG(INFO) << "Consensus Load KeyPair " << toPublic(key_pair.secret());
-    }
-    else
-    {
-        LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
-        exit(-1);
-    }
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
-        std::make_shared<LedgerManager<FakeLedger>>();
-    std::map<GROUP_ID, h512s> groudID2NodeList;
-    LOG(DEBUG) << "### group size:" << params.groupSize();
-    /// init all the modules through ledger
-    for (int i = 1; i <= params.groupSize(); i++)
-    {
-        LOG(DEBUG) << "### init group:" << std::to_string(i);
-        initSingleGroup(p2pService, ledgerManager, i, key_pair);
-        groudID2NodeList[int(i)] =
-            ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
-        LOG(DEBUG) << "## push back minerList:"
-                   << ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
-    }
-    p2pService->setGroupID2NodeList(groudID2NodeList);
-    /// start all the modules through ledger
-    ledgerManager->startAll();
     /// create transaction
     createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
 }
