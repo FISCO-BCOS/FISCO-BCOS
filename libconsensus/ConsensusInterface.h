@@ -22,6 +22,7 @@
  */
 #pragma once
 #include "Common.h"
+#include <libethcore/Protocol.h>
 namespace dev
 {
 class ConsensusStatus;
@@ -47,7 +48,7 @@ public:
     virtual const std::string consensusStatus() const = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual int16_t const& protocolId() const = 0;
+    virtual PROTOCOL_ID const& protocolId() const = 0;
 
     /// get node account type
     virtual NodeAccountType accountType() = 0;

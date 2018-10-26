@@ -26,7 +26,7 @@ namespace dev
 namespace p2p
 {
 bool P2PMsgHandler::addProtocolID2Handler(
-    int16_t protocolID, CallbackFuncWithSession const& callback)
+    PROTOCOL_ID protocolID, CallbackFuncWithSession const& callback)
 {
     RecursiveGuard l(x_protocolID2Handler);
     if (m_protocolID2Handler->find(protocolID) == m_protocolID2Handler->end())
@@ -41,7 +41,8 @@ bool P2PMsgHandler::addProtocolID2Handler(
     }
 }
 
-bool P2PMsgHandler::getHandlerByProtocolID(int16_t protocolID, CallbackFuncWithSession& callback)
+bool P2PMsgHandler::getHandlerByProtocolID(
+    PROTOCOL_ID protocolID, CallbackFuncWithSession& callback)
 {
     RecursiveGuard l(x_protocolID2Handler);
     auto it = m_protocolID2Handler->find(protocolID);
@@ -57,7 +58,7 @@ bool P2PMsgHandler::getHandlerByProtocolID(int16_t protocolID, CallbackFuncWithS
     }
 }
 
-bool P2PMsgHandler::eraseHandlerByProtocolID(int16_t protocolID)
+bool P2PMsgHandler::eraseHandlerByProtocolID(PROTOCOL_ID protocolID)
 {
     RecursiveGuard l(x_protocolID2Handler);
     if (m_protocolID2Handler->find(protocolID) != m_protocolID2Handler->end())

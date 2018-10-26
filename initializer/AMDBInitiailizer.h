@@ -1,4 +1,3 @@
-
 /*
     This file is part of FISCO-BCOS.
 
@@ -15,15 +14,30 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file RLPXSocket.cpp
- * @author toxotguo
- * @date 2018
- *
- * * @ author: yujiechen
- * @ date: 2018-09-17
- * @ modification: rename RLPXSocket.cpp to Socket.cpp
+/** @file AMDBInitiailizer.h
+ *  @author chaychen
+ *  @modify first draft
+ *  @date 20181022
  */
-#include "Socket.h"
 
-ba::ssl::context Socket::m_sslContext(ba::ssl::context::tlsv12);
-bool Socket::m_isInit = false;
+#pragma once
+
+#include "Common.h"
+
+namespace dev
+{
+namespace initializer
+{
+class AMDBInitiailizer : public std::enable_shared_from_this<AMDBInitiailizer>
+{
+public:
+    typedef std::shared_ptr<AMDBInitiailizer> Ptr;
+
+    void initConfig(boost::property_tree::ptree const& _pt);
+
+private:
+};
+
+}  // namespace initializer
+
+}  // namespace dev

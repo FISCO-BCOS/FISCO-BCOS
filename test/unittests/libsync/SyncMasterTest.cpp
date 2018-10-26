@@ -44,7 +44,7 @@ namespace test
 class SyncFixture : public TestOutputHelperFixture
 {
 public:
-    const int16_t c_protocolId = 66;
+    const PROTOCOL_ID c_protocolId = 66;
     const bytes c_txBytes = fromHex(
         "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
         "000000000000003ca576d469d7aa0244071d27eb33c5629753593e000000000000000000000000000000000000"

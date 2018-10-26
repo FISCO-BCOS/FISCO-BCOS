@@ -49,7 +49,7 @@ public:
     virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
 
     virtual void registerHandlerByProtoclID(
-        int16_t protocolID, CallbackFuncWithSession handler) = 0;
+        PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
 
     virtual void registerHandlerByTopic(
         std::string const& topic, CallbackFuncWithSession handler) = 0;
@@ -64,10 +64,19 @@ public:
     ///< Get connecting sessions by topicID which is groupID and can be got by protocolID.
     ///< TODO: Whether the session list needs caching, especially when the consensus module calls.
 
-    virtual SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const = 0;
+    virtual SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const = 0;
 
     ///< Quickly determine whether to connect to a particular node.
     virtual bool isConnected(NodeID const& _nodeID) const = 0;
+
+    ///< One-time loading the list of node members for a group.
+    virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) = 0;
+
+    ///< interface to set and get topics
+    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
+    virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
+
+    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
 };
 
 }  // namespace p2p
