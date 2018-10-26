@@ -11,4 +11,4 @@ target_include_directories(blockverifier PRIVATE ${BOOST_INCLUDE_DIR})
 endif()
 
 target_include_directories(blockverifier PRIVATE ..)
-target_link_libraries(blockverifier storage evmc z dl)
+target_link_libraries(blockverifier storage executivecontext evmc z dl)

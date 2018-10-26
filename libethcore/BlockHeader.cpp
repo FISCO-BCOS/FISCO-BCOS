@@ -255,7 +255,7 @@ void BlockHeader::populateFromParent(BlockHeader const& _parent)
 void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRef _block) const
 {
     /// check block number
-    if (m_number >= INT64_MAX || m_number < 0)
+    if (m_number >= MaxBlockNumber || m_number < 0)
     {
         BOOST_THROW_EXCEPTION(InvalidNumber());
     }
