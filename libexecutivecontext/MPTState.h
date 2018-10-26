@@ -96,7 +96,7 @@ public:
     // virtual std::map<h256, std::pair<u256, u256>> storage(Address const& _contract) const
     // override;
 
-    virtual bytes const& code(Address const& _addr) const override;
+    virtual bytes const code(Address const& _addr) const override;
 
     virtual h256 codeHash(Address const& _contract) const override;
 

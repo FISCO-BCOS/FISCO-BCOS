@@ -108,7 +108,7 @@ public:
     /// @returns bytes() if no account exists at that address.
     /// @warning The reference to the code is only valid until the access to
     ///          other account. Do not keep it.
-    virtual bytes const& code(Address const& _addr) const = 0;
+    virtual bytes const code(Address const& _addr) const = 0;
 
     /// Get the code hash of an account.
     /// @returns EmptySHA3 if no account exists at that address or if there is no code associated

@@ -47,7 +47,7 @@ public:
             if (it != tableData->data.end())
                 return it->second;
         }
-        return nullptr;
+        return std::make_shared<Entries>();
     }
     virtual size_t commit(
         h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash) override

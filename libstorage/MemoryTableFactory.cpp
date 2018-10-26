@@ -80,7 +80,7 @@ Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const stri
     });
 
     memoryTable->init(tableName);
-
+    m_name2Table.insert({tableName, memoryTable});
     return memoryTable;
 }
 
@@ -89,7 +89,7 @@ Table::Ptr MemoryTableFactory::createTable(h256 blockHash, int64_t num, const st
 {
     LOG(DEBUG) << "Create Table:" << blockHash << " num:" << num << " table:" << tableName;
 
-    auto sysTable = openTable(blockHash, num, SYS_MINERS);
+    auto sysTable = openTable(blockHash, num, SYS_TABLES);
 
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());

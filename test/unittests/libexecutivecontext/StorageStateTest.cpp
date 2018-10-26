@@ -24,6 +24,7 @@
 #include "libexecutiveContext/StorageState.h"
 #include "../libstorage/MemoryStorage.h"
 #include "libstorage/MemoryTableFactory.h"
+#include "libdevcore/SHA3.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -47,8 +48,8 @@ BOOST_FIXTURE_TEST_SUITE(StorageState, StorageStateFixture);
 
 BOOST_AUTO_TEST_CASE(Balance)
 {
-    Address addr1("0x10001");
-    Address addr2("0x10002");
+    Address addr1(0x100001);
+    Address addr2(0x100002);
     m_state.addBalance(addr1, u256(10));
     BOOST_TEST(m_state.balance(addr1) == u256(10));
     m_state.addBalance(addr1, u256(15));
@@ -60,31 +61,37 @@ BOOST_AUTO_TEST_CASE(Balance)
     m_state.transferBalance(addr2, addr1, u256(55));
 
     BOOST_TEST(m_state.balance(addr2) == u256(45));
-    BOOST_TEST(m_state.balance(addr1) == u256(67));
+    BOOST_TEST(m_state.balance(addr1) == u256(77));
 }
 
 BOOST_AUTO_TEST_CASE(Account)
 {
-    Address addr1("0x10001");
+    Address addr1(0x100001);
     auto isUse = m_state.addressInUse(addr1);
     BOOST_TEST(isUse == false);
     m_state.createContract(addr1);
+    isUse = m_state.addressInUse(addr1);
     BOOST_TEST(isUse == true);
+    auto balance = m_state.balance(addr1);
+    BOOST_TEST(balance == u256(0));
+    auto nonce = m_state.getNonce(addr1);
+    BOOST_TEST(nonce == u256(0));
+    auto hash = m_state.codeHash(addr1);
+    BOOST_TEST(hash == EmptySHA3);
     auto sign = m_state.accountNonemptyAndExisting(addr1);
     BOOST_TEST(sign == false);
     m_state.kill(addr1);
     m_state.rootHash();
     m_state.noteAccountStartNonce(u256(0));
-    auto nonce = m_state.accountStartNonce();
+    nonce = m_state.accountStartNonce();
     BOOST_TEST(nonce == u256(0));
 }
 
 BOOST_AUTO_TEST_CASE(Storage)
 {
-    Address addr1("0x10001");
+    Address addr1(0x100001);
     m_state.addBalance(addr1, u256(10));
     auto hash = m_state.storageRoot(addr1);
-    BOOST_TEST(hash == h256());
     auto value = m_state.storage(addr1, u256(123));
     BOOST_TEST(value == u256());
     m_state.setStorage(addr1, u256(123), u256(456));
@@ -95,11 +102,11 @@ BOOST_AUTO_TEST_CASE(Storage)
 
 BOOST_AUTO_TEST_CASE(Code)
 {
-    Address addr1("0x10001");
+    Address addr1(0x100001);
     m_state.addBalance(addr1, u256(10));
     auto code = m_state.code(addr1);
     BOOST_TEST(code == NullBytes);
-    std::string codeString("tttttttttttttt");
+    std::string codeString("aaaaaaaaaaaaa");
     code = bytes(codeString.begin(), codeString.end());
     m_state.setCode(addr1, bytes(codeString.begin(), codeString.end()));
     auto code2 = m_state.code(addr1);
@@ -113,7 +120,7 @@ BOOST_AUTO_TEST_CASE(Code)
 
 BOOST_AUTO_TEST_CASE(Nonce)
 {
-    Address addr1("0x10001");
+    Address addr1(0x100001);
     m_state.addBalance(addr1, u256(10));
     auto nonce = m_state.getNonce(addr1);
     BOOST_TEST(nonce == m_state.accountStartNonce());
@@ -127,7 +134,7 @@ BOOST_AUTO_TEST_CASE(Nonce)
 
 BOOST_AUTO_TEST_CASE(Operate)
 {
-    Address addr1("0x10001");
+    Address addr1(0x100001);
     auto savepoint1 = m_state.savepoint();
     m_state.addBalance(addr1, u256(10));
     m_state.commit();

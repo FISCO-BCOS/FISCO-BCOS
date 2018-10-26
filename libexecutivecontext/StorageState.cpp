@@ -42,7 +42,7 @@ bool StorageState::accountNonemptyAndExisting(Address const& _address) const
     auto table = getTable(_address);
     if (table)
     {
-        if (balance(_address) > 0 || codeHash(_address) != EmptySHA3 ||
+        if (balance(_address) > u256(0) || codeHash(_address) != EmptySHA3 ||
             getNonce(_address) != m_accountStartNonce)
             return true;
     }
@@ -57,8 +57,8 @@ bool StorageState::addressHasCode(Address const& _address) const
         auto entries = table->select(ACCOUNT_CODE_HASH, table->newCondition());
         if (entries->size() != 0u)
         {
-            auto codeHash = h256(entries->get(0)->getField(STORAGE_VALUE));
-            return codeHash != Invalid256;
+            auto codeHash = h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
+            return codeHash != EmptySHA3;
         }
     }
     return false;
@@ -89,13 +89,13 @@ void StorageState::addBalance(Address const& _address, u256 const& _amount)
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance += _amount;
-            entry->setField(ACCOUNT_BALANCE, balance.str());
+            entry->setField(STORAGE_VALUE, balance.str());
             table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         }
     }
     else
     {
-        createAccount(_address, _amount);
+        createAccount(_address, requireAccountStartNonce(), _amount);
     }
 }
 
@@ -112,7 +112,7 @@ void StorageState::subBalance(Address const& _address, u256 const& _amount)
             if (balance < _amount)
                 BOOST_THROW_EXCEPTION(NotEnoughCash());
             balance -= _amount;
-            entry->setField(ACCOUNT_BALANCE, balance.str());
+            entry->setField(STORAGE_VALUE, balance.str());
             table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         }
     }
@@ -129,13 +129,13 @@ void StorageState::setBalance(Address const& _address, u256 const& _amount)
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance = _amount;
-            entry->setField(ACCOUNT_BALANCE, balance.str());
+            entry->setField(STORAGE_VALUE, balance.str());
             table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         }
     }
     else
     {
-        createAccount(_address, _amount);
+        createAccount(_address, requireAccountStartNonce(), _amount);
     }
 }
 
@@ -189,10 +189,8 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
     if (table)
     {
         auto entry = table->newEntry();
-        entry->setField(STORAGE_KEY, ACCOUNT_CODE);
         entry->setField(STORAGE_VALUE, toHex(_code));
         table->update(ACCOUNT_CODE, entry, table->newCondition());
-        entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
         entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
     }
@@ -210,7 +208,7 @@ void StorageState::kill(Address _address)
         table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         entry->setField(STORAGE_VALUE, "");
         table->update(ACCOUNT_CODE, entry, table->newCondition());
-        entry->setField(STORAGE_VALUE, "");
+        entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
         entry->setField(STORAGE_VALUE, "false");
         table->update(ACCOUNT_ALIVE, entry, table->newCondition());
@@ -218,7 +216,7 @@ void StorageState::kill(Address _address)
     clear();
 }
 
-bytes const& StorageState::code(Address const& _address) const
+bytes const StorageState::code(Address const& _address) const
 {
     auto table = getTable(_address);
     if (table)
@@ -240,10 +238,10 @@ h256 StorageState::codeHash(Address const& _address) const
         auto entries = table->select(ACCOUNT_CODE_HASH, table->newCondition());
         if (entries->size() != 0u)
         {
-            return h256(entries->get(0)->getField(STORAGE_VALUE));
+            return h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
         }
     }
-    return h256();
+    return EmptySHA3;
 }
 
 size_t StorageState::codeSize(Address const& _address) const
@@ -356,26 +354,29 @@ void StorageState::rollback(size_t _savepoint)
 
 void StorageState::clear() {}
 
-void StorageState::createAccount(Address const& _address, u256 const& _amount)
+void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)
 {
-    assert(!addressInUse(_address) && "Account already exists");
     std::string tableName("_contract_data_" + _address.hex() + "_");
     auto table =
         m_memoryTableFactory->createTable(h256(), 0, tableName, STORAGE_KEY, STORAGE_VALUE);
+
     auto entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_BALANCE);
     entry->setField(STORAGE_VALUE, _amount.str());
     table->insert(ACCOUNT_BALANCE, entry);
     entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-    entry->setField(STORAGE_VALUE, "");
+    entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
     table->insert(ACCOUNT_CODE_HASH, entry);
+    entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_CODE);
     entry->setField(STORAGE_VALUE, "");
     table->insert(ACCOUNT_CODE, entry);
+    entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_NONCE);
-    entry->setField(STORAGE_VALUE, m_accountStartNonce.str());
+    entry->setField(STORAGE_VALUE, _nonce.str());
     table->insert(ACCOUNT_NONCE, entry);
+    entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_ALIVE);
     entry->setField(STORAGE_VALUE, "true");
     table->insert(ACCOUNT_CODE, entry);
