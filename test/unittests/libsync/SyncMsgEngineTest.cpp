@@ -115,8 +115,8 @@ BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
     BOOST_CHECK(fakeStatusPtr->bq().size() == 1);
-    auto blockPtrVec = fakeStatusPtr->bq().popSequent(fakeBlock.header().number(), 1);
-    BOOST_CHECK(blockPtrVec[0]->equalAll(fakeBlock));
+    auto block = fakeStatusPtr->bq().top(true);
+    BOOST_CHECK(block->equalAll(fakeBlock));
 }
 
 BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
