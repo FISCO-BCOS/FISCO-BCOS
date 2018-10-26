@@ -23,15 +23,12 @@
 
 #include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
-#include <initializer/Initializer.h>
-#include <initializer/LedgerInitiailizer.h>
-#include <initializer/P2PInitializer.h>
-#include <initializer/SecureInitiailizer.h>
-#include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
+#include <libinitializer/LedgerInitiailizer.h>
 #include <libinitializer/P2PInitializer.h>
+#include <libinitializer/SecureInitiailizer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
 
