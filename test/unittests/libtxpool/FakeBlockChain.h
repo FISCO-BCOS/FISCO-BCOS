@@ -49,12 +49,13 @@ public:
 
     void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
         CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        Options const& options = Options()) override
+        dev::p2p::Options const& options = dev::p2p::Options()) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
         else
             m_asyncSend[nodeID] = 1;
+        m_asyncSendMsgs[nodeID] = message;
     }
     size_t getAsyncSendSizeByNodeID(NodeID const& nodeID)
     {
@@ -62,12 +63,22 @@ public:
             return 0;
         return m_asyncSend[nodeID];
     }
+
+    Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    {
+        auto msg = m_asyncSendMsgs.find(nodeID);
+        if (msg == m_asyncSendMsgs.end())
+            return nullptr;
+        return msg->second;
+    }
+
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const& nodeId) const { return m_connected; }
 
 private:
     SessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
+    std::map<NodeID, Message::Ptr> m_asyncSendMsgs;
     bool m_connected;
 };
 class FakeTxPool : public TxPool
@@ -129,6 +140,10 @@ public:
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
+    {
+        return LocalisedTransaction();
+    }
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
     {
         return TransactionReceipt();

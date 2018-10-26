@@ -39,6 +39,8 @@ target_link_libraries(mini-consensus sync)
 target_link_libraries(mini-consensus txpool)
 target_link_libraries(mini-consensus blockchain)
 target_link_libraries(mini-consensus consensus)
+target_link_libraries(mini-consensus ledger)
+target_link_libraries(mini-consensus initializer)
 
 if (UNIX)
 target_link_libraries(mini-consensus pthread)

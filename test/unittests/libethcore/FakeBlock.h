@@ -125,14 +125,14 @@ public:
         m_blockHeader.setNumber(int64_t(0));
         m_blockHeader.setGasLimit(u256(3000000));
         m_blockHeader.setGasUsed(u256(100000));
-        uint64_t current_time = utcTime();
+        uint64_t current_time = 100000;  // utcTime();
         m_blockHeader.setTimestamp(current_time);
         m_blockHeader.appendExtraDataArray(jsToBytes("0x1020"));
         m_blockHeader.setSealer(u256(12));
         std::vector<h512> sealer_list;
         for (unsigned int i = 0; i < 10; i++)
         {
-            sealer_list.push_back(toPublic(Secret::random()));
+            sealer_list.push_back(toPublic(Secret(h256(i))));
         }
         m_blockHeader.setSealerList(sealer_list);
     }

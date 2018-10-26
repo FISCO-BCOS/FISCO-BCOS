@@ -71,6 +71,7 @@ void SyncMaster::doWork()
     }
 
     // Always do
+    maintainPeersConnection();
     maintainPeersStatus();
 }
 
@@ -89,7 +90,7 @@ void SyncMaster::workLoop()
 
 SyncStatus SyncMaster::status() const
 {
-    RecursiveGuard l(x_sync);
+    ReadGuard l(x_sync);
     SyncStatus res;
     res.state = m_state;
     res.protocolId = m_protocolId;
@@ -108,26 +109,32 @@ void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
-    auto ts = m_txPool->topTransactionsCondition(
-        c_maxSendTransactions, [&](Transaction const& _tx) { return !_tx.hasSent(); });
+    auto ts =
+        m_txPool->topTransactionsCondition(c_maxSendTransactions, [&](Transaction const& _tx) {
+            bool unsent = !m_txPool->isTransactionKonwnBy(_tx.sha3(), m_nodeId);
+            return unsent;
+        });
 
-
+    LOG(DEBUG) << ts.size() << " transactions need to broadcast";
     {
-        Guard l(x_transactions);
         for (size_t i = 0; i < ts.size(); ++i)
         {
             auto const& t = ts[i];
             NodeIDs peers;
-            unsigned _percent = t->hasImportPeers() ? 25 : 100;
+            unsigned _percent = m_txPool->isTransactionKonwnBySomeone(t.sha3()) ? 25 : 100;
 
-            peers = m_syncStatus->randomSelection(_percent,
-                [&](std::shared_ptr<SyncPeerStatus> _p) { return !t->hasImportPeer(_p->nodeId); });
+            peers =
+                m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
+                    bool unsent = !m_txPool->isTransactionKonwnBy(t.sha3(), m_nodeId);
+                    return unsent && !m_txPool->isTransactionKonwnBy(t.sha3(), _p->nodeId);
+                });
 
             for (auto const& p : peers)
+            {
                 peerTransactions[p].push_back(i);
-
-            if (!peers.empty())
-                t->setHasSent();
+                m_txPool->transactionIsKonwnBy(t.sha3(), p);
+                m_txPool->transactionIsKonwnBy(t.sha3(), m_nodeId);
+            }
         }
     }
 
@@ -138,7 +145,7 @@ void SyncMaster::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs += ts[i]->rlp();
+            txRLPs += ts[i].rlp();
 
         SyncTransactionsPacket packet;
         packet.encode(txsSize, txRLPs);
@@ -148,6 +155,8 @@ void SyncMaster::maintainTransactions()
 
         return true;
     });
+
+    LOG(DEBUG) << " maintain transaction finish";
 }
 
 void SyncMaster::maintainBlocks()
@@ -187,33 +196,50 @@ void SyncMaster::maintainPeersStatus()
         return;  // no need to sync
     else
     {
-        RecursiveGuard l(m_syncStatus->x_known);
+        WriteGuard l(m_syncStatus->x_known);
         m_syncStatus->knownHighestNumber = maxPeerNumber;
         m_syncStatus->knownLatestHash = latestHash;
         noteDownloadingBegin();
     }
 
-    // Select some peers to request blocks by c_maxRequestBlocks
-    for (int64_t from = currentNumber; from < maxPeerNumber + 1; from += c_maxRequestBlocks)
+    // Sharding by c_maxRequestBlocks to request blocks
+    size_t shardNumber =
+        (maxPeerNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
+    size_t shard = 0;
+    while (shard < shardNumber)
     {
-        // [from, to)
-        int64_t to = min(from + c_maxRequestBlocks, maxPeerNumber + 1);
+        bool thisTurnFound = false;
+        m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+            // shard: [from, to]
+            int64_t from = currentNumber + 1 + shard * c_maxRequestBlocks;
+            int64_t to = min(from + c_maxRequestBlocks - 1, maxPeerNumber);
+            if (_p->number < to)
+                return true;  // exit, to next peer
 
-        // Select 1 node to request
-        NodeIDs peers = m_syncStatus->randomSelectionSize(
-            1, [&](std::shared_ptr<SyncPeerStatus> _p) { return _p->number < to; });
-
-        for (auto peer : peers)
-        {
+            // found a peer
+            thisTurnFound = true;
             SyncReqBlockPacket packet;
-            unsigned size = to - from;
+            unsigned size = to - from + 1;
             packet.encode(from, size);
-            m_service->asyncSendMessageByNodeID(peer, packet.toMessage(m_protocolId));
-            LOG(TRACE) << "Request blocks [" << from << ", " << to << "] to " << peer;
+            m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
+            LOG(TRACE) << "Request blocks [" << from << ", " << to << "] to " << _p->nodeId;
+
+            ++shard;  // shard move
+
+            return shard < shardNumber;
+        });
+
+        if (!thisTurnFound)
+        {
+            int64_t from = currentNumber + shard * c_maxRequestBlocks;
+            int64_t to = min(from + c_maxRequestBlocks - 1, maxPeerNumber);
+
+            LOG(ERROR) << "Couldn't find any peers to request blocks [" << from << ", " << to
+                       << "]";
+            break;
         }
     }
 }
-
 
 bool SyncMaster::maintainDownloadingQueue()
 {
@@ -232,9 +258,34 @@ bool SyncMaster::maintainDownloadingQueue()
     currentNumber = m_blockChain->number();
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
-        assert(m_syncStatus->knownLatestHash ==
-               m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash());
+        h256 const& latestHash =
+            m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
+        LOG(TRACE) << "Download finish. Latest hash: " << latestHash
+                   << " Expected hash: " << m_syncStatus->knownLatestHash;
+        assert(m_syncStatus->knownLatestHash == latestHash);
         return true;
     }
     return false;
+}
+
+void SyncMaster::maintainPeersConnection()
+{
+    // Delete inactive peers
+    NodeIDs nodeIds = m_syncStatus->peers();
+    for (NodeID const& id : nodeIds)
+    {
+        if (!m_service->isConnected(id))
+            m_syncStatus->deletePeer(id);
+    }
+
+    // Add new peers
+    SessionInfos sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    for (auto const& session : sessions)
+    {
+        if (!m_syncStatus->hasPeer(session.nodeID))
+        {
+            SyncPeerInfo newPeer{session.nodeID, 0, m_genesisHash, m_genesisHash};
+            m_syncStatus->newSyncPeerStatus(newPeer);
+        }
+    }
 }

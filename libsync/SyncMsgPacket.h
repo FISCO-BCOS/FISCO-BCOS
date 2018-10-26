@@ -37,7 +37,7 @@ class SyncMsgPacket
 public:
     SyncMsgPacket() {}
     /// Extract data by decoding the message
-    bool decode(std::shared_ptr<dev::p2p::Session> _session, dev::p2p::Message::Ptr _msg);
+    bool decode(std::shared_ptr<dev::p2p::SessionFace> _session, dev::p2p::Message::Ptr _msg);
 
     /// encode is implement in derived class
     /// basic encode function

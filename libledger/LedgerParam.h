@@ -16,21 +16,20 @@
  */
 
 /**
- * @brief : concrete implementation of ParamInterface
- * @file : Param.h
+ * @brief : concrete implementation of LedgerParamInterface
+ * @file : LedgerParam.h
  * @author: yujiechen
  * @date: 2018-10-23
  */
 #pragma once
-#include "ParamInterface.h"
+#include "LedgerParamInterface.h"
 #include <libdevcore/FixedHash.h>
-#include <libdevcrypto/Common.h>
 #include <libp2p/Network.h>
 #include <memory>
 #include <vector>
 namespace dev
 {
-namespace initializer
+namespace ledger
 {
 /// forward class declaration
 struct TxPoolParam
@@ -40,12 +39,16 @@ struct TxPoolParam
 struct ConsensusParam
 {
     std::string consensusType;
-    dev::h512s minerList;
+    dev::h512s minerList = dev::h512s();
+    uint64_t maxTransactions;
     unsigned intervalBlockTime;
 };
-struct BlockChainParam
+
+struct AMDBParam
 {
-    /// TODO: gensis related config
+    std::string topic;
+    int retryInterval = 1;
+    int maxRetry = 0;
 };
 
 struct SyncParam
@@ -53,12 +56,6 @@ struct SyncParam
     /// TODO: syncParam related
     unsigned idleWaitMs;
 };
-
-struct P2pParam
-{
-    dev::p2p::NetworkConfig networkConfig;
-};
-
 struct GenesisParam
 {
     dev::h256 genesisHash;
@@ -67,14 +64,18 @@ struct GenesisParam
 class LedgerParam : public LedgerParamInterface
 {
 public:
-    TxPoolParam const& txPoolParam() const override { return m_txPoolParam; }
-    ConsensusParam const& consensusParam() const override { return m_consensusParam; }
-    BlockChainParam const& blockChainParam() const override { return m_blockChainParam; }
-    SyncParam const& syncParam() const override { return m_syncParam; }
-    dev::eth::GroupID const& groupId() const override { return m_groupId; }
+    TxPoolParam& mutableTxPoolParam() override { return m_txPoolParam; }
+    ConsensusParam& mutableConsensusParam() override { return m_consensusParam; }
+    SyncParam& mutableSyncParam() override { return m_syncParam; }
+    GenesisParam& mutableGenesisParam() override { return m_genesisParam; }
+    AMDBParam& mutableAMDBParam() override { return m_amdbParam; }
+    std::string const& dbType() const override { return m_dbType; }
+    bool enableMpt() const override { return m_enableMpt; }
+    void setMptState(bool mptState) override { m_enableMpt = mptState; }
+    void setDBType(std::string const& dbType) override { m_dbType = dbType; }
+
     std::string const& baseDir() const override { return m_baseDir; }
-    dev::KeyPair const& keyPair() const override { return m_keypair; }
-    GenesisParam const& genesisParam() const override { return m_genesisParam; }
+    void setBaseDir(std::string const& baseDir) override { m_baseDir = baseDir; }
 
 protected:
     virtual void initLedgerParams(){};
@@ -82,12 +83,12 @@ protected:
 private:
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
-    BlockChainParam m_blockChainParam;
     SyncParam m_syncParam;
     GenesisParam m_genesisParam;
-    dev::eth::GroupID m_groupId;
+    AMDBParam m_amdbParam;
+    std::string m_dbType;
+    bool m_enableMpt;
     std::string m_baseDir;
-    dev::KeyPair m_keypair;
 };
-}  // namespace initializer
+}  // namespace ledger
 }  // namespace dev

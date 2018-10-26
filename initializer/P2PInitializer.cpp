@@ -21,7 +21,6 @@
  */
 
 #include "P2PInitializer.h"
-#include <libp2p/CertificateServer.h>
 #include <libp2p/Host.h>
 #include <libp2p/Network.h>
 #include <libp2p/P2pFactory.h>
@@ -34,7 +33,6 @@ using namespace dev::initializer;
 
 void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    ///< TODO:The certificate loads independently.
     LOG(INFO) << "P2PInitializer::initConfig";
     std::string publicID = _pt.get<std::string>("p2p.public_ip", "127.0.0.1");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
@@ -78,8 +76,8 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     auto asioInterface = std::make_shared<AsioInterface>();
     auto socketFactory = std::make_shared<SocketFactory>();
     auto sessionFactory = std::make_shared<SessionFactory>();
-    auto host = std::make_shared<Host>("2.0", CertificateServer::GetInstance().keypair(),
-        network_config, asioInterface, socketFactory, sessionFactory);
+    auto host = std::make_shared<Host>("2.0", m_keyPair, network_config, asioInterface,
+        socketFactory, sessionFactory, m_SSLContext);
     host->setStaticNodes(nodes);
     m_p2pService = std::make_shared<Service>(host, p2pMsgHandler);
 

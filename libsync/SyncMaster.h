@@ -50,17 +50,17 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned _idleWaitMs = 30)
-      : m_service(_service),
+      : SyncInterface(),
+        Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs),
+        m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_blockVerifier(_blockVerifier),
         m_protocolId(_protocolId),
         m_nodeId(_nodeId),
-        m_genesisHash(_genesisHash),
-        SyncInterface(),
-        Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs)
+        m_genesisHash(_genesisHash)
     {
-        m_syncStatus = std::make_shared<SyncMasterStatus>();
+        m_syncStatus = std::make_shared<SyncMasterStatus>(_genesisHash);
         m_msgEngine = std::make_shared<SyncMsgEngine>(
             _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 
@@ -124,6 +124,16 @@ public:
             m_state = SyncState::Idle;
     }
 
+    int64_t protocolId() { return m_protocolId; }
+
+    NodeID nodeId() { return m_nodeId; }
+
+    h256 genesisHash() { return m_genesisHash; }
+
+    std::shared_ptr<SyncMasterStatus> syncStatus() { return m_syncStatus; }
+
+    std::shared_ptr<SyncMsgEngine> msgEngine() { return m_msgEngine; }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -139,6 +149,7 @@ private:
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
     // Internal data
+    PROTOCOL_ID m_protocolId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 
@@ -147,8 +158,7 @@ private:
 
     // Internal coding variable
     /// mutex
-    mutable RecursiveMutex x_sync;
-    mutable Mutex x_transactions;
+    mutable SharedMutex x_sync;
     /// mutex to access m_signalled
     Mutex x_signalled;
     /// signal to notify all thread to work
@@ -161,13 +171,13 @@ private:
 
     // settings
     int64_t m_maxBlockDownloadQueueSize = 5;
-    PROTOCOL_ID m_protocolId;
 
-private:
+public:
     void maintainTransactions();
     void maintainBlocks();
     void maintainPeersStatus();
     bool maintainDownloadingQueue();  /// return true if downloading finish
+    void maintainPeersConnection();
 };
 
 }  // namespace sync

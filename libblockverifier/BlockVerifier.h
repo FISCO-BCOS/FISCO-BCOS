@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "BlockVerifierInterface.h"
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
 #include "Precompiled.h"
@@ -28,7 +29,9 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
+#include <libethcore/TransactionReceipt.h>
 #include <libevm/ExtVMFace.h>
+#include <libexecutivecontext/ExecutionResult.h>
 #include <libmptstate/State.h>
 #include <boost/function.hpp>
 #include <memory>
@@ -44,7 +47,8 @@ class LastBlockHashesFace;
 }  // namespace eth
 namespace blockverifier
 {
-class BlockVerifier : public std::enable_shared_from_this<BlockVerifier>
+class BlockVerifier : public BlockVerifierInterface,
+                      public std::enable_shared_from_this<BlockVerifier>
 {
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
@@ -54,6 +58,9 @@ public:
     virtual ~BlockVerifier(){};
 
     ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
+
+    std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
 
     std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> execute(
         dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
@@ -66,7 +73,10 @@ public:
         m_executiveContextFactory = executiveContextFactory;
     }
     ExecutiveContextFactory::Ptr getExecutiveContextFactory() { return m_executiveContextFactory; }
-    void setNumberHash(NumberHashCallBackFunction _pNumberHash) { m_pNumberHash = _pNumberHash; }
+    void setNumberHash(const NumberHashCallBackFunction& _pNumberHash)
+    {
+        m_pNumberHash = _pNumberHash;
+    }
 
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
