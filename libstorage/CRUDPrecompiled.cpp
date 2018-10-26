@@ -39,8 +39,7 @@ storage::Table::Ptr CRUDPrecompiled::openTable(
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(
-        context->blockInfo().hash, context->blockInfo().number.convert_to<int64_t>(), tableName);
+    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
 bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)

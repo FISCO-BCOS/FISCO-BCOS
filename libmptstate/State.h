@@ -78,9 +78,6 @@ template <class KeyType, class DB>
 using SecureTrieDB = SpecificTrieDB<HashedGenericTrieDB<DB>, KeyType>;
 #endif
 
-DEV_SIMPLE_EXCEPTION(InvalidAccountStartNonceInState);
-DEV_SIMPLE_EXCEPTION(IncorrectAccountStartNonceInState);
-
 class SealEngineFace;
 class Executive;
 
