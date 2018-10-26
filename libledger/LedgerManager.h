@@ -46,7 +46,6 @@ public:
                 std::make_shared<T>(service, _groupId, _keyPair, _baseDir, configFileName);
             LOG(DEBUG) << "Init Ledger for group:" << _groupId;
             ledger->initLedger(preCompile);
-
             m_ledgerMap.insert(std::make_pair(_groupId, ledger));
             return true;
         }

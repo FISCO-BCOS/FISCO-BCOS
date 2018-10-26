@@ -24,8 +24,8 @@
 #include "Ledger.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libconsensus/pbft/PBFTConsensus.h>
 #include <libconsensus/pbft/PBFTEngine.h>
+#include <libconsensus/pbft/PBFTSealer.h>
 #include <libdevcore/OverlayDB.h>
 #include <libdevcore/easylog.h>
 #include <libsync/SyncInterface.h>
@@ -180,21 +180,22 @@ void Ledger::initBlockChain()
  * @param param: Ledger related params
  * @return std::shared_ptr<ConsensusInterface>: created consensus engine
  */
-std::shared_ptr<Consensus> Ledger::createPBFTConsensus()
+std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 {
     assert(m_txPool && m_blockChain && m_sync && m_blockVerifier);
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
-    LOG(DEBUG) << "create PBFTConsensus, baseDir:" << m_param->baseDir();
-    std::shared_ptr<Consensus> pbftConsensus =
-        std::make_shared<PBFTConsensus>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
+    LOG(DEBUG) << "create PBFTConsensus, baseDir:" << m_param->baseDir()
+               << " , protocol_id:" << protocol_id;
+    std::shared_ptr<Sealer> pbftSealer =
+        std::make_shared<PBFTSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             protocol_id, m_param->baseDir(), m_keyPair, m_param->mutableConsensusParam().minerList);
-    pbftConsensus->setMaxBlockTransactions(m_param->mutableConsensusParam().maxTransactions);
+    pbftSealer->setMaxBlockTransactions(m_param->mutableConsensusParam().maxTransactions);
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =
-        std::dynamic_pointer_cast<PBFTEngine>(pbftConsensus->consensusEngine());
+        std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
     pbftEngine->setIntervalBlockTime(m_param->mutableConsensusParam().intervalBlockTime);
-    return pbftConsensus;
+    return pbftSealer;
 }
 
 /// init consensus
@@ -205,7 +206,7 @@ void Ledger::consensusInitFactory()
     /// default create pbft consensus
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
-        m_consensus = createPBFTConsensus();
+        m_sealer = createPBFTSealer();
     }
     else
     {
