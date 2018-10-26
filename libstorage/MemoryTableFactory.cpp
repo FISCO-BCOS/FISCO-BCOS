@@ -84,8 +84,8 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     return memoryTable;
 }
 
-Table::Ptr MemoryTableFactory::createTable(const string& tableName,
-    const string& keyField, const std::string& valueField)
+Table::Ptr MemoryTableFactory::createTable(
+    const string& tableName, const string& keyField, const std::string& valueField)
 {
     LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum << " table:" << tableName;
 

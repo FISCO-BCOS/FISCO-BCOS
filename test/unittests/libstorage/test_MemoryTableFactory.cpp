@@ -59,8 +59,8 @@ BOOST_AUTO_TEST_CASE(open_Table)
     std::string keyField("hash");
     std::string valueField("hash");
     memoryDBFactory->createTable(tableName, keyField, valueField);
-    MemoryTable::Ptr db = std::dynamic_pointer_cast<MemoryTable>(
-        memoryDBFactory->openTable("t_test"));
+    MemoryTable::Ptr db =
+        std::dynamic_pointer_cast<MemoryTable>(memoryDBFactory->openTable("t_test"));
 }
 
 BOOST_AUTO_TEST_CASE(setBlockHash)
