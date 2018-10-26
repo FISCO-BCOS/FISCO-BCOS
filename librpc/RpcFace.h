@@ -29,7 +29,7 @@ namespace rpc
 class RpcFace : public ServerInterface<RpcFace>
 {
 public:
-	RpcFace()
+    RpcFace()
     {
         this->bindAndAddMethod(jsonrpc::Procedure("blockNumber", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
@@ -45,9 +45,8 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getBlockByHashI);
-        this->bindAndAddMethod(
-            jsonrpc::Procedure("getBlockByNumber", jsonrpc::PARAMS_BY_POSITION,
-                jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
+        this->bindAndAddMethod(jsonrpc::Procedure("getBlockByNumber", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getBlockByNumberI);
 
         this->bindAndAddMethod(
@@ -58,9 +57,9 @@ public:
             jsonrpc::Procedure("getTransactionByBlockHashAndIndex", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getTransactionByBlockHashAndIndexI);
-        this->bindAndAddMethod(jsonrpc::Procedure("getTransactionByBlockNumberAndIndex",
-                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
-                                   jsonrpc::JSON_OBJECT, NULL),
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("getTransactionByBlockNumberAndIndex", jsonrpc::PARAMS_BY_POSITION,
+                jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getTransactionByBlockNumberAndIndexI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getTransactionReceipt", jsonrpc::PARAMS_BY_POSITION,
@@ -74,9 +73,8 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::callI);
 
-        this->bindAndAddMethod(
-            jsonrpc::Procedure("sendRawTransaction", jsonrpc::PARAMS_BY_POSITION,
-                jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
+        this->bindAndAddMethod(jsonrpc::Procedure("sendRawTransaction", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("topics", jsonrpc::PARAMS_BY_POSITION,
@@ -127,8 +125,7 @@ public:
     {
         response = this->getTransactionByBlockNumberAndIndex(request);
     }
-    inline virtual void getTransactionReceiptI(
-        const Json::Value& request, Json::Value& response)
+    inline virtual void getTransactionReceiptI(const Json::Value& request, Json::Value& response)
     {
         response = this->getTransactionReceipt(request);
     }
