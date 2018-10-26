@@ -69,6 +69,7 @@ add_subdirectory(libblockchain)
 add_subdirectory(libsync)
 add_subdirectory(libledger)
 add_subdirectory(initializer)
+add_subdirectory(librpc)
 
 if (TESTS)
         enable_testing()
