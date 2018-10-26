@@ -39,7 +39,7 @@ using boost::lexical_cast;
 int64_t BlockChainImp::number() const
 {
     int64_t num = 0;
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_extraDbName_currentState);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_CURRENT_STATE_);
     if (tb)
     {
         auto entries = tb->select(m_keyValue_currentNumber, tb->newCondition());
@@ -56,7 +56,7 @@ int64_t BlockChainImp::number() const
 h256 BlockChainImp::numberHash(int64_t _i) const
 {
     string numberHash = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_number2hash);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_NUMBER_2_HASH_);
     if (tb)
     {
         auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
@@ -72,7 +72,7 @@ h256 BlockChainImp::numberHash(int64_t _i) const
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
     string strblock = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_hash2Block);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_blockHash.hex(), tb->newCondition());
@@ -95,7 +95,7 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
     string numberHash = "";
     string strblock = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_number2hash);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_NUMBER_2_HASH_);
     if (tb)
     {
         auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
@@ -118,7 +118,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_txHash2Block);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -143,7 +143,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_txHash2Block);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -169,7 +169,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_txHash2Block);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -192,7 +192,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 
 void BlockChainImp::writeNumber(const Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_extraDbName_currentState);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_CURRENT_STATE_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
@@ -203,7 +203,7 @@ void BlockChainImp::writeNumber(const Block& block)
 
 void BlockChainImp::writeTxToBlock(const Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_txHash2Block);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         std::vector<Transaction> txs = block.transactions();
@@ -219,7 +219,7 @@ void BlockChainImp::writeTxToBlock(const Block& block)
 
 void BlockChainImp::writeNumber2Hash(const Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_number2hash);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_NUMBER_2_HASH_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
@@ -230,7 +230,7 @@ void BlockChainImp::writeNumber2Hash(const Block& block)
 
 void BlockChainImp::writeHash2Block(Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, m_number2hash);
+    Table::Ptr tb = m_memoryTableFactory->openTable(h256(), 0, _SYS_NUMBER_2_HASH_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();

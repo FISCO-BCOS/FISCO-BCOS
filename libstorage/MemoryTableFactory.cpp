@@ -35,6 +35,10 @@ MemoryTableFactory::MemoryTableFactory()
 {
     m_sysTables.push_back(SYS_MINERS);
     m_sysTables.push_back(SYS_TABLES);
+    m_sysTables.push_back(_SYS_CURRENT_STATE_);
+    m_sysTables.push_back(_SYS_NUMBER_2_HASH_);
+    m_sysTables.push_back(_SYS_TX_HASH_2_BLOCK_);
+    m_sysTables.push_back(_SYS_HASH_2_BLOCK_);
 }
 
 Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const string& tableName)
@@ -262,6 +266,26 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     {
         tableInfo->key = "table_name";
         tableInfo->fields = vector<string>{"key_field", "value_field"};
+    }
+    else if (tableName == _SYS_CURRENT_STATE_)
+    {
+        tableInfo->key = "number";
+        tableInfo->fields = std::vector<std::string>{"value"};
+    }
+    else if (tableName == _SYS_NUMBER_2_HASH_)
+    {
+        tableInfo->key = "hash";
+        tableInfo->fields = std::vector<std::string>{"value"};
+    }
+    else if (tableName == _SYS_TX_HASH_2_BLOCK_)
+    {
+        tableInfo->key = "hash";
+        tableInfo->fields = std::vector<std::string>{"value", "index"};
+    }
+    else if (tableName == _SYS_HASH_2_BLOCK_)
+    {
+        tableInfo->key = "key";
+        tableInfo->fields = std::vector<std::string>{"value"};
     }
     tableInfo->fields.emplace_back(tableInfo->key);
     tableInfo->fields.emplace_back(STATUS);
