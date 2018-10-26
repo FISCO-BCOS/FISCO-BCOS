@@ -22,8 +22,8 @@
  * @date: 2018-10-09
  */
 #include "FakePBFTEngine.h"
-#include <libconsensus/Consensus.h>
-#include <libconsensus/pbft/PBFTConsensus.h>
+#include <libconsensus/Sealer.h>
+#include <libconsensus/pbft/PBFTSealer.h>
 #include <libethcore/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(testLoadTransactions)
 
     /*FakeConsensus<FakePBFTEngine> fake_engine(
         1, ProtocolID::PBFT, sync, blockVerifier, txpool_creator);*/
-    FakePBFTConsensus fake_pbft(txpool_creator->m_topicService, txpool_creator->m_txPool,
+    FakePBFTSealer fake_pbft(txpool_creator->m_topicService, txpool_creator->m_txPool,
         txpool_creator->m_blockChain, sync, blockVerifier, 10);
 
 
