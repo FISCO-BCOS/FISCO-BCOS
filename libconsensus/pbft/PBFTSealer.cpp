@@ -17,11 +17,16 @@
 
 /**
  * @brief : implementation of PBFT consensus
- * @file: PBFTConsensus.cpp
+ * @file: PBFTSealer.cpp
  * @author: yujiechen
  * @date: 2018-09-28
+ *
+ * @author: yujiechen
+ * @file:PBFTSealer.cpp
+ * @date: 2018-10-26
+ * @modifications: rename PBFTSealer.cpp to PBFTSealer.cpp
  */
-#include "PBFTConsensus.h"
+#include "PBFTSealer.h"
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
@@ -34,29 +39,28 @@ namespace dev
 {
 namespace consensus
 {
-void PBFTConsensus::handleBlock()
+void PBFTSealer::handleBlock()
 {
     setBlock();
     LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on: "
               << m_sealing.block.header().hash()
-              << "#block_number:" << m_sealing.block.header().number()
-              << "#tx:" << m_sealing.block.getTransactionSize() << "time:" << utcTime();
+              << " #block_number:" << m_sealing.block.header().number()
+              << " #tx:" << m_sealing.block.getTransactionSize()
+              << " #protocol:" << m_pbftEngine->protocolId() << " time:" << utcTime();
     bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
     if (!succ)
     {
-        LOG(DEBUG) << "#### after generateprepare, resetSealingBlock";
         resetSealingBlock();
         /// notify to re-generate the block
         m_signalled.notify_all();
     }
     else if (m_pbftEngine->shouldReset(m_sealing.block))
     {
-        LOG(DEBUG) << "##### omit the empty block, resetSealingBlock";
         resetSealingBlock();
         m_signalled.notify_all();
     }
 }
-void PBFTConsensus::setBlock()
+void PBFTSealer::setBlock()
 {
     resetSealingHeader(m_sealing.block.header());
     setSealingRoot(m_sealing.block.getTransactionRoot(), h256(), h256());
@@ -67,26 +71,26 @@ void PBFTConsensus::setBlock()
  * @return true: this node can generate block
  * @return false: this node can't generate block
  */
-bool PBFTConsensus::shouldSeal()
+bool PBFTSealer::shouldSeal()
 {
-    /// LOG(DEBUG)<<"#### Consensus::shouldSeal():"<<Consensus::shouldSeal();
+    /// LOG(DEBUG)<<"#### Sealer::shouldSeal():"<<Sealer::shouldSeal();
     /// LOG(DEBUG)<<"#### m_pbftEngine->shouldSeal:"<<m_pbftEngine->shouldSeal();
-    return Consensus::shouldSeal() && m_pbftEngine->shouldSeal();
+    return Sealer::shouldSeal() && m_pbftEngine->shouldSeal();
 }
 
-uint64_t PBFTConsensus::calculateMaxPackTxNum()
+uint64_t PBFTSealer::calculateMaxPackTxNum()
 {
     return m_pbftEngine->calculateMaxPackTxNum(m_maxBlockTransactions);
 }
 
-void PBFTConsensus::start()
+void PBFTSealer::start()
 {
     m_pbftEngine->start();
-    Consensus::start();
+    Sealer::start();
 }
-void PBFTConsensus::stop()
+void PBFTSealer::stop()
 {
-    Consensus::stop();
+    Sealer::stop();
     m_pbftEngine->stop();
 }
 }  // namespace consensus

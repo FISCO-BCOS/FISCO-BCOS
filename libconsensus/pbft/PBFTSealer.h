@@ -20,26 +20,32 @@
  * @file: PBFTConsensus.h
  * @author: yujiechen
  * @date: 2018-09-28
+ *
+ *
+ * @author: yujiechen
+ * @file:PBFTSealer.h
+ * @date: 2018-10-26
+ * @modifications: rename PBFTConsensus.h to PBFTSealer.h
  */
 #pragma once
 #include "PBFTEngine.h"
-#include <libconsensus/Consensus.h>
+#include <libconsensus/Sealer.h>
 #include <sstream>
 namespace dev
 {
 namespace consensus
 {
-class PBFTConsensus : public Consensus
+class PBFTSealer : public Sealer
 {
 public:
-    PBFTConsensus(std::shared_ptr<dev::p2p::P2PInterface> _service,
+    PBFTSealer(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
         h512s const& _minerList = h512s())
-      : Consensus(_txPool, _blockChain, _blockSync)
+      : Sealer(_txPool, _blockChain, _blockSync)
     {
         m_consensusEngine = std::make_shared<PBFTEngine>(_service, _txPool, _blockChain, _blockSync,
             _blockVerifier, _protocolId, _baseDir, _key_pair, _minerList);
@@ -47,11 +53,8 @@ public:
         m_pbftEngine->onViewChange([this]() {
             DEV_WRITE_GUARDED(x_sealing)
             {
-                LOG(DEBUG) << "#### callbacked after viewchange";
                 if (shouldResetSealing())
                 {
-                    LOG(DEBUG) << "#### reset the sealing, number = "
-                               << m_sealing.block.header().number();
                     resetSealingBlock();
                 }
                 m_signalled.notify_all();

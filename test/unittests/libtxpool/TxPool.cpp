@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(testSessionRead)
     ba::io_service m_ioservice(2);
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
     std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice, m_endpoint);
-    NodeID m_nodeId = KeyPair::create().pub();
+    /// NodeID m_nodeId = KeyPair::create().pub();
     /// start peer session and doRead
     // BOOST_REQUIRE_NO_THROW(pool_test.m_host->startPeerSession(m_nodeId, fake_socket));
 }
