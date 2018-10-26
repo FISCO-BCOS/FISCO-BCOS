@@ -33,11 +33,12 @@ using namespace dev::txpool;
 
 bool SyncMasterStatus::hasPeer(NodeID const& _id)
 {
+    ReadGuard l(x_peerStatus);
     auto peer = m_peersStatus.find(_id);
     return peer != m_peersStatus.end();
 }
 
-bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
+bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)
 {
     if (hasPeer(_info.nodeId))
     {
@@ -49,7 +50,7 @@ bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
     {
         shared_ptr<SyncPeerStatus> peer = make_shared<SyncPeerStatus>(_info);
 
-        Guard l(x_peerStatus);
+        WriteGuard l(x_peerStatus);
         m_peersStatus.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->nodeId, peer));
     }
     catch (Exception const& e)
@@ -60,8 +61,26 @@ bool SyncMasterStatus::newSyncPeerStatus(NodeInfo const& _info)
     return true;
 }
 
+void SyncMasterStatus::deletePeer(NodeID const& _id)
+{
+    WriteGuard l(x_peerStatus);
+    auto peer = m_peersStatus.find(_id);
+    if (peer != m_peersStatus.end())
+        m_peersStatus.erase(peer);
+}
+
+NodeIDs SyncMasterStatus::peers()
+{
+    NodeIDs nodeIds;
+    ReadGuard l(x_peerStatus);
+    for (auto& peer : m_peersStatus)
+        nodeIds.emplace_back(peer.first);
+    return nodeIds;
+}
+
 std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
 {
+    ReadGuard l(x_peerStatus);
     auto peer = m_peersStatus.find(_id);
     if (peer == m_peersStatus.end())
     {
@@ -74,9 +93,37 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
 void SyncMasterStatus::foreachPeer(
     std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const
 {
+    ReadGuard l(x_peerStatus);
     for (auto& peer : m_peersStatus)
     {
         if (!_f(peer.second))
+            break;
+    }
+}
+
+void SyncMasterStatus::foreachPeerRandom(
+    std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const
+{
+    ReadGuard l(x_peerStatus);
+    // Get nodeid list
+    NodeIDs nodeIds;
+    for (auto& peer : m_peersStatus)
+        nodeIds.emplace_back(peer.first);
+
+    // Random nodeid list
+    for (size_t i = nodeIds.size() - 1; i > 0; --i)
+    {
+        size_t select = rand() % (i + 1);
+        swap(nodeIds[i], nodeIds[select]);
+    }
+
+    // access _f() according to the random list
+    for (NodeID const& nodeId : nodeIds)
+    {
+        auto const& peer = m_peersStatus.find(nodeId);
+        if (peer == m_peersStatus.end())
+            continue;
+        if (!_f(peer->second))
             break;
     }
 }

@@ -29,7 +29,6 @@
 #include <set>
 #include <vector>
 
-
 namespace dev
 {
 namespace sync
@@ -37,7 +36,9 @@ namespace sync
 class DownloadingBlockQueue
 {
 public:
-    DownloadingBlockQueue() : m_blocks(), m_buffer() {}
+    DownloadingBlockQueue() : m_blocks(), m_buffer(std::make_shared<BlockPtrVec>()) {
+        
+    }
     /// Push a block
     void push(BlockPtr _block);
 
@@ -49,14 +50,13 @@ public:
     /// Pop the block sequent, erase blocks smaller than _startNumber
     BlockPtrVec popSequent(int64_t _startNumber, int64_t _limit);
 
-
 private:
     std::map<int64_t, BlockPtr, std::greater<int64_t>> m_blocks;  //
     int64_t m_minNumberInQueue = LONG_LONG_MAX;
     std::shared_ptr<BlockPtrVec> m_buffer;  // use buffer for faster push return
 
-    mutable RecursiveMutex x_blocks;
-    mutable RecursiveMutex x_buffer;
+    mutable SharedMutex x_blocks;
+    mutable SharedMutex x_buffer;
 };
 
 }  // namespace sync

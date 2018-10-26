@@ -46,6 +46,7 @@ BOOST_AUTO_TEST_CASE(testSocket)
 
     boost::property_tree::ptree pt;
     auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
+    secureInitiailizer->setDataPath(getTestPath().string() + "/fisco-bcos-data/");
     secureInitiailizer->initConfig(pt);
     auto sslContext = secureInitiailizer->SSLContext();
 

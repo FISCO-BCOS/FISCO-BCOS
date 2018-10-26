@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "CertificateServer.h"
 #include "Common.h"
 #include "SocketFace.h"
 #include <libdevcore/FileSystem.h>
