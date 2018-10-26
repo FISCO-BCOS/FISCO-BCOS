@@ -39,11 +39,11 @@ void SyncMsgEngine::messageHandler(
     }
 
     SyncMsgPacket packet;
-    if (!packet.decode(_session, _msg))
+    if (!packet.decode(_session, _msg) || !checkPacket(packet))
     {
         LOG(WARNING) << "Received " << _msg->buffer()->size() << ": " << toHex(*_msg->buffer())
                      << endl;
-        LOG(WARNING) << "INVALID MESSAGE RECEIVED";
+        LOG(WARNING) << "INVALID MESSAGE RECEIVED from " << _session->id();
         _session->disconnect(BadProtocol);
         return;
     }
@@ -67,6 +67,18 @@ bool SyncMsgEngine::checkPacket(bytesConstRef _msg)
         return false;
     if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
         return false;
+    return true;
+}
+
+bool SyncMsgEngine::checkImportBlock(shared_ptr<Block> block)
+{
+    if (block->header().number() <= m_blockChain->number())
+        return false;
+
+    // if (block->header()->)
+    // if //Check sig list
+    // return false;
+
     return true;
 }
 
@@ -130,8 +142,8 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
     for (unsigned i = 0; i < itemCount; ++i)
     {
         shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
-        // TODO check minerlist sig
-        m_syncStatus->bq().push(block);
+        if (checkImportBlock(block))
+            m_syncStatus->bq().push(block);
     }
 }
 

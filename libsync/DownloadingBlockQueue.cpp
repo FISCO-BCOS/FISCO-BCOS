@@ -98,10 +98,12 @@ BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _lim
     // delete smaller blocks in queue
     for (; m_minNumberInQueue < _startNumber; ++m_minNumberInQueue)
     {
+        cout << m_minNumberInQueue << " ";
         auto p = m_blocks.find(m_minNumberInQueue);
         if (p != m_blocks.end())
             m_blocks.erase(p);
     }
+    cout << endl;
 
     // generate a queue
     BlockPtrVec ret;
@@ -114,7 +116,27 @@ BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _lim
             m_blocks.erase(p);
         }
         else
+        {
+            /*
+            auto upper = m_blocks.upper_bound(m_minNumberInQueue);
+            if (upper != m_blocks.end())
+            {
+                cout << "start: " << _startNumber << "  " << m_minNumberInQueue << " upper found "
+                     << upper->first << endl;
+                m_minNumberInQueue = upper->first;
+            }
+            else
+            {
+                cout << "Is ??? " << (m_blocks.upper_bound(m_minNumberInQueue) == m_blocks.end())
+                     << endl;
+                cout << "start: " << _startNumber << " to max:" << m_minNumberInQueue << endl;
+                cout << "This time, size is " << m_blocks.size() << " has 7 ? " << m_blocks.count(7)
+                     << endl;
+                m_minNumberInQueue = LONG_LONG_MAX;
+            }
+            */
             break;
+        }
     }
     return ret;
 }

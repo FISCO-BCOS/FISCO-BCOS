@@ -36,9 +36,7 @@ namespace sync
 class DownloadingBlockQueue
 {
 public:
-    DownloadingBlockQueue() : m_blocks(), m_buffer(std::make_shared<BlockPtrVec>()) {
-        
-    }
+    DownloadingBlockQueue() : m_blocks(), m_buffer(std::make_shared<BlockPtrVec>()) {}
     /// Push a block
     void push(BlockPtr _block);
 
@@ -46,6 +44,8 @@ public:
     bool empty();
 
     size_t size();
+
+    int64_t minNumberInQueue() { return m_minNumberInQueue; }
 
     /// Pop the block sequent, erase blocks smaller than _startNumber
     BlockPtrVec popSequent(int64_t _startNumber, int64_t _limit);

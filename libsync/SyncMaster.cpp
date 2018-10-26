@@ -202,9 +202,15 @@ void SyncMaster::maintainPeersStatus()
         noteDownloadingBegin();
     }
 
+    // Choose to use min number in blockqueue or max peer number
+    int64_t maxRequestNumber = maxPeerNumber;
+    int64_t minNumberInQueue = m_syncStatus->bq().minNumberInQueue();
+    if (0 != minNumberInQueue)
+        maxRequestNumber = min(maxPeerNumber, minNumberInQueue - 1);
+
     // Sharding by c_maxRequestBlocks to request blocks
     size_t shardNumber =
-        (maxPeerNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
+        (maxRequestNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
     size_t shard = 0;
     while (shard < shardNumber)
     {
@@ -212,7 +218,7 @@ void SyncMaster::maintainPeersStatus()
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
             // shard: [from, to]
             int64_t from = currentNumber + 1 + shard * c_maxRequestBlocks;
-            int64_t to = min(from + c_maxRequestBlocks - 1, maxPeerNumber);
+            int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
             if (_p->number < to)
                 return true;  // exit, to next peer
 
@@ -232,7 +238,7 @@ void SyncMaster::maintainPeersStatus()
         if (!thisTurnFound)
         {
             int64_t from = currentNumber + shard * c_maxRequestBlocks;
-            int64_t to = min(from + c_maxRequestBlocks - 1, maxPeerNumber);
+            int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
 
             LOG(ERROR) << "Couldn't find any peers to request blocks [" << from << ", " << to
                        << "]";
