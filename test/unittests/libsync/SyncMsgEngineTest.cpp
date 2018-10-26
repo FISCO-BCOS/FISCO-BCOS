@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
     auto msgPtr = statusPacket.toMessage(0x01);
     auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0x1234));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
-    
+
     BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0x1234)));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
     BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0x1234)));
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     auto msgPtr = txPacket.toMessage(0x02);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
-    
+
     auto txPoolPtr = fakeSyncToolsSet.getTxPoolPtr();
     auto topTxs = txPoolPtr->topTransactions(1);
     BOOST_CHECK(topTxs.size() == 1);
@@ -107,12 +107,13 @@ BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)
     SyncBlocksPacket blocksPacket;
     vector<bytes> blockRLPs;
     auto& fakeBlock = fakeSyncToolsSet.getBlock();
+    fakeBlock.header().setNumber(INT64_MAX - 1);
     blockRLPs.push_back(fakeBlock.rlp());
     blocksPacket.encode(blockRLPs);
     auto msgPtr = blocksPacket.toMessage(0x03);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
-    
+
     BOOST_CHECK(fakeStatusPtr->bq().size() == 1);
     auto blockPtrVec = fakeStatusPtr->bq().popSequent(fakeBlock.header().number(), 1);
     BOOST_CHECK(blockPtrVec[0]->equalAll(fakeBlock));
