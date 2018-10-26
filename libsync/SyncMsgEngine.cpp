@@ -53,7 +53,7 @@ void SyncMsgEngine::messageHandler(
         LOG(WARNING) << "Couldn't interpret packet. " << RLP(packet.rlp());
 }
 
-bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::Session> _session)
+bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::SessionFace> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
     if (_session->id() == m_nodeId)

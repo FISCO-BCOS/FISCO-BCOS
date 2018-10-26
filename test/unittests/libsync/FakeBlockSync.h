@@ -41,15 +41,15 @@ public:
     void stop() override {}
     SyncStatus status() const override { return m_syncStatus; }
     bool isSyncing() const override { return m_isSyncing; }
-    int16_t const& protocolId() const override { return m_protocolId; };
-    void setProtocolId(int16_t const _protocolId) override { m_protocolId = _protocolId; };
+    PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
+    void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
 
 private:
     SyncStatus m_syncStatus;
     bool m_isSyncing;
     bool m_forceSync;
     Block m_latestSentBlock;
-    int16_t m_protocolId;
+    PROTOCOL_ID m_protocolId;
 };
 }  // namespace test
 }  // namespace dev

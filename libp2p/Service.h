@@ -68,7 +68,8 @@ public:
 
     void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
 
-    void registerHandlerByProtoclID(int16_t protocolID, CallbackFuncWithSession handler) override;
+    void registerHandlerByProtoclID(
+        PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
 
     void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
 
@@ -80,9 +81,26 @@ public:
     ///< Only connected node
     SessionInfos sessionInfos() const override;
 
-    SessionInfos sessionInfosByProtocolID(int16_t _protocolID) const override;
+    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const override;
 
     bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
+
+    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) override
+    {
+        m_host->setGroupID2NodeList(_groupID2NodeList);
+    }
+
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    {
+        m_host->setTopics(_topics);
+    }
+
+    std::shared_ptr<std::vector<std::string>> topics() const override { return m_host->topics(); }
+
+    void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    {
+        m_host->setMessageFactory(_messageFactory);
+    }
 
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,

@@ -22,11 +22,17 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include "DBInitializer.h"
 #include "LedgerInterface.h"
-#include <initializer/Param.h>
+#include "LedgerParam.h"
+#include "LedgerParamInterface.h"
+#include <libconsensus/Consensus.h>
+#include <libdevcore/Exceptions.h>
+#include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
+#include <boost/property_tree/ptree.hpp>
 namespace dev
 {
 namespace ledger
@@ -34,19 +40,48 @@ namespace ledger
 class Ledger : public LedgerInterface
 {
 public:
-    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service,
-        std::shared_ptr<dev::initializer::LedgerParamInterface> param)
-      : m_service(service)
+    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
+        dev::KeyPair const& _keyPair, std::string const& _baseDir,
+        std::string const& configFileName)
+      : m_service(service),
+        m_groupId(_groupId),
+        m_keyPair(_keyPair),
+        m_configFileName(configFileName)
     {
+        m_param = std::make_shared<LedgerParam>();
+        std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
+        if (_baseDir == "")
+            prefix = "./group" + std::to_string(_groupId);
+        m_param->setBaseDir(prefix);
         assert(m_service);
-        initLedger(param);
+        if (m_configFileName == "")
+            m_configFileName = "./config.group" + std::to_string(_groupId) + m_postfix;
+        LOG(DEBUG) << "### config file path:" << m_configFileName;
+        LOG(DEBUG) << "### basedir:" << m_param->baseDir();
+        initConfig(m_configFileName);
+    }
+
+    void startAll() override
+    {
+        assert(m_sync && m_consensus);
+        m_sync->start();
+        m_consensus->start();
+    }
+
+    void stopAll() override
+    {
+        m_consensus->stop();
+        m_sync->stop();
     }
 
     virtual ~Ledger(){};
-    /// init the ledger(called by initializer)
-    void initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> param) override;
-    std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
+    void initConfig(std::string const& configPath) override;
 
+    /// init the ledger(called by initializer)
+    void initLedger(
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override;
+
+    std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
         return m_blockVerifier;
@@ -60,32 +95,45 @@ public:
         return m_consensus->consensusEngine();
     }
     std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    virtual dev::eth::GroupID const& groupId() const { return m_groupId; }
+    virtual dev::GROUP_ID const& groupId() const { return m_groupId; }
+    std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
 protected:
-    virtual void initTxPool(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void initTxPool();
     /// init blockverifier related
-    virtual void initBlockVerifier(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
-    virtual void initBlockChain(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void initBlockVerifier();
+    virtual void initBlockChain();
     /// create consensus moudle
-    virtual void consensusInitFactory(
-        std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void consensusInitFactory();
     /// init the blockSync
-    virtual void initSync(std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    virtual void initSync();
 
 private:
     /// create PBFTConsensus
-    virtual std::shared_ptr<dev::consensus::Consensus> createPBFTConsensus(
-        std::shared_ptr<dev::initializer::LedgerParamInterface> param);
+    std::shared_ptr<dev::consensus::Consensus> createPBFTConsensus();
+    /// init configurations
+    void initCommonConfig(boost::property_tree::ptree const& pt);
+    void initTxPoolConfig(boost::property_tree::ptree const& pt);
+    void initConsensusConfig(boost::property_tree::ptree const& pt);
+    void initSyncConfig(boost::property_tree::ptree const& pt);
+    void initDBConfig(boost::property_tree::ptree const& pt);
+    void initGenesisConfig(boost::property_tree::ptree const& pt);
 
-private:
+protected:
+    std::shared_ptr<LedgerParamInterface> m_param = nullptr;
+
+    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
+    dev::GROUP_ID m_groupId;
+    dev::KeyPair m_keyPair;
+    std::string m_configFileName = "config";
+    std::string m_postfix = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::consensus::Consensus> m_consensus = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
-    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
-    dev::eth::GroupID m_groupId;
+
+    std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
 };
 }  // namespace ledger
 }  // namespace dev

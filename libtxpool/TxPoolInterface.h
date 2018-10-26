@@ -24,8 +24,8 @@
 #pragma once
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
+#include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
-
 namespace dev
 {
 namespace txpool
@@ -87,7 +87,7 @@ public:
     virtual TxPoolStatus status() const = 0;
 
     /// protocol id used when register handler to p2p module
-    virtual int16_t const& getProtocolId() const = 0;
+    virtual PROTOCOL_ID const& getProtocolId() const = 0;
 
     /// Get transaction in TxPool, return nullptr when not found
     virtual std::shared_ptr<dev::eth::Transaction const> transactionInPool(h256 const& _txHash)

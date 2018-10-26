@@ -22,12 +22,11 @@
  * @date: 2018-10-23
  */
 #pragma once
-#include <initializer/ParamInterface.h>
+#include "LedgerParamInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
-#include <libconsensus/Consensus.h>
 #include <libconsensus/ConsensusInterface.h>
-#include <libethcore/Common.h>
+#include <libethcore/Protocol.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <memory>
@@ -41,13 +40,19 @@ public:
     LedgerInterface() = default;
     virtual ~LedgerInterface(){};
     /// init the ledger(called by initializer)
-    virtual void initLedger(std::shared_ptr<dev::initializer::LedgerParamInterface> param) = 0;
+    virtual void initLedger(
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) = 0;
+
+    virtual void initConfig(std::string const& configPath) = 0;
     virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const = 0;
     virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const = 0;
     virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const = 0;
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const = 0;
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const = 0;
-    virtual dev::eth::GroupID const& groupId() const = 0;
+    virtual dev::GROUP_ID const& groupId() const = 0;
+    virtual std::shared_ptr<LedgerParamInterface> getParam() const = 0;
+    virtual void startAll() = 0;
+    virtual void stopAll() = 0;
 };
 }  // namespace ledger
 }  // namespace dev

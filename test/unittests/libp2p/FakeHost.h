@@ -21,11 +21,15 @@
  * @date 2018-09-10
  */
 #pragma once
+
+#include <initializer/SecureInitiailizer.h>
+#include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Session.h>
 #include <libp2p/SessionFace.h>
+#include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -105,7 +109,7 @@ public:
         //        setTest(true);
     }
 
-    void setProtocolId(int16_t const& protocol_id) { m_protocolId = protocol_id; }
+    void setProtocolId(PROTOCOL_ID const& protocol_id) { m_protocolId = protocol_id; }
 
     void setDataContent(std::string const& data_content) { m_dataContent = data_content; }
     void EncodeData()
@@ -129,7 +133,7 @@ public:
         Session::doRead();
     }
     unsigned m_read = 0;
-    int16_t m_protocolId = 0;
+    PROTOCOL_ID m_protocolId = 0;
     std::string m_dataContent;
 };
 
@@ -165,8 +169,9 @@ class FakeHost : public Host
 public:
     FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         std::shared_ptr<AsioInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-        shared_ptr<SessionFactory>& _sessionFactory)
-      : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory)
+        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext)
+      : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory,
+            _sslContext)
     {
         setLastPing(chrono::steady_clock::now());
         m_run = true;
@@ -323,8 +328,8 @@ public:
 class FakeSocketFactory : public SocketFactory
 {
 public:
-    virtual std::shared_ptr<SocketFace> create_socket(
-        ba::io_service& _ioService, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
+    virtual std::shared_ptr<SocketFace> create_socket(ba::io_service& _ioService,
+        ba::ssl::context& _sslContext, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
     {
         std::shared_ptr<SocketFace> m_socket =
             std::make_shared<FakeSocket>(_ioService, _nodeIPEndpoint);
@@ -444,10 +449,16 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
+    setDataDir(dev::test::getTestPath().string() + "/fisco-bcos-data");
+    boost::property_tree::ptree pt;
+    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
+    secureInitiailizer->setDataPath(dev::test::getTestPath().string() + "/fisco-bcos-data/");
+    secureInitiailizer->initConfig(pt);
+    auto sslContext = secureInitiailizer->SSLContext();
     /// create m_socketFactory
     std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<FakeSocketFactory>();
     FakeHost* m_host = new FakeHost(client_version, key_pair, network_config, m_asioInterface,
-        m_socketFactory, m_sessionFactory);
+        m_socketFactory, m_sessionFactory, sslContext);
     return m_host;
 }
 

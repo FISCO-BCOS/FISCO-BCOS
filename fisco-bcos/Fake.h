@@ -76,7 +76,10 @@ public:
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
-
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
+    {
+        return LocalisedTransaction();
+    }
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
     {
@@ -119,12 +122,12 @@ public:
     bool isSyncing() const override { return false; };
 
     /// protocol id used when register handler to p2p module
-    int16_t const& protocolId() const override { return m_protocolID; };
-    void setProtocolId(int16_t const _protocolId) override{};
+    PROTOCOL_ID const& protocolId() const override { return m_protocolID; };
+    void setProtocolId(PROTOCOL_ID const _protocolId) override{};
 
 private:
     SyncStatus m_status;
-    int16_t m_protocolID = 0;
+    PROTOCOL_ID m_protocolID = 0;
 };
 
 class FakeBlockVerifier : public BlockVerifierInterface
@@ -142,6 +145,13 @@ public:
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
+    virtual std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
+    {
+        dev::eth::ExecutionResult res;
+        dev::eth::TransactionReceipt reciept;
+        return std::make_pair(res, reciept);
+    }
 
 private:
     std::shared_ptr<ExecutiveContext> m_executiveContext;
