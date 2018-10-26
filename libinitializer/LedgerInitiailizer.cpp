@@ -53,8 +53,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
                     continue;
                 }
 
-                initSingleGroup(m_ledgerManager, boost::lexical_cast<int>(s[1]), it.second.data(),
-                    groudID2NodeList);
+                initSingleGroup(boost::lexical_cast<int>(s[1]), it.second.data(), groudID2NodeList);
             }
             catch (std::exception& e)
             {
@@ -67,17 +66,17 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
     m_ledgerManager->startAll();
 }
 
-void LedgerInitiailizer::initSingleGroup(std::shared_ptr<LedgerManager<FakeLedger>> _ledgerManager,
+void LedgerInitiailizer::initSingleGroup(
     GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
 {
-    _ledgerManager->initSingleLedger(
+    m_ledgerManager->initSingleLedger(
         m_preCompile, m_p2pService, _groupID, m_keyPair, m_groupDataDir, _path);
     _groudID2NodeList[_groupID] =
-        _ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
+        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 
     LOG(INFO) << "LedgerInitiailizer::initSingleGroup, groupID:" << std::to_string(_groupID)
               << ",minerList count:" << _groudID2NodeList[_groupID].size()
-              << ",consensus status:" << _ledgerManager->consensus(_groupID)->consensusStatus();
+              << ",consensus status:" << m_ledgerManager->consensus(_groupID)->consensusStatus();
     for (auto i : _groudID2NodeList[_groupID])
         LOG(INFO) << "miner:" << toHex(i);
 }

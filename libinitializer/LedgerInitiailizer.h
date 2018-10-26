@@ -23,8 +23,8 @@
 #pragma once
 
 ///< TODO: We're using the 'Fake.h' and 'FakeLedger' to run demo, we will delete that later.
-#include "../fisco-bcos/Fake.h"
 #include "Common.h"
+#include "Fake.h"
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/Service.h>
@@ -52,7 +52,7 @@ public:
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
 private:
-    void initSingleGroup(std::shared_ptr<LedgerManager<FakeLedger>> _ledgerManager,
+    void initSingleGroup(
         GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList);
 
     std::shared_ptr<LedgerManager<FakeLedger>> m_ledgerManager;
