@@ -23,10 +23,10 @@
 
 #include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
-#include <initializer/SecureInitiailizer.h>
 #include <initializer/Initializer.h>
 #include <initializer/LedgerInitiailizer.h>
 #include <initializer/P2PInitializer.h>
+#include <initializer/SecureInitiailizer.h>
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
@@ -78,26 +78,6 @@ static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
         }
     });
-}
-
-/// init a single group
-static void initSingleGroup(std::shared_ptr<Service> p2pService,
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager, GROUP_ID const& group_id,
-    KeyPair const& key_pair)
-{
-    std::unordered_map<dev::Address, dev::eth::PrecompiledContract> preCompile;
-    /// init all modules related to the ledger
-    ledgerManager->initSingleLedger(preCompile, p2pService, group_id, key_pair);
-    LOG(DEBUG) << "##### Group id:" << std::to_string(group_id) << std::endl;
-
-    for (auto i : ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList)
-    {
-        LOG(DEBUG) << "#### miner:" << toHex(i) << std::endl;
-    }
-    std::cout << "##### before startAll" << std::endl;
-    /// test pbft status
-    std::cout << "#### pbft consensus:" << ledgerManager->consensus(group_id)->consensusStatus()
-              << std::endl;
 }
 
 static void startConsensus(Params& params)
