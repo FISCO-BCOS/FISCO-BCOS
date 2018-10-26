@@ -98,7 +98,7 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 public:
     virtual ~MockMemoryTableFactory() {}
 
-    Table::Ptr openTable(h256 blockHash, int64_t num, const std::string& table)
+    Table::Ptr openTable(const std::string& table)
     {
         MockTable::Ptr tableptr = std::make_shared<MockTable>();
         tableptr->m_table = table;

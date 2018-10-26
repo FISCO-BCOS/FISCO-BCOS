@@ -21,10 +21,10 @@
  * @date 2018-10-25
  */
 
-#include "libexecutiveContext/StorageState.h"
+#include "libstoragestate/StorageState.h"
 #include "../libstorage/MemoryStorage.h"
-#include "libstorage/MemoryTableFactory.h"
 #include "libdevcore/SHA3.h"
+#include "libstorage/MemoryTableFactory.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(Storage)
 {
     Address addr1(0x100001);
     m_state.addBalance(addr1, u256(10));
-    auto hash = m_state.storageRoot(addr1);
+    m_state.storageRoot(addr1);
     auto value = m_state.storage(addr1, u256(123));
     BOOST_TEST(value == u256());
     m_state.setStorage(addr1, u256(123), u256(456));
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(Code)
     m_state.setCode(addr1, bytes(codeString.begin(), codeString.end()));
     auto code2 = m_state.code(addr1);
     BOOST_TEST(code == code2);
-    auto hash = m_state.codeHash(addr1);
+    m_state.codeHash(addr1);
     auto size = m_state.codeSize(addr1);
     BOOST_TEST(code.size() == size);
     auto hasCode = m_state.addressHasCode(addr1);

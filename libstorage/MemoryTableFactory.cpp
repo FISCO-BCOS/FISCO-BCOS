@@ -37,9 +37,9 @@ MemoryTableFactory::MemoryTableFactory()
     m_sysTables.push_back(SYS_TABLES);
 }
 
-Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const string& tableName)
+Table::Ptr MemoryTableFactory::openTable(const string& tableName)
 {
-    LOG(DEBUG) << "Open table:" << blockHash << " num:" << num << " table:" << tableName;
+    LOG(DEBUG) << "Open table:" << m_blockHash << " num:" << m_blockNum << " table:" << tableName;
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
@@ -54,7 +54,7 @@ Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const stri
     }
     else
     {
-        auto tempSysTable = openTable(m_blockHash, m_blockNum, SYS_TABLES);
+        auto tempSysTable = openTable(SYS_TABLES);
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
@@ -84,12 +84,12 @@ Table::Ptr MemoryTableFactory::openTable(h256 blockHash, int64_t num, const stri
     return memoryTable;
 }
 
-Table::Ptr MemoryTableFactory::createTable(h256 blockHash, int64_t num, const string& tableName,
+Table::Ptr MemoryTableFactory::createTable(const string& tableName,
     const string& keyField, const std::string& valueField)
 {
-    LOG(DEBUG) << "Create Table:" << blockHash << " num:" << num << " table:" << tableName;
+    LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum << " table:" << tableName;
 
-    auto sysTable = openTable(blockHash, num, SYS_TABLES);
+    auto sysTable = openTable(SYS_TABLES);
 
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
@@ -105,7 +105,7 @@ Table::Ptr MemoryTableFactory::createTable(h256 blockHash, int64_t num, const st
     tableEntry->setField("value_field", valueField);
     sysTable->insert(tableName, tableEntry);
 
-    return openTable(blockHash, num, tableName);
+    return openTable(tableName);
 }
 
 void MemoryTableFactory::setBlockHash(h256 blockHash)

@@ -358,7 +358,7 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
     auto table =
-        m_memoryTableFactory->createTable(h256(), 0, tableName, STORAGE_KEY, STORAGE_VALUE);
+        m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE);
 
     auto entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_BALANCE);
@@ -385,5 +385,5 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
 Table::Ptr StorageState::getTable(Address const& _address) const
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
-    return m_memoryTableFactory->openTable(h256(), 0, tableName);
+    return m_memoryTableFactory->openTable(tableName);
 }
