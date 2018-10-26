@@ -26,6 +26,7 @@ void ExecutiveContextFactory::initExecutiveContext(
 
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
+    context->setState(m_stateFactoryInterface->getState());
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)

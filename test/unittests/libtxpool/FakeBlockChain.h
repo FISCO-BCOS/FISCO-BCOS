@@ -140,6 +140,10 @@ public:
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
+    {
+        return LocalisedTransaction();
+    }
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
     {
         return TransactionReceipt();

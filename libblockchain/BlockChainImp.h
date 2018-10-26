@@ -48,6 +48,7 @@ public:
     int64_t number() const override;
     dev::h256 numberHash(int64_t _i) const override;
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override;
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;

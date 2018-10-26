@@ -27,7 +27,9 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
+#include <libethcore/TransactionReceipt.h>
 #include <libevm/ExtVMFace.h>
+#include <libexecutivecontext/ExecutionResult.h>
 #include <libmptstate/State.h>
 #include <memory>
 namespace dev
@@ -47,6 +49,8 @@ public:
     virtual ~BlockVerifierInterface(){};
 
     virtual ExecutiveContext::Ptr executeBlock(dev::eth::Block& block) = 0;
+    virtual std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) = 0;
 };
 
 }  // namespace blockverifier
