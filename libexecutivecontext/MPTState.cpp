@@ -110,7 +110,7 @@ void MPTState::kill(Address _a)
     m_state.kill(_a);
 }
 
-bytes const& MPTState::code(Address const& _addr) const
+bytes const MPTState::code(Address const& _addr) const
 {
     return m_state.code(_addr);
 }
@@ -150,7 +150,7 @@ void MPTState::commit()
     m_state.commit();
 }
 
-void MPTState::dbCommit()
+void MPTState::dbCommit(h256 const&, int64_t)
 {
     m_state.db().commit();
 }
