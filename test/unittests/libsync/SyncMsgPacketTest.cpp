@@ -42,8 +42,7 @@ namespace test
 class SyncMsgPacketFixture : public TestOutputHelperFixture
 {
 public:
-    SyncMsgPacketFixture()
-    : fakeSyncToolsSet()
+    SyncMsgPacketFixture() : fakeSyncToolsSet()
     {
         fakeSessionPtr = fakeSyncToolsSet.createSession();
         fakeTransactionPtr = fakeSyncToolsSet.createTransaction(0);
@@ -51,6 +50,7 @@ public:
 
     std::shared_ptr<SessionFace> fakeSessionPtr;
     std::shared_ptr<Transaction> fakeTransactionPtr;
+
 private:
     FakeSyncToolsSet fakeSyncToolsSet;
 };
