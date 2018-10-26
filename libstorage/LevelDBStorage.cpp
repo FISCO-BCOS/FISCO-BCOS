@@ -56,9 +56,6 @@ Entries::Ptr LevelDBStorage::select(
             Json::Value valueJson;
             ssIn >> valueJson;
 
-            std::string blockHash = valueJson["blockHash"].asString();
-            int num = valueJson["num"].asInt();
-
             Json::Value values = valueJson["values"];
             for (auto it = values.begin(); it != values.end(); ++it)
             {
@@ -69,8 +66,11 @@ Entries::Ptr LevelDBStorage::select(
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
 
-                entry->setDirty(false);
-                entries->addEntry(entry);
+                if (entry->getStatus() == 0)
+                {
+                    entry->setDirty(false);
+                    entries->addEntry(entry);
+                }
             }
         }
 
@@ -101,8 +101,6 @@ size_t LevelDBStorage::commit(
                 std::string entryKey = it->tableName + "_" + dataIt.first;
 
                 Json::Value entry;
-                entry["blockHash"] = hash.hex();
-                entry["num"] = num;
 
                 for (size_t i = 0; i < dataIt.second->size(); ++i)
                 {
@@ -111,6 +109,8 @@ size_t LevelDBStorage::commit(
                     {
                         value[fieldIt.first] = fieldIt.second;
                     }
+                    value["_hash_"] = hash.hex();
+                    value["_num_"] = num;
                     entry["values"].append(value);
                 }
 

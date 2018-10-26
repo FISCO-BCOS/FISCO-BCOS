@@ -31,7 +31,7 @@ namespace dev
 {
 namespace eth
 {
-enum StateType
+enum class StateType
 {
     MptState,
     StorageState
@@ -108,7 +108,7 @@ public:
     /// @returns bytes() if no account exists at that address.
     /// @warning The reference to the code is only valid until the access to
     ///          other account. Do not keep it.
-    virtual bytes const& code(Address const& _addr) const = 0;
+    virtual bytes const code(Address const& _addr) const = 0;
 
     /// Get the code hash of an account.
     /// @returns EmptySHA3 if no account exists at that address or if there is no code associated
@@ -138,7 +138,7 @@ public:
 
     /// Commit levelDB data into hardisk or commit AMDB data into database (Called after commit())
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.
-    virtual void dbCommit() = 0;
+    virtual void dbCommit(h256 const& _blockHash, int64_t _blockNumber) = 0;
 
     /// Resets any uncommitted changes to the cache. Return a new root in params &root
     virtual void setRoot(h256 const& _root) = 0;
