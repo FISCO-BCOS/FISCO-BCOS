@@ -16,14 +16,14 @@
  *
  * @brief: unit test for Session
  *
- * @file Eth.h
+ * @file Rpc.h
  * @author: caryliao
  * @date 2018-10-25
  */
 
 #pragma once
 
-#include "EthFace.h"
+#include "RpcFace.h"
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libdevcrypto/Common.h>
@@ -40,10 +40,10 @@ namespace rpc
 /**
  * @brief JSON-RPC api
  */
-class Eth : public EthFace
+class Rpc : public RpcFace
 {
 public:
-    Eth(dev::ledger::LedgerManager<dev::ledger::LedgerInterface>& _ledgerManager,
+    Rpc(dev::ledger::LedgerManager<dev::ledger::LedgerInterface>& _ledgerManager,
         dev::p2p::Service& _service);
 
     virtual RPCModules implementedModules() const override
@@ -52,44 +52,44 @@ public:
     }
 
     // consensus part
-    virtual Json::Value eth_blockNumber(const Json::Value& requestJson) override;
-    virtual Json::Value eth_pbftView(const Json::Value& requestJson) override;
+    virtual Json::Value blockNumber(const Json::Value& requestJson) override;
+    virtual Json::Value pbftView(const Json::Value& requestJson) override;
 
     // p2p part
-    virtual Json::Value admin_peers(const Json::Value& requestJson) override;
+    virtual Json::Value peers(const Json::Value& requestJson) override;
 
     // block part
-    virtual Json::Value eth_getBlockByHash(const Json::Value& requestJson) override;
-    virtual Json::Value eth_getBlockByNumber(const Json::Value& requestJson) override;
+    virtual Json::Value getBlockByHash(const Json::Value& requestJson) override;
+    virtual Json::Value getBlockByNumber(const Json::Value& requestJson) override;
 
     // transaction part
     /// @return the information about a transaction requested by transaction hash.
-    virtual Json::Value eth_getTransactionByHash(const Json::Value& requestJson) override;
+    virtual Json::Value getTransactionByHash(const Json::Value& requestJson) override;
     /// @return information about a transaction by block hash and transaction index position.
-    virtual Json::Value eth_getTransactionByBlockHashAndIndex(
+    virtual Json::Value getTransactionByBlockHashAndIndex(
         const Json::Value& requestJson) override;
     /// @return information about a transaction by block number and transaction index position.
-    virtual Json::Value eth_getTransactionByBlockNumberAndIndex(
+    virtual Json::Value getTransactionByBlockNumberAndIndex(
         const Json::Value& requestJson) override;
     /// @return the receipt of a transaction by transaction hash.
     /// @note That the receipt is not available for pending transactions.
-    virtual Json::Value eth_getTransactionReceipt(const Json::Value& requestJson) override;
+    virtual Json::Value getTransactionReceipt(const Json::Value& requestJson) override;
     /// @return information about pendingTransactions.
-    virtual Json::Value eth_pendingTransactions(const Json::Value& requestJson) override;
+    virtual Json::Value pendingTransactions(const Json::Value& requestJson) override;
     /// Executes a new message call immediately without creating a transaction on the blockchain.
-    virtual Json::Value eth_call(const Json::Value& requestJson) override;
+    virtual Json::Value call(const Json::Value& requestJson) override;
 
     // Creates new message call transaction or a contract creation for signed transactions.
-    virtual Json::Value eth_sendRawTransaction(const Json::Value& requestJson) override;
+    virtual Json::Value sendRawTransaction(const Json::Value& requestJson) override;
 
     // amop part
-    virtual Json::Value amop_topics(const Json::Value& requestJson) override;
-    virtual Json::Value amop_setTopics(const Json::Value& requestJson) override;
-    virtual Json::Value amop_sendMessage(const Json::Value& requestJson) override;
+    virtual Json::Value topics(const Json::Value& requestJson) override;
+    virtual Json::Value setTopics(const Json::Value& requestJson) override;
+    virtual Json::Value sendMessage(const Json::Value& requestJson) override;
 
     // push event part
-    //	virtual Json::Value eth_blockAccepted  (const Json::Value &requestJson) override;
-    //	virtual Json::Value eth_transactionAccepted (const Json::Value &requestJson) override;
+    //	virtual Json::Value blockAccepted  (const Json::Value &requestJson) override;
+    //	virtual Json::Value transactionAccepted (const Json::Value &requestJson) override;
     //	virtual Json::Value amop_push (const Json::Value &requestJson) override;
 
 

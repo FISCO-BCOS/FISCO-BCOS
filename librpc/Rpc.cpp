@@ -16,15 +16,16 @@
  *
  * @brief: unit test for Session
  *
- * @file Eth.cpp
+ * @file Rpc.cpp
  * @author: caryliao
  * @date 2018-10-25
  */
 
+#include "Rpc.h"
+#include "JsonHelper.h"
 #include <jsonrpccpp/common/exception.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
-#include <libconsensus/Consensus.h>
 #include <libconsensus/ConsensusInterface.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
@@ -36,19 +37,16 @@
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
 
-#include "Eth.h"
-#include "JsonHelper.h"
-
 using namespace std;
 using namespace jsonrpc;
 using namespace dev::rpc;
 
-Eth::Eth(dev::ledger::LedgerManager<dev::ledger::LedgerInterface>& _ledgerManager,
+Rpc::Rpc(dev::ledger::LedgerManager<dev::ledger::LedgerInterface>& _ledgerManager,
     dev::p2p::Service& _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
-Json::Value Eth::eth_blockNumber(const Json::Value& requestJson)
+Json::Value Rpc::blockNumber(const Json::Value& requestJson)
 {
     try
     {
@@ -72,7 +70,7 @@ Json::Value Eth::eth_blockNumber(const Json::Value& requestJson)
     }
     return Json::Value(Json::nullValue);
 }
-Json::Value Eth::eth_pbftView(const Json::Value& requestJson)
+Json::Value Rpc::pbftView(const Json::Value& requestJson)
 {
     try
     {
@@ -104,7 +102,7 @@ Json::Value Eth::eth_pbftView(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::admin_peers(const Json::Value& requestJson)
+Json::Value Rpc::peers(const Json::Value& requestJson)
 {
     try
     {
@@ -137,7 +135,7 @@ Json::Value Eth::admin_peers(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_getBlockByHash(const Json::Value& requestJson)
+Json::Value Rpc::getBlockByHash(const Json::Value& requestJson)
 {
     try
     {
@@ -189,7 +187,7 @@ Json::Value Eth::eth_getBlockByHash(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_getBlockByNumber(const Json::Value& requestJson)
+Json::Value Rpc::getBlockByNumber(const Json::Value& requestJson)
 {
     try
     {
@@ -241,7 +239,7 @@ Json::Value Eth::eth_getBlockByNumber(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_getTransactionByHash(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionByHash(const Json::Value& requestJson)
 {
     try
     {
@@ -279,7 +277,7 @@ Json::Value Eth::eth_getTransactionByHash(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_getTransactionByBlockHashAndIndex(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionByBlockHashAndIndex(const Json::Value& requestJson)
 {
     try
     {
@@ -323,7 +321,7 @@ Json::Value Eth::eth_getTransactionByBlockHashAndIndex(const Json::Value& reques
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_getTransactionByBlockNumberAndIndex(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionByBlockNumberAndIndex(const Json::Value& requestJson)
 {
     try
     {
@@ -366,7 +364,7 @@ Json::Value Eth::eth_getTransactionByBlockNumberAndIndex(const Json::Value& requ
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_getTransactionReceipt(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionReceipt(const Json::Value& requestJson)
 {
     try
     {
@@ -412,7 +410,7 @@ Json::Value Eth::eth_getTransactionReceipt(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_pendingTransactions(const Json::Value& requestJson)
+Json::Value Rpc::pendingTransactions(const Json::Value& requestJson)
 {
     try
     {
@@ -456,7 +454,7 @@ Json::Value Eth::eth_pendingTransactions(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_call(const Json::Value& requestJson)
+Json::Value Rpc::call(const Json::Value& requestJson)
 {
     try
     {
@@ -492,7 +490,7 @@ Json::Value Eth::eth_call(const Json::Value& requestJson)
     return Json::Value(Json::nullValue);
 }
 
-Json::Value Eth::eth_sendRawTransaction(const Json::Value& requestJson)
+Json::Value Rpc::sendRawTransaction(const Json::Value& requestJson)
 {
     try
     {
