@@ -38,20 +38,20 @@ public:
     MemoryTableFactory();
     virtual ~MemoryTableFactory() {}
 
-    Table::Ptr openTable(h256 blockHash, int64_t num, const std::string& table) override;
-    Table::Ptr createTable(h256 blockHash, int64_t num, const std::string& tableName,
-        const std::string& keyField, const std::string& valueField) override;
+    Table::Ptr openTable(const std::string& table) override;
+    Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
+        const std::string& valueField) override;
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
     virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
 
     void setBlockHash(h256 blockHash);
     void setBlockNum(int blockNum);
-    h256 hash(std::shared_ptr<blockverifier::ExecutiveContext> context);
+    h256 hash();
     size_t savepoint() const { return m_changeLog.size(); };
     void rollback(size_t _savepoint);
     void commit();
-    void commitDB(std::shared_ptr<blockverifier::ExecutiveContext> context, bool commit);
+    void commitDB(h256 const& _blockHash, int64_t _blockNumber);
 
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);

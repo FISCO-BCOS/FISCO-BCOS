@@ -30,6 +30,8 @@
 #include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
+#include <libinitializer/Initializer.h>
+#include <libinitializer/P2PInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
 
@@ -46,38 +48,35 @@ public:
 };
 
 static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
-    GROUP_ID const& group_id, float txSpeed, KeyPair const& key_pair)
+    GROUP_ID const& groupSize, float txSpeed, KeyPair const& key_pair)
 {
-    std::shared_ptr<BlockChainInterface> blockChain = ledgerManager->blockChain(group_id);
-    std::shared_ptr<TxPoolInterface> txPool = ledgerManager->txPool(group_id);
-    new thread([&]() {
-        ///< transaction related
-        bytes rlpBytes = fromHex(
-            "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-            "0000"
-            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-            "0000"
-            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-            "657c"
-            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
-        Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
-        Secret sec = key_pair.secret();
-        u256 maxBlockLimit = u256(1000);
-        /// get the consensus status
-        /// m_txSpeed default is 10
-        uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
-        while (true)
+    ///< transaction related
+    bytes rlpBytes = fromHex(
+        "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+        "0000"
+        "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+        "0000"
+        "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+        "657c"
+        "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
+    Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
+    Secret sec = key_pair.secret();
+    u256 maxBlockLimit = u256(1000);
+    /// get the consensus status
+    /// m_txSpeed default is 10
+    uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
+    while (true)
+    {
+        for (int i = 1; i <= groupSize; i++)
         {
             tx.setNonce(tx.nonce() + u256(1));
-            tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
+            tx.setBlockLimit(u256(ledgerManager->blockChain(i)->number()) + maxBlockLimit);
             dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
             tx.updateSignature(SignatureStruct(sig));
-            std::pair<h256, Address> ret = txPool->submit(tx);
-            /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
-            ///          << ", size:" << txPool->pendingSize();
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+            ledgerManager->txPool(i)->submit(tx);
         }
-    });
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+    }
 }
 
 static void startConsensus(Params& params)
@@ -94,14 +93,7 @@ static void startConsensus(Params& params)
     auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
 
     /// create transaction
-    for (GROUP_ID i = 1; i <= params.groupSize(); i++)
-    {
-        createTx(ledgerManager, i, params.txSpeed(), key_pair);
-    }
-    while (true)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
+    createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
 }
 
 int main(int argc, const char* argv[])
