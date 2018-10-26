@@ -179,6 +179,9 @@ public:
     bool maintainDownloadingQueue();  /// return true if downloading finish
     void maintainDownloadingQueueBuffer();
     void maintainPeersConnection();
+
+private:
+    bool isNewBlock(BlockPtr _block);
 };
 
 }  // namespace sync

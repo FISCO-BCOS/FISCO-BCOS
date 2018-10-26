@@ -264,7 +264,7 @@ bool SyncMaster::maintainDownloadingQueue()
     BlockPtr topBlock = bq.top();
     while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
-        if (isNextBlock(topBlock))
+        if (isNewBlock(topBlock))
         // TODO check minerlist (&& minerlist sig is ok)
         {
             ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock);
@@ -321,7 +321,7 @@ void SyncMaster::maintainDownloadingQueueBuffer()
         m_syncStatus->bq().clear();
 }
 
-bool SyncMaster::isNextBlock(BlockPtr _block)
+bool SyncMaster::isNewBlock(BlockPtr _block)
 {
     if (_block == nullptr)
         return false;
