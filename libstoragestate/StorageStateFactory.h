@@ -26,7 +26,6 @@
 
 #include "libexecutivecontext/StateFactoryInterface.h"
 
-
 namespace dev
 {
 namespace storagestate
