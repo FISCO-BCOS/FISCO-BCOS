@@ -16,12 +16,17 @@
  */
 
 /**
- * @brief : implementation of consensus
+ * @brief : implementation of Consensus
  * @file: Consensus.cpp
  * @author: yujiechen
  * @date: 2018-09-27
+ *
+ * @ author: yujiechen
+ * @ date: 2018-10-26
+ * @ file : Sealer.cpp
+ * @ modification: rename Consensus.cpp to Sealer.cpp
  */
-#include "Consensus.h"
+#include "Sealer.h"
 #include <libethcore/LogEntry.h>
 #include <libsync/SyncStatus.h>
 using namespace dev::sync;
@@ -32,12 +37,12 @@ namespace dev
 {
 namespace consensus
 {
-/// start the consensus module
-void Consensus::start()
+/// start the Sealer module
+void Sealer::start()
 {
     if (m_startConsensus)
     {
-        LOG(WARNING) << "Consensus module has already been started, return directly";
+        LOG(WARNING) << "Sealer module has already been started, return directly";
         return;
     }
     resetSealingBlock();
@@ -49,7 +54,7 @@ void Consensus::start()
     m_startConsensus = true;
 }
 
-bool Consensus::shouldSeal()
+bool Sealer::shouldSeal()
 {
     bool sealed;
     DEV_READ_GUARDED(x_sealing)
@@ -58,7 +63,7 @@ bool Consensus::shouldSeal()
             m_consensusEngine->accountType() == NodeAccountType::MinerAccount && !isBlockSyncing());
 }
 
-void Consensus::reportNewBlock()
+void Sealer::reportNewBlock()
 {
     bool t = true;
     if (m_syncBlock.compare_exchange_strong(t, false))
@@ -77,12 +82,12 @@ void Consensus::reportNewBlock()
     }
 }
 
-bool Consensus::shouldWait(bool const& wait) const
+bool Sealer::shouldWait(bool const& wait) const
 {
     return !m_syncBlock && wait;
 }
 
-void Consensus::doWork(bool wait)
+void Sealer::doWork(bool wait)
 {
     reportNewBlock();
     if (shouldSeal())
@@ -119,7 +124,7 @@ void Consensus::doWork(bool wait)
  * @brief: load transactions from the transaction pool
  * @param transToFetch: max transactions to fetch
  */
-void Consensus::loadTransactions(uint64_t const& transToFetch)
+void Sealer::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
     m_sealing.block.appendTransactions(
@@ -127,20 +132,20 @@ void Consensus::loadTransactions(uint64_t const& transToFetch)
 }
 
 /// check whether the blocksync module is syncing
-bool Consensus::isBlockSyncing()
+bool Sealer::isBlockSyncing()
 {
     SyncStatus state = m_blockSync->status();
     return (state.state != SyncState::Idle);
 }
 
-void Consensus::resetSealingBlock(Sealing& sealing)
+void Sealer::resetSealingBlock(Sealing& sealing)
 {
     resetBlock(sealing.block);
     sealing.m_transactionSet.clear();
     sealing.p_execContext = nullptr;
 }
 
-void Consensus::resetBlock(Block& block)
+void Sealer::resetBlock(Block& block)
 {
     block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
     /// LOG(DEBUG) << "##### m_blockChain->getBlockByNumber(m_blockChain->number():"
@@ -148,7 +153,7 @@ void Consensus::resetBlock(Block& block)
     /// LOG(DEBUG) << "##### block number after reset:" << block.header().number();
 }
 
-void Consensus::resetSealingHeader(BlockHeader& header)
+void Sealer::resetSealingHeader(BlockHeader& header)
 {
     /// import block
     resetCurrentTime();
@@ -159,12 +164,12 @@ void Consensus::resetSealingHeader(BlockHeader& header)
     header.setExtraData(m_extraData);
 }
 
-/// stop the consensus module
-void Consensus::stop()
+/// stop the Sealer module
+void Sealer::stop()
 {
     if (m_startConsensus == false)
     {
-        LOG(WARNING) << "Consensus module has already been stopped, return now";
+        LOG(WARNING) << "Sealer module has already been stopped, return now";
         return;
     }
     m_startConsensus = false;
