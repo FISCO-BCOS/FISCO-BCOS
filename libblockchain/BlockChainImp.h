@@ -64,13 +64,13 @@ private:
     void writeNumber2Hash(const dev::eth::Block& block);
     void writeHash2Block(dev::eth::Block& block);
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
-    const std::string m_extraDbName_currentState = "currentState";
-    const std::string m_keyValue_currentNumber = "currentNumber";
+    const std::string m_extraDbName_currentState = "_current_state_";
+    const std::string m_keyValue_currentNumber = "current_number";
     const std::string m_ValueName_currentNumber = "value";
     const std::string m_ValueName = "value";
-    const std::string m_txHash2Block = "txHash2Block";
-    const std::string m_number2hash = "number2hash";
-    const std::string m_hash2Block = "hash2Block";
+    const std::string m_txHash2Block = "_tx_hash_2_block_";
+    const std::string m_number2hash = "_number_2_hash_";
+    const std::string m_hash2Block = "_hash_2_block_";
 };
 }  // namespace blockchain
 }  // namespace dev

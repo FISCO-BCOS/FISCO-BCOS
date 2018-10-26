@@ -48,12 +48,13 @@ public:
         m_db = MPTState::openDB(m_basePath, m_genesisHash);
     };
     virtual ~MPTStateFactory(){};
-    virtual std::shared_ptr<StateFace> getState() override;
+    virtual std::shared_ptr<StateFace> getState(
+        h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory) override;
 
 private:
     OverlayDB m_db;
-    u256 m_accountStartNonce;
-    BaseState m_bs;
+    u256 m_accountStartNonce;  //
+    BaseState m_bs;            //
     boost::filesystem::path m_basePath;
     h256 m_genesisHash;
     WithExisting m_we;
