@@ -177,6 +177,7 @@ public:
     void maintainBlocks();
     void maintainPeersStatus();
     bool maintainDownloadingQueue();  /// return true if downloading finish
+    void maintainDownloadingQueueBuffer();
     void maintainPeersConnection();
 };
 

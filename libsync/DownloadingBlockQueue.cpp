@@ -61,8 +61,37 @@ size_t DownloadingBlockQueue::size()
     return s;
 }
 
-/// pop the block sequent
-BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _limit)
+/// pop the block
+void DownloadingBlockQueue::pop()
+{
+    WriteGuard l(x_blocks);
+    if (!m_blocks.empty())
+        m_blocks.pop();
+}
+
+BlockPtr DownloadingBlockQueue::top(bool isFlushBuffer)
+{
+    if (isFlushBuffer)
+        flushBufferToQueue();
+
+    ReadGuard l(x_blocks);
+    if (!m_blocks.empty())
+        return m_blocks.top();
+    else
+        return nullptr;
+}
+
+void DownloadingBlockQueue::clear()
+{
+    ReadGuard l1(x_buffer);
+    ReadGuard l2(x_blocks);
+    m_buffer->clear();
+
+    std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> emptyQueue;
+    swap(m_blocks, emptyQueue);  // Does memory leak here ?
+}
+
+void DownloadingBlockQueue::flushBufferToQueue()
 {
     shared_ptr<BlockPtrVec> localBuffer;
     {
@@ -82,61 +111,6 @@ BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _lim
             break;
         }
 
-        int64_t number = block->header().number();
-
-        if (number < _startNumber)
-            continue;  // ignore smaller blocks
-
-        auto p = m_blocks.find(number);
-        if (p == m_blocks.end())
-        {
-            m_blocks.insert(pair<int64_t, BlockPtr>(number, block));
-            m_minNumberInQueue = min(m_minNumberInQueue, number);
-        }
+        m_blocks.push(block);
     }
-
-    // delete smaller blocks in queue
-    for (; m_minNumberInQueue < _startNumber; ++m_minNumberInQueue)
-    {
-        cout << m_minNumberInQueue << " ";
-        auto p = m_blocks.find(m_minNumberInQueue);
-        if (p != m_blocks.end())
-            m_blocks.erase(p);
-    }
-    cout << endl;
-
-    // generate a queue
-    BlockPtrVec ret;
-    for (; m_minNumberInQueue < _startNumber + _limit; ++m_minNumberInQueue)
-    {
-        auto p = m_blocks.find(m_minNumberInQueue);
-        if (p != m_blocks.end())
-        {
-            ret.emplace_back(p->second);
-            m_blocks.erase(p);
-        }
-        else
-        {
-            /*
-            auto upper = m_blocks.upper_bound(m_minNumberInQueue);
-            if (upper != m_blocks.end())
-            {
-                cout << "start: " << _startNumber << "  " << m_minNumberInQueue << " upper found "
-                     << upper->first << endl;
-                m_minNumberInQueue = upper->first;
-            }
-            else
-            {
-                cout << "Is ??? " << (m_blocks.upper_bound(m_minNumberInQueue) == m_blocks.end())
-                     << endl;
-                cout << "start: " << _startNumber << " to max:" << m_minNumberInQueue << endl;
-                cout << "This time, size is " << m_blocks.size() << " has 7 ? " << m_blocks.count(7)
-                     << endl;
-                m_minNumberInQueue = LONG_LONG_MAX;
-            }
-            */
-            break;
-        }
-    }
-    return ret;
 }

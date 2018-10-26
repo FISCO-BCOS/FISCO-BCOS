@@ -43,6 +43,11 @@ void SyncMaster::stop()
 
 void SyncMaster::doWork()
 {
+    // Always do
+    maintainPeersConnection();
+    maintainDownloadingQueueBuffer();
+    maintainPeersStatus();
+
     // Idle do
     if (!isSyncing())
     {
@@ -69,10 +74,6 @@ void SyncMaster::doWork()
                 noteDownloadingFinish();
         }
     }
-
-    // Always do
-    maintainPeersConnection();
-    maintainPeersStatus();
 }
 
 void SyncMaster::workLoop()
@@ -204,9 +205,13 @@ void SyncMaster::maintainPeersStatus()
 
     // Choose to use min number in blockqueue or max peer number
     int64_t maxRequestNumber = maxPeerNumber;
-    int64_t minNumberInQueue = m_syncStatus->bq().minNumberInQueue();
-    if (0 != minNumberInQueue)
+    if (nullptr != m_syncStatus->bq().top())
+    {
+        int64_t minNumberInQueue = m_syncStatus->bq().top()->header().number();
         maxRequestNumber = min(maxPeerNumber, minNumberInQueue - 1);
+    }
+    if (currentNumber >= maxRequestNumber)
+        return;  // no need to send request block packet
 
     // Sharding by c_maxRequestBlocks to request blocks
     size_t shardNumber =
@@ -250,17 +255,29 @@ void SyncMaster::maintainPeersStatus()
 bool SyncMaster::maintainDownloadingQueue()
 {
     int64_t currentNumber = m_blockChain->number();
-    if (currentNumber < m_syncStatus->knownHighestNumber)
+    if (currentNumber >= m_syncStatus->knownHighestNumber)
+        return true;
+
+    DownloadingBlockQueue& bq = m_syncStatus->bq();
+
+    // pop block in sequence and ignore block which number is lower than currentNumber +1
+    BlockPtr topBlock = bq.top();
+    while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
-        BlockPtrVec blocks = m_syncStatus->bq().popSequent(currentNumber + 1, c_maxCommitBlocks);
-        for (auto block : blocks)
+        if (isNextBlock(topBlock))
+        // TODO check minerlist (&& minerlist sig is ok)
         {
-            // TODO: verify transaction signature before blockVerifier
-            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block);
-            m_blockChain->commitBlock(*block, exeCtx);
+            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock);
+            m_blockChain->commitBlock(*topBlock, exeCtx);
         }
+        else
+            LOG(WARNING) << "Ignore illigal block " << topBlock->header().number();
+
+        bq.pop();
+        topBlock = bq.top();
     }
 
+    // has download finished ?
     currentNumber = m_blockChain->number();
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
@@ -294,4 +311,27 @@ void SyncMaster::maintainPeersConnection()
             m_syncStatus->newSyncPeerStatus(newPeer);
         }
     }
+}
+
+void SyncMaster::maintainDownloadingQueueBuffer()
+{
+    if (m_state == SyncState::Downloading)
+        m_syncStatus->bq().flushBufferToQueue();
+    else
+        m_syncStatus->bq().clear();
+}
+
+bool SyncMaster::isNextBlock(BlockPtr _block)
+{
+    if (_block == nullptr)
+        return false;
+
+    int64_t currentNumber = m_blockChain->number();
+    if (currentNumber + 1 != _block->header().number())
+        return false;
+    if (m_blockChain->numberHash(currentNumber) != _block->header().parentHash())
+        return false;
+
+    // TODO check block minerlist sig
+    return true;
 }
