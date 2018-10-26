@@ -85,6 +85,7 @@ protected:
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile);
 
 private:
+    /// TODO: init AMDB storage
     void initAMDB();
     /// TODO: init levelDB storage
     void initLevelDB(){};

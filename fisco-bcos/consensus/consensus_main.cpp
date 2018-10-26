@@ -76,13 +76,11 @@ static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
 }
 
 /// init a single group
-static void initSingleGroup(std::shared_ptr<Service> p2pService,
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager, GROUP_ID const& group_id,
-    KeyPair const& key_pair)
+static void initSingleGroup(
+    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager, GROUP_ID const& group_id)
 {
-    std::unordered_map<dev::Address, dev::eth::PrecompiledContract> preCompile;
     /// init all modules related to the ledger
-    ledgerManager->initSingleLedger(preCompile, p2pService, group_id, key_pair);
+    ledgerManager->initSingleLedger(group_id);
     LOG(DEBUG) << "##### Group id:" << std::to_string(group_id) << std::endl;
 
     for (auto i : ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList)
@@ -119,15 +117,17 @@ static void startConsensus(Params& params)
         LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
         exit(-1);
     }
+    std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>> preCompile =
+        std::make_shared<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>>();
     std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
-        std::make_shared<LedgerManager<FakeLedger>>();
+        std::make_shared<LedgerManager<FakeLedger>>(p2pService, key_pair, preCompile);
     std::map<GROUP_ID, h512s> groudID2NodeList;
     LOG(DEBUG) << "### group size:" << params.groupSize();
     /// init all the modules through ledger
     for (int i = 1; i <= params.groupSize(); i++)
     {
         LOG(DEBUG) << "### init group:" << std::to_string(i);
-        initSingleGroup(p2pService, ledgerManager, i, key_pair);
+        initSingleGroup(ledgerManager, i);
         groudID2NodeList[int(i)] =
             ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
         LOG(DEBUG) << "## push back minerList:"

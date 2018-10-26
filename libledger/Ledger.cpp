@@ -94,10 +94,14 @@ void Ledger::initConfig(std::string const& configPath)
 void Ledger::initTxPoolConfig(ptree const& pt)
 {
     m_param->mutableTxPoolParam().txPoolLimit = pt.get<uint64_t>("txPool.limit", 102400);
-    LOG(DEBUG) << "### init txPool.limit = " << m_param->mutableTxPoolParam().txPoolLimit;
+    LOG(DEBUG) << "init txPool.limit = " << m_param->mutableTxPoolParam().txPoolLimit;
 }
 
-/// init consensus confit
+/// init consensus configurations:
+/// 1. consensusType: current support pbft only (default is pbft)
+/// 2. maxTransNum: max number of transactions can be sealed into a block
+/// 3. intervalBlockTime: average block generation period
+/// 4. miner.${idx}: define the node id of every miner related to the group
 void Ledger::initConsensusConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().consensusType =
@@ -126,12 +130,18 @@ void Ledger::initConsensusConfig(ptree const& pt)
     }
 }
 
+/// init sync related configurations
+/// 1. idleWaitMs: default is 30ms
 void Ledger::initSyncConfig(ptree const& pt)
 {
     m_param->mutableSyncParam().idleWaitMs = pt.get<unsigned>("sync.idleWaitMs", 30);
     LOG(DEBUG) << "Init Sync.idleWaitMs = " << m_param->mutableSyncParam().idleWaitMs;
 }
 
+/// init db related configurations:
+/// dbType: leveldb/AMDB, storage type, default is "AMDB"
+/// mpt: true/false, enable mpt or not, default is true
+/// dbpath: data to place all data of the group, default is "data"
 void Ledger::initDBConfig(ptree const& pt)
 {
     /// init the basic config
@@ -139,13 +149,15 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->setMptState(pt.get<bool>("statedb.mpt", true));
     std::string baseDir = m_param->baseDir() + "/" + pt.get<std::string>("statedb.dbpath", "data");
     m_param->setBaseDir(baseDir);
-    LOG(DEBUG) << "### baseDir:" << m_param->baseDir();
 }
 
+/// init genesis configuration
+/// 1. hash: hash of the genesis
 void Ledger::initGenesisConfig(ptree const& pt)
 {
     m_param->mutableGenesisParam().genesisHash = pt.get<dev::h256>("genesis.hash", h256());
 }
+
 /// init txpool
 void Ledger::initTxPool()
 {

@@ -34,18 +34,38 @@ template <typename T>
 class LedgerManager
 {
 public:
-    virtual inline bool initSingleLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile,
-        std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir = "data",
-        std::string const& configFileName = "")
+    /**
+     * @brief: constructor of LedgerManager
+     * @param _service: p2p service handler used to send/receive messages
+     * @param _keyPair: the keyPair used to init consensus module
+     * @param _preCompile: map that stores the PrecompiledContract (required by blockverifier)
+     */
+    LedgerManager(std::shared_ptr<dev::p2p::P2PInterface> _service, dev::KeyPair keyPair,
+        std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>>
+            _preCompile)
+      : m_service(_service), m_keyPair(keyPair), m_preCompile(_preCompile)
+    {
+        assert(m_service);
+    }
+
+    /**
+     * @brief : init a single ledger with the given params
+     *
+     * @param _groupId : the groupId of the ledger need to be inited
+     * @param _baseDir: baseDir used to place the data of the group
+     * @param configFileName: the configuration file path of the group to be inited
+     * @return true: init single ledger succeed
+     * @return false: init single ledger failed
+     */
+    virtual inline bool initSingleLedger(dev::GROUP_ID const& _groupId,
+        std::string const& _baseDir = "data", std::string const& configFileName = "")
     {
         if (m_ledgerMap.count(_groupId) == 0)
         {
             std::shared_ptr<LedgerInterface> ledger =
-                std::make_shared<T>(service, _groupId, _keyPair, _baseDir, configFileName);
+                std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
             LOG(DEBUG) << "Init Ledger for group:" << _groupId;
-            ledger->initLedger(preCompile);
+            ledger->initLedger(*m_preCompile);
             m_ledgerMap.insert(std::make_pair(_groupId, ledger));
             return true;
         }
@@ -56,6 +76,12 @@ public:
         }
     }
 
+    /**
+     * @brief : start a single ledger by groupId
+     * @param groupId : the ledger need to be started
+     * @return true : start success
+     * @return false : start failed (maybe the ledger doesn't exist)
+     */
     virtual inline bool startByGroupID(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
@@ -64,6 +90,12 @@ public:
         return true;
     }
 
+    /**
+     * @brief: stop the ledger by group id
+     * @param groupId: the groupId of the ledger need to be stopped
+     * @return true: stop the ledger succeed
+     * @return false: stop the ledger failed
+     */
     virtual inline bool stopByGroupID(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
@@ -72,12 +104,13 @@ public:
         return true;
     }
 
+    /// start all the ledgers that have been created
     virtual inline void startAll()
     {
         for (auto item : m_ledgerMap)
             item.second->startAll();
     }
-
+    /// stop all the ledgers that have been started
     virtual inline void stopAll()
     {
         for (auto item : m_ledgerMap)
@@ -122,7 +155,7 @@ public:
             return nullptr;
         return m_ledgerMap[groupId]->sync();
     }
-
+    /// get ledger params by group id
     inline std::shared_ptr<LedgerParamInterface> getParamByGroupId(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
@@ -131,7 +164,13 @@ public:
     }
 
 private:
+    /// map used to store the mappings between groupId and created ledger objects
     std::map<dev::GROUP_ID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
+    /// p2p service shared by all the ledgers
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    /// keyPair shared by all the ledgers
+    dev::KeyPair m_keyPair;
+    std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>> m_preCompile;
 };
 }  // namespace ledger
 }  // namespace dev
