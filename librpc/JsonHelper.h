@@ -14,24 +14,22 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: unit test for Session
- *
  * @file JsonHelper.h
  * @author: caryliao
  * @date 2018-10-26
  */
 #pragma once
 
+#include <json/json.h>
 #include <libethcore/Common.h>
 #include <libp2p/Common.h>
-#include <json/json.h>
 
 namespace dev
 {
 namespace rpc
 {
-Json::Value toJson(
-		dev::eth::Transaction const& _t, std::pair<h256, unsigned> _location, dev::eth::BlockNumber _blockNumber);
+Json::Value toJson(dev::eth::Transaction const& _t, std::pair<h256, unsigned> _location,
+    dev::eth::BlockNumber _blockNumber);
 dev::eth::TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
 
 }  // namespace rpc

@@ -14,8 +14,6 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: unit test for Session
- *
  * @file JsonHelper.cpp
  * @author: caryliao
  * @date 2018-10-26

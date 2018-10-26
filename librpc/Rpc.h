@@ -14,8 +14,6 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: unit test for Session
- *
  * @file Rpc.h
  * @author: caryliao
  * @date 2018-10-25
@@ -66,8 +64,7 @@ public:
     /// @return the information about a transaction requested by transaction hash.
     virtual Json::Value getTransactionByHash(const Json::Value& requestJson) override;
     /// @return information about a transaction by block hash and transaction index position.
-    virtual Json::Value getTransactionByBlockHashAndIndex(
-        const Json::Value& requestJson) override;
+    virtual Json::Value getTransactionByBlockHashAndIndex(const Json::Value& requestJson) override;
     /// @return information about a transaction by block number and transaction index position.
     virtual Json::Value getTransactionByBlockNumberAndIndex(
         const Json::Value& requestJson) override;
