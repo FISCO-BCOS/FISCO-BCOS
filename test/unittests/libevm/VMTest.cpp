@@ -21,7 +21,6 @@
 #include <libexecutivecontext/ExtVM.h>
 #include <libexecutivecontext/MPTState.h>
 #include <libexecutivecontext/StateFace.h>
-#include <libexecutivecontext/StorageState.h>
 #include <libinterpreter/interpreter.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>

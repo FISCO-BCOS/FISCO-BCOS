@@ -62,8 +62,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
         if (entries.get() == NULL)
         {
             LOG(ERROR) << "Can't find data";
-
-            return entries;
+            return Entries::Ptr();
         }
         auto indexes = processEntries(entries, condition);
         Entries::Ptr resultEntries = std::make_shared<Entries>();
@@ -175,15 +174,12 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
         if (entries->size() == 0)
         {
             entries->addEntry(entry);
-
             m_cache.insert(std::make_pair(key, entries));
-
             return 1;
         }
         else
         {
             entries->addEntry(entry);
-
             return 1;
         }
     }
@@ -291,8 +287,11 @@ void dev::storage::MemoryTable::setStateStorage(Storage::Ptr amopDB)
 std::vector<size_t> MemoryTable::processEntries(Entries::Ptr entries, Condition::Ptr condition)
 {
     std::vector<size_t> indexes;
+    indexes.reserve(entries->size());
     if (condition->getConditions()->empty())
     {
+        for (size_t i = 0; i < entries->size(); ++i)
+            indexes.emplace_back(i);
         return indexes;
     }
 
