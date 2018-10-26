@@ -32,14 +32,14 @@ using namespace dev::txpool;
 void SyncMsgEngine::messageHandler(
     P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session, Message::Ptr _msg)
 {
-    if (!checkSession(_session))
+    if (!checkSession(_session) || !checkMessage(_msg))
     {
         _session->disconnect(LocalIdentity);
         return;
     }
 
     SyncMsgPacket packet;
-    if (!packet.decode(_session, _msg) || !checkPacket(packet))
+    if (!packet.decode(_session, _msg))
     {
         LOG(WARNING) << "Received " << _msg->buffer()->size() << ": " << toHex(*_msg->buffer())
                      << endl;
@@ -61,11 +61,12 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::SessionFace> _session
     return true;
 }
 
-bool SyncMsgEngine::checkPacket(bytesConstRef _msg)
+bool SyncMsgEngine::checkMessage(Message::Ptr _msg)
 {
-    if (_msg.size() < 2 || _msg[0] > 0x7f)
+    bytesConstRef msgBytes = ref(*_msg->buffer());
+    if (msgBytes.size() < 2 || msgBytes[0] > 0x7f)
         return false;
-    if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
+    if (RLP(msgBytes.cropped(1)).actualSize() + 1 != msgBytes.size())
         return false;
     return true;
 }

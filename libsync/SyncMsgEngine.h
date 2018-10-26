@@ -63,7 +63,7 @@ public:
 
 private:
     bool checkSession(std::shared_ptr<dev::p2p::SessionFace> _session);
-    bool checkPacket(bytesConstRef _msg);
+    bool checkMessage(dev::p2p::Message::Ptr _msg);
     bool checkImportBlock(std::shared_ptr<dev::eth::Block> block);
     bool interpret(SyncMsgPacket const& _packet);
 
