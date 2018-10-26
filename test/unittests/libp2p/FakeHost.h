@@ -22,9 +22,9 @@
  */
 #pragma once
 
-#include <initializer/SecureInitiailizer.h>
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
+#include <libinitializer/SecureInitiailizer.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Session.h>

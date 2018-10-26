@@ -59,7 +59,8 @@ public:
         m_keyPair(_key_pair),
         m_baseDir(_baseDir)
     {
-        std::cout << "#### register handler for PBFTEngine" << std::endl;
+        std::cout << "#### register handler for PBFTEngine, protocol id:" << m_protocolId
+                  << std::endl;
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
@@ -353,7 +354,9 @@ protected:
     inline bool isValidLeader(PrepareReq const& req) const
     {
         auto leader = getLeader();
-        LOG(DEBUG) << "### req.idx:" << req.idx << ", leader.second:" << leader.second;
+        LOG(DEBUG) << "### req.idx:" << req.idx << ", leader.second:" << leader.second
+                   << " protocol:" << m_protocolId << ", sealer:" << m_highestBlock.sealer()
+                   << " cfgErr:" << m_cfgErr << " m_leaderFailed:" << m_leaderFailed;
         LOG(DEBUG) << "#### m_view:" << m_view << ", highest number:" << m_highestBlock.number();
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)

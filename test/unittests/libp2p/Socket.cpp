@@ -21,8 +21,8 @@
  * @date 2018-09-19
  */
 
-#include <initializer/SecureInitiailizer.h>
 #include <libdevcore/FileSystem.h>
+#include <libinitializer/SecureInitiailizer.h>
 #include <libp2p/Socket.h>
 #include <openssl/ssl.h>
 #include <test/tools/libutils/Common.h>
