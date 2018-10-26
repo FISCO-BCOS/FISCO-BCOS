@@ -110,6 +110,7 @@ BOOST_AUTO_TEST_CASE(testSessionDoRead)
     session->setMessageFactory(p2PMessageFactory);
     session->start();
 }
+
 BOOST_AUTO_TEST_CASE(testSessionConnect)
 {
     auto session = getSession();
