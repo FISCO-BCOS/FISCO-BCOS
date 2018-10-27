@@ -29,7 +29,7 @@
 #include <libexecutivecontext/ExecutionResult.h>
 #include <libexecutivecontext/Executive.h>
 #include <libexecutivecontext/ExtVM.h>
-#include <libexecutivecontext/MPTState.h>
+#include <libmptstate/MPTState.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>

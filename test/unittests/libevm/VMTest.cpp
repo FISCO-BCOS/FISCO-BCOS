@@ -19,7 +19,7 @@
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/EVMC.h>
 #include <libexecutivecontext/ExtVM.h>
-#include <libexecutivecontext/MPTState.h>
+#include <libmptstate/MPTState.h>
 #include <libexecutivecontext/StateFace.h>
 #include <libinterpreter/interpreter.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -29,6 +29,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::test;
 using namespace dev::eth;
+using namespace dev::mptstate;
 
 
 namespace
