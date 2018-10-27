@@ -205,9 +205,10 @@ void SyncMaster::maintainPeersStatus()
 
     // Choose to use min number in blockqueue or max peer number
     int64_t maxRequestNumber = maxPeerNumber;
-    if (nullptr != m_syncStatus->bq().top())
+    BlockPtr topBlock = m_syncStatus->bq().top();
+    if (nullptr != topBlock)
     {
-        int64_t minNumberInQueue = m_syncStatus->bq().top()->header().number();
+        int64_t minNumberInQueue = topBlock->header().number();
         maxRequestNumber = min(maxPeerNumber, minNumberInQueue - 1);
     }
     if (currentNumber >= maxRequestNumber)
@@ -265,13 +266,12 @@ bool SyncMaster::maintainDownloadingQueue()
     while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
         if (isNewBlock(topBlock))
-        // TODO check minerlist (&& minerlist sig is ok)
         {
             ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock);
             m_blockChain->commitBlock(*topBlock, exeCtx);
         }
         else
-            LOG(WARNING) << "Ignore illigal block " << topBlock->header().number();
+            LOG(WARNING) << "Ignore illegal block " << topBlock->header().number();
 
         bq.pop();
         topBlock = bq.top();
