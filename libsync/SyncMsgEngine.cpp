@@ -71,7 +71,7 @@ bool SyncMsgEngine::checkMessage(Message::Ptr _msg)
     return true;
 }
 
-bool SyncMsgEngine::checkImportBlock(shared_ptr<Block> block)
+bool SyncMsgEngine::isNewerBlock(shared_ptr<Block> block)
 {
     if (block->header().number() <= m_blockChain->number())
         return false;
@@ -143,7 +143,7 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
     for (unsigned i = 0; i < itemCount; ++i)
     {
         shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
-        if (checkImportBlock(block))
+        if (isNewerBlock(block))
             m_syncStatus->bq().push(block);
     }
 }
