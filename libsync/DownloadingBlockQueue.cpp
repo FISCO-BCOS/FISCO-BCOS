@@ -83,8 +83,8 @@ BlockPtr DownloadingBlockQueue::top(bool isFlushBuffer)
 
 void DownloadingBlockQueue::clear()
 {
-    ReadGuard l1(x_buffer);
-    ReadGuard l2(x_blocks);
+    WriteGuard l1(x_buffer);
+    WriteGuard l2(x_blocks);
     m_buffer->clear();
 
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> emptyQueue;
