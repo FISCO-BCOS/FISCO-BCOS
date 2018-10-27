@@ -269,6 +269,7 @@ bool SyncMaster::maintainDownloadingQueue()
         {
             ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock);
             m_blockChain->commitBlock(*topBlock, exeCtx);
+            m_txPool->dropBlockTrans(*topBlock);
         }
         else
             LOG(WARNING) << "Ignore illegal block " << topBlock->header().number();
