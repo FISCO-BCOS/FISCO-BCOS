@@ -313,6 +313,7 @@ BOOST_AUTO_TEST_CASE(DoWorkTest)
 
     sync->noteNewTransactions();
     sync->noteNewBlocks();
+    sync->doWork();
 
     sync->noteDownloadingBegin();
     BOOST_CHECK(sync->status().state == SyncState::Downloading);
