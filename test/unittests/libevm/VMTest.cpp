@@ -18,10 +18,10 @@
 #include <libethcore/Exceptions.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/EVMC.h>
-#include <libexecutivecontext/ExtVM.h>
-#include <libmptstate/MPTState.h>
-#include <libexecutivecontext/StateFace.h>
+#include <libexecutive/ExtVM.h>
+#include <libexecutive/StateFace.h>
 #include <libinterpreter/interpreter.h>
+#include <libmptstate/MPTState.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -30,6 +30,7 @@ using namespace dev;
 using namespace dev::test;
 using namespace dev::eth;
 using namespace dev::mptstate;
+using namespace dev::executive;
 
 
 namespace

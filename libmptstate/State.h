@@ -38,6 +38,10 @@ class StateLoader;
 namespace eth
 {
 class SealEngineFace;
+}
+
+namespace executive
+{
 class Executive;
 }
 
@@ -57,7 +61,8 @@ using errinfo_vmtrace = boost::error_info<struct tag_vmtrace, std::string>;
 using errinfo_receipts = boost::error_info<struct tag_receipts, std::vector<bytes>>;
 using errinfo_transaction = boost::error_info<struct tag_transaction, bytes>;
 using errinfo_phase = boost::error_info<struct tag_phase, unsigned>;
-using errinfo_required_LogBloom = boost::error_info<struct tag_required_LogBloom, dev::eth::LogBloom>;
+using errinfo_required_LogBloom =
+    boost::error_info<struct tag_required_LogBloom, dev::eth::LogBloom>;
 using errinfo_got_LogBloom = boost::error_info<struct tag_get_LogBloom, dev::eth::LogBloom>;
 using LogBloomRequirementError = boost::tuple<errinfo_required_LogBloom, errinfo_got_LogBloom>;
 

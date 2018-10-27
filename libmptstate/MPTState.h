@@ -26,14 +26,14 @@
 
 #include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
-#include <libexecutivecontext/StateFace.h>
+#include <libexecutive/StateFace.h>
 #include <libmptstate/State.h>
 
 namespace dev
 {
 namespace mptstate
 {
-class MPTState : public dev::eth::StateFace
+class MPTState : public dev::executive::StateFace
 {
 public:
     explicit MPTState(u256 const& _accountStartNonce) : m_state(_accountStartNonce){};
