@@ -24,7 +24,7 @@
 #include <libdevcore/FileSystem.h>
 using namespace std;
 using namespace dev;
-using namespace dev::eth;
+using namespace dev::mptstate;
 
 Defaults* Defaults::s_this = nullptr;
 

@@ -2,7 +2,7 @@
 
 #include "ExecutiveContext.h"
 #include <libdevcore/OverlayDB.h>
-#include <libexecutivecontext/StateFactoryInterface.h>
+#include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/Storage.h>
 namespace dev
 {
@@ -20,14 +20,14 @@ public:
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
 
     virtual void setStateFactory(
-        std::shared_ptr<dev::eth::StateFactoryInterface> stateFactoryInterface);
+        std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface);
 
     void setPrecompiledContract(
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
 
 private:
     dev::storage::Storage::Ptr m_stateStorage;
-    std::shared_ptr<dev::eth::StateFactoryInterface> m_stateFactoryInterface;
+    std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 };
 

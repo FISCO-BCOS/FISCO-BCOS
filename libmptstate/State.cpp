@@ -32,6 +32,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
+using namespace dev::mptstate;
 namespace fs = boost::filesystem;
 
 State::State(u256 const& _accountStartNonce, OverlayDB const& _db, BaseState _bs)
@@ -50,8 +51,8 @@ State::State(State const& _s)
     m_unchangedCacheEntries(_s.m_unchangedCacheEntries),
     m_nonExistingAccountsCache(_s.m_nonExistingAccountsCache),
     m_touched(_s.m_touched),
-    m_changeLog(_s.m_changeLog),
-    m_accountStartNonce(_s.m_accountStartNonce)
+    m_accountStartNonce(_s.m_accountStartNonce),
+    m_changeLog(_s.m_changeLog)
 {}
 
 OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, WithExisting _we)
@@ -96,7 +97,7 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, Wit
 
 void State::populateFrom(AccountMap const& _map)
 {
-    eth::commit(_map, m_state);
+    mptstate::commit(_map, m_state);
     commit();
 }
 
@@ -194,7 +195,7 @@ void State::commit()
 {
     // Remove empty accounts by default
     removeEmptyAccounts();
-    m_touched += dev::eth::commit(m_cache, m_state);
+    m_touched += dev::mptstate::commit(m_cache, m_state);
     m_changeLog.clear();
     m_cache.clear();
     m_unchangedCacheEntries.clear();
@@ -594,7 +595,7 @@ void State::rollback(size_t _savepoint)
     }
 }
 
-std::ostream& dev::eth::operator<<(std::ostream& _out, State const& _s)
+std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
 {
     _out << "--- " << _s.rootHash() << std::endl;
     std::set<Address> d;
@@ -684,7 +685,7 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, State const& _s)
 }
 
 template <class DB>
-AddressHash dev::eth::commit(AccountMap const& _cache, SecureTrieDB<Address, DB>& _state)
+AddressHash dev::mptstate::commit(AccountMap const& _cache, SecureTrieDB<Address, DB>& _state)
 {
     AddressHash ret;
     for (auto const& i : _cache)
@@ -733,7 +734,7 @@ AddressHash dev::eth::commit(AccountMap const& _cache, SecureTrieDB<Address, DB>
 }
 
 
-template AddressHash dev::eth::commit<OverlayDB>(
+template AddressHash dev::mptstate::commit<OverlayDB>(
     AccountMap const& _cache, SecureTrieDB<Address, OverlayDB>& _state);
-template AddressHash dev::eth::commit<MemoryDB>(
+template AddressHash dev::mptstate::commit<MemoryDB>(
     AccountMap const& _cache, SecureTrieDB<Address, MemoryDB>& _state);

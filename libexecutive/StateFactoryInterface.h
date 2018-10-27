@@ -29,7 +29,7 @@
 #include <libethcore/Common.h>
 namespace dev
 {
-namespace eth
+namespace executive
 {
 class StateFactoryInterface
 {
@@ -39,5 +39,5 @@ public:
     virtual std::shared_ptr<StateFace> getState() = 0;
 };
 
-}  // namespace eth
+}  // namespace executive
 }  // namespace dev
