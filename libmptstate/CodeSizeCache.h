@@ -77,5 +77,5 @@ private:
     std::map<h256, size_t> m_cache;
 };
 
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

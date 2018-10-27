@@ -50,5 +50,5 @@ private:
     static Defaults* s_this;
 };
 
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

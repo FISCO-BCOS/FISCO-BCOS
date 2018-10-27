@@ -24,9 +24,9 @@
  */
 #pragma once
 
-#include <libexecutivecontext/StateFace.h>
 #include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
+#include <libexecutivecontext/StateFace.h>
 #include <libmptstate/State.h>
 
 namespace dev
@@ -134,5 +134,5 @@ private:
     State m_state;
 };
 
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

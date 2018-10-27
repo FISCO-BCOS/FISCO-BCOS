@@ -25,8 +25,8 @@
 #pragma once
 
 #include "MPTState.h"
-#include <libexecutivecontext/StateFactoryInterface.h>
 #include <libdevcore/OverlayDB.h>
+#include <libexecutivecontext/StateFactoryInterface.h>
 #include <libstorage/Storage.h>
 #include <boost/filesystem.hpp>
 
@@ -59,6 +59,6 @@ private:
     WithExisting m_we;
 };
 
-}  // namespace eth
+}  // namespace mptstate
 
 }  // namespace dev

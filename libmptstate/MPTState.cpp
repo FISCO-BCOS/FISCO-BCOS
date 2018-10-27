@@ -195,5 +195,5 @@ State& MPTState::getState()
     return m_state;
 }
 
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev
