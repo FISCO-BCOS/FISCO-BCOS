@@ -31,7 +31,7 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libevm/ExtVMFace.h>
-#include <libexecutivecontext/ExecutionResult.h>
+#include <libexecutive/ExecutionResult.h>
 #include <libmptstate/State.h>
 #include <boost/function.hpp>
 #include <memory>
@@ -41,10 +41,15 @@ namespace eth
 {
 class PrecompiledContract;
 class TransactionReceipt;
-class ExecutionResult;
 class LastBlockHashesFace;
 
 }  // namespace eth
+
+namespace executive
+{
+class ExecutionResult;
+}
+
 namespace blockverifier
 {
 class BlockVerifier : public BlockVerifierInterface,
@@ -59,10 +64,10 @@ public:
 
     ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
 
-    std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
 
-    std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> execute(
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> execute(
         dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
         dev::eth::OnOpFunc const& _onOp,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext);

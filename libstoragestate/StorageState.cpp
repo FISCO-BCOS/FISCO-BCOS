@@ -31,6 +31,7 @@
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::storage;
+using namespace dev::executive;
 
 bool StorageState::addressInUse(Address const& _address) const
 {
