@@ -1,12 +1,12 @@
+#include "MemoryStorage.h"
 #include <json/json.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
-#include "MemoryStorage.h"
 #include <libstorage/TableFactoryPrecompiled.h>
-#include <libblockverifier/ExecutiveContext.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -15,7 +15,6 @@ using namespace dev::storage;
 
 namespace test_TableFactoryPrecompiled
 {
-
 class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 {
 public:
@@ -99,15 +98,15 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     abi.abiOut(&out, addressOut);
     BOOST_TEST(addressOut == Address(++addressCount));
 
-  auto tablePrecompiled = std::dynamic_pointer_cast<TablePrecompiled>(
-      context->getPrecompiled(addressOut));
-  auto memTable = tablePrecompiled->getTable();
-  auto entry = memTable->newEntry();
-  entry->setField("id", "张三");
-  entry->setField("item_id", "4");
-  entry->setField("item_name", "M5");
-  entry->setStatus(Entry::Status::NORMAL);
-  memTable->insert("张三", entry);
+    auto tablePrecompiled =
+        std::dynamic_pointer_cast<TablePrecompiled>(context->getPrecompiled(addressOut));
+    auto memTable = tablePrecompiled->getTable();
+    auto entry = memTable->newEntry();
+    entry->setField("id", "张三");
+    entry->setField("item_id", "4");
+    entry->setField("item_name", "M5");
+    entry->setStatus(Entry::Status::NORMAL);
+    memTable->insert("张三", entry);
 }
 
 BOOST_AUTO_TEST_CASE(hash)
