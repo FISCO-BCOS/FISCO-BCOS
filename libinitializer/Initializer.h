@@ -48,6 +48,7 @@ public:
     CommonInitializer::Ptr commonInitializer() { return m_commonInitializer; }
     SecureInitiailizer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
+    LedgerInitiailizer::Ptr ledgerInitiailizer() { return m_ledgerInitiailizer; }
 
 private:
     AMDBInitiailizer::Ptr m_AMDBInitiailizer;

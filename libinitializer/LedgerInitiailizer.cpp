@@ -21,8 +21,62 @@
  */
 
 #include "LedgerInitiailizer.h"
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/lexical_cast.hpp>
 
 using namespace dev;
 using namespace dev::initializer;
 
-void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt) {}
+void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
+{
+    LOG(INFO) << "LedgerInitiailizer::initConfig";
+    m_groupDataDir = _pt.get<std::string>("group.group_data_path", "data/");
+
+    m_ledgerManager = std::make_shared<LedgerManager<FakeLedger>>();
+    std::map<GROUP_ID, h512s> groudID2NodeList;
+
+    for (auto it : _pt.get_child("group"))
+    {
+        if (it.first.find("group_config.") == 0)
+        {
+            LOG(INFO) << "Load group config, GoupID:" << it.first << ",config:" << it.second.data();
+
+            std::vector<std::string> s;
+            try
+            {
+                boost::split(s, it.first, boost::is_any_of("."), boost::token_compress_on);
+
+                if (s.size() != 2)
+                {
+                    LOG(ERROR) << "Parse groupID failed:" << it.first.data();
+                    continue;
+                }
+
+                initSingleGroup(boost::lexical_cast<int>(s[1]), it.second.data(), groudID2NodeList);
+            }
+            catch (std::exception& e)
+            {
+                LOG(ERROR) << "Parse group config faield:" << e.what();
+                continue;
+            }
+        }
+    }
+    m_p2pService->setGroupID2NodeList(groudID2NodeList);
+    m_ledgerManager->startAll();
+}
+
+void LedgerInitiailizer::initSingleGroup(
+    GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
+{
+    m_ledgerManager->initSingleLedger(
+        m_preCompile, m_p2pService, _groupID, m_keyPair, m_groupDataDir, _path);
+    _groudID2NodeList[_groupID] =
+        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
+
+    LOG(INFO) << "LedgerInitiailizer::initSingleGroup, groupID:" << std::to_string(_groupID)
+              << ",minerList count:" << _groudID2NodeList[_groupID].size()
+              << ",consensus status:" << m_ledgerManager->consensus(_groupID)->consensusStatus();
+    for (auto i : _groudID2NodeList[_groupID])
+        LOG(INFO) << "miner:" << toHex(i);
+}

@@ -41,4 +41,16 @@ void Initializer::init(std::string const& _path)
     m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
     m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
     m_p2pInitializer->initConfig(pt);
+
+    m_ledgerInitiailizer = std::make_shared<LedgerInitiailizer>();
+    ///< TODO: The preCompile will be got from another module.
+    std::unordered_map<Address, eth::PrecompiledContract> preCompile;
+    m_ledgerInitiailizer->setPreCompile(preCompile);
+    m_ledgerInitiailizer->setP2PService(m_p2pInitializer->p2pService());
+    m_ledgerInitiailizer->setKeyPair(m_secureInitiailizer->keyPair());
+    m_ledgerInitiailizer->initConfig(pt);
+
+    ///< TODO: The Ledger is passed to the RPC module as a handle.
+    m_rpcInitiailizer = std::make_shared<RPCInitiailizer>();
+    m_rpcInitiailizer->initConfig(pt);
 }
