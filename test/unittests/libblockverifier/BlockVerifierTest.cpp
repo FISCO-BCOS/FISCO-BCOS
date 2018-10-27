@@ -23,7 +23,7 @@
 #include <leveldb/db.h>
 #include <libblockverifier/BlockVerifier.h>
 #include <libethcore/PrecompiledContract.h>
-#include <libexecutivecontext/MPTStateFactory.h>
+#include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
@@ -33,6 +33,8 @@ using namespace dev;
 using namespace dev::eth;
 using namespace dev::storage;
 using namespace dev::blockverifier;
+using namespace dev::mptstate;
+using namespace dev::executive;
 
 namespace dev
 {
@@ -95,7 +97,7 @@ struct BlockVerifierFixture
     std::shared_ptr<FakeBlock> m_fakeBlock;
     dev::storage::LevelDBStorage::Ptr m_levelDBStorage;
     std::shared_ptr<leveldb::DB> m_db;
-    std::shared_ptr<dev::eth::StateFactoryInterface> m_stateFactory;
+    std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 };
 

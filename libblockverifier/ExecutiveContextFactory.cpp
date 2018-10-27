@@ -6,6 +6,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::executive;
 
 void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, ExecutiveContext::Ptr context)
@@ -35,7 +36,7 @@ void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateSt
 }
 
 void ExecutiveContextFactory::setStateFactory(
-    std::shared_ptr<dev::eth::StateFactoryInterface> stateFactoryInterface)
+    std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface)
 {
     m_stateFactoryInterface = stateFactoryInterface;
 }

@@ -31,6 +31,10 @@ namespace dev
 {
 namespace eth
 {
+class PrecompiledContract;
+}
+namespace mptstate
+{
 /**
  * Models the state of a single Ethereum account.
  * Used to cache a portion of the full Ethereum state. State keeps a mapping of Address's to
@@ -300,12 +304,10 @@ private:
 
 using AccountMap = std::unordered_map<Address, Account>;
 using AccountMaskMap = std::unordered_map<Address, AccountMask>;
-
-class PrecompiledContract;
-using PrecompiledContractMap = std::unordered_map<Address, PrecompiledContract>;
+using PrecompiledContractMap = std::unordered_map<Address, dev::eth::PrecompiledContract>;
 
 AccountMap jsonToAccountMap(std::string const& _json, u256 const& _defaultNonce = 0,
     AccountMaskMap* o_mask = nullptr, PrecompiledContractMap* o_precompiled = nullptr,
     const boost::filesystem::path& _configPath = {});
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

@@ -28,6 +28,8 @@ using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::db;
 using namespace dev::eth;
+using namespace dev::mptstate;
+using namespace dev::executive;
 
 namespace dev
 {

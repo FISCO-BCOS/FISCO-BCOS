@@ -22,13 +22,14 @@
 #include "ExecutiveContext.h"
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
-#include <libexecutivecontext/ExecutionResult.h>
-#include <libexecutivecontext/Executive.h>
+#include <libexecutive/ExecutionResult.h>
+#include <libexecutive/Executive.h>
 #include <exception>
 using namespace dev;
 using namespace std;
 using namespace dev::eth;
 using namespace dev::blockverifier;
+using namespace dev::executive;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
 {
