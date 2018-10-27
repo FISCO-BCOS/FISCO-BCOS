@@ -29,6 +29,7 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
+#include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libp2p/Common.h>
 #include <libp2p/P2PInterface.h>
@@ -65,8 +66,8 @@ public:
             _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 
         // signal registration
-        m_txPool->onReady([=]() { this->noteNewTransactions(); });
-        m_blockChain->onReady([=]() { this->noteNewBlocks(); });
+        m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
+        m_blockSubmitted = m_blockChain->onReady([&]() { this->noteNewBlocks(); });
     }
 
     virtual ~SyncMaster(){};
@@ -100,16 +101,13 @@ public:
         m_protocolId = _protocolId;
     };
 
-    void noteNewTransactions()
-    {
-        m_newTransactions = true;
-        m_signalled.notify_all();  // awake doWork
-    }
+    void noteNewTransactions() { m_newTransactions = true; }
 
     void noteNewBlocks()
     {
         m_newBlocks = true;
-        m_signalled.notify_all();  // awake doWork
+        // for test
+        // m_signalled.notify_all();  // awake doWork
     }
 
     void noteDownloadingBegin()
@@ -171,6 +169,9 @@ private:
 
     // settings
     int64_t m_maxBlockDownloadQueueSize = 5;
+
+    dev::eth::Handler<> m_tqReady;
+    dev::eth::Handler<> m_blockSubmitted;
 
 public:
     void maintainTransactions();
