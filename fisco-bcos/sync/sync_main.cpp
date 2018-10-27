@@ -1,0 +1,146 @@
+/**
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ *
+ * @brief: empty framework for main of consensus
+ *
+ * @file: sync_main.cpp
+ * @author: jimmyshi
+ * @date 2018-10-27
+ */
+
+#include "Fake.h"
+#include "SyncParamParse.h"
+#include <libdevcore/easylog.h>
+#include <libethcore/Protocol.h>
+#include <libinitializer/Fake.h>
+#include <libinitializer/Initializer.h>
+#include <libinitializer/LedgerInitiailizer.h>
+#include <libinitializer/P2PInitializer.h>
+#include <libinitializer/SecureInitiailizer.h>
+#include <libledger/LedgerManager.h>
+#include <libp2p/P2PInterface.h>
+#include <libsync/Common.h>
+#include <libsync/SyncMaster.h>
+#include <libtxpool/TxPool.h>
+
+
+using namespace dev;
+using namespace dev::eth;
+using namespace dev::ledger;
+using namespace dev::initializer;
+using namespace dev::p2p;
+using namespace dev::txpool;
+using namespace dev::sync;
+using namespace dev::blockchain;
+
+
+class P2PMessageFactory : public MessageFactory
+{
+public:
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+};
+
+static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain, GROUP_ID const& groupSize,
+    float txSpeed, KeyPair const& key_pair)
+{
+    ///< transaction related
+    bytes rlpBytes = fromHex(
+        "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+        "0000"
+        "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+        "0000"
+        "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+        "657c"
+        "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
+    Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
+    Secret sec = key_pair.secret();
+    u256 maxBlockLimit = u256(1000);
+    /// get the consensus status
+    /// m_txSpeed default is 10
+    uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
+    while (true)
+    {
+        for (int i = 1; i <= groupSize; i++)
+        {
+            tx.setNonce(tx.nonce() + u256(1));
+            tx.setBlockLimit(u256(_blockChain->number()) + maxBlockLimit);
+            dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
+            tx.updateSignature(SignatureStruct(sig));
+            _txPool->submit(tx);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+    }
+}
+
+static void startSync(Params& params)
+{
+    ///< initialize component
+    auto initialize = std::make_shared<Initializer>();
+    initialize->init("./config.conf");
+
+    auto p2pInitializer = initialize->p2pInitializer();
+    shared_ptr<Service> p2pService = p2pInitializer->p2pService();
+    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+
+    ///< Read the KeyPair of node from configuration file.
+    auto nodePrivate = contents(getDataDir().string() + "/node.private");
+    KeyPair key_pair;
+    string pri = asString(nodePrivate);
+    if (pri.size() >= 64)
+    {
+        key_pair = KeyPair(Secret(fromHex(pri.substr(0, 64))));
+        LOG(INFO) << "Sync Load KeyPair " << toPublic(key_pair.secret());
+    }
+    else
+    {
+        LOG(ERROR) << "Sync Load KeyPair Fail! Please Check node.private File.";
+        exit(-1);
+    }
+    // NodeID nodeId = NodeID(fromHex(asString(contents(getDataDir().string() + "/node.nodeid"))));
+    auto nodeIdstr = asString(contents(getDataDir().string() + "/node.nodeid"));
+    NodeID nodeId = NodeID(nodeIdstr.substr(0, 128));
+    LOG(INFO) << "Load node id: " << nodeIdstr << "  " << nodeId << endl;
+
+    GROUP_ID groupId = 1;
+    PROTOCOL_ID txPoolId = getGroupProtoclID(groupId, ProtocolID::TxPool);
+    PROTOCOL_ID syncId = getGroupProtoclID(groupId, ProtocolID::BlockSync);
+
+    shared_ptr<FakeBlockChain> blockChain = make_shared<FakeBlockChain>();
+    shared_ptr<dev::txpool::TxPool> txPool =
+        make_shared<dev::txpool::TxPool>(p2pService, blockChain, txPoolId);
+    shared_ptr<FakeBlockVerifier> blockVerifier = make_shared<FakeBlockVerifier>();
+    shared_ptr<SyncMaster> sync = make_shared<SyncMaster>(p2pService, txPool, blockChain,
+        blockVerifier, syncId, nodeId, blockChain->numberHash(0), 1000 / params.syncSpeed());
+    shared_ptr<FakeConcensus> concencus =
+        make_shared<FakeConcensus>(txPool, blockChain, blockVerifier, 1000 / params.blockSpeed());
+
+    sync->start();
+    LOG(INFO) << "sync started" << endl;
+    concencus->start();
+    LOG(INFO) << "concencus started" << endl;
+
+    /// create transaction
+    createTx(txPool, blockChain, params.groupSize(), params.txSpeed(), key_pair);
+}
+
+int main(int argc, const char* argv[])
+{
+    Params params = initCommandLine(argc, argv);
+    startSync(params);
+    return 0;
+}
