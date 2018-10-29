@@ -25,16 +25,16 @@
 #pragma once
 
 #include "MPTState.h"
-#include "StateFactoryInterface.h"
 #include <libdevcore/OverlayDB.h>
+#include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/Storage.h>
 #include <boost/filesystem.hpp>
 
 namespace dev
 {
-namespace eth
+namespace mptstate
 {
-class MPTStateFactory : public StateFactoryInterface
+class MPTStateFactory : public dev::executive::StateFactoryInterface
 {
 public:
     MPTStateFactory(u256 const& _accountStartNonce, boost::filesystem::path const& _basePath,
@@ -48,11 +48,11 @@ public:
         m_db = MPTState::openDB(m_basePath, m_genesisHash);
     };
     virtual ~MPTStateFactory(){};
-    virtual std::shared_ptr<StateFace> getState(
+    virtual std::shared_ptr<dev::executive::StateFace> getState(
         h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory) override;
 
 private:
-    OverlayDB m_db;
+    dev::OverlayDB m_db;
     u256 m_accountStartNonce;  //
     BaseState m_bs;            //
     boost::filesystem::path m_basePath;
@@ -60,6 +60,6 @@ private:
     WithExisting m_we;
 };
 
-}  // namespace eth
+}  // namespace mptstate
 
 }  // namespace dev

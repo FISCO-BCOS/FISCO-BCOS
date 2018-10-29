@@ -82,6 +82,8 @@ public:
     void setPrecompiledContract(
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
 
+    void dbCommit();
+
 private:
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
     int m_addressCount = 0x10000;

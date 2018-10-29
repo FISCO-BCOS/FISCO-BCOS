@@ -53,8 +53,8 @@ public:
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
-    void commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override;
+    void commitBlock(dev::eth::Block& block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
     void setMemoryTableFactory(
         std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory);
 

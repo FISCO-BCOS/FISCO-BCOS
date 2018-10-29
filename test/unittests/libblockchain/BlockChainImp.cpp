@@ -60,21 +60,21 @@ public:
         Entries::Ptr entries = std::make_shared<Entries>();
         Entry::Ptr entry = std::make_shared<Entry>();
 
-        if (m_table == "currentState" && key == "currentNumber")
+        if (m_table == "_sys_current_state_" && key == "current_number")
         {
             entry->setField("value", "1");
         }
-        else if (m_table == "number2hash" && key == "1")
+        else if (m_table == "_sys_number_2_hash_" && key == "1")
         {
             entry->setField(
                 "value", "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
         }
-        else if (m_table == "hash2Block" &&
+        else if (m_table == "_sys_hash_2_block_" &&
                  key == "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e")
         {
             entry->setField("value", toHexPrefixed(m_fakeBlock->getBlockData()));
         }
-        else if (m_table == "txHash2Block" &&
+        else if (m_table == "_sys_tx_hash_2_block_" &&
                  key == "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e")
         {
             entry->setField("value", "1");
@@ -151,7 +151,6 @@ BOOST_AUTO_TEST_CASE(number2hash)
 
 BOOST_AUTO_TEST_CASE(getBlockByHash)
 {
-    // std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> bptr = m_blockChainImp->getBlockByHash(
         h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
     std::cout << " h256 "
@@ -161,9 +160,16 @@ BOOST_AUTO_TEST_CASE(getBlockByHash)
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), 5);
 }
 
+BOOST_AUTO_TEST_CASE(getLocalisedTxByHash)
+{
+    Transaction tx = m_blockChainImp->getLocalisedTxByHash(
+        h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
+    BOOST_CHECK_EQUAL(tx.sha3(), m_fakeBlock->m_transaction[0].sha3());
+}
+
+
 BOOST_AUTO_TEST_CASE(getTxByHash)
 {
-    // dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
     Transaction tx = m_blockChainImp->getTxByHash(
         h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
     BOOST_CHECK_EQUAL(tx.sha3(), m_fakeBlock->m_transaction[0].sha3());
@@ -171,7 +177,7 @@ BOOST_AUTO_TEST_CASE(getTxByHash)
 
 BOOST_AUTO_TEST_CASE(commitBlock)
 {
-    m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
+    // m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
