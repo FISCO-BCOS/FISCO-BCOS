@@ -74,13 +74,13 @@ public:
         Transactions const& txs = m_txPool->pendingList();
         int64_t currentNumber = m_blockChain->number();
         h256 const& parentHash = m_blockChain->numberHash(currentNumber);
-        BlockPtr block = newBlock(parentHash, currentNumber, txs);
+        BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
         ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block);
         m_blockChain->commitBlock(*block, exeCtx);
         m_txPool->dropBlockTrans(*block);
 
-        LOG(INFO) << "[SYNC] Block commit: " << currentNumber + 1 << " with " << txs.size()
-                  << " transactions";
+        SYNCLOG(TRACE) << "[Commit] Conencus block commit " << currentNumber + 1 << " with "
+                       << txs.size() << " transactions" << endl;
     }
 
 private:

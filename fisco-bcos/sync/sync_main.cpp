@@ -69,7 +69,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
-    u256 maxBlockLimit = u256(1000);
+    // u256 maxBlockLimit = u256(100);
     /// get the consensus status
     /// m_txSpeed default is 10
     uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
@@ -78,7 +78,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         for (int i = 1; i <= groupSize; i++)
         {
             tx.setNonce(tx.nonce() + u256(1));
-            tx.setBlockLimit(u256(_blockChain->number()) + maxBlockLimit);
+            tx.setBlockLimit(u256(_blockChain->number()) + 1);
             dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
             tx.updateSignature(SignatureStruct(sig));
             _txPool->submit(tx);
@@ -96,6 +96,19 @@ static void startSync(Params& params)
     auto p2pInitializer = initialize->p2pInitializer();
     shared_ptr<Service> p2pService = p2pInitializer->p2pService();
     p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+
+    GROUP_ID groupId = 1;
+    std::map<GROUP_ID, h512s> groudID2NodeList;
+    groudID2NodeList[groupId] = {
+        h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191c"
+             "c2aebf4746846c0db2604adebf9c70c7f418d4d5a61"),
+        h512("46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491c"
+             "c1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1"),
+        h512("f6f4931f56b9963851f43bb857ed5a6170ec1a4208ddcf1a1f2bb66f6d7e7a5c4749a89b5277d6265b1c1"
+             "2fdbc89290bed7cccf905eef359989275319b331753"),
+        h512("4525966a74f9b2ba564fcceee50bf1c4d2faa35a307983df026a18b3486da6ad5bf4b9a56a8d7e35484af"
+             "2cafb6224059c4ee332c9ec02bd304c0292c2f9efb8")};
+    p2pService->setGroupID2NodeList(groudID2NodeList);
 
     ///< Read the KeyPair of node from configuration file.
     auto nodePrivate = contents(getDataDir().string() + "/node.private");
@@ -116,7 +129,6 @@ static void startSync(Params& params)
     NodeID nodeId = NodeID(nodeIdstr.substr(0, 128));
     LOG(INFO) << "Load node id: " << nodeIdstr << "  " << nodeId << endl;
 
-    GROUP_ID groupId = 1;
     PROTOCOL_ID txPoolId = getGroupProtoclID(groupId, ProtocolID::TxPool);
     PROTOCOL_ID syncId = getGroupProtoclID(groupId, ProtocolID::BlockSync);
 
