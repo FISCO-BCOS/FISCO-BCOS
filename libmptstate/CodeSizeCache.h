@@ -26,7 +26,7 @@
 
 namespace dev
 {
-namespace eth
+namespace mptstate
 {
 /**
  * @brief Simple thread-safe cache to store a mapping from code hash to code size.
@@ -77,5 +77,5 @@ private:
     std::map<h256, size_t> m_cache;
 };
 
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

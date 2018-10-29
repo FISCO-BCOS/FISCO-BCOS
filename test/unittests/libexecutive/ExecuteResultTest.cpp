@@ -26,10 +26,10 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
-#include <libexecutivecontext/ExecutionResult.h>
-#include <libexecutivecontext/Executive.h>
-#include <libexecutivecontext/ExtVM.h>
-#include <libexecutivecontext/MPTState.h>
+#include <libexecutive/ExecutionResult.h>
+#include <libexecutive/Executive.h>
+#include <libexecutive/ExtVM.h>
+#include <libmptstate/MPTState.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -37,6 +37,7 @@
 
 using namespace std;
 using namespace dev::eth;
+using namespace dev::executive;
 
 namespace dev
 {

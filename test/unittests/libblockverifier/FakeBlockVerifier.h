@@ -38,10 +38,10 @@ public:
     {
         return m_execContext;
     }
-    virtual std::pair<dev::eth::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
+    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
+    executeTransaction(const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
     {
-        dev::eth::ExecutionResult res;
+        dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;
         return std::make_pair(res, reciept);
     }

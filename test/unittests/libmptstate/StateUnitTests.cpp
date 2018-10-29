@@ -26,6 +26,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
+using namespace dev::mptstate;
 
 namespace dev
 {

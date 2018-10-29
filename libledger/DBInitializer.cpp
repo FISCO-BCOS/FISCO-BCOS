@@ -24,7 +24,7 @@
 #include "DBInitializer.h"
 #include "LedgerParam.h"
 #include <libdevcore/Common.h>
-#include <libexecutivecontext/MPTStateFactory.h>
+#include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 using namespace dev;
@@ -32,6 +32,8 @@ using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::db;
 using namespace dev::eth;
+using namespace dev::mptstate;
+using namespace dev::executive;
 
 namespace dev
 {

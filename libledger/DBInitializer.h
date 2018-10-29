@@ -25,7 +25,7 @@
 #include "LedgerParamInterface.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/OverlayDB.h>
-#include <libexecutivecontext/StateFactoryInterface.h>
+#include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <memory>
@@ -86,7 +86,7 @@ private:
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;
-    std::shared_ptr<dev::eth::StateFactoryInterface> m_stateFactory;
+    std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     dev::storage::Storage::Ptr m_storage = nullptr;
     std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> m_executiveContextFac;
 };
