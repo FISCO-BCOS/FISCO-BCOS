@@ -20,7 +20,7 @@
 
 namespace dev
 {
-namespace eth
+namespace mptstate
 {
 namespace validation
 {
@@ -79,5 +79,5 @@ void validateAccountObj(json_spirit::mObject const& _o);
 // Validate accountMask json object. Mask indicates which fields are set
 void validateAccountMaskObj(json_spirit::mObject const& _o);
 }  // namespace validation
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

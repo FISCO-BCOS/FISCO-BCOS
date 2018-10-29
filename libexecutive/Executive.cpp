@@ -31,6 +31,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
+using namespace dev::executive;
 /*
 Executive::Executive(Block& _s, BlockChain const& _bc, unsigned _level)
   : m_s(_s.mutableState()), m_envInfo(_s.info(), _bc.lastBlockHashes(), 0), m_depth(_level)

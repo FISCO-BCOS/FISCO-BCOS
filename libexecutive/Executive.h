@@ -34,9 +34,8 @@ class OverlayDB;
 
 namespace eth
 {
-class StateFace;
 class Block;
-class ExtVM;
+}  // namespace eth
 
 /**
  * @brief Message-call/contract-creation executor; useful for executing transactions.
@@ -58,16 +57,21 @@ class ExtVM;
  * e.finalize();
  * @endcode
  */
+namespace executive
+{
+class ExtVM;
+class StateFace;
+
 class Executive
 {
 public:
     /// Simple constructor; executive will operate on given state, with the given environment info.
-    Executive(StateFace& _s, EnvInfo const& _envInfo, unsigned _level = 0)
+    Executive(StateFace& _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
       : m_s(_s), m_envInfo(_envInfo), m_depth(_level)
     {}
 
     template <typename T>
-    Executive(T& _s, EnvInfo const& _envInfo, unsigned _level = 0)
+    Executive(T& _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
       : m_s(dynamic_cast<StateFace&>(_s)), m_envInfo(_envInfo), m_depth(_level)
     {}
 
@@ -98,9 +102,9 @@ public:
     /// point following this.
     void initialize(bytesConstRef _transaction)
     {
-        initialize(Transaction(_transaction, CheckTransaction::None));
+        initialize(dev::eth::Transaction(_transaction, dev::eth::CheckTransaction::None));
     }
-    void initialize(Transaction const& _transaction);
+    void initialize(dev::eth::Transaction const& _transaction);
     /// Finalise a transaction previously set up with initialize().
     /// @warning Only valid after initialize() and execute(), and possibly go().
     /// @returns true if the outermost execution halted normally, false if exceptionally halted.
@@ -108,16 +112,16 @@ public:
     /// Begins execution of a transaction. You must call finalize() following this.
     /// @returns true if the transaction is done, false if go() must be called.
 
-    void verifyTransaction(ImportRequirements::value _ir, Transaction const& _t,
-        BlockHeader const& _header, u256 const& _gasUsed) const;
+    void verifyTransaction(dev::eth::ImportRequirements::value _ir, dev::eth::Transaction const& _t,
+        dev::eth::BlockHeader const& _header, u256 const& _gasUsed) const;
 
     bool execute();
     /// @returns the transaction from initialize().
     /// @warning Only valid after initialize().
-    Transaction const& t() const { return m_t; }
+    dev::eth::Transaction const& t() const { return m_t; }
     /// @returns the log entries created by this operation.
     /// @warning Only valid after finalise().
-    LogEntries const& logs() const { return m_logs; }
+    dev::eth::LogEntries const& logs() const { return m_logs; }
     /// @returns total gas used in the transaction/operation.
     /// @warning Only valid after finalise().
     u256 gasUsed() const;
@@ -138,13 +142,13 @@ public:
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool call(Address const& _receiveAddress, Address const& _txSender, u256 const& _txValue,
         u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas);
-    bool call(CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+    bool call(dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     /// Finalise an operation through accruing the substate into the parent context.
-    void accrueSubState(SubState& _parentContext);
+    void accrueSubState(dev::eth::SubState& _parentContext);
 
     /// Executes (or continues execution of) the VM.
     /// @returns false iff go() must be called again to finish the transaction.
-    bool go(OnOpFunc const& _onOp = OnOpFunc());
+    bool go(dev::eth::OnOpFunc const& _onOp = dev::eth::OnOpFunc());
 
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
@@ -169,7 +173,7 @@ private:
 
     StateFace& m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
-    EnvInfo m_envInfo;             ///< Information on the runtime environment.
+    dev::eth::EnvInfo m_envInfo;   ///< Information on the runtime environment.
     std::shared_ptr<ExtVM> m_ext;  ///< The VM externality object for the VM execution or null if no
                                    ///< VM is required. shared_ptr used only to allow ExtVM forward
                                    ///< reference. This field does *NOT* survive this object.
@@ -185,8 +189,9 @@ private:
                           ///< final amount after go() execution.
     u256 m_refunded = 0;  ///< The amount of gas refunded.
 
-    Transaction m_t;    ///< The original transaction. Set by setup().
-    LogEntries m_logs;  ///< The log entries created by this transaction. Set by finalize().
+    dev::eth::Transaction m_t;    ///< The original transaction. Set by setup().
+    dev::eth::LogEntries m_logs;  ///< The log entries created by this transaction. Set by
+                                  ///< finalize().
 
     u256 m_gasCost;
 
@@ -195,5 +200,5 @@ private:
     size_t m_savepoint = 0;
 };
 
-}  // namespace eth
+}  // namespace executive
 }  // namespace dev

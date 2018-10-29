@@ -16,64 +16,56 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @AMDB Storage interface for EVM
+ * @state base interface for EVM
  *
- * @file StorageState.h
- * @author xingqiangbai
- * @date 2018-10-22
+ * @file StateFace.h
+ * @author jimmyshi
+ * @date 2018-09-21
  */
 
 #pragma once
-#include "libexecutive/StateFace.h"
+
+#include <libethcore/Common.h>
 
 namespace dev
 {
-namespace storage
+namespace executive
 {
-class Table;
-class MemoryTableFactory;
-}  // namespace storage
-namespace storagestate
+enum class StateType
 {
-const char* const STORAGE_KEY = "key";
-const char* const STORAGE_VALUE = "value";
-const char* const ACCOUNT_BALANCE = "balance";
-const char* const ACCOUNT_CODE_HASH = "codeHash";
-const char* const ACCOUNT_CODE = "code";
-const char* const ACCOUNT_NONCE = "nonce";
-const char* const ACCOUNT_ALIVE = "alive";
-class StorageState : public dev::executive::StateFace
+    MptState,
+    StorageState
+};
+
+class StateFace
 {
 public:
-    explicit StorageState(u256 const& _accountStartNonce)
-      : m_accountStartNonce(_accountStartNonce), m_memoryTableFactory(nullptr){};
-
     /// Check if the address is in use.
-    virtual bool addressInUse(Address const& _address) const override;
+    virtual bool addressInUse(Address const& _address) const = 0;
 
     /// Check if the account exists in the state and is non empty (nonce > 0 || balance > 0 || code
     /// nonempty and suiside != 1). These two notions are equivalent after EIP158.
-    virtual bool accountNonemptyAndExisting(Address const& _address) const override;
+    virtual bool accountNonemptyAndExisting(Address const& _address) const = 0;
 
     /// Check if the address contains executable code.
-    virtual bool addressHasCode(Address const& _address) const override;
+    virtual bool addressHasCode(Address const& _address) const = 0;
 
     /// Get an account's balance.
     /// @returns 0 if the address has never been used.
-    virtual u256 balance(Address const& _address) const override;
+    virtual u256 balance(Address const& _id) const = 0;
 
     /// Add some amount to balance.
     /// Will initialise the address if it has never been used.
-    virtual void addBalance(Address const& _address, u256 const& _amount) override;
+    virtual void addBalance(Address const& _id, u256 const& _amount) = 0;
 
-    /// Subtract the @p _value amount from the balance of @p _address account.
+    /// Subtract the @p _value amount from the balance of @p _addr account.
     /// @throws NotEnoughCash if the balance of the account is less than the
     /// amount to be subtrackted (also in case the account does not exist).
-    virtual void subBalance(Address const& _address, u256 const& _value) override;
+    virtual void subBalance(Address const& _addr, u256 const& _value) = 0;
 
-    /// Set the balance of @p _address to @p _value.
+    /// Set the balance of @p _addr to @p _value.
     /// Will instantiate the address if it has never been used.
-    virtual void setBalance(Address const& _address, u256 const& _value) override;
+    virtual void setBalance(Address const& _addr, u256 const& _value) = 0;
 
     /**
      * @brief Transfers "the balance @a _value between two accounts.
@@ -81,103 +73,91 @@ public:
      * @param _to Account to which @a _value will be added.
      * @param _value Amount to be transferred.
      */
-    virtual void transferBalance(
-        Address const& _from, Address const& _to, u256 const& _value) override;
+    virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value) = 0;
 
     /// Get the root of the storage of an account.
-    virtual h256 storageRoot(Address const& _contract) const override;
+    virtual h256 storageRoot(Address const& _contract) const = 0;
 
     /// Get the value of a storage position of an account.
     /// @returns 0 if no account exists at that address.
-    virtual u256 storage(Address const& _contract, u256 const& _memory) const override;
+    virtual u256 storage(Address const& _contract, u256 const& _memory) const = 0;
 
     /// Set the value of a storage position of an account.
     virtual void setStorage(
-        Address const& _contract, u256 const& _location, u256 const& _value) override;
+        Address const& _contract, u256 const& _location, u256 const& _value) = 0;
 
     /// Clear the storage root hash of an account to the hash of the empty trie.
-    virtual void clearStorage(Address const& _contract) override;
+    virtual void clearStorage(Address const& _contract) = 0;
 
     /// Create a contract at the given address (with unset code and unchanged balance).
-    virtual void createContract(Address const& _address) override;
+    virtual void createContract(Address const& _address) = 0;
 
     /// Sets the code of the account. Must only be called during / after contract creation.
-    virtual void setCode(Address const& _address, bytes&& _code) override;
+    virtual void setCode(Address const& _address, bytes&& _code) = 0;
 
     /// Delete an account (used for processing suicides). (set suicides key = 1 when use AMDB)
-    virtual void kill(Address _a) override;
+    virtual void kill(Address _a) = 0;
 
     /// Get the storage of an account.
     /// @note This is expensive. Don't use it unless you need to.
     /// @returns map of hashed keys to key-value pairs or empty map if no account exists at that
     /// address.
-    // virtual std::map<h256, std::pair<u256, u256>> storage(Address const& _contract) const
-    // override;
+    // virtual std::map<h256, std::pair<u256, u256>> storage(Address const& _contract) const = 0;
 
     /// Get the code of an account.
     /// @returns bytes() if no account exists at that address.
     /// @warning The reference to the code is only valid until the access to
     ///          other account. Do not keep it.
-    virtual bytes const code(Address const& _address) const override;
+    virtual bytes const code(Address const& _addr) const = 0;
 
     /// Get the code hash of an account.
     /// @returns EmptySHA3 if no account exists at that address or if there is no code associated
     /// with the address.
-    virtual h256 codeHash(Address const& _contract) const override;
+    virtual h256 codeHash(Address const& _contract) const = 0;
 
     /// Get the byte-size of the code of an account.
     /// @returns code(_contract).size(), but utilizes CodeSizeHash.
-    virtual size_t codeSize(Address const& _contract) const override;
+    virtual size_t codeSize(Address const& _contract) const = 0;
 
     /// Increament the account nonce.
-    virtual void incNonce(Address const& _address) override;
+    virtual void incNonce(Address const& _id) = 0;
 
     /// Set the account nonce.
-    virtual void setNonce(Address const& _address, u256 const& _newNonce) override;
+    virtual void setNonce(Address const& _addr, u256 const& _newNonce) = 0;
 
     /// Get the account nonce -- the number of transactions it has sent.
     /// @returns 0 if the address has never been used.
-    virtual u256 getNonce(Address const& _address) const override;
+    virtual u256 getNonce(Address const& _addr) const = 0;
 
     /// The hash of the root of our state tree.
-    virtual h256 rootHash() const override;
+    virtual h256 rootHash() const = 0;
 
     /// Commit all changes waiting in the address cache to the DB.
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.
-    virtual void commit() override;
+    virtual void commit() = 0;
 
     /// Commit levelDB data into hardisk or commit AMDB data into database (Called after commit())
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.
-    virtual void dbCommit(h256 const& _blockHash, int64_t _blockNumber) override;
+    virtual void dbCommit(h256 const& _blockHash, int64_t _blockNumber) = 0;
 
     /// Resets any uncommitted changes to the cache. Return a new root in params &root
-    virtual void setRoot(h256 const& _root) override;
+    virtual void setRoot(h256 const& _root) = 0;
 
     /// Get the account start nonce. May be required.
-    virtual u256 const& accountStartNonce() const override;
-    virtual u256 const& requireAccountStartNonce() const override;
-    virtual void noteAccountStartNonce(u256 const& _actual) override;
+    virtual u256 const& accountStartNonce() const = 0;
+    virtual u256 const& requireAccountStartNonce() const = 0;
+    virtual void noteAccountStartNonce(u256 const& _actual) = 0;
 
     /// Create a savepoint in the state changelog.	///
     /// @return The savepoint index that can be used in rollback() function.
-    virtual size_t savepoint() const override;
+    virtual size_t savepoint() const = 0;
 
     /// Revert all recent changes up to the given @p _savepoint savepoint.
-    virtual void rollback(size_t _savepoint) override;
+    virtual void rollback(size_t _savepoint) = 0;
 
     /// Clear state's cache
-    virtual void clear() override;
-    void setMemoryTableFactory(
-        std::shared_ptr<dev::storage::MemoryTableFactory> _memoryTableFactory)
-    {
-        m_memoryTableFactory = _memoryTableFactory;
-    }
-
-private:
-    void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256());
-    std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
-    u256 m_accountStartNonce;
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    virtual void clear() = 0;
 };
-}  // namespace storagestate
+
+}  // namespace executive
 }  // namespace dev
