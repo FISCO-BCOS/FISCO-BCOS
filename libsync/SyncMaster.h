@@ -183,6 +183,7 @@ public:
 
 private:
     bool isNewBlock(BlockPtr _block);
+    void printSyncInfo();
 };
 
 }  // namespace sync

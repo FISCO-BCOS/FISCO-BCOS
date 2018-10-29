@@ -112,15 +112,22 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         _packet.rlp()[1].toHash<h256>(), _packet.rlp()[2].toHash<h256>()};
 
     if (status == nullptr)
+    {
+        SYNCLOG(TRACE) << "[Rcv] Peer status new " << info.nodeId << endl;
         m_syncStatus->newSyncPeerStatus(info);
+    }
     else
+    {
+        SYNCLOG(TRACE) << "[Rcv] Peer status update " << info.nodeId << endl;
         status->update(info);
+    }
 }
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 {
     RLP const& rlps = _packet.rlp();
     unsigned itemCount = rlps.itemCount();
+    size_t successCnt = 0;
 
     for (unsigned i = 0; i < itemCount; ++i)
     {
@@ -128,24 +135,34 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         tx.decode(rlps[i]);
 
         if (ImportResult::Success == m_txPool->import(tx))
-        {
-            LOG(TRACE) << "Import transaction " << tx.sha3() << " from peer " << _packet.nodeId;
-        }
+            successCnt++;
+        else
+            LOG(ERROR) << "[Rcv] Transaction " << tx.sha3()
+                       << " import into txPool FAILED from peer " << _packet.nodeId;
 
         m_txPool->transactionIsKonwnBy(tx.sha3(), _packet.nodeId);
     }
+    SYNCLOG(TRACE) << "[Rcv] Peer transactions import [import/rcv/txPool]: " << successCnt << "/"
+                   << itemCount << "/" << m_txPool->pendingSize() << " from " << _packet.nodeId
+                   << endl;
 }
 
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlps = _packet.rlp();
     unsigned itemCount = rlps.itemCount();
+    size_t successCnt = 0;
     for (unsigned i = 0; i < itemCount; ++i)
     {
         shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
         if (isNewerBlock(block))
+        {
+            successCnt++;
             m_syncStatus->bq().push(block);
+        }
     }
+    SYNCLOG(TRACE) << "[Rcv] Peer block receive [import/rcv/downloadBlockQueue]: " << successCnt
+                   << "/" << itemCount << "/" << m_syncStatus->bq().size() << endl;
 }
 
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
@@ -165,10 +182,18 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
         blockRLPs.emplace_back(block->rlp());
     }
 
+    if (0 == blockRLPs.size())
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Send] Block request from " << _packet.nodeId << " req[" << from
+                       << ", " << from + size - 1 << "] -> back[null]" << endl;
+        return;
+    }
+
     SyncBlocksPacket retPacket;
     retPacket.encode(blockRLPs);
 
     m_service->asyncSendMessageByNodeID(_packet.nodeId, retPacket.toMessage(m_protocolId));
-    LOG(TRACE) << "Send blocks [" << from << ", " << from + blockRLPs.size() << "] to "
-               << _packet.nodeId;
+    SYNCLOG(TRACE) << "[Rcv] [Send] Block request from " << _packet.nodeId << " req[" << from
+                   << ", " << from + size - 1 << "] -> back[" << from << ", "
+                   << from + blockRLPs.size() - 1 << "]" << endl;
 }

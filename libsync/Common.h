@@ -50,6 +50,8 @@ using NodeIDs = std::vector<dev::p2p::NodeID>;
 using BlockPtr = std::shared_ptr<dev::eth::Block>;
 using BlockPtrVec = std::vector<BlockPtr>;
 
+#define SYNCLOG(_OBV) cout << "[SYNC] [" << #_OBV << "] "
+
 enum SyncPacketType : byte
 {
     StatusPacket = 0x00,
