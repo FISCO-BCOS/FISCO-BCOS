@@ -39,8 +39,9 @@ using namespace std;
 using namespace jsonrpc;
 using namespace dev::rpc;
 
-Rpc::Rpc(dev::ledger::LedgerManager<dev::ledger::LedgerInterface>& _ledgerManager,
-    dev::p2p::Service& _service)
+
+Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
+		std::shared_ptr<dev::p2p::Service> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
@@ -68,6 +69,8 @@ Json::Value Rpc::blockNumber(const Json::Value& requestJson)
     }
     return Json::Value(Json::nullValue);
 }
+
+
 Json::Value Rpc::pbftView(const Json::Value& requestJson)
 {
     try
@@ -95,10 +98,11 @@ Json::Value Rpc::pbftView(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::peers(const Json::Value& requestJson)
 {
@@ -128,10 +132,11 @@ Json::Value Rpc::peers(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::getBlockByHash(const Json::Value& requestJson)
 {
@@ -180,10 +185,11 @@ Json::Value Rpc::getBlockByHash(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::getBlockByNumber(const Json::Value& requestJson)
 {
@@ -232,10 +238,11 @@ Json::Value Rpc::getBlockByNumber(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::getTransactionByHash(const Json::Value& requestJson)
 {
@@ -270,10 +277,11 @@ Json::Value Rpc::getTransactionByHash(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::getTransactionByBlockHashAndIndex(const Json::Value& requestJson)
 {
@@ -314,10 +322,11 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(const Json::Value& requestJso
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::getTransactionByBlockNumberAndIndex(const Json::Value& requestJson)
 {
@@ -357,10 +366,11 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(const Json::Value& requestJ
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::getTransactionReceipt(const Json::Value& requestJson)
 {
@@ -403,10 +413,11 @@ Json::Value Rpc::getTransactionReceipt(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::pendingTransactions(const Json::Value& requestJson)
 {
@@ -447,10 +458,11 @@ Json::Value Rpc::pendingTransactions(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::call(const Json::Value& requestJson)
 {
@@ -483,10 +495,11 @@ Json::Value Rpc::call(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
+
 
 Json::Value Rpc::sendRawTransaction(const Json::Value& requestJson)
 {
@@ -518,7 +531,7 @@ Json::Value Rpc::sendRawTransaction(const Json::Value& requestJson)
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+        //BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
     return Json::Value(Json::nullValue);
 }
