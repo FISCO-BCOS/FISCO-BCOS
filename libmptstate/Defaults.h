@@ -26,7 +26,7 @@
 
 namespace dev
 {
-namespace eth
+namespace mptstate
 {
 struct Defaults
 {
@@ -50,5 +50,5 @@ private:
     static Defaults* s_this;
 };
 
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

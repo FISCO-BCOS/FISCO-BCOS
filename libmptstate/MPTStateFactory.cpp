@@ -24,7 +24,9 @@
 
 #include "MPTStateFactory.h"
 using namespace dev;
+using namespace dev::mptstate;
 using namespace dev::eth;
+using namespace dev::executive;
 
 std::shared_ptr<StateFace> MPTStateFactory::getState()
 {

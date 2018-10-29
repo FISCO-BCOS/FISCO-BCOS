@@ -23,7 +23,7 @@ namespace js = json_spirit;
 
 namespace dev
 {
-namespace eth
+namespace mptstate
 {
 namespace validation
 {
@@ -151,5 +151,5 @@ void validateAccountObj(js::mObject const& _obj)
     }
 }
 }  // namespace validation
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev
