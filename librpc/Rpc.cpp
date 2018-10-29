@@ -30,7 +30,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libexecutivecontext/ExecutionResult.h>
+#include <libexecutive/ExecutionResult.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
@@ -40,8 +40,7 @@ using namespace jsonrpc;
 using namespace dev::rpc;
 
 
-Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-		std::shared_ptr<dev::p2p::Service> _service)
+Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager, std::shared_ptr<dev::p2p::Service> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 

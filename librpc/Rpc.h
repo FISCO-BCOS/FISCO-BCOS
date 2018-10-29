@@ -42,8 +42,7 @@ namespace rpc
 class Rpc : public RpcFace
 {
 public:
-    Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-    		std::shared_ptr<dev::p2p::Service> _service);
+    Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager, std::shared_ptr<dev::p2p::Service> _service);
 
     virtual RPCModules implementedModules() const override
     {
