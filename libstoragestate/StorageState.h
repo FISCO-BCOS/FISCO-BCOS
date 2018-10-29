@@ -24,7 +24,7 @@
  */
 
 #pragma once
-#include "libexecutivecontext/StateFace.h"
+#include "libexecutive/StateFace.h"
 
 namespace dev
 {
@@ -42,7 +42,7 @@ const char* const ACCOUNT_ALIVE = "alive";
 }  // namespace storage
 namespace eth
 {
-class StorageState : public StateFace
+class StorageState : public dev::executive::StateFace
 {
 public:
     explicit StorageState(u256 const& _accountStartNonce)

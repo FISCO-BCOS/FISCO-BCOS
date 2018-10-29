@@ -29,7 +29,8 @@
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
-using namespace dev::eth::validation;
+using namespace dev::mptstate;
+using namespace dev::mptstate::validation;
 
 namespace fs = boost::filesystem;
 
@@ -91,7 +92,7 @@ PrecompiledContract createPrecompiledContract(js::mObject const& _precompiled)
 }  // namespace
 
 // TODO move AccountMaskObj to libtesteth (it is used only in test logic)
-AccountMap dev::eth::jsonToAccountMap(std::string const& _json, u256 const& _defaultNonce,
+AccountMap dev::mptstate::jsonToAccountMap(std::string const& _json, u256 const& _defaultNonce,
     AccountMaskMap* o_mask, PrecompiledContractMap* o_precompiled, const fs::path& _configPath)
 {
     auto u256Safe = [](std::string const& s) -> u256 {

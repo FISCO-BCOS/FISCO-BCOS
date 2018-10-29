@@ -42,9 +42,10 @@ public:
 
     void initConfig(boost::property_tree::ptree const& _pt);
 
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager() { return m_ledgerManager; }
+    std::shared_ptr<LedgerManager> ledgerManager() { return m_ledgerManager; }
 
-    void setPreCompile(std::unordered_map<Address, eth::PrecompiledContract> const& _preCompile)
+    void setPreCompile(
+        std::shared_ptr<std::unordered_map<Address, eth::PrecompiledContract>> _preCompile)
     {
         m_preCompile = _preCompile;
     }
@@ -55,9 +56,9 @@ private:
     void initSingleGroup(
         GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList);
 
-    std::shared_ptr<LedgerManager<FakeLedger>> m_ledgerManager;
+    std::shared_ptr<LedgerManager> m_ledgerManager;
 
-    std::unordered_map<Address, eth::PrecompiledContract> m_preCompile;
+    std::shared_ptr<std::unordered_map<Address, eth::PrecompiledContract>> m_preCompile;
     std::shared_ptr<p2p::Service> m_p2pService;
     KeyPair m_keyPair;
     std::string m_groupDataDir;
