@@ -23,9 +23,10 @@
 #include "ExecutiveContext.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/Exceptions.h>
-#include <libexecutivecontext/ExecutionResult.h>
+#include <libexecutive/ExecutionResult.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
+using namespace dev::executive;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev;
@@ -103,14 +104,14 @@ std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& addres
     std::string tableName = "_contract_data_" + address.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(h256(), 0, tableName);
+    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-std::shared_ptr<dev::eth::StateFace> ExecutiveContext::getState()
+std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()
 {
     return m_stateFace;
 }
-void ExecutiveContext::setState(std::shared_ptr<dev::eth::StateFace> state)
+void ExecutiveContext::setState(std::shared_ptr<dev::executive::StateFace> state)
 {
     m_stateFace = state;
 }

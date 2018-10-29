@@ -60,8 +60,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
 
         LOG(DEBUG) << "DBFactory open table:" << tableName;
         Address address;
-        auto table = m_memoryTableFactory->openTable(context->blockInfo().hash,
-            context->blockInfo().number.convert_to<int64_t>(), tableName);
+        auto table = m_memoryTableFactory->openTable(tableName);
         if (table)
         {
             TablePrecompiled::Ptr tablePrecompiled = make_shared<TablePrecompiled>();
@@ -88,8 +87,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         for (auto& str : fieldNameList)
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
-        auto table = m_memoryTableFactory->createTable(context->blockInfo().hash,
-            context->blockInfo().number.convert_to<int64_t>(), tableName, keyField, valueFiled);
+        auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled);
         // tableName already exist
         unsigned errorCode = 0;
         if (!table == 0u)
@@ -109,7 +107,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
     return out;
 }
 
-h256 TableFactoryPrecompiled::hash(std::shared_ptr<ExecutiveContext> context)
+h256 TableFactoryPrecompiled::hash()
 {
-    return m_memoryTableFactory->hash(context);
+    return m_memoryTableFactory->hash();
 }

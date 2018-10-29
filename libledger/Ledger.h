@@ -26,7 +26,7 @@
 #include "LedgerInterface.h"
 #include "LedgerParam.h"
 #include "LedgerParamInterface.h"
-#include <libconsensus/Consensus.h>
+#include <libconsensus/Sealer.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
@@ -63,14 +63,14 @@ public:
 
     void startAll() override
     {
-        assert(m_sync && m_consensus);
+        assert(m_sync && m_sealer);
         m_sync->start();
-        m_consensus->start();
+        m_sealer->start();
     }
 
     void stopAll() override
     {
-        m_consensus->stop();
+        m_sealer->stop();
         m_sync->stop();
     }
 
@@ -92,7 +92,7 @@ public:
     }
     std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
-        return m_consensus->consensusEngine();
+        return m_sealer->consensusEngine();
     }
     std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
     virtual dev::GROUP_ID const& groupId() const { return m_groupId; }
@@ -110,7 +110,7 @@ protected:
 
 private:
     /// create PBFTConsensus
-    std::shared_ptr<dev::consensus::Consensus> createPBFTConsensus();
+    std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// init configurations
     void initCommonConfig(boost::property_tree::ptree const& pt);
     void initTxPoolConfig(boost::property_tree::ptree const& pt);
@@ -130,7 +130,7 @@ protected:
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
-    std::shared_ptr<dev::consensus::Consensus> m_consensus = nullptr;
+    std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;

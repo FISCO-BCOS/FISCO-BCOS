@@ -22,9 +22,9 @@
  * @date: 2018-10-10
  */
 #pragma once
-#include <libconsensus/Consensus.h>
-#include <libconsensus/pbft/PBFTConsensus.h>
+#include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTEngine.h>
+#include <libconsensus/pbft/PBFTSealer.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
@@ -228,17 +228,17 @@ private:
 };
 
 /// fake class of PBFTConsensus
-class FakePBFTConsensus : public PBFTConsensus
+class FakePBFTSealer : public PBFTSealer
 {
 public:
-    FakePBFTConsensus(std::shared_ptr<dev::p2p::P2PInterface> _service,
+    FakePBFTSealer(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir = "",
         KeyPair const& _key_pair = KeyPair::create(), h512s const& _minerList = h512s())
-      : PBFTConsensus(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
+      : PBFTSealer(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _minerList)
     {
         m_pbftEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain, _blockSync,
@@ -247,11 +247,11 @@ public:
 
     void loadTransactions(uint64_t const& transToFetch)
     {
-        return PBFTConsensus::loadTransactions(transToFetch);
+        return PBFTSealer::loadTransactions(transToFetch);
     }
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
-        return PBFTConsensus::checkTxsEnough(maxTxsCanSeal);
+        return PBFTSealer::checkTxsEnough(maxTxsCanSeal);
     }
 
     std::shared_ptr<FakePBFTEngine> engine()

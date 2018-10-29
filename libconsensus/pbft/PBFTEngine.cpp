@@ -74,7 +74,7 @@ bool PBFTEngine::shouldSeal()
         h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
         if (node_id != h512() && !m_service->isConnected(node_id))
         {
-            LOG(DEBUG) << "To notify all";
+            /// LOG(DEBUG) << "To notify all";
             m_timeManager.m_lastConsensusTime = 0;
             m_timeManager.m_lastSignTime = 0;
             m_signalled.notify_all();
@@ -131,8 +131,8 @@ void PBFTEngine::resetConfig()
     m_nodeNum = u256(node_num);
     m_f = (m_nodeNum - u256(1)) / u256(3);
     m_cfgErr = (m_idx == u256(-1));
-    LOG(INFO) << "resetConfig: m_node_idx=" << m_idx.convert_to<ssize_t>()
-              << ", m_nodeNum =" << m_nodeNum;
+    /*LOG(INFO) << "resetConfig: m_node_idx=" << m_idx.convert_to<ssize_t>()
+              << ", m_nodeNum =" << m_nodeNum;*/
 }
 
 /// init pbftMsgBackup
@@ -148,7 +148,8 @@ void PBFTEngine::initBackupDB()
     m_backupDB = std::make_shared<LevelDB>(path);
     if (!isDiskSpaceEnough(path))
     {
-        LOG(ERROR) << "Not enough available space found on hard drive. Please free some up and "
+        LOG(ERROR) << "ProtocolID:" << m_protocolId
+                   << "Not enough available space found on hard drive. Please free some up and "
                       "then re-run. Bailing.";
         BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
     }
@@ -291,7 +292,8 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 bool PBFTEngine::broadcastViewChangeReq()
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
-    LOG(DEBUG) << "##### generate view_change_data, block_hash:" << m_highestBlock.hash();
+    LOG(DEBUG) << "##### generate view_change_data"
+               << ", protocol:" << m_protocolId << ", block_hash:" << m_highestBlock.hash();
     bytes view_change_data;
     req.encode(view_change_data);
     return broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
@@ -315,7 +317,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     m_connectedNode = u256(sessions.size());
     for (auto session : sessions)
     {
-        LOG(DEBUG) << "#### session id:" << session.nodeID;
+        /// LOG(DEBUG) << "#### session id:" << session.nodeID;
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
             continue;
@@ -406,7 +408,8 @@ void PBFTEngine::checkMinerList(Block const& block)
             miners += miner + " ";
         LOG(DEBUG) << "Miner list = " << miners;
 #endif
-        LOG(ERROR) << "Wrong Miner List, right_miner_size = " << m_minerList.size()
+        LOG(ERROR) << "ProtocolID:" << m_protocolId
+                   << " Wrong Miner List, right_miner_size = " << m_minerList.size()
                    << " miner size of block_hash = " << block.blockHeader().hash() << " is "
                    << block.blockHeader().sealerList().size();
         BOOST_THROW_EXCEPTION(
@@ -617,7 +620,6 @@ void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
     m_highestBlock = blockHeader;
     if (m_highestBlock.number() >= m_consensusBlockNumber)
     {
-        LOG(DEBUG) << "#### RESET VIEW to 0";
         m_view = m_toView = u256(0);
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
@@ -630,10 +632,9 @@ void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
     /// clear caches
     m_reqCache->clearAllExceptCommitCache();
     m_reqCache->delCache(m_highestBlock.hash());
-    LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: m_highestBlock.blk="
-              << m_highestBlock.number() << ",hash=" << blockHeader.hash().abridged()
-              << ",m_highestBlock.idx=" << m_highestBlock.sealer()
-              << ", Next: blk=" << m_consensusBlockNumber;
+    LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=" << m_highestBlock.number()
+              << ",hash=" << blockHeader.hash().abridged() << ", idx=" << m_highestBlock.sealer()
+              << ", Next: blk=" << m_consensusBlockNumber << ", Protocol=" << m_protocolId;
 }
 
 /**
@@ -830,7 +831,8 @@ void PBFTEngine::checkAndChangeView()
     u256 count = m_reqCache->getViewChangeSize(m_toView);
     if (count >= minValidNodes() - u256(1))
     {
-        LOG(INFO) << "######### Reach consensus, to_view=" << m_toView;
+        LOG(INFO) << "######### Reach consensus, to_view=" << m_toView
+                  << " ProtocolID:" << m_protocolId;
         m_leaderFailed = false;
         m_view = m_toView;
         m_reqCache->triggerViewChange(m_view);

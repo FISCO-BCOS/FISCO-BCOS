@@ -2,9 +2,11 @@ file(GLOB sources "*.cpp" "*.h")
 
 add_library(evm ${sources})
 
+target_include_directories(evm PRIVATE ${BOOST_INCLUDE_DIR})
+
 target_link_libraries(
     evm
-    PUBLIC ethcore devcore evmc::evmc
+    PUBLIC ethcore devcore evmc::evmc Boost::program_options
     PRIVATE interpreter ${JSONCPP_LIBRARY}  evmc::loader
 )
 

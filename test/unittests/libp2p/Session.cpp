@@ -103,18 +103,6 @@ BOOST_AUTO_TEST_CASE(testSessionConstruct)
     session->lastReceived();
 }
 
-BOOST_AUTO_TEST_CASE(testSessionDoRead)
-{
-    auto session = getSession();
-    std::shared_ptr<MessageFactory> p2PMessageFactory = std::make_shared<P2PMessageFactory>();
-    session->setMessageFactory(p2PMessageFactory);
-    std::shared_ptr<std::vector<std::string>> topics = std::make_shared<std::vector<std::string>>();
-    std::string topic = "Topic1";
-    topics->push_back(topic);
-    session->setTopics(topics);
-    BOOST_CHECK(session->topics()->size() == topics->size());
-    session->start();
-}
 BOOST_AUTO_TEST_CASE(testSessionConnect)
 {
     auto session = getSession();

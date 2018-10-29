@@ -21,14 +21,14 @@
  * @date 2018-10-09
  */
 
-#include "FakeLedger.h"
-#include <fisco-bcos/Fake.h>
 #include <fisco-bcos/ParamParse.h>
-#include <initializer/Initializer.h>
-#include <initializer/P2PInitializer.h>
-#include <libconsensus/pbft/PBFTConsensus.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
+#include <libinitializer/Fake.h>
+#include <libinitializer/Initializer.h>
+#include <libinitializer/LedgerInitiailizer.h>
+#include <libinitializer/P2PInitializer.h>
+#include <libinitializer/SecureInitiailizer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
 
@@ -45,58 +45,35 @@ public:
 };
 
 static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
-    GROUP_ID const& group_id, float txSpeed, KeyPair const& key_pair)
+    GROUP_ID const& groupSize, float txSpeed, KeyPair const& key_pair)
 {
-    std::shared_ptr<BlockChainInterface> blockChain = ledgerManager->blockChain(group_id);
-    std::shared_ptr<TxPoolInterface> txPool = ledgerManager->txPool(group_id);
-    new thread([&]() {
-        ///< transaction related
-        bytes rlpBytes = fromHex(
-            "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-            "0000"
-            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-            "0000"
-            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-            "657c"
-            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
-        Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
-        Secret sec = key_pair.secret();
-        u256 maxBlockLimit = u256(1000);
-        /// get the consensus status
-        /// m_txSpeed default is 10
-        uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
-        while (true)
+    ///< transaction related
+    bytes rlpBytes = fromHex(
+        "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+        "0000"
+        "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+        "0000"
+        "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+        "657c"
+        "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
+    Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
+    Secret sec = key_pair.secret();
+    u256 maxBlockLimit = u256(1000);
+    /// get the consensus status
+    /// m_txSpeed default is 10
+    uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
+    while (true)
+    {
+        for (int i = 1; i <= groupSize; i++)
         {
             tx.setNonce(tx.nonce() + u256(1));
-            tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
+            tx.setBlockLimit(u256(ledgerManager->blockChain(i)->number()) + maxBlockLimit);
             dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
             tx.updateSignature(SignatureStruct(sig));
-            std::pair<h256, Address> ret = txPool->submit(tx);
-            /// LOG(INFO) << "Import tx hash:" << dev::toJS(ret.first)
-            ///          << ", size:" << txPool->pendingSize();
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+            ledgerManager->txPool(i)->submit(tx);
         }
-    });
-}
-
-/// init a single group
-static void initSingleGroup(std::shared_ptr<Service> p2pService,
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager, GROUP_ID const& group_id,
-    KeyPair const& key_pair)
-{
-    std::unordered_map<dev::Address, dev::eth::PrecompiledContract> preCompile;
-    /// init all modules related to the ledger
-    ledgerManager->initSingleLedger(preCompile, p2pService, group_id, key_pair);
-    LOG(DEBUG) << "##### Group id:" << std::to_string(group_id) << std::endl;
-
-    for (auto i : ledgerManager->getParamByGroupId(group_id)->mutableConsensusParam().minerList)
-    {
-        LOG(DEBUG) << "#### miner:" << toHex(i) << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
-    std::cout << "##### before startAll" << std::endl;
-    /// test pbft status
-    std::cout << "#### pbft consensus:" << ledgerManager->consensus(group_id)->consensusStatus()
-              << std::endl;
 }
 
 static void startConsensus(Params& params)
@@ -108,47 +85,12 @@ static void startConsensus(Params& params)
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
     p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+    auto secureInitiailizer = initialize->secureInitiailizer();
+    KeyPair key_pair = secureInitiailizer->keyPair();
+    auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
 
-    ///< Read the KeyPair of node from configuration file.
-    auto nodePrivate = contents(getDataDir().string() + "/node.private");
-    KeyPair key_pair;
-    string pri = asString(nodePrivate);
-    if (pri.size() >= 64)
-    {
-        key_pair = KeyPair(Secret(fromHex(pri.substr(0, 64))));
-        LOG(INFO) << "Consensus Load KeyPair " << toPublic(key_pair.secret());
-    }
-    else
-    {
-        LOG(ERROR) << "Consensus Load KeyPair Fail! Please Check node.private File.";
-        exit(-1);
-    }
-    std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager =
-        std::make_shared<LedgerManager<FakeLedger>>();
-    std::map<GROUP_ID, h512s> groudID2NodeList;
-    LOG(DEBUG) << "### group size:" << params.groupSize();
-    /// init all the modules through ledger
-    for (int i = 1; i <= params.groupSize(); i++)
-    {
-        LOG(DEBUG) << "### init group:" << std::to_string(i);
-        initSingleGroup(p2pService, ledgerManager, i, key_pair);
-        groudID2NodeList[int(i)] =
-            ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
-        LOG(DEBUG) << "## push back minerList:"
-                   << ledgerManager->getParamByGroupId(i)->mutableConsensusParam().minerList;
-    }
-    p2pService->setGroupID2NodeList(groudID2NodeList);
-    /// start all the modules through ledger
-    ledgerManager->startAll();
     /// create transaction
-    for (GROUP_ID i = 1; i <= params.groupSize(); i++)
-    {
-        createTx(ledgerManager, i, params.txSpeed(), key_pair);
-    }
-    while (true)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
+    createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
 }
 
 int main(int argc, const char* argv[])

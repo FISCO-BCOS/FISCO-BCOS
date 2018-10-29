@@ -16,10 +16,15 @@
  */
 
 /**
- * @brief : implementation of consensus
+ * @brief : implementation of Consensus
  * @file: Consensus.h
  * @author: yujiechen
  * @date: 2018-09-27
+ *
+ * @ author: yujiechen
+ * @ date: 2018-10-26
+ * @ file: Sealer.h
+ * @ modification: rename Consensus.h to Sealer.h
  */
 #pragma once
 #include "ConsensusEngineBase.h"
@@ -34,7 +39,7 @@ namespace dev
 {
 namespace consensus
 {
-class Consensus : public Worker, public std::enable_shared_from_this<Consensus>
+class Sealer : public Worker, public std::enable_shared_from_this<Sealer>
 {
 public:
     /**
@@ -46,10 +51,10 @@ public:
      * @param _protocolId: protocolId
      * @param _minerList: miners to generate and execute block
      */
-    Consensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    Sealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync)
-      : Worker("consensus", 0),
+      : Worker("Sealer", 0),
         m_txPool(_txPool),
         m_blockSync(_blockSync),
         m_blockChain(_blockChain),
@@ -61,10 +66,10 @@ public:
         m_blockSubmitted = m_blockChain->onReady([=]() { this->onBlockChanged(); });
     }
 
-    virtual ~Consensus() noexcept { stop(); }
-    /// start the consensus module
+    virtual ~Sealer() noexcept { stop(); }
+    /// start the Sealer module
     virtual void start();
-    /// stop the consensus module
+    /// stop the Sealer module
     virtual void stop();
     /// Magically called when m_tq needs syncing. Be nice and don't block.
     virtual void onTransactionQueueReady()

@@ -37,6 +37,16 @@ class StateLoader;
 
 namespace eth
 {
+class SealEngineFace;
+}
+
+namespace executive
+{
+class Executive;
+}
+
+namespace mptstate
+{
 // Import-specific errinfos
 using errinfo_uncleIndex = boost::error_info<struct tag_uncleIndex, unsigned>;
 using errinfo_currentNumber = boost::error_info<struct tag_currentNumber, u256>;
@@ -51,8 +61,9 @@ using errinfo_vmtrace = boost::error_info<struct tag_vmtrace, std::string>;
 using errinfo_receipts = boost::error_info<struct tag_receipts, std::vector<bytes>>;
 using errinfo_transaction = boost::error_info<struct tag_transaction, bytes>;
 using errinfo_phase = boost::error_info<struct tag_phase, unsigned>;
-using errinfo_required_LogBloom = boost::error_info<struct tag_required_LogBloom, LogBloom>;
-using errinfo_got_LogBloom = boost::error_info<struct tag_get_LogBloom, LogBloom>;
+using errinfo_required_LogBloom =
+    boost::error_info<struct tag_required_LogBloom, dev::eth::LogBloom>;
+using errinfo_got_LogBloom = boost::error_info<struct tag_get_LogBloom, dev::eth::LogBloom>;
 using LogBloomRequirementError = boost::tuple<errinfo_required_LogBloom, errinfo_got_LogBloom>;
 
 class State;
@@ -77,12 +88,6 @@ using SecureTrieDB = SpecificTrieDB<FatGenericTrieDB<DB>, KeyType>;
 template <class KeyType, class DB>
 using SecureTrieDB = SpecificTrieDB<HashedGenericTrieDB<DB>, KeyType>;
 #endif
-
-DEV_SIMPLE_EXCEPTION(InvalidAccountStartNonceInState);
-DEV_SIMPLE_EXCEPTION(IncorrectAccountStartNonceInState);
-
-class SealEngineFace;
-class Executive;
 
 /// An atomic state changelog entry.
 struct Change
@@ -195,7 +200,7 @@ public:
     OverlayDB const& db() const { return m_db; }
     OverlayDB& db() { return m_db; }
 
-    /// Populate the state from the given AccountMap. Just uses dev::eth::commit().
+    /// Populate the state from the given AccountMap. Just uses dev::mptstate::commit().
     void populateFrom(AccountMap const& _map);
 
     /// @returns the set containing all addresses currently in use in Ethereum.
@@ -365,5 +370,5 @@ std::ostream& operator<<(std::ostream& _out, State const& _s);
 template <class DB>
 AddressHash commit(AccountMap const& _cache, SecureTrieDB<Address, DB>& _state);
 
-}  // namespace eth
+}  // namespace mptstate
 }  // namespace dev

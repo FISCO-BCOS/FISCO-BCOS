@@ -31,7 +31,7 @@
 
 namespace dev
 {
-namespace eth
+namespace executive
 {
 class StateFactoryInterface
 {
@@ -42,5 +42,5 @@ public:
         h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory) = 0;
 };
 
-}  // namespace eth
+}  // namespace executive
 }  // namespace dev
