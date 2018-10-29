@@ -34,8 +34,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
     m_groupDataDir = _pt.get<std::string>("group.group_data_path", "data/");
     assert(m_p2pService && m_preCompile);
     /// TODO: modify FakeLedger to the real Ledger after all modules ready
-    m_ledgerManager =
-        std::make_shared<LedgerManager<FakeLedger>>(m_p2pService, m_keyPair, m_preCompile);
+    m_ledgerManager = std::make_shared<LedgerManager>(m_p2pService, m_keyPair, m_preCompile);
     std::map<GROUP_ID, h512s> groudID2NodeList;
 
     for (auto it : _pt.get_child("group"))
@@ -71,7 +70,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 void LedgerInitiailizer::initSingleGroup(
     GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
 {
-    m_ledgerManager->initSingleLedger(_groupID, m_groupDataDir, _path);
+    m_ledgerManager->initSingleLedger<FakeLedger>(_groupID, m_groupDataDir, _path);
     _groudID2NodeList[_groupID] =
         m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 

@@ -114,12 +114,11 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>> preCompile =
         std::make_shared<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>>();
-    std::shared_ptr<LedgerManager<FakeLedgerForTest>> ledgerManager =
-        std::make_shared<LedgerManager<FakeLedgerForTest>>(
-            txpool_creator.m_topicService, key_pair, preCompile);
+    std::shared_ptr<LedgerManager> ledgerManager =
+        std::make_shared<LedgerManager>(txpool_creator.m_topicService, key_pair, preCompile);
     dev::GROUP_ID group_id = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
-    ledgerManager->initSingleLedger(group_id, "", configurationPath);
+    ledgerManager->initSingleLedger<FakeLedgerForTest>(group_id, "", configurationPath);
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(ledgerManager->getParamByGroupId(group_id));
     checkParam(param);

@@ -30,7 +30,6 @@ namespace dev
 {
 namespace ledger
 {
-template <typename T>
 class LedgerManager
 {
 public:
@@ -57,7 +56,8 @@ public:
      * @return true: init single ledger succeed
      * @return false: init single ledger failed
      */
-    virtual inline bool initSingleLedger(dev::GROUP_ID const& _groupId,
+    template <class T>
+    inline bool initSingleLedger(dev::GROUP_ID const& _groupId,
         std::string const& _baseDir = "data", std::string const& configFileName = "")
     {
         if (m_ledgerMap.count(_groupId) == 0)

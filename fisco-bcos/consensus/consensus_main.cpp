@@ -37,8 +37,8 @@ using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
-static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
-    GROUP_ID const& groupSize, float txSpeed, KeyPair const& key_pair)
+static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID const& groupSize,
+    float txSpeed, KeyPair const& key_pair)
 {
     ///< transaction related
     bytes rlpBytes = fromHex(
