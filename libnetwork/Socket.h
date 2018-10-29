@@ -25,13 +25,13 @@
 
 #pragma once
 
-#include "Common.h"
-#include "SocketFace.h"
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
 #include <openssl/ec.h>
 #include <openssl/ssl.h>
 #include <boost/filesystem.hpp>
+#include "Common.h"
+#include "SocketFace.h"
 
 using namespace dev::eth;
 using namespace dev::p2p;

@@ -20,12 +20,12 @@
  */
 
 #pragma once
-#include "Common.h"
-#include "Host.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <memory>
+#include <libnetwork/Common.h>
+#include <libnetwork/Host.h>
 
 namespace dev
 {

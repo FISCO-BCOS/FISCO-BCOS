@@ -20,11 +20,12 @@
  * @author: yujiechen
  * @date 2018-09-10
  */
+#include "../../../libnetwork/Peer.h"
+
 #include "FakeHost.h"
-#include <libp2p/Common.h>
-#include <libp2p/Peer.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
+#include "../../../libnetwork/Common.h"
 
 using namespace dev;
 using namespace dev::p2p;

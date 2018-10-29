@@ -7,7 +7,7 @@ target_include_directories(initializer PUBLIC ${BOOST_INCLUDE_DIR})
 target_link_libraries(initializer Boost::program_options)
 
 target_link_libraries(initializer devcore)
-target_link_libraries(initializer p2p)
+target_link_libraries(initializer network)
 target_link_libraries(initializer devcrypto)
 target_link_libraries(initializer ethcore)
 target_link_libraries(initializer blockverifier)

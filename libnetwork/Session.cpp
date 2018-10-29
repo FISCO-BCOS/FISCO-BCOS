@@ -23,14 +23,16 @@
  */
 
 #include "Session.h"
-#include "Host.h"
-#include "P2PMsgHandler.h"
+
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
+
+#include "../libp2p/P2PMsgHandler.h"
+#include "Host.h"
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;

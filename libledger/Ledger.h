@@ -30,9 +30,10 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
-#include <libp2p/P2PInterface.h>
-#include <libp2p/Service.h>
 #include <boost/property_tree/ptree.hpp>
+
+#include "../libp2p/P2PInterface.h"
+#include "../libp2p/Service.h"
 namespace dev
 {
 namespace ledger

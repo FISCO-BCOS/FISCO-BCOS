@@ -22,7 +22,7 @@
  */
 
 #include "Network.h"
-#include "Common.h"
+
 #include <ifaddrs.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/Common.h>
@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include "Common.h"
 
 using namespace std;
 using namespace dev;

@@ -25,8 +25,8 @@
 #include "Common.h"
 #include "SyncMsgPacket.h"
 #include <libdevcore/RLP.h>
-#include <libp2p/Common.h>
-#include <libp2p/Session.h>
+#include "../libnetwork/Common.h"
+#include "../libnetwork/Session.h"
 
 namespace dev
 {

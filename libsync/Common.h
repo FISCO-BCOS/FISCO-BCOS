@@ -27,10 +27,11 @@
  * @date: 2018-10-15
  */
 #pragma once
+#include "../libnetwork/Common.h"
+
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
-#include <libp2p/Common.h>
 #include <set>
 
 namespace dev

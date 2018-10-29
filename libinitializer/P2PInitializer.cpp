@@ -21,11 +21,11 @@
  */
 
 #include "P2PInitializer.h"
-#include <libp2p/Host.h>
-#include <libp2p/Network.h>
-#include <libp2p/P2pFactory.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include "../libnetwork/Host.h"
+#include "../libnetwork/Network.h"
+#include "../libnetwork/P2pFactory.h"
 
 using namespace dev;
 using namespace dev::p2p;

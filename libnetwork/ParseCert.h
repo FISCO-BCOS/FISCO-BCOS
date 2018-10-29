@@ -22,8 +22,9 @@
  */
 
 #pragma once
-#include "Common.h"
 #include <string>
+
+#include "Common.h"
 using namespace std;
 class ParseCert
 {

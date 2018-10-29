@@ -30,11 +30,11 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
-#include <libp2p/Common.h>
-#include <libp2p/P2PInterface.h>
-#include <libp2p/Session.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
+#include "../libnetwork/Common.h"
+#include "../libnetwork/Session.h"
+#include "../libp2p/P2PInterface.h"
 
 
 namespace dev

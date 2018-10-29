@@ -20,7 +20,7 @@
  */
 
 #pragma once
-#include "Common.h"
+#include <libnetwork/Common.h>
 
 namespace dev
 {
@@ -29,6 +29,8 @@ namespace p2p
 class P2PInterface
 {
 public:
+    virtual ~P2PInterface() {};
+
     /// < protocolID stored in Message struct
     virtual Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
 

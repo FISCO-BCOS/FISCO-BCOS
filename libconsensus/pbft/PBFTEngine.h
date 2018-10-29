@@ -30,9 +30,10 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
-#include <libp2p/Session.h>
-#include <libp2p/SessionFace.h>
 #include <sstream>
+
+#include "../../libnetwork/Session.h"
+#include "../../libnetwork/SessionFace.h"
 namespace dev
 {
 namespace consensus

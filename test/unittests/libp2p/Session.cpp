@@ -20,12 +20,13 @@
  * @author: caryliao
  * @date 2018-10-22
  */
+#include "../../../libnetwork/Session.h"
+
 #include "FakeHost.h"
-#include <libp2p/Host.h>
-#include <libp2p/P2pFactory.h>
-#include <libp2p/Session.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
+#include "../../../libnetwork/Host.h"
+#include "../../../libnetwork/P2pFactory.h"
 
 using namespace dev;
 using namespace dev::p2p;

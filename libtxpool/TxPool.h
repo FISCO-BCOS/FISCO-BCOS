@@ -30,8 +30,8 @@
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
-#include <libp2p/P2PInterface.h>
-#include <libp2p/Service.h>
+#include "../libp2p/P2PInterface.h"
+#include "../libp2p/Service.h"
 using namespace dev::eth;
 using namespace dev::p2p;
 namespace dev

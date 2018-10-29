@@ -23,13 +23,6 @@
  */
 #pragma once
 
-#include "AsioInterface.h"
-#include "Common.h"
-#include "Network.h"
-#include "P2pFactory.h"
-#include "Peer.h"
-#include "SessionFace.h"
-#include "Socket.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/ThreadPool.h>
 #include <libdevcore/Worker.h>
@@ -43,6 +36,13 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include "AsioInterface.h"
+#include "Common.h"
+#include "Network.h"
+#include "P2pFactory.h"
+#include "Peer.h"
+#include "SessionFace.h"
+#include "Socket.h"
 
 namespace ba = boost::asio;
 namespace bi = ba::ip;
@@ -51,8 +51,7 @@ namespace dev
 {
 namespace p2p
 {
-class RLPXHandshake;
-class Host : public Worker
+class Host: public std::enable_shared_from_this<Host>
 {
 public:
     /// constructor function : init Host with specified client version,
@@ -63,14 +62,8 @@ public:
     virtual ~Host();
 
     /// ------get interfaces ------
-    /// get client version
-    std::string const& clientVersion() const { return m_clientVersion; }
-    /// get network configs
-    NetworkConfig const& networkConfig() const { return m_netConfigs; }
     /// get io_service object  pointer
-    ba::io_service* ioService() { return &m_ioService; }
-    /// get keypair
-    KeyPair const& keyPair() const { return m_alias; }
+    std::shared_ptr<ba::io_service> ioService() { return m_ioService; }
     /// get node id(public key)
     NodeID const& id() const { return m_alias.pub(); }
     /// get private key of the node
@@ -91,6 +84,8 @@ public:
     RecursiveMutex& mutexSessions() { return x_sessions; }
     /// get m_staticNodes
     std::map<NodeIPEndpoint, NodeID>* staticNodes() { return &m_staticNodes; }
+
+#if 0
     /// get the peer slots
     unsigned peerSlots(PeerSlotType _type) const
     {
@@ -129,6 +124,8 @@ public:
         }
         return ret;
     }
+#endif
+
     /// get m_tcpClient
     bi::tcp::endpoint const& tcpClient() const { return m_tcpClient; }
     /// ------set interfaces ------
@@ -144,13 +141,17 @@ public:
     {
         m_staticNodes = staticNodes;
     }
+#if 0
     /// set max peer counts
     void setMaxPeerCount(unsigned max_peer_count) { m_maxPeerCount = max_peer_count; }
+#endif
+
     virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
     {
         m_threadPool = threadPool;
     }
 
+#if 0
     ///------ Network and worker threads related ------
     /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
     void start();
@@ -167,13 +168,15 @@ public:
     /// remove expired timer
     /// modify alived peers to m_peers
     /// reconnect all nodes recorded in m_staticNodes periodically
-    virtual void run(boost::system::error_code const& error);
+
     /// start the network by callback io_serivce.run
     void doWork();
     /// stop the network and worker thread
     virtual void stop();
     /// clean resources (include both network, socket resources) when stop working
     void doneWorking();
+#endif
+    virtual void run(boost::system::error_code const& error);
 
     /// get the network status
     /// @return true : the network has been started
@@ -184,6 +187,7 @@ public:
         return m_run;
     }
 
+#if 0
     /// Get session by id
     std::shared_ptr<SessionFace> peerSession(NodeID const& _id)
     {
@@ -223,9 +227,11 @@ public:
 
     std::shared_ptr<std::vector<std::string>> topics() const { return m_topics; };
     uint32_t topicSeq() const { return m_topicSeq; }
+#endif
 
     shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
 
+#if 0
     void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList)
     {
         if (m_groupID2NodeList.find(0) != m_groupID2NodeList.end())
@@ -248,6 +254,7 @@ public:
         _nodeList = it->second;
         return true;
     }
+#endif
 
     MessageFactory::Ptr messageFactory() { return m_messageFactory; }
 
@@ -301,15 +308,15 @@ protected:  /// protected functions
     void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId);
 
 protected:  /// protected members(for unit testing)
-    /// values inited by contructor
-    /// Our version string
-    std::string m_clientVersion;
     /// Network settings.
     NetworkConfig m_netConfigs;
+
     /// Interface addresses.
     std::set<bi::address> m_ifAddresses;
+
     /// I/O handler
-    ba::io_service m_ioService;
+    std::shared_ptr<ba::io_service> m_ioService;
+
     /// Listening acceptor.
     bi::tcp::acceptor m_tcp4Acceptor;
     /// Alias for network communication, namely (public key, private key) of the node
@@ -332,16 +339,21 @@ protected:  /// protected members(for unit testing)
     bool m_run = false;
     ///< Start/stop mutex.(mutex for m_run)
     mutable std::mutex x_runTimer;
+
     /// the network accepting status(false means p2p is not accepting connections)
     bool m_accepting = false;
+
+#if 0
     /// maps from node ids to the sessions
     mutable std::unordered_map<NodeID, std::shared_ptr<SessionFace>> m_sessions;
+
     /// maps between peer name and peeer object
     /// attention: (endpoint recorded in m_peers always (listenIp, listenAddress))
     ///           (client endpoint of (connectIp, connectAddress) has no record)
     std::unordered_map<NodeID, std::shared_ptr<Peer>> m_peers;
     /// mutex for accepting session information m_sessions and m_peers
     mutable RecursiveMutex x_sessions;
+#endif
     /// control reconnecting, if set to be true, will reconnect peers immediately
     bool m_reconnectnow = true;
     /// mutex for m_reconnectnow
@@ -362,8 +374,10 @@ protected:  /// protected members(for unit testing)
     unsigned m_maxPeerCount = 100;
     static const unsigned c_timerInterval = 100;
 
+#if 0
     ///< This handler will be sent to sessions before session start.
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
+#endif
 
     ///< Time we sent the last topic seq to all
     std::chrono::steady_clock::time_point m_lastSendTopicSeq;
@@ -373,6 +387,7 @@ protected:  /// protected members(for unit testing)
     uint32_t m_topicSeq;
 
     std::shared_ptr<dev::ThreadPool> m_threadPool;
+#if 0
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;
 
@@ -380,6 +395,7 @@ protected:  /// protected members(for unit testing)
     ///< value is the list of node members for the group
     ///< the data is currently statically loaded and not synchronized between nodes
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
+#endif
 
     MessageFactory::Ptr m_messageFactory;
 };

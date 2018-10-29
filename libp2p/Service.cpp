@@ -20,6 +20,7 @@
  */
 
 #include "Service.h"
+
 #include <libdevcore/CommonJS.h>
 namespace dev
 {

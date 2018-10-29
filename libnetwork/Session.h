@@ -24,9 +24,6 @@
 
 #pragma once
 
-#include "Common.h"
-#include "SessionFace.h"
-#include "SocketFace.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
@@ -38,6 +35,10 @@
 #include <mutex>
 #include <set>
 #include <utility>
+
+#include "Common.h"
+#include "SessionFace.h"
+#include "SocketFace.h"
 namespace dev
 {
 namespace p2p
@@ -126,12 +127,6 @@ protected:
     byte m_recvBuffer[1024];
 
 private:
-    struct Header
-    {
-        uint32_t length = 0;
-        uint32_t protocolID = 0;
-    };
-
     /// Drop the connection for the reason @a _r.
     void drop(DisconnectReason _r);
 
@@ -153,10 +148,6 @@ private:
     Mutex x_framing;                       ///< Mutex for the write queue.
     MessageFactory::Ptr m_messageFactory;
 
-#if 0
-	std::deque<bytes> m_writeQueue;			///< The write queue.
-	std::deque<u256> m_writeTimeQueue; ///< to stat queue time
-#endif
     class QueueCompare
     {
     public:

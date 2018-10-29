@@ -20,8 +20,9 @@
  */
 
 #include "Common.h"
-#include "Network.h"
+
 #include <libdevcore/CommonIO.h>
+#include "Network.h"
 
 using namespace std;
 using namespace dev;

@@ -35,9 +35,7 @@
  * Add send topicSeq
  */
 #include "Host.h"
-#include "Common.h"
-#include "ParseCert.h"
-#include "Session.h"
+
 #include <libdevcore/Assertions.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
@@ -52,6 +50,10 @@
 #include <mutex>
 #include <set>
 #include <thread>
+
+#include "Common.h"
+#include "ParseCert.h"
+#include "Session.h"
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
@@ -671,11 +673,11 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
     LOG(INFO) << "Attempting connection to node "
               << "@" << _nodeIPEndpoint.name() << "," << _nodeIPEndpoint.host << " from " << id();
     std::shared_ptr<SocketFace> socket =
-        m_socketFactory->create_socket(m_ioService, *m_sslContext, _nodeIPEndpoint);
+        m_socketFactory->create_socket(*m_ioService, *m_sslContext, _nodeIPEndpoint);
     // socket.reset(socket);
     m_tcpClient = socket->remoteEndpoint();
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
-    socket->sslref().set_verify_depth(3);
+
     /// connect to the server
     m_asioInterface->async_connect(socket, m_strand, _nodeIPEndpoint,
         [=](boost::system::error_code const& ec) {
@@ -778,7 +780,7 @@ void Host::doneWorking()
     try
     {
         // reset ioservice (cancels all timers and allows manually polling network, below)
-        m_ioService.reset();
+        m_ioService->reset();
         // shutdown acceptor
         if (m_tcp4Acceptor.is_open())
         {
@@ -836,7 +838,7 @@ void Host::doWork()
     try
     {
         if (m_run)
-            m_ioService.run();
+            m_ioService->run();
     }
     catch (std::exception const& _e)
     {

@@ -20,7 +20,8 @@
  * @author: yujiechen
  * @date 2018-09-19
  */
-#include <libp2p/ParseCert.h>
+#include "../../../libnetwork/ParseCert.h"
+
 #include <openssl/bio.h>
 #include <openssl/x509.h>
 #include <test/tools/libutils/Common.h>

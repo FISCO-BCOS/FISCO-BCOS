@@ -21,10 +21,11 @@
  * @date 2018-09-13
  */
 #pragma once
-#include "SocketFace.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
+
+#include "SocketFace.h"
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 

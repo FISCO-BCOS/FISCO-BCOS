@@ -20,8 +20,9 @@
  * @author: yujiechen
  * @date 2018-09-10
  */
+#include "../../../libnetwork/Common.h"
+
 #include <libdevcore/Assertions.h>
-#include <libp2p/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

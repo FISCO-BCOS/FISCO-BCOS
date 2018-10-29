@@ -20,7 +20,8 @@
  * @author: yujiechen
  * @date 2018-09-11
  */
-#include <libp2p/Network.h>
+#include "../../../libnetwork/Network.h"
+
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
