@@ -37,10 +37,10 @@ namespace dev
 {
 namespace sync
 {
-static unsigned const c_maxSendTransactions = 10;
+static unsigned const c_maxSendTransactions = 128;
 static size_t const c_maxDownloadingBlockQueueSize = 4096;
 static size_t const c_maxDownloadingBlockQueueBufferSize = 4096;
-static int64_t const c_maxRequestBlocks = 1024;
+static int64_t const c_maxRequestBlocks = 128;
 static int64_t const c_maxCommitBlocks = 2048;
 static unsigned const c_syncPacketIDBase = 1;
 
