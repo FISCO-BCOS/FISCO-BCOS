@@ -1,3 +1,4 @@
+
 var Web3= require('web3');
 var config=require('../web3lib/config');
 var fs=require('fs');
@@ -74,8 +75,11 @@ switch (filename){
         var key=options[4];
         var instance=getAction("ConfigAction");
         var value=instance.get(key,  initializer);
-        console.log(key+"="+parseInt(value[0], 16)+","+value[1].toString());
 
+        if (key == "CAVerify")
+          console.log("config :"+key+","+value);
+        else
+          console.log(key+"="+parseInt(value[0], 16)+","+value[1].toString());
         break;
       }
       case "set":
@@ -85,15 +89,21 @@ switch (filename){
           break;
         }
         var key=options[4];
-        var value=parseInt(options[5]).toString(16);
+        var value;
+        if (key == "CAVerify")
+          value=options[5];
+        else
+          value=parseInt(options[5]).toString(16);
         
         var instance=getAction("ConfigAction");
 
         var func = "set(string,string)";
         var params = [key,value];
         var receipt = web3sync.sendRawTransaction(config.account, config.privKey, instance.address, func, params);
-
-        console.log("config :"+key+","+value);
+        if (key == "CAVerify")
+          console.log("config :"+key+","+value);
+        else
+          console.log("config :"+key+","+parseInt(value,16));
        
         break;
       }
