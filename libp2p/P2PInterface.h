@@ -32,23 +32,23 @@ public:
     virtual ~P2PInterface() {};
 
     /// < protocolID stored in Message struct
-    virtual Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
+    virtual P2PMessage::Ptr sendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message,
+        CallbackFunc callback = [](P2PException e, P2PMessage::Ptr msg) {},
         Options const& options = Options()) = 0;
 
-    virtual Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
+    virtual P2PMessage::Ptr sendMessageByTopic(std::string const& topic, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
+    virtual void asyncSendMessageByTopic(std::string const& topic, P2PMessage::Ptr message,
         CallbackFunc callback, Options const& options) = 0;
 
-    virtual void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
+    virtual void asyncMulticastMessageByTopic(std::string const& topic, P2PMessage::Ptr message) = 0;
 
     virtual void asyncMulticastMessageByNodeIDList(
-        NodeIDs const& nodeIDs, Message::Ptr message) = 0;
+        NodeIDs const& nodeIDs, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
+    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, Options const& options) = 0;
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
@@ -78,7 +78,7 @@ public:
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
     virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
 
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
+    virtual void setMessageFactory(P2PMessageFactory::Ptr _messageFactory) = 0;
 };
 
 }  // namespace p2p

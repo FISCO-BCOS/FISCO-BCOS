@@ -36,7 +36,7 @@ namespace txpool
  * @param pMessage : p2p handler returned by p2p module to obtain messages
  */
 void TxPool::enqueue(
-    dev::p2p::P2PException exception, std::shared_ptr<Session> session, Message::Ptr pMessage)
+    dev::p2p::P2PException exception, std::shared_ptr<Session> session, P2PMessage::Ptr pMessage)
 {
     if (exception.errorCode() != 0)
         BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed()

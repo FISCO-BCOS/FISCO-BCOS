@@ -47,8 +47,8 @@ public:
     void clearSessionInfo() { m_sessionInfos.clear(); }
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+    void asyncSendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message,
+        CallbackFunc callback = [](P2PException e, P2PMessage::Ptr msg) {},
         dev::p2p::Options const& options = dev::p2p::Options()) override
     {
         if (m_asyncSend.count(nodeID))
@@ -64,7 +64,7 @@ public:
         return m_asyncSend[nodeID];
     }
 
-    Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    P2PMessage::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
     {
         auto msg = m_asyncSendMsgs.find(nodeID);
         if (msg == m_asyncSendMsgs.end())
@@ -78,7 +78,7 @@ public:
 private:
     SessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
-    std::map<NodeID, Message::Ptr> m_asyncSendMsgs;
+    std::map<NodeID, P2PMessage::Ptr> m_asyncSendMsgs;
     bool m_connected;
 };
 class FakeTxPool : public TxPool

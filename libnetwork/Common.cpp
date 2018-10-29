@@ -96,7 +96,7 @@ std::string p2p::reasonOf(DisconnectReason _r)
     }
 }
 
-void Message::encode(bytes& buffer)
+void P2PMessage::encode(bytes& buffer)
 {
     buffer.clear();  ///< It is not allowed to be assembled outside.
     m_length = HEADER_LENGTH + m_buffer->size();
@@ -113,7 +113,7 @@ void Message::encode(bytes& buffer)
     buffer.insert(buffer.end(), m_buffer->begin(), m_buffer->end());
 }
 
-ssize_t Message::decode(const byte* buffer, size_t size)
+ssize_t P2PMessage::decode(const byte* buffer, size_t size)
 {
     if (size < HEADER_LENGTH)
     {
@@ -145,7 +145,7 @@ ssize_t Message::decode(const byte* buffer, size_t size)
     return m_length;
 }
 
-void Message::encodeAMOPBuffer(std::string const& topic)
+void P2PMessage::encodeAMOPBuffer(std::string const& topic)
 {
     ///< check protocolID is AMOP message or not
     if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
@@ -159,7 +159,7 @@ void Message::encodeAMOPBuffer(std::string const& topic)
     m_buffer->insert(m_buffer->begin(), (byte*)&topicLen, (byte*)&topicLen + sizeof(topicLen));
 }
 
-ssize_t Message::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic)
+ssize_t P2PMessage::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic)
 {
     ///< check protocolID is AMOP message or not
     if (dev::eth::ProtocolID::Topic != abs(m_protocolID))

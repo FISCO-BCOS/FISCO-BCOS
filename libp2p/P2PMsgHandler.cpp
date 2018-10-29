@@ -123,7 +123,7 @@ bool P2PMsgHandler::eraseHandlerByTopic(std::string const& topic)
 void P2PMsgHandler::registerAMOP()
 {
     addProtocolID2Handler(dev::eth::ProtocolID::AMOP,
-        [](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
+        [](P2PException e, std::shared_ptr<Session> s, P2PMessage::Ptr msg) {
             msg->printMsgWithPrefix("Message received in AMOP handler,");
             switch (msg->packetType())
             {
@@ -135,10 +135,10 @@ void P2PMsgHandler::registerAMOP()
                 LOG(INFO) << "HandleSendTopicSeq recordSeq:" << recordSeq << ", msgSeq:" << msgSeq;
                 if (recordSeq < msgSeq)
                 {
-                    Message::Ptr retMsg = std::make_shared<Message>();
+                    P2PMessage::Ptr retMsg = std::make_shared<P2PMessage>();
                     retMsg->setProtocolID(dev::eth::ProtocolID::AMOP);
                     retMsg->setPacketType(AMOPPacketType::RequestTopics);
-                    retMsg->setLength(Message::HEADER_LENGTH + retMsg->buffer()->size());
+                    retMsg->setLength(P2PMessage::HEADER_LENGTH + retMsg->buffer()->size());
                     std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
                     retMsg->encode(*msgBuf);
                     s->send(msgBuf);
@@ -147,7 +147,7 @@ void P2PMsgHandler::registerAMOP()
             }
             case AMOPPacketType::RequestTopics:
             {
-                Message::Ptr retMsg = std::make_shared<Message>();
+                P2PMessage::Ptr retMsg = std::make_shared<P2PMessage>();
                 retMsg->setProtocolID(dev::eth::ProtocolID::AMOP);
                 retMsg->setPacketType(AMOPPacketType::SendTopics);
                 stringstream str;
@@ -165,7 +165,7 @@ void P2PMsgHandler::registerAMOP()
                 LOG(INFO) << "HandleRequestTopics, the buffer content of message sent:" << content;
                 buffer->assign(content.begin(), content.end());
                 retMsg->setBuffer(buffer);
-                retMsg->setLength(Message::HEADER_LENGTH + retMsg->buffer()->size());
+                retMsg->setLength(P2PMessage::HEADER_LENGTH + retMsg->buffer()->size());
                 std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
                 retMsg->encode(*msgBuf);
                 s->send(msgBuf);

@@ -122,19 +122,32 @@ struct Options
     uint32_t timeout;     ///< The timeout value of async function, in milliseconds.
 };
 
-class Message : public std::enable_shared_from_this<Message>
+class Message: public std::enable_shared_from_this<Message> {
+public:
+	virtual ~Message() {};
+
+	typedef std::shared_ptr<Message> Ptr;
+
+	virtual uint32_t length() = 0;
+	virtual uint32_t seq() = 0;
+
+	virtual void encode(bytes &buffer) = 0;
+	virtual ssize_t decode(const byte *buffer, size_t size) = 0;
+};
+
+class P2PMessage : public Message
 {
 public:
-    typedef std::shared_ptr<Message> Ptr;
+    typedef std::shared_ptr<P2PMessage> Ptr;
 
     const static size_t HEADER_LENGTH = 12;
     const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
 
-    Message() { m_buffer = std::make_shared<bytes>(); }
+    P2PMessage() { m_buffer = std::make_shared<bytes>(); }
 
-    virtual ~Message() {}
+    virtual ~P2PMessage() {}
 
-    uint32_t length() { return m_length; }
+    virtual uint32_t length() override { return m_length; }
     void setLength(uint32_t _length) { m_length = _length; }
 
     PROTOCOL_ID protocolID() { return m_protocolID; }
@@ -157,11 +170,11 @@ public:
             return 0;
     }
 
-    void encode(bytes& buffer);
+    virtual void encode(bytes& buffer) override;
 
     /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
     /// returned.
-    ssize_t decode(const byte* buffer, size_t size);
+    virtual ssize_t decode(const byte* buffer, size_t size) override;
 
     ///< This buffer param is the m_buffer member stored in struct Messger, and the topic info will
     ///< be encoded in buffer.
@@ -204,13 +217,13 @@ enum AMOPPacketType
     SendTopics = 3
 };
 
-class MessageFactory : public std::enable_shared_from_this<MessageFactory>
+class P2PMessageFactory : public std::enable_shared_from_this<P2PMessageFactory>
 {
 public:
-    typedef std::shared_ptr<MessageFactory> Ptr;
+    typedef std::shared_ptr<P2PMessageFactory> Ptr;
 
-    virtual ~MessageFactory(){};
-    virtual Message::Ptr buildMessage() = 0;
+    virtual ~P2PMessageFactory(){};
+    virtual P2PMessage::Ptr buildMessage() = 0;
 };
 
 class P2PException : public std::exception
@@ -249,7 +262,7 @@ public:
 
     SessionCallback() { mutex.lock(); }
 
-    void onResponse(P2PException _error, Message::Ptr _message)
+    void onResponse(P2PException _error, P2PMessage::Ptr _message)
     {
         error = _error;
         response = _message;
@@ -257,7 +270,7 @@ public:
     }
 
     P2PException error;
-    Message::Ptr response;
+    P2PMessage::Ptr response;
     std::mutex mutex;
 };
 

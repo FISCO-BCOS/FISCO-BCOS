@@ -34,11 +34,11 @@ namespace dev
 {
 namespace test
 {
-class P2PMessageFactory : public MessageFactory
+class P2PMessageFactory : public P2PMessageFactory
 {
 public:
     virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+    virtual P2PMessage::Ptr buildMessage() override { return std::make_shared<P2PMessage>(); }
 };
 
 class SessionFixure : public TestOutputHelperFixture
@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(testSessionConstruct)
     BOOST_CHECK(session->id() == session->peer()->id());
     BOOST_CHECK(session->nodeIPEndpoint() == getSocket()->nodeIPEndpoint());
     session->info();
-    std::shared_ptr<MessageFactory> p2PMessageFactory = std::make_shared<P2PMessageFactory>();
+    std::shared_ptr<P2PMessageFactory> p2PMessageFactory = std::make_shared<P2PMessageFactory>();
     session->setMessageFactory(p2PMessageFactory);
     BOOST_CHECK(session->messageFactory() == p2PMessageFactory);
     uint32_t topicSeq = uint32_t(0);

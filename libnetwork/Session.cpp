@@ -31,8 +31,9 @@
 #include <libdevcore/easylog.h>
 #include <chrono>
 
-#include "../libp2p/P2PMsgHandler.h"
+//#include "../libp2p/P2PMsgHandler.h"
 #include "Host.h"
+
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
@@ -102,10 +103,12 @@ vector<T> randomSelection(vector<T> const& _t, unsigned _n)
     return ret;
 }
 
+void Session::asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc()) {
+	if()
+}
+
 void Session::send(std::shared_ptr<bytes> _msg)
 {
-    bytesConstRef msg(_msg.get());
-
     if (!m_socket->isConnected())
         return;
 
@@ -223,7 +226,7 @@ void Session::drop(DisconnectReason _reason)
                 P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
             /// it.second->callbackFunc(e, Message::Ptr());
             m_threadPool->enqueue([=]() {
-                it.second->callbackFunc(e, Message::Ptr());
+                it.second->callbackFunc(e, P2PMessage::Ptr());
                 eraseCallbackBySeq(it.first);
             });
         }
@@ -285,7 +288,7 @@ void Session::doRead()
 
         while (true)
         {
-            Message::Ptr message = m_messageFactory->buildMessage();
+            P2PMessage::Ptr message = m_messageFactory->buildMessage();
             ssize_t result = message->decode(m_data.data(), m_data.size());
             LOG(TRACE) << "Parse result: " << result;
             if (result > 0)
@@ -338,6 +341,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
+#if 0
 bool Session::CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Session> session)
 {
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(protocolID);
@@ -364,10 +368,12 @@ bool Session::CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Sess
 
     return true;
 }
+#endif
 
 void Session::onMessage(
-    P2PException const& e, std::shared_ptr<Session> session, Message::Ptr message)
+    P2PException const& e, std::shared_ptr<Session> session, P2PMessage::Ptr message)
 {
+#if 0
     PROTOCOL_ID protocolID = message->protocolID();
     if (message->isRequestPacket())
     {
@@ -424,6 +430,7 @@ void Session::onMessage(
     {
         LOG(ERROR) << "Session::onMessage, protocolID=0 Error!";
     }
+#endif
 }
 
 bool Session::addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback)

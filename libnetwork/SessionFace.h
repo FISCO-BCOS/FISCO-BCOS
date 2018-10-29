@@ -58,6 +58,7 @@ public:
 
     virtual void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) = 0;
 
+    virtual void send(P2PMessage::Ptr message) = 0;
     virtual void send(std::shared_ptr<bytes> _msg) = 0;
 
     ///< interface to set and get topicSeq
@@ -77,8 +78,8 @@ public:
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
-    virtual MessageFactory::Ptr messageFactory() const = 0;
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
+    virtual P2PMessageFactory::Ptr messageFactory() const = 0;
+    virtual void setMessageFactory(P2PMessageFactory::Ptr _messageFactory) = 0;
 
     virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) = 0;
 };

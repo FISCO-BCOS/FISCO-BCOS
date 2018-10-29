@@ -77,11 +77,15 @@ public:
     bi::tcp::endpoint const& tcpPublic() const { return m_tcpPublic; }
     /// get the number of connected peers
     size_t peerCount() const;
+
+#if 0
     /// get session map
     std::unordered_map<NodeID, std::shared_ptr<SessionFace>>& sessions() { return m_sessions; }
 
     /// get mutex of sessions
     RecursiveMutex& mutexSessions() { return x_sessions; }
+#endif
+
     /// get m_staticNodes
     std::map<NodeIPEndpoint, NodeID>* staticNodes() { return &m_staticNodes; }
 
@@ -256,9 +260,9 @@ public:
     }
 #endif
 
-    MessageFactory::Ptr messageFactory() { return m_messageFactory; }
+    P2PMessageFactory::Ptr messageFactory() { return m_messageFactory; }
 
-    void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    void setMessageFactory(P2PMessageFactory::Ptr _messageFactory)
     {
         m_messageFactory = _messageFactory;
     }
@@ -283,6 +287,8 @@ protected:  /// protected functions
     /// update m_sessions and m_peers periodically
     /// drop the unconnected/invalid sessions periodically
     void keepAlivePeers();
+
+#if 0
     /// @return true: the specified peer node has alived-sessions
     /// @ return false: the specified peer node has no-alived-sessions
     bool havePeerSession(NodeID const& _id)
@@ -292,6 +298,8 @@ protected:  /// protected functions
             return true;
         return false;
     }
+#endif
+
     /// reconnect to all unconnected peers recorded in m_staticNodes
     void reconnectAllNodes();
     /// connect to the server
@@ -397,7 +405,7 @@ protected:  /// protected members(for unit testing)
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
 #endif
 
-    MessageFactory::Ptr m_messageFactory;
+    P2PMessageFactory::Ptr m_messageFactory;
 };
 }  // namespace p2p
 

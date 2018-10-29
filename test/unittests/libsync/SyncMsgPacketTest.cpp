@@ -100,7 +100,7 @@ BOOST_FIXTURE_TEST_SUITE(SyncMsgPacketTest, SyncMsgPacketFixture)
 
 BOOST_AUTO_TEST_CASE(PacketDecodeTest)
 {
-    auto fakeMessagePtr = shared_ptr<Message>(nullptr);
+    auto fakeMessagePtr = shared_ptr<P2PMessage>(nullptr);
     SyncMsgPacket msgPacket;
 
     // message is nullptr
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(PacketDecodeTest)
     BOOST_CHECK(isSuccessful == false);
 
     // message contains no data
-    fakeMessagePtr = make_shared<Message>();
+    fakeMessagePtr = make_shared<P2PMessage>();
     isSuccessful = msgPacket.decode(fakeSessionPtr, fakeMessagePtr);
     BOOST_CHECK(isSuccessful == false);
 

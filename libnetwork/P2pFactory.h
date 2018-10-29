@@ -49,7 +49,7 @@ class SessionFactory
 public:
     virtual std::shared_ptr<SessionFace> create_session(Host* _server,
         std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
-        PeerSessionInfo _info, MessageFactory::Ptr _messageFactory)
+        PeerSessionInfo _info, P2PMessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<SessionFace> m_session =
             std::make_shared<Session>(_server, _socket, _peer, _info);

@@ -635,14 +635,14 @@ void Host::sendTopicSeq()
         return;
     LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
 
-    Message::Ptr msg = std::make_shared<Message>();
+    P2PMessage::Ptr msg = std::make_shared<P2PMessage>();
     msg->setProtocolID(dev::eth::ProtocolID::AMOP);
     msg->setPacketType(AMOPPacketType::SendTopicSeq);
     std::string s = to_string(m_topicSeq);
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
     buffer->assign(s.begin(), s.end());
     msg->setBuffer(buffer);
-    msg->setLength(Message::HEADER_LENGTH + msg->buffer()->size());
+    msg->setLength(P2PMessage::HEADER_LENGTH + msg->buffer()->size());
     std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
     msg->encode(*msgBuf);
 

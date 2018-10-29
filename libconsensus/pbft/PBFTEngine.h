@@ -132,7 +132,7 @@ protected:
     bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::P2PException exception,
-        std::shared_ptr<dev::p2p::Session> session, dev::p2p::Message::Ptr message);
+        std::shared_ptr<dev::p2p::Session> session, dev::p2p::P2PMessage::Ptr message);
     void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
@@ -211,10 +211,10 @@ protected:
     }
 
     /// trans data into message
-    inline dev::p2p::Message::Ptr transDataToMessage(
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
     {
-        dev::p2p::Message::Ptr message = std::make_shared<dev::p2p::Message>();
+        dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
@@ -226,7 +226,7 @@ protected:
         return message;
     }
 
-    inline dev::p2p::Message::Ptr transDataToMessage(
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, PACKET_TYPE const& packetType)
     {
         return transDataToMessage(data, packetType, m_protocolId);
@@ -244,7 +244,7 @@ protected:
      * @return true : the network-received message is valid
      * @return false: the network-received message is invalid
      */
-    bool isValidReq(dev::p2p::Message::Ptr message, std::shared_ptr<dev::p2p::Session> session,
+    bool isValidReq(dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::Session> session,
         ssize_t& peerIndex) override
     {
         /// check message size

@@ -37,14 +37,14 @@ class SyncMsgPacket
 public:
     SyncMsgPacket() {}
     /// Extract data by decoding the message
-    bool decode(std::shared_ptr<dev::p2p::SessionFace> _session, dev::p2p::Message::Ptr _msg);
+    bool decode(std::shared_ptr<dev::p2p::SessionFace> _session, dev::p2p::P2PMessage::Ptr _msg);
 
     /// encode is implement in derived class
     /// basic encode function
     RLPStream& prep(RLPStream& _s, unsigned _id, unsigned _args);
 
     /// Generate p2p message after encode
-    dev::p2p::Message::Ptr toMessage(PROTOCOL_ID _protocolId);
+    dev::p2p::P2PMessage::Ptr toMessage(PROTOCOL_ID _protocolId);
 
     RLP const& rlp() const { return m_rlp; }
 

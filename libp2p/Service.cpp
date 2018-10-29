@@ -26,7 +26,7 @@ namespace dev
 {
 namespace p2p
 {
-Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message)
+P2PMessage::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message)
 {
     LOG(INFO) << "Call Service::sendMessageByNodeID";
     try
@@ -47,7 +47,7 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         if (!findNodeID)
         {
             LOG(ERROR) << "Service::sendMessageByNodeID cannot find target.";
-            return Message::Ptr();
+            return P2PMessage::Ptr();
         }
 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
@@ -74,11 +74,11 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         LOG(ERROR) << "ERROR:" << e.what();
     }
 
-    return Message::Ptr();
+    return P2PMessage::Ptr();
 }
 
 void Service::asyncSendMessageByNodeID(
-    NodeID const& nodeID, Message::Ptr message, CallbackFunc callback, Options const& options)
+    NodeID const& nodeID, P2PMessage::Ptr message, CallbackFunc callback, Options const& options)
 {
     LOG(INFO) << "Call Service::asyncSendMessageByNodeID to NodeID=" << toJS(nodeID);
     try
@@ -108,7 +108,7 @@ void Service::asyncSendMessageByNodeID(
                 }
                 ///< update seq and length
                 message->setSeq(seq);
-                message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+                message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
                 std::shared_ptr<bytes> buf = std::make_shared<bytes>();
                 message->encode(*buf);
                 p->send(buf);
@@ -123,7 +123,7 @@ void Service::asyncSendMessageByNodeID(
 }
 
 void Service::onTimeoutByTopic(const boost::system::error_code& error,
-    std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
+    std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, P2PMessage::Ptr message,
     CallbackFunc callback, Options const& options, uint32_t totalTimeout)
 {
     LOG(INFO) << "Service::onTimeoutByTopic, error=" << error;
@@ -189,7 +189,7 @@ void Service::onTimeoutByTopic(const boost::system::error_code& error,
                     {
                         P2PException e(P2PExceptionType::NetworkTimeout,
                             g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
-                        Message::Ptr msg = make_shared<Message>();
+                        P2PMessage::Ptr msg = make_shared<P2PMessage>();
                         msg->setSeq(message->seq());
                         it->callbackFunc(e, msg);
                     }
@@ -232,7 +232,7 @@ void Service::onTimeoutByNode(
                 {
                     P2PException e(P2PExceptionType::NetworkTimeout,
                         g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
-                    Message::Ptr message = make_shared<Message>();
+                    P2PMessage::Ptr message = make_shared<P2PMessage>();
                     message->setSeq(seq);
                     it->callbackFunc(e, message);
                 }
@@ -257,7 +257,7 @@ void Service::onTimeoutByNode(
     }
 }
 
-Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr message)
+P2PMessage::Ptr Service::sendMessageByTopic(std::string const& topic, P2PMessage::Ptr message)
 {
     LOG(INFO) << "Call Service::sendMessageByTopic";
     try
@@ -286,11 +286,11 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
         LOG(ERROR) << "Service::sendMessageByTopic error:" << e.what();
     }
 
-    return Message::Ptr();
+    return P2PMessage::Ptr();
 }
 
 void Service::asyncSendMessageByTopic(
-    std::string const& topic, Message::Ptr message, CallbackFunc callback, Options const& options)
+    std::string const& topic, P2PMessage::Ptr message, CallbackFunc callback, Options const& options)
 {
     LOG(INFO) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
     assert(options.timeout > 0 && options.subTimeout > 0);
@@ -316,7 +316,7 @@ void Service::asyncSendMessageByTopic(
                 uint32_t seq = ++m_seq;
                 ///< update seq and length
                 message->setSeq(seq);
-                message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+                message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
                 if (callback)
                 {
                     ResponseCallback::Ptr responseCallback = std::make_shared<ResponseCallback>();
@@ -343,7 +343,7 @@ void Service::asyncSendMessageByTopic(
     }
 }
 
-void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message)
+void Service::asyncMulticastMessageByTopic(std::string const& topic, P2PMessage::Ptr message)
 {
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     LOG(INFO) << "Call Service::asyncMulticastMessageByTopic nodes size=" << nodeIDsToSend.size();
@@ -351,7 +351,7 @@ void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Pt
     {
         uint32_t seq = ++m_seq;
         message->setSeq(seq);
-        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
         std::shared_ptr<bytes> buf = std::make_shared<bytes>();
         message->encode(*buf);
 
@@ -369,14 +369,14 @@ void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Pt
     }
 }
 
-void Service::asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message)
+void Service::asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, P2PMessage::Ptr message)
 {
     LOG(INFO) << "Call Service::asyncMulticastMessageByNodeIDList nodes size=" << nodeIDs.size();
     try
     {
         uint32_t seq = ++m_seq;
         message->setSeq(seq);
-        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
         std::shared_ptr<bytes> buf = std::make_shared<bytes>();
         message->encode(*buf);
 
@@ -404,14 +404,14 @@ bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& n
     return false;
 }
 
-void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options)
+void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options const& options)
 {
     LOG(INFO) << "Call Service::asyncBroadcastMessage";
     try
     {
         uint32_t seq = ++m_seq;
         message->setSeq(seq);
-        message->setLength(Message::HEADER_LENGTH + message->buffer()->size());
+        message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
         std::shared_ptr<bytes> buf = std::make_shared<bytes>();
         message->encode(*buf);
 
@@ -442,7 +442,7 @@ void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithS
     if (false == m_p2pMsgHandler->getHandlerByProtocolID(dev::eth::ProtocolID::Topic, callback))
     {
         registerHandlerByProtoclID(dev::eth::ProtocolID::Topic,
-            [=](P2PException e, std::shared_ptr<Session> s, Message::Ptr msg) {
+            [=](P2PException e, std::shared_ptr<Session> s, P2PMessage::Ptr msg) {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by Topic protocolID.";
 
                 ///< Get topic from message buffer.

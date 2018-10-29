@@ -92,12 +92,12 @@ public:
     void resetConfig() { PBFTEngine::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
-        P2PException exception, std::shared_ptr<Session> session, Message::Ptr message)
+        P2PException exception, std::shared_ptr<Session> session, P2PMessage::Ptr message)
     {
         return PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }
 
-    Message::Ptr transDataToMessage(
+    P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
     {
         return PBFTEngine::transDataToMessage(data, packetType, protocolId);

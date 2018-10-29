@@ -51,22 +51,22 @@ public:
 
     virtual ~Service() { m_ioService = NULL; }
 
-    Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
+    P2PMessage::Ptr sendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message) override;
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+    void asyncSendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message,
+        CallbackFunc callback = [](P2PException e, P2PMessage::Ptr msg) {},
         Options const& options = Options()) override;
 
-    Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
+    P2PMessage::Ptr sendMessageByTopic(std::string const& topic, P2PMessage::Ptr message) override;
 
-    void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
+    void asyncSendMessageByTopic(std::string const& topic, P2PMessage::Ptr message,
         CallbackFunc callback, Options const& options) override;
 
-    void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) override;
+    void asyncMulticastMessageByTopic(std::string const& topic, P2PMessage::Ptr message) override;
 
-    void asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message) override;
+    void asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, P2PMessage::Ptr message) override;
 
-    void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
+    void asyncBroadcastMessage(P2PMessage::Ptr message, Options const& options) override;
 
     void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
@@ -99,7 +99,7 @@ public:
 
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,
-        std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
+        std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, P2PMessage::Ptr message,
         CallbackFunc callback, Options const& options, uint32_t totalTimeout);
     void onTimeoutByNode(
         const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);

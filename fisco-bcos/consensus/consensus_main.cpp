@@ -37,11 +37,11 @@ using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
-class P2PMessageFactory : public MessageFactory
+class MockP2PMessageFactory : public P2PMessageFactory
 {
 public:
-    virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
+    virtual ~MockP2PMessageFactory() {}
+    virtual P2PMessage::Ptr buildMessage() override { return std::make_shared<P2PMessage>(); }
 };
 
 static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
@@ -84,7 +84,7 @@ static void startConsensus(Params& params)
 
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
-    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+    p2pService->setMessageFactory(std::make_shared<MockP2PMessageFactory>());
     auto secureInitiailizer = initialize->secureInitiailizer();
     KeyPair key_pair = secureInitiailizer->keyPair();
     auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
