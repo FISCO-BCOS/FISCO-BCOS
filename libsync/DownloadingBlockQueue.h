@@ -61,10 +61,16 @@ public:
     /// get the top unit of the block queue
     BlockPtr top(bool isFlushBuffer = false);
 
+    /// clear queue and buffer
     void clear();
+
+    /// clear queue
+    void clearQueue();
 
     /// flush m_buffer into queue
     void flushBufferToQueue();
+
+    void clearFullQueueIfNotHas(int64_t _blockNumber);
 
 private:
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //

@@ -83,10 +83,15 @@ BlockPtr DownloadingBlockQueue::top(bool isFlushBuffer)
 
 void DownloadingBlockQueue::clear()
 {
-    WriteGuard l1(x_buffer);
-    WriteGuard l2(x_blocks);
+    WriteGuard l(x_buffer);
     m_buffer->clear();
 
+    clearQueue();
+}
+
+void DownloadingBlockQueue::clearQueue()
+{
+    WriteGuard l(x_blocks);
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> emptyQueue;
     swap(m_blocks, emptyQueue);  // Does memory leak here ?
 }
@@ -113,4 +118,18 @@ void DownloadingBlockQueue::flushBufferToQueue()
 
         m_blocks.push(block);
     }
+}
+
+void DownloadingBlockQueue::clearFullQueueIfNotHas(int64_t _blockNumber)
+{
+    bool needClear = false;
+    {
+        ReadGuard l(x_blocks);
+
+        if (m_blocks.size() == c_maxDownloadingBlockQueueSize &&
+            m_blocks.top()->header().number() > _blockNumber)
+            needClear = true;
+    }
+    if (needClear)
+        clearQueue();
 }
