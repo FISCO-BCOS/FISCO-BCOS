@@ -58,7 +58,6 @@ public:
         m_socket = std::make_shared<FakeSocket>(m_ioservice, m_endpoint);
         m_session = std::make_shared<Session>(m_host, m_socket, m_peer, m_info);
         m_host->setSessions(m_session);
-
         return m_session;
     }
     FakeHost* getHost() { return m_host; }
