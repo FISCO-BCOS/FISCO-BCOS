@@ -92,7 +92,7 @@ public:
     void resetConfig() { PBFTEngine::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
-        P2PException exception, std::shared_ptr<Session> session, P2PMessage::Ptr message)
+        NetworkException exception, std::shared_ptr<Session> session, P2PMessage::Ptr message)
     {
         return PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }

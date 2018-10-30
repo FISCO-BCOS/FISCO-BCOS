@@ -187,7 +187,7 @@ public:
     }
 
     void keepAlivePeers() { Host::keepAlivePeers(); }
-    virtual void runAcceptor(boost::system::error_code boost_error = boost::system::error_code())
+    virtual void startAccept(boost::system::error_code boost_error = boost::system::error_code())
     {
         /// to stop runAcceptor
         if (m_loop == 1)
@@ -196,10 +196,10 @@ public:
             return;
         }
         m_loop = 1;
-        Host::runAcceptor(boost_error);
+        Host::startAccept(boost_error);
     }
 
-    void run(boost::system::error_code const& error) { Host::run(error); }
+    void start(boost::system::error_code const& error) { Host::start(error); }
 
     std::shared_ptr<SessionFace> FakeSession(NodeIPEndpoint const& _nodeIPEndpoint)
     {
@@ -218,10 +218,10 @@ public:
     {
         Host::setStaticNodes(staticNodes);
     }
-    void connect(NodeIPEndpoint const& _nodeIPEndpoint,
+    void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         boost::system::error_code ec = boost::system::error_code())
     {
-        Host::connect(_nodeIPEndpoint, ec);
+        Host::asyncConnect(_nodeIPEndpoint, ec);
     }
     bool havePeerSession(NodeID const& _id) { return Host::havePeerSession(_id); }
     void reconnectAllNodes() { return Host::reconnectAllNodes(); }

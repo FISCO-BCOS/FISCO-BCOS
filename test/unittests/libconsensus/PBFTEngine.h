@@ -102,7 +102,7 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft, std::shared_pt
     T const& req, PACKET_TYPE const& packetType, bool const& valid = false)
 {
     P2PMessage::Ptr message_ptr = FakeReqMessage(pbft, req, packetType, ProtocolID::PBFT);
-    pbft->onRecvPBFTMessage(P2PException(), session, message_ptr);
+    pbft->onRecvPBFTMessage(NetworkException(), session, message_ptr);
     std::pair<bool, PBFTMsgPacket> ret = pbft->mutableMsgQueue().tryPop(unsigned(5));
     if (valid == true)
     {

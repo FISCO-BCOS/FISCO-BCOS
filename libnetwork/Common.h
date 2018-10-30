@@ -217,20 +217,20 @@ enum AMOPPacketType
     SendTopics = 3
 };
 
-class P2PMessageFactory : public std::enable_shared_from_this<P2PMessageFactory>
+class MessageFactory : public std::enable_shared_from_this<MessageFactory>
 {
 public:
-    typedef std::shared_ptr<P2PMessageFactory> Ptr;
+    typedef std::shared_ptr<MessageFactory> Ptr;
 
-    virtual ~P2PMessageFactory(){};
+    virtual ~MessageFactory(){};
     virtual P2PMessage::Ptr buildMessage() = 0;
 };
 
-class P2PException : public std::exception
+class NetworkException : public std::exception
 {
 public:
-    P2PException(){};
-    P2PException(int _errorCode, const std::string& _msg) : m_errorCode(_errorCode), m_msg(_msg){};
+    NetworkException(){};
+    NetworkException(int _errorCode, const std::string& _msg) : m_errorCode(_errorCode), m_msg(_msg){};
 
     virtual int errorCode() { return m_errorCode; };
     virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return m_msg.c_str(); };
@@ -243,18 +243,6 @@ private:
 
 class Session;
 
-#define CallbackFunc std::function<void(P2PException, Message::Ptr)>
-#define CallbackFuncWithSession \
-    std::function<void(P2PException, std::shared_ptr<dev::p2p::Session>, Message::Ptr)>
-
-struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
-{
-    typedef std::shared_ptr<ResponseCallback> Ptr;
-
-    CallbackFunc callbackFunc;
-    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
-};
-
 struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
 {
 public:
@@ -262,14 +250,14 @@ public:
 
     SessionCallback() { mutex.lock(); }
 
-    void onResponse(P2PException _error, P2PMessage::Ptr _message)
+    void onResponse(NetworkException _error, P2PMessage::Ptr _message)
     {
         error = _error;
         response = _message;
         mutex.unlock();
     }
 
-    P2PException error;
+    NetworkException error;
     P2PMessage::Ptr response;
     std::mutex mutex;
 };

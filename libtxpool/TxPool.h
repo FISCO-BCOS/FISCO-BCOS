@@ -143,7 +143,7 @@ protected:
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
     /// obtain a transaction from lower network
     void enqueue(
-        dev::p2p::P2PException exception, std::shared_ptr<Session> session, P2PMessage::Ptr pMessage);
+        dev::p2p::NetworkException exception, std::shared_ptr<Session> session, P2PMessage::Ptr pMessage);
     /// verify transcation
     virtual ImportResult verify(
         Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);

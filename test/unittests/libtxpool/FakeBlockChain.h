@@ -48,7 +48,7 @@ public:
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
     void asyncSendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message,
-        CallbackFunc callback = [](P2PException e, P2PMessage::Ptr msg) {},
+        CallbackFunc callback = [](NetworkException e, P2PMessage::Ptr msg) {},
         dev::p2p::Options const& options = dev::p2p::Options()) override
     {
         if (m_asyncSend.count(nodeID))

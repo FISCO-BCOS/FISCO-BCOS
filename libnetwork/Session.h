@@ -46,26 +46,35 @@ namespace p2p
 class Peer;
 class P2PMsgHandler;
 class Host;
-/**
- * @brief The Session class
- * @todo Document fully.
- */
+
+#define CallbackFunc std::function<void(NetworkException, Message::Ptr)>
+#define CallbackFuncWithSession \
+    std::function<void(NetworkException, std::shared_ptr<dev::p2p::Session>, Message::Ptr)>
+
+struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
+{
+    typedef std::shared_ptr<ResponseCallback> Ptr;
+
+    uint64_t m_startTime;
+    CallbackFunc callbackFunc;
+    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
+};
+
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
-    Session(Host* _server, std::shared_ptr<SocketFace> const& _s, std::shared_ptr<Peer> const& _n,
+    Session(std::weak_ptr<Host> _server,
+        std::shared_ptr<SocketFace> const& _s, std::shared_ptr<Peer> const& _n,
         PeerSessionInfo const& _info);
 
     virtual ~Session();
+
+    typedef std::shared_ptr<Session> Ptr;
 
     void start() override;
     void disconnect(DisconnectReason _reason) override;
 
     virtual bool isConnected() const override { return m_socket->isConnected(); }
-
-#if 0
-    virtual NodeID id() const override;
-#endif
 
     virtual PeerSessionInfo info() const override
     {
@@ -73,60 +82,22 @@ public:
         return m_info;
     }
 
-    virtual std::chrono::steady_clock::time_point connectionTime() override { return m_connect; }
-
     virtual std::shared_ptr<Peer> peer() const override { return m_peer; }
-
-    virtual std::chrono::steady_clock::time_point lastReceived() const override { return m_lastReceived; }
-
-#if 0
-    void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) override
-    {
-        m_p2pMsgHandler = _p2pMsgHandler;
-    }
-#endif
 
     virtual void asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc());
     virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options());
 
     virtual void send(std::shared_ptr<bytes> _msg) override;
 
-#if 0
-    ///< interface to set and get topicSeq
-    void setTopicSeq(uint32_t _topicSeq) override { m_topicSeq = _topicSeq; }
-    uint32_t topicSeq() const { return m_topicSeq; }
-#endif
+    virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
 
-#if 0
-    ///< interface to set and get topics
-    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
-    {
-        m_topics = _topics;
-    }
-    std::shared_ptr<std::vector<std::string>> topics() const override { return m_topics; }
+    virtual std::weak_ptr<Host> host() { return m_server; }
 
-    bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) override;
-    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) override;
-    bool eraseCallbackBySeq(uint32_t seq) override;
-#endif
+    virtual MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
 
-    NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
+    virtual void onTimeout(const boost::system::error_code& error, uint32_t seq);
 
-    Host* host() { return m_server; }
-
-#if 0
-    ///< interface to get topicSeq of counter node
-    uint32_t peerTopicSeq(NodeID const& nodeID);
-
-    ///< interface to set topicSeq/topics of counter node
-    void setTopicsAndTopicSeq(NodeID const& nodeID,
-        std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq);
-#endif
-    void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) { m_threadPool = threadPool; }
-
-    P2PMessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
-
-    void setMessageFactory(P2PMessageFactory::Ptr _messageFactory) override
+    void setMessageFactory(MessageFactory::Ptr _messageFactory) override
     {
         m_messageFactory = _messageFactory;
     }
@@ -136,7 +107,6 @@ public:
 protected:
     /// Perform a read on the socket.
     virtual void doRead();
-    //    void setTest(bool const& _test) { m_test = _test; }
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
     byte m_recvBuffer[1024];
 
@@ -149,20 +119,16 @@ private:
 
     /// Perform a single round of the write operation. This could end up calling itself
     /// asynchronously.
-    void onWrite(boost::system::error_code ec, std::size_t length);
+    void onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer);
     void write();
 
     /// call by doRead() to deal with mesage
-    void onMessage(P2PException const& e, std::shared_ptr<Session> session, P2PMessage::Ptr message);
+    void onMessage(NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message);
 
-#if 0
-    bool CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Session> session);
-#endif
-
-    Host* m_server;                        ///< The host that owns us. Never null.
+    std::weak_ptr<Host> m_server;                        ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
     Mutex x_framing;                       ///< Mutex for the write queue.
-    P2PMessageFactory::Ptr m_messageFactory;
+    MessageFactory::Ptr m_messageFactory;
 
     class QueueCompare
     {
@@ -179,35 +145,18 @@ private:
         m_writeQueue;
 
     std::shared_ptr<Peer> m_peer;  ///< The Peer object.
-    bool m_dropped = false;  ///< If true, we've already divested ourselves of this peer. We're just
-                             ///< waiting for the reads & writes to fail before the shared_ptr goes
-                             ///< OOS and the destructor kicks in.
 
     mutable Mutex x_info;
     PeerSessionInfo m_info;  ///< Dynamic information about this peer.
 
-    std::chrono::steady_clock::time_point m_connect;       ///< Time point of connection.
-    std::chrono::steady_clock::time_point m_ping;          ///< Time point of last ping.
-    std::chrono::steady_clock::time_point m_lastReceived;  ///< Time point of last message.
-
-    unsigned m_start_t;
-
-    boost::asio::io_service::strand* m_strand;
-
-    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
-    //    bool m_test = false;  /// for unit test
-
-#if 0
-    uint32_t m_topicSeq = 0;  ///< Represents the topics situation at a certain stage. When topics
-                              ///< change, increase m_topicSeq.
-    std::shared_ptr<std::vector<std::string>> m_topics;  ///< Topic being concerned by this
-                                                         ///< session/node.
-#endif
+    bool m_actived = false;
 
     ///< A call B, the function to call after the response is received by A.
     mutable RecursiveMutex x_seq2Callback;
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
     std::shared_ptr<dev::ThreadPool> m_threadPool;
+
+    std::function<void(NetworkException, Session::Ptr, Message::Ptr)> m_messageHandler;
 };
 
 }  // namespace p2p

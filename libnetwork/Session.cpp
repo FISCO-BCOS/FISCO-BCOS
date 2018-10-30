@@ -31,39 +31,28 @@
 #include <libdevcore/easylog.h>
 #include <chrono>
 
-//#include "../libp2p/P2PMsgHandler.h"
 #include "Host.h"
 
-using namespace std;
 using namespace dev;
 using namespace dev::p2p;
 
-Session::Session(Host* _server, std::shared_ptr<SocketFace> const& _s,
+Session::Session(std::weak_ptr<Host> _server, std::shared_ptr<SocketFace> const& _s,
     std::shared_ptr<Peer> const& _n, PeerSessionInfo const& _info)
   : m_server(_server),
     m_socket(_s),
     m_peer(_n),
-    m_info(_info),
-    m_ping(chrono::steady_clock::time_point::max())
+    m_info(_info)
 {
     m_peer->m_lastDisconnect = NoDisconnect;
-    m_lastReceived = m_connect = chrono::steady_clock::now();
     DEV_GUARDED(x_info)
     m_info.socketId = m_socket->ref().native_handle();
 
-
-    m_strand = _server->strand();
-
-    m_topics = std::make_shared<std::vector<std::string>>();
     m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
 }
 
 Session::~Session()
 {
-    ThreadContext tc(info().id.abridged());
-    ThreadContext tc2(info().host);
-    LOG(INFO) << "Closing peer session :-(";
-    m_peer->m_lastConnected = m_peer->m_lastAttempted - chrono::seconds(1);
+    LOG(INFO) << "Closing peer session";
 
     try
     {
@@ -72,8 +61,6 @@ Session::~Session()
         {
             boost::system::error_code ec;
 
-            // shutdown may block servals seconds - morebtcg
-            // socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
             socket.close();
         }
     }
@@ -83,132 +70,146 @@ Session::~Session()
     }
 }
 
-NodeID Session::id() const
+void Session::asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc())
 {
-    return m_peer ? m_peer->id() : NodeID();
-}
+    auto server = m_server.lock();
+    if(m_actived && server && server->haveNetwork()) {
+        if(server && server->haveNetwork()) {
+            auto handler = std::make_shared<ResponseCallback>();
+            handler->callbackFunc = callback;
+            if(options.timeout > 0) {
+                std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
+                    std::make_shared<boost::asio::deadline_timer>(*server->ioService(),
+                            boost::posix_time::milliseconds(options.timeout));
 
-template <class T>
-vector<T> randomSelection(vector<T> const& _t, unsigned _n)
-{
-    if (_t.size() <= _n)
-        return _t;
-    vector<T> ret = _t;
-    while (ret.size() > _n)
-    {
-        auto i = ret.begin();
-        advance(i, rand() % ret.size());
-        ret.erase(i);
+                auto session = std::weak_ptr<Session>(shared_from_this());
+                timeoutHandler->async_wait(
+                    boost::bind(&Session::onTimeout, shared_from_this(),
+                                boost::asio::placeholders::error, message->seq()));
+
+                handler->timeoutHandler = timeoutHandler;
+                handler->m_startTime = utcTime();
+            }
+
+            m_seq2Callback->insert(std::make_pair(message->seq(), handler));
+
+            auto buffer = std::make_shared<bytes>();
+            message->encode(*buffer);
+
+            send(buffer);
+        }
     }
-    return ret;
-}
-
-void Session::asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc()) {
-	if()
+    else {
+        callback(NetworkException(-1, "Session inactived"), Message::Ptr());
+    }
 }
 
 void Session::send(std::shared_ptr<bytes> _msg)
 {
-    if (!m_socket->isConnected())
-        return;
+    auto server = m_server.lock();
+    if(m_actived && server && server->haveNetwork()) {
+        if (!m_socket->isConnected())
+            return;
 
-    bool doWrite = false;
-    DEV_GUARDED(x_framing)
-    {
-        m_writeQueue.push(make_pair(_msg, u256(utcTime())));
-        doWrite = (m_writeQueue.size() == 1);
+        bool doWrite = false;
+        DEV_GUARDED(x_framing)
+        {
+            m_writeQueue.push(make_pair(_msg, u256(utcTime())));
+            doWrite = (m_writeQueue.size() == 1);
+        }
+        if (doWrite)
+            write();
     }
-    if (doWrite)
-        write();
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t length)
+void Session::onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer)
 {
-    try
-    {
-        unsigned elapsed = (unsigned)(utcTime() - m_start_t);
-        if (elapsed >= 10)
+    auto server = m_server.lock();
+    if(m_actived && server && server->haveNetwork()) {
+        try
         {
-            LOG(WARNING) << "ba::async_write write-time=" << elapsed << ",len=" << length
-                         << ",id=" << id();
+            if (ec)
+            {
+                LOG(WARNING) << "Error sending: " << ec.message();
+                drop(TCPError);
+                return;
+            }
+
+            if(!m_writeQueue.empty()) {
+                write();
+            }
         }
-        ThreadContext tc(info().id.abridged());
-        ThreadContext tc2(info().host);
-        // must check queue, as write callback can occur following dropped()
-        if (ec)
+        catch (std::exception& e)
         {
-            LOG(WARNING) << "Error sending: " << ec.message();
+            LOG(ERROR) << "Error:" << e.what();
             drop(TCPError);
             return;
         }
-        DEV_GUARDED(x_framing)
-        {
-            m_writeQueue.pop();
-            if (m_writeQueue.empty())
-            {
-                return;
-            }
-        }
-        write();
-    }
-    catch (exception& e)
-    {
-        LOG(ERROR) << "Error:" << e.what();
-        drop(TCPError);
-        return;
     }
 }
 
 void Session::write()
 {
-    try
-    {
-        std::pair<std::shared_ptr<bytes>, u256> task;
-        u256 enter_time = u256(0);
-        DEV_GUARDED(x_framing)
+    auto server = m_server.lock();
+    if(m_actived && server && server->haveNetwork()) {
+        try
         {
-            task = m_writeQueue.top();
+            std::pair<std::shared_ptr<bytes>, u256> task;
+            u256 enter_time = u256(0);
+            DEV_GUARDED(x_framing)
+            {
+                task = m_writeQueue.top();
+                m_writeQueue.pop();
+            }
+
             enter_time = task.second;
-        }
+            auto session = shared_from_this();
+            auto buffer = task.first;
 
-        auto self(shared_from_this());
-        m_start_t = utcTime();
-        unsigned queue_elapsed = (unsigned)(m_start_t - enter_time);
-        if (queue_elapsed > 10)
-        {
-            LOG(WARNING) << "Session::write queue-time=" << queue_elapsed;
+            auto server = m_server.lock();
+            if(server && server->haveNetwork()) {
+                if (m_socket->isConnected())
+                {
+                    server->strand()->post([m_socket, task, server, session, buffer] {
+                        server->asioInterface()->async_write(
+                            m_socket,
+                            boost::asio::buffer(*(task.first)),
+                            std::bind(
+                                &Session::onWrite,
+                                session, boost::asio::placeholders::error,
+                                boost::asio::placeholders::bytes_transferred,
+                                buffer
+                            )
+                        );
+                    });
+                }
+                else
+                {
+                    LOG(WARNING) << "Error sending ssl socket is close!";
+                    drop(TCPError);
+                    return;
+                }
+            }
+            else {
+                LOG(WARNING) << "Host is gone";
+                drop(TCPError);
+                return;
+            }
         }
-
-        auto session = shared_from_this();
-
-        if (m_socket->isConnected())
+        catch (std::exception& e)
         {
-            m_server->ioService()->post([=] {
-                m_server->asioInterface()->async_write(m_socket, boost::asio::buffer(*(task.first)),
-                    boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
-                        boost::asio::placeholders::bytes_transferred));
-            });
-        }
-        else
-        {
-            LOG(WARNING) << "Error sending ssl socket is close!";
+            LOG(ERROR) << "Error:" << e.what();
             drop(TCPError);
             return;
         }
-    }
-    catch (exception& e)
-    {
-        LOG(ERROR) << "Error:" << e.what();
-        drop(TCPError);
-        return;
     }
 }
 
 void Session::drop(DisconnectReason _reason)
 {
-    if (m_dropped)
+    if (!m_actived)
         return;
-    m_dropped = true;
+    m_actived = true;
 
     LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
     for (auto it : *m_seq2Callback)
@@ -222,24 +223,23 @@ void Session::drop(DisconnectReason _reason)
         {
             LOG(INFO) << "Session::drop, call callbackFunc by seq=" << it.first;
             ///< TODO: use threadPool
-            P2PException e(
+            NetworkException e(
                 P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
             /// it.second->callbackFunc(e, Message::Ptr());
             m_threadPool->enqueue([=]() {
                 it.second->callbackFunc(e, P2PMessage::Ptr());
-                eraseCallbackBySeq(it.first);
             });
         }
     }
+    m_seq2Callback->clear();
 
     bi::tcp::socket& socket = m_socket->ref();
     if (m_socket->isConnected())
+    {
         try
         {
             boost::system::error_code ec;
 
-            // shutdown may block servals seconds - morebtcg
-            // socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
             LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason)
                          << ")" << m_peer->address() << "," << ec.message();
 
@@ -248,9 +248,13 @@ void Session::drop(DisconnectReason _reason)
         catch (...)
         {
         }
+    }
     m_peer->m_lastDisconnect = _reason;
+
+#if 0
     if (TCPError == _reason)
         m_server->reconnectNow();
+#endif
 }
 
 void Session::disconnect(DisconnectReason _reason)
@@ -261,69 +265,78 @@ void Session::disconnect(DisconnectReason _reason)
 
 void Session::start()
 {
-    /// m_strand->post(boost::bind(&Session::doRead, this));  // doRead();
-    m_server->asioInterface()->strand_post(
-        *m_strand, boost::bind(&Session::doRead, this));  // doRead();
+    if(!m_actived) {
+        auto server = m_server.lock();
+        if(server && server->haveNetwork()) {
+            server->asioInterface()->strand_post(
+                *server->strand(), boost::bind(&Session::doRead, this));  // doRead();
+        }
+
+        m_actived = true;
+    }
 }
 
 void Session::doRead()
 {
-    // ignore packets received while waiting to disconnect.
-    if (m_dropped)
-        return;
-    auto self(shared_from_this());
-    auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
-        if (ec)
+    auto server = m_server.lock();
+    if(m_actived && server && server->haveNetwork()) {
+        auto self(shared_from_this());
+        auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
+            if (ec)
+            {
+                LOG(WARNING) << "Error sending: " << ec.message();
+                drop(TCPError);
+                return;
+            }
+            LOG(TRACE) << "Read: " << bytesTransferred
+                       << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
+            m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
+
+            ThreadContext tc(info().id.abridged());
+            ThreadContext tc2(info().host);
+
+            while (true)
+            {
+                Message::Ptr message = m_messageFactory->buildMessage();
+                ssize_t result = message->decode(m_data.data(), m_data.size());
+                LOG(TRACE) << "Parse result: " << result;
+                if (result > 0)
+                {
+                    LOG(TRACE) << "Decode success: " << result;
+                    NetworkException e(
+                        P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
+                    onMessage(e, self, message);
+                    m_data.erase(m_data.begin(), m_data.begin() + result);
+                }
+                else if (result == 0)
+                {
+                    doRead();
+                    break;
+                }
+                else
+                {
+                    NetworkException e(P2PExceptionType::ProtocolError,
+                        g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
+                    onMessage(e, self, message);
+                    break;
+                }
+            }
+        };
+
+        if (m_socket->isConnected())
         {
-            LOG(WARNING) << "Error sending: " << ec.message();
+            LOG(TRACE) << "Start read:" << bufferLength;
+            if(server && server->haveNetwork()) {
+                server->asioInterface()->async_read_some(
+                    m_socket, *server->strand(), boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
+            }
+        }
+        else
+        {
+            LOG(WARNING) << "Error Reading ssl socket is close!";
             drop(TCPError);
             return;
         }
-        LOG(TRACE) << "Read: " << bytesTransferred
-                   << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
-        m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
-
-        ThreadContext tc(info().id.abridged());
-        ThreadContext tc2(info().host);
-
-        while (true)
-        {
-            P2PMessage::Ptr message = m_messageFactory->buildMessage();
-            ssize_t result = message->decode(m_data.data(), m_data.size());
-            LOG(TRACE) << "Parse result: " << result;
-            if (result > 0)
-            {
-                LOG(TRACE) << "Decode success: " << result;
-                P2PException e(
-                    P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
-                onMessage(e, self, message);
-                m_data.erase(m_data.begin(), m_data.begin() + result);
-            }
-            else if (result == 0)
-            {
-                doRead();
-                break;
-            }
-            else
-            {
-                P2PException e(P2PExceptionType::ProtocolError,
-                    g_P2PExceptionMsg[P2PExceptionType::ProtocolError]);
-                onMessage(e, self, message);
-                break;
-            }
-        }
-    };
-    if (m_socket->isConnected())
-    {
-        LOG(TRACE) << "Start read:" << bufferLength;
-        m_server->asioInterface()->async_read_some(
-            m_socket, *m_strand, boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
-    }
-    else
-    {
-        LOG(WARNING) << "Error Reading ssl socket is close!";
-        drop(TCPError);
-        return;
     }
 }
 
@@ -341,186 +354,43 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
-#if 0
-bool Session::CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Session> session)
-{
-    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(protocolID);
-    if (0 == ret.first)
-    {
-        return true;
-    }
-    h512s nodeList;
-    if (m_server->getNodeListByGroupID(int(ret.first), nodeList))
-    {
-        if (find(nodeList.begin(), nodeList.end(), session->id()) == nodeList.end())
-        {
-            ///< The message sender is not a member of the group
-            LOG(ERROR) << "Session::onMessage, The message sender is not a member of the group!";
-            return false;
-        }
-    }
-    else
-    {
-        ///< I didn't join the group
-        LOG(ERROR) << "Session::onMessage, I didn't join the group!";
-        return false;
-    }
-
-    return true;
-}
-#endif
-
 void Session::onMessage(
-    P2PException const& e, std::shared_ptr<Session> session, P2PMessage::Ptr message)
+    NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message)
 {
-#if 0
-    PROTOCOL_ID protocolID = message->protocolID();
-    if (message->isRequestPacket())
-    {
-        ///< Whitelist mechanism, check groupID and sender of this message
-        if (false == CheckGroupIDAndSender(protocolID, session))
-            return;
-
-        ///< request package, get callback by protocolID
-        CallbackFuncWithSession callbackFunc;
-
-        bool ret = m_p2pMsgHandler->getHandlerByProtocolID(protocolID, callbackFunc);
-        if (ret && callbackFunc)
-        {
-            LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
-            ///< execute funtion, send response packet by user in callbackFunc
-            ///< TODO: use threadPool
-            m_threadPool->enqueue(
-                [callbackFunc, e, session, message]() { callbackFunc(e, session, message); });
-        }
-        else
-        {
-            LOG(ERROR) << "Session::onMessage, handler not found by protocolID=" << protocolID;
-        }
-    }
-    else if (protocolID != 0)
-    {
-        ///< response package, get callback by seq
-        ResponseCallback::Ptr callback = getCallbackBySeq(message->seq());
-        if (callback != NULL)
-        {
-            if (callback->timeoutHandler)
-            {
-                ///< cancel timer
-                callback->timeoutHandler->cancel();
+    auto server = m_server.lock();
+    if(m_actived && server && server->haveNetwork()) {
+        auto it = m_seq2Callback->find(message->seq());
+        if(it != m_seq2Callback->end()) {
+            if(it->second->timeoutHandler) {
+                it->second->timeoutHandler->cancel();
             }
-            if (callback->callbackFunc)
-            {
-                LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
-                ///< TODO: use threadPool
-                m_threadPool->enqueue(
-                    [callback, e, message]() { callback->callbackFunc(e, message); });
-            }
-            else
-            {
-                LOG(INFO) << "Session::onMessage, callbackFunc is null.";
+
+            if(it->second->callbackFunc) {
+                server->threadPool()->enqueue([=]() {
+                    it->second->callbackFunc(e, message);
+                    m_seq2Callback->erase(message->seq());
+                });
             }
         }
-        else
-        {
-            LOG(WARNING) << "Session::onMessage, callback not found by seq=" << message->seq();
-        }
     }
-    else
-    {
-        LOG(ERROR) << "Session::onMessage, protocolID=0 Error!";
-    }
-#endif
-}
+    else {
+        if(m_messageHandler) {
+            auto session = shared_from_this();
+            auto handler = m_messageHandler;
 
-bool Session::addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback)
-{
-    RecursiveGuard l(x_seq2Callback);
-    if (m_seq2Callback->find(seq) == m_seq2Callback->end())
-    {
-        m_seq2Callback->insert(std::make_pair(seq, callback));
-        return true;
-    }
-    else
-    {
-        LOG(ERROR) << "Handler repetition! SeqID = " << seq;
-        return false;
+            server->threadPool()->enqueue([session, handler, e, message]() {
+                handler(session, e, message);
+            });
+        }
     }
 }
 
-ResponseCallback::Ptr Session::getCallbackBySeq(uint32_t seq)
+void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
 {
-    RecursiveGuard l(x_seq2Callback);
+    auto server = m_server.lock();
+
     auto it = m_seq2Callback->find(seq);
-    if (it != m_seq2Callback->end())
-    {
-        return it->second;
-    }
-    else
-    {
-        LOG(ERROR) << "Handler not found! SeqID = " << seq;
-        return NULL;
-    }
-}
+    if(it != m_seq2Callback->end()) {
 
-bool Session::eraseCallbackBySeq(uint32_t seq)
-{
-    RecursiveGuard l(x_seq2Callback);
-    if (m_seq2Callback->find(seq) != m_seq2Callback->end())
-    {
-        m_seq2Callback->erase(seq);
-        return true;
-    }
-    else
-    {
-        LOG(ERROR) << "Handler not found! SeqID = " << seq;
-        return false;
-    }
-}
-
-uint32_t Session::peerTopicSeq(NodeID const& nodeID)
-{
-    uint32_t seq = uint32_t(-1);
-    try
-    {
-        RecursiveGuard l(m_server->mutexSessions());
-        auto s = m_server->sessions();
-        for (auto const& i : s)
-        {
-            if (i.first == nodeID)
-            {
-                seq = i.second->topicSeq();
-                break;
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        LOG(ERROR) << "Session::peerTopicSeq error:" << e.what();
-    }
-    return seq;
-}
-
-void Session::setTopicsAndTopicSeq(
-    NodeID const& nodeID, std::shared_ptr<std::vector<std::string>> _topics, uint32_t _topicSeq)
-{
-    try
-    {
-        RecursiveGuard l(m_server->mutexSessions());
-        auto s = m_server->sessions();
-        for (auto const& i : s)
-        {
-            if (i.first == nodeID)
-            {
-                std::shared_ptr<SessionFace> p = i.second;
-                p->setTopics(_topics);
-                p->setTopicSeq(_topicSeq);
-                break;
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        LOG(ERROR) << "Session::setTopicsAndTopicSeq error:" << e.what();
     }
 }

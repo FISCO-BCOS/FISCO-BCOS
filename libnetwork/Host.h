@@ -1,5 +1,5 @@
 /*
-        This file is part of cpp-ethereum.
+        This file is part of FISCO-BCOS
 
         cpp-ethereum is free software: you can redistribute it and/or modify
         it under the terms of the GNU General Public License as published by
@@ -15,10 +15,7 @@
         along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Host.h
- * @author Alex Leverington <nessence@gmail.com>
- * @author Gav Wood <i@gavwood.com>
- * @date 2014
- * @author toxotguo
+ * @author monan <651932351@qq.com>
  * @date 2018
  */
 #pragma once
@@ -28,6 +25,7 @@
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/ECDHE.h>
+#include <boost/asio/strand.hpp>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -54,222 +52,58 @@ namespace p2p
 class Host: public std::enable_shared_from_this<Host>
 {
 public:
-    /// constructor function : init Host with specified client version,
-    /// keypair and network config
-    Host(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
-        shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext);
+    Host();
     virtual ~Host();
 
-    /// ------get interfaces ------
-    /// get io_service object  pointer
-    std::shared_ptr<ba::io_service> ioService() { return m_ioService; }
-    /// get node id(public key)
-    NodeID const& id() const { return m_alias.pub(); }
-    /// get private key of the node
-    Secret sec() const { return m_alias.secret(); }
-    /// post and dispatch handlers
-    boost::asio::io_service::strand* strand() { return &m_strand; }
-    /// get the listen port
-    uint16_t const& listenPort() const { return m_listenPort; }
-    /// get the public address endpoint
-    /// (obtained from listenAddress or network interface address by callback determinePublic)
-    bi::tcp::endpoint const& tcpPublic() const { return m_tcpPublic; }
-    /// get the number of connected peers
-    size_t peerCount() const;
+    virtual NodeID id() const { return m_alias.pub(); }
+    virtual uint16_t listenPort() const { return m_listenPort; }
 
-#if 0
-    /// get session map
-    std::unordered_map<NodeID, std::shared_ptr<SessionFace>>& sessions() { return m_sessions; }
-
-    /// get mutex of sessions
-    RecursiveMutex& mutexSessions() { return x_sessions; }
-#endif
-
-    /// get m_staticNodes
-    std::map<NodeIPEndpoint, NodeID>* staticNodes() { return &m_staticNodes; }
-
-#if 0
-    /// get the peer slots
-    unsigned peerSlots(PeerSlotType _type) const
-    {
-        /// to remove warning(maybe _type will be used in the future)
-        (void)_type;
-        return m_maxPeerCount;
-    }
-    /// to avoid too many connected sessions
-    bool peerSlotsAvailable(PeerSlotType _type = Ingress)
-    {
-        Guard l(x_pendingNodeConns);
-        return peerCount() + m_pendingPeerConns.size() < peerSlots(_type);
-    }
-    /// judge whether the specified node has been connected
-    bool isConnected(const NodeID& nodeID)
-    {
-        auto session = peerSession(nodeID);
-        if (session && session->isConnected())
-            return true;
-        return false;
-    }
-    /// get status of worker thread
-    bool isStarted() const { return isWorking(); }
-    /// get peers(maybe called by EthereumHost)
-    Peers getPeers() const
-    {
-        Peers ret;
-        try
-        {
-            RecursiveGuard l(x_sessions);
-            for (auto const& i : m_peers)
-                ret.push_back(*i.second);
-        }
-        catch (...)
-        {
-        }
-        return ret;
-    }
-#endif
-
-    /// get m_tcpClient
-    bi::tcp::endpoint const& tcpClient() const { return m_tcpClient; }
-    /// ------set interfaces ------
-    /// set m_reconnectnow to be true, reconnect all peers when callback keepAlivePeers
-    void reconnectNow()
-    {
-        Guard l(x_reconnectnow);
-        m_reconnectnow = true;
-    }
-
-    /// set static nodes
-    void setStaticNodes(const std::map<NodeIPEndpoint, NodeID>& staticNodes)
-    {
-        m_staticNodes = staticNodes;
-    }
-#if 0
-    /// set max peer counts
-    void setMaxPeerCount(unsigned max_peer_count) { m_maxPeerCount = max_peer_count; }
-#endif
-
-    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
-    {
-        m_threadPool = threadPool;
-    }
-
-#if 0
-    ///------ Network and worker threads related ------
-    /// the working entry of libp2p(called by when init FISCO-BCOS to start the p2p network)
-    void start();
-    /// called by start() to start the network
-    virtual void startedWorking();
-    /// start peer sessions after handshake succeed(called by RLPxHandshake), mainly include four
-    /// functions:
-    /// 1. disconnect connecting host with invalid capability
-    /// 2. modify m_peers && disconnect already-connected session
-    /// 3. modify m_sessions and m_staticNodes
-    /// 4. start new session (session->start())
-    void startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> const& _s);
-    /// remove invalid RLPXHandshake object from m_connecting
-    /// remove expired timer
-    /// modify alived peers to m_peers
-    /// reconnect all nodes recorded in m_staticNodes periodically
-
-    /// start the network by callback io_serivce.run
-    void doWork();
-    /// stop the network and worker thread
+    virtual void start(boost::system::error_code const& error);
     virtual void stop();
-    /// clean resources (include both network, socket resources) when stop working
-    void doneWorking();
-#endif
-    virtual void run(boost::system::error_code const& error);
 
     /// get the network status
-    /// @return true : the network has been started
-    /// @return false : the network has been stopped
-    bool haveNetwork() const
-    {
-        Guard l(x_runTimer);
-        return m_run;
-    }
+    virtual bool haveNetwork() const { return m_run; }
 
-#if 0
-    /// Get session by id
-    std::shared_ptr<SessionFace> peerSession(NodeID const& _id)
-    {
-        RecursiveGuard l(x_sessions);
-        return m_sessions.count(_id) ? m_sessions[_id] : nullptr;
-    }
-    bytes saveNetwork() const;
+    virtual std::shared_ptr<dev::ThreadPool> threadPool() { return m_threadPool; }
+    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) { m_threadPool = threadPool; }
 
-    /// implement 'disconnectByNodeId'
-    bool disconnectByNodeId(const NodeID& sNodeId)
-    {
-        RecursiveGuard l(x_sessions);
-        for (auto it = m_sessions.begin(); it != m_sessions.end(); it++)
-        {
-            auto p = it->second;
-            if (p->id() == sNodeId)
-            {
-                p->disconnect(DisconnectReason::UserReason);
-                m_sessions.erase(it);
-                m_peers.erase(p->id());
-                return true;
-            }
-        }
-        return false;
-    }
+    virtual std::shared_ptr<ba::io_service> ioService() { return m_ioService; }
+    virtual void setIOService(std::shared_ptr<ba::io_service> ioService) { m_ioService = ioService; }
 
-    void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
-    {
-        m_p2pMsgHandler = _p2pMsgHandler;
-    }
+    virtual std::shared_ptr<ba::io_context::strand> strand() { return m_strand; }
+    virtual void setStrand(virtual std::shared_ptr<ba::io_context::strand> strand) { m_strand = strand; }
 
-    void setTopics(std::shared_ptr<std::vector<std::string>> _topics)
-    {
-        m_topics = _topics;
-        m_topicSeq++;
-    }
+    virtual std::shared_ptr<bi::tcp::acceptor> acceptor() { return m_acceptor; }
+    virtual void setAcceptor(std::shared_ptr<bi::tcp::acceptor> acceptor) { m_acceptor = acceptor; }
 
-    std::shared_ptr<std::vector<std::string>> topics() const { return m_topics; };
-    uint32_t topicSeq() const { return m_topicSeq; }
-#endif
+    virtual std::shared_ptr<AsioInterface>  asioInterface() { return m_asioInterface; }
+    virtual void setASIOInterface(std::shared_ptr<AsioInterface> asioInterface) { m_asioInterface = asioInterface; }
 
-    shared_ptr<AsioInterface> const& asioInterface() const { return m_asioInterface; }
+    virtual std::shared_ptr<SocketFactory> socketFactory() { return m_socketFactory; }
+    virtual void setSocketFactory(std::shared_ptr<SocketFactory> socketFactory) { m_socketFactory = socketFactory; }
 
-#if 0
-    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList)
-    {
-        if (m_groupID2NodeList.find(0) != m_groupID2NodeList.end())
-        {
-            LOG(INFO) << "Host::setGroupID2NodeList, groupID can not be 0!";
-            return;
-        }
-        m_groupID2NodeList = _groupID2NodeList;
-    }
+    virtual std::shared_ptr<SessionFactory> sessionFactory() { return m_sessionFactory; }
+    virtual void setSessionFactory(std::shared_ptr<SessionFactory> sessionFactory) { m_sessionFactory = sessionFactory; }
 
-    ///< If I joined this group, return true and node members for this group.
-    ///< If didnot, return false.
-    bool getNodeListByGroupID(GROUP_ID const& _groupID, h512s& _nodeList) const
-    {
-        std::map<GROUP_ID, h512s>::const_iterator it = m_groupID2NodeList.find(_groupID);
-        if (it == m_groupID2NodeList.end())
-        {
-            return false;
-        }
-        _nodeList = it->second;
-        return true;
-    }
-#endif
+    virtual std::shared_ptr<ba::ssl::context> sslContext() { return m_sslContext; }
+    void void setSSLContext(std::shared_ptr<ba::ssl::context> sslContext) { m_sslContext = sslContext; }
 
-    P2PMessageFactory::Ptr messageFactory() { return m_messageFactory; }
+    virtual MessageFactory::Ptr messageFactory() { return m_messageFactory; }
+    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
 
-    void setMessageFactory(P2PMessageFactory::Ptr _messageFactory)
-    {
-        m_messageFactory = _messageFactory;
-    }
+    virtual KeyPair keyPair() { return m_alias; }
+    virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
 
-protected:  /// protected functions
+    virtual std::string listenHost() { return m_listenHost; }
+    virtual uint16_t listenPort() { return m_listenPort; }
+    virtual void setHostPort(std::string host, uint16_t port) { m_listenHost = host; m_listenPort = port; }
+
+    virtual std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> connectionHandler() { return m_connectionHandler; }
+    virtual void setConnectionHandler(std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> connectionHandler) { m_connectionHandler = connectionHandler; }
+
+protected:
     /// called by 'startedWorking' to accept connections
-    virtual void runAcceptor(boost::system::error_code ec = boost::system::error_code());
+    virtual void startAccept(boost::system::error_code ec = boost::system::error_code());
     /// functions called after openssl handshake,
     /// maily to get node id and verify whether the certificate has been expired
     /// @return: node id of the connected peer
@@ -277,135 +111,55 @@ protected:  /// protected functions
         std::shared_ptr<std::string> nodeIDOut);
     /// @return true: the given certificate has been expired
     /// @return false: the given certificate has not been expired
-    static bool isExpired(ba::ssl::verify_context& ctx);
+    bool isExpired(ba::ssl::verify_context& ctx);
     /// server calls handshakeServer to after handshake, mainly calls RLPxHandshake to obtain
     /// informations(client version, caps, etc),start peer session and start accepting procedure
     /// repeatedly
     virtual void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
-    /// update m_sessions and m_peers periodically
-    /// drop the unconnected/invalid sessions periodically
-    void keepAlivePeers();
+    virtual void startPeerSession(NodeID nodeID,
+        std::shared_ptr<SocketFace> const& socket,
+        std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> handler);
 
-#if 0
-    /// @return true: the specified peer node has alived-sessions
-    /// @ return false: the specified peer node has no-alived-sessions
-    bool havePeerSession(NodeID const& _id)
-    {
-        RecursiveGuard l(x_sessions);
-        if (m_sessions.count(_id))
-            return true;
-        return false;
-    }
-#endif
+    virtual void asyncConnect(
+        NodeIPEndpoint const& _nodeIPEndpoint,
+        std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> callback,
+        boost::system::error_code ec = boost::system::error_code()
+    );
 
-    /// reconnect to all unconnected peers recorded in m_staticNodes
-    void reconnectAllNodes();
-    /// connect to the server
-    virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint,
-        boost::system::error_code ec = boost::system::error_code());
-
-    /// start RLPxHandshake procedure after ssl handshake succeed
     virtual void handshakeClient(const boost::system::error_code& error,
-        std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
+        std::shared_ptr<SocketFace> socket,
+        std::shared_ptr<std::string>& endpointPublicKey,
+        std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> callback,
         NodeIPEndpoint& _nodeIPEndpoint);
-    inline void determinePublic() { m_tcpPublic = Network::determinePublic(m_netConfigs); }
-
-    void sendTopicSeq();
-    void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId);
-
-protected:  /// protected members(for unit testing)
-    /// Network settings.
-    NetworkConfig m_netConfigs;
-
-    /// Interface addresses.
-    std::set<bi::address> m_ifAddresses;
-
-    /// I/O handler
-    std::shared_ptr<ba::io_service> m_ioService;
-
-    /// Listening acceptor.
-    bi::tcp::acceptor m_tcp4Acceptor;
-    /// Alias for network communication, namely (public key, private key) of the node
-    KeyPair m_alias;
-    /// Time we sent the last ping to all peers.
-    std::chrono::steady_clock::time_point m_lastPing;
-    /// Time we sent the last ping to all
-    std::chrono::steady_clock::time_point m_lastReconnect;
-    /// post and dispatch handlers
-    boost::asio::io_service::strand m_strand;
-    /// What port are we listening on. uint16_t(-1)
-    /// means binding failed or acceptor hasn't been initialized.
-    uint16_t m_listenPort = uint16_t(-1);
-    /// representing to the network state
-    shared_ptr<AsioInterface> m_asioInterface;
-    shared_ptr<SocketFactory> m_socketFactory;
-    shared_ptr<SessionFactory> m_sessionFactory;
-    shared_ptr<ba::ssl::context> m_sslContext;
-
-    bool m_run = false;
-    ///< Start/stop mutex.(mutex for m_run)
-    mutable std::mutex x_runTimer;
-
-    /// the network accepting status(false means p2p is not accepting connections)
-    bool m_accepting = false;
-
-#if 0
-    /// maps from node ids to the sessions
-    mutable std::unordered_map<NodeID, std::shared_ptr<SessionFace>> m_sessions;
-
-    /// maps between peer name and peeer object
-    /// attention: (endpoint recorded in m_peers always (listenIp, listenAddress))
-    ///           (client endpoint of (connectIp, connectAddress) has no record)
-    std::unordered_map<NodeID, std::shared_ptr<Peer>> m_peers;
-    /// mutex for accepting session information m_sessions and m_peers
-    mutable RecursiveMutex x_sessions;
-#endif
-    /// control reconnecting, if set to be true, will reconnect peers immediately
-    bool m_reconnectnow = true;
-    /// mutex for m_reconnectnow
-    Mutex x_reconnectnow;
-    std::unique_ptr<boost::asio::deadline_timer> m_timer;
-
-    /// static nodes recording maps between endpoints of peers and node id
-    std::map<NodeIPEndpoint, NodeID> m_staticNodes;
-    /// public listening endpoint.
-    bi::tcp::endpoint m_tcpPublic;
-    // ip and port information of the connected peer
-    bi::tcp::endpoint m_tcpClient;
-    /// pending connections
-    std::set<std::string> m_pendingPeerConns;
-    /// mutex for m_pendingPeerConns
-    Mutex x_pendingNodeConns;
-    /// peer count limit
-    unsigned m_maxPeerCount = 100;
-    static const unsigned c_timerInterval = 100;
-
-#if 0
-    ///< This handler will be sent to sessions before session start.
-    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
-#endif
-
-    ///< Time we sent the last topic seq to all
-    std::chrono::steady_clock::time_point m_lastSendTopicSeq;
-
-    ///< Represents the my topics situation at a certain stage. When topics change, increase
-    ///< m_topicSeq.
-    uint32_t m_topicSeq;
 
     std::shared_ptr<dev::ThreadPool> m_threadPool;
-#if 0
-    ///< Topics being concerned by myself
-    std::shared_ptr<std::vector<std::string>> m_topics;
+    /// I/O handler
+    std::shared_ptr<ba::io_service> m_ioService;
+    std::shared_ptr<ba::io_context::strand > m_strand;
+    std::shared_ptr<bi::tcp::acceptor> m_acceptor;
 
-    ///< key is the group that the node joins
-    ///< value is the list of node members for the group
-    ///< the data is currently statically loaded and not synchronized between nodes
-    std::map<GROUP_ID, h512s> m_groupID2NodeList;
-#endif
+    /// representing to the network state
+    std::shared_ptr<AsioInterface> m_asioInterface;
+    std::shared_ptr<SocketFactory> m_socketFactory;
+    std::shared_ptr<SessionFactory> m_sessionFactory;
+    std::shared_ptr<ba::ssl::context> m_sslContext;
+    MessageFactory::Ptr m_messageFactory;
 
-    P2PMessageFactory::Ptr m_messageFactory;
+    KeyPair m_alias;
+    std::string m_listenHost = "";
+    uint16_t m_listenPort = 0;
+
+    std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> m_connectionHandler;
+
+    Mutex x_runTimer;
+    bool m_run = false;
+
+    std::shared_ptr<boost::asio::deadline_timer> m_timer;
+
+    std::set<std::string> m_pendingPeerConns;
+    Mutex x_pendingNodeConns;
 };
 }  // namespace p2p
 

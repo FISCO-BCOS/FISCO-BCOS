@@ -131,7 +131,7 @@ protected:
     bool shouldBroadcastViewChange();
     bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
-    void onRecvPBFTMessage(dev::p2p::P2PException exception,
+    void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::Session> session, dev::p2p::P2PMessage::Ptr message);
     void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
     /// handler prepare messages

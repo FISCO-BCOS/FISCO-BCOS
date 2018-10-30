@@ -47,6 +47,9 @@ public:
     /// write handler
     typedef std::function<void(const boost::system::error_code&, std::size_t)> ReadWriteHandler;
     typedef std::function<bool(bool, boost::asio::ssl::verify_context&)> VerifyCallback;
+
+    virtual ~AsioInterface() {};
+
     /// default implemetation of async_accept
     virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace>& socket,
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
@@ -103,7 +106,7 @@ public:
         boost::system::error_code ec = boost::system::error_code())
     {
         if (m_timer)
-            return m_timer->async_wait(m_strand.wrap(handler));
+            m_timer->async_wait(m_strand.wrap(handler));
     }
     /// default implementation of set_verify_callback
     virtual void set_verify_callback(

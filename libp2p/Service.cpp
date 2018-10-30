@@ -59,7 +59,7 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, P2PMessage::P
         callback->mutex.unlock();
         LOG(INFO) << "Service::sendMessageByNodeID mutex unlock.";
 
-        P2PException error = callback->error;
+        NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
             LOG(ERROR) << "asyncSendMessageByNodeID error:" << error.errorCode() << " "
@@ -187,7 +187,7 @@ void Service::onTimeoutByTopic(const boost::system::error_code& error,
                 {
                     if (it->callbackFunc)
                     {
-                        P2PException e(P2PExceptionType::NetworkTimeout,
+                        NetworkException e(P2PExceptionType::NetworkTimeout,
                             g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
                         P2PMessage::Ptr msg = make_shared<P2PMessage>();
                         msg->setSeq(message->seq());
@@ -230,7 +230,7 @@ void Service::onTimeoutByNode(
                 ///< passive timeout
                 if (it->callbackFunc)
                 {
-                    P2PException e(P2PExceptionType::NetworkTimeout,
+                    NetworkException e(P2PExceptionType::NetworkTimeout,
                         g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
                     P2PMessage::Ptr message = make_shared<P2PMessage>();
                     message->setSeq(seq);
@@ -271,7 +271,7 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string const& topic, P2PMessage
         callback->mutex.unlock();
         LOG(INFO) << "Service::sendMessageByTopic mutex unlock.";
 
-        P2PException error = callback->error;
+        NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
             LOG(ERROR) << "Service::sendMessageByTopic error:" << error.errorCode() << " "
@@ -442,7 +442,7 @@ void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithS
     if (false == m_p2pMsgHandler->getHandlerByProtocolID(dev::eth::ProtocolID::Topic, callback))
     {
         registerHandlerByProtoclID(dev::eth::ProtocolID::Topic,
-            [=](P2PException e, std::shared_ptr<Session> s, P2PMessage::Ptr msg) {
+            [=](NetworkException e, std::shared_ptr<Session> s, P2PMessage::Ptr msg) {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by Topic protocolID.";
 
                 ///< Get topic from message buffer.

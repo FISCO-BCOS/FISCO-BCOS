@@ -99,11 +99,11 @@ BOOST_AUTO_TEST_CASE(testRunAcceptor)
     boost::system::error_code boost_error = boost::asio::error::broken_pipe;
     /// std::cout<<"### test boost_error"<<std::endl;
     getHost()->m_loop = 0;
-    getHost()->runAcceptor(boost_error);
+    getHost()->startAccept(boost_error);
     getHost()->setRun(false);
     /// std::cout<<"### test Run false"<<std::endl;
     getHost()->m_loop = 0;
-    getHost()->runAcceptor();
+    getHost()->startAccept();
     /// tcp client hasn't been set
     BOOST_CHECK(getHost()->tcpClient().port() == 0);
     /// set async_accept return true
@@ -119,16 +119,16 @@ BOOST_AUTO_TEST_CASE(testRunAcceptor)
     /// std::cout<<"#### set limit max peer count"<<std::endl;
     boost_error = boost::asio::error::timed_out;
     getHost()->m_loop = 0;
-    getHost()->runAcceptor(boost_error);  // return directly
+    getHost()->startAccept(boost_error);  // return directly
     BOOST_CHECK(getHost()->tcpClient().port() == 0);
 
     /// --- test too many peers && boost error => return directly
     getHost()->m_loop = 0;
-    getHost()->runAcceptor(boost_error);
+    getHost()->startAccept(boost_error);
     BOOST_CHECK(getHost()->tcpClient().port() == 0);
     /// --- test too many peers && no error => call runAcceptor
     getHost()->m_loop = 0;
-    getHost()->runAcceptor(boost_error);
+    getHost()->startAccept(boost_error);
     BOOST_CHECK(getHost()->tcpClient().port() == 0);
 
     /// get m_tcpClient
@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(testRunAcceptor)
     getHost()->setRun(true);
     /// std::cout<<"### test valid runAcceptor"<<std::endl;
     getHost()->m_loop = 0;
-    getHost()->runAcceptor();
+    getHost()->startAccept();
     BOOST_CHECK(getHost()->tcpClient().address().to_string() == "127.0.0.1");
     BOOST_CHECK(getHost()->tcpClient().port() == 30314);
 }
@@ -321,7 +321,7 @@ BOOST_AUTO_TEST_CASE(testRunAndStartedWorking)
     /// test run exception
     boost::system::error_code err = boost::asio::error::timed_out;
     getHost()->setRun(false);
-    getHost()->run(err);
+    getHost()->start(err);
     BOOST_CHECK(getHost()->ioService()->stopped());
     /// test connect to node-self(handshake client)
     std::map<NodeIPEndpoint, NodeID> m_staticNodes;

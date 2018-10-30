@@ -78,8 +78,8 @@ public:
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
-    virtual P2PMessageFactory::Ptr messageFactory() const = 0;
-    virtual void setMessageFactory(P2PMessageFactory::Ptr _messageFactory) = 0;
+    virtual MessageFactory::Ptr messageFactory() const = 0;
+    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
 
     virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) = 0;
 };
