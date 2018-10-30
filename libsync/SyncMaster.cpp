@@ -57,6 +57,7 @@ void SyncMaster::start()
 
 void SyncMaster::stop()
 {
+    doneWorking();
     stopWorking();
 }
 
@@ -215,19 +216,24 @@ void SyncMaster::maintainPeersStatus()
         return true;
     });
 
-    if (currentNumber >= maxPeerNumber)
-    {
-        SYNCLOG(TRACE) << "[Idle] no need to sync currentNumber:" << currentNumber
-                       << " maxPeerNumber:" << maxPeerNumber << endl;
-        return;  // no need to sync
-    }
-    else
+    if (maxPeerNumber > currentNumber)
     {
         WriteGuard l(m_syncStatus->x_known);
         m_syncStatus->knownHighestNumber = maxPeerNumber;
         m_syncStatus->knownLatestHash = latestHash;
-        noteDownloadingBegin();
     }
+
+    if (maxPeerNumber - currentNumber <= 1)
+    {
+        // mining : maxPeerNumber - currentNumber == 1
+        // idle: maxPeerNumber - currentNumber <= 0
+        SYNCLOG(TRACE)
+            << "[Idle] No need to sync when mining or idle [currentNumber/maxPeerNumber]: "
+            << currentNumber << "/" << maxPeerNumber << endl;
+        return;  // no need to sync
+    }
+
+    noteDownloadingBegin();
 
     // Choose to use min number in blockqueue or max peer number
     int64_t maxRequestNumber = maxPeerNumber;
@@ -306,14 +312,12 @@ bool SyncMaster::maintainDownloadingQueue()
                            << "/" << topBlock->headerHash();
         }
         else
-            SYNCLOG(WARNING) << "[Download] Ignore illegal block " << topBlock->header().number();
+            SYNCLOG(WARNING) << "[Download] Ignore illegal block [thisNumber/currentNumber]: "
+                             << topBlock->header().number() << "/" << m_blockChain->number();
 
         bq.pop();
         topBlock = bq.top();
     }
-
-    // note new blocks
-    this->noteNewBlocks();
 
     // has download finished ?
     currentNumber = m_blockChain->number();
