@@ -40,8 +40,6 @@ using namespace dev::blockchain;
 using namespace dev::eth;
 using namespace dev::sync;
 using namespace dev::blockverifier;
-
-
 class FakeConcensus : public Worker
 {
     // FakeConcensus, only do: fetch tx from txPool and commit newBlock into blockchain
@@ -60,7 +58,8 @@ public:
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_blockVerifier(_blockVerifier),
-        m_totalTxCommit(0)
+        m_totalTxCommit(0),
+        m_protocolId(0)
     {}
 
     virtual ~FakeConcensus(){};
@@ -156,4 +155,5 @@ private:
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
 
     size_t m_totalTxCommit;
+    PROTOCOL_ID m_protocolId;
 };
