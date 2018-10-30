@@ -21,6 +21,7 @@
  * @date 2018-09-21
  */
 #include <leveldb/db.h>
+#include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libmptstate/MPTStateFactory.h>
@@ -28,7 +29,6 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
-
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::storage;
@@ -90,12 +90,16 @@ struct BlockVerifierFixture
 
         m_blockVerifier->setExecutiveContextFactory(m_executiveContextFactory);
 
-        m_blockVerifier->setNumberHash(
-            boost::bind(&FakeBlockchain::getHash, &m_fakeBlockchain, _1));
+        m_blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
+        m_blockChain->setStateStorage(m_levelDBStorage);
+
+        m_blockVerifier->setNumberHash([this](int64_t num) {
+            return this->m_blockChain->getBlockByNumber(num)->headerHash();
+        });
         m_fakeBlock = std::make_shared<FakeBlock>(5);
     }
 
-    FakeBlockchain m_fakeBlockchain;
+    std::shared_ptr<dev::blockchain::BlockChainImp> m_blockChain;
     std::shared_ptr<BlockVerifier> m_blockVerifier;
     std::shared_ptr<ExecutiveContextFactory> m_executiveContextFactory;
     std::shared_ptr<FakeBlock> m_fakeBlock;
@@ -110,7 +114,36 @@ BOOST_FIXTURE_TEST_SUITE(BlockVerifierTest, BlockVerifierFixture);
 
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
-    // m_blockVerifier->executeBlock(m_fakeBlock->getBlock());
+    /* for (int i = 0; i < 100; ++i)
+     {
+         auto max = m_blockChain->number();
+
+         auto parentBlock = m_blockChain->getBlockByNumber(max);
+
+         dev::eth::BlockHeader header;
+         header.setNumber(i);
+         header.setParentHash(parentBlock->headerHash());
+         header.setGasLimit(dev::u256(1024 * 1024 * 1024));
+         header.setRoots(parentBlock->header().transactionsRoot(),
+             parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
+
+         dev::eth::Block block;
+         block.setBlockHeader(header);
+
+         dev::bytes rlpBytes = dev::fromHex(
+             "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+             "0000"
+             "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+             "0000"
+             "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+             "657c"
+             "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
+         dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
+         block.appendTransaction(tx);
+
+         auto context = m_blockVerifier->executeBlock(block);
+         m_blockChain->commitBlock(block, context);
+     }*/
 }
 
 BOOST_AUTO_TEST_SUITE_END()

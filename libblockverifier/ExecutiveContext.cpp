@@ -136,8 +136,5 @@ void ExecutiveContext::setPrecompiledContract(
 void ExecutiveContext::dbCommit()
 {
     m_stateFace->dbCommit(m_blockInfo.hash, m_blockInfo.number.convert_to<int64_t>());
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-    tableFactoryPrecompiled->getmemoryTableFactory()->commitDB(
-        m_blockInfo.hash, m_blockInfo.number.convert_to<int64_t>());
+    m_memoryTableFactory->commitDB(m_blockInfo.hash, m_blockInfo.number.convert_to<int64_t>());
 }

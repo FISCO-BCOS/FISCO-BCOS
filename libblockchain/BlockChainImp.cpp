@@ -24,11 +24,13 @@
 #include "BlockChainImp.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonData.h>
+#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/lexical_cast.hpp>
+
 using namespace dev;
 using namespace std;
 using namespace dev::eth;
@@ -57,19 +59,21 @@ int64_t BlockChainImp::number()
     Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_CURRENT_STATE_);
     if (tb)
     {
-        auto entries = tb->select(m_keyValue_currentNumber, tb->newCondition());
+        auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            std::string currentNumber = entry->getField(m_ValueName_currentNumber);
+            std::string currentNumber = entry->getField(SYS_VALUE);
             num = lexical_cast<int64_t>(currentNumber.c_str());
         }
     }
+    LOG(TRACE) << "BlockChainImp::number num=" << num;
     return num;
 }
 
 h256 BlockChainImp::numberHash(int64_t _i)
 {
+    LOG(TRACE) << "BlockChainImp::numberHash _i=" << _i;
     string numberHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
     if (tb)
@@ -78,14 +82,17 @@ h256 BlockChainImp::numberHash(int64_t _i)
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            numberHash = entry->getField(m_ValueName);
+            numberHash = entry->getField(SYS_VALUE);
         }
     }
+    LOG(TRACE) << "BlockChainImp::numberHash numberHash=" << numberHash;
     return h256(numberHash);
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
+    LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
+               << "_blockHash.hex()=" << _blockHash.hex();
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_HASH_2_BLOCK_);
     if (tb)
@@ -94,11 +101,11 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            strblock = entry->getField(m_ValueName);
+            strblock = entry->getField(SYS_VALUE);
+            LOG(TRACE) << "BlockChainImp::getBlockByHash strblock=" << strblock;
             return std::make_shared<Block>(fromHex(strblock.c_str()));
         }
     }
-
 
     if (strblock.size() == 0)
         return nullptr;
@@ -108,6 +115,7 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
+    LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
     string numberHash = "";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
@@ -117,16 +125,11 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            numberHash = entry->getField(m_ValueName);
+            numberHash = entry->getField(SYS_VALUE);
             return getBlockByHash(h256(numberHash));
         }
     }
     return std::make_shared<Block>();
-
-    if (strblock.size() == 0)
-        return nullptr;
-
-    return std::make_shared<Block>(fromHex(strblock.c_str()));
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
@@ -140,7 +143,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            strblock = entry->getField(m_ValueName);
+            strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
         }
     }
@@ -165,7 +168,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            strblock = entry->getField(m_ValueName);
+            strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
         }
     }
@@ -191,7 +194,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            strblock = entry->getField(m_ValueName);
+            strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
         }
     }
@@ -205,68 +208,68 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
     return TransactionReceipt();
 }
 
-void BlockChainImp::writeNumber(const Block& block)
+void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_CURRENT_STATE_);
+    Table::Ptr tb = context->getMemoryTableFactory()->openTable(_SYS_CURRENT_STATE_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        entry->setField(m_ValueName, lexical_cast<std::string>(block.blockHeader().number()));
-        tb->insert(m_keyValue_currentNumber, entry);
+        entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
+        tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
     }
 }
 
-void BlockChainImp::writeTxToBlock(const Block& block)
+void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_TX_HASH_2_BLOCK_);
+    Table::Ptr tb = context->getMemoryTableFactory()->openTable(_SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         std::vector<Transaction> txs = block.transactions();
         for (uint i = 0; i < txs.size(); i++)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
-            entry->setField(m_ValueName, txs[i].sha3().hex());
+            entry->setField(SYS_VALUE, txs[i].sha3().hex());
             entry->setField("index", lexical_cast<std::string>(i));
             tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
         }
     }
 }
 
-void BlockChainImp::writeNumber2Hash(const Block& block)
+void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
+    Table::Ptr tb = context->getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        entry->setField(m_ValueName, block.blockHeader().hash().hex());
+        entry->setField(SYS_VALUE, block.blockHeader().hash().hex());
         tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
     }
 }
 
-void BlockChainImp::writeHash2Block(Block& block)
+void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
+    Table::Ptr tb = context->getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
         bytes out;
         block.encode(out);
-        entry->setField(m_ValueName, toHexPrefixed(out));
+        entry->setField(SYS_VALUE, toHexPrefixed(out));
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
 }
 
-void BlockChainImp::writeBlockInfo(Block& block)
+void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    writeNumber2Hash(block);
-    writeHash2Block(block);
+    writeNumber2Hash(block, context);
+    writeHash2Block(block, context);
 }
 
 void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    writeNumber(block);
-    writeTxToBlock(block);
-    writeBlockInfo(block);
+    writeNumber(block, context);
+    writeTxToBlock(block, context);
+    writeBlockInfo(block, context);
     context->dbCommit();
     m_onReady();
 }

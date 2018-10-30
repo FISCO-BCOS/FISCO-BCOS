@@ -42,9 +42,9 @@ namespace dev
 namespace test
 {
 //   const std::string m_extraDbName_currentState = "currentState";
-//   const std::string m_keyValue_currentNumber = "currentNumber";
-//   const std::string m_ValueName_currentNumber = "value";
-//   const std::string m_ValueName = "value";
+//   const std::string SYS_KEY_CURRENT_NUMBER = "currentNumber";
+//   const std::string SYS_VALUE = "value";
+//   const std::string SYS_VALUE = "value";
 //   const std::string m_txHash2Block = "txHash2Block";
 //   const std::string m_number2hash = "number2hash";
 //   const std::string m_hash2Block = "hash2Block";

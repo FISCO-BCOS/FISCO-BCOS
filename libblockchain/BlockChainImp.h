@@ -60,12 +60,16 @@ public:
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
 
 private:
-    void writeNumber(const dev::eth::Block& block);
-
-    void writeTxToBlock(const dev::eth::Block& block);
-    void writeBlockInfo(dev::eth::Block& block);
-    void writeNumber2Hash(const dev::eth::Block& block);
-    void writeHash2Block(dev::eth::Block& block);
+    void writeNumber(const dev::eth::Block& block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeTxToBlock(const dev::eth::Block& block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeBlockInfo(
+        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeNumber2Hash(const dev::eth::Block& block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeHash2Block(
+        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     dev::storage::Storage::Ptr m_stateStorage;
 };
 }  // namespace blockchain

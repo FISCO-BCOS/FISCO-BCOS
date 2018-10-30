@@ -33,14 +33,18 @@ using namespace dev::executive;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
 {
-    LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size();
+    LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size()
+               << " hash: " << block.blockHeader().hash()
+               << " num: " << block.blockHeader().number()
+               << " stateRoot: " << block.blockHeader().stateRoot();
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     // try
     {
         BlockInfo blockInfo;
         blockInfo.hash = block.blockHeader().hash();
         blockInfo.number = block.blockHeader().number();
-        m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
+        m_executiveContextFactory->initExecutiveContext(
+            blockInfo, block.blockHeader().stateRoot(), executiveContext);
     }
     // catch (exception& e)
     {
@@ -70,7 +74,8 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
         BlockInfo blockInfo;
         blockInfo.hash = blockHeader.hash();
         blockInfo.number = blockHeader.number();
-        m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
+        m_executiveContextFactory->initExecutiveContext(
+            blockInfo, blockHeader.stateRoot(), executiveContext);
     }
     catch (exception& e)
     {
