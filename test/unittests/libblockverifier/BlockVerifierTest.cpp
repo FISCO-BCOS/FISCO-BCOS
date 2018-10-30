@@ -52,23 +52,27 @@ struct BlockVerifierFixture
     BlockVerifierFixture()
     {
         m_blockVerifier = std::make_shared<BlockVerifier>();
+
+        auto storagePath = std::string("test_storage/");
+        boost::filesystem::create_directories(storagePath);
         leveldb::Options option;
         option.create_if_missing = true;
         option.max_open_files = 100;
 
         leveldb::DB* dbPtr = NULL;
-        leveldb::Status s = leveldb::DB::Open(option, "./block", &dbPtr);
+        leveldb::Status s = leveldb::DB::Open(option, storagePath, &dbPtr);
         if (!s.ok())
         {
-            LOG(ERROR) << "Open leveldb error: " << s.ToString();
+            LOG(ERROR) << "Open storage leveldb error: " << s.ToString();
         }
 
         m_db = std::shared_ptr<leveldb::DB>(dbPtr);
+
         m_levelDBStorage = std::make_shared<LevelDBStorage>();
         m_levelDBStorage->setDB(m_db);
 
         m_stateFactory =
-            std::make_shared<MPTStateFactory>(u256(0), "./overlayDB", h256(0), WithExisting::Trust);
+            std::make_shared<MPTStateFactory>(u256(0), "test_state", h256(0), WithExisting::Trust);
 
         m_precompiledContract.insert(std::make_pair(
             Address(1), PrecompiledContract(3000, 0, PrecompiledRegistrar::executor("ecrecover"))));
@@ -106,7 +110,7 @@ BOOST_FIXTURE_TEST_SUITE(BlockVerifierTest, BlockVerifierFixture);
 
 BOOST_AUTO_TEST_CASE(executeBlock)
 {
-    // m_blockVerifier->executeBlock(m_fakeBlock->getBlock());
+    m_blockVerifier->executeBlock(m_fakeBlock->getBlock());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

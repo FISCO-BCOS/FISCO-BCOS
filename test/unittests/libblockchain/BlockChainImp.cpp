@@ -56,7 +56,7 @@ public:
 
     Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
-        std::cout << "key " << key << " table " << m_table << std::endl;
+        // std::cout << "key " << key << " table " << m_table << std::endl;
         Entries::Ptr entries = std::make_shared<Entries>();
         Entry::Ptr entry = std::make_shared<Entry>();
 
@@ -111,20 +111,35 @@ public:
     std::shared_ptr<FakeBlock> m_fakeBlock;
 };
 
+class MockBlockChainImp : public BlockChainImp
+{
+public:
+    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory() override
+    {
+        return m_memoryTableFactory;
+    }
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> _m)
+    {
+        m_memoryTableFactory = _m;
+    }
+    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+};
+
+
 struct MemoryTableFactoryFixture
 {
     MemoryTableFactoryFixture()
     {
         m_executiveContext = std::make_shared<ExecutiveContext>();
-        m_blockChainImp = std::make_shared<BlockChainImp>();
+        m_blockChainImp = std::make_shared<MockBlockChainImp>();
         m_fakeBlock = std::make_shared<FakeBlock>(5);
         std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory =
             std::make_shared<MockMemoryTableFactory>();
         mockMemoryTableFactory->setFakeBlock(m_fakeBlock);
         m_blockChainImp->setMemoryTableFactory(mockMemoryTableFactory);
-        std::cout << "blockChainImp " << m_blockChainImp << std::endl;
+        // std::cout << "blockChainImp " << m_blockChainImp << std::endl;
     }
-    std::shared_ptr<BlockChainImp> m_blockChainImp;
+    std::shared_ptr<MockBlockChainImp> m_blockChainImp;
     std::shared_ptr<FakeBlock> m_fakeBlock;
     std::shared_ptr<ExecutiveContext> m_executiveContext;
 };
@@ -136,7 +151,7 @@ BOOST_FIXTURE_TEST_SUITE(BlockChainImp1, MemoryTableFactoryFixture);
 BOOST_AUTO_TEST_CASE(testnumber)
 {
     // int64_t number() const override;
-    std::cout << "testnumber " << m_blockChainImp << std::endl;
+    // std::cout << "testnumber " << m_blockChainImp << std::endl;
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 1);
 }
 
@@ -153,9 +168,9 @@ BOOST_AUTO_TEST_CASE(getBlockByHash)
 {
     std::shared_ptr<dev::eth::Block> bptr = m_blockChainImp->getBlockByHash(
         h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
-    std::cout << " h256 "
-              << h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e").hex()
-              << std::endl;
+    // std::cout << " h256 "
+    //          << h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e").hex()
+    //          << std::endl;
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), m_fakeBlock->getBlock().getTransactionSize());
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), 5);
 }

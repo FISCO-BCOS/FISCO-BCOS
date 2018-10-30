@@ -31,7 +31,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory::MemoryTableFactory()
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 {
     m_sysTables.push_back(SYS_MINERS);
     m_sysTables.push_back(SYS_TABLES);
@@ -117,7 +117,7 @@ void MemoryTableFactory::setBlockHash(h256 blockHash)
     m_blockHash = blockHash;
 }
 
-void MemoryTableFactory::setBlockNum(int blockNum)
+void MemoryTableFactory::setBlockNum(int64_t blockNum)
 {
     m_blockNum = blockNum;
 }

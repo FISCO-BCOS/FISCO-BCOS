@@ -35,16 +35,16 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
 {
     LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size();
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
-    try
+    // try
     {
         BlockInfo blockInfo;
         blockInfo.hash = block.blockHeader().hash();
         blockInfo.number = block.blockHeader().number();
         m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
     }
-    catch (exception& e)
+    // catch (exception& e)
     {
-        LOG(ERROR) << "Error:" << e.what();
+        // LOG(ERROR) << "Error:" << e.what();
     }
     unsigned i = 0;
     for (Transaction const& tr : block.transactions())
@@ -96,7 +96,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
 
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.
-    Executive e(*(executiveContext->getState()), _envInfo);
+    Executive e(executiveContext->getState(), _envInfo);
     ExecutionResult res;
     e.setResultRecipient(res);
     e.initialize(_t);

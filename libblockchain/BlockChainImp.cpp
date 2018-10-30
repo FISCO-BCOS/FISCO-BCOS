@@ -37,10 +37,24 @@ using namespace dev::storage;
 using namespace dev::blockverifier;
 using boost::lexical_cast;
 
-int64_t BlockChainImp::number() const
+
+void BlockChainImp::setStateStorage(Storage::Ptr stateStorage)
+{
+    m_stateStorage = stateStorage;
+}
+
+shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
+{
+    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
+        std::make_shared<dev::storage::MemoryTableFactory>();
+    memoryTableFactory->setStateStorage(m_stateStorage);
+    return memoryTableFactory;
+}
+
+int64_t BlockChainImp::number()
 {
     int64_t num = 0;
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_CURRENT_STATE_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_CURRENT_STATE_);
     if (tb)
     {
         auto entries = tb->select(m_keyValue_currentNumber, tb->newCondition());
@@ -54,10 +68,10 @@ int64_t BlockChainImp::number() const
     return num;
 }
 
-h256 BlockChainImp::numberHash(int64_t _i) const
+h256 BlockChainImp::numberHash(int64_t _i)
 {
     string numberHash = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_NUMBER_2_HASH_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
     if (tb)
     {
         auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
@@ -73,7 +87,7 @@ h256 BlockChainImp::numberHash(int64_t _i) const
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
     string strblock = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_HASH_2_BLOCK_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_blockHash.hex(), tb->newCondition());
@@ -96,7 +110,7 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
     string numberHash = "";
     string strblock = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_NUMBER_2_HASH_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
     if (tb)
     {
         auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
@@ -119,7 +133,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_TX_HASH_2_BLOCK_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -144,7 +158,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_TX_HASH_2_BLOCK_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -170,7 +184,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_TX_HASH_2_BLOCK_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -193,7 +207,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 
 void BlockChainImp::writeNumber(const Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_CURRENT_STATE_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_CURRENT_STATE_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
@@ -204,7 +218,7 @@ void BlockChainImp::writeNumber(const Block& block)
 
 void BlockChainImp::writeTxToBlock(const Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_TX_HASH_2_BLOCK_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_TX_HASH_2_BLOCK_);
     if (tb)
     {
         std::vector<Transaction> txs = block.transactions();
@@ -220,7 +234,7 @@ void BlockChainImp::writeTxToBlock(const Block& block)
 
 void BlockChainImp::writeNumber2Hash(const Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_NUMBER_2_HASH_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
@@ -231,7 +245,7 @@ void BlockChainImp::writeNumber2Hash(const Block& block)
 
 void BlockChainImp::writeHash2Block(Block& block)
 {
-    Table::Ptr tb = m_memoryTableFactory->openTable(_SYS_NUMBER_2_HASH_);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(_SYS_NUMBER_2_HASH_);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
@@ -255,9 +269,4 @@ void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> 
     writeBlockInfo(block);
     context->dbCommit();
     m_onReady();
-}
-
-void BlockChainImp::setMemoryTableFactory(std::shared_ptr<MemoryTableFactory> memoryTableFactory)
-{
-    m_memoryTableFactory = memoryTableFactory;
 }

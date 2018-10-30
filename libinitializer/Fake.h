@@ -70,9 +70,9 @@ public:
 
     ~FakeBlockChain() {}
 
-    int64_t number() const { return m_blockChain.size() - 1; }
+    int64_t number() { return m_blockChain.size() - 1; }
 
-    dev::h256 numberHash(int64_t _i) const { return m_blockChain[_i]->headerHash(); }
+    dev::h256 numberHash(int64_t _i) { return m_blockChain[_i]->headerHash(); }
 
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
