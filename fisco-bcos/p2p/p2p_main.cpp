@@ -31,13 +31,6 @@ INITIALIZE_EASYLOGGINGPP
 using namespace dev;
 using namespace dev::initializer;
 
-class P2PMessageFactory : public MessageFactory
-{
-public:
-    virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
-};
-
 int main(int argc, const char* argv[])
 {
     auto initialize = std::make_shared<Initializer>();
@@ -45,7 +38,7 @@ int main(int argc, const char* argv[])
 
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
-    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+    /// p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
 
     uint32_t counter = 0;
     while (true)
