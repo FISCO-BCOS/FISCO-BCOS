@@ -61,7 +61,10 @@ Block& Block::operator=(Block const& _block)
     /// init sigList
     m_sigList = _block.sigList();
     m_txsCache = _block.m_txsCache;
-    m_txsMapCache = _block.m_txsMapCache;
+    {
+        WriteGuard l(x_txsMapCache);
+        m_txsMapCache = _block.m_txsMapCache;
+    }
     m_txsRoot = _block.m_txsRoot;
     noteChange();
     return *this;
@@ -130,6 +133,7 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
 bytes const& Block::encodeTransactions() const
 {
+    WriteGuard l(x_txsMapCache);
     RLPStream txs;
     txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
