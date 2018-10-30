@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of consensus
+ * @brief: parser of evm
  *
  * @file: EvmParams.h
  * @author: yujiechen
@@ -33,7 +33,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <string>
 
-#define EVMC_LOG(DES) LOG(DES) << "[EVMC_MAIN]"
+#define EVMC_LOG(DES) LOG(DES) << "[EVM_DEMO]"
 
 using namespace boost::property_tree;
 using namespace dev;

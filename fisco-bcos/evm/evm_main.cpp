@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of consensus
+ * @brief: evm demo
  *
  * @file: evm_main.cpp
  * @author: yujiechen
