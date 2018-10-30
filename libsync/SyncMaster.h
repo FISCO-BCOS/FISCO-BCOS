@@ -70,7 +70,7 @@ public:
         m_blockSubmitted = m_blockChain->onReady([&]() { this->noteNewBlocks(); });
     }
 
-    virtual ~SyncMaster(){};
+    virtual ~SyncMaster() { stop(); };
     /// start blockSync
     virtual void start() override;
     /// stop blockSync
