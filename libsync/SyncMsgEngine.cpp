@@ -134,11 +134,14 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         Transaction tx;
         tx.decode(rlps[i]);
 
-        if (ImportResult::Success == m_txPool->import(tx))
+        auto importResult = m_txPool->import(tx);
+        if (ImportResult::Success == importResult)
             successCnt++;
         else
-            LOG(ERROR) << "[Rcv] Transaction " << tx.sha3()
-                       << " import into txPool FAILED from peer " << _packet.nodeId;
+            SYNCLOG(TRACE)
+                << "[Rcv] Transaction import into txPool FAILED from peer [reason/txHash/peer]: "
+                << int(importResult) << "/" << _packet.nodeId << "/" << move(tx.sha3()) << endl;
+
 
         m_txPool->transactionIsKonwnBy(tx.sha3(), _packet.nodeId);
     }
