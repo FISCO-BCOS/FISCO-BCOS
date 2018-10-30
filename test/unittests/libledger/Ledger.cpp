@@ -50,6 +50,7 @@ public:
     void initLedger(
         std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override
     {
+        std::cout << "##### callbaci initLedger for FakeLedgerForTest" << std::endl;
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         /// init blockChain
@@ -122,6 +123,13 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(ledgerManager->getParamByGroupId(group_id));
     checkParam(param);
+    /// check BlockChain
+    std::shared_ptr<BlockChainInterface> m_blockChain = ledgerManager->blockChain(group_id);
+    std::shared_ptr<Block> block = m_blockChain->getBlockByNumber(m_blockChain->number());
+    Block populateBlock;
+    populateBlock.resetCurrentBlock(block->header());
+    m_blockChain->commitBlock(populateBlock, nullptr);
+    BOOST_CHECK(ledgerManager->blockChain(group_id)->number() == 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

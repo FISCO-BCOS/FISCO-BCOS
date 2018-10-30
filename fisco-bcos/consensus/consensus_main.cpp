@@ -31,8 +31,6 @@
 #include <libinitializer/SecureInitiailizer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
-
-
 using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
@@ -51,7 +49,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
-    u256 maxBlockLimit = u256(1000);
+    u256 maxBlockLimit = u256(500);
     /// get the consensus status
     /// m_txSpeed default is 10
     uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
