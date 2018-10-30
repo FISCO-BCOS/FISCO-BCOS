@@ -55,8 +55,8 @@ public:
 };
 
 static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain, GROUP_ID const& groupSize,
-    float txSpeed, KeyPair const& key_pair)
+    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain, GROUP_ID const& _groupSize,
+    float _txSpeed, int _totalTransactions, KeyPair const& key_pair)
 {
     ///< transaction related
     bytes rlpBytes = fromHex(
@@ -69,16 +69,16 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = key_pair.secret();
-    // u256 maxBlockLimit = u256(100);
-    /// get the consensus status
-    /// m_txSpeed default is 10
-    uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
-    while (true)
+    srand(time(NULL));
+
+    uint16_t sleep_interval = (uint16_t)(1000.0 / _txSpeed);
+    while (_totalTransactions > 0)
     {
-        for (int i = 1; i <= groupSize; i++)
+        _totalTransactions -= _groupSize;
+        for (int i = 1; i <= _groupSize; i++)
         {
-            tx.setNonce(tx.nonce() + u256(1));
-            tx.setBlockLimit(u256(_blockChain->number()) + 1);
+            tx.setNonce(u256(rand()));
+            tx.setBlockLimit(u256(_blockChain->number()) + 50);
             dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
             tx.updateSignature(SignatureStruct(sig));
             _txPool->submit(tx);
@@ -147,7 +147,8 @@ static void startSync(Params& params)
     LOG(INFO) << "concencus started" << endl;
 
     /// create transaction
-    createTx(txPool, blockChain, params.groupSize(), params.txSpeed(), key_pair);
+    createTx(txPool, blockChain, params.groupSize(), params.txSpeed(), params.totalTransactions(),
+        key_pair);
 }
 
 int main(int argc, const char* argv[])

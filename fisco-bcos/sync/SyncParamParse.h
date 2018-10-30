@@ -32,6 +32,7 @@
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Service.h>
 #include <boost/program_options.hpp>
+#include <cstdlib>
 #include <memory>
 
 INITIALIZE_EASYLOGGINGPP
@@ -42,7 +43,9 @@ namespace js = json_spirit;
 class Params
 {
 public:
-    Params() : m_blockSpeed(1), m_txSpeed(10), m_syncSpeed(1), m_groupSize(1) {}
+    Params()
+      : m_blockSpeed(1), m_txSpeed(10), m_syncSpeed(1), m_totalTransactions(1 << 30), m_groupSize(1)
+    {}
 
     Params(boost::program_options::variables_map const& vm,
         boost::program_options::options_description const& option)
@@ -62,18 +65,22 @@ public:
             m_syncSpeed = vm["syncSpeed"].as<float>();
         if (vm.count("groupSize") || vm.count("n"))
             m_groupSize = vm["groupSize"].as<int>();
+        if (vm.count("totalTx") || vm.count("m"))
+            m_totalTransactions = vm["totalTx"].as<int>();
     }
 
     int groupSize() const { return m_groupSize; }
     float blockSpeed() { return m_blockSpeed; }
     float txSpeed() { return m_txSpeed; }
     float syncSpeed() { return m_syncSpeed; }
+    int totalTransactions() { return m_totalTransactions; }
 
 
 private:
     float m_blockSpeed;
     float m_txSpeed;
     float m_syncSpeed;
+    int m_totalTransactions;
     dev::GROUP_ID m_groupSize;
 };
 
@@ -83,7 +90,8 @@ static Params initCommandLine(int argc, const char* argv[])
     server_options.add_options()("txSpeed,t", boost::program_options::value<float>(),
         "transaction generate speed")("blockSpeed,b", boost::program_options::value<float>(),
         "block generate speed")("syncSpeed,s", boost::program_options::value<float>(),
-        "sync speed")("groupSize,n", boost::program_options::value<int>(), "group size")("nodeId,i",
+        "sync speed")("groupSize,n", boost::program_options::value<int>(), "group size")(
+        "totalTx,m", boost::program_options::value<int>(), "total transaction number")("nodeId,i",
         boost::program_options::value<h256>(),
         "node ID")("help,h", "help of p2p module of FISCO-BCOS");
 

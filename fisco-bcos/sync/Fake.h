@@ -59,7 +59,8 @@ public:
       : Worker("FakeConcensusForSync", _idleWaitMs),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
-        m_blockVerifier(_blockVerifier)
+        m_blockVerifier(_blockVerifier),
+        m_totalTxCommit(0)
     {}
 
     virtual ~FakeConcensus(){};
@@ -78,9 +79,12 @@ public:
         ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block);
         m_blockChain->commitBlock(*block, exeCtx);
         m_txPool->dropBlockTrans(*block);
+        m_totalTxCommit += txs.size();
 
-        SYNCLOG(TRACE) << "[Commit] Conencus block commit " << currentNumber + 1 << " with "
-                       << txs.size() << " transactions" << endl;
+        SYNCLOG(TRACE) << "[Commit] Conencus block commit "
+                          "[blockNumber/txNumber/totalTxCommitThisNode/blockHash]: "
+                       << currentNumber + 1 << "/" << txs.size() << "/" << m_totalTxCommit << "/"
+                       << block->headerHash() << endl;
     }
 
 private:
@@ -150,4 +154,6 @@ private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     /// block verifier
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
+
+    size_t m_totalTxCommit;
 };
