@@ -31,6 +31,7 @@ namespace storagestate
 {
 class StorageStateFactory : public dev::executive::StateFactoryInterface
 {
+public:
     StorageStateFactory(u256 const& _accountStartNonce) : m_accountStartNonce(_accountStartNonce) {}
     virtual ~StorageStateFactory() {}
     virtual std::shared_ptr<dev::executive::StateFace> getState();

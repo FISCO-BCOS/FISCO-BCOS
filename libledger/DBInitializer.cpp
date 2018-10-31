@@ -34,6 +34,7 @@ using namespace dev::db;
 using namespace dev::eth;
 using namespace dev::mptstate;
 using namespace dev::executive;
+using namespace dev::storagestate;
 
 namespace dev
 {
@@ -42,7 +43,7 @@ namespace ledger
 void DBInitializer::initStorageDB()
 {
     if (dev::stringCmpIgnoreCase(m_param->dbType(), "AMDB") == 0)
-        initAMDBStorage();
+        initAMOPStorage();
     if (dev::stringCmpIgnoreCase(m_param->dbType(), "LevelDB") == 0)
         initLevelDBStorage();
 }
@@ -72,8 +73,8 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
-/// TODO: init AMDB
-void DBInitializer::initAMDBStorage() {}
+/// TODO: init AMOP Storage
+void DBInitializer::initAMOPStorage() {}
 
 /// create ExecutiveContextFactory
 void DBInitializer::createExecutiveContext(
@@ -89,7 +90,7 @@ void DBInitializer::createExecutiveContext(
     m_executiveContextFac->setPrecompiledContract(precompile);
 }
 
-/// TODO: create stateFactory
+/// create stateFactory
 void DBInitializer::createStateFactory()
 {
     if (m_param->enableMpt())
@@ -98,8 +99,12 @@ void DBInitializer::createStateFactory()
         createStorageState();
 }
 
-/// TODO: create the stateStorage with AMDB
-void DBInitializer::createStorageState() {}
+/// TOCHECK: create the stateStorage with AMDB
+void DBInitializer::createStorageState()
+{
+    m_stateFactory =
+        std::make_shared<StorageStateFactory>(m_param->mutableGenesisParam().accountStartNonce);
+}
 
 /// create the mptState
 void DBInitializer::createMptState()
