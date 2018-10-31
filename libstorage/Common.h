@@ -29,11 +29,11 @@ namespace storage
 const char* const STATUS = "_status_";
 const char* const SYS_TABLES = "_sys_tables_";
 const char* const SYS_MINERS = "_sys_miners_";
-const std::string _SYS_CURRENT_STATE_ = "_sys_current_state_";
+const std::string SYS_CURRENT_STATE = "_sys_current_state_";
 const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
 const std::string SYS_VALUE = "value";
-const std::string _SYS_TX_HASH_2_BLOCK_ = "_sys_tx_hash_2_block_";
-const std::string _SYS_NUMBER_2_HASH_ = "_sys_number_2_hash_";
-const std::string _SYS_HASH_2_BLOCK_ = "_sys_hash_2_block_";
+const std::string SYS_TX_HASH_2_BLOCK = "_sys_tx_hash_2_block_";
+const std::string SYS_NUMBER_2_HASH = "_sys_number_2_hash_";
+const std::string SYS_HASH_2_BLOCK = "_sys_hash_2_block_";
 }  // namespace storage
 }  // namespace dev

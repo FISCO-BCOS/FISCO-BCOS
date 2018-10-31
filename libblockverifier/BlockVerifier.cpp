@@ -86,7 +86,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
 std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo const& _envInfo,
     Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
 {
-    LOG(TRACE) << "State::execute ";
+    LOG(TRACE) << "BlockVerifier::execute ";
 
     auto onOp = _onOp;
 #if ETH_VMTRACE
