@@ -78,6 +78,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     for (auto tx : transaction_vec)
     {
         tx.setNonce(tx.nonce() + u256(i) + u256(1));
+        tx.setBlockLimit(pool_test.m_blockChain->number() + u256(1));
         bytes trans_bytes2;
         tx.encode(trans_bytes2);
         BOOST_CHECK_THROW(pool_test.m_txPool->import(ref(trans_bytes2)), InvalidSignature);

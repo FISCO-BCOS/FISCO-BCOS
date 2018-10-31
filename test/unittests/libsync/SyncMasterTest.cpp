@@ -88,11 +88,20 @@ public:
         shared_ptr<Transactions> txs = make_shared<Transactions>();
         for (size_t i = 0; i < _num; ++i)
         {
-            Transaction tx(ref(c_txBytes), CheckTransaction::Everything);
+            /// Transaction tx(ref(c_txBytes), CheckTransaction::Everything);
+            u256 value = u256(100);
+            u256 gas = u256(100000000);
+            u256 gasPrice = u256(0);
+            Address dst = toAddress(KeyPair::create().pub());
+            std::string str = "test transaction";
+            bytes data(str.begin(), str.end());
+            Transaction tx(value, gasPrice, gas, dst, data);
+            KeyPair sigKeyPair = KeyPair::create();
             tx.setNonce(tx.nonce() + u256(rand()));
             tx.setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-            dev::Signature sig = sign(m_sec, tx.sha3(WithoutSignature));
-            tx.updateSignature(SignatureStruct(sig));
+            SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx.sha3(WithoutSignature));
+            /// update the signature of transaction
+            tx.updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);
             txs->emplace_back(tx);
         }

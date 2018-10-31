@@ -156,12 +156,12 @@ public:
     /// fake transactions
     void FakeTransaction(size_t size)
     {
-        fakeSingleTransaction();
         RLPStream txs;
         txs.appendList(size);
         m_transaction.resize(size);
         for (size_t i = 0; i < size; i++)
         {
+            fakeSingleTransaction(i);
             m_transaction[i] = m_singleTransaction;
             bytes trans_data;
             m_transaction[i].encode(trans_data);
@@ -171,20 +171,21 @@ public:
     }
 
     /// fake single transaction
-    void fakeSingleTransaction()
+    void fakeSingleTransaction(u256 i)
     {
-        bytes rlpBytes = fromHex(
-            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-            "0000"
-            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-            "0000"
-            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-            "657c"
-            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
-
-        RLP rlpObj(rlpBytes);
-        bytesConstRef d = rlpObj.data();
-        m_singleTransaction = Transaction(d, eth::CheckTransaction::Everything);
+        u256 value = u256(100);
+        u256 gas = u256(100000000);
+        u256 gasPrice = u256(0);
+        Address dst = toAddress(KeyPair::create().pub());
+        std::string str = "test transaction";
+        bytes data(str.begin(), str.end());
+        m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);
+        m_singleTransaction.setBlockLimit(i + u256(1));
+        KeyPair sigKeyPair = KeyPair::create();
+        SignatureStruct sig =
+            dev::sign(sigKeyPair.secret(), m_singleTransaction.sha3(WithoutSignature));
+        /// update the signature of transaction
+        m_singleTransaction.updateSignature(sig);
     }
 
     Block& getBlock() { return m_block; }
