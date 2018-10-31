@@ -38,6 +38,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
                << " num: " << block.blockHeader().number()
                << " stateRoot: " << block.blockHeader().stateRoot();
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
+    try
     {
         BlockInfo blockInfo;
         blockInfo.hash = block.blockHeader().hash();
@@ -45,7 +46,10 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
         m_executiveContextFactory->initExecutiveContext(
             blockInfo, block.blockHeader().stateRoot(), executiveContext);
     }
-    catch (exception& e) { LOG(ERROR) << "Error:" << e.what(); }
+    catch (exception& e)
+    {
+        LOG(ERROR) << "Error:" << e.what();
+    }
     unsigned i = 0;
     for (Transaction const& tr : block.transactions())
     {
