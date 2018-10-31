@@ -40,6 +40,22 @@ namespace ledger
 class Ledger : public LedgerInterface
 {
 public:
+    /**
+     * @brief: init a single ledger with specified params
+     * @param service : p2p handler
+     * @param _groupId : group id of the ledger belongs to
+     * @param _keyPair : keyPair used to init the consensus Sealer
+     * @param _baseDir: baseDir used to place the data of the ledger
+     *                  (1) if _baseDir not empty, the group data is placed in
+     * ${_baseDir}/group${_groupId}/${data_dir},
+     *                  ${data_dir} configurated by the configuration of the ledger, default is
+     * "data" (2) if _baseDir is empty, the group data is placed in ./group${_groupId}/${data_dir}
+     *
+     * @param configFileName: the configuration file path of the ledger, configurated by the
+     * main-configuration (1) if configFileName is empty, the configuration path is
+     * ./group${_groupId}.ini, (2) if configFileName is not empty, the configuration path is decided
+     * by the param ${configFileName}
+     */
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir,
         std::string const& configFileName)
@@ -48,6 +64,7 @@ public:
         m_keyPair(_keyPair),
         m_configFileName(configFileName)
     {
+        std::cout << "begin construct Ledger" << std::endl;
         m_param = std::make_shared<LedgerParam>();
         std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
         if (_baseDir == "")
@@ -56,11 +73,12 @@ public:
         assert(m_service);
         if (m_configFileName == "")
             m_configFileName = "./config.group" + std::to_string(_groupId) + m_postfix;
-        LOG(DEBUG) << "### config file path:" << m_configFileName;
-        LOG(DEBUG) << "### basedir:" << m_param->baseDir();
+        LOG(DEBUG) << "config file path:" << m_configFileName;
+        LOG(DEBUG) << "basedir:" << m_param->baseDir();
         initConfig(m_configFileName);
     }
 
+    /// start all modules(sync, consensus)
     void startAll() override
     {
         assert(m_sync && m_sealer);
@@ -68,6 +86,7 @@ public:
         m_sealer->start();
     }
 
+    /// stop all modules(consensus, sync)
     void stopAll() override
     {
         m_sealer->stop();
@@ -75,7 +94,6 @@ public:
     }
 
     virtual ~Ledger(){};
-    void initConfig(std::string const& configPath) override;
 
     /// init the ledger(called by initializer)
     void initLedger(
@@ -99,6 +117,7 @@ public:
     std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
 protected:
+    void initConfig(std::string const& configPath) override;
     virtual void initTxPool();
     /// init blockverifier related
     virtual void initBlockVerifier();

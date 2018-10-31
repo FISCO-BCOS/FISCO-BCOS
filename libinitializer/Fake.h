@@ -47,7 +47,6 @@ using namespace dev::eth;
 using namespace dev::sync;
 using namespace dev::blockverifier;
 using namespace dev::ledger;
-
 class FakeBlockChain : public BlockChainInterface
 {
 public:
