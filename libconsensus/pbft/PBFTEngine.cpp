@@ -425,6 +425,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
                << ", hash = " << working_block.header().hash().abridged() << ", idx = " << req.idx
                << ", time =" << utcTime();
     checkBlockValid(working_block);
+    m_blockSync->noteSealingBlockNumber(working_block.header().number());
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
