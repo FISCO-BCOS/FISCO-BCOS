@@ -93,6 +93,7 @@ target_link_libraries(test-fisco-bcos blockverifier)
 target_link_libraries(test-fisco-bcos consensus)
 target_link_libraries(test-fisco-bcos sync)
 target_link_libraries(test-fisco-bcos initializer)
+target_link_libraries(test-fisco-bcos ledger)
 
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)

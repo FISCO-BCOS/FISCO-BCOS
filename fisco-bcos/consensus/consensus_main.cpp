@@ -37,15 +37,8 @@ using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
-class P2PMessageFactory : public MessageFactory
-{
-public:
-    virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
-};
-
-static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
-    GROUP_ID const& groupSize, float txSpeed, KeyPair const& key_pair)
+static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID const& groupSize,
+    float txSpeed, KeyPair const& key_pair)
 {
     ///< transaction related
     bytes rlpBytes = fromHex(
@@ -82,13 +75,11 @@ static void startConsensus(Params& params)
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.conf");
 
-    auto p2pInitializer = initialize->p2pInitializer();
-    auto p2pService = p2pInitializer->p2pService();
-    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+    /// auto p2pInitializer = initialize->p2pInitializer();
+    /// auto p2pService = p2pInitializer->p2pService();
     auto secureInitiailizer = initialize->secureInitiailizer();
     KeyPair key_pair = secureInitiailizer->keyPair();
     auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
-
     /// create transaction
     createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
 }
