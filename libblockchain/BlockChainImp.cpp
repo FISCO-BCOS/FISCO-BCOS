@@ -145,21 +145,22 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             auto entry = entries->get(0);
             strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
+            std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
+            std::vector<Transaction> txs = pblock->transactions();
+            if (txs.size() > lexical_cast<uint>(txIndex))
+            {
+                return txs[lexical_cast<uint>(txIndex)];
+            }
         }
     }
 
-    std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
-    std::vector<Transaction> txs = pblock->transactions();
-    if (txs.size() > lexical_cast<uint>(txIndex))
-    {
-        return txs[lexical_cast<uint>(txIndex)];
-    }
+
     return Transaction();
 }
 
 LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
 {
-    string strblock = "";
+    string strblockhash = "";
     string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
     if (tb)
@@ -168,17 +169,16 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            strblock = entry->getField(SYS_VALUE);
+            strblockhash = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
+            std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblockhash));
+            std::vector<Transaction> txs = pblock->transactions();
+            if (txs.size() > lexical_cast<uint>(txIndex))
+            {
+                return LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], pblock->headerHash(),
+                    lexical_cast<unsigned>(txIndex), pblock->blockHeader().number());
+            }
         }
-    }
-
-    std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
-    std::vector<Transaction> txs = pblock->transactions();
-    if (txs.size() > lexical_cast<uint>(txIndex))
-    {
-        return LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], pblock->headerHash(),
-            lexical_cast<unsigned>(txIndex), pblock->blockHeader().number());
     }
     return LocalisedTransaction(Transaction(), h256(0), -1);
 }
@@ -196,14 +196,13 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             auto entry = entries->get(0);
             strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
+            std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
+            std::vector<TransactionReceipt> receipts = pblock->transactionReceipts();
+            if (receipts.size() > lexical_cast<uint>(txIndex))
+            {
+                return receipts[lexical_cast<uint>(txIndex)];
+            }
         }
-    }
-
-    std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
-    std::vector<TransactionReceipt> receipts = pblock->transactionReceipts();
-    if (receipts.size() > lexical_cast<uint>(txIndex))
-    {
-        return receipts[lexical_cast<uint>(txIndex)];
     }
     return TransactionReceipt();
 }
@@ -228,9 +227,9 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         for (uint i = 0; i < txs.size(); i++)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
-            entry->setField(SYS_VALUE, txs[i].sha3().hex());
+            entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
             entry->setField("index", lexical_cast<std::string>(i));
-            tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
+            tb->insert(txs[i].sha3().hex(), entry);
         }
     }
 }

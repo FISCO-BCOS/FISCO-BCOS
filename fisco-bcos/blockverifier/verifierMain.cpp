@@ -26,10 +26,14 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
+#include <libdevcrypto/Common.h>
+#include <libethcore/TransactionReceipt.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
+
+using namespace dev;
 INITIALIZE_EASYLOGGINGPP
 int main(int argc, char* argv[])
 {
@@ -80,6 +84,7 @@ int main(int argc, char* argv[])
                 parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
             dev::eth::Block block;
             block.setBlockHeader(header);
+
             dev::bytes rlpBytes = dev::fromHex(
                 "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a1000"
                 "00000000"
@@ -89,9 +94,19 @@ int main(int argc, char* argv[])
                 "6d62657c"
                 "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
             dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
+            dev::KeyPair key_pair(dev::Secret::random());
+            dev::Secret sec = key_pair.secret();
+            u256 maxBlockLimit = u256(1000);
+            tx.setNonce(tx.nonce() + u256(1));
+            tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
+            dev::Signature sig = sign(sec, tx.sha3(dev::eth::WithoutSignature));
+            tx.updateSignature(SignatureStruct(sig));
+            LOG(INFO) << "Tx" << tx.sha3();
             block.appendTransaction(tx);
             auto context = blockVerifier->executeBlock(block);
             blockChain->commitBlock(block, context);
+            dev::eth::TransactionReceipt receipt = blockChain->getTransactionReceiptByHash(tx.sha3());
+            LOG(INFO) << "receipt" << receipt;
         }
     }
     else if (argc > 1 && std::string("verify") == argv[1])
