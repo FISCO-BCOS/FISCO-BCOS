@@ -79,17 +79,6 @@ void Executive::initialize(Transaction const& _transaction)
         // Avoid unaffordable transactions.
         bigint gasCost = (bigint)m_t.gas() * m_t.gasPrice();
         bigint totalCost = m_t.value() + gasCost;
-        /*if (m_s.balance(sender) < totalCost)
-        {
-            LOG(WARNING) << "Not enough cash: Require > " << totalCost << " = " << m_t.gas()
-                         << " * " << m_t.gasPrice() << " + " << m_t.value() << " Got"
-                         << m_s.balance(sender) << " for sender: " << sender;
-            m_excepted = TransactionException::NotEnoughCash;
-            m_excepted = TransactionException::NotEnoughCash;
-            BOOST_THROW_EXCEPTION(NotEnoughCash()
-                                  << RequirementError(totalCost, (bigint)m_s.balance(sender))
-                                  << errinfo_comment(sender.hex()));
-        }*/
         m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
     }
 }
