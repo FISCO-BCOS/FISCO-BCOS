@@ -95,8 +95,7 @@ install_ubuntu_deps() {
     install_ubuntu_package "make" "build-essential"  \
                             "openssl" "libssl-dev" "libkrb5-dev" \
                             "libcurl4-openssl-dev" "libgmp-dev" \
-                            "libleveldb-dev" "libmicrohttpd-dev" \
-                            "libminiupnpc-dev" "uuid-dev"
+                            "libleveldb-dev" "libmicrohttpd-dev" 
 }
 
 
@@ -105,7 +104,7 @@ install_centos_deps() {
     execute_cmd "sudo yum upgrade"
     install_centos_package "make" "gcc-c++" "leveldb-devel" \
                             "curl-devel" "openssl" "openssl-devel" \
-                            "libmicrohttpd-devel" "gmp-devel" "libuuid-devel"
+                            "libmicrohttpd-devel" "gmp-devel" 
 }
 
 # install oracle package

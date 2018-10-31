@@ -23,5 +23,20 @@
 
 
 #pragma once
-
 #include "libexecutive/StateFactoryInterface.h"
+
+namespace dev
+{
+namespace storagestate
+{
+class StorageStateFactory : public dev::executive::StateFactoryInterface
+{
+    StorageStateFactory(u256 const& _accountStartNonce) : m_accountStartNonce(_accountStartNonce) {}
+    virtual ~StorageStateFactory() {}
+    virtual std::shared_ptr<dev::executive::StateFace> getState();
+
+private:
+    u256 m_accountStartNonce;
+};
+}  // namespace storagestate
+}  // namespace dev
