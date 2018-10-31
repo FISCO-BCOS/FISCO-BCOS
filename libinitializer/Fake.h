@@ -180,7 +180,7 @@ public:
         /// init txPool
         initTxPool();
         /// init sync
-        initSync();
+        Ledger::initSync();
         /// init consensus
         Ledger::consensusInitFactory();
     }
@@ -189,5 +189,5 @@ public:
     void initBlockVerifier() override { m_blockVerifier = std::make_shared<FakeBlockVerifier>(); }
     void initBlockChain() override { m_blockChain = std::make_shared<FakeBlockChain>(); }
     /// init the blockSync
-    void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
+    /// void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
 };
