@@ -46,14 +46,6 @@ using namespace dev::txpool;
 using namespace dev::sync;
 using namespace dev::blockchain;
 
-
-class P2PMessageFactory : public MessageFactory
-{
-public:
-    virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
-};
-
 static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
     std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain, GROUP_ID const& _groupSize,
     float _txSpeed, int _totalTransactions, KeyPair const& key_pair)
@@ -95,7 +87,6 @@ static void startSync(Params& params)
 
     auto p2pInitializer = initialize->p2pInitializer();
     shared_ptr<Service> p2pService = p2pInitializer->p2pService();
-    p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
 
     GROUP_ID groupId = 1;
     std::map<GROUP_ID, h512s> groudID2NodeList;
