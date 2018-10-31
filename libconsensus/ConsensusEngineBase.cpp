@@ -74,7 +74,8 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     /// check the block number
     if (block.blockHeader().number() <= m_blockChain->number())
     {
-        LOG(WARNING) << "Old Block Height, block_hash = " << block_hash;
+        LOG(WARNING) << "Old Block Height, height = " << block.blockHeader().number()
+                     << " blk=" << m_blockChain->number() << " hash =" << block_hash;
         BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
     }
     /// check existence of this block (Must non-exist)
