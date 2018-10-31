@@ -229,7 +229,7 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
         // Send blocks if packet size more than c_maxPayload
         if (shardSize != 0 && shardSize + block->rlp().size() > c_maxPayload)
         {
-            sendBlocks(_packet.nodeId, number, blockRLPs);
+            sendBlocks(_packet.nodeId, number - blockRLPs.size(), blockRLPs);
             blockRLPs.clear();
             shardSize = 0;
         }
@@ -237,5 +237,5 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
         blockRLPs.emplace_back(block->rlp());
         shardSize += block->rlp().size();
     }
-    sendBlocks(_packet.nodeId, number - 1, blockRLPs);
+    sendBlocks(_packet.nodeId, number - blockRLPs.size(), blockRLPs);
 }
