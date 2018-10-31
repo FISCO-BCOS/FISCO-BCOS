@@ -82,6 +82,7 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const override;
+    virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // virtual h256 latestBlockSent() override;
 
@@ -153,12 +154,17 @@ private:
 
     unsigned m_startingBlock = 0;  ///< Last block number for the start of sync
     unsigned m_highestBlock = 0;   ///< Highest block number seen
+    uint64_t m_lastDownloadingRequestTime = 0;
+    int64_t m_currentSealingNumber = 0;
 
     // Internal coding variable
     /// mutex
     mutable SharedMutex x_sync;
     /// mutex to access m_signalled
     Mutex x_signalled;
+    /// mutex to protect m_currentSealingNumber
+    mutable SharedMutex x_currentSealingNumber;
+
     /// signal to notify all thread to work
     std::condition_variable m_signalled;
 
@@ -168,8 +174,6 @@ private:
     bool m_newBlocks = false;
 
     // settings
-    int64_t m_maxBlockDownloadQueueSize = 5;
-
     dev::eth::Handler<> m_tqReady;
     dev::eth::Handler<> m_blockSubmitted;
 

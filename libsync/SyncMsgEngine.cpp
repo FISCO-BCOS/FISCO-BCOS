@@ -32,8 +32,11 @@ using namespace dev::txpool;
 void SyncMsgEngine::messageHandler(
     P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session, Message::Ptr _msg)
 {
+    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->id() << endl;
     if (!checkSession(_session) || !checkMessage(_msg))
     {
+        SYNCLOG(WARNING) << "[Rcv] [Packet] Reject packet: [reason]: session or msg illegal"
+                         << endl;
         _session->disconnect(LocalIdentity);
         return;
     }
@@ -41,16 +44,19 @@ void SyncMsgEngine::messageHandler(
     SyncMsgPacket packet;
     if (!packet.decode(_session, _msg))
     {
-        LOG(WARNING) << "Received " << _msg->buffer()->size() << ": " << toHex(*_msg->buffer())
-                     << endl;
-        LOG(WARNING) << "INVALID MESSAGE RECEIVED from " << _session->id();
+        SYNCLOG(WARNING)
+            << "[Rcv] [Packet] Reject packet: [reason/nodeId/size/message]: decode failed/"
+            << _session->id() << "/" << _msg->buffer()->size() << "/" << toHex(*_msg->buffer())
+            << endl;
         _session->disconnect(BadProtocol);
         return;
     }
 
     bool ok = interpret(packet);
     if (!ok)
-        LOG(WARNING) << "Couldn't interpret packet. " << RLP(packet.rlp());
+        SYNCLOG(WARNING)
+            << "[Rcv] [Packet] Reject packet: [reason/packetType]: illegal packet type/"
+            << int(packet.packetType) << endl;
 }
 
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::SessionFace> _session)
@@ -85,6 +91,7 @@ bool SyncMsgEngine::isNewerBlock(shared_ptr<Block> block)
 
 bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
+    SYNCLOG(TRACE) << "[Rcv] [Packet] interpret packet type: " << int(_packet.packetType) << endl;
     switch (_packet.packetType)
     {
     case StatusPacket:
@@ -113,12 +120,12 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
     if (status == nullptr)
     {
-        SYNCLOG(TRACE) << "[Rcv] Peer status new " << info.nodeId << endl;
+        SYNCLOG(TRACE) << "[Rcv] [Status] Peer status new " << info.nodeId << endl;
         m_syncStatus->newSyncPeerStatus(info);
     }
     else
     {
-        SYNCLOG(TRACE) << "[Rcv] Peer status update " << info.nodeId << endl;
+        SYNCLOG(TRACE) << "[Rcv] [Status] Peer status update " << info.nodeId << endl;
         status->update(info);
     }
 }
@@ -138,16 +145,17 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         if (ImportResult::Success == importResult)
             successCnt++;
         else
-            SYNCLOG(TRACE)
-                << "[Rcv] Transaction import into txPool FAILED from peer [reason/txHash/peer]: "
-                << int(importResult) << "/" << _packet.nodeId << "/" << move(tx.sha3()) << endl;
+            SYNCLOG(TRACE) << "[Rcv] [Tx] Transaction import into txPool FAILED from peer "
+                              "[reason/txHash/peer]: "
+                           << int(importResult) << "/" << _packet.nodeId << "/" << move(tx.sha3())
+                           << endl;
 
 
         m_txPool->transactionIsKonwnBy(tx.sha3(), _packet.nodeId);
     }
-    SYNCLOG(TRACE) << "[Rcv] Peer transactions import [import/rcv/txPool]: " << successCnt << "/"
-                   << itemCount << "/" << m_txPool->pendingSize() << " from " << _packet.nodeId
-                   << endl;
+    SYNCLOG(TRACE) << "[Rcv] [Tx] Peer transactions import [import/rcv/txPool]: " << successCnt
+                   << "/" << itemCount << "/" << m_txPool->pendingSize() << " from "
+                   << _packet.nodeId << endl;
 }
 
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
@@ -164,8 +172,8 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
             m_syncStatus->bq().push(block);
         }
     }
-    SYNCLOG(TRACE) << "[Rcv] Peer block receive [import/rcv/downloadBlockQueue]: " << successCnt
-                   << "/" << itemCount << "/" << m_syncStatus->bq().size() << endl;
+    SYNCLOG(TRACE) << "[Rcv] [Download] Peer block receive [import/rcv/downloadBlockQueue]: "
+                   << successCnt << "/" << itemCount << "/" << m_syncStatus->bq().size() << endl;
 }
 
 void SyncMsgEngine::sendBlocks(

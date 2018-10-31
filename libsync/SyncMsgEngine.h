@@ -66,6 +66,7 @@ private:
     bool checkMessage(dev::p2p::Message::Ptr _msg);
     bool isNewerBlock(std::shared_ptr<dev::eth::Block> block);
     bool interpret(SyncMsgPacket const& _packet);
+    void sendBlocks(NodeID _nodeId, int64_t _fromNumber, std::vector<dev::bytes> const& _blockRLPs);
 
 private:
     void onPeerStatus(SyncMsgPacket const& _packet);
