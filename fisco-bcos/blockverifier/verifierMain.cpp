@@ -25,8 +25,8 @@
 #include <libblockverifier/BlockVerifier.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/easylog.h>
-#include <libethcore/Block.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/Block.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
@@ -105,7 +105,8 @@ int main(int argc, char* argv[])
             block.appendTransaction(tx);
             auto context = blockVerifier->executeBlock(block);
             blockChain->commitBlock(block, context);
-            dev::eth::TransactionReceipt receipt = blockChain->getTransactionReceiptByHash(tx.sha3());
+            dev::eth::TransactionReceipt receipt =
+                blockChain->getTransactionReceiptByHash(tx.sha3());
             LOG(INFO) << "receipt" << receipt;
         }
     }
