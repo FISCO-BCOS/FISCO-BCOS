@@ -39,8 +39,9 @@ class FakeBlock
 {
 public:
     /// for normal case test
-    FakeBlock(size_t size)
+    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret())
     {
+        m_sec = sec;
         FakeBlockHeader();
         FakeSigList(size);
         FakeTransaction(size);
@@ -159,9 +160,9 @@ public:
         RLPStream txs;
         txs.appendList(size);
         m_transaction.resize(size);
+        fakeSingleTransaction();
         for (size_t i = 0; i < size; i++)
         {
-            fakeSingleTransaction(i);
             m_transaction[i] = m_singleTransaction;
             bytes trans_data;
             m_transaction[i].encode(trans_data);
@@ -171,7 +172,7 @@ public:
     }
 
     /// fake single transaction
-    void fakeSingleTransaction(u256 i)
+    void fakeSingleTransaction()
     {
         u256 value = u256(100);
         u256 gas = u256(100000000);
@@ -180,10 +181,7 @@ public:
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
         m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);
-        m_singleTransaction.setBlockLimit(i + u256(1));
-        KeyPair sigKeyPair = KeyPair::create();
-        SignatureStruct sig =
-            dev::sign(sigKeyPair.secret(), m_singleTransaction.sha3(WithoutSignature));
+        SignatureStruct sig = dev::sign(m_sec, m_singleTransaction.sha3(WithoutSignature));
         /// update the signature of transaction
         m_singleTransaction.updateSignature(sig);
     }
@@ -194,6 +192,7 @@ public:
     bytes& getBlockData() { return m_blockData; }
 
 public:
+    Secret m_sec;
     Block m_block;
     BlockHeader m_blockHeader;
     Transactions m_transaction;

@@ -28,9 +28,10 @@ using namespace std;
 using namespace dev;
 using namespace dev::storagestate;
 using namespace dev::executive;
-std::shared_ptr<StateFace> StorageStateFactory::getState()
+std::shared_ptr<StateFace> StorageStateFactory::getState(
+    h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory)
 {
     auto storageState = make_shared<StorageState>(m_accountStartNonce);
-    // storageState->setMemoryTableFactory(_factory);
+    storageState->setMemoryTableFactory(_factory);
     return storageState;
 }

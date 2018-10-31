@@ -35,7 +35,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(TxPoolTest, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testSessionRead)
 {
-    TxPoolFixture pool_test;
+    TxPoolFixture pool_test(5, 5);
     BOOST_CHECK(!!pool_test.m_txPool);
     BOOST_CHECK(!!pool_test.m_topicService);
     BOOST_CHECK(!!pool_test.m_blockChain);
@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_CASE(testSessionRead)
 
 BOOST_AUTO_TEST_CASE(testImportAndSubmit)
 {
-    TxPoolFixture pool_test;
+    TxPoolFixture pool_test(5, 5);
     BOOST_CHECK(!!pool_test.m_txPool);
     BOOST_CHECK(!!pool_test.m_topicService);
     BOOST_CHECK(!!pool_test.m_blockChain);
@@ -60,6 +60,9 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     Transactions trans =
         pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
             ->transactions();
+    trans[0].setBlockLimit(pool_test.m_blockChain->number() + u256(1));
+    Signature sig = sign(pool_test.m_blockChain->m_sec, trans[0].sha3(WithoutSignature));
+    trans[0].updateSignature(SignatureStruct(sig));
     bytes trans_data;
     trans[0].encode(trans_data);
     /// import invalid transaction
@@ -72,7 +75,6 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     Transactions transaction_vec =
         pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
             ->transactions();
-    Secret sec = KeyPair::create().secret();
     /// set valid nonce
     size_t i = 0;
     for (auto tx : transaction_vec)
@@ -83,7 +85,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
         tx.encode(trans_bytes2);
         BOOST_CHECK_THROW(pool_test.m_txPool->import(ref(trans_bytes2)), InvalidSignature);
         /// resignature
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
+        sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         tx.encode(trans_bytes2);
         result = pool_test.m_txPool->import(ref(trans_bytes2));
@@ -99,7 +101,8 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     }
     /// test out of limit, clear the queue
     tx.setNonce(u256(tx.nonce() + u256(10)));
-    Signature sig = sign(sec, tx.sha3(WithoutSignature));
+    tx.setBlockLimit(pool_test.m_blockChain->number() + u256(1));
+    sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
     tx.updateSignature(SignatureStruct(sig));
     tx.encode(trans_data);
     pool_test.m_txPool->setTxPoolLimit(2);

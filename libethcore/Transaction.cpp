@@ -127,8 +127,7 @@ void Transaction::encode(bytes& _trans, IncludeSignature _sig) const
     if (m_type == NullTransaction)
         return;
     _s.appendList((_sig ? 3 : 0) + 7);
-    _s << m_nonce << m_gasPrice << m_gas;
-    _s << m_blockLimit;
+    _s << m_nonce << m_gasPrice << m_gas << m_blockLimit;
     if (m_type == MessageCall)
         _s << m_receiveAddress;
     else
