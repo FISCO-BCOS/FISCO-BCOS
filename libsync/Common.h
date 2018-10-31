@@ -43,6 +43,9 @@ static size_t const c_maxDownloadingBlockQueueBufferSize = 4096;
 static int64_t const c_maxRequestBlocks = 128;
 static int64_t const c_maxCommitBlocks = 2048;
 static unsigned const c_syncPacketIDBase = 1;
+static uint64_t const c_downloadingRequestTimeout = 500;  // ms
+static size_t const c_maxPayload =
+    dev::p2p::Message::MAX_LENGTH - 2048;  // ethereum default is 256*1024(256K);
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;

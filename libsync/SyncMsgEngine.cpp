@@ -168,6 +168,26 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
                    << "/" << itemCount << "/" << m_syncStatus->bq().size() << endl;
 }
 
+void SyncMsgEngine::sendBlocks(
+    NodeID _nodeId, int64_t _fromNumber, std::vector<dev::bytes> const& _blockRLPs)
+{
+    if (0 == _blockRLPs.size())
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << _nodeId << " back[null]"
+                       << endl;
+        return;
+    }
+
+    SyncBlocksPacket retPacket;
+    retPacket.encode(_blockRLPs);
+
+    auto msg = retPacket.toMessage(m_protocolId);
+    m_service->asyncSendMessageByNodeID(_nodeId, msg);
+    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << _nodeId << " back[" << _fromNumber
+                   << ", " << _fromNumber + _blockRLPs.size() - 1 << "/ " << msg->buffer()->size()
+                   << "B]" << endl;
+}
+
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlp = _packet.rlp();
@@ -176,27 +196,38 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     int64_t from = rlp[0].toInt<int64_t>();
     unsigned size = rlp[1].toInt<unsigned>();
 
+    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block request from " << _packet.nodeId << " req["
+                   << from << ", " << from + size - 1 << "]" << endl;
+
     vector<bytes> blockRLPs;
-    for (int64_t number = from; number < from + size; ++number)
+    size_t shardSize = 0;
+    int64_t number = from;
+    for (; number < from + size; ++number)
     {
         shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
         if (!block || block->header().number() != number)
+        {
+            number++;  // to the right number when the last sendBlocks
             break;
+        }
+
+        if (block->rlp().size() > c_maxPayload)
+        {
+            SYNCLOG(FATAL)
+                << "[Rcv] [Send] [Download] Block RLP size is larger than max packet size" << endl;
+            return;
+        }
+
+        // Send blocks if packet size more than c_maxPayload
+        if (shardSize != 0 && shardSize + block->rlp().size() > c_maxPayload)
+        {
+            sendBlocks(_packet.nodeId, number, blockRLPs);
+            blockRLPs.clear();
+            shardSize = 0;
+        }
+
         blockRLPs.emplace_back(block->rlp());
+        shardSize += block->rlp().size();
     }
-
-    if (0 == blockRLPs.size())
-    {
-        SYNCLOG(TRACE) << "[Rcv] [Send] Block request from " << _packet.nodeId << " req[" << from
-                       << ", " << from + size - 1 << "] -> back[null]" << endl;
-        return;
-    }
-
-    SyncBlocksPacket retPacket;
-    retPacket.encode(blockRLPs);
-
-    m_service->asyncSendMessageByNodeID(_packet.nodeId, retPacket.toMessage(m_protocolId));
-    SYNCLOG(TRACE) << "[Rcv] [Send] Block request from " << _packet.nodeId << " req[" << from
-                   << ", " << from + size - 1 << "] -> back[" << from << ", "
-                   << from + blockRLPs.size() - 1 << "]" << endl;
+    sendBlocks(_packet.nodeId, number - 1, blockRLPs);
 }
