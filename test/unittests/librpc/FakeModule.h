@@ -120,7 +120,7 @@ public:
         extraData = bytes();
         byte b = 10;
         extraData.push_back(b);
-        blockHeader.setExtraData(extraData);
+        blockHeader.appendExtraDataArray(extraData);
         blockHeader.setGasLimit(u256(9));
         blockHeader.setGasUsed(u256(8));
         blockHeader.setTimestamp(9);
@@ -137,24 +137,23 @@ public:
 
     virtual ~MockBlockChain() {}
 
-    virtual int64_t number() const override { return m_blockNumber; }
+    virtual int64_t number() override { return m_blockNumber; }
 
     void createTransaction()
     {
         bytes rlpBytes = fromHex(
-            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-            "0000"
-            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-            "0000"
-            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-            "657c"
-            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
+            "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
+            "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
+            "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
+            "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
+            "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
+            "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
 
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
     }
-    dev::h256 numberHash(int64_t _i) const { return blockHash; }
+    dev::h256 numberHash(int64_t _i) { return blockHash; }
 
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
@@ -240,13 +239,12 @@ public:
     MockTxPool()
     {
         bytes rlpBytes = fromHex(
-            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-            "0000"
-            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-            "0000"
-            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-            "657c"
-            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
+            "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
+            "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
+            "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
+            "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
+            "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
+            "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
 
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
