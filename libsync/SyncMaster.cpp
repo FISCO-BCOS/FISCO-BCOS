@@ -273,9 +273,9 @@ void SyncMaster::maintainPeersStatus()
     }
     if (currentNumber >= maxRequestNumber)
     {
-        SYNCLOG(TRACE)
-            << "[Idle] [Download] no need to sync with blocks are in queue, currentNumber:"
-            << currentNumber << " maxRequestNumber:" << maxRequestNumber << endl;
+        SYNCLOG(TRACE) << "[Idle] [Download] no need to sync with blocks are in queue "
+                          "[currentNumber/maxRequestNumber]: "
+                       << currentNumber << "/" << maxRequestNumber << endl;
         return;  // no need to send request block packet
     }
 
@@ -283,7 +283,7 @@ void SyncMaster::maintainPeersStatus()
     size_t shardNumber =
         (maxRequestNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
     size_t shard = 0;
-    while (shard < shardNumber)
+    while (shard < shardNumber && shard < c_maxRequestShards)
     {
         bool thisTurnFound = false;
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {

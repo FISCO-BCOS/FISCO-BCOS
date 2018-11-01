@@ -50,7 +50,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 30)
+        unsigned _idleWaitMs = 200)
       : SyncInterface(),
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),

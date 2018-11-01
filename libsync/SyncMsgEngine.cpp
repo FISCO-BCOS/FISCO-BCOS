@@ -205,13 +205,17 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 void DownloadBlocksContainer::push(BlockPtr _block)
 {
     bytes blockRLP = _block->rlp();
-    if ((m_currentShardSize + blockRLP.size()) > c_maxPayload)
+    if ((m_currentShardSize + blockRLP.size()) > c_maxPayload &&
+        0 != m_blockRLPShards.back().size())
     {
         m_blockRLPShards.emplace_back(vector<bytes>());
         m_currentShardSize = 0;
     }
     m_blockRLPShards.back().emplace_back(blockRLP);
     m_currentShardSize += blockRLP.size();
+
+    // Note that: if _block->rlp().size() > c_maxPayload
+    // We also send it as a packet
 }
 
 void DownloadBlocksContainer::send(NodeID _nodeId)
@@ -226,6 +230,8 @@ void DownloadBlocksContainer::send(NodeID _nodeId)
     int64_t numberOffset = 0;
     for (vector<bytes> const& shard : m_blockRLPShards)
     {
+        if (0 == shard.size())
+            continue;
         SyncBlocksPacket retPacket;
         retPacket.encode(shard);
 
