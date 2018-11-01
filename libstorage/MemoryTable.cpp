@@ -121,10 +121,7 @@ size_t dev::storage::MemoryTable::update(
             Entry::Ptr updateEntry = entries->get(i);
             for (auto it : *(entry->fields()))
             {
-                std::string value;
-
                 records.emplace_back(i, it.first, updateEntry->getField(it.first));
-
                 updateEntry->setField(it.first, it.second);
             }
         }
@@ -228,7 +225,7 @@ size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr 
 
     entries->setDirty(true);
 
-    return 1;
+    return indexes.size();
 }
 
 h256 dev::storage::MemoryTable::hash()
@@ -439,8 +436,7 @@ void MemoryTable::checkFiled(Entry::Ptr entry)
             find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
         {
             LOG(ERROR) << "table:" << m_tableInfo->name << " doesn't have field:" << it.first;
-            throw std::invalid_argument(
-                std::string("table:") + m_tableInfo->name + " doesn't have field:" + it.first);
+            throw std::invalid_argument("Invalid key.");
         }
     }
 }
