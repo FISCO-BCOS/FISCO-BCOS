@@ -10,7 +10,7 @@
 using namespace dev;
 using namespace dev::storage;
 
-namespace test_MemoryDBFactory
+namespace test_MemoryTableFactory
 {
 class MockAMOPDB : public dev::storage::Storage
 {
@@ -34,9 +34,9 @@ public:
     virtual bool onlyDirty() override { return false; }
 };
 
-struct MemoryDBFactoryFixture
+struct MemoryTableFactoryFixture
 {
-    MemoryDBFactoryFixture()
+    MemoryTableFactoryFixture()
     {
         std::shared_ptr<MockAMOPDB> mockAMOPDB = std::make_shared<MockAMOPDB>();
 
@@ -49,18 +49,36 @@ struct MemoryDBFactoryFixture
     dev::storage::MemoryTableFactory::Ptr memoryDBFactory;
 };
 
-BOOST_FIXTURE_TEST_SUITE(MemoryDBFactory, MemoryDBFactoryFixture)
+BOOST_FIXTURE_TEST_SUITE(MemoryTableFactory, MemoryTableFactoryFixture)
 
 BOOST_AUTO_TEST_CASE(open_Table)
 {
     h256 blockHash(0x0101);
     int num = 1;
     std::string tableName("t_test");
-    std::string keyField("hash");
-    std::string valueField("hash");
+    std::string keyField("key");
+    std::string valueField("value");
     memoryDBFactory->createTable(tableName, keyField, valueField);
     MemoryTable::Ptr db =
         std::dynamic_pointer_cast<MemoryTable>(memoryDBFactory->openTable("t_test"));
+    auto entry = db->newEntry();
+    entry->setField("key", "name");
+    entry->setField("value", "Lili");
+    db->insert("name", entry);
+    entry->setField("key", "balance");
+    entry->setField("value", "500");
+    db->insert("balance", entry);
+    auto condition = db->newCondition();
+    condition->EQ("key", "name");
+    condition->NE("value", "name");
+    db->remove("name", condition);
+    condition = db->newCondition();
+    condition->EQ("key", "balance");
+    condition->GT("value", "404");
+    condition->GE("value", "404");
+    condition->LT("value", "505");
+    condition->LE("value", "505");
+    db->remove("balance", condition);
 }
 
 BOOST_AUTO_TEST_CASE(setBlockHash)
@@ -75,4 +93,4 @@ BOOST_AUTO_TEST_CASE(setBlockNum)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace test_MemoryDBFactory
+}  // namespace test_MemoryTableFactory

@@ -121,10 +121,7 @@ size_t dev::storage::MemoryTable::update(
             Entry::Ptr updateEntry = entries->get(i);
             for (auto it : *(entry->fields()))
             {
-                std::string value;
-
                 records.emplace_back(i, it.first, updateEntry->getField(it.first));
-
                 updateEntry->setField(it.first, it.second);
             }
         }
@@ -228,7 +225,7 @@ size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr 
 
     entries->setDirty(true);
 
-    return 1;
+    return indexes.size();
 }
 
 h256 dev::storage::MemoryTable::hash()

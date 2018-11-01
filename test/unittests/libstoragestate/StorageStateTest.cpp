@@ -154,10 +154,17 @@ BOOST_AUTO_TEST_CASE(Operate)
     Address addr1(0x100001);
     auto savepoint1 = m_state.savepoint();
     m_state.addBalance(addr1, u256(10));
+    m_state.addBalance(addr1, u256(10));
     m_state.commit();
     auto savepoint2 = m_state.savepoint();
     BOOST_TEST(savepoint2 > savepoint1);
+    BOOST_TEST(m_state.balance(addr1) == u256(20));
+    m_state.addBalance(addr1, u256(10));
+    BOOST_TEST(m_state.balance(addr1) == u256(30));
+    m_state.rollback(savepoint2);
+    BOOST_TEST(m_state.balance(addr1) == u256(20));
     m_state.rollback(savepoint1);
+    BOOST_TEST(m_state.addressInUse(addr1) == false);
     auto savepoint3 = m_state.savepoint();
     BOOST_TEST(savepoint3 == savepoint1);
     m_state.dbCommit(h256(), 5u);

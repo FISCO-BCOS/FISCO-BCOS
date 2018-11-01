@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(call_newEntry)
     bytes out2 = abi.abiIn("", address);
     BOOST_CHECK(out1 == out2);
 }
-/*
+
 BOOST_AUTO_TEST_CASE(call_remove)
 {
     storage::Condition::Ptr condition = std::make_shared<storage::Condition>();
@@ -137,7 +137,7 @@ BOOST_AUTO_TEST_CASE(call_remove)
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);
     BOOST_TEST_TRUE(num == 0u);
-}*/
+}
 
 BOOST_AUTO_TEST_CASE(call_update2)
 {
