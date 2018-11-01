@@ -27,6 +27,8 @@
 
 #include "StateFace.h"
 #include <libethcore/Common.h>
+#include <libstorage/MemoryTableFactory.h>
+
 namespace dev
 {
 namespace executive
@@ -36,7 +38,8 @@ class StateFactoryInterface
 public:
     StateFactoryInterface() = default;
     virtual ~StateFactoryInterface(){};
-    virtual std::shared_ptr<StateFace> getState() = 0;
+    virtual std::shared_ptr<StateFace> getState(
+        h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory) = 0;
 };
 
 }  // namespace executive

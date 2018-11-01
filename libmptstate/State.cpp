@@ -72,9 +72,12 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, Wit
 
     try
     {
-        std::unique_ptr<db::DatabaseFace> db(new db::DBImpl(path / fs::path("state")));
+        // std::unique_ptr<db::DatabaseFace> db(new db::DBImpl(path / fs::path("state")));
+        std::shared_ptr<db::DatabaseFace> db =
+            std::make_shared<db::DBImpl>(path / fs::path("state"));
+
         LOG(TRACE) << "statedb Opened state DB.";
-        return OverlayDB(std::move(db));
+        return OverlayDB(db);
     }
     catch (boost::exception const& ex)
     {

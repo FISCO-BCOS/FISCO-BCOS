@@ -12,18 +12,30 @@ class ExecutiveContextFactory : public std::enable_shared_from_this<ExecutiveCon
 {
 public:
     typedef std::shared_ptr<ExecutiveContextFactory> Ptr;
-
+    ExecutiveContextFactory()
+    {
+        m_precompiledContract.insert(std::make_pair(
+            dev::Address(1), dev::eth::PrecompiledContract(
+                                 3000, 0, dev::eth::PrecompiledRegistrar::executor("ecrecover"))));
+        m_precompiledContract.insert(std::make_pair(
+            dev::Address(2), dev::eth::PrecompiledContract(
+                                 60, 12, dev::eth::PrecompiledRegistrar::executor("sha256"))));
+        m_precompiledContract.insert(std::make_pair(
+            dev::Address(3), dev::eth::PrecompiledContract(
+                                 600, 120, dev::eth::PrecompiledRegistrar::executor("ripemd160"))));
+        m_precompiledContract.insert(std::make_pair(
+            dev::Address(4), dev::eth::PrecompiledContract(
+                                 15, 3, dev::eth::PrecompiledRegistrar::executor("identity"))));
+    };
     virtual ~ExecutiveContextFactory(){};
 
-    virtual void initExecutiveContext(BlockInfo blockInfo, ExecutiveContext::Ptr context);
+    virtual void initExecutiveContext(
+        BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context);
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
 
     virtual void setStateFactory(
         std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface);
-
-    void setPrecompiledContract(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
 
 private:
     dev::storage::Storage::Ptr m_stateStorage;

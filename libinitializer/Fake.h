@@ -69,13 +69,13 @@ public:
 
     ~FakeBlockChain() {}
 
-    int64_t number() const
+    int64_t number()
     {
         ReadGuard l(x_blockChain);
         return m_blockChain.size() - 1;
     }
 
-    dev::h256 numberHash(int64_t _i) const
+    dev::h256 numberHash(int64_t _i)
     {
         ReadGuard l(x_blockChain);
         return m_blockChain[_i]->headerHash();

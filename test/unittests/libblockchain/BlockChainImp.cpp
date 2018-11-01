@@ -42,9 +42,9 @@ namespace dev
 namespace test
 {
 //   const std::string m_extraDbName_currentState = "currentState";
-//   const std::string m_keyValue_currentNumber = "currentNumber";
-//   const std::string m_ValueName_currentNumber = "value";
-//   const std::string m_ValueName = "value";
+//   const std::string SYS_KEY_CURRENT_NUMBER = "currentNumber";
+//   const std::string SYS_VALUE = "value";
+//   const std::string SYS_VALUE = "value";
 //   const std::string m_txHash2Block = "txHash2Block";
 //   const std::string m_number2hash = "number2hash";
 //   const std::string m_hash2Block = "hash2Block";
@@ -56,25 +56,25 @@ public:
 
     Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
-        std::cout << "key " << key << " table " << m_table << std::endl;
+        // std::cout << "key " << key << " table " << m_table << std::endl;
         Entries::Ptr entries = std::make_shared<Entries>();
         Entry::Ptr entry = std::make_shared<Entry>();
 
-        if (m_table == "currentState" && key == "currentNumber")
+        if (m_table == "_sys_current_state_" && key == "current_number")
         {
             entry->setField("value", "1");
         }
-        else if (m_table == "number2hash" && key == "1")
+        else if (m_table == "_sys_number_2_hash_" && key == "1")
         {
             entry->setField(
                 "value", "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
         }
-        else if (m_table == "hash2Block" &&
+        else if (m_table == "_sys_hash_2_block_" &&
                  key == "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e")
         {
             entry->setField("value", toHexPrefixed(m_fakeBlock->getBlockData()));
         }
-        else if (m_table == "txHash2Block" &&
+        else if (m_table == "_sys_tx_hash_2_block_" &&
                  key == "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e")
         {
             entry->setField("value", "1");
@@ -111,20 +111,35 @@ public:
     std::shared_ptr<FakeBlock> m_fakeBlock;
 };
 
+class MockBlockChainImp : public BlockChainImp
+{
+public:
+    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory() override
+    {
+        return m_memoryTableFactory;
+    }
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> _m)
+    {
+        m_memoryTableFactory = _m;
+    }
+    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+};
+
+
 struct MemoryTableFactoryFixture
 {
     MemoryTableFactoryFixture()
     {
         m_executiveContext = std::make_shared<ExecutiveContext>();
-        m_blockChainImp = std::make_shared<BlockChainImp>();
+        m_blockChainImp = std::make_shared<MockBlockChainImp>();
         m_fakeBlock = std::make_shared<FakeBlock>(5);
         std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory =
             std::make_shared<MockMemoryTableFactory>();
         mockMemoryTableFactory->setFakeBlock(m_fakeBlock);
         m_blockChainImp->setMemoryTableFactory(mockMemoryTableFactory);
-        std::cout << "blockChainImp " << m_blockChainImp << std::endl;
+        // std::cout << "blockChainImp " << m_blockChainImp << std::endl;
     }
-    std::shared_ptr<BlockChainImp> m_blockChainImp;
+    std::shared_ptr<MockBlockChainImp> m_blockChainImp;
     std::shared_ptr<FakeBlock> m_fakeBlock;
     std::shared_ptr<ExecutiveContext> m_executiveContext;
 };
@@ -136,7 +151,7 @@ BOOST_FIXTURE_TEST_SUITE(BlockChainImp1, MemoryTableFactoryFixture);
 BOOST_AUTO_TEST_CASE(testnumber)
 {
     // int64_t number() const override;
-    std::cout << "testnumber " << m_blockChainImp << std::endl;
+    // std::cout << "testnumber " << m_blockChainImp << std::endl;
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 1);
 }
 
@@ -151,19 +166,25 @@ BOOST_AUTO_TEST_CASE(number2hash)
 
 BOOST_AUTO_TEST_CASE(getBlockByHash)
 {
-    // std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> bptr = m_blockChainImp->getBlockByHash(
         h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
-    std::cout << " h256 "
-              << h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e").hex()
-              << std::endl;
+    // std::cout << " h256 "
+    //          << h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e").hex()
+    //          << std::endl;
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), m_fakeBlock->getBlock().getTransactionSize());
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), 5);
 }
 
+BOOST_AUTO_TEST_CASE(getLocalisedTxByHash)
+{
+    Transaction tx = m_blockChainImp->getLocalisedTxByHash(
+        h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
+    BOOST_CHECK_EQUAL(tx.sha3(), m_fakeBlock->m_transaction[0].sha3());
+}
+
+
 BOOST_AUTO_TEST_CASE(getTxByHash)
 {
-    // dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
     Transaction tx = m_blockChainImp->getTxByHash(
         h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
     BOOST_CHECK_EQUAL(tx.sha3(), m_fakeBlock->m_transaction[0].sha3());
@@ -171,7 +192,7 @@ BOOST_AUTO_TEST_CASE(getTxByHash)
 
 BOOST_AUTO_TEST_CASE(commitBlock)
 {
-    m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
+    // m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
