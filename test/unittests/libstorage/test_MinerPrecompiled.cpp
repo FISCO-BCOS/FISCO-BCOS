@@ -65,7 +65,6 @@ BOOST_AUTO_TEST_CASE(call_add)
     BOOST_TEST(entries->size() == 1u);
 }
 
-
 BOOST_AUTO_TEST_CASE(call_remove)
 {
     eth::ContractABI abi;

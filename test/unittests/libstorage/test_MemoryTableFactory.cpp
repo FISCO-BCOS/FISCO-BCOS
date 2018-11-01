@@ -84,10 +84,19 @@ BOOST_AUTO_TEST_CASE(open_Table)
     condition = table->newCondition();
     condition->EQ("key", "balance");
     condition->GT("value", "404");
-    condition->GE("value", "404");
+    table->select("balance", condition);
+    condition = table->newCondition();
+    condition->EQ("key", "balance");
+    condition->GE("value", "403");
+    table->select("balance", condition);
+    condition = table->newCondition();
+    condition->EQ("key", "balance");
     condition->LT("value", "505");
-    condition->LE("value", "505");
-    table->remove("balance", condition);
+    table->select("balance", condition);
+    condition = table->newCondition();
+    condition->EQ("key", "balance");
+    condition->LE("value", "504");
+    table->select("balance", condition);
     memoryDBFactory->commitDB(h256(0), 2);
 }
 
