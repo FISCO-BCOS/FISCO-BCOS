@@ -41,17 +41,17 @@ class AsioInterface
 {
 public:
     /// CompletionHandler
-    typedef std::function<void()> Base_Handler;
+    typedef boost::function<void()> Base_Handler;
     /// accept handler
-    typedef std::function<void(const boost::system::error_code&)> Handler_Type;
+    typedef boost::function<void(const boost::system::error_code)> Handler_Type;
     /// write handler
-    typedef std::function<void(const boost::system::error_code&, std::size_t)> ReadWriteHandler;
-    typedef std::function<bool(bool, boost::asio::ssl::verify_context&)> VerifyCallback;
+    typedef boost::function<void(const boost::system::error_code, std::size_t)> ReadWriteHandler;
+    typedef boost::function<bool(bool, boost::asio::ssl::verify_context&)> VerifyCallback;
 
     virtual ~AsioInterface() {};
 
     /// default implemetation of async_accept
-    virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace>& socket,
+    virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace> socket,
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code())
     {
@@ -59,15 +59,15 @@ public:
     }
 
     /// default implementation of async_connect
-    virtual void async_connect(std::shared_ptr<SocketFace>& socket,
-        boost::asio::io_service::strand& m_strand, const bi::tcp::endpoint& peer_endpoint,
+    virtual void async_connect(std::shared_ptr<SocketFace> socket,
+        boost::asio::io_service::strand& m_strand, const bi::tcp::endpoint peer_endpoint,
         Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
     {
         socket->ref().async_connect(peer_endpoint, m_strand.wrap(handler));
     }
 
     /// default implementation of async_write
-    virtual void async_write(std::shared_ptr<SocketFace> const& socket,
+    virtual void async_write(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler,
         std::size_t transferred_bytes = 0,
         boost::system::error_code ec = boost::system::error_code())
@@ -76,7 +76,7 @@ public:
     }
 
     /// default implementation of async_read
-    virtual void async_read(std::shared_ptr<SocketFace> const& socket,
+    virtual void async_read(std::shared_ptr<SocketFace> socket,
         boost::asio::io_service::strand& m_strand, boost::asio::mutable_buffers_1 buffers,
         ReadWriteHandler handler, std::size_t transferred_bytes = 0,
         boost::system::error_code ec = boost::system::error_code())
@@ -85,7 +85,7 @@ public:
     }
 
     /// default implementation of async_read_some
-    virtual void async_read_some(std::shared_ptr<SocketFace> const& socket,
+    virtual void async_read_some(std::shared_ptr<SocketFace> socket,
         boost::asio::io_service::strand& m_strand, boost::asio::mutable_buffers_1 buffers,
         ReadWriteHandler handler, std::size_t transferred_bytes = 0,
         boost::system::error_code ec = boost::system::error_code())
@@ -94,8 +94,8 @@ public:
     }
 
     /// default implementation of async_handshake
-    virtual void async_handshake(std::shared_ptr<SocketFace> const& socket,
-        boost::asio::io_service::strand& m_strand, ba::ssl::stream_base::handshake_type const& type,
+    virtual void async_handshake(std::shared_ptr<SocketFace> socket,
+        boost::asio::io_service::strand& m_strand, ba::ssl::stream_base::handshake_type type,
         Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
     {
         socket->sslref().async_handshake(type, m_strand.wrap(handler));
@@ -110,7 +110,7 @@ public:
     }
     /// default implementation of set_verify_callback
     virtual void set_verify_callback(
-        std::shared_ptr<SocketFace> const& socket, VerifyCallback callback, bool verify_succ = true)
+        std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool verify_succ = true)
     {
         socket->sslref().set_verify_callback(callback);
     }

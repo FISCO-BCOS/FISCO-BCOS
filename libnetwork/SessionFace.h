@@ -27,61 +27,44 @@
  */
 
 #pragma once
-#include <libdevcore/ThreadPool.h>
 #include <memory>
 namespace dev
 {
 namespace p2p
 {
-class Peer;
-class P2PMsgHandler;
+
+#define CallbackFunc std::function<void(NetworkException, Message::Ptr)>
+#define CallbackFuncWithSession \
+    std::function<void(NetworkException, std::shared_ptr<dev::p2p::Session>, Message::Ptr)>
+
+struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
+{
+    typedef std::shared_ptr<ResponseCallback> Ptr;
+
+    uint64_t m_startTime;
+    CallbackFunc callbackFunc;
+    std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
+};
+
 class SessionFace
 {
 public:
-    virtual ~SessionFace(){};
+    SessionFace();
+    virtual ~SessionFace() {};
+
+    typedef std::shared_ptr<SessionFace> Ptr;
 
     virtual void start() = 0;
-
     virtual void disconnect(DisconnectReason _reason) = 0;
 
     virtual bool isConnected() const = 0;
 
-    virtual NodeID id() const = 0;
-
-    virtual PeerSessionInfo info() const = 0;
-
-    virtual std::chrono::steady_clock::time_point connectionTime() = 0;
-
-    virtual std::shared_ptr<Peer> peer() const = 0;
-
-    virtual std::chrono::steady_clock::time_point lastReceived() const = 0;
-
-    virtual void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> _p2pMsgHandler) = 0;
-
-    virtual void send(P2PMessage::Ptr message) = 0;
-    virtual void send(std::shared_ptr<bytes> _msg) = 0;
-
-    ///< interface to set and get topicSeq
-    virtual void setTopicSeq(uint32_t _topicSeq) = 0;
-    virtual uint32_t topicSeq() const = 0;
-
-    ///< interface to set and get topics
-    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
-    virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
-
-    ///< Add, Get, Erase interface of seq2Callback.
-    ///< The return true indicates that the operation was successful.
-    ///< The return false indicates that the operation failed.
-    virtual bool addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callback) = 0;
-    virtual ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) = 0;
-    virtual bool eraseCallbackBySeq(uint32_t seq) = 0;
+    virtual void asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc()) = 0;
+    virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
-    virtual MessageFactory::Ptr messageFactory() const = 0;
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
-
-    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) = 0;
+    virtual bool actived() const = 0;
 };
-}  // namespace p2p
-}  // namespace dev
+}
+}

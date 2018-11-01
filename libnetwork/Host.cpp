@@ -50,10 +50,12 @@
 #include <mutex>
 #include <set>
 #include <thread>
+#include <functional>
 
 #include "Common.h"
 #include "ParseCert.h"
 #include "Session.h"
+
 using namespace std;
 using namespace dev;
 using namespace dev::p2p;
@@ -63,45 +65,9 @@ namespace dev
 {
 namespace p2p
 {
-/// Interval at which Host::run will call keepAlivePeers to ping peers.
-std::chrono::seconds const c_keepAliveInterval = std::chrono::seconds(30);
-std::chrono::seconds const c_reconnectNodesInterval = std::chrono::seconds(60);
-std::chrono::seconds const c_sendTopicSeqInterval = std::chrono::seconds(10);
-
-/// Disconnect timeout after failure to respond to keepAlivePeers ping.
-std::chrono::milliseconds const c_keepAliveTimeOut = std::chrono::milliseconds(1000);
-
-#if 0
-Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
-    shared_ptr<AsioInterface>& _asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-    shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext)
-  : Worker("p2p", 0),
-    m_clientVersion(_clientVersion),
-    m_netConfigs(_n),
-    m_ifAddresses(Network::getInterfaceAddresses()),
-    m_ioService(2),
-    m_tcp4Acceptor(m_ioService),
-    m_alias(_alias),
-    m_lastPing(chrono::steady_clock::time_point::min()),
-    m_lastReconnect(chrono::steady_clock::time_point::min()),
-    m_strand(m_ioService),
-    m_listenPort(_n.listenPort),
-    m_asioInterface(_asioInterface),
-    m_socketFactory(_socketFactory),
-    m_sessionFactory(_sessionFactory),
-    m_sslContext(_sslContext),
-    m_lastSendTopicSeq(std::chrono::milliseconds(0)),
-    m_topicSeq(0)
-{
-    LOG(INFO) << "Id:" << id();
-    //m_topics = std::make_shared<std::vector<std::string>>();
-}
-#endif
-
-/// destructor function
 Host::~Host()
 {
-    //stop();
+    stop();
 }
 
 /**
@@ -118,7 +84,7 @@ void Host::startAccept(boost::system::error_code boost_error)
     /// accept the connection
     if (m_run)
     {
-        LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_tcpPublic
+        LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_listenHost
                   << "), P2P Start Accept";
         std::shared_ptr<SocketFace> socket =
             m_socketFactory->create_socket(*m_ioService, *m_sslContext, NodeIPEndpoint());
@@ -144,7 +110,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 LOG(DEBUG) << "client port:" << endpoint.port()
                            << "|ip:" << endpoint.address().to_string();
                 LOG(DEBUG) << "server port:" << m_listenPort
-                           << "|ip:" << m_tcpPublic.address().to_string();
+                           << "|ip:" << m_listenHost;
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->set_verify_callback(socket, newVerifyCallback(endpointPublicKey));
@@ -175,11 +141,12 @@ bool Host::isExpired(ba::ssl::verify_context& ctx)
 std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCallback(
     std::shared_ptr<std::string> nodeIDOut)
 {
-    return [nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
+    auto host = shared_from_this();
+    return [host, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
         try
         {
             /// check certificate expiration
-            if (Host::isExpired(ctx))
+            if (host->isExpired(ctx))
             {
                 LOG(ERROR) << "The Certificate has been expired";
                 return false;
@@ -279,52 +246,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
 
         startAccept();
     }
-
-#if 0
-    /// forbid connect to node-self
-    if (node_id == id())
-    {
-        LOG(TRACE) << "Disconnect self" << node_id;
-        socket->close();
-        return;
-    }
-    bool success = false;
-    try
-    {
-        /// start peer session
-        startPeerSession(node_id, socket);
-        success = true;
-    }
-    catch (Exception const& _e)
-    {
-        LOG(ERROR) << "ERROR: " << diagnostic_information(_e);
-    }
-    catch (std::exception const& _e)
-    {
-        LOG(ERROR) << "ERROR: " << _e.what();
-    }
-    if (!success)
-        socket->close();
-    /// repeat runAcceptor procedure after start peer session
-    startAccept();
-#endif
 }
-
-#if 0
-void Host::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId)
-{
-    /// update the staticNodes
-    NodeIPEndpoint endpoint(
-        _s->remoteEndpoint().address(), _s->remoteEndpoint().port(), _s->remoteEndpoint().port());
-    auto it = m_staticNodes.find(endpoint);
-    /// modify m_staticNodes(including accept cases, namely the client endpoint)
-    if (it != m_staticNodes.end())
-    {
-        LOG(DEBUG) << "### update m_staticNodes to:" << toHex(nodeId);
-        it->second = nodeId;
-    }
-}
-#endif
 
 /**
  * @brief: start peer sessions after handshake succeed(called by RLPxHandshake),
@@ -338,7 +260,7 @@ void Host::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const
  *              now include protocolVersion, clientVersion, caps and listenPort
  * @param _s : connected socket(used to init session object)
  */
-void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket, std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> handler)
+void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket, std::function<void(NetworkException, std::shared_ptr<SessionFace>)> handler)
 {
     shared_ptr<Peer> p;
     NodeIPEndpoint nodeIPEndpoint;
@@ -352,15 +274,11 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
     p->setEndpoint(remote_endpoint);
 
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
-    std::shared_ptr<SessionFace> ps = m_sessionFactory->create_session(weakHost, socket, p,
-        PeerSessionInfo(
-            {nodeID, p->endpoint().address.to_string(), chrono::steady_clock::duration(), 0}),
-        m_messageFactory);
+    std::shared_ptr<SessionFace> ps = m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
 
-    ps->setThreadPool(m_threadPool);
-
-    m_threadPool->enqueue([ps, m_connectionHandler]() {
-        m_connectionHandler(ps);
+    auto connectionHandler = m_connectionHandler;
+    m_threadPool->enqueue([ps, connectionHandler]() {
+        connectionHandler(NetworkException(0, ""), ps);
     });
 
     LOG(INFO) << "start a new peer: " << nodeID;
@@ -401,154 +319,11 @@ void Host::start(boost::system::error_code const&)
                 if (m_ioService->stopped())
                     m_ioService->reset();
             }
+
+            LOG(WARNING) << "Host exit";
         };
-
-#if 0
-        /// modify alived peers to m_peers
-        keepAlivePeers();
-        /// reconnect all nodes recorded in m_staticNodes periodically
-        reconnectAllNodes();
-        /// send my topic seq to all sessions periodically
-        sendTopicSeq();
-        auto runcb = [this](boost::system::error_code const& error) { start(error); };
-        m_timer->expires_from_now(boost::posix_time::milliseconds(c_timerInterval));
-        m_asioInterface->async_wait(m_timer.get(), m_strand, runcb);
-#endif
     }
 }
-
-#if 0
-/**
- * @brief: drop the unconnected/invalid sessions periodically(c_keepAliveInterval)
- *         and update the peers correspondingly
- */
-void Host::keepAlivePeers()
-{
-    auto now = chrono::steady_clock::now();
-    if ((now - c_keepAliveInterval < m_lastPing) && (!m_reconnectnow))
-        return;
-    RecursiveGuard l(x_sessions);
-    /// update m_sessions by excluding unconnected/invalid sessions
-    for (auto it = m_sessions.begin(); it != m_sessions.end();)
-    {
-        auto p = it->second;
-        /// ping connected sessions
-        if (p->isConnected())
-        {
-            ++it;
-        }
-        /// erase unconnected sessions
-        else
-        {
-            if (m_peers.count(p->info().id))
-                m_peers.erase(p->info().id);
-            LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << p->id();
-            it = m_sessions.erase(it);
-        }
-    }
-    /// update peers according the current-alive sessions
-    for (auto it = m_peers.begin(); it != m_peers.end();)
-    {
-        if (!havePeerSession(it->second->id()))
-        {
-            LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << it->second->id() << ","
-                         << it->second->endpoint().name();
-            it = m_peers.erase(it);
-        }
-        else
-            ++it;
-    }
-    /// update the timer
-    m_lastPing = chrono::steady_clock::now();
-}
-#endif
-
-#if 0
-/**
- * @brief : reconnect to all unconnected peers recorded in m_staticNodes
- * @attention: how to avoid repeated connection:
- *   1. modify [endpoint(both client-endpoint and server-endpoint), nodeid] map when call
- * startPeerSession
- *   2. go through m_staticNodes to avoid repeated connection according to node-id
- */
-void Host::reconnectAllNodes()
-{
-    if (chrono::steady_clock::now() - c_reconnectNodesInterval < m_lastReconnect)
-        return;
-    RecursiveGuard l(x_sessions);
-    LOG(TRACE) << "Try reconnect all node: " << m_staticNodes.size();
-    /// try to connect to nodes recorded in configurations
-    for (auto it : m_staticNodes)
-    {
-        LOG(DEBUG) << "try connect: " << it.first.address.to_string() << ":" << it.first.tcpPort;
-        /// exclude myself
-        if (((!m_netConfigs.listenIPAddress.empty() &&
-                 it.first.address ==
-                     boost::asio::ip::address::from_string(m_netConfigs.listenIPAddress)) ||
-                (!m_netConfigs.publicIPAddress.empty() &&
-                    it.first.address ==
-                        boost::asio::ip::address::from_string(m_netConfigs.publicIPAddress)) ||
-                m_ifAddresses.find(it.first.address) != m_ifAddresses.end() ||
-                it.first.address == m_tcpPublic.address() ||
-                it.first.address == m_tcpClient.address()) &&
-            it.first.tcpPort == m_netConfigs.listenPort)
-        {
-            if (it.second == NodeID())
-                it.second = id();
-            LOG(DEBUG) << "Ignore connect self" << it.first;
-            continue;
-        }
-        if (it.second == id())
-        {
-            LOG(DEBUG) << "Ignore connect self: " << it.first;
-            continue;
-        }
-        LOG(DEBUG) << "##### determine node id:" << toHex(it.second);
-        LOG(DEBUG) << "##### determine node id, isconnected:" << isConnected(it.second);
-        /// use node id as the key to avoid repeated connection
-        if (it.second != NodeID() && isConnected(it.second))
-        {
-            LOG(DEBUG) << "Ignore connected node: " << it.second;
-            continue;
-        }
-        if (it.first.address.to_string().empty())
-        {
-            LOG(INFO) << "Target Node Ip Is Empty  (" << it.first.name() << ")";
-            continue;
-        }
-        asyncConnect(it.first);
-    }
-    m_lastReconnect = chrono::steady_clock::now();
-}
-#endif
-
-#if 0
-void Host::sendTopicSeq()
-{
-    if (chrono::steady_clock::now() - c_sendTopicSeqInterval < m_lastSendTopicSeq)
-        return;
-    LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
-
-    P2PMessage::Ptr msg = std::make_shared<P2PMessage>();
-    msg->setProtocolID(dev::eth::ProtocolID::AMOP);
-    msg->setPacketType(AMOPPacketType::SendTopicSeq);
-    std::string s = to_string(m_topicSeq);
-    std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-    buffer->assign(s.begin(), s.end());
-    msg->setBuffer(buffer);
-    msg->setLength(P2PMessage::HEADER_LENGTH + msg->buffer()->size());
-    std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
-    msg->encode(*msgBuf);
-
-    /// Send my current topic seq to all nodes
-    {
-        RecursiveGuard l(x_sessions);
-        for (auto const& i : sessions())
-            i.second->send(msgBuf);
-    }
-    m_lastSendTopicSeq = chrono::steady_clock::now();
-}
-#endif
 
 /**
  * @brief : connect to the server
@@ -556,16 +331,17 @@ void Host::sendTopicSeq()
  */
 void Host::asyncConnect(
         NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> callback,
-        boost::system::error_code boost_error)
+        std::function<void(NetworkException, std::shared_ptr<SessionFace>)> callback)
 {
-    if (!m_run)
+    if (!m_run) {
         return;
+    }
+
     {
-        /// update the pending connections
         Guard l(x_pendingNodeConns);
-        if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
+        if (m_pendingPeerConns.count(_nodeIPEndpoint.name())) {
             return;
+        }
         m_pendingPeerConns.insert(_nodeIPEndpoint.name());
     }
     LOG(INFO) << "Attempting connection to node "
@@ -595,11 +371,10 @@ void Host::asyncConnect(
                 m_asioInterface->set_verify_callback(socket, newVerifyCallback(endpointPublicKey));
                 /// call handshakeClient after handshake succeed
                 m_asioInterface->async_handshake(socket, *m_strand, ba::ssl::stream_base::client,
-                    boost::bind(&Host::handshakeClient, this, ba::placeholders::error, socket,
+                    boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error, socket,
                         endpointPublicKey, callback, _nodeIPEndpoint));
             }
-        },
-        boost_error);
+        });
 }
 
 /**
@@ -611,8 +386,8 @@ void Host::asyncConnect(
  */
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
-    std::function<void(boost::system::error_code, std::shared_ptr<SessionFace>)> callback,
-    NodeIPEndpoint& _nodeIPEndpoint)
+    std::function<void(NetworkException, std::shared_ptr<SessionFace>)> callback,
+    NodeIPEndpoint _nodeIPEndpoint)
 {
     if(m_run) {
        std::string node_id_str(*endpointPublicKey);
@@ -627,41 +402,6 @@ void Host::handshakeClient(const boost::system::error_code& error,
 
        startPeerSession(nodeID, socket, callback);
    }
-#if 0
-    /// get the node id of the server
-    dev::p2p::NodeID node_id(*endpointPublicKey);
-    if (error)
-    {
-        Guard l(x_pendingNodeConns);
-        m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-        LOG(ERROR) << "P2P Handshake failed:" << error.message();
-        socket->close();
-        return;
-    }
-    /// avoid to connect to node-self
-    if (node_id == id())
-    {
-        // connect to myself
-        LOG(TRACE) << "Disconnect self" << _nodeIPEndpoint;
-        Guard l(x_pendingNodeConns);
-        m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-
-        RecursiveGuard m(x_sessions);
-        /// obtain the node id of specified connect when handshakeClient
-        auto it = m_staticNodes.find(_nodeIPEndpoint);
-        if (it != m_staticNodes.end())
-        {
-            LOG(DEBUG) << "### modify node id of m_staticNodes:" << toHex(node_id);
-            it->second = node_id;  // modify node ID
-        }
-        socket->close();
-        return;
-    }
-    /// start handshake
-    startPeerSession(node_id, socket);
-    Guard l(x_pendingNodeConns);
-    m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-#endif
 }
 
 /// stop the network and worker thread
@@ -682,72 +422,7 @@ void Host::stop()
         m_acceptor->close();
         m_ioService->stop();
     }
-#if 0
-    // stop worker thread
-    if (isWorking())
-        stopWorking();
-#endif
 }
-
-#if 0
-/// clean resources (include both network, socket resources) when stop working
-void Host::doneWorking()
-{
-    try
-    {
-        // reset ioservice (cancels all timers and allows manually polling network, below)
-        m_ioService->reset();
-        // shutdown acceptor
-        if (m_tcp4Acceptor.is_open())
-        {
-            m_tcp4Acceptor.cancel();
-            m_tcp4Acceptor.close();
-        }
-        while (m_accepting)
-            m_ioService.poll();
-        // disconnect peers
-        for (unsigned n = 0;; n = 0)
-        {
-            DEV_RECURSIVE_GUARDED(x_sessions)
-            for (auto i : m_sessions)
-            {
-                auto p = i.second;
-                if (p->isConnected())
-                {
-                    p->disconnect(ClientQuit);
-                    n++;
-                }
-            }
-            if (!n)
-                break;
-            // poll so that peers send out disconnect packets
-            m_ioService.poll();
-        }
-        // stop network (again; helpful to call before subsequent reset())
-        m_ioService.stop();
-        // reset network (allows reusing ioservice in future)
-        m_ioService.reset();
-        /// disconnect all sessions by callback keepAlivePeers
-        reconnectNow();
-        keepAlivePeers();
-    }
-    catch (std::exception& err)
-    {
-        LOG(ERROR) << "callback doneWorking failed, error message:" << err.what();
-    }
-}
-
-bytes Host::saveNetwork() const
-{
-    RLPStream ret(3);
-    ret << m_alias.secret().ref();
-    int count = 0;
-    ret.appendList(count);
-    /*if (!!count)
-        ret.appendRaw(network.out(), count);*/
-    return ret.out();
-}
-#endif
 
 }  // namespace p2p
 }  // namespace dev

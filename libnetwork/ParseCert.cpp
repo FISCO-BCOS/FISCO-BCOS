@@ -35,11 +35,11 @@ bool ParseCert::isExpire() const
 {
     return m_isExpire;
 }
-string ParseCert::serialNumber() const
+std::string ParseCert::serialNumber() const
 {
     return m_serialNumber;
 }
-string ParseCert::subjectName() const
+std::string ParseCert::subjectName() const
 {
     return m_subjectName;
 }

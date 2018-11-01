@@ -117,9 +117,9 @@ enum PacketDecodeStatus
 
 struct Options
 {
-    uint32_t subTimeout;  ///< The timeout value of every node, used in send message to topic, in
+    uint32_t subTimeout = 0;  ///< The timeout value of every node, used in send message to topic, in
                           ///< milliseconds.
-    uint32_t timeout;     ///< The timeout value of async function, in milliseconds.
+    uint32_t timeout = 0;     ///< The timeout value of async function, in milliseconds.
 };
 
 class Message: public std::enable_shared_from_this<Message> {

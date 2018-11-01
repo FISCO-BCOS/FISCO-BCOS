@@ -34,21 +34,21 @@ public:
     /// < protocolID stored in Message struct
     virtual P2PMessage::Ptr sendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message,
-        CallbackFunc callback = [](NetworkException e, P2PMessage::Ptr msg) {},
+    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+        CallbackFunc callback = [](NetworkException e, Message::Ptr msg) {},
         Options const& options = Options()) = 0;
 
-    virtual P2PMessage::Ptr sendMessageByTopic(std::string const& topic, P2PMessage::Ptr message) = 0;
+    virtual Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
-    virtual void asyncSendMessageByTopic(std::string const& topic, P2PMessage::Ptr message,
+    virtual void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
         CallbackFunc callback, Options const& options) = 0;
 
-    virtual void asyncMulticastMessageByTopic(std::string const& topic, P2PMessage::Ptr message) = 0;
+    virtual void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
     virtual void asyncMulticastMessageByNodeIDList(
-        NodeIDs const& nodeIDs, P2PMessage::Ptr message) = 0;
+        NodeIDs const& nodeIDs, Message::Ptr message) = 0;
 
-    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, Options const& options) = 0;
+    virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
@@ -77,8 +77,6 @@ public:
     ///< interface to set and get topics
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
     virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
-
-    virtual void setMessageFactory(P2PMessageFactory::Ptr _messageFactory) = 0;
 };
 
 }  // namespace p2p

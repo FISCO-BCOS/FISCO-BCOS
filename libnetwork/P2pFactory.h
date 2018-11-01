@@ -34,6 +34,8 @@ class Host;
 class SocketFactory
 {
 public:
+    virtual ~SocketFactory() {};
+
     virtual std::shared_ptr<SocketFace> create_socket(ba::io_service& _ioService,
         ba::ssl::context& _sslContext, NodeIPEndpoint _nodeIPEndpoint = NodeIPEndpoint())
     {
@@ -47,14 +49,17 @@ public:
 class SessionFactory
 {
 public:
+    virtual ~SessionFactory() {};
+
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
-        std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
-        PeerSessionInfo _info, MessageFactory::Ptr _messageFactory)
+        std::shared_ptr<SocketFace> const& _socket,
+        MessageFactory::Ptr _messageFactory)
     {
-        std::shared_ptr<SessionFace> m_session =
-            std::make_shared<Session>(_server, _socket, _peer, _info);
-        m_session->setMessageFactory(_messageFactory);
-        return m_session;
+        std::shared_ptr<Session> session = std::make_shared<Session>();
+        session->setServer(_server);
+        session->setSocket(_socket);
+        session->setMessageFactory(_messageFactory);
+        return session;
     }
 };
 

@@ -28,10 +28,10 @@
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-#include "../../../libnetwork/Host.h"
-#include "../../../libnetwork/P2pFactory.h"
-#include "../../../libnetwork/Session.h"
-#include "../../../libnetwork/SessionFace.h"
+#include <libnetwork/Host.h>
+#include <libnetwork/P2pFactory.h>
+#include <libnetwork/Session.h>
+#include <libnetwork/SessionFace.h>
 
 using namespace dev;
 using namespace dev::p2p;
@@ -47,7 +47,7 @@ public:
         std::shared_ptr<SocketFace> const& _socket = nullptr)
       : m_host(_server), m_peer(_n), m_info(_info)
     {
-        m_ping = m_lastReceived = m_connectionTime = chrono::steady_clock::now();
+        m_ping = m_lastReceived = m_connectionTime = std::chrono::steady_clock::now();
         m_disconnect = false;
         std::shared_ptr<dev::ThreadPool> threadPool =
             std::make_shared<ThreadPool>("SessionCallBackThreadPool", 1);

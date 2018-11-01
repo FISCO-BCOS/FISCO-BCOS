@@ -33,8 +33,8 @@ public:
     ParseCert(ba::ssl::verify_context& ctx);
     ~ParseCert();
     bool isExpire() const;
-    string serialNumber() const;
-    string subjectName() const;
+    std::string serialNumber() const;
+    std::string subjectName() const;
     /// set interfaces
     void setSubjectName(std::string const& _subjectName) { m_subjectName = _subjectName; }
     void setExpiration(bool const isExpired) { m_isExpire = isExpired; }
@@ -50,8 +50,8 @@ private:
     time_t ASN1_TIME_get(ASN1_TIME* a, int* err);
 
     bool m_isExpire;        // the certificate is expired or not
-    string m_serialNumber;  // serial number of the certificate
+    std::string m_serialNumber;  // serial number of the certificate
     int m_certType;         // type of the certificate (include CA and user certificate)
-    string m_subjectName;   // subject of the certificate (0 represents CA, 1 represents user
+    std::string m_subjectName;   // subject of the certificate (0 represents CA, 1 represents user
                             // certificate)
 };

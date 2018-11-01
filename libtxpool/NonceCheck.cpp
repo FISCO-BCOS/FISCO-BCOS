@@ -48,7 +48,7 @@ bool NonceCheck::ok(Transaction const& _transaction, bool _needinsert)
 {
     DEV_WRITE_GUARDED(m_lock)
     {
-        string key = this->generateKey(_transaction);
+        std::string key = this->generateKey(_transaction);
         auto iter = m_cache.find(key);
         if (iter != m_cache.end())
             return false;
@@ -66,7 +66,7 @@ void NonceCheck::delCache(Transactions const& _transcations)
     {
         for (unsigned i = 0; i < _transcations.size(); i++)
         {
-            string key = this->generateKey(_transcations[i]);
+            std::string key = this->generateKey(_transcations[i]);
             auto iter = m_cache.find(key);
             if (iter != m_cache.end())
                 m_cache.erase(iter);
@@ -108,7 +108,7 @@ void NonceCheck::updateCache(bool _rebuild)
                     Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
                     for (unsigned j = 0; j < trans.size(); j++)
                     {
-                        string key = this->generateKey(trans[j]);
+                        std::string key = this->generateKey(trans[j]);
                         auto iter = m_cache.find(key);
                         if (iter != m_cache.end())
                             m_cache.erase(iter);
@@ -122,7 +122,7 @@ void NonceCheck::updateCache(bool _rebuild)
                 Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
                 for (unsigned j = 0; j < trans.size(); j++)
                 {
-                    string key = this->generateKey(trans[j]);
+                    std::string key = this->generateKey(trans[j]);
                     auto iter = m_cache.find(key);
                     if (iter == m_cache.end())
                         m_cache.insert(std::pair<std::string, bool>(key, true));

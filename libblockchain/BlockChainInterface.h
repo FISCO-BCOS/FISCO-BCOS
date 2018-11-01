@@ -25,6 +25,8 @@
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
+#include <libdevcore/FixedHash.h>
+
 namespace dev
 {
 namespace blockverifier

@@ -58,7 +58,7 @@ public:
         KeyPair key_pair = KeyPair::create();
         std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), peer_endpoint);
         PeerSessionInfo peer_info({key_pair.pub(), peer_endpoint.address.to_string(),
-            chrono::steady_clock::duration(), 0});
+            std::chrono::steady_clock::duration(), 0});
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(getHost(), peer, peer_info);
         session->start();
