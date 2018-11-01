@@ -26,6 +26,7 @@
 #include "Transaction.h"
 #include "TransactionReceipt.h"
 #include <libdevcore/Common.h>
+#include <libdevcore/Guards.h>
 #include <libdevcore/TrieHash.h>
 namespace dev
 {
@@ -175,6 +176,8 @@ private:
     TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
     mutable BytesMap m_txsMapCache;
     mutable h256 m_txsRoot;
+
+    mutable SharedMutex x_txsMapCache;
 };
 }  // namespace eth
 }  // namespace dev

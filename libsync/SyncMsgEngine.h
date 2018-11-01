@@ -63,7 +63,8 @@ public:
 
 private:
     bool checkSession(std::shared_ptr<dev::p2p::SessionFace> _session);
-    bool checkPacket(bytesConstRef _msg);
+    bool checkMessage(dev::p2p::Message::Ptr _msg);
+    bool isNewerBlock(std::shared_ptr<dev::eth::Block> block);
     bool interpret(SyncMsgPacket const& _packet);
 
 private:
@@ -83,6 +84,27 @@ private:
     PROTOCOL_ID m_protocolId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
+};
+
+class DownloadBlocksContainer
+{
+public:
+    DownloadBlocksContainer(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        PROTOCOL_ID _protocolId, int64_t _startNumber)
+      : m_service(_service),
+        m_protocolId(_protocolId),
+        m_startBlockNumber(_startNumber),
+        m_blockRLPShards(1, std::vector<dev::bytes>())
+    {}
+    void push(BlockPtr _block);
+    void send(NodeID _nodeId);
+
+private:
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    PROTOCOL_ID m_protocolId;
+    int64_t m_startBlockNumber;
+    std::vector<std::vector<dev::bytes>> m_blockRLPShards;
+    size_t m_currentShardSize = 0;
 };
 
 }  // namespace sync
