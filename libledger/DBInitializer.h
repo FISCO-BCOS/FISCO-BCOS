@@ -76,11 +76,11 @@ protected:
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompile);
 
 private:
-    /// TODO: init AMDB storage
-    void initAMDBStorage();
-    /// TOTEST: init levelDB storage
+    /// TODO: init AMOP storage
+    void initAMOPStorage();
+    /// TOCHECK: init levelDB storage
     void initLevelDBStorage();
-    /// TODO: create AMDB/mpt stateStorage
+    /// TOCHECK: create AMDB/mpt stateStorage
     void createStorageState();
     void createMptState();
 
