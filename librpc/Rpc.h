@@ -97,6 +97,7 @@ protected:
     std::shared_ptr<dev::p2p::Service> service() { return m_service; }
     std::shared_ptr<dev::p2p::Service> m_service;
     Json::Value rpcErrorResult(Json::Value& responseJson, std::exception& e);
+    Json::Value rpcErrorArray(Json::Value& responseJson, std::string s);
 };
 
 }  // namespace rpc

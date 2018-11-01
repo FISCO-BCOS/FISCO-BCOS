@@ -136,16 +136,6 @@ public:
         return m_connectors.size() - 1;
     }
 
-    //	bool setStatistics(dev::InterfaceStatistics *stats)
-    //	{
-    //		if (stats && statistics.get() == nullptr)
-    //		{
-    //			statistics.reset(stats);
-    //			return true;
-    //		}
-    //		return false;
-    //	}
-
     jsonrpc::AbstractServerConnector* connector(unsigned _i) const
     {
         return m_connectors.at(_i).get();
@@ -156,7 +146,6 @@ protected:
     std::unique_ptr<jsonrpc::IProtocolHandler> m_handler;
     /// Mapping for implemented modules, to be filled by subclasses during construction.
     Json::Value m_implementedModules;
-    //	std::shared_ptr<dev::InterfaceStatistics> statistics = nullptr;
 };
 
 template <class I, class... Is>
@@ -195,14 +184,7 @@ public:
         {
             try
             {
-                // std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
                 (m_interface.get()->*(pointer->second))(_input, _output);
-                // std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-                // std::chrono::milliseconds timeLong =
-                // std::chrono::duration_cast<std::chrono::milliseconds>(end - start); if
-                // (ModularServer<Is...>::statistics.get() != nullptr)
-                //	ModularServer<Is...>::statistics->interfaceCalled(_proc.GetProcedureName(),
-                // timeLong.count());
             }
             catch (std::exception& e)
             {

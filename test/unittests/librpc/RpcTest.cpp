@@ -168,6 +168,16 @@ BOOST_AUTO_TEST_CASE(testGetBlockByHash)
     requestJson["groupId"] = "abcd";
     responseJson = rpc->getBlockByHash(requestJson);
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -1);
+
+    Json::Value requestJson2;
+    requestJson2["id"] = "1";
+    requestJson2["jsonrpc"] = "2.0";
+    requestJson2["groupId"] = 0;
+    requestJson2["method"] = "getBlockByHash";
+    requestJson2["params"] = Json::Value(Json::arrayValue);
+    requestJson2["params"].append(blockHash);
+    responseJson = rpc->getBlockByHash(requestJson2);
+    BOOST_CHECK(responseJson["error"]["code"].asInt() == -2);
 }
 BOOST_AUTO_TEST_CASE(getBlockByNumber)
 {
@@ -217,6 +227,16 @@ BOOST_AUTO_TEST_CASE(getBlockByNumber)
     requestJson["groupId"] = "abcd";
     responseJson = rpc->getBlockByNumber(requestJson);
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -1);
+
+    Json::Value requestJson2;
+    requestJson2["id"] = "1";
+    requestJson2["jsonrpc"] = "2.0";
+    requestJson2["groupId"] = 0;
+    requestJson2["method"] = "getBlockByNumber";
+    requestJson2["params"] = Json::Value(Json::arrayValue);
+    requestJson2["params"].append(1);
+    responseJson = rpc->getBlockByNumber(requestJson2);
+    BOOST_CHECK(responseJson["error"]["code"].asInt() == -2);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByHash)
@@ -251,6 +271,15 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByHash)
     requestJson["groupId"] = "abcd";
     responseJson = rpc->getTransactionByHash(requestJson);
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -1);
+
+    Json::Value requestJson2;
+    requestJson2["id"] = "1";
+    requestJson2["jsonrpc"] = "2.0";
+    requestJson2["groupId"] = 0;
+    requestJson2["method"] = "getTransactionByHash";
+    requestJson2["params"] = Json::Value(Json::arrayValue);
+    responseJson = rpc->getTransactionByHash(requestJson2);
+    BOOST_CHECK(responseJson["error"]["code"].asInt() == -2);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByBlockHashAndIndex)
@@ -289,6 +318,15 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockHashAndIndex)
     requestJson["groupId"] = "abcd";
     responseJson = rpc->getTransactionByBlockHashAndIndex(requestJson);
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -1);
+
+    Json::Value requestJson2;
+    requestJson2["id"] = "1";
+    requestJson2["jsonrpc"] = "2.0";
+    requestJson2["groupId"] = 0;
+    requestJson2["method"] = "getTransactionByBlockHashAndIndex";
+    requestJson2["params"] = Json::Value(Json::arrayValue);
+    responseJson = rpc->getTransactionByBlockHashAndIndex(requestJson2);
+    BOOST_CHECK(responseJson["error"]["code"].asInt() == -2);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByBlockNumberAndIndex)
@@ -327,6 +365,15 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockNumberAndIndex)
     requestJson["groupId"] = "abcd";
     responseJson = rpc->getTransactionByBlockNumberAndIndex(requestJson);
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -1);
+
+    Json::Value requestJson2;
+    requestJson2["id"] = "1";
+    requestJson2["jsonrpc"] = "2.0";
+    requestJson2["groupId"] = 0;
+    requestJson2["method"] = "getTransactionByBlockNumberAndIndex";
+    requestJson2["params"] = Json::Value(Json::arrayValue);
+    responseJson = rpc->getTransactionByBlockNumberAndIndex(requestJson2);
+    BOOST_CHECK(responseJson["error"]["code"].asInt() == -2);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
@@ -367,6 +414,15 @@ BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
     requestJson["groupId"] = "abcd";
     responseJson = rpc->getTransactionReceipt(requestJson);
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -1);
+
+    Json::Value requestJson2;
+    requestJson2["id"] = "1";
+    requestJson2["jsonrpc"] = "2.0";
+    requestJson2["groupId"] = 0;
+    requestJson2["method"] = "getTransactionReceipt";
+    requestJson2["params"] = Json::Value(Json::arrayValue);
+    responseJson = rpc->getTransactionReceipt(requestJson2);
+    BOOST_CHECK(responseJson["error"]["code"].asInt() == -2);
 }
 BOOST_AUTO_TEST_CASE(testPendingTransactions)
 {
@@ -380,9 +436,6 @@ BOOST_AUTO_TEST_CASE(testPendingTransactions)
 
     BOOST_CHECK(responseJson["id"].asString() == "1");
     BOOST_CHECK(responseJson["jsonrpc"].asString() == "2.0");
-    BOOST_CHECK(responseJson["result"]["pending"][0]["blockHash"].asString() ==
-                "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
-    BOOST_CHECK(responseJson["result"]["pending"][0]["blockNumber"].asString() == "0x1");
     BOOST_CHECK(responseJson["result"]["pending"][0]["from"].asString() ==
                 "0x7667b41c569604a64956d985bb2a4f8d5f2dae87");
     BOOST_CHECK(responseJson["result"]["pending"][0]["gas"].asString() == "0xf4240");
@@ -390,7 +443,6 @@ BOOST_AUTO_TEST_CASE(testPendingTransactions)
     BOOST_CHECK(responseJson["result"]["pending"][0]["nonce"].asString() == "0x1be1a7d");
     BOOST_CHECK(responseJson["result"]["pending"][0]["to"].asString() ==
                 "0x1dc8def0867ea7e3626e03acee3eb40ee17251c8");
-    BOOST_CHECK(responseJson["result"]["pending"][0]["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(responseJson["result"]["pending"][0]["value"].asString() == "0x0");
 
     requestJson["groupId"] = "abcd";
@@ -455,6 +507,15 @@ BOOST_AUTO_TEST_CASE(testSendRawTransaction)
     requestJson["groupId"] = "abcd";
     responseJson = rpc->sendRawTransaction(requestJson);
     BOOST_CHECK(responseJson["error"]["code"].asInt() == -1);
+
+    Json::Value requestJson2;
+    requestJson2["id"] = "1";
+    requestJson2["jsonrpc"] = "2.0";
+    requestJson2["groupId"] = 0;
+    requestJson2["method"] = "sendRawTransaction";
+    requestJson2["params"] = Json::Value(Json::arrayValue);
+    responseJson = rpc->sendRawTransaction(requestJson2);
+    BOOST_CHECK(responseJson["error"]["code"].asInt() == -2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

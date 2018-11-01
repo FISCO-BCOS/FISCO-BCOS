@@ -156,42 +156,48 @@ Json::Value Rpc::getBlockByHash(const Json::Value& requestJson)
 
         int16_t groupId = requestJson["groupId"].asInt();
         std::string method = requestJson["method"].asString();
-        std::string blockHash = requestJson["params"][0].asString();
-        bool includeTransactions = requestJson["params"][1].asBool();
-
-        auto blockchain = ledgerManager()->blockChain(groupId);
-
-        h256 hash = jsToFixed<32>(blockHash);
-        auto block = blockchain->getBlockByHash(hash);
-        responseJson["result"]["number"] = toJS(block->header().number());
-        responseJson["result"]["hash"] = blockHash;
-        responseJson["result"]["parentHash"] = toJS(block->header().parentHash());
-        responseJson["result"]["logsBloom"] = toJS(block->header().logBloom());
-        responseJson["result"]["transactionsRoot"] = toJS(block->header().transactionsRoot());
-        responseJson["result"]["stateRoot"] = toJS(block->header().stateRoot());
-        responseJson["result"]["sealer"] = toJS(block->header().sealer());
-        responseJson["result"]["extraData"] = Json::Value(Json::arrayValue);
-        auto datas = block->header().extraData();
-        for (auto data : datas)
-            responseJson["result"]["extraData"].append(toJS(data));
-        responseJson["result"]["gasLimit"] = toJS(block->header().gasLimit());
-        responseJson["result"]["gasUsed"] = toJS(block->header().gasUsed());
-        responseJson["result"]["timestamp"] = toJS(block->header().timestamp());
-        auto transactions = block->transactions();
-        responseJson["result"]["transactions"] = Json::Value(Json::arrayValue);
-        for (unsigned i = 0; i < transactions.size(); i++)
+        if (requestJson["params"].size() != 2)
         {
-            if (includeTransactions)
-            {
-                responseJson["result"]["transactions"].append(
-                    toJson(transactions[i], std::make_pair(hash, i), block->header().number()));
-            }
-            else
-            {
-                responseJson["result"]["transactions"].append(toJS(transactions[i].sha3()));
-            }
+            return rpcErrorArray(responseJson, "Number of params error!");
         }
-        return responseJson;
+        else
+        {
+            std::string blockHash = requestJson["params"][0].asString();
+            bool includeTransactions = requestJson["params"][1].asBool();
+            auto blockchain = ledgerManager()->blockChain(groupId);
+
+            h256 hash = jsToFixed<32>(blockHash);
+            auto block = blockchain->getBlockByHash(hash);
+            responseJson["result"]["number"] = toJS(block->header().number());
+            responseJson["result"]["hash"] = blockHash;
+            responseJson["result"]["parentHash"] = toJS(block->header().parentHash());
+            responseJson["result"]["logsBloom"] = toJS(block->header().logBloom());
+            responseJson["result"]["transactionsRoot"] = toJS(block->header().transactionsRoot());
+            responseJson["result"]["stateRoot"] = toJS(block->header().stateRoot());
+            responseJson["result"]["sealer"] = toJS(block->header().sealer());
+            responseJson["result"]["extraData"] = Json::Value(Json::arrayValue);
+            auto datas = block->header().extraData();
+            for (auto data : datas)
+                responseJson["result"]["extraData"].append(toJS(data));
+            responseJson["result"]["gasLimit"] = toJS(block->header().gasLimit());
+            responseJson["result"]["gasUsed"] = toJS(block->header().gasUsed());
+            responseJson["result"]["timestamp"] = toJS(block->header().timestamp());
+            auto transactions = block->transactions();
+            responseJson["result"]["transactions"] = Json::Value(Json::arrayValue);
+            for (unsigned i = 0; i < transactions.size(); i++)
+            {
+                if (includeTransactions)
+                {
+                    responseJson["result"]["transactions"].append(
+                        toJson(transactions[i], std::make_pair(hash, i), block->header().number()));
+                }
+                else
+                {
+                    responseJson["result"]["transactions"].append(toJS(transactions[i].sha3()));
+                }
+            }
+            return responseJson;
+        }
     }
     catch (std::exception& e)
     {
@@ -213,42 +219,48 @@ Json::Value Rpc::getBlockByNumber(const Json::Value& requestJson)
 
         int16_t groupId = requestJson["groupId"].asInt();
         std::string method = requestJson["method"].asString();
-        std::string blockNumber = requestJson["params"][0].asString();
-        bool includeTransactions = requestJson["params"][1].asBool();
-
-        auto blockchain = ledgerManager()->blockChain(groupId);
-
-        BlockNumber number = jsToBlockNumber(blockNumber);
-        auto block = blockchain->getBlockByNumber(number);
-        responseJson["result"]["number"] = toJS(number);
-        responseJson["result"]["hash"] = toJS(block->headerHash());
-        responseJson["result"]["parentHash"] = toJS(block->header().parentHash());
-        responseJson["result"]["logsBloom"] = toJS(block->header().logBloom());
-        responseJson["result"]["transactionsRoot"] = toJS(block->header().transactionsRoot());
-        responseJson["result"]["stateRoot"] = toJS(block->header().stateRoot());
-        responseJson["result"]["sealer"] = toJS(block->header().sealer());
-        responseJson["result"]["extraData"] = Json::Value(Json::arrayValue);
-        auto datas = block->header().extraData();
-        for (auto data : datas)
-            responseJson["result"]["extraData"].append(toJS(data));
-        responseJson["result"]["gasLimit"] = toJS(block->header().gasLimit());
-        responseJson["result"]["gasUsed"] = toJS(block->header().gasUsed());
-        responseJson["result"]["timestamp"] = toJS(block->header().timestamp());
-        auto transactions = block->transactions();
-        responseJson["result"]["transactions"] = Json::Value(Json::arrayValue);
-        for (unsigned i = 0; i < transactions.size(); i++)
+        if (requestJson["params"].size() != 2)
         {
-            if (includeTransactions)
-            {
-                responseJson["result"]["transactions"].append(toJson(transactions[i],
-                    std::make_pair(block->headerHash(), i), block->header().number()));
-            }
-            else
-            {
-                responseJson["result"]["transactions"].append(toJS(transactions[i].sha3()));
-            }
+            return rpcErrorArray(responseJson, "Number of params error!");
         }
-        return responseJson;
+        else
+        {
+            std::string blockNumber = requestJson["params"][0].asString();
+            bool includeTransactions = requestJson["params"][1].asBool();
+            auto blockchain = ledgerManager()->blockChain(groupId);
+
+            BlockNumber number = jsToBlockNumber(blockNumber);
+            auto block = blockchain->getBlockByNumber(number);
+            responseJson["result"]["number"] = toJS(number);
+            responseJson["result"]["hash"] = toJS(block->headerHash());
+            responseJson["result"]["parentHash"] = toJS(block->header().parentHash());
+            responseJson["result"]["logsBloom"] = toJS(block->header().logBloom());
+            responseJson["result"]["transactionsRoot"] = toJS(block->header().transactionsRoot());
+            responseJson["result"]["stateRoot"] = toJS(block->header().stateRoot());
+            responseJson["result"]["sealer"] = toJS(block->header().sealer());
+            responseJson["result"]["extraData"] = Json::Value(Json::arrayValue);
+            auto datas = block->header().extraData();
+            for (auto data : datas)
+                responseJson["result"]["extraData"].append(toJS(data));
+            responseJson["result"]["gasLimit"] = toJS(block->header().gasLimit());
+            responseJson["result"]["gasUsed"] = toJS(block->header().gasUsed());
+            responseJson["result"]["timestamp"] = toJS(block->header().timestamp());
+            auto transactions = block->transactions();
+            responseJson["result"]["transactions"] = Json::Value(Json::arrayValue);
+            for (unsigned i = 0; i < transactions.size(); i++)
+            {
+                if (includeTransactions)
+                {
+                    responseJson["result"]["transactions"].append(toJson(transactions[i],
+                        std::make_pair(block->headerHash(), i), block->header().number()));
+                }
+                else
+                {
+                    responseJson["result"]["transactions"].append(toJS(transactions[i].sha3()));
+                }
+            }
+            return responseJson;
+        }
     }
     catch (std::exception& e)
     {
@@ -270,25 +282,31 @@ Json::Value Rpc::getTransactionByHash(const Json::Value& requestJson)
 
         int16_t groupId = requestJson["groupId"].asInt();
         std::string method = requestJson["method"].asString();
-        std::string txHash = requestJson["params"][0].asString();
+        if (requestJson["params"].size() != 1)
+        {
+            return rpcErrorArray(responseJson, "Number of params error!");
+        }
+        else
+        {
+            std::string txHash = requestJson["params"][0].asString();
+            auto blockchain = ledgerManager()->blockChain(groupId);
 
-        auto blockchain = ledgerManager()->blockChain(groupId);
+            h256 hash = jsToFixed<32>(txHash);
+            auto tx = blockchain->getLocalisedTxByHash(hash);
+            responseJson["result"]["blockHash"] = toJS(tx.blockHash());
+            responseJson["result"]["blockNumber"] = toJS(tx.blockNumber());
+            responseJson["result"]["from"] = toJS(tx.from());
+            responseJson["result"]["gas"] = toJS(tx.gas());
+            responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
+            responseJson["result"]["hash"] = toJS(hash);
+            responseJson["result"]["input"] = toJS(tx.data());
+            responseJson["result"]["nonce"] = toJS(tx.nonce());
+            responseJson["result"]["to"] = toJS(tx.to());
+            responseJson["result"]["transactionIndex"] = toJS(tx.transactionIndex());
+            responseJson["result"]["value"] = toJS(tx.value());
 
-        h256 hash = jsToFixed<32>(txHash);
-        auto tx = blockchain->getLocalisedTxByHash(hash);
-        responseJson["result"]["blockHash"] = toJS(tx.blockHash());
-        responseJson["result"]["blockNumber"] = toJS(tx.blockNumber());
-        responseJson["result"]["from"] = toJS(tx.from());
-        responseJson["result"]["gas"] = toJS(tx.gas());
-        responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
-        responseJson["result"]["hash"] = toJS(hash);
-        responseJson["result"]["input"] = toJS(tx.data());
-        responseJson["result"]["nonce"] = toJS(tx.nonce());
-        responseJson["result"]["to"] = toJS(tx.to());
-        responseJson["result"]["transactionIndex"] = toJS(tx.transactionIndex());
-        responseJson["result"]["value"] = toJS(tx.value());
-
-        return responseJson;
+            return responseJson;
+        }
     }
     catch (std::exception& e)
     {
@@ -311,30 +329,36 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(const Json::Value& requestJso
 
         int16_t groupId = requestJson["groupId"].asInt();
         std::string method = requestJson["method"].asString();
-        std::string blockHash = requestJson["params"][0].asString();
-        int index = jsToInt(requestJson["params"][1].asString());
-
-        auto blockchain = ledgerManager()->blockChain(groupId);
-
-        h256 hash = jsToFixed<32>(blockHash);
-        auto block = blockchain->getBlockByHash(hash);
-        auto transactions = block->transactions();
-        if (transactions[index])
+        if (requestJson["params"].size() != 2)
         {
-            Transaction tx = transactions[index];
-            responseJson["result"]["blockHash"] = blockHash;
-            responseJson["result"]["blockNumber"] = toJS(block->header().number());
-            responseJson["result"]["from"] = toJS(tx.from());
-            responseJson["result"]["gas"] = toJS(tx.gas());
-            responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
-            responseJson["result"]["hash"] = toJS(tx.sha3());
-            responseJson["result"]["input"] = toJS(tx.data());
-            responseJson["result"]["nonce"] = toJS(tx.nonce());
-            responseJson["result"]["to"] = toJS(tx.to());
-            responseJson["result"]["transactionIndex"] = toJS(index);
-            responseJson["result"]["value"] = toJS(tx.value());
+            return rpcErrorArray(responseJson, "Number of params error!");
         }
-        return responseJson;
+        else
+        {
+            std::string blockHash = requestJson["params"][0].asString();
+            int index = jsToInt(requestJson["params"][1].asString());
+            auto blockchain = ledgerManager()->blockChain(groupId);
+
+            h256 hash = jsToFixed<32>(blockHash);
+            auto block = blockchain->getBlockByHash(hash);
+            auto transactions = block->transactions();
+            if (transactions[index])
+            {
+                Transaction tx = transactions[index];
+                responseJson["result"]["blockHash"] = blockHash;
+                responseJson["result"]["blockNumber"] = toJS(block->header().number());
+                responseJson["result"]["from"] = toJS(tx.from());
+                responseJson["result"]["gas"] = toJS(tx.gas());
+                responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
+                responseJson["result"]["hash"] = toJS(tx.sha3());
+                responseJson["result"]["input"] = toJS(tx.data());
+                responseJson["result"]["nonce"] = toJS(tx.nonce());
+                responseJson["result"]["to"] = toJS(tx.to());
+                responseJson["result"]["transactionIndex"] = toJS(index);
+                responseJson["result"]["value"] = toJS(tx.value());
+            }
+            return responseJson;
+        }
     }
     catch (std::exception& e)
     {
@@ -357,30 +381,40 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(const Json::Value& requestJ
 
         std::string method = requestJson["method"].asString();
         int16_t groupId = requestJson["groupId"].asInt();
-        std::string blockNumber = requestJson["params"][0].asString();
-        int index = jsToInt(requestJson["params"][1].asString());
-
-        auto blockchain = ledgerManager()->blockChain(groupId);
-
-        BlockNumber number = jsToBlockNumber(blockNumber);
-        auto block = blockchain->getBlockByNumber(number);
-        Transactions transactions = block->transactions();
-        if (transactions[index])
+        if (requestJson["params"].size() != 2)
         {
-            Transaction tx = transactions[index];
-            responseJson["result"]["blockHash"] = toJS(block->header().hash());
-            responseJson["result"]["blockNumber"] = toJS(block->header().number());
-            responseJson["result"]["from"] = toJS(tx.from());
-            responseJson["result"]["gas"] = toJS(tx.gas());
-            responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
-            responseJson["result"]["hash"] = toJS(tx.sha3());
-            responseJson["result"]["input"] = toJS(tx.data());
-            responseJson["result"]["nonce"] = toJS(tx.nonce());
-            responseJson["result"]["to"] = toJS(tx.to());
-            responseJson["result"]["transactionIndex"] = toJS(index);
-            responseJson["result"]["value"] = toJS(tx.value());
+            return rpcErrorArray(responseJson, "Number of params error!");
         }
-        return responseJson;
+        else
+        {
+            std::string blockNumber = requestJson["params"][0].asString();
+            unsigned int index = (unsigned)jsToInt(requestJson["params"][1].asString());
+            auto blockchain = ledgerManager()->blockChain(groupId);
+
+            BlockNumber number = jsToBlockNumber(blockNumber);
+            auto block = blockchain->getBlockByNumber(number);
+            Transactions transactions = block->transactions();
+            if (index >= transactions.size())
+            {
+                return rpcErrorArray(responseJson, "Out of index error!");
+            }
+            else
+            {
+                Transaction tx = transactions[index];
+                responseJson["result"]["blockHash"] = toJS(block->header().hash());
+                responseJson["result"]["blockNumber"] = toJS(block->header().number());
+                responseJson["result"]["from"] = toJS(tx.from());
+                responseJson["result"]["gas"] = toJS(tx.gas());
+                responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
+                responseJson["result"]["hash"] = toJS(tx.sha3());
+                responseJson["result"]["input"] = toJS(tx.data());
+                responseJson["result"]["nonce"] = toJS(tx.nonce());
+                responseJson["result"]["to"] = toJS(tx.to());
+                responseJson["result"]["transactionIndex"] = toJS(index);
+                responseJson["result"]["value"] = toJS(tx.value());
+                return responseJson;
+            }
+        }
     }
     catch (std::exception& e)
     {
@@ -402,33 +436,39 @@ Json::Value Rpc::getTransactionReceipt(const Json::Value& requestJson)
 
         int16_t groupId = requestJson["groupId"].asInt();
         std::string method = requestJson["method"].asString();
-        std::string txHash = requestJson["params"][0].asString();
-
-        auto blockchain = ledgerManager()->blockChain(groupId);
-
-        h256 hash = jsToFixed<32>(txHash);
-        auto tx = blockchain->getLocalisedTxByHash(hash);
-        auto txReceipt = blockchain->getTransactionReceiptByHash(hash);
-        responseJson["result"]["transactionHash"] = txHash;
-        responseJson["result"]["transactionIndex"] = toJS(tx.transactionIndex());
-        responseJson["result"]["blockNumber"] = toJS(tx.blockNumber());
-        responseJson["result"]["blockHash"] = toJS(tx.blockHash());
-        responseJson["result"]["from"] = toJS(tx.from());
-        responseJson["result"]["to"] = toJS(tx.to());
-        responseJson["result"]["gasUsed"] = toJS(txReceipt.gasUsed());
-        responseJson["result"]["contractAddress"] = toJS(txReceipt.contractAddress());
-        responseJson["result"]["logs"] = Json::Value(Json::arrayValue);
-        for (unsigned int i = 0; i < txReceipt.log().size(); ++i)
+        if (requestJson["params"].size() != 1)
         {
-            Json::Value log;
-            log["address"] = toJS(txReceipt.log()[i].address);
-            log["topics"] = toJS(txReceipt.log()[i].topics);
-            log["data"] = toJS(txReceipt.log()[i].data);
-            responseJson["result"]["logs"].append(log);
+            return rpcErrorArray(responseJson, "Number of params error!");
         }
-        responseJson["result"]["logsBloom"] = toJS(txReceipt.bloom());
-        responseJson["result"]["status"] = toJS(txReceipt.status());
-        return responseJson;
+        else
+        {
+            std::string txHash = requestJson["params"][0].asString();
+            auto blockchain = ledgerManager()->blockChain(groupId);
+
+            h256 hash = jsToFixed<32>(txHash);
+            auto tx = blockchain->getLocalisedTxByHash(hash);
+            auto txReceipt = blockchain->getTransactionReceiptByHash(hash);
+            responseJson["result"]["transactionHash"] = txHash;
+            responseJson["result"]["transactionIndex"] = toJS(tx.transactionIndex());
+            responseJson["result"]["blockNumber"] = toJS(tx.blockNumber());
+            responseJson["result"]["blockHash"] = toJS(tx.blockHash());
+            responseJson["result"]["from"] = toJS(tx.from());
+            responseJson["result"]["to"] = toJS(tx.to());
+            responseJson["result"]["gasUsed"] = toJS(txReceipt.gasUsed());
+            responseJson["result"]["contractAddress"] = toJS(txReceipt.contractAddress());
+            responseJson["result"]["logs"] = Json::Value(Json::arrayValue);
+            for (unsigned int i = 0; i < txReceipt.log().size(); ++i)
+            {
+                Json::Value log;
+                log["address"] = toJS(txReceipt.log()[i].address);
+                log["topics"] = toJS(txReceipt.log()[i].topics);
+                log["data"] = toJS(txReceipt.log()[i].data);
+                responseJson["result"]["logs"].append(log);
+            }
+            responseJson["result"]["logsBloom"] = toJS(txReceipt.bloom());
+            responseJson["result"]["status"] = toJS(txReceipt.status());
+            return responseJson;
+        }
     }
     catch (std::exception& e)
     {
@@ -452,15 +492,12 @@ Json::Value Rpc::pendingTransactions(const Json::Value& requestJson)
         auto txPool = ledgerManager()->txPool(groupId);
         auto blockchain = ledgerManager()->blockChain(groupId);
 
-
         responseJson["result"]["pending"] = Json::Value(Json::arrayValue);
         Transactions transactions = txPool->pendingList();
         for (size_t i = 0; i < transactions.size(); ++i)
         {
-            auto tx = blockchain->getLocalisedTxByHash(transactions[i].sha3());
+            auto tx = transactions[i];
             Json::Value txJson;
-            txJson["blockHash"] = toJS(tx.blockHash());
-            txJson["blockNumber"] = toJS(tx.blockNumber());
             txJson["from"] = toJS(tx.from());
             txJson["gas"] = toJS(tx.gas());
             txJson["gasPrice"] = toJS(tx.gasPrice());
@@ -468,7 +505,6 @@ Json::Value Rpc::pendingTransactions(const Json::Value& requestJson)
             txJson["input"] = toJS(tx.data());
             txJson["nonce"] = toJS(tx.nonce());
             txJson["to"] = toJS(tx.to());
-            txJson["transactionIndex"] = toJS(tx.transactionIndex());
             txJson["value"] = toJS(tx.value());
             responseJson["result"]["pending"].append(txJson);
         }
@@ -528,13 +564,20 @@ Json::Value Rpc::sendRawTransaction(const Json::Value& requestJson)
 
         std::string method = requestJson["method"].asString();
         int16_t groupId = requestJson["groupId"].asInt();
-        std::string signedData = requestJson["params"][0].asString();
-        Transaction tx(jsToBytes(signedData, OnFailed::Throw), CheckTransaction::Everything);
+        if (requestJson["params"].size() != 1)
+        {
+            return rpcErrorArray(responseJson, "Number of params error!");
+        }
+        else
+        {
+            std::string signedData = requestJson["params"][0].asString();
+            Transaction tx(jsToBytes(signedData, OnFailed::Throw), CheckTransaction::Everything);
 
-        auto txPool = ledgerManager()->txPool(groupId);
-        std::pair<h256, Address> ret = txPool->submit(tx);
-        responseJson["result"] = toJS(ret.first);
-        return responseJson;
+            auto txPool = ledgerManager()->txPool(groupId);
+            std::pair<h256, Address> ret = txPool->submit(tx);
+            responseJson["result"] = toJS(ret.first);
+            return responseJson;
+        }
     }
     catch (std::exception& e)
     {
@@ -546,5 +589,12 @@ Json::Value Rpc::rpcErrorResult(Json::Value& responseJson, std::exception& e)
 {
     responseJson["error"]["code"] = -1;
     responseJson["error"]["message"] = e.what();
+    return responseJson;
+}
+
+Json::Value Rpc::rpcErrorArray(Json::Value& responseJson, std::string s)
+{
+    responseJson["error"]["code"] = -2;
+    responseJson["error"]["message"] = s;
     return responseJson;
 }
