@@ -32,12 +32,11 @@ namespace dev
 class OverlayDB : public MemoryDB
 {
 public:
-    explicit OverlayDB(std::unique_ptr<db::DatabaseFace> _db = nullptr)
-      : m_db(_db.release(), [](db::DatabaseFace* db) {
-            LOG(DEBUG) << "Closing state DB";
-            delete db;
-        })
-    {}
+    explicit OverlayDB(std::shared_ptr<db::DatabaseFace> _db = nullptr)
+    {
+        m_db = _db;
+    }
+
 
     ~OverlayDB();
 

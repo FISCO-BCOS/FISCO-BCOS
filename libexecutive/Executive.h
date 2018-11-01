@@ -66,14 +66,14 @@ class Executive
 {
 public:
     /// Simple constructor; executive will operate on given state, with the given environment info.
-    Executive(StateFace& _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
+    Executive(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
       : m_s(_s), m_envInfo(_envInfo), m_depth(_level)
     {}
 
-    template <typename T>
-    Executive(T& _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
-      : m_s(dynamic_cast<StateFace&>(_s)), m_envInfo(_envInfo), m_depth(_level)
-    {}
+    // template <typename T>
+    // Executive(T _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
+    //  : m_s(dynamic_cast<std::shared_ptr<StateFace>>(_s)), m_envInfo(_envInfo), m_depth(_level)
+    //{}
 
     /** Easiest constructor.
      * Creates executive to operate on the state of end of the given block, populating environment
@@ -171,7 +171,7 @@ private:
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
 
-    StateFace& m_s;  ///< The state to which this operation/transaction is applied.
+    std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
     dev::eth::EnvInfo m_envInfo;   ///< Information on the runtime environment.
     std::shared_ptr<ExtVM> m_ext;  ///< The VM externality object for the VM execution or null if no

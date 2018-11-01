@@ -45,7 +45,7 @@ static void FakeBlockHeader(BlockHeader& header, EvmParams const& param)
 }
 
 static void ExecuteTransaction(
-    ExecutionResult& res, MPTState& mptState, EnvInfo& info, Transaction const& tx)
+    ExecutionResult& res, std::shared_ptr<MPTState> mptState, EnvInfo& info, Transaction const& tx)
 {
     Executive executive(mptState, info, 0);
     executive.setResultRecipient(res);
@@ -60,17 +60,18 @@ static void ExecuteTransaction(
     executive.finalize();
 }
 
-static void updateSender(MPTState& mptState, Transaction& tx, EvmParams const& param)
+static void updateSender(
+    std::shared_ptr<MPTState> mptState, Transaction& tx, EvmParams const& param)
 {
     KeyPair key_pair = KeyPair::create();
     Address sender = toAddress(key_pair.pub());
     tx.forceSender(sender);
-    mptState.addBalance(sender, param.transValue());
+    mptState->addBalance(sender, param.transValue());
 }
 
 /// deploy contract
 static Address deployContract(
-    MPTState& mptState, EnvInfo& info, bytes const& code, EvmParams const& param)
+    std::shared_ptr<MPTState> mptState, EnvInfo& info, bytes const& code, EvmParams const& param)
 {
     /// LOG(DEBUG) << "[evm_main] codeData: " << toHex(code);
     Transaction tx = Transaction(param.transValue(), param.gasPrice(), param.gas(), code, u256(0));
@@ -81,17 +82,18 @@ static Address deployContract(
     EVMC_LOG(INFO) << "[evm_main/depositSize]:" << res.depositSize << std::endl;
 }
 
-static void updateMptState(MPTState& mptState, Input& input)
+static void updateMptState(std::shared_ptr<MPTState> mptState, Input& input)
 {
     Account account(u256(0), u256(0));
     account.setCode(bytes{input.codeData});
     AccountMap map;
     map[input.addr] = account;
-    mptState.getState().populateFrom(map);
+    mptState->getState().populateFrom(map);
 }
 
 /// call contract
-static void callTransaction(MPTState& mptState, EnvInfo& info, Input& input, EvmParams const& param)
+static void callTransaction(
+    std::shared_ptr<MPTState> mptState, EnvInfo& info, Input& input, EvmParams const& param)
 {
     if (input.codeData.size() > 0)
     {
@@ -127,7 +129,8 @@ int main(int argc, const char* argv[])
     std::shared_ptr<FakeBlockChain> blockChain = std::make_shared<FakeBlockChain>();
     EnvInfo envInfo(header, boost::bind(&FakeBlockChain::numberHash, blockChain, _1), u256(0));
     /// init state
-    MPTState mptState(u256(0), MPTState::openDB("./", sha3("0x1234")), BaseState::Empty);
+    std::shared_ptr<MPTState> mptState = std::make_shared<MPTState>(
+        u256(0), MPTState::openDB("./", sha3("0x1234")), BaseState::Empty);
     /// test deploy
     for (size_t i = 0; i < param.code().size(); i++)
     {
