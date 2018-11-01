@@ -25,7 +25,8 @@
 #include <libp2p/Common.h>
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libsync/FakeSyncToolsSet.h>
+#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -42,7 +43,7 @@ namespace test
 class SyncMsgPacketFixture : public TestOutputHelperFixture
 {
 public:
-    SyncMsgPacketFixture() : fakeSyncToolsSet()
+    SyncMsgPacketFixture()
     {
         m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
 
@@ -86,10 +87,13 @@ public:
     }
 
     std::shared_ptr<SessionFace> fakeSessionPtr;
-    std::shared_ptr<Transaction> fakeTransactionPtr;
+    Transaction fakeTransaction;
 
-private:
-    FakeSyncToolsSet fakeSyncToolsSet;
+protected:
+    FakeHost* m_host;
+    std::string m_clientVersion = "2.0";
+    std::string m_listenIp = "127.0.0.1";
+    uint16_t m_listenPort = 30304;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgPacketTest, SyncMsgPacketFixture)
@@ -138,7 +142,7 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
 {
     SyncTransactionsPacket txPacket;
-    bytes txRLPs = fakeTransactionPtr->rlp();
+    bytes txRLPs = fakeTransaction.rlp();
 
     txPacket.encode(0x01, txRLPs);
     auto msgPtr = txPacket.toMessage(0x02);
@@ -146,7 +150,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
     auto rlpTx = txPacket.rlp()[0];
     Transaction tx;
     tx.decode(rlpTx);
-    BOOST_CHECK(tx == *fakeTransactionPtr);
+    BOOST_CHECK(tx == fakeTransaction);
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)
