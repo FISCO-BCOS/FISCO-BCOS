@@ -25,7 +25,8 @@
 #include <libp2p/Common.h>
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libsync/FakeSyncToolsSet.h>
+#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -42,17 +43,57 @@ namespace test
 class SyncMsgPacketFixture : public TestOutputHelperFixture
 {
 public:
-    SyncMsgPacketFixture() : fakeSyncToolsSet()
+    SyncMsgPacketFixture()
     {
-        fakeSessionPtr = fakeSyncToolsSet.createSession();
-        fakeTransactionPtr = fakeSyncToolsSet.createTransaction(0);
+        m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
+
+        fakeSessionPtr = createFakeSession();
+        fakeTransaction = createFakeTransaction(0);
+    }
+
+    std::shared_ptr<SessionFace> createFakeSession(std::string ip = "127.0.0.1")
+    {
+        unsigned const protocolVersion = 0;
+        NodeIPEndpoint peer_endpoint(bi::address::from_string(ip), m_listenPort, m_listenPort);
+        ;
+        KeyPair key_pair = KeyPair::create();
+        std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), peer_endpoint);
+        PeerSessionInfo peer_info({key_pair.pub(), peer_endpoint.address.to_string(),
+            chrono::steady_clock::duration(), 0});
+        std::shared_ptr<SessionFace> session =
+            std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
+        session->start();
+        return session;
+    }
+
+    Transaction createFakeTransaction(int64_t _currentBlockNumber)
+    {
+        u256 value = u256(100);
+        u256 gas = u256(100000000);
+        u256 gasPrice = u256(0);
+        Address dst = toAddress(KeyPair::create().pub());
+        std::string str = "test transaction";
+        bytes data(str.begin(), str.end());
+        Transaction tx(value, gasPrice, gas, dst, data);
+        tx.setNonce(tx.nonce() + u256(rand()));
+        u256 c_maxBlockLimit = u256(500);
+        tx.setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
+        KeyPair sigKeyPair = KeyPair::create();
+
+        SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx.sha3(WithoutSignature));
+        /// update the signature of transaction
+        tx.updateSignature(sig);
+        return tx;
     }
 
     std::shared_ptr<SessionFace> fakeSessionPtr;
-    std::shared_ptr<Transaction> fakeTransactionPtr;
+    Transaction fakeTransaction;
 
-private:
-    FakeSyncToolsSet fakeSyncToolsSet;
+protected:
+    FakeHost* m_host;
+    std::string m_clientVersion = "2.0";
+    std::string m_listenIp = "127.0.0.1";
+    uint16_t m_listenPort = 30304;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgPacketTest, SyncMsgPacketFixture)
@@ -101,7 +142,7 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
 {
     SyncTransactionsPacket txPacket;
-    bytes txRLPs = fakeTransactionPtr->rlp();
+    bytes txRLPs = fakeTransaction.rlp();
 
     txPacket.encode(0x01, txRLPs);
     auto msgPtr = txPacket.toMessage(0x02);
@@ -109,7 +150,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
     auto rlpTx = txPacket.rlp()[0];
     Transaction tx;
     tx.decode(rlpTx);
-    BOOST_CHECK(tx == *fakeTransactionPtr);
+    BOOST_CHECK(tx == fakeTransaction);
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)

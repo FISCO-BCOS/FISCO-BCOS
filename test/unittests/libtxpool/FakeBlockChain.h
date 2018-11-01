@@ -98,8 +98,11 @@ public:
 class FakeBlockChain : public BlockChainInterface
 {
 public:
-    FakeBlockChain(uint64_t _blockNum, size_t const& transSize = 5) : m_blockNumber(_blockNum)
+    FakeBlockChain(uint64_t _blockNum, size_t const& transSize = 5,
+        Secret const& sec = KeyPair::create().secret())
+      : m_blockNumber(_blockNum)
     {
+        m_sec = sec;
         FakeTheBlockChain(_blockNum, transSize);
     }
 
@@ -111,7 +114,7 @@ public:
         m_blockHash.clear();
         for (uint64_t blockHeight = 0; blockHeight < _blockNum; blockHeight++)
         {
-            FakeBlock fake_block(trans_size);
+            FakeBlock fake_block(trans_size, m_sec);
             if (blockHeight > 0)
             {
                 fake_block.m_blockHeader.setParentHash(m_blockChain[blockHeight - 1]->headerHash());
@@ -123,9 +126,9 @@ public:
         }
     }
 
-    int64_t number() const { return m_blockNumber - 1; }
+    int64_t number() { return m_blockNumber - 1; }
 
-    dev::h256 numberHash(int64_t _i) const { return m_blockChain[_i]->headerHash(); }
+    dev::h256 numberHash(int64_t _i) { return m_blockChain[_i]->headerHash(); }
 
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
@@ -162,6 +165,7 @@ public:
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;
+    Secret m_sec;
 };
 class TxPoolFixture
 {
@@ -173,8 +177,9 @@ public:
 
     void FakeTxPoolFunc(uint64_t _blockNum, size_t const& transSize)
     {
+        Secret sec = KeyPair::create().secret();
         /// fake block manager
-        m_blockChain = std::make_shared<FakeBlockChain>(_blockNum, transSize);
+        m_blockChain = std::make_shared<FakeBlockChain>(_blockNum, transSize, sec);
         /// fake host of p2p module
         FakeHost* hostPtr = createFakeHostWithSession(clientVersion, listenIp, listenPort);
         m_host = std::shared_ptr<Host>(hostPtr);
@@ -185,7 +190,8 @@ public:
         std::shared_ptr<BlockChainInterface> blockChain =
             std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
-        m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain);
+        PROTOCOL_ID protocol = getGroupProtoclID(0, dev::eth::ProtocolID::TxPool);
+        m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain, 1024000, protocol);
     }
 
     void setSessionData(std::string const& data_content)
@@ -198,6 +204,7 @@ public:
     std::shared_ptr<P2PMsgHandler> m_p2pHandler;
     std::shared_ptr<FakeBlockChain> m_blockChain;
     std::shared_ptr<Host> m_host;
+    Secret sec;
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
