@@ -436,8 +436,7 @@ void MemoryTable::checkFiled(Entry::Ptr entry)
             find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
         {
             LOG(ERROR) << "table:" << m_tableInfo->name << " doesn't have field:" << it.first;
-            throw std::invalid_argument(
-                std::string("table:") + m_tableInfo->name + " doesn't have field:" + it.first);
+            throw std::invalid_argument("Invalid key.");
         }
     }
 }

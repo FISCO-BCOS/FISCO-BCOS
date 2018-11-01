@@ -56,6 +56,13 @@ BOOST_AUTO_TEST_CASE(call_add)
     condition->EQ(NODE_KEY_NODEID, nodeID);
     auto entries = table->select(PRI_KEY, condition);
     BOOST_TEST(entries->size() == 1u);
+    in = abi.abiIn("remove(string)", nodeID);
+    out = minerPrecompiled->call(context, bytesConstRef(&in));
+    condition = table->newCondition();
+    condition->EQ(NODE_KEY_NODEID, nodeID);
+    condition->EQ(NODE_TYPE, NODE_TYPE_OBSERVER);
+    entries = table->select(PRI_KEY, condition);
+    BOOST_TEST(entries->size() == 1u);
 }
 
 
@@ -78,6 +85,24 @@ BOOST_AUTO_TEST_CASE(call_remove)
     condition->EQ(NODE_TYPE, NODE_TYPE_OBSERVER);
     entries = table->select(PRI_KEY, condition);
     BOOST_TEST(entries->size() == 1u);
+    in = abi.abiIn("add(string)", nodeID);
+    out = minerPrecompiled->call(context, bytesConstRef(&in));
+    condition = table->newCondition();
+    condition->EQ(NODE_KEY_NODEID, nodeID);
+    entries = table->select(PRI_KEY, condition);
+    BOOST_TEST(entries->size() == 1u);
+}
+
+BOOST_AUTO_TEST_CASE(wrong_nodeid)
+{
+    eth::ContractABI abi;
+    std::string nodeID(
+        "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
+        "fb6b32df4cf4fbadbccf7123b4dce271157aa");
+    bytes in = abi.abiIn("remove(string)", nodeID);
+    bytes out = minerPrecompiled->call(context, bytesConstRef(&in));
+    in = abi.abiIn("add(string)", nodeID);
+    out = minerPrecompiled->call(context, bytesConstRef(&in));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

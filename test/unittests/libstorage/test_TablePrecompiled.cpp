@@ -63,9 +63,16 @@ BOOST_AUTO_TEST_CASE(getDB)
 {
     tablePrecompiled->getTable();
 }
+
 BOOST_AUTO_TEST_CASE(hash)
 {
     tablePrecompiled->hash();
+}
+
+BOOST_AUTO_TEST_CASE(clear)
+{
+    auto table = tablePrecompiled->getTable();
+    table->clear();
 }
 
 BOOST_AUTO_TEST_CASE(toString)

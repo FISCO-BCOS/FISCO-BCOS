@@ -1,6 +1,7 @@
 #include "Common.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
+#include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
@@ -59,26 +60,43 @@ BOOST_AUTO_TEST_CASE(open_Table)
     std::string keyField("key");
     std::string valueField("value");
     memoryDBFactory->createTable(tableName, keyField, valueField);
-    MemoryTable::Ptr db =
+    MemoryTable::Ptr table =
         std::dynamic_pointer_cast<MemoryTable>(memoryDBFactory->openTable("t_test"));
-    auto entry = db->newEntry();
+    table->remove("name", table->newCondition());
+    auto entry = table->newEntry();
     entry->setField("key", "name");
     entry->setField("value", "Lili");
-    db->insert("name", entry);
+    table->insert("name", entry);
+    entry = table->newEntry();
+    entry->setField("key", "id");
+    entry->setField("value", "12345");
+    table->update("id", entry, table->newCondition());
+    table->insert("id", entry);
     entry->setField("key", "balance");
     entry->setField("value", "500");
-    db->insert("balance", entry);
-    auto condition = db->newCondition();
+    table->insert("balance", entry);
+    auto savePoint = memoryDBFactory->savepoint();
+    auto condition = table->newCondition();
     condition->EQ("key", "name");
     condition->NE("value", "name");
-    db->remove("name", condition);
-    condition = db->newCondition();
+    table->remove("name", condition);
+    memoryDBFactory->rollback(savePoint);
+    condition = table->newCondition();
     condition->EQ("key", "balance");
     condition->GT("value", "404");
     condition->GE("value", "404");
     condition->LT("value", "505");
     condition->LE("value", "505");
-    db->remove("balance", condition);
+    table->remove("balance", condition);
+    memoryDBFactory->commitDB(h256(0), 2);
+}
+
+BOOST_AUTO_TEST_CASE(open_sysTables)
+{
+    auto table = memoryDBFactory->openTable(SYS_CURRENT_STATE);
+    table = memoryDBFactory->openTable(SYS_NUMBER_2_HASH);
+    table = memoryDBFactory->openTable(SYS_TX_HASH_2_BLOCK);
+    table = memoryDBFactory->openTable(SYS_HASH_2_BLOCK);
 }
 
 BOOST_AUTO_TEST_CASE(setBlockHash)
