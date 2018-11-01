@@ -74,15 +74,20 @@ public:
                                    jsonrpc::JSON_OBJECT, "requestJson", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
 
-//        this->bindAndAddMethod(jsonrpc::Procedure("topics", jsonrpc::PARAMS_BY_POSITION,
-//                                   jsonrpc::JSON_OBJECT, "requestJson", jsonrpc::JSON_OBJECT, NULL),
-//            &dev::rpc::RpcFace::topicsI);
-//        this->bindAndAddMethod(jsonrpc::Procedure("setTopics", jsonrpc::PARAMS_BY_POSITION,
-//                                   jsonrpc::JSON_OBJECT, "requestJson", jsonrpc::JSON_OBJECT, NULL),
-//            &dev::rpc::RpcFace::setTopicsI);
-//        this->bindAndAddMethod(jsonrpc::Procedure("sendMessage", jsonrpc::PARAMS_BY_POSITION,
-//                                   jsonrpc::JSON_OBJECT, "requestJson", jsonrpc::JSON_OBJECT, NULL),
-//            &dev::rpc::RpcFace::sendMessageI);
+        //        this->bindAndAddMethod(jsonrpc::Procedure("topics", jsonrpc::PARAMS_BY_POSITION,
+        //                                   jsonrpc::JSON_OBJECT, "requestJson",
+        //                                   jsonrpc::JSON_OBJECT, NULL),
+        //            &dev::rpc::RpcFace::topicsI);
+        //        this->bindAndAddMethod(jsonrpc::Procedure("setTopics",
+        //        jsonrpc::PARAMS_BY_POSITION,
+        //                                   jsonrpc::JSON_OBJECT, "requestJson",
+        //                                   jsonrpc::JSON_OBJECT, NULL),
+        //            &dev::rpc::RpcFace::setTopicsI);
+        //        this->bindAndAddMethod(jsonrpc::Procedure("sendMessage",
+        //        jsonrpc::PARAMS_BY_POSITION,
+        //                                   jsonrpc::JSON_OBJECT, "requestJson",
+        //                                   jsonrpc::JSON_OBJECT, NULL),
+        //            &dev::rpc::RpcFace::sendMessageI);
     }
 
     inline virtual void blockNumberI(const Json::Value& request, Json::Value& response)
@@ -140,18 +145,18 @@ public:
         response = this->sendRawTransaction(request);
     }
 
-//    inline virtual void topicsI(const Json::Value& request, Json::Value& response)
-//    {
-//        response = this->topics(request);
-//    }
-//    inline virtual void setTopicsI(const Json::Value& request, Json::Value& response)
-//    {
-//        response = this->setTopics(request);
-//    }
-//    inline virtual void sendMessageI(const Json::Value& request, Json::Value& response)
-//    {
-//        response = this->sendMessage(request);
-//    }
+    //    inline virtual void topicsI(const Json::Value& request, Json::Value& response)
+    //    {
+    //        response = this->topics(request);
+    //    }
+    //    inline virtual void setTopicsI(const Json::Value& request, Json::Value& response)
+    //    {
+    //        response = this->setTopics(request);
+    //    }
+    //    inline virtual void sendMessageI(const Json::Value& request, Json::Value& response)
+    //    {
+    //        response = this->sendMessage(request);
+    //    }
 
     // consensus part
     virtual Json::Value blockNumber(const Json::Value& requestJson) = 0;
@@ -183,9 +188,9 @@ public:
     virtual Json::Value sendRawTransaction(const Json::Value& requestJson) = 0;
 
     // amop part
-//    virtual Json::Value topics(const Json::Value& requestJson) = 0;
-//    virtual Json::Value setTopics(const Json::Value& requestJson) = 0;
-//    virtual Json::Value sendMessage(const Json::Value& requestJson) = 0;
+    //    virtual Json::Value topics(const Json::Value& requestJson) = 0;
+    //    virtual Json::Value setTopics(const Json::Value& requestJson) = 0;
+    //    virtual Json::Value sendMessage(const Json::Value& requestJson) = 0;
 };
 
 }  // namespace rpc
