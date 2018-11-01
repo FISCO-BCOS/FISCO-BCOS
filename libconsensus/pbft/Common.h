@@ -27,6 +27,13 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
+#define PBFTENGINE_LOG(LEVEL) \
+    LOG(LEVEL) << "[" << utcTime() << "] [PBFTENGINE] [PROTOCOL: " << m_protocolId << "] "
+#define PBFTSEALER_LOG(LEVEL)                                                                    \
+    LOG(LEVEL) << "[" << utcTime() << "] [PBFTSEALER] [PROTOCOL: " << m_pbftEngine->protocolId() \
+               << "] "
+#define PBFTReqCache_LOG(LEVEL) \
+    LOG(LEVEL) << "[" << utcTime() << "] [PBFTREQCACHE] [PROTOCOL: " << m_protocolId << "] "
 namespace dev
 {
 namespace consensus

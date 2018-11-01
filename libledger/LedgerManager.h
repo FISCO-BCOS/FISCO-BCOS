@@ -26,6 +26,7 @@
 #include "LedgerInterface.h"
 #include <libethcore/Protocol.h>
 #include <map>
+#define LedgerManager_LOG(LEVEL) LOG(LEVEL) << "[" << utcTime() << "] [LEDGERMANAGER] "
 namespace dev
 {
 namespace ledger
@@ -39,10 +40,8 @@ public:
      * @param _keyPair: the keyPair used to init consensus module
      * @param _preCompile: map that stores the PrecompiledContract (required by blockverifier)
      */
-    LedgerManager(std::shared_ptr<dev::p2p::P2PInterface> _service, dev::KeyPair keyPair,
-        std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>>
-            _preCompile)
-      : m_service(_service), m_keyPair(keyPair), m_preCompile(_preCompile)
+    LedgerManager(std::shared_ptr<dev::p2p::P2PInterface> _service, dev::KeyPair keyPair)
+      : m_service(_service), m_keyPair(keyPair)
     {
         assert(m_service);
     }
@@ -64,14 +63,16 @@ public:
         {
             std::shared_ptr<LedgerInterface> ledger =
                 std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
-            LOG(DEBUG) << "Init Ledger for group:" << _groupId;
-            ledger->initLedger(*m_preCompile);
+            LedgerManager_LOG(INFO)
+                << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId) << std::endl;
+            ledger->initLedger();
             m_ledgerMap.insert(std::make_pair(_groupId, ledger));
             return true;
         }
         else
         {
-            LOG(WARNING) << "Group " << _groupId << " has been created already";
+            LedgerManager_LOG(WARNING) << "[initSingleLedger] Group already inited [GroupId]:  "
+                                       << std::to_string(_groupId) << std::endl;
             return false;
         }
     }
@@ -170,7 +171,6 @@ private:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// keyPair shared by all the ledgers
     dev::KeyPair m_keyPair;
-    std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>> m_preCompile;
 };
 }  // namespace ledger
 }  // namespace dev

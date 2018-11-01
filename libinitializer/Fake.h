@@ -187,8 +187,7 @@ public:
       : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {}
     /// init the ledger(called by initializer)
-    void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override
+    void initLedger() override
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);

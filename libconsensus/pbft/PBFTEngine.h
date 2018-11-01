@@ -52,19 +52,18 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
         h512s const& _minerList = h512s())
       : ConsensusEngineBase(
             _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
         m_keyPair(_key_pair),
         m_baseDir(_baseDir)
     {
-        std::cout << "#### register handler for PBFTEngine, protocol id:" << m_protocolId
-                  << std::endl;
+        PBFTENGINE_LOG(INFO) << "[Register handler for PBFTEngine, protocol id]:  " << m_protocolId;
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-        m_reqCache = std::make_shared<PBFTReqCache>();
+        m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -253,7 +252,8 @@ protected:
         peerIndex = getIndexByMiner(session->id());
         if (peerIndex < 0)
         {
-            LOG(WARNING) << "Recv an pbft msg from unknown peer id=" << session->id();
+            PBFTENGINE_LOG(WARNING)
+                << "[#isValidReq] Recv PBFT msg from unkown peer:  " << session->id();
             return false;
         }
         /// check whether this node is in the miner list
@@ -287,16 +287,16 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            LOG(WARNING) << oss.str()
-                         << " Recv a req which not in prepareCache,prepareCache block_hash = "
-                         << m_reqCache->prepareCache().block_hash.abridged()
-                         << "req block_hash = " << req.block_hash;
+            PBFTENGINE_LOG(WARNING) << "#[checkReq] Not exist in prepare cache: [prepHash/hash]:"
+                                    << m_reqCache->prepareCache().block_hash.abridged() << "/"
+                                    << req.block_hash << "  [INFO]:  " << oss.str();
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
             {
-                LOG(INFO) << "Recv a future request, hash="
-                          << m_reqCache->prepareCache().block_hash.abridged();
+                PBFTENGINE_LOG(INFO) << "#[checkReq] Recv future request: [prepHash]:"
+                                     << m_reqCache->prepareCache().block_hash.abridged()
+                                     << "  [INFO]:  " << oss.str();
                 return CheckResult::FUTURE;
             }
             return CheckResult::INVALID;
@@ -304,20 +304,22 @@ protected:
         /// check the sealer of this request
         if (req.idx == m_idx)
         {
-            LOG(WARNING) << oss.str() << " Discard an illegal request, your own req";
+            PBFTENGINE_LOG(WARNING) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
             return CheckResult::INVALID;
         }
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            LOG(WARNING) << oss.str()
-                         << ", Discard a req of which view is not equal to prepare.view = "
-                         << m_reqCache->prepareCache().view;
+            PBFTENGINE_LOG(WARNING)
+                << "[#checkReq] Recv req with unconsistent view: [prepView/view]:  "
+                << m_reqCache->prepareCache().view << "/" << req.view << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            LOG(WARNING) << oss.str() << ", CheckSign failed";
+            PBFTENGINE_LOG(WARNING)
+                << "[#checkReq] invalid sign: [hash]:" << req.block_hash.abridged()
+                << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         return CheckResult::VALID;
@@ -354,13 +356,16 @@ protected:
     inline bool isValidLeader(PrepareReq const& req) const
     {
         auto leader = getLeader();
-        LOG(DEBUG) << "### req.idx:" << req.idx << ", leader.second:" << leader.second
-                   << " protocol:" << m_protocolId << ", sealer:" << m_highestBlock.sealer()
-                   << " cfgErr:" << m_cfgErr << " m_leaderFailed:" << m_leaderFailed;
-        LOG(DEBUG) << "#### m_view:" << m_view << ", highest number:" << m_highestBlock.number();
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
+        {
+            PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Get leader failed: "
+                                       "[cfgErr/idx/req.idx/view/highSealer/highNumber]:  "
+                                    << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/"
+                                    << m_highestBlock.sealer() << "/" << m_highestBlock.number();
             return false;
+        }
+
         return true;
     }
 
@@ -370,7 +375,6 @@ protected:
         {
             return std::make_pair(false, Invalid256);
         }
-        /// LOG(DEBUG)<<"#### m_view:"<<m_view<<", highest number:"<<m_highestBlock.number();
         return std::make_pair(true, (m_view + u256(m_highestBlock.number())) % u256(m_nodeNum));
     }
     void checkMinerList(dev::eth::Block const& block);
