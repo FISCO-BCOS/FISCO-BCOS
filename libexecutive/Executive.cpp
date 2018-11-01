@@ -92,12 +92,6 @@ void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction con
     if ((_ir & ImportRequirements::TransactionBasic) && _t.baseGasRequired(schedule) > _t.gas())
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
                                   (bigint)(_t.baseGasRequired(schedule)), (bigint)_t.gas()));
-
-    // Avoid transactions that would take us beyond the block gas limit.
-    if (_gasUsed + (bigint)_t.gas() > _header.gasLimit())
-        BOOST_THROW_EXCEPTION(BlockGasLimitReached() << RequirementErrorComment(
-                                  (bigint)(_header.gasLimit() - _gasUsed), (bigint)_t.gas(),
-                                  string("_gasUsed + (bigint)_t.gas() > _header.gasLimit()")));
 }
 
 bool Executive::execute()

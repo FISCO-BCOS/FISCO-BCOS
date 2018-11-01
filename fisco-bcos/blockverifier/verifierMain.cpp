@@ -25,8 +25,8 @@
 #include <libblockverifier/BlockVerifier.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/easylog.h>
-#include <libethcore/Block.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/Block.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
@@ -86,13 +86,12 @@ int main(int argc, char* argv[])
             block.setBlockHeader(header);
 
             dev::bytes rlpBytes = dev::fromHex(
-                "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a1000"
-                "00000000"
-                "000000000000003ca576d469d7aa0244071d27eb33c5629753593e0000000000000000000000000000"
-                "00000000"
-                "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff"
-                "6d62657c"
-                "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
+                "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
+                "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
+                "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
+                "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
+                "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
+                "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
             dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
             dev::KeyPair key_pair(dev::Secret::random());
             dev::Secret sec = key_pair.secret();
@@ -105,7 +104,8 @@ int main(int argc, char* argv[])
             block.appendTransaction(tx);
             auto context = blockVerifier->executeBlock(block);
             blockChain->commitBlock(block, context);
-            dev::eth::TransactionReceipt receipt = blockChain->getTransactionReceiptByHash(tx.sha3());
+            dev::eth::TransactionReceipt receipt =
+                blockChain->getTransactionReceiptByHash(tx.sha3());
             LOG(INFO) << "receipt" << receipt;
         }
     }
