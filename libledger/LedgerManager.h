@@ -26,7 +26,7 @@
 #include "LedgerInterface.h"
 #include <libethcore/Protocol.h>
 #include <map>
-#define LedgerManager_LOG(LEVEL) LOG(LEVEL) << "[" << utcTime() << "] [LEDGERMANAGER] "
+#define LedgerManager_LOG(LEVEL) LOG(LEVEL) << "[#LEDGERMANAGER] "
 namespace dev
 {
 namespace ledger

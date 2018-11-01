@@ -43,19 +43,20 @@ BOOST_AUTO_TEST_CASE(testLoadTransactions)
     std::shared_ptr<BlockVerifierInterface> blockVerifier = std::make_shared<FakeBlockverifier>();
     std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5);
 
-    bytes rlpBytes = fromHex(
-        "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
-        "000000000000003ca576d469d7aa0244071d27eb33c5629753593e000000000000000000000000000000000000"
-        "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62657c"
-        "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
-    Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
+    u256 value = u256(100);
+    u256 gas = u256(100000000);
+    u256 gasPrice = u256(0);
+    Address dst = toAddress(KeyPair::create().pub());
+    std::string str = "transaction";
+    bytes data(str.begin(), str.end());
+    Transaction tx(value, gasPrice, gas, dst, data);
     Secret sec = KeyPair::create().secret();
-
     ///< Summit 10 transactions to txpool.
     const size_t txCnt = 10;
     for (size_t i = 0; i < txCnt; i++)
     {
         tx.setNonce(tx.nonce() + u256(i));
+        tx.setBlockLimit(txpool_creator->m_blockChain->number() + 2);
         dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         txpool_creator->m_txPool->submit(tx);

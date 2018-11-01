@@ -197,17 +197,17 @@ evmc_result ExtVM::call(CallParameters& _p)
 
 size_t ExtVM::codeSizeAt(dev::Address _a)
 {
-    return m_s.codeSize(_a);
+    return m_s->codeSize(_a);
 }
 
 h256 ExtVM::codeHashAt(Address _a)
 {
-    return exists(_a) ? m_s.codeHash(_a) : h256{};
+    return exists(_a) ? m_s->codeHash(_a) : h256{};
 }
 
 void ExtVM::setStore(u256 _n, u256 _v)
 {
-    m_s.setStorage(myAddress(), _n, _v);
+    m_s->setStorage(myAddress(), _n, _v);
 }
 
 evmc_result ExtVM::create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op,
@@ -242,8 +242,8 @@ void ExtVM::suicide(Address _a)
     // http://martin.swende.se/blog/Ethereum_quirks_and_vulns.html). There is one test case
     // witnessing the current consensus
     // 'GeneralStateTests/stSystemOperationsTest/suicideSendEtherPostDeath.json'.
-    m_s.addBalance(_a, m_s.balance(myAddress()));
-    m_s.setBalance(myAddress(), 0);
+    m_s->addBalance(_a, m_s->balance(myAddress()));
+    m_s->setBalance(myAddress(), 0);
     ExtVMFace::suicide(_a);
 }
 

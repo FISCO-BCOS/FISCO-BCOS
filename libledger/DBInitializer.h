@@ -29,7 +29,7 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <memory>
-#define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[" << utcTime() << "] [DBINITIALIZER] "
+#define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[#DBINITIALIZER] "
 namespace dev
 {
 namespace ledger

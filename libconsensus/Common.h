@@ -26,11 +26,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
-#define SEAL_LOG(LEVEL)                                                                         \
-    LOG(LEVEL) << "[" << utcTime() << "] [Seal] [PROTOCOL: " << m_consensusEngine->protocolId() \
-               << "] "
-#define ENGINE_LOG(LEVEL) \
-    LOG(LEVEL) << "[" << utcTime() << "] [ConsensusEngine] [PROTOCOL: " << m_protocolId << "] "
+#define SEAL_LOG(LEVEL) \
+    LOG(LEVEL) << "[#Seal] [PROTOCOL: " << m_consensusEngine->protocolId() << "] "
+#define ENGINE_LOG(LEVEL) LOG(LEVEL) << "[#ConsensusEngine] [PROTOCOL: " << m_protocolId << "] "
 namespace dev
 {
 namespace consensus

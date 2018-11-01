@@ -211,6 +211,7 @@ void Ledger::initBlockChain()
     Ledger_LOG(DEBUG) << "[#initBlockChain]";
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     m_blockChain = std::shared_ptr<BlockChainInterface>(blockChain.get());
+    blockChain->setStateStorage(m_dbInitializer->storage());
 }
 
 /**
