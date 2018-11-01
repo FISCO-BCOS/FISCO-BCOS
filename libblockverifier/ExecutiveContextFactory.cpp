@@ -41,9 +41,3 @@ void ExecutiveContextFactory::setStateFactory(
 {
     m_stateFactoryInterface = stateFactoryInterface;
 }
-
-void ExecutiveContextFactory::setPrecompiledContract(
-    std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract)
-{
-    m_precompiledContract = precompiledContract;
-}

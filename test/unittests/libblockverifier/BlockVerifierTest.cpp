@@ -86,7 +86,6 @@ struct BlockVerifierFixture
         m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
         m_executiveContextFactory->setStateStorage(m_levelDBStorage);
         m_executiveContextFactory->setStateFactory(m_stateFactory);
-        m_executiveContextFactory->setPrecompiledContract(m_precompiledContract);
 
         m_blockVerifier->setExecutiveContextFactory(m_executiveContextFactory);
 
