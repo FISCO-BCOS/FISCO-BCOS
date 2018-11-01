@@ -86,8 +86,6 @@ void DBInitializer::createExecutiveContext(
     m_executiveContextFac->setStateStorage(m_storage);
     // mpt or storage
     m_executiveContextFac->setStateFactory(m_stateFactory);
-    /// precompile
-    m_executiveContextFac->setPrecompiledContract(precompile);
 }
 
 /// create stateFactory

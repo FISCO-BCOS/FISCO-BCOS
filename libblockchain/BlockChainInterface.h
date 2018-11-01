@@ -38,8 +38,8 @@ class BlockChainInterface
 public:
     BlockChainInterface() = default;
     virtual ~BlockChainInterface(){};
-    virtual int64_t number() const = 0;
-    virtual dev::h256 numberHash(int64_t _i) const = 0;
+    virtual int64_t number() = 0;
+    virtual dev::h256 numberHash(int64_t _i) = 0;
     virtual dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) = 0;
     virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) = 0;
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) = 0;

@@ -46,9 +46,10 @@ class ExtVM : public dev::eth::ExtVMFace
 {
 public:
     /// Full constructor.
-    ExtVM(StateFace& _s, dev::eth::EnvInfo const& _envInfo, Address _myAddress, Address _caller,
-        Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data, bytesConstRef _code,
-        h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
+    ExtVM(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo, Address _myAddress,
+        Address _caller, Address _origin, u256 _value, u256 _gasPrice, bytesConstRef _data,
+        bytesConstRef _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
+        bool _staticCall)
       : ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(),
             _codeHash, _depth, _isCreate, _staticCall),
         m_s(_s)
@@ -56,17 +57,17 @@ public:
         // Contract: processing account must exist. In case of CALL, the ExtVM
         // is created only if an account has code (so exist). In case of CREATE
         // the account must be created first.
-        assert(m_s.addressInUse(_myAddress));
+        assert(m_s->addressInUse(_myAddress));
     }
 
     /// Read storage location.
-    u256 store(u256 _n) final { return m_s.storage(myAddress(), _n); }
+    u256 store(u256 _n) final { return m_s->storage(myAddress(), _n); }
 
     /// Write a value in storage.
     void setStore(u256 _n, u256 _v) final;
 
     /// Read address's code.
-    bytes const& codeAt(Address _a) final { return m_s.code(_a); }
+    bytes const& codeAt(Address _a) final { return m_s->code(_a); }
 
     /// @returns the size of the code in  bytes at the given address.
     size_t codeSizeAt(Address _a) final;
@@ -82,15 +83,15 @@ public:
     evmc_result call(dev::eth::CallParameters& _params) final;
 
     /// Read address's balance.
-    u256 balance(Address _a) final { return m_s.balance(_a); }
+    u256 balance(Address _a) final { return m_s->balance(_a); }
 
     /// Does the account exist?
     bool exists(Address _a) final
     {
         if (evmSchedule().emptinessIsNonexistence())
-            return m_s.accountNonemptyAndExisting(_a);
+            return m_s->accountNonemptyAndExisting(_a);
         else
-            return m_s.addressInUse(_a);
+            return m_s->addressInUse(_a);
     }
 
     /// Suicide the associated contract to the given address.
@@ -99,13 +100,13 @@ public:
     /// Return the EVM gas-price schedule for this execution context.
     dev::eth::EVMSchedule const& evmSchedule() const final { return dev::eth::DefaultSchedule; }
 
-    StateFace const& state() const { return m_s; }
+    std::shared_ptr<StateFace> const& state() const { return m_s; }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     h256 blockHash(int64_t _number) final;
 
 private:
-    StateFace& m_s;  ///< A reference to the base state.
+    std::shared_ptr<StateFace> m_s;  ///< A reference to the base state.
 };
 
 }  // namespace executive

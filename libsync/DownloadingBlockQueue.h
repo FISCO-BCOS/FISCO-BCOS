@@ -33,26 +33,47 @@ namespace dev
 {
 namespace sync
 {
+struct BlockQueueCmp
+{
+    bool operator()(BlockPtr const& _a, BlockPtr const& _b)
+    {
+        // increase order
+        return _a->header().number() > _b->header().number();
+    }
+};
+
 class DownloadingBlockQueue
 {
 public:
-    DownloadingBlockQueue() : m_blocks(), m_buffer(std::make_shared<BlockPtrVec>()) {
-        
-    }
+    DownloadingBlockQueue() : m_blocks(), m_buffer(std::make_shared<BlockPtrVec>()) {}
     /// Push a block
     void push(BlockPtr _block);
 
     /// Is the queue empty?
     bool empty();
 
+    /// get the total size of th block queue
     size_t size();
 
-    /// Pop the block sequent, erase blocks smaller than _startNumber
-    BlockPtrVec popSequent(int64_t _startNumber, int64_t _limit);
+    /// pop the top unit of the block queue
+    void pop();
+
+    /// get the top unit of the block queue
+    BlockPtr top(bool isFlushBuffer = false);
+
+    /// clear queue and buffer
+    void clear();
+
+    /// clear queue
+    void clearQueue();
+
+    /// flush m_buffer into queue
+    void flushBufferToQueue();
+
+    void clearFullQueueIfNotHas(int64_t _blockNumber);
 
 private:
-    std::map<int64_t, BlockPtr, std::greater<int64_t>> m_blocks;  //
-    int64_t m_minNumberInQueue = LONG_LONG_MAX;
+    std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //
     std::shared_ptr<BlockPtrVec> m_buffer;  // use buffer for faster push return
 
     mutable SharedMutex x_blocks;

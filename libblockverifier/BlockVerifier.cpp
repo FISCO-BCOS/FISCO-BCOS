@@ -33,14 +33,18 @@ using namespace dev::executive;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
 {
-    LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size();
+    LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size()
+               << " hash: " << block.blockHeader().hash()
+               << " num: " << block.blockHeader().number()
+               << " stateRoot: " << block.blockHeader().stateRoot();
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
     {
         BlockInfo blockInfo;
         blockInfo.hash = block.blockHeader().hash();
         blockInfo.number = block.blockHeader().number();
-        m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
+        m_executiveContextFactory->initExecutiveContext(
+            blockInfo, block.blockHeader().stateRoot(), executiveContext);
     }
     catch (exception& e)
     {
@@ -70,7 +74,8 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
         BlockInfo blockInfo;
         blockInfo.hash = blockHeader.hash();
         blockInfo.number = blockHeader.number();
-        m_executiveContextFactory->initExecutiveContext(blockInfo, executiveContext);
+        m_executiveContextFactory->initExecutiveContext(
+            blockInfo, blockHeader.stateRoot(), executiveContext);
     }
     catch (exception& e)
     {
@@ -85,7 +90,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
 std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo const& _envInfo,
     Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
 {
-    LOG(TRACE) << "State::execute ";
+    LOG(TRACE) << "BlockVerifier::execute ";
 
     auto onOp = _onOp;
 #if ETH_VMTRACE
@@ -96,7 +101,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
 
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.
-    Executive e(*(executiveContext->getState()), _envInfo);
+    Executive e(executiveContext->getState(), _envInfo);
     ExecutionResult res;
     e.setResultRecipient(res);
     e.initialize(_t);
