@@ -61,7 +61,9 @@ public:
 
     ExecuteVMTestFixture()
       : TestOutputHelperFixture(),
-        m_mptStates(u256(0), MPTState::openDB("./", h256("0x1234")), BaseState::Empty),
+        m_mptStates(std::make_shared<MPTState>(
+            u256(0), MPTState::openDB("./", h256("0x2234")), BaseState::Empty)),
+
         m_e(m_mptStates, EnvInfo(fakeBlockHeader(), fakeCallBack, 0))
     {}
 
@@ -79,7 +81,7 @@ public:
         m_e.finalize();
     }
 
-    MPTState m_mptStates;
+    std::shared_ptr<MPTState> m_mptStates;
     Executive m_e;
 
 private:
@@ -153,7 +155,7 @@ BOOST_AUTO_TEST_CASE(DeployGetSetContractTest)
     Address newAddress = m_e.newAddress();
     cout << "Contract created at: " << newAddress << endl;
 
-    bytes createdCode = m_mptStates.code(newAddress);
+    bytes createdCode = m_mptStates->code(newAddress);
     cout << "Created code: " << toHex(createdCode) << endl;
 
     bytes runtimeCode = fromHex(

@@ -119,14 +119,21 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     LOG(DEBUG) << "init consensus.intervalBlockTime ="
                << m_param->mutableConsensusParam().intervalBlockTime;
-    for (auto it : pt.get_child("consensus"))
+    try
     {
-        if (it.first.find("miner.") == 0)
+        for (auto it : pt.get_child("consensus"))
         {
-            LOG(DEBUG) << "Add " << it.first << " : " << it.second.data();
-            h512 miner(it.second.data());
-            m_param->mutableConsensusParam().minerList.push_back(miner);
+            if (it.first.find("miner.") == 0)
+            {
+                LOG(DEBUG) << "Add " << it.first << " : " << it.second.data();
+                h512 miner(it.second.data());
+                m_param->mutableConsensusParam().minerList.push_back(miner);
+            }
         }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Parse consensus section failed:" << e.what();
     }
 }
 
@@ -185,6 +192,7 @@ void Ledger::initBlockChain()
 {
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     m_blockChain = std::shared_ptr<BlockChainInterface>(blockChain.get());
+    blockChain->setStateStorage(m_dbInitializer->storage());
 }
 
 /**

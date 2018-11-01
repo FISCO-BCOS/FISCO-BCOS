@@ -42,8 +42,6 @@ public:
     typedef std::shared_ptr<Initializer> Ptr;
 
     void init(std::string const& _path);
-    void initSystemParams(){};
-    bool startSystem(){};
 
     CommonInitializer::Ptr commonInitializer() { return m_commonInitializer; }
     SecureInitiailizer::Ptr secureInitiailizer() { return m_secureInitiailizer; }

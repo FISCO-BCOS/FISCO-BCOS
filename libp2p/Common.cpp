@@ -122,10 +122,10 @@ ssize_t Message::decode(const byte* buffer, size_t size)
     int32_t offset = 0;
     m_length = ntohl(*((uint32_t*)&buffer[offset]));
 
-    if (m_length > MAX_LENGTH)
+    /*if (m_length > MAX_LENGTH)
     {
         return PACKET_ERROR;
-    }
+    }*/
 
     if (size < m_length)
     {

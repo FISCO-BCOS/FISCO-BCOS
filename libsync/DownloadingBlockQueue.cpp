@@ -61,8 +61,42 @@ size_t DownloadingBlockQueue::size()
     return s;
 }
 
-/// pop the block sequent
-BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _limit)
+/// pop the block
+void DownloadingBlockQueue::pop()
+{
+    WriteGuard l(x_blocks);
+    if (!m_blocks.empty())
+        m_blocks.pop();
+}
+
+BlockPtr DownloadingBlockQueue::top(bool isFlushBuffer)
+{
+    if (isFlushBuffer)
+        flushBufferToQueue();
+
+    ReadGuard l(x_blocks);
+    if (!m_blocks.empty())
+        return m_blocks.top();
+    else
+        return nullptr;
+}
+
+void DownloadingBlockQueue::clear()
+{
+    WriteGuard l(x_buffer);
+    m_buffer->clear();
+
+    clearQueue();
+}
+
+void DownloadingBlockQueue::clearQueue()
+{
+    WriteGuard l(x_blocks);
+    std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> emptyQueue;
+    swap(m_blocks, emptyQueue);  // Does memory leak here ?
+}
+
+void DownloadingBlockQueue::flushBufferToQueue()
 {
     shared_ptr<BlockPtrVec> localBuffer;
     {
@@ -82,39 +116,20 @@ BlockPtrVec DownloadingBlockQueue::popSequent(int64_t _startNumber, int64_t _lim
             break;
         }
 
-        int64_t number = block->header().number();
-
-        if (number < _startNumber)
-            continue;  // ignore smaller blocks
-
-        auto p = m_blocks.find(number);
-        if (p == m_blocks.end())
-        {
-            m_blocks.insert(pair<int64_t, BlockPtr>(number, block));
-            m_minNumberInQueue = min(m_minNumberInQueue, number);
-        }
+        m_blocks.push(block);
     }
+}
 
-    // delete smaller blocks in queue
-    for (; m_minNumberInQueue < _startNumber; ++m_minNumberInQueue)
+void DownloadingBlockQueue::clearFullQueueIfNotHas(int64_t _blockNumber)
+{
+    bool needClear = false;
     {
-        auto p = m_blocks.find(m_minNumberInQueue);
-        if (p != m_blocks.end())
-            m_blocks.erase(p);
-    }
+        ReadGuard l(x_blocks);
 
-    // generate a queue
-    BlockPtrVec ret;
-    for (; m_minNumberInQueue < _startNumber + _limit; ++m_minNumberInQueue)
-    {
-        auto p = m_blocks.find(m_minNumberInQueue);
-        if (p != m_blocks.end())
-        {
-            ret.emplace_back(p->second);
-            m_blocks.erase(p);
-        }
-        else
-            break;
+        if (m_blocks.size() == c_maxDownloadingBlockQueueSize &&
+            m_blocks.top()->header().number() > _blockNumber)
+            needClear = true;
     }
-    return ret;
+    if (needClear)
+        clearQueue();
 }

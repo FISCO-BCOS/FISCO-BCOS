@@ -46,7 +46,8 @@ public:
     virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
 
     void setBlockHash(h256 blockHash);
-    void setBlockNum(int blockNum);
+    void setBlockNum(int64_t blockNum);
+
     h256 hash();
     size_t savepoint() const { return m_changeLog.size(); };
     void rollback(size_t _savepoint);

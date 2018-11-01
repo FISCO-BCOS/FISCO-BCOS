@@ -54,9 +54,9 @@ public:
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param);
 
-    void setMemoryTableFactory(dev::storage::MemoryTableFactory::Ptr MemoryTableFactory)
+    void setMemoryTableFactory(dev::storage::MemoryTableFactory::Ptr memoryTableFactory)
     {
-        m_memoryTableFactory = MemoryTableFactory;
+        m_memoryTableFactory = memoryTableFactory;
     }
 
     dev::storage::MemoryTableFactory::Ptr getmemoryTableFactory() { return m_memoryTableFactory; }
