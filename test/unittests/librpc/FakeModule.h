@@ -26,17 +26,17 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libconsensus/ConsensusInterface.h>
-#include <libblockverifier/BlockVerifierInterface.h>
-#include <libsync/SyncInterface.h>
-#include <libledger/LedgerManager.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libledger/LedgerManager.h>
+#include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <test/tools/libutils/Common.h>
+#include <test/unittests/libconsensus/FakePBFTEngine.h>
 
 using namespace dev;
 using namespace dev::blockchain;
@@ -49,65 +49,137 @@ namespace dev
 {
 namespace test
 {
-
-class FakeService : public Service
+class MockService : public Service
 {
 public:
-	FakeService(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
-	      : Service(_host, _p2pMsgHandler)
+    MockService(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
+      : Service(_host, _p2pMsgHandler)
     {
-
+        NodeID nodeID = h512(100);
+        NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
+        SessionInfo info(nodeID, m_endpoint, std::vector<std::string>());
+        std::vector<std::string> topics;
+        std::string topic = "Topic1";
+        topics.push_back(topic);
+        m_sessionInfos.push_back(SessionInfo(nodeID, m_endpoint, topics));
     }
 
-	SessionInfos sessionInfos()
-	{
-		  SessionInfos infos;
-//		  infos.push_back(SessionInfo(h512, i.second->nodeIPEndpoint(), *(i.second->topics())));
-//		  infos.push_back(SessionInfo(i.first, i.second->nodeIPEndpoint(), *(i.second->topics())));
-		  return infos;
-	}
+    virtual SessionInfos sessionInfos() const override { return m_sessionInfos; }
+    void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
+    void clearSessionInfo() { m_sessionInfos.clear(); }
+    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
+
+    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
+        dev::p2p::Options const& options = dev::p2p::Options()) override
+    {
+        if (m_asyncSend.count(nodeID))
+            m_asyncSend[nodeID]++;
+        else
+            m_asyncSend[nodeID] = 1;
+        m_asyncSendMsgs[nodeID] = message;
+    }
+    size_t getAsyncSendSizeByNodeID(NodeID const& nodeID)
+    {
+        if (!m_asyncSend.count(nodeID))
+            return 0;
+        return m_asyncSend[nodeID];
+    }
+
+    Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    {
+        auto msg = m_asyncSendMsgs.find(nodeID);
+        if (msg == m_asyncSendMsgs.end())
+            return nullptr;
+        return msg->second;
+    }
+
+    void setConnected() { m_connected = true; }
+    bool isConnected(NodeID const& nodeId) const { return m_connected; }
+
+private:
+    SessionInfos m_sessionInfos;
+    std::map<NodeID, size_t> m_asyncSend;
+    std::map<NodeID, Message::Ptr> m_asyncSendMsgs;
+    bool m_connected;
 };
 
-class FakeBlockChain : public BlockChainInterface
+class MockBlockChain : public BlockChainInterface
 {
 public:
-	FakeBlockChain()
+    MockBlockChain()
     {
         m_blockNumber = 1;
-        bytes m_blockHeaderData = bytes();
-        bytes m_blockData = bytes();
-        BlockHeader blockHeader;
+        blockHash = h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
+        blockHeader.setNumber(1);
+        blockHeader.setParentHash(h256(0x1));
+        blockHeader.setLogBloom(h2048(0x2));
+        blockHeader.setRoots(h256(0x3), h256(0x4), h256(0x5));
         blockHeader.setSealer(u256(1));
-        blockHeader.setNumber(0);
-        blockHeader.setTimestamp(0);
-        Block block;
-        blockHeader.encode(m_blockHeaderData);
-        block.encode(m_blockData, ref(m_blockHeaderData));
-        block.decode(ref(m_blockData));
-        m_blockHash[block.blockHeaderHash()] = 0;
+        extraData = bytes();
+        byte b = 10;
+        extraData.push_back(b);
+        blockHeader.setExtraData(extraData);
+        blockHeader.setGasLimit(u256(9));
+        blockHeader.setGasUsed(u256(8));
+        blockHeader.setTimestamp(9);
+
+        createTransaction();
+        transactions.push_back(transaction);
+
+        block.setBlockHeader(blockHeader);
+        block.setTransactions(transactions);
+
+        m_blockHash[blockHash] = 0;
         m_blockChain.push_back(std::make_shared<Block>(block));
     }
 
-	virtual ~FakeBlockChain() {}
+    virtual ~MockBlockChain() {}
 
-    int64_t number() const { return m_blockNumber; }
+    virtual int64_t number() const override { return m_blockNumber; }
 
-    dev::h256 numberHash(int64_t _i) const { return m_blockChain[_i]->headerHash(); }
+    void createTransaction()
+    {
+        bytes rlpBytes = fromHex(
+            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+            "0000"
+            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+            "0000"
+            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+            "657c"
+            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+        RLP rlpObj(rlpBytes);
+        bytesConstRef d = rlpObj.data();
+        transaction = Transaction(d, eth::CheckTransaction::Everything);
+    }
+    dev::h256 numberHash(int64_t _i) const { return blockHash; }
+
+    virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
-    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
+
+    virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
     {
-        return LocalisedTransaction();
+        return LocalisedTransaction(transaction, blockHash, 0, 1);
     }
+
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
-    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
+
+    virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(
+        dev::h256 const& _txHash) override
     {
-        return TransactionReceipt();
+        LogEntries entries;
+        LogEntry entry;
+        entry.address = Address(0x2000);
+        entry.data = bytes();
+        entry.topics = h256s();
+        entries.push_back(entry);
+        return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
@@ -118,35 +190,40 @@ public:
     void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        std::cout << "##### commitBlock:" << block.blockHeader().number() << std::endl;
         m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
         m_blockChain.push_back(std::make_shared<Block>(block));
         m_blockNumber = block.blockHeader().number() + 1;
         m_onReady();
     }
 
+    BlockHeader blockHeader;
+    Transactions transactions;
+    Transaction transaction;
+    bytes extraData;
+    Block block;
+    h256 blockHash;
     std::map<h256, uint64_t> m_blockHash;
     std::vector<std::shared_ptr<Block>> m_blockChain;
     uint64_t m_blockNumber;
 };
 
-class FakeBlockVerifier : public BlockVerifierInterface
+class MockBlockVerifier : public BlockVerifierInterface
 {
 public:
-	FakeBlockVerifier()
+    MockBlockVerifier()
     {
         m_executiveContext = std::make_shared<ExecutiveContext>();
         std::srand(std::time(nullptr));
     };
-    virtual ~ FakeBlockVerifier(){};
+    virtual ~MockBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
     {
-        /// execute time: 1000
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
-    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
+    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
+    executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) override
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;
@@ -157,6 +234,68 @@ private:
     std::shared_ptr<ExecutiveContext> m_executiveContext;
 };
 
+class MockTxPool : public TxPoolInterface
+{
+public:
+    MockTxPool()
+    {
+        bytes rlpBytes = fromHex(
+            "f8ac8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
+            "0000"
+            "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
+            "0000"
+            "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
+            "657c"
+            "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df050948203ea");
+
+        RLP rlpObj(rlpBytes);
+        bytesConstRef d = rlpObj.data();
+        transaction = Transaction(d, eth::CheckTransaction::Everything);
+        transactions.push_back(transaction);
+    };
+    virtual ~MockTxPool(){};
+    virtual dev::eth::Transactions pendingList() const override { return transactions; };
+    virtual size_t pendingSize() override { return 1; }
+    virtual dev::eth::Transactions topTransactions(
+        uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override
+    {
+        return transactions;
+    }
+    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) override
+    {
+        return transactions;
+    }
+    virtual bool drop(h256 const& _txHash) override { return true; }
+    virtual bool dropBlockTrans(dev::eth::Block const& block) override { return true; }
+    virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
+    virtual TxPoolStatus status() const override
+    {
+        TxPoolStatus status;
+        status.current = 0;
+        status.dropped = 0;
+        return status;
+    }
+    virtual std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
+    {
+        return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
+    }
+    virtual dev::eth::ImportResult import(
+        dev::eth::Transaction& _tx, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) override
+    {
+        return ImportResult::Success;
+    }
+    virtual dev::eth::ImportResult import(
+        bytesConstRef _txBytes, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) override
+    {
+        return ImportResult::Success;
+    }
+
+private:
+    Transactions transactions;
+    Transaction transaction;
+    PROTOCOL_ID protocolId = 0;
+};
+
 class FakeLedger : public Ledger
 {
 public:
@@ -164,17 +303,27 @@ public:
         dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
       : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {
-    	/// init blockChain
-    	initBlockChain();
-		/// init blockVerifier
-		initBlockVerifier();
-		/// init txPool
-//		initTxPool();
+        /// init blockChain
+        initBlockChain();
+        /// init blockVerifier
+        initBlockVerifier();
+        /// init txPool
+        initTxPool();
     }
-
+    virtual void initLedger(
+        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile)
+        override{};
     /// init blockverifier related
-    void initBlockChain() override { m_blockChain = std::make_shared<FakeBlockChain>(); }
-    void initBlockVerifier() override { m_blockVerifier = std::make_shared<FakeBlockVerifier>(); }
+    void initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
+    void initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    void initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
+    virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
+    {
+        FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
+        std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface =
+            fake_pbft.consensus();
+        return consensusInterface;
+    }
 };
 
 }  // namespace test

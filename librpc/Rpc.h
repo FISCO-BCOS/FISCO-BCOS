@@ -42,7 +42,8 @@ namespace rpc
 class Rpc : public RpcFace
 {
 public:
-    Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager, std::shared_ptr<dev::p2p::Service> _service);
+    Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
+        std::shared_ptr<dev::p2p::Service> _service);
 
     virtual RPCModules implementedModules() const override
     {
@@ -80,9 +81,9 @@ public:
     virtual Json::Value sendRawTransaction(const Json::Value& requestJson) override;
 
     // amop part
-//    virtual Json::Value topics(const Json::Value& requestJson) override;
-//    virtual Json::Value setTopics(const Json::Value& requestJson) override;
-//    virtual Json::Value sendMessage(const Json::Value& requestJson) override;
+    //    virtual Json::Value topics(const Json::Value& requestJson) override;
+    //    virtual Json::Value setTopics(const Json::Value& requestJson) override;
+    //    virtual Json::Value sendMessage(const Json::Value& requestJson) override;
 
     // push event part
     //	virtual Json::Value blockAccepted  (const Json::Value &requestJson) override;
@@ -91,14 +92,11 @@ public:
 
 
 protected:
-    std::shared_ptr<dev::ledger::LedgerManager> ledgerManager()
-    {
-        return m_ledgerManager;
-    }
-    //std::shared_ptr<dev::ledger::LedgerManager<dev::ledger::LedgerInterface>> m_ledgerManager;
+    std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
     std::shared_ptr<dev::p2p::Service> service() { return m_service; }
     std::shared_ptr<dev::p2p::Service> m_service;
+    Json::Value rpcErrorResult(Json::Value& responseJson, std::exception& e);
 };
 
 }  // namespace rpc
