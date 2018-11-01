@@ -89,12 +89,6 @@ public:
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& getProtocolId() const = 0;
 
-    /// Get transaction in TxPool, return nullptr when not found
-    virtual std::shared_ptr<dev::eth::Transaction const> transactionInPool(h256 const& _txHash)
-    {
-        return nullptr;
-    };
-
     /// Set transaction is known by a node
     virtual void transactionIsKonwnBy(h256 const& _txHash, h512 const& _nodeId){};
 

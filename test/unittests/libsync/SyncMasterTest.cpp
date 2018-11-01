@@ -88,11 +88,20 @@ public:
         shared_ptr<Transactions> txs = make_shared<Transactions>();
         for (size_t i = 0; i < _num; ++i)
         {
-            Transaction tx(ref(c_txBytes), CheckTransaction::Everything);
+            /// Transaction tx(ref(c_txBytes), CheckTransaction::Everything);
+            u256 value = u256(100);
+            u256 gas = u256(100000000);
+            u256 gasPrice = u256(0);
+            Address dst = toAddress(KeyPair::create().pub());
+            std::string str = "test transaction";
+            bytes data(str.begin(), str.end());
+            Transaction tx(value, gasPrice, gas, dst, data);
+            KeyPair sigKeyPair = KeyPair::create();
             tx.setNonce(tx.nonce() + u256(rand()));
             tx.setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-            dev::Signature sig = sign(m_sec, tx.sha3(WithoutSignature));
-            tx.updateSignature(SignatureStruct(sig));
+            SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx.sha3(WithoutSignature));
+            /// update the signature of transaction
+            tx.updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);
             txs->emplace_back(tx);
         }
@@ -236,38 +245,56 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
 
     int64_t currentNumber = 0;
 
-    // latestNumber: 6  curr:[0] -> downloadqueue:[1] -> curr:[0, 1]  not finish
+    cout << " latestNumber: 6  curr:[0] -> downloadqueue:[1] -> curr:[0, 1]  not finish " << endl;
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b1 = latestBlockChain.getBlockByNumber(1);
     status->bq().push(b1);
+    status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 0);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
 
-    // latestNumber: 6  curr:[0, 1] -> downloadqueue:[3, 4] -> curr:[0, 1]  not finish
+    cout << " latestNumber: 6  curr:[0, 1] -> downloadqueue:[3, 4] -> curr:[0, 1]  not finish"
+         << endl;
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b3 = latestBlockChain.getBlockByNumber(3);
     shared_ptr<Block> b4 = latestBlockChain.getBlockByNumber(4);
     status->bq().push(b3);
     status->bq().push(b4);
+    status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
 
-    // latestNumber: 6  curr:[0, 1] -> downloadqueue:[2, 3, 4] -> curr:[0, 4]  not finish
+    cout << " latestNumber: 6  curr:[0, 1] -> downloadqueue:[1, 3, 3, 4] -> curr:[0, 1]  not finish"
+         << endl;
+    cout << "Number: " << blockChain->number() << endl;
+    b1 = latestBlockChain.getBlockByNumber(1);
+    b3 = latestBlockChain.getBlockByNumber(3);
+    status->bq().push(b1);
+    status->bq().push(b3);
+    status->bq().flushBufferToQueue();
+    BOOST_CHECK_EQUAL(blockChain->number(), 1);
+    BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
+    BOOST_CHECK_EQUAL(blockChain->number(), 1);
+
+    cout << " latestNumber: 6  curr:[0, 1] -> downloadqueue:[2, 3, 3, 4] -> curr:[0, 4]  not finish"
+         << endl;
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b2 = latestBlockChain.getBlockByNumber(2);
     status->bq().push(b2);
+    status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
     BOOST_CHECK_EQUAL(blockChain->number(), 4);
 
-    // latestNumber: 6  curr:[0, 4] -> downloadqueue:[5, 6] -> curr:[0, 6]  finish
+    cout << " latestNumber: 6  curr:[0, 4] -> downloadqueue:[5, 6] -> curr:[0, 6]  finish" << endl;
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b5 = latestBlockChain.getBlockByNumber(5);
     shared_ptr<Block> b6 = latestBlockChain.getBlockByNumber(6);
     status->bq().push(b5);
     status->bq().push(b6);
+    status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 4);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), true);  // finish
     BOOST_CHECK_EQUAL(blockChain->number(), 6);
@@ -286,6 +313,27 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     }
 }
 
+BOOST_AUTO_TEST_CASE(DoWorkTest)
+{
+    int64_t currentBlockNumber = 0;
+    int64_t latestNumber = 6;
+    FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100));
+    std::shared_ptr<SyncMaster> sync = syncTools.sync;
+
+    sync->noteNewTransactions();
+    sync->noteNewBlocks();
+    sync->doWork();
+
+    sync->noteDownloadingBegin();
+    BOOST_CHECK(sync->status().state == SyncState::Downloading);
+    sync->doWork();
+    BOOST_CHECK(sync->status().state == SyncState::Idle);
+
+    sync->noteDownloadingBegin();
+    BOOST_CHECK(sync->status().state == SyncState::Downloading);
+    sync->noteDownloadingFinish();
+    BOOST_CHECK(sync->status().state == SyncState::Idle);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

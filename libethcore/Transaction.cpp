@@ -120,17 +120,14 @@ SignatureStruct const& Transaction::signature() const
     return *m_vrs;
 }
 
-/// void Transaction::streamRLP(RLPStream& _s, IncludeSignature _sig) const
+/// encode the transaction to bytes
 void Transaction::encode(bytes& _trans, IncludeSignature _sig) const
 {
     RLPStream _s;
     if (m_type == NullTransaction)
         return;
-
-    // 3 means r/s/v 3 fields, may not be serialized.
-    // 7 means other fields in the transaction, except r/s/v.
     _s.appendList((_sig ? 3 : 0) + 7);
-    _s << m_nonce << m_gasPrice << m_gas;
+    _s << m_nonce << m_gasPrice << m_gas << m_blockLimit;
     if (m_type == MessageCall)
         _s << m_receiveAddress;
     else
@@ -144,8 +141,6 @@ void Transaction::encode(bytes& _trans, IncludeSignature _sig) const
 
         _s << (int)(m_vrs->v + VBase) << (u256)m_vrs->r << (u256)m_vrs->s;
     }
-
-    _s << m_blockLimit;
     _s.swapOut(_trans);
 }
 

@@ -425,6 +425,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
                << ", hash = " << working_block.header().hash().abridged() << ", idx = " << req.idx
                << ", time =" << utcTime();
     checkBlockValid(working_block);
+    m_blockSync->noteSealingBlockNumber(working_block.header().number());
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
@@ -616,25 +617,29 @@ void PBFTEngine::checkAndSave()
 void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
 {
     Guard l(m_mutex);
-    /// update the highest block
-    m_highestBlock = blockHeader;
-    if (m_highestBlock.number() >= m_consensusBlockNumber)
+    if (m_blockChain->number() == 0 || m_highestBlock.number() < blockHeader.number())
     {
-        m_view = m_toView = u256(0);
-        m_leaderFailed = false;
-        m_timeManager.m_lastConsensusTime = utcTime();
-        m_timeManager.m_changeCycle = 0;
-        m_consensusBlockNumber = m_highestBlock.number() + 1;
-        /// delete invalid view change requests from the cache
-        m_reqCache->delInvalidViewChange(m_highestBlock);
+        /// update the highest block
+        m_highestBlock = blockHeader;
+        if (m_highestBlock.number() >= m_consensusBlockNumber)
+        {
+            m_view = m_toView = u256(0);
+            m_leaderFailed = false;
+            m_timeManager.m_lastConsensusTime = utcTime();
+            m_timeManager.m_changeCycle = 0;
+            m_consensusBlockNumber = m_highestBlock.number() + 1;
+            /// delete invalid view change requests from the cache
+            m_reqCache->delInvalidViewChange(m_highestBlock);
+        }
+        resetConfig();
+        /// clear caches
+        m_reqCache->clearAllExceptCommitCache();
+        m_reqCache->delCache(m_highestBlock.hash());
+        LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=" << m_highestBlock.number()
+                  << ",hash=" << blockHeader.hash().abridged()
+                  << ", idx=" << m_highestBlock.sealer() << ", Next: blk=" << m_consensusBlockNumber
+                  << ", Protocol=" << m_protocolId;
     }
-    resetConfig();
-    /// clear caches
-    m_reqCache->clearAllExceptCommitCache();
-    m_reqCache->delCache(m_highestBlock.hash());
-    LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Report: blk=" << m_highestBlock.number()
-              << ",hash=" << blockHeader.hash().abridged() << ", idx=" << m_highestBlock.sealer()
-              << ", Next: blk=" << m_consensusBlockNumber << ", Protocol=" << m_protocolId;
 }
 
 /**
