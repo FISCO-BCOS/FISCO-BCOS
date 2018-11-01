@@ -129,7 +129,7 @@ public:
     h256 const getTransactionRoot()
     {
         encodeTransactions();
-        return m_txsRoot;
+        return header().transactionsRoot();
     }
 
     void resetCurrentBlock(BlockHeader& _parent)
@@ -139,13 +139,14 @@ public:
         m_transactionReceipts.clear();
         m_sigList.clear();
         m_txsCache.clear();
-        m_txsMapCache.clear();
-        m_txsRoot.clear();
     }
 
-    void appendTransactionReceipt(TransactionReceipt const& _tran) { m_receipts.push_back(_tran); }
+    void appendTransactionReceipt(TransactionReceipt const& _tran)
+    {
+        m_transactionReceipts.push_back(_tran);
+    }
 
-    const TransactionReceipts& getTransactionReceipts() const { return m_receipts; }
+    const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
 
 private:
     /// encode function
@@ -156,14 +157,15 @@ private:
     {
         /// RecursiveGuard l(m_txsCacheLock);
         m_txsCache = bytes();
-        m_txsMapCache = BytesMap();
     }
 
     bytes const& encodeTransactions() const;
 
+    bytes const& encodeTransactionReceipts() const;
+
 private:
     /// block header of the block (field 0)
-    BlockHeader m_blockHeader;
+    mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)
     Transactions m_transactions;
     TransactionReceipts m_transactionReceipts;
@@ -171,13 +173,12 @@ private:
     std::vector<std::pair<u256, Signature>> m_sigList;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
-    mutable bytes m_txsCache;
-    /// mutable RecursiveMutex m_txsCacheLock;
-    TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
-    mutable BytesMap m_txsMapCache;
-    mutable h256 m_txsRoot;
 
-    mutable SharedMutex x_txsMapCache;
+    mutable SharedMutex x_txsCache;
+    mutable bytes m_txsCache;
+
+    mutable SharedMutex x_txReceiptsCache;
+    mutable bytes m_tReceiptsCache;
 };
 }  // namespace eth
 }  // namespace dev

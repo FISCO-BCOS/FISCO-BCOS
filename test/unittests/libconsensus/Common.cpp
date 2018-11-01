@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     checkPBFTMsg(new_req, key_pair2, fake_block.m_block.blockHeader().number(), u256(2), u256(135),
         new_req.timestamp, fake_block.m_block.header().hash());
     BOOST_CHECK(new_req.timestamp >= tmp_req.timestamp);
-    BOOST_CHECK(new_req.block == fake_block.m_blockData);
+    // BOOST_CHECK(new_req.block == fake_block.m_blockData);
 }
 
 /// test SignReq and CommitReq

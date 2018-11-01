@@ -44,9 +44,7 @@ Block::Block(Block const& _block)
     m_transactions(_block.transactions()),
     m_transactionReceipts(_block.transactionReceipts()),
     m_sigList(_block.sigList()),
-    m_txsCache(_block.m_txsCache),
-    m_txsMapCache(_block.m_txsMapCache),
-    m_txsRoot(_block.m_txsRoot)
+    m_txsCache(_block.m_txsCache)
 {
     noteChange();
 }
@@ -61,11 +59,6 @@ Block& Block::operator=(Block const& _block)
     /// init sigList
     m_sigList = _block.sigList();
     m_txsCache = _block.m_txsCache;
-    {
-        WriteGuard l(x_txsMapCache);
-        m_txsMapCache = _block.m_txsMapCache;
-    }
-    m_txsRoot = _block.m_txsRoot;
     noteChange();
     return *this;
 }
@@ -116,13 +109,16 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 {
     /// refresh transaction list cache
     bytes txsCache = encodeTransactions();
+    bytes txReceiptsCache = encodeTransactionReceipts();
     /// get block RLPStream
     RLPStream block_stream;
-    block_stream.appendList(4);
+    block_stream.appendList(5);
     // append block header
     block_stream.appendRaw(block_header);
     // append transaction list
     block_stream.appendRaw(txsCache);
+    // append transactionReceipts list
+    block_stream.appendRaw(txReceiptsCache);
     // append block hash
     block_stream.append(hash);
     // append sig_list
@@ -133,12 +129,12 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
 bytes const& Block::encodeTransactions() const
 {
-    WriteGuard l(x_txsMapCache);
+    WriteGuard l(x_txsCache);
     RLPStream txs;
     txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
     {
-        m_txsMapCache.clear();
+        BytesMap txsMapCache;
         for (size_t i = 0; i < m_transactions.size(); i++)
         {
             RLPStream s;
@@ -146,12 +142,36 @@ bytes const& Block::encodeTransactions() const
             bytes trans_data;
             m_transactions[i].encode(trans_data);
             txs.appendRaw(trans_data);
-            m_txsMapCache.insert(std::make_pair(s.out(), trans_data));
+            txsMapCache.insert(std::make_pair(s.out(), trans_data));
         }
         txs.swapOut(m_txsCache);
+        m_blockHeader.setTransactionsRoot(hash256(txsMapCache));
     }
-    m_txsRoot = hash256(m_txsMapCache);
     return m_txsCache;
+}
+
+/// encode transactionReceipts to bytes using rlp-encoding when transaction list has been changed
+bytes const& Block::encodeTransactionReceipts() const
+{
+    WriteGuard l(x_txReceiptsCache);
+    RLPStream txReceipts;
+    txReceipts.appendList(m_transactionReceipts.size());
+    if (m_tReceiptsCache == bytes())
+    {
+        BytesMap mapCache;
+        for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+        {
+            RLPStream s;
+            s << i;
+            bytes tranReceipts_data;
+            m_transactionReceipts[i].encode(tranReceipts_data);
+            txReceipts.appendRaw(tranReceipts_data);
+            mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
+        }
+        txReceipts.swapOut(m_tReceiptsCache);
+        m_blockHeader.setReceiptsRoot(hash256(mapCache));
+    }
+    return m_tReceiptsCache;
 }
 
 /**
@@ -172,8 +192,21 @@ void Block::decode(bytesConstRef _block_bytes)
     {
         m_transactions[i].decode(transactions_rlp[i]);
     }
+    /// get transactionReceipt list
+    RLP transactionReceipts_rlp = block_rlp[2];
+    m_transactionReceipts.resize(transactionReceipts_rlp.itemCount());
+    for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
+    {
+        m_transactionReceipts[i].decode(transactionReceipts_rlp[i]);
+    }
+    /// get hash
+    // h256 hash = block_rlp[3].toHash<h256>();
+    // if(hash != m_blockHeader.hash())
+    //{
+    //    BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
+    //}
     /// get sig_list
-    m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
+    m_sigList = block_rlp[4].toVector<std::pair<u256, Signature>>();
     noteChange();
 }
 }  // namespace eth
