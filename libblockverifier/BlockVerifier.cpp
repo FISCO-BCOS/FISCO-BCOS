@@ -62,6 +62,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
             execute(envInfo, tr, OnOpFunc(), executiveContext);
         block.appendTransactionReceipt(resultReceipt.second);
     }
+    block.header().setStateRoot(executiveContext->getState()->rootHash());
     return executiveContext;
 }
 
