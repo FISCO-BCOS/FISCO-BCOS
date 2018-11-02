@@ -1043,10 +1043,8 @@ void PBFTEngine::updateMinerList()
         return;
     if (m_highestBlock.number() == m_lastObtainMinerNum)
         return;
-    std::cout << "### updateMinerList now" << std::endl;
     try
     {
-        std::cout << "#### lock now" << std::endl;
         UpgradableGuard l(m_minerListMutex);
         auto miner_list = m_minerList;
         int64_t curBlockNum = m_highestBlock.number();

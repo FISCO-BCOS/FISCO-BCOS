@@ -186,20 +186,17 @@ protected:
     ///           2. equal to -1: the node is not a miner(not exists in miner list)
     inline ssize_t getIndexByMiner(dev::h512 const& nodeId)
     {
-        updateMinerList();
+        ReadGuard l(m_minerListMutex);
+        ssize_t index = -1;
+        for (size_t i = 0; i < m_minerList.size(); ++i)
         {
-            ReadGuard l(m_minerListMutex);
-            ssize_t index = -1;
-            for (size_t i = 0; i < m_minerList.size(); ++i)
+            if (m_minerList[i] == nodeId)
             {
-                if (m_minerList[i] == nodeId)
-                {
-                    index = i;
-                    break;
-                }
+                index = i;
+                break;
             }
-            return index;
         }
+        return index;
     }
     /// get the node id of specified miner according to its index
     /// @param index: the index of the node
