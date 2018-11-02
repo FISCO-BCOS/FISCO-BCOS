@@ -117,11 +117,14 @@ public:
             FakeBlock fake_block(trans_size, m_sec);
             if (blockHeight > 0)
             {
-                fake_block.m_blockHeader.setParentHash(m_blockChain[blockHeight - 1]->headerHash());
-                fake_block.m_blockHeader.setNumber(blockHeight);
+                fake_block.m_block.header().setParentHash(
+                    m_blockChain[blockHeight - 1]->headerHash());
+                fake_block.m_block.header().setNumber(blockHeight);
                 fake_block.reEncodeDecode();
             }
-            m_blockHash[fake_block.m_blockHeader.hash()] = blockHeight;
+            std::cout << "#### push back:" << toHex(fake_block.m_block.header().hash())
+                      << std::endl;
+            m_blockHash[fake_block.m_block.header().hash()] = blockHeight;
             m_blockChain.push_back(std::make_shared<Block>(fake_block.m_block));
         }
     }

@@ -432,6 +432,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     block.header().setSealerList(fake_pbft.consensus()->minerList());
     block.header().setSealer(req.idx);
     block.encode(req.block);
+    block.decode(ref(req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     fake_pbft.consensus()->mutableConsensusNumber() = req.height;
