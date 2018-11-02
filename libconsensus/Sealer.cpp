@@ -42,9 +42,10 @@ void Sealer::start()
 {
     if (m_startConsensus)
     {
-        LOG(WARNING) << "Sealer module has already been started, return directly";
+        SEAL_LOG(WARNING) << "[#Sealer module has already been started]" << std::endl;
         return;
     }
+    SEAL_LOG(INFO) << "[#Start sealer module]" << std::endl;
     resetSealingBlock();
     m_consensusEngine->reportBlock(
         m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
@@ -68,14 +69,14 @@ void Sealer::reportNewBlock()
     bool t = true;
     if (m_syncBlock.compare_exchange_strong(t, false))
     {
-        LOG(DEBUG) << "#### reportNewBlock compare_exchange_strong";
         DEV_WRITE_GUARDED(x_sealing)
         {
             m_consensusEngine->reportBlock(
                 m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
             if (shouldResetSealing())
             {
-                LOG(DEBUG) << "##### resetSealingBlock";
+                SEAL_LOG(DEBUG) << "[#reportNewBlock] Reset sealing: [number]:  "
+                                << m_blockChain->number() << std::endl;
                 resetSealingBlock();
             }
         }
@@ -148,9 +149,6 @@ void Sealer::resetSealingBlock(Sealing& sealing)
 void Sealer::resetBlock(Block& block)
 {
     block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
-    /// LOG(DEBUG) << "##### m_blockChain->getBlockByNumber(m_blockChain->number():"
-    ///           << m_blockChain->number();
-    /// LOG(DEBUG) << "##### block number after reset:" << block.header().number();
 }
 
 void Sealer::resetSealingHeader(BlockHeader& header)
@@ -169,9 +167,10 @@ void Sealer::stop()
 {
     if (m_startConsensus == false)
     {
-        LOG(WARNING) << "Sealer module has already been stopped, return now";
+        SEAL_LOG(WARNING) << "[#Sealer module has already been stopped]" << std::endl;
         return;
     }
+    SEAL_LOG(INFO) << "[#Stop sealer module...]" << std::endl;
     m_startConsensus = false;
     doneWorking();
     stopWorking();
