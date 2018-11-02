@@ -60,6 +60,7 @@ struct SyncParam
 struct GenesisParam
 {
     dev::h256 genesisHash;
+    u256 accountStartNonce;
 };
 
 class LedgerParam : public LedgerParamInterface

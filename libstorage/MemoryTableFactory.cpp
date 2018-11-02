@@ -31,10 +31,14 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory::MemoryTableFactory()
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 {
     m_sysTables.push_back(SYS_MINERS);
     m_sysTables.push_back(SYS_TABLES);
+    m_sysTables.push_back(SYS_CURRENT_STATE);
+    m_sysTables.push_back(SYS_NUMBER_2_HASH);
+    m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
+    m_sysTables.push_back(SYS_HASH_2_BLOCK);
 }
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName)
@@ -113,7 +117,7 @@ void MemoryTableFactory::setBlockHash(h256 blockHash)
     m_blockHash = blockHash;
 }
 
-void MemoryTableFactory::setBlockNum(int blockNum)
+void MemoryTableFactory::setBlockNum(int64_t blockNum)
 {
     m_blockNum = blockNum;
 }
@@ -160,6 +164,8 @@ void MemoryTableFactory::rollback(size_t _savepoint)
             auto data = change.table->data();
             auto entries = (*data)[change.key];
             entries->removeEntry(change.value[0].index);
+            if (entries->size() == 0u)
+                data->erase(change.key);
             break;
         }
         case Change::Update:
@@ -253,6 +259,26 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     {
         tableInfo->key = "table_name";
         tableInfo->fields = vector<string>{"key_field", "value_field"};
+    }
+    else if (tableName == SYS_CURRENT_STATE)
+    {
+        tableInfo->key = "number";
+        tableInfo->fields = std::vector<std::string>{"value"};
+    }
+    else if (tableName == SYS_NUMBER_2_HASH)
+    {
+        tableInfo->key = "hash";
+        tableInfo->fields = std::vector<std::string>{"value"};
+    }
+    else if (tableName == SYS_TX_HASH_2_BLOCK)
+    {
+        tableInfo->key = "hash";
+        tableInfo->fields = std::vector<std::string>{"value", "index"};
+    }
+    else if (tableName == SYS_HASH_2_BLOCK)
+    {
+        tableInfo->key = "key";
+        tableInfo->fields = std::vector<std::string>{"value"};
     }
     tableInfo->fields.emplace_back(tableInfo->key);
     tableInfo->fields.emplace_back(STATUS);

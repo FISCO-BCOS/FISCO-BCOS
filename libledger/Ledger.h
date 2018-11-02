@@ -32,8 +32,10 @@
 #include <libethcore/Common.h>
 #include <boost/property_tree/ptree.hpp>
 
-#include "../libp2p/P2PInterface.h"
-#include "../libp2p/Service.h"
+#include <libp2p/P2PInterface.h>
+#include <libp2p/Service.h>
+#define Ledger_LOG(LEVEL) LOG(LEVEL) << "[#LEDGER] [GROUPID:" << std::to_string(m_groupId) << "]"
+
 namespace dev
 {
 namespace ledger
@@ -41,6 +43,22 @@ namespace ledger
 class Ledger : public LedgerInterface
 {
 public:
+    /**
+     * @brief: init a single ledger with specified params
+     * @param service : p2p handler
+     * @param _groupId : group id of the ledger belongs to
+     * @param _keyPair : keyPair used to init the consensus Sealer
+     * @param _baseDir: baseDir used to place the data of the ledger
+     *                  (1) if _baseDir not empty, the group data is placed in
+     * ${_baseDir}/group${_groupId}/${data_dir},
+     *                  ${data_dir} configurated by the configuration of the ledger, default is
+     * "data" (2) if _baseDir is empty, the group data is placed in ./group${_groupId}/${data_dir}
+     *
+     * @param configFileName: the configuration file path of the ledger, configurated by the
+     * main-configuration (1) if configFileName is empty, the configuration path is
+     * ./group${_groupId}.ini, (2) if configFileName is not empty, the configuration path is decided
+     * by the param ${configFileName}
+     */
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir,
         std::string const& configFileName)
@@ -57,30 +75,34 @@ public:
         assert(m_service);
         if (m_configFileName == "")
             m_configFileName = "./config.group" + std::to_string(_groupId) + m_postfix;
-        LOG(DEBUG) << "### config file path:" << m_configFileName;
-        LOG(DEBUG) << "### basedir:" << m_param->baseDir();
+
+        Ledger_LOG(INFO) << "[#LedgerConstructor] [configPath/baseDir]:  " << m_configFileName
+                         << "/" << m_param->baseDir() << std::endl;
         initConfig(m_configFileName);
     }
 
+    /// start all modules(sync, consensus)
     void startAll() override
     {
         assert(m_sync && m_sealer);
+        Ledger_LOG(INFO) << "[#startAll...]" << std::endl;
         m_sync->start();
         m_sealer->start();
     }
 
+    /// stop all modules(consensus, sync)
     void stopAll() override
     {
+        assert(m_sync && m_sealer);
+        Ledger_LOG(INFO) << "[#stopAll...]" << std::endl;
         m_sealer->stop();
         m_sync->stop();
     }
 
     virtual ~Ledger(){};
-    void initConfig(std::string const& configPath) override;
 
     /// init the ledger(called by initializer)
-    void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override;
+    void initLedger() override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
@@ -100,6 +122,7 @@ public:
     std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
 protected:
+    void initConfig(std::string const& configPath) override;
     virtual void initTxPool();
     /// init blockverifier related
     virtual void initBlockVerifier();

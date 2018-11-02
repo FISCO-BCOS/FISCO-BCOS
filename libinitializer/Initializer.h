@@ -22,10 +22,8 @@
 
 #pragma once
 
-#include "AMDBInitiailizer.h"
 #include "Common.h"
 #include "CommonInitializer.h"
-#include "ConsoleInitiailizer.h"
 #include "InitializerInterface.h"
 #include "LedgerInitiailizer.h"
 #include "P2PInitializer.h"
@@ -42,18 +40,15 @@ public:
     typedef std::shared_ptr<Initializer> Ptr;
 
     void init(std::string const& _path);
-    void initSystemParams(){};
-    bool startSystem(){};
 
     CommonInitializer::Ptr commonInitializer() { return m_commonInitializer; }
     SecureInitiailizer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
     LedgerInitiailizer::Ptr ledgerInitiailizer() { return m_ledgerInitiailizer; }
+    RPCInitiailizer::Ptr rpcInitiailizer() { return m_rpcInitiailizer; }
 
 private:
-    AMDBInitiailizer::Ptr m_AMDBInitiailizer;
     CommonInitializer::Ptr m_commonInitializer;
-    ConsoleInitiailizer::Ptr m_consoleInitiailizer;
     LedgerInitiailizer::Ptr m_ledgerInitiailizer;
     P2PInitializer::Ptr m_p2pInitializer;
     RPCInitiailizer::Ptr m_rpcInitiailizer;

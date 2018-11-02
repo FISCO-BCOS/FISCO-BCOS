@@ -31,8 +31,6 @@
 #include <libinitializer/SecureInitiailizer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
-
-
 using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
@@ -44,21 +42,19 @@ public:
     virtual P2PMessage::Ptr buildMessage() override { return std::make_shared<P2PMessage>(); }
 };
 
-static void createTx(std::shared_ptr<LedgerManager<FakeLedger>> ledgerManager,
-    GROUP_ID const& groupSize, float txSpeed, KeyPair const& key_pair)
+static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID const& groupSize,
+    float txSpeed, KeyPair const& key_pair)
 {
     ///< transaction related
-    bytes rlpBytes = fromHex(
-        "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-        "0000"
-        "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-        "0000"
-        "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-        "657c"
-        "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
-    Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
-    Secret sec = key_pair.secret();
-    u256 maxBlockLimit = u256(1000);
+    u256 value = u256(100);
+    u256 gasPrice = u256(0);
+    u256 gas = u256(100000000);
+    Address dst = toAddress(KeyPair::create().pub());
+    std::string str = "test transaction";
+    bytes data(str.begin(), str.end());
+    Transaction tx(value, gasPrice, gas, dst, data);
+    Secret sec = KeyPair::create().secret();
+    u256 maxBlockLimit = u256(500);
     /// get the consensus status
     /// m_txSpeed default is 10
     uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
@@ -82,13 +78,17 @@ static void startConsensus(Params& params)
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.conf");
 
+<<<<<<< HEAD
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
     p2pService->setMessageFactory(std::make_shared<MockP2PMessageFactory>());
+=======
+    /// auto p2pInitializer = initialize->p2pInitializer();
+    /// auto p2pService = p2pInitializer->p2pService();
+>>>>>>> upstream/dev
     auto secureInitiailizer = initialize->secureInitiailizer();
     KeyPair key_pair = secureInitiailizer->keyPair();
     auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
-
     /// create transaction
     createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
 }

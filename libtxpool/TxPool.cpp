@@ -198,11 +198,11 @@ bool TxPool::removeTrans(h256 const& _txHash)
         ///             << " doesn't exist in the txpool, please check again";
         return false;
     }
+    m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
-    removeTransactionKnowBy(_txHash);  // Remove the record of transaction know by some peers
     if (m_known.count(_txHash))
         m_known.erase(_txHash);
-    m_txsQueue.erase(p_tx->second);
+    removeTransactionKnowBy(_txHash);  // Remove the record of transaction know by some peers
     return true;
 }
 
@@ -330,15 +330,6 @@ size_t TxPool::pendingSize()
     return m_txsQueue.size();
 }
 
-
-std::shared_ptr<Transaction const> TxPool::transactionInPool(h256 const& _txHash)
-{
-    auto p_tx = m_txsHash.find(_txHash);
-    if (p_tx == m_txsHash.end())
-        return nullptr;
-    return shared_ptr<Transaction const>(&(*p_tx->second));
-}
-
 /// @returns the status of the transaction queue.
 TxPoolStatus TxPool::status() const
 {
@@ -356,6 +347,8 @@ void TxPool::clear()
     m_known.clear();
     m_txsQueue.clear();
     m_txsHash.clear();
+    WriteGuard l_trans(x_transactionKnownBy);
+    m_transactionKnownBy.clear();
 }
 
 /// Set transaction is known by a node

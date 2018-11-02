@@ -30,12 +30,18 @@
 
 using namespace dev;
 using namespace dev::eth;
+using namespace dev::storagestate;
 using namespace dev::storage;
 using namespace dev::executive;
 
 bool StorageState::addressInUse(Address const& _address) const
 {
-    return getTable(_address) != nullptr;
+    auto table = getTable(_address);
+    if (table && !table->data()->empty())
+    {
+        return true;
+    }
+    return false;
 }
 
 bool StorageState::accountNonemptyAndExisting(Address const& _address) const
@@ -90,6 +96,7 @@ void StorageState::addBalance(Address const& _address, u256 const& _amount)
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance += _amount;
+            entry = table->newEntry();
             entry->setField(STORAGE_VALUE, balance.str());
             table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         }
@@ -113,6 +120,7 @@ void StorageState::subBalance(Address const& _address, u256 const& _amount)
             if (balance < _amount)
                 BOOST_THROW_EXCEPTION(NotEnoughCash());
             balance -= _amount;
+            entry = table->newEntry();
             entry->setField(STORAGE_VALUE, balance.str());
             table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         }
@@ -130,6 +138,7 @@ void StorageState::setBalance(Address const& _address, u256 const& _amount)
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance = _amount;
+            entry = table->newEntry();
             entry->setField(STORAGE_VALUE, balance.str());
             table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         }
@@ -192,6 +201,7 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
         auto entry = table->newEntry();
         entry->setField(STORAGE_VALUE, toHex(_code));
         table->update(ACCOUNT_CODE, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
     }
@@ -279,13 +289,9 @@ void StorageState::setNonce(Address const& _address, u256 const& _newNonce)
     auto table = getTable(_address);
     if (table)
     {
-        auto entries = table->select(ACCOUNT_NONCE, table->newCondition());
-        if (entries->size() != 0u)
-        {
-            auto entry = entries->get(0);
-            entry->setField(STORAGE_VALUE, _newNonce.str());
-            table->update(ACCOUNT_NONCE, entry, table->newCondition());
-        }
+        auto entry = table->newEntry();
+        entry->setField(STORAGE_VALUE, _newNonce.str());
+        table->update(ACCOUNT_NONCE, entry, table->newCondition());
     }
     else
         createAccount(_address, _newNonce);
@@ -379,10 +385,10 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
     entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_ALIVE);
     entry->setField(STORAGE_VALUE, "true");
-    table->insert(ACCOUNT_CODE, entry);
+    table->insert(ACCOUNT_ALIVE, entry);
 }
 
-Table::Ptr StorageState::getTable(Address const& _address) const
+inline storage::Table::Ptr StorageState::getTable(Address const& _address) const
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
     return m_memoryTableFactory->openTable(tableName);

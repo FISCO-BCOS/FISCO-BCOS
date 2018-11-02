@@ -9,7 +9,7 @@ using namespace dev::blockverifier;
 using namespace dev::executive;
 
 void ExecutiveContextFactory::initExecutiveContext(
-    BlockInfo blockInfo, ExecutiveContext::Ptr context)
+    BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
 {
     // DBFactoryPrecompiled
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
@@ -24,10 +24,11 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
     context->setAddress2Precompiled(
         Address(0x1002), std::make_shared<dev::blockverifier::CRUDPrecompiled>());
+    context->setMemoryTableFactory(memoryTableFactory);
 
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
-    context->setState(m_stateFactoryInterface->getState());
+    context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)
@@ -39,10 +40,4 @@ void ExecutiveContextFactory::setStateFactory(
     std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface)
 {
     m_stateFactoryInterface = stateFactoryInterface;
-}
-
-void ExecutiveContextFactory::setPrecompiledContract(
-    std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract)
-{
-    m_precompiledContract = precompiledContract;
 }

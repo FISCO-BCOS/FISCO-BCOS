@@ -80,6 +80,6 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         socketFactory, sessionFactory, m_SSLContext);
     host->setStaticNodes(nodes);
     m_p2pService = std::make_shared<Service>(host, p2pMsgHandler);
-
+    m_p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
     host->start();
 }

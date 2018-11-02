@@ -29,6 +29,7 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
+#include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
@@ -65,11 +66,11 @@ public:
             _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 
         // signal registration
-        m_txPool->onReady([=]() { this->noteNewTransactions(); });
-        m_blockChain->onReady([=]() { this->noteNewBlocks(); });
+        m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
+        m_blockSubmitted = m_blockChain->onReady([&]() { this->noteNewBlocks(); });
     }
 
-    virtual ~SyncMaster(){};
+    virtual ~SyncMaster() { stop(); };
     /// start blockSync
     virtual void start() override;
     /// stop blockSync
@@ -81,6 +82,7 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const override;
+    virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // virtual h256 latestBlockSent() override;
 
@@ -100,16 +102,13 @@ public:
         m_protocolId = _protocolId;
     };
 
-    void noteNewTransactions()
-    {
-        m_newTransactions = true;
-        m_signalled.notify_all();  // awake doWork
-    }
+    void noteNewTransactions() { m_newTransactions = true; }
 
     void noteNewBlocks()
     {
         m_newBlocks = true;
-        m_signalled.notify_all();  // awake doWork
+        // for test
+        // m_signalled.notify_all();  // awake doWork
     }
 
     void noteDownloadingBegin()
@@ -155,12 +154,17 @@ private:
 
     unsigned m_startingBlock = 0;  ///< Last block number for the start of sync
     unsigned m_highestBlock = 0;   ///< Highest block number seen
+    uint64_t m_lastDownloadingRequestTime = 0;
+    int64_t m_currentSealingNumber = 0;
 
     // Internal coding variable
     /// mutex
     mutable SharedMutex x_sync;
     /// mutex to access m_signalled
     Mutex x_signalled;
+    /// mutex to protect m_currentSealingNumber
+    mutable SharedMutex x_currentSealingNumber;
+
     /// signal to notify all thread to work
     std::condition_variable m_signalled;
 
@@ -170,14 +174,20 @@ private:
     bool m_newBlocks = false;
 
     // settings
-    int64_t m_maxBlockDownloadQueueSize = 5;
+    dev::eth::Handler<> m_tqReady;
+    dev::eth::Handler<> m_blockSubmitted;
 
 public:
     void maintainTransactions();
     void maintainBlocks();
     void maintainPeersStatus();
     bool maintainDownloadingQueue();  /// return true if downloading finish
+    void maintainDownloadingQueueBuffer();
     void maintainPeersConnection();
+
+private:
+    bool isNewBlock(BlockPtr _block);
+    void printSyncInfo();
 };
 
 }  // namespace sync

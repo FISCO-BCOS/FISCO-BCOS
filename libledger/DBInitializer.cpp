@@ -23,65 +23,93 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
-#include <libmptstate/State.h>
+#include <libdevcore/Common.h>
+#include <libmptstate/MPTStateFactory.h>
+#include <libstorage/LevelDBStorage.h>
+#include <libstoragestate/StorageStateFactory.h>
+using namespace dev;
 using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::db;
 using namespace dev::eth;
 using namespace dev::mptstate;
 using namespace dev::executive;
+using namespace dev::storagestate;
 
 namespace dev
 {
 namespace ledger
 {
-/// create stateStorage
-void DBInitializer::createStateStorage()
-{
-    m_storage = std::shared_ptr<Storage>();
-}
-
-/// init the DB
 void DBInitializer::initStorageDB()
 {
     if (dev::stringCmpIgnoreCase(m_param->dbType(), "AMDB") == 0)
-        initAMDB();
+        initAMOPStorage();
     if (dev::stringCmpIgnoreCase(m_param->dbType(), "LevelDB") == 0)
-        initLevelDB();
+        initLevelDBStorage();
 }
 
-/// TODO: init AMDB
-void DBInitializer::initAMDB() {}
-
-/// open levelDB for MPTState
-void DBInitializer::openMPTStateDB()
+/// init the storage with leveldb
+void DBInitializer::initLevelDBStorage()
 {
-    m_mptStateDB = State::openDB(
-        boost::filesystem::path(m_param->baseDir()), m_param->mutableGenesisParam().genesisHash);
+    m_storage = std::make_shared<LevelDBStorage>();
+    /// open and init the levelDB
+    leveldb::Options ldb_option;
+    leveldb::DB* pleveldb;
+    try
+    {
+        ldb_option.create_if_missing = true;
+        DBInitializer_LOG(DEBUG) << "[#initLevelDBStorage]: open leveldb handler" << std::endl;
+        leveldb::Status status = leveldb::DB::Open(ldb_option, m_param->baseDir(), &(pleveldb));
+        std::shared_ptr<LevelDBStorage> leveldb_storage =
+            std::dynamic_pointer_cast<LevelDBStorage>(m_storage);
+        assert(leveldb_storage);
+        std::shared_ptr<leveldb::DB> leveldb_handler = std::shared_ptr<leveldb::DB>(pleveldb);
+        leveldb_storage->setDB(leveldb_handler);
+    }
+    catch (std::exception& e)
+    {
+        DBInitializer_LOG(ERROR) << "[#initLevelDBStorage] initLevelDBStorage failed, [EINFO]: "
+                                 << e.what();
+        BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
+    }
 }
+
+/// TODO: init AMOP Storage
+void DBInitializer::initAMOPStorage() {}
+
 /// create ExecutiveContextFactory
-void DBInitializer::createExecutiveContext(
-    std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile)
+void DBInitializer::createExecutiveContext()
 {
     assert(m_storage && m_stateFactory);
     m_executiveContextFac = std::make_shared<ExecutiveContextFactory>();
+    /// storage
     m_executiveContextFac->setStateStorage(m_storage);
+    // mpt or storage
     m_executiveContextFac->setStateFactory(m_stateFactory);
-    m_executiveContextFac->setPrecompiledContract(preCompile);
 }
 
-/// TODO: create stateFactory
+/// create stateFactory
 void DBInitializer::createStateFactory()
 {
-    /// m_stateFactory = std::make_shared<StateFactoryInterface>();
+    if (m_param->enableMpt())
+        createMptState();
+    else
+        createStorageState();
 }
 
-/// create memoryTableFactory
-void DBInitializer::createMemoryTable()
+/// TOCHECK: create the stateStorage with AMDB
+void DBInitializer::createStorageState()
 {
-    assert(m_storage);
-    m_memoryTableFac = std::make_shared<MemoryTableFactory>();
-    m_memoryTableFac->setStateStorage(m_storage);
+    m_stateFactory =
+        std::make_shared<StorageStateFactory>(m_param->mutableGenesisParam().accountStartNonce);
+}
+
+/// create the mptState
+void DBInitializer::createMptState()
+{
+    m_stateFactory =
+        std::make_shared<MPTStateFactory>(m_param->mutableGenesisParam().accountStartNonce,
+            m_param->baseDir(), m_param->mutableGenesisParam().genesisHash, WithExisting::Trust);
 }
 
 }  // namespace ledger

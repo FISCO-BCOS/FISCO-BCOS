@@ -444,44 +444,53 @@ void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithS
         registerHandlerByProtoclID(dev::eth::ProtocolID::Topic,
             [=](NetworkException e, std::shared_ptr<Session> s, P2PMessage::Ptr msg) {
                 LOG(INFO) << "Session::onMessage, call callbackFunc by Topic protocolID.";
-
-                ///< Get topic from message buffer.
-                std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-                std::string topic;
-                msg->decodeAMOPBuffer(buffer, topic);
-                std::shared_ptr<std::vector<std::string>> topics = s->host()->topics();
-
-                ///< This above topic get this node/host attention or not.
-                bool bFind = false;
-                for (size_t i = 0; i < topics->size(); i++)
+                if (msg->buffer()->size() <= Message::MAX_LENGTH)
                 {
-                    if (topic == (*topics)[i])
+                    ///< Get topic from message buffer.
+                    std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+                    std::string topic;
+                    msg->decodeAMOPBuffer(buffer, topic);
+                    std::shared_ptr<std::vector<std::string>> topics = s->host()->topics();
+
+                    ///< This above topic get this node/host attention or not.
+                    bool bFind = false;
+                    for (size_t i = 0; i < topics->size(); i++)
                     {
-                        bFind = true;
-                        break;
+                        if (topic == (*topics)[i])
+                        {
+                            bFind = true;
+                            break;
+                        }
                     }
-                }
 
-                if (bFind)
-                {
-                    CallbackFuncWithSession callbackFunc;
-
-                    bool ret = m_p2pMsgHandler->getHandlerByTopic(topic, callbackFunc);
-                    if (ret && callbackFunc)
+                    if (bFind)
                     {
-                        LOG(INFO) << "Session::onMessage, call callbackFunc by topic=" << topic;
-                        ///< execute funtion, send response packet by user in callbackFunc
-                        ///< TODO: use threadPool
-                        callbackFunc(e, s, msg);
+                        CallbackFuncWithSession callbackFunc;
+
+                        bool ret = m_p2pMsgHandler->getHandlerByTopic(topic, callbackFunc);
+                        if (ret && callbackFunc)
+                        {
+                            LOG(INFO) << "Session::onMessage, call callbackFunc by topic=" << topic;
+                            ///< execute funtion, send response packet by user in callbackFunc
+                            ///< TODO: use threadPool
+                            callbackFunc(e, s, msg);
+                        }
+                        else
+                        {
+                            LOG(ERROR)
+                                << "Session::onMessage, handler not found by topic=" << topic;
+                        }
                     }
                     else
                     {
-                        LOG(ERROR) << "Session::onMessage, handler not found by topic=" << topic;
+                        LOG(ERROR)
+                            << "Session::onMessage, topic donot get this node/host attention.";
                     }
                 }
                 else
                 {
-                    LOG(ERROR) << "Session::onMessage, topic donot get this node/host attention.";
+                    LOG(ERROR) << "Session::onMessage, Packet too large, size:"
+                               << msg->buffer()->size();
                 }
             });
     }

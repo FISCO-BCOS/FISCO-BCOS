@@ -109,9 +109,6 @@ public:
     /// get current transaction num
     size_t pendingSize() override;
 
-    /// Get transaction in TxPool, return nullptr when not found
-    std::shared_ptr<Transaction const> transactionInPool(h256 const& _txHash) override;
-
     /// @returns the status of the transaction queue.
     TxPoolStatus status() const override;
 

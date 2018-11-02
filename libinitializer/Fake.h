@@ -47,7 +47,6 @@ using namespace dev::eth;
 using namespace dev::sync;
 using namespace dev::blockverifier;
 using namespace dev::ledger;
-
 class FakeBlockChain : public BlockChainInterface
 {
 public:
@@ -70,12 +69,21 @@ public:
 
     ~FakeBlockChain() {}
 
-    int64_t number() const { return m_blockChain.size() - 1; }
+    int64_t number()
+    {
+        ReadGuard l(x_blockChain);
+        return m_blockChain.size() - 1;
+    }
 
-    dev::h256 numberHash(int64_t _i) const { return m_blockChain[_i]->headerHash(); }
+    dev::h256 numberHash(int64_t _i)
+    {
+        ReadGuard l(x_blockChain);
+        return m_blockChain[_i]->headerHash();
+    }
 
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
+        ReadGuard l(x_blockChain);
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
@@ -98,16 +106,26 @@ public:
     void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        std::cout << "##### commitBlock:" << block.blockHeader().number() << std::endl;
-        m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
-        m_blockChain.push_back(std::make_shared<Block>(block));
-        m_blockNumber = block.blockHeader().number() + 1;
-        m_onReady();
+        std::cout << "#### commitBlock before, block number:" << block.blockHeader().number()
+                  << std::endl;
+        if (block.blockHeader().number() == number() + 1)
+        {
+            WriteGuard l(x_blockChain);
+            {
+                std::cout << "##### commitBlock:" << block.blockHeader().number() << std::endl;
+                m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
+                m_blockChain.push_back(std::make_shared<Block>(block));
+                m_blockNumber = block.blockHeader().number() + 1;
+            }
+            m_onReady();
+        }
     }
 
+private:
     std::map<h256, uint64_t> m_blockHash;
     std::vector<std::shared_ptr<Block>> m_blockChain;
     uint64_t m_blockNumber;
+    mutable SharedMutex x_blockChain;
 };
 
 class FakeBlockSync : public SyncInterface
@@ -169,8 +187,7 @@ public:
       : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {}
     /// init the ledger(called by initializer)
-    void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override
+    void initLedger() override
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
@@ -181,7 +198,7 @@ public:
         /// init txPool
         initTxPool();
         /// init sync
-        initSync();
+        Ledger::initSync();
         /// init consensus
         Ledger::consensusInitFactory();
     }
@@ -190,5 +207,5 @@ public:
     void initBlockVerifier() override { m_blockVerifier = std::make_shared<FakeBlockVerifier>(); }
     void initBlockChain() override { m_blockChain = std::make_shared<FakeBlockChain>(); }
     /// init the blockSync
-    void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
+    /// void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
 };

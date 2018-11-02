@@ -41,6 +41,10 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const = 0;
+
+    /// note sync module the sealing number
+    virtual void noteSealingBlockNumber(int64_t _number) = 0;
+
     virtual bool isSyncing() const = 0;
     /*    virtual h256 latestBlockSent() = 0;
 

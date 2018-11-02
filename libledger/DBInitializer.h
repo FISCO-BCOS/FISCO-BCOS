@@ -29,6 +29,7 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <memory>
+#define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[#DBINITIALIZER] "
 namespace dev
 {
 namespace ledger
@@ -38,26 +39,15 @@ class DBInitializer
 public:
     DBInitializer(std::shared_ptr<LedgerParamInterface> param) : m_param(param) {}
 
-    virtual void initDBModules(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile)
+    virtual void initDBModules()
     {
         assert(m_param);
-        if (m_param->enableMpt())
-            openMPTStateDB();
         /// init the storage DB
         initStorageDB();
-        /// create state storage handler
-        createStateStorage();
-        /// create stateFactory
+        /// create state storage
         createStateFactory();
-        createMemoryTable();
-        createExecutiveContext(preCompile);
-    }
-
-    std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory() const
-    {
-        assert(m_memoryTableFac);
-        return m_memoryTableFac;
+        /// create executive context
+        createExecutiveContext();
     }
 
     dev::storage::Storage::Ptr storage() const
@@ -73,29 +63,29 @@ public:
     }
 
 protected:
-    virtual void openMPTStateDB();
+    /// create storage DB(must be storage)
+    ///  must be open before init
     virtual void initStorageDB();
-    /// create stateStorage
-    virtual void createStateStorage();
+
+    /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory();
-    /// create memoryTableFactory
-    virtual void createMemoryTable();
     /// create ExecutiveContextFactory
-    virtual void createExecutiveContext(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile);
+    virtual void createExecutiveContext();
 
 private:
-    void initAMDB();
-    /// TODO: init levelDB storage
-    void initLevelDB(){};
+    /// TODO: init AMOP storage
+    void initAMOPStorage();
+    /// TOCHECK: init levelDB storage
+    void initLevelDBStorage();
+    /// TOCHECK: create AMDB/mpt stateStorage
+    void createStorageState();
+    void createMptState();
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;
-    std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> m_executiveContextFac;
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFac;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     dev::storage::Storage::Ptr m_storage = nullptr;
-    dev::OverlayDB m_mptStateDB;
+    std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> m_executiveContextFac;
 };
 }  // namespace ledger
 }  // namespace dev
