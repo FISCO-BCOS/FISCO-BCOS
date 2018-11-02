@@ -21,7 +21,6 @@
 
 #include "Transaction.h"
 #include "EVMSchedule.h"
-#include <libdevcore/easylog.h>
 #include <libdevcore/vector_ref.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
@@ -31,6 +30,7 @@ using namespace dev;
 using namespace dev::eth;
 Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 {
+    m_rpcCallbackPtr = nullptr;
     decode(_rlpData, _checkSig);
 }
 

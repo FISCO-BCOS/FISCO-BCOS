@@ -153,7 +153,11 @@ protected:
     void clear();
 
 private:
-    bool removeTrans(h256 const& _txHash);
+    dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(Transaction const& tx,
+        dev::eth::TransactionReceipt const& receipt, Block const& block, unsigned index);
+
+    bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
+        dev::eth::LocalisedTransactionReceipt::Ptr pReceipt = nullptr);
     bool removeOutOfBound(h256 const& _txHash);
     void insert(Transaction const& _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
@@ -182,7 +186,6 @@ private:
     /// Transaction is known by some peers
     mutable SharedMutex x_transactionKnownBy;
     std::map<h256, std::set<h512>> m_transactionKnownBy;
-
-};  // namespace txpool
+};
 }  // namespace txpool
 }  // namespace dev

@@ -17,12 +17,13 @@
 
 #pragma once
 
+#include "TransactionReceipt.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/SHA3.h>
+#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
-
 #include <boost/optional.hpp>
 
 namespace dev
@@ -45,6 +46,7 @@ enum class CheckTransaction
     Everything
 };
 
+using RPCCallbackPtr = std::shared_ptr<void(LocalisedTransactionReceipt::Ptr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
 /// Remove m_chainId ,EIP155 value for calculating transaction hash
 /// https://github.com/ethereum/EIPs/issues/155
@@ -60,25 +62,27 @@ public:
     Transaction() {}
     /// Constructs an unsigned message-call transaction.
     Transaction(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, Address const& _dest,
-        bytes const& _data, u256 const& _nonce = 0)
+        bytes const& _data, u256 const& _nonce = u256(0))
       : m_type(MessageCall),
         m_nonce(_nonce),
         m_value(_value),
         m_receiveAddress(_dest),
         m_gasPrice(_gasPrice),
         m_gas(_gas),
-        m_data(_data)
+        m_data(_data),
+        m_rpcCallbackPtr(nullptr)
     {}
 
     /// Constructs an unsigned contract-creation transaction.
     Transaction(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, bytes const& _data,
-        u256 const& _nonce = 0)
+        u256 const& _nonce = u256(0))
       : m_type(ContractCreation),
         m_nonce(_nonce),
         m_value(_value),
         m_gasPrice(_gasPrice),
         m_gas(_gas),
-        m_data(_data)
+        m_data(_data),
+        m_rpcCallbackPtr(nullptr)
     {}
 
     /// Constructs a transaction from the given RLP.
@@ -210,6 +214,23 @@ public:
     static int64_t baseGasRequired(
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
+    void setRpcCallbackPtr(RPCCallbackPtr ptr) { m_rpcCallbackPtr = ptr; }
+    void tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
+    {
+        try
+        {
+            if (m_rpcCallbackPtr)
+            {
+                (*m_rpcCallbackPtr)(pReceipt);
+            }
+        }
+        catch (std::exception& e)
+        {
+            LOG(ERROR) << "callback RPC callback failed";
+            return;
+        }
+    }
+
 protected:
     /// Type of transaction.
     enum Type
@@ -242,8 +263,10 @@ protected:
                                              ///< sender.
     mutable h256 m_hashWith;                 ///< Cached hash of transaction with signature.
     mutable Address m_sender;                ///< Cached sender, determined from signature.
-    u256 m_blockLimit;      ///< The latest block number to be packaged for transaction.
-    u256 m_importTime = 0;  ///< The utc time at which a transaction enters the queue.
+    u256 m_blockLimit;            ///< The latest block number to be packaged for transaction.
+    u256 m_importTime = u256(0);  ///< The utc time at which a transaction enters the queue.
+
+    RPCCallbackPtr m_rpcCallbackPtr;
 };
 
 /// Nice name for vector of Transaction.

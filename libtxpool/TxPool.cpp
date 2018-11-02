@@ -189,7 +189,8 @@ bool TxPool::isNonceOk(Transaction const& _tx, bool _needInsert) const
 /**
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
-bool TxPool::removeTrans(h256 const& _txHash)
+bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
+    dev::eth::LocalisedTransactionReceipt::Ptr pReceipt)
 {
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
@@ -197,6 +198,11 @@ bool TxPool::removeTrans(h256 const& _txHash)
         /// LOG(WARNING) << "txHash = " << toHex(_txHash)
         ///             << " doesn't exist in the txpool, please check again";
         return false;
+    }
+    /// trigger callback from RPC
+    if (needTriggerCallback && pReceipt)
+    {
+        p_tx->second->tiggerRpcCallback(pReceipt);
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
@@ -245,16 +251,32 @@ bool TxPool::drop(h256 const& _txHash)
     return removeTrans(_txHash);
 }
 
+dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
+    Transaction const& tx, TransactionReceipt const& receipt, Block const& block, unsigned index)
+{
+    dev::eth::LocalisedTransactionReceipt::Ptr pTxReceipt =
+        std::make_shared<LocalisedTransactionReceipt>(receipt, tx.sha3(),
+            block.blockHeader().hash(), block.blockHeader().number(), tx.safeSender(),
+            tx.receiveAddress(), index, receipt.gasUsed(), receipt.contractAddress());
+    return pTxReceipt;
+}
+
 bool TxPool::dropBlockTrans(Block const& block)
 {
     if (block.getTransactionSize() == 0)
         return true;
     WriteGuard l(m_lock);
     bool succ = true;
-    for (auto t : block.transactions())
+    for (size_t i = 0; i < block.transactions().size(); i++)
     {
-        m_dropped.insert(t.sha3());
-        if (removeTrans(t.sha3()) == false)
+        m_dropped.insert(block.transactions()[i].sha3());
+        LocalisedTransactionReceipt::Ptr pReceipt;
+        if (block.transactionReceipts().size() > i)
+        {
+            pReceipt = constructTransactionReceipt(
+                block.transactions()[i], block.transactionReceipts()[i], block, i);
+        }
+        if (removeTrans(block.transactions()[i].sha3(), true, pReceipt) == false)
             succ = false;
     }
     return succ;
