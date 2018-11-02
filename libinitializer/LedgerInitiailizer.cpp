@@ -32,9 +32,9 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 {
     LOG(INFO) << "LedgerInitiailizer::initConfig";
     m_groupDataDir = _pt.get<std::string>("group.group_data_path", "data/");
-    assert(m_p2pService && m_preCompile);
+    assert(m_p2pService);
     /// TODO: modify FakeLedger to the real Ledger after all modules ready
-    m_ledgerManager = std::make_shared<LedgerManager>(m_p2pService, m_keyPair, m_preCompile);
+    m_ledgerManager = std::make_shared<LedgerManager>(m_p2pService, m_keyPair);
     std::map<GROUP_ID, h512s> groudID2NodeList;
 
     for (auto it : _pt.get_child("group"))

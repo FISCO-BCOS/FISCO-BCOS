@@ -35,9 +35,10 @@ void ConsensusEngineBase::start()
 {
     if (m_startConsensusEngine)
     {
-        LOG(WARNING) << "Consensus Engine has already been started, return directly";
+        ENGINE_LOG(WARNING) << "[#ConsensusEngineBase has already been started]";
         return;
     }
+    ENGINE_LOG(INFO) << "[#Start ConsensusEngineBase]";
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     m_startConsensusEngine = true;
@@ -47,9 +48,10 @@ void ConsensusEngineBase::stop()
 {
     if (m_startConsensusEngine == false)
     {
-        LOG(WARNING) << "Consensus module has already been stopped, return now";
+        ENGINE_LOG(WARNING) << " [#ConsensusEngineBase has already been stopped]";
         return;
     }
+    ENGINE_LOG(INFO) << "[#Stop ConsensusEngineBase]";
     m_startConsensusEngine = false;
     doneWorking();
     stopWorking();
@@ -68,26 +70,31 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     /// check the timestamp
     if (block.blockHeader().timestamp() > utcTime() && !m_allowFutureBlocks)
     {
-        LOG(WARNING) << "Future timestamp(now disabled) of block_hash = " << block_hash;
+        ENGINE_LOG(WARNING) << "[#checkBlockValid] Future timestamp: [timestamp/utcTime/hash]:  "
+                            << block.blockHeader().timestamp() << "/" << utcTime() << "/"
+                            << block_hash << std::endl;
         BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
     }
     /// check the block number
     if (block.blockHeader().number() <= m_blockChain->number())
     {
-        LOG(WARNING) << "Old Block Height, height = " << block.blockHeader().number()
-                     << " blk=" << m_blockChain->number() << " hash =" << block_hash;
+        ENGINE_LOG(WARNING) << "[#checkBlockValid] Old height: [blockNumber/number/hash]:  "
+                            << block.blockHeader().number() << "/" << m_blockChain->number() << "/"
+                            << block_hash << std::endl;
         BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
     }
     /// check existence of this block (Must non-exist)
     if (blockExists(block_hash))
     {
-        LOG(WARNING) << "Block Already Existed, drop now, block_hash = " << block_hash;
+        ENGINE_LOG(WARNING) << "[#checkBlockValid] Block already exist: [hash]:  " << block_hash
+                            << std::endl;
         BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
     }
     /// check the existence of the parent block (Must exist)
     if (!blockExists(block.blockHeader().parentHash()))
     {
-        LOG(WARNING) << "Parent Block Doesn't Exist, drop now, block_hash = " << block_hash;
+        ENGINE_LOG(WARNING) << "[#checkBlockValid] Parent doesn't exist: [hash]:  " << block_hash
+                            << std::endl;
         BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
     }
 }

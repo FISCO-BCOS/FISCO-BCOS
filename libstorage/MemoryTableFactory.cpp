@@ -164,6 +164,8 @@ void MemoryTableFactory::rollback(size_t _savepoint)
             auto data = change.table->data();
             auto entries = (*data)[change.key];
             entries->removeEntry(change.value[0].index);
+            if (entries->size() == 0u)
+                data->erase(change.key);
             break;
         }
         case Change::Update:

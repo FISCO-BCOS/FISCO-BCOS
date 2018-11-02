@@ -46,11 +46,9 @@ public:
         m_host = std::shared_ptr<Host>(hostPtr);
         m_p2pHandler = std::make_shared<P2PMsgHandler>();
         m_service = std::make_shared<MockService>(m_host, m_p2pHandler);
-        m_preCompile =
-            std::make_shared<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>>();
         std::string configurationPath =
             getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
-        m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair, m_preCompile);
+        m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
         m_ledgerManager->initSingleLedger<FakeLedger>(0, "", configurationPath);
 
         rpc = std::make_shared<Rpc>(m_ledgerManager, m_service);
@@ -58,7 +56,6 @@ public:
 
 public:
     std::shared_ptr<Rpc> rpc;
-    std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>> m_preCompile;
     KeyPair m_keyPair = KeyPair::create();
     std::shared_ptr<MockService> m_service;
     std::shared_ptr<LedgerManager> m_ledgerManager;

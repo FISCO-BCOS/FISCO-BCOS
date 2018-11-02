@@ -27,7 +27,7 @@
 #include "Fake.h"
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/LedgerManager.h>
-#include <libp2p/Service.h>
+#include <libp2p/P2PInterface.h>
 
 using namespace dev::ledger;
 
@@ -44,12 +44,7 @@ public:
 
     std::shared_ptr<LedgerManager> ledgerManager() { return m_ledgerManager; }
 
-    void setPreCompile(
-        std::shared_ptr<std::unordered_map<Address, eth::PrecompiledContract>> _preCompile)
-    {
-        m_preCompile = _preCompile;
-    }
-    void setP2PService(std::shared_ptr<Service> _p2pService) { m_p2pService = _p2pService; }
+    void setP2PService(std::shared_ptr<P2PInterface> _p2pService) { m_p2pService = _p2pService; }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
 private:
@@ -57,9 +52,7 @@ private:
         GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList);
 
     std::shared_ptr<LedgerManager> m_ledgerManager;
-
-    std::shared_ptr<std::unordered_map<Address, eth::PrecompiledContract>> m_preCompile;
-    std::shared_ptr<p2p::Service> m_p2pService;
+    std::shared_ptr<P2PInterface> m_p2pService;
     KeyPair m_keyPair;
     std::string m_groupDataDir;
 };

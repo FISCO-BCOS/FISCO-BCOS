@@ -54,8 +54,7 @@ public:
     Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
 
     void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        Options const& options = Options()) override;
+        CallbackFunc callback = nullptr, Options const& options = Options()) override;
 
     Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
 

@@ -47,8 +47,7 @@ public:
       : FakeLedger(service, _groupId, _keyPair, _baseDir, _configFile)
     {}
     /// init the ledger(called by initializer)
-    void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override
+    void initLedger() override
     {
         std::cout << "##### callbaci initLedger for FakeLedgerForTest" << std::endl;
         /// init dbInitializer
@@ -113,10 +112,8 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
 {
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
-    std::shared_ptr<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>> preCompile =
-        std::make_shared<std::unordered_map<dev::Address, dev::eth::PrecompiledContract>>();
     std::shared_ptr<LedgerManager> ledgerManager =
-        std::make_shared<LedgerManager>(txpool_creator.m_topicService, key_pair, preCompile);
+        std::make_shared<LedgerManager>(txpool_creator.m_topicService, key_pair);
     dev::GROUP_ID group_id = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
     ledgerManager->initSingleLedger<FakeLedgerForTest>(group_id, "", configurationPath);

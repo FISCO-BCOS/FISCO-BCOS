@@ -274,8 +274,9 @@ void Session::doRead()
             drop(TCPError);
             return;
         }
-        LOG(TRACE) << "Read: " << bytesTransferred
-                   << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
+        // LOG(TRACE) << "Read: " << bytesTransferred
+        ///           << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer +
+        ///           bytesTransferred);
         m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
         ThreadContext tc(info().id.abridged());
@@ -285,7 +286,7 @@ void Session::doRead()
         {
             Message::Ptr message = m_messageFactory->buildMessage();
             ssize_t result = message->decode(m_data.data(), m_data.size());
-            LOG(TRACE) << "Parse result: " << result;
+            /// LOG(TRACE) << "Parse result: " << result;
             if (result > 0)
             {
                 LOG(TRACE) << "Decode success: " << result;

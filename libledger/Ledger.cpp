@@ -41,23 +41,28 @@ namespace dev
 {
 namespace ledger
 {
-void Ledger::initLedger(
-    std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile)
+void Ledger::initLedger()
 {
     assert(m_param);
     /// init dbInitializer
+    Ledger_LOG(INFO) << "[#initLedger] [DBInitializer]" << std::endl;
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
     /// init the DB
-    m_dbInitializer->initDBModules(preCompile);
+    m_dbInitializer->initDBModules();
     /// init blockChain
+    Ledger_LOG(INFO) << "[#initLedger] [initBlockChain]" << std::endl;
     initBlockChain();
     /// intit blockVerifier
+    Ledger_LOG(INFO) << "[#initLedger] [initBlockVerifier]" << std::endl;
     initBlockVerifier();
     /// init txPool
+    Ledger_LOG(INFO) << "[#initLedger] [initTxPool]" << std::endl;
     initTxPool();
     /// init sync
+    Ledger_LOG(INFO) << "[#initLedger] [initSync]" << std::endl;
     initSync();
     /// init consensus
+    Ledger_LOG(INFO) << "[#initLedger] [consensusInitFactory]" << std::endl;
     consensusInitFactory();
 }
 
@@ -69,6 +74,10 @@ void Ledger::initConfig(std::string const& configPath)
 {
     try
     {
+        Ledger_LOG(INFO) << "[#initConfig] "
+                            "[initTxPoolConfig/initConsensusConfig/initSyncConfig/initDBConfig/"
+                            "initGenesisConfig]"
+                         << std::endl;
         ptree pt;
         /// read the configuration file for a specified group
         read_ini(configPath, pt);
@@ -85,8 +94,9 @@ void Ledger::initConfig(std::string const& configPath)
     catch (std::exception& e)
     {
         std::string error_info =
-            "init config failed for " + toString(m_groupId) + " failed, error_msg:" + e.what();
+            "init config failed for " + toString(m_groupId) + " failed, error_msg: " + e.what();
         LOG(ERROR) << error_info;
+        Ledger_LOG(ERROR) << "[#initConfig Failed] [EINFO]:  " << e.what() << std::endl;
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
 }
@@ -94,7 +104,8 @@ void Ledger::initConfig(std::string const& configPath)
 void Ledger::initTxPoolConfig(ptree const& pt)
 {
     m_param->mutableTxPoolParam().txPoolLimit = pt.get<uint64_t>("txPool.limit", 102400);
-    LOG(DEBUG) << "init txPool.limit = " << m_param->mutableTxPoolParam().txPoolLimit;
+    Ledger_LOG(DEBUG) << "[#initTxPoolConfig] [limit]:  "
+                      << m_param->mutableTxPoolParam().txPoolLimit << std::endl;
 }
 
 /// init consensus configurations:
@@ -106,26 +117,25 @@ void Ledger::initConsensusConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().consensusType =
         pt.get<std::string>("consensus.consensusType", "pbft");
-    LOG(DEBUG) << "Init consensus.consensusType = "
-               << m_param->mutableConsensusParam().consensusType;
 
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.maxTransNum", 1000);
-    LOG(DEBUG) << "Init consensus.maxTransNum = "
-               << m_param->mutableConsensusParam().maxTransactions;
 
     m_param->mutableConsensusParam().intervalBlockTime =
         pt.get<unsigned>("consensus.intervalBlockTime", 1000);
 
-    LOG(DEBUG) << "init consensus.intervalBlockTime ="
-               << m_param->mutableConsensusParam().intervalBlockTime;
+    Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum/interval]:  "
+                      << m_param->mutableConsensusParam().consensusType << "/"
+                      << m_param->mutableConsensusParam().maxTransactions << "/"
+                      << m_param->mutableConsensusParam().intervalBlockTime;
     try
     {
         for (auto it : pt.get_child("consensus"))
         {
             if (it.first.find("miner.") == 0)
             {
-                LOG(DEBUG) << "Add " << it.first << " : " << it.second.data();
+                Ledger_LOG(INFO) << "[#initConsensusConfig] [miner_key]:  " << it.first
+                                 << "  [miner]: " << it.second.data() << std::endl;
                 h512 miner(it.second.data());
                 m_param->mutableConsensusParam().minerList.push_back(miner);
             }
@@ -133,7 +143,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Parse consensus section failed:" << e.what();
+        Ledger_LOG(ERROR) << "[#initConsensusConfig]: Parse consensus section failed: " << e.what();
     }
 }
 
@@ -142,7 +152,8 @@ void Ledger::initConsensusConfig(ptree const& pt)
 void Ledger::initSyncConfig(ptree const& pt)
 {
     m_param->mutableSyncParam().idleWaitMs = pt.get<unsigned>("sync.idleWaitMs", 30);
-    LOG(DEBUG) << "Init Sync.idleWaitMs = " << m_param->mutableSyncParam().idleWaitMs;
+    Ledger_LOG(DEBUG) << "[#initSyncConfig] [idleWaitMs]:" << m_param->mutableSyncParam().idleWaitMs
+                      << std::endl;
 }
 
 /// init db related configurations:
@@ -156,6 +167,8 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->setMptState(pt.get<bool>("statedb.mpt", true));
     std::string baseDir = m_param->baseDir() + "/" + pt.get<std::string>("statedb.dbpath", "data");
     m_param->setBaseDir(baseDir);
+    Ledger_LOG(DEBUG) << "[#initDBConfig] [type/enableMpt/baseDir]: " << m_param->dbType() << "/"
+                      << m_param->enableMpt() << "/" << baseDir << std::endl;
 }
 
 /// init genesis configuration
@@ -164,6 +177,9 @@ void Ledger::initGenesisConfig(ptree const& pt)
 {
     m_param->mutableGenesisParam().genesisHash = pt.get<dev::h256>("genesis.hash", h256());
     m_param->mutableGenesisParam().accountStartNonce = pt.get<u256>("genesis.nonce", u256(0x0));
+    Ledger_LOG(DEBUG) << "[#initGenesisConfig] [genHash/accountStartNonce]:  "
+                      << m_param->mutableGenesisParam().genesisHash << "/"
+                      << m_param->mutableGenesisParam().accountStartNonce << std::endl;
 }
 
 /// init txpool
@@ -171,6 +187,8 @@ void Ledger::initTxPool()
 {
     assert(m_blockChain);
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
+    Ledger_LOG(DEBUG) << "[#initTxPool] [Protocol ID]:  " << protocol_id;
+    ;
     m_txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
 }
@@ -178,6 +196,7 @@ void Ledger::initTxPool()
 /// init blockVerifier
 void Ledger::initBlockVerifier()
 {
+    Ledger_LOG(DEBUG) << "[#initBlockVerifier]";
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>();
     m_blockVerifier = blockVerifier;
     /// set params for blockverifier
@@ -187,9 +206,9 @@ void Ledger::initBlockVerifier()
     blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
 }
 
-/// TODO: init blockchain
 void Ledger::initBlockChain()
 {
+    Ledger_LOG(DEBUG) << "[#initBlockChain]";
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     m_blockChain = std::shared_ptr<BlockChainInterface>(blockChain.get());
     blockChain->setStateStorage(m_dbInitializer->storage());
@@ -205,8 +224,8 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     assert(m_txPool && m_blockChain && m_sync && m_blockVerifier);
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
-    LOG(DEBUG) << "create PBFTConsensus, baseDir:" << m_param->baseDir()
-               << " , protocol_id:" << protocol_id;
+    Ledger_LOG(DEBUG) << "[#createPBFTSealer] [baseDir/Protocol ID]:  " << m_param->baseDir() << "/"
+                      << protocol_id << std::endl;
     std::shared_ptr<Sealer> pbftSealer =
         std::make_shared<PBFTSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             protocol_id, m_param->baseDir(), m_keyPair, m_param->mutableConsensusParam().minerList);
@@ -221,8 +240,8 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 /// init consensus
 void Ledger::consensusInitFactory()
 {
-    LOG(DEBUG) << "#### Configurated Consensus type:"
-               << m_param->mutableConsensusParam().consensusType;
+    Ledger_LOG(DEBUG) << "[#consensusInitFactory] [type]:  "
+                      << m_param->mutableConsensusParam().consensusType;
     /// default create pbft consensus
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
@@ -231,7 +250,8 @@ void Ledger::consensusInitFactory()
     else
     {
         std::string error_msg =
-            "Unsupported Consensus type:" + m_param->mutableConsensusParam().consensusType;
+            "Unsupported Consensus type: " + m_param->mutableConsensusParam().consensusType;
+        Ledger_LOG(ERROR) << "[#UnsupportConsensusType]" << std::endl;
         LOG(ERROR) << error_msg;
         BOOST_THROW_EXCEPTION(dev::InvalidConsensusType() << errinfo_comment(error_msg));
     }
@@ -241,6 +261,7 @@ void Ledger::consensusInitFactory()
 void Ledger::initSync()
 {
     assert(m_txPool && m_blockChain && m_blockVerifier);
+    Ledger_LOG(DEBUG) << "[#initSync]" << std::endl;
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), m_param->mutableGenesisParam().genesisHash,

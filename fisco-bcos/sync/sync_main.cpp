@@ -86,7 +86,7 @@ static void startSync(Params& params)
     initialize->init("./config.conf");
 
     auto p2pInitializer = initialize->p2pInitializer();
-    shared_ptr<Service> p2pService = p2pInitializer->p2pService();
+    shared_ptr<P2PInterface> p2pService = p2pInitializer->p2pService();
 
     GROUP_ID groupId = 1;
     std::map<GROUP_ID, h512s> groudID2NodeList;

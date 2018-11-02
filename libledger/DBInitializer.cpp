@@ -58,7 +58,7 @@ void DBInitializer::initLevelDBStorage()
     try
     {
         ldb_option.create_if_missing = true;
-        LOG(DEBUG) << "open leveldb handler";
+        DBInitializer_LOG(DEBUG) << "[#initLevelDBStorage]: open leveldb handler" << std::endl;
         leveldb::Status status = leveldb::DB::Open(ldb_option, m_param->baseDir(), &(pleveldb));
         std::shared_ptr<LevelDBStorage> leveldb_storage =
             std::dynamic_pointer_cast<LevelDBStorage>(m_storage);
@@ -68,7 +68,8 @@ void DBInitializer::initLevelDBStorage()
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "initLevelDBStorage failed, error information:" << e.what();
+        DBInitializer_LOG(ERROR) << "[#initLevelDBStorage] initLevelDBStorage failed, [EINFO]: "
+                                 << e.what();
         BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
     }
 }
@@ -77,8 +78,7 @@ void DBInitializer::initLevelDBStorage()
 void DBInitializer::initAMOPStorage() {}
 
 /// create ExecutiveContextFactory
-void DBInitializer::createExecutiveContext(
-    std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompile)
+void DBInitializer::createExecutiveContext()
 {
     assert(m_storage && m_stateFactory);
     m_executiveContextFac = std::make_shared<ExecutiveContextFactory>();

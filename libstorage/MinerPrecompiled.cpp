@@ -63,7 +63,7 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 
             if (entries->size() == 0u)
             {
-                entry->setField(NODE_KEY_ENABLENUM, (context->blockInfo().number + 1).str());
+                entry->setField(NODE_KEY_ENABLENUM, (context->blockInfo().number).str());
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 table->insert(PRI_KEY, entry);
                 LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
