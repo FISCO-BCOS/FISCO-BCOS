@@ -151,12 +151,10 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlps = _packet.rlp();
 
-    // TODO add filter logic
-    m_syncStatus->bq().push(rlps);
+    SYNCLOG(TRACE) << "[Rcv] [Download] Peer block packet received [packetSize]: "
+                   << rlps.data().size() << "B" << endl;
 
-    SYNCLOG(TRACE)
-        << "[Rcv] [Download] Peer block packet received [fromNumber/numberSize/packetSize]: "
-        << rlps.data().size() << "B" << endl;
+    m_syncStatus->bq().push(rlps);
 }
 
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)

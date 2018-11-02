@@ -42,9 +42,6 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
     ShardPtr blocksShard =
         make_shared<DownloadBlocksShard>(DownloadBlocksShard{0, 0, _rlps.data().toBytes()});
     m_buffer->emplace_back(blocksShard);
-
-    SYNCLOG(TRACE) << "[Rcv] [Download] Download block buffer pushed [from/size]: " << 0 << "/" << 0
-                   << endl;
 }
 
 void DownloadingBlockQueue::push(BlockPtr _block)
