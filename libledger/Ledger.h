@@ -99,7 +99,6 @@ public:
 
     virtual ~Ledger(){};
 
-    /// init the ledger(called by initializer)
     void initLedger() override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
@@ -111,7 +110,7 @@ public:
     {
         return m_blockChain;
     }
-    std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
+    virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         return m_sealer->consensusEngine();
     }
