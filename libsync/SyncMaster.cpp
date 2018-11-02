@@ -90,7 +90,7 @@ void SyncMaster::doWork()
     // Not Idle do
     if (isSyncing())
     {
-        if (m_state == SyncState::Downloading)
+        if (m_syncStatus->state == SyncState::Downloading)
         {
             bool finished = maintainDownloadingQueue();
             if (finished)
@@ -116,7 +116,7 @@ SyncStatus SyncMaster::status() const
 {
     ReadGuard l(x_sync);
     SyncStatus res;
-    res.state = m_state;
+    res.state = m_syncStatus->state;
     res.protocolId = m_protocolId;
     res.startBlockNumber = m_startingBlock;
     res.currentBlockNumber = m_blockChain->number();
@@ -132,7 +132,7 @@ void SyncMaster::noteSealingBlockNumber(int64_t _number)
 
 bool SyncMaster::isSyncing() const
 {
-    return m_state != SyncState::Idle;
+    return m_syncStatus->state != SyncState::Idle;
 }
 
 void SyncMaster::maintainTransactions()
@@ -399,7 +399,7 @@ void SyncMaster::maintainPeersConnection()
 
 void SyncMaster::maintainDownloadingQueueBuffer()
 {
-    if (m_state == SyncState::Downloading)
+    if (m_syncStatus->state == SyncState::Downloading)
     {
         m_syncStatus->bq().clearFullQueueIfNotHas(m_blockChain->number() + 1);
         m_syncStatus->bq().flushBufferToQueue();

@@ -121,6 +121,13 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 {
+    if (m_syncStatus->state == SyncState::Downloading)
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Tx] Transaction dropped when downloading blocks [fromNodeId]: "
+                       << _packet.nodeId << endl;
+        return;
+    }
+
     RLP const& rlps = _packet.rlp();
     unsigned itemCount = rlps.itemCount();
     size_t successCnt = 0;

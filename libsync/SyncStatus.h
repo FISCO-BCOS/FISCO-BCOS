@@ -126,6 +126,7 @@ public:
     mutable SharedMutex x_known;
     int64_t knownHighestNumber;
     h256 knownLatestHash;
+    SyncState state = SyncState::Idle;
 
 private:
     mutable SharedMutex x_peerStatus;

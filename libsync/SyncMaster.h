@@ -113,14 +113,14 @@ public:
 
     void noteDownloadingBegin()
     {
-        if (m_state == SyncState::Idle)
-            m_state = SyncState::Downloading;
+        if (m_syncStatus->state == SyncState::Idle)
+            m_syncStatus->state = SyncState::Downloading;
     }
 
     void noteDownloadingFinish()
     {
-        if (m_state == SyncState::Downloading)
-            m_state = SyncState::Idle;
+        if (m_syncStatus->state == SyncState::Downloading)
+            m_syncStatus->state = SyncState::Idle;
     }
 
     int64_t protocolId() { return m_protocolId; }
@@ -169,7 +169,6 @@ private:
     std::condition_variable m_signalled;
 
     // sync state
-    SyncState m_state = SyncState::Idle;
     bool m_newTransactions = false;
     bool m_newBlocks = false;
 
