@@ -414,18 +414,16 @@ public:
             ec = boost::asio::error::eof;
             handler(ec, transferred_bytes);
         }
-        if (count == 1)
-        {
-            count++;
-            std::shared_ptr<Message> message = std::make_shared<Message>();
-            std::string s(32, 'a');
-            bytes data;
-            data.assign(s.begin(), s.end());
-            message->encode(data);
-            buffers = boost::asio::mutable_buffers_1(message.get(), message->length());
-            transferred_bytes = data.size();
-            handler(ec, transferred_bytes);
-        }
+        //        if (count == 1)
+        //        {
+        //            count++;
+        //            std::string s(32, 'a');
+        //            bytes data;
+        //            data.assign(s.begin(), s.end());
+        //            buffers = boost::asio::mutable_buffers_1(ref(data).data(), data.size());
+        //            transferred_bytes = data.size();
+        //            handler(ec, transferred_bytes);
+        //        }
         else
         {
             count++;
