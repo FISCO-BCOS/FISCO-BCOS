@@ -77,18 +77,6 @@ bool SyncMsgEngine::checkMessage(Message::Ptr _msg)
     return true;
 }
 
-bool SyncMsgEngine::isNewerBlock(shared_ptr<Block> block)
-{
-    if (block->header().number() <= m_blockChain->number())
-        return false;
-
-    // if (block->header()->)
-    // if //Check sig list
-    // return false;
-
-    return true;
-}
-
 bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
     SYNCLOG(TRACE) << "[Rcv] [Packet] interpret packet type: " << int(_packet.packetType) << endl;
@@ -115,8 +103,9 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
-    SyncPeerInfo info{_packet.nodeId, _packet.rlp()[0].toInt<int64_t>(),
-        _packet.rlp()[1].toHash<h256>(), _packet.rlp()[2].toHash<h256>()};
+    RLP const& rlps = _packet.rlp();
+    SyncPeerInfo info{
+        _packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(), rlps[2].toHash<h256>()};
 
     if (status == nullptr)
     {
@@ -161,19 +150,13 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlps = _packet.rlp();
-    unsigned itemCount = rlps.itemCount();
-    size_t successCnt = 0;
-    for (unsigned i = 0; i < itemCount; ++i)
-    {
-        shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
-        if (isNewerBlock(block))
-        {
-            successCnt++;
-            m_syncStatus->bq().push(block);
-        }
-    }
-    SYNCLOG(TRACE) << "[Rcv] [Download] Peer block receive [import/rcv/downloadBlockQueue]: "
-                   << successCnt << "/" << itemCount << "/" << m_syncStatus->bq().size() << endl;
+
+    // TODO add filter logic
+    m_syncStatus->bq().push(rlps);
+
+    SYNCLOG(TRACE)
+        << "[Rcv] [Download] Peer block packet received [fromNumber/numberSize/packetSize]: "
+        << rlps.data().size() << "B" << endl;
 }
 
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
