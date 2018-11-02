@@ -102,6 +102,14 @@ BOOST_AUTO_TEST_CASE(testSessionConstruct)
     session->lastReceived();
 }
 
+BOOST_AUTO_TEST_CASE(testSessionDoRead)
+{
+    auto session = getSession();
+    std::shared_ptr<MessageFactory> p2PMessageFactory = std::make_shared<P2PMessageFactory>();
+    session->setMessageFactory(p2PMessageFactory);
+    session->start();
+}
+
 BOOST_AUTO_TEST_CASE(testSessionConnect)
 {
     auto session = getSession();

@@ -119,6 +119,7 @@ protected:
         bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
         if (enough)
         {
+            SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num << std::endl;
             m_syncTxPool = false;
         }
         return enough;

@@ -69,13 +69,13 @@ public:
 
     ~FakeBlockChain() {}
 
-    int64_t number() const
+    int64_t number()
     {
         ReadGuard l(x_blockChain);
         return m_blockChain.size() - 1;
     }
 
-    dev::h256 numberHash(int64_t _i) const
+    dev::h256 numberHash(int64_t _i)
     {
         ReadGuard l(x_blockChain);
         return m_blockChain[_i]->headerHash();
@@ -187,8 +187,7 @@ public:
       : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {}
     /// init the ledger(called by initializer)
-    void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override
+    void initLedger() override
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);

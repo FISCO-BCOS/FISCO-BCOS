@@ -66,14 +66,14 @@ class Executive
 {
 public:
     /// Simple constructor; executive will operate on given state, with the given environment info.
-    Executive(StateFace& _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
+    Executive(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
       : m_s(_s), m_envInfo(_envInfo), m_depth(_level)
     {}
 
-    template <typename T>
-    Executive(T& _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
-      : m_s(dynamic_cast<StateFace&>(_s)), m_envInfo(_envInfo), m_depth(_level)
-    {}
+    // template <typename T>
+    // Executive(T _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
+    //  : m_s(dynamic_cast<std::shared_ptr<StateFace>>(_s)), m_envInfo(_envInfo), m_depth(_level)
+    //{}
 
     /** Easiest constructor.
      * Creates executive to operate on the state of end of the given block, populating environment
@@ -153,7 +153,7 @@ public:
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
     u256 gas() const { return m_gas; }
-    unsigned status() const { return m_status; }
+    u256 status() const { return m_status; }
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
 
@@ -171,14 +171,14 @@ private:
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
 
-    StateFace& m_s;  ///< The state to which this operation/transaction is applied.
+    std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
     dev::eth::EnvInfo m_envInfo;   ///< Information on the runtime environment.
     std::shared_ptr<ExtVM> m_ext;  ///< The VM externality object for the VM execution or null if no
                                    ///< VM is required. shared_ptr used only to allow ExtVM forward
                                    ///< reference. This field does *NOT* survive this object.
     owning_bytes_ref m_output;     ///< Execution output.
-    unsigned m_status = 0;         ///< Execution output.
+    u256 m_status = 0;             ///< Execution output.
     ExecutionResult* m_res = nullptr;  ///< Optional storage for execution results.
 
     unsigned m_depth = 0;  ///< The context's call-depth.
