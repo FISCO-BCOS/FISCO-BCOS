@@ -42,11 +42,10 @@ namespace consensus
 void PBFTSealer::handleBlock()
 {
     setBlock();
-    LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on: "
-              << m_sealing.block.header().hash()
-              << " #block_number:" << m_sealing.block.header().number()
-              << " #tx:" << m_sealing.block.getTransactionSize()
-              << " #protocol:" << m_pbftEngine->protocolId() << " time:" << utcTime();
+    PBFTSEALER_LOG(INFO) << "+++++++++++++++++++++++++++ [#Generating seal on]:  "
+                         << "[blockNumber/txNum/hash]:  " << m_sealing.block.header().number()
+                         << "/" << m_sealing.block.getTransactionSize() << "/"
+                         << m_sealing.block.header().hash() << std::endl;
     bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
     if (!succ)
     {

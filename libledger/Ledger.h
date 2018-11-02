@@ -33,6 +33,7 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 #include <boost/property_tree/ptree.hpp>
+#define Ledger_LOG(LEVEL) LOG(LEVEL) << "[#LEDGER] [GROUPID:" << std::to_string(m_groupId) << "]"
 namespace dev
 {
 namespace ledger
@@ -64,7 +65,6 @@ public:
         m_keyPair(_keyPair),
         m_configFileName(configFileName)
     {
-        std::cout << "begin construct Ledger" << std::endl;
         m_param = std::make_shared<LedgerParam>();
         std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
         if (_baseDir == "")
@@ -73,8 +73,9 @@ public:
         assert(m_service);
         if (m_configFileName == "")
             m_configFileName = "./config.group" + std::to_string(_groupId) + m_postfix;
-        LOG(DEBUG) << "config file path:" << m_configFileName;
-        LOG(DEBUG) << "basedir:" << m_param->baseDir();
+
+        Ledger_LOG(INFO) << "[#LedgerConstructor] [configPath/baseDir]:  " << m_configFileName
+                         << "/" << m_param->baseDir() << std::endl;
         initConfig(m_configFileName);
     }
 
@@ -82,6 +83,7 @@ public:
     void startAll() override
     {
         assert(m_sync && m_sealer);
+        Ledger_LOG(INFO) << "[#startAll...]" << std::endl;
         m_sync->start();
         m_sealer->start();
     }
@@ -89,6 +91,8 @@ public:
     /// stop all modules(consensus, sync)
     void stopAll() override
     {
+        assert(m_sync && m_sealer);
+        Ledger_LOG(INFO) << "[#stopAll...]" << std::endl;
         m_sealer->stop();
         m_sync->stop();
     }
@@ -96,8 +100,7 @@ public:
     virtual ~Ledger(){};
 
     /// init the ledger(called by initializer)
-    void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile) override;
+    void initLedger() override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override

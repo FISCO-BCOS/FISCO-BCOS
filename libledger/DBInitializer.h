@@ -29,6 +29,7 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <memory>
+#define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[#DBINITIALIZER] "
 namespace dev
 {
 namespace ledger
@@ -38,8 +39,7 @@ class DBInitializer
 public:
     DBInitializer(std::shared_ptr<LedgerParamInterface> param) : m_param(param) {}
 
-    virtual void initDBModules(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& preCompile)
+    virtual void initDBModules()
     {
         assert(m_param);
         /// init the storage DB
@@ -47,7 +47,7 @@ public:
         /// create state storage
         createStateFactory();
         /// create executive context
-        createExecutiveContext(preCompile);
+        createExecutiveContext();
     }
 
     dev::storage::Storage::Ptr storage() const
@@ -67,13 +67,10 @@ protected:
     ///  must be open before init
     virtual void initStorageDB();
 
-    /// mpt && storagestate(2选1)
-    /// TODO:storageStateFactory( mpt && storage 2 选1)
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory();
     /// create ExecutiveContextFactory
-    virtual void createExecutiveContext(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompile);
+    virtual void createExecutiveContext();
 
 private:
     /// TODO: init AMOP storage

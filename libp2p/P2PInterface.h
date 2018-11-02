@@ -33,8 +33,7 @@ public:
     virtual Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
 
     virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        Options const& options = Options()) = 0;
+        CallbackFunc callback = nullptr, Options const& options = Options()) = 0;
 
     virtual Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
