@@ -27,6 +27,7 @@
 #include <libconsensus/pbft/Common.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
+#include <libethcore/Protocol.h>
 namespace dev
 {
 namespace consensus
@@ -34,6 +35,7 @@ namespace consensus
 class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
+    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol) {}
     /// specified prepareRequest exists in raw-prepare-cache or not?
     /// @return true : the prepare request exists in the  raw-prepare-cache
     /// @return false : the prepare request doesn't exist in the  raw-prepare-cache
@@ -94,8 +96,8 @@ public:
     inline void addRawPrepare(PrepareReq const& req)
     {
         m_rawPrepareCache = req;
-        LOG(DEBUG) << "addRawPrepare: current raw_prepare:" << req.block_hash.abridged()
-                   << "| reset prepare cache";
+        PBFTReqCache_LOG(DEBUG) << "[addRawPrepare] [height/idx/hash]:" << req.height << "/"
+                                << req.idx << "/" << req.block_hash.abridged();
         m_prepareCache = PrepareReq();
     }
 
@@ -133,8 +135,8 @@ public:
         if (m_futurePrepareCache.block_hash != req.block_hash)
         {
             m_futurePrepareCache = req;
-            LOG(INFO) << "recvFutureBlock, blk=" << req.height << ", hash=" << req.block_hash
-                      << ", idx=" << req.idx;
+            PBFTReqCache_LOG(INFO) << "[addFuturePrepareCache] [height/idx/hash]: " << req.height
+                                   << "/" << req.idx << "/" << req.block_hash.abridged();
         }
     }
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
@@ -277,6 +279,7 @@ private:
     }
 
 private:
+    dev::PROTOCOL_ID m_protocolId;
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
