@@ -26,7 +26,6 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
-#include <librpc/Rpc.cpp>
 
 
 using namespace dev;
