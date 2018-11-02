@@ -61,7 +61,9 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
             execute(envInfo, tr, OnOpFunc(), executiveContext);
         block.appendTransactionReceipt(resultReceipt.second);
+        executiveContext->getState()->commit();
     }
+    block.header().setStateRoot(executiveContext->getState()->rootHash());
     return executiveContext;
 }
 

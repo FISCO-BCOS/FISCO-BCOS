@@ -153,7 +153,7 @@ public:
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
     u256 gas() const { return m_gas; }
-    unsigned status() const { return m_status; }
+    u256 status() const { return m_status; }
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
 
@@ -178,7 +178,7 @@ private:
                                    ///< VM is required. shared_ptr used only to allow ExtVM forward
                                    ///< reference. This field does *NOT* survive this object.
     owning_bytes_ref m_output;     ///< Execution output.
-    unsigned m_status = 0;         ///< Execution output.
+    u256 m_status = 0;             ///< Execution output.
     ExecutionResult* m_res = nullptr;  ///< Optional storage for execution results.
 
     unsigned m_depth = 0;  ///< The context's call-depth.
