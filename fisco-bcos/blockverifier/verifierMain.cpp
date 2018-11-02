@@ -77,13 +77,15 @@ int main(int argc, char* argv[])
             auto max = blockChain->number();
             auto parentBlock = blockChain->getBlockByNumber(max);
             dev::eth::BlockHeader header;
-            header.setNumber(i);
+            header.setNumber(max + 1);
             header.setParentHash(parentBlock->headerHash());
             header.setGasLimit(dev::u256(1024 * 1024 * 1024));
             header.setRoots(parentBlock->header().transactionsRoot(),
                 parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
             dev::eth::Block block;
             block.setBlockHeader(header);
+            LOG(INFO) << "max " << max << " parentHeader " << parentBlock->header() << " header "
+                      << header;
 
             dev::bytes rlpBytes = dev::fromHex(
                 "0xf92cc4a002b6cb747cb0285a58d4a949cf3ccb9cb6c0c2a43a3568f95fcd3c902a0d822b85174876"
@@ -381,7 +383,7 @@ int main(int argc, char* argv[])
             blockChain->commitBlock(block, context);
             dev::eth::TransactionReceipt receipt =
                 blockChain->getTransactionReceiptByHash(tx.sha3());
-            LOG(INFO) << "receipt" << receipt;
+            LOG(INFO) << "receipt " << receipt;
         }
     }
     else if (argc > 1 && std::string("verify") == argv[1])
