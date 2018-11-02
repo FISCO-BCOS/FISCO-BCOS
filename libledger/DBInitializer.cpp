@@ -51,6 +51,7 @@ void DBInitializer::initStorageDB()
 /// init the storage with leveldb
 void DBInitializer::initLevelDBStorage()
 {
+    DBInitializer_LOG(INFO) << "[#initLevelDBStorage] ..." << std::endl;
     m_storage = std::make_shared<LevelDBStorage>();
     /// open and init the levelDB
     leveldb::Options ldb_option;
@@ -75,7 +76,10 @@ void DBInitializer::initLevelDBStorage()
 }
 
 /// TODO: init AMOP Storage
-void DBInitializer::initAMOPStorage() {}
+void DBInitializer::initAMOPStorage()
+{
+    DBInitializer_LOG(INFO) << "[#initAMOPStorage] ..." << std::endl;
+}
 
 /// create ExecutiveContextFactory
 void DBInitializer::createExecutiveContext()

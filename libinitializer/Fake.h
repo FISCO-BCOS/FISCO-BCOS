@@ -19,7 +19,6 @@
  * @brief: fake interface
  *         fake Block
  *         fake BlockChainInterface
- *         fake SyncInterface
  *         fake BlockVerifierInterface
  *         fake Ledger
  * @file: Fake.h
@@ -191,6 +190,8 @@ public:
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        /// init the DB
+        m_dbInitializer->initDBModules();
         /// init blockChain
         initBlockChain();
         /// intit blockVerifier

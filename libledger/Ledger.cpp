@@ -163,7 +163,7 @@ void Ledger::initSyncConfig(ptree const& pt)
 void Ledger::initDBConfig(ptree const& pt)
 {
     /// init the basic config
-    m_param->setDBType(pt.get<std::string>("statedb.dbType", "AMDB"));
+    m_param->setDBType(pt.get<std::string>("statedb.dbType", "LevelDB"));
     m_param->setMptState(pt.get<bool>("statedb.mpt", true));
     std::string baseDir = m_param->baseDir() + "/" + pt.get<std::string>("statedb.dbpath", "data");
     m_param->setBaseDir(baseDir);
@@ -221,7 +221,7 @@ void Ledger::initBlockChain()
  */
 std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 {
-    assert(m_txPool && m_blockChain && m_sync && m_blockVerifier);
+    assert(m_txPool && m_blockChain && m_sync && m_blockVerifier && m_dbInitializer);
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
     Ledger_LOG(DEBUG) << "[#createPBFTSealer] [baseDir/Protocol ID]:  " << m_param->baseDir() << "/"
@@ -234,6 +234,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     std::shared_ptr<PBFTEngine> pbftEngine =
         std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
     pbftEngine->setIntervalBlockTime(m_param->mutableConsensusParam().intervalBlockTime);
+    pbftEngine->setStorage(m_dbInitializer->storage());
     return pbftSealer;
 }
 

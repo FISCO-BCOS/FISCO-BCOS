@@ -100,7 +100,7 @@ public:
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
-
+    void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
     const std::string consensusStatus() const override;
 
 protected:
@@ -184,18 +184,22 @@ protected:
     /// @param nodeId: the node id of the miner
     /// @return : 1. >0: the index of the miner
     ///           2. equal to -1: the node is not a miner(not exists in miner list)
-    inline ssize_t getIndexByMiner(dev::h512 const& nodeId) const
+    inline ssize_t getIndexByMiner(dev::h512 const& nodeId)
     {
-        ssize_t index = -1;
-        for (size_t i = 0; i < m_minerList.size(); ++i)
+        updateMinerList();
         {
-            if (m_minerList[i] == nodeId)
+            ReadGuard l(m_minerListMutex);
+            ssize_t index = -1;
+            for (size_t i = 0; i < m_minerList.size(); ++i)
             {
-                index = i;
-                break;
+                if (m_minerList[i] == nodeId)
+                {
+                    index = i;
+                    break;
+                }
             }
+            return index;
         }
-        return index;
     }
     /// get the node id of specified miner according to its index
     /// @param index: the index of the node
@@ -385,6 +389,7 @@ protected:
     {
         return boost::filesystem::space(path).available > 1024;
     }
+    void updateMinerList();
 
 protected:
     u256 m_view = u256(0);
@@ -394,6 +399,8 @@ protected:
     std::string m_baseDir;
     bool m_cfgErr = false;
     bool m_leaderFailed = false;
+
+    dev::storage::Storage::Ptr m_storage;
 
     /// whether to omit empty block
     bool m_omitEmptyBlock = true;
@@ -415,6 +422,9 @@ protected:
     Mutex x_signalled;
 
     std::function<void()> m_onViewChange;
+
+    /// the block number that update the miner list
+    int64_t m_lastObtainMinerNum = 0;
 };
 }  // namespace consensus
 }  // namespace dev
