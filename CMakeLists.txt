@@ -72,6 +72,7 @@ add_subdirectory(libconsensus)
 add_subdirectory(libblockchain)
 add_subdirectory(libsync)
 add_subdirectory(libledger)
+add_subdirectory(librpc)
 add_subdirectory(libinitializer)
 
 
