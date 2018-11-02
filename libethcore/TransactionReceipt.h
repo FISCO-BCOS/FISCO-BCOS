@@ -23,6 +23,7 @@
 
 
 #include <libdevcore/Address.h>
+#include <libdevcore/CommonIO.h>
 #include <libdevcore/RLP.h>
 #include <libethcore/Common.h>
 #include <libethcore/LogEntry.h>
@@ -142,7 +143,7 @@ class TransactionReceipt
 public:
     TransactionReceipt(){};
     TransactionReceipt(bytesConstRef _rlp);
-    TransactionReceipt(h256 _root, u256 _gasUsed, LogEntries const& _log, unsigned _status,
+    TransactionReceipt(h256 _root, u256 _gasUsed, LogEntries const& _log, u256 _status,
         bytes _bytes, Address const& _contractAddress = Address());
     TransactionReceipt(TransactionReceipt const& _other);
     h256 const& stateRoot() const { return m_stateRoot; }
@@ -150,10 +151,17 @@ public:
     Address const& contractAddress() const { return m_contractAddress; }
     LogBloom const& bloom() const { return m_bloom; }
     LogEntries const& log() const { return m_log; }
-    unsigned const& status() const { return m_status; }
+    u256 const& status() const { return m_status; }
     bytes const& outputBytes() const { return m_outputBytes; }
 
     void streamRLP(RLPStream& _s) const;
+
+    void encode(bytes& receipt) const
+    {
+        RLPStream s;
+        streamRLP(s);
+        s.swapOut(receipt);
+    }
 
     bytes rlp() const
     {
@@ -162,12 +170,15 @@ public:
         return s.out();
     }
 
+    void decode(bytesConstRef receiptsBytes);
+    void decode(RLP const& rlp);
+
 private:
     h256 m_stateRoot;
     u256 m_gasUsed;
     Address m_contractAddress;
     LogBloom m_bloom;
-    unsigned m_status;
+    u256 m_status;
     bytes m_outputBytes;
     LogEntries m_log;
 };

@@ -212,9 +212,17 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
     if (tb)
     {
-        Entry::Ptr entry = std::make_shared<Entry>();
+        auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
+        auto entry = tb->newEntry();
         entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
-        tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
+        if (entries->size() > 0)
+        {
+            tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());
+        }
+        else
+        {
+            tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
+        }
     }
 }
 

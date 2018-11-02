@@ -136,6 +136,7 @@ public:
         return out;
     }
 
+
     /// @returns the SHA3 hash of the RLP serialisation of this transaction.
     h256 sha3(IncludeSignature _sig = WithSignature) const;
 
