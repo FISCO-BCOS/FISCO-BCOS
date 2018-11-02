@@ -135,11 +135,14 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     sealing.block = fake_block.m_block;
     block_populated_prepare.block = bytes();
     sealing.p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
+
     PrepareReq new_req(block_populated_prepare, sealing, key_pair2);
     checkPBFTMsg(new_req, key_pair2, fake_block.m_block.blockHeader().number(), u256(2), u256(135),
         new_req.timestamp, fake_block.m_block.header().hash());
     BOOST_CHECK(new_req.timestamp >= tmp_req.timestamp);
-    // BOOST_CHECK(new_req.block == fake_block.m_blockData);
+    bytes encodedData;
+    fake_block.m_block.encode(encodedData);
+    BOOST_CHECK(new_req.block == encodedData);
 }
 
 /// test SignReq and CommitReq

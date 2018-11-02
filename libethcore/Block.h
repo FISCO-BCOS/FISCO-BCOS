@@ -99,6 +99,7 @@ public:
     void setTransactionReceipts(TransactionReceipts const& transReceipt)
     {
         m_transactionReceipts = transReceipt;
+        noteChange();
     }
     /// append a single transaction to m_transactions
     void appendTransaction(Transaction const& _trans)
@@ -139,6 +140,7 @@ public:
         m_transactionReceipts.clear();
         m_sigList.clear();
         m_txsCache.clear();
+        noteChange();
     }
 
     void appendTransactionReceipt(TransactionReceipt const& _tran)
@@ -156,7 +158,10 @@ private:
     void noteChange()
     {
         /// RecursiveGuard l(m_txsCacheLock);
+        WriteGuard l_receipt(x_txReceiptsCache);
+        WriteGuard l_txscache(x_txsCache);
         m_txsCache = bytes();
+        m_tReceiptsCache = bytes();
     }
 
     bytes const& encodeTransactions() const;
