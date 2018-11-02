@@ -78,7 +78,7 @@ public:
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
 
     ///< Only connected node
-    SessionInfos sessionInfos() const override;
+    virtual SessionInfos sessionInfos() const override;
 
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const override;
 
