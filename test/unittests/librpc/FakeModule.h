@@ -308,9 +308,7 @@ public:
         /// init txPool
         initTxPool();
     }
-    virtual void initLedger(
-        std::unordered_map<dev::Address, dev::eth::PrecompiledContract> const& preCompile)
-        override{};
+    void initLedger() override{};
     /// init blockverifier related
     void initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
     void initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
