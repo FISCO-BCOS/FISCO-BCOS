@@ -1052,9 +1052,13 @@ void PBFTEngine::updateMinerList()
         /// get node from storage DB
         auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
         /// obtain miner list
+        if (!nodes)
+            return;
         for (size_t i = 0; i < nodes->size(); i++)
         {
             auto node = nodes->get(i);
+            if (!node)
+                return;
             if ((node->getField("type") == "miner") &&
                 (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
             {
@@ -1072,6 +1076,8 @@ void PBFTEngine::updateMinerList()
         for (size_t i = 0; i < miner_list.size(); i++)
         {
             auto node = nodes->get(i);
+            if (!node)
+                return;
             if ((node->getField("type") == "observer") &&
                 (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
             {
