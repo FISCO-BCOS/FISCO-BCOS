@@ -45,8 +45,8 @@ enum class CheckTransaction
     Cheap,
     Everything
 };
-
-using RPCCallbackPtr = std::shared_ptr<void(LocalisedTransactionReceipt::Ptr)>;
+/// function called after the transaction has been submitted
+using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
 /// Remove m_chainId ,EIP155 value for calculating transaction hash
 /// https://github.com/ethereum/EIPs/issues/155
@@ -70,7 +70,7 @@ public:
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallbackPtr(nullptr)
+        m_rpcCallback(nullptr)
     {}
 
     /// Constructs an unsigned contract-creation transaction.
@@ -82,7 +82,7 @@ public:
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallbackPtr(nullptr)
+        m_rpcCallback(nullptr)
     {}
 
     /// Constructs a transaction from the given RLP.
@@ -215,15 +215,13 @@ public:
     static int64_t baseGasRequired(
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
-    void setRpcCallbackPtr(RPCCallbackPtr ptr) { m_rpcCallbackPtr = ptr; }
+    void setRpcCallback(RPCCallback callBack) { m_rpcCallback = callBack; }
     void tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
     {
         try
         {
-            if (m_rpcCallbackPtr)
-            {
-                (*m_rpcCallbackPtr)(pReceipt);
-            }
+            if (m_rpcCallback)
+                m_rpcCallback(pReceipt);
         }
         catch (std::exception& e)
         {
@@ -267,7 +265,7 @@ protected:
     u256 m_blockLimit;            ///< The latest block number to be packaged for transaction.
     u256 m_importTime = u256(0);  ///< The utc time at which a transaction enters the queue.
 
-    RPCCallbackPtr m_rpcCallbackPtr;
+    RPCCallback m_rpcCallback;
 };
 
 /// Nice name for vector of Transaction.

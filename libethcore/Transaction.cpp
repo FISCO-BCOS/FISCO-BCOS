@@ -30,7 +30,7 @@ using namespace dev;
 using namespace dev::eth;
 Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 {
-    m_rpcCallbackPtr = nullptr;
+    m_rpcCallback = nullptr;
     decode(_rlpData, _checkSig);
 }
 
