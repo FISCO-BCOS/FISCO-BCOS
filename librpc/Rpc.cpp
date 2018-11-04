@@ -22,22 +22,24 @@
 #include "Rpc.h"
 #include "JsonHelper.h"
 #include <jsonrpccpp/common/exception.h>
-#include <libblockchain/BlockChainInterface.h>
-#include <libblockverifier/BlockVerifierInterface.h>
-#include <libconsensus/ConsensusInterface.h>
+//#include <libblockchain/BlockChainInterface.h>
+//#include <libblockverifier/BlockVerifierInterface.h>
+//#include <libconsensus/ConsensusInterface.h>
+//#include <libsync/SyncInterface.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
 
-using namespace std;
 using namespace jsonrpc;
 using namespace dev::rpc;
+using namespace dev::sync;
 
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
@@ -45,85 +47,126 @@ Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
-Json::Value Rpc::blockNumber(const Json::Value& requestJson)
+std::string Rpc::blockNumber(int _groupID)
 {
-    Json::Value responseJson;
     try
     {
-        LOG(INFO) << "blockNumber # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "blockNumber # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-
-        auto blockchain = ledgerManager()->blockChain(groupId);
-
-        responseJson["result"] = toJS(blockchain->number());
-
-        return responseJson;
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (blockchain)
+            return toJS(blockchain->number());
+        else
+            return "";
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::pbftView(const Json::Value& requestJson)
+std::string Rpc::pbftView(int _groupID)
 {
-    Json::Value responseJson;
     try
     {
-        LOG(INFO) << "pbftView # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "pbftView # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-
-        auto consensus = ledgerManager()->consensus(groupId);
-
-        std::string status = consensus->consensusStatus();
-        Json::Reader reader;
-        Json::Value statusJson;
-        u256 view;
-        if (reader.parse(status, statusJson))
+        auto consensus = ledgerManager()->consensus(_groupID);
+        if (consensus)
         {
-            view = statusJson[0]["currentView"].asUInt();
-            responseJson["result"] = toJS(view);
+            std::string status = consensus->consensusStatus();
+            Json::Reader reader;
+            Json::Value statusJson;
+            u256 view;
+            if (reader.parse(status, statusJson))
+            {
+                view = statusJson[0]["currentView"].asUInt();
+                return toJS(view);
+            }
         }
-        return responseJson;
+        return "";
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+    }
+}
+
+std::string Rpc::consensusStatus(int _groupID)
+{
+    try
+    {
+        LOG(INFO) << "consensusStatus # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
+
+        auto consensus = ledgerManager()->consensus(_groupID);
+        if (consensus)
+            return consensus->consensusStatus();
+        else
+            return "";
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+    }
+}
+
+Json::Value Rpc::syncStatus(int _groupID)
+{
+    Json::Value response;
+    try
+    {
+        LOG(INFO) << "syncStatus # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
+
+        auto sync = ledgerManager()->sync(_groupID);
+        if (sync)
+        {
+            auto status = sync->status();
+            if (status.state == SyncState::Idle)
+                response["state"] = "Idle";
+            else if (status.state == SyncState::Downloading)
+                response["state"] = "Downloading";
+            else
+                response["state"] = "size";
+            response["protocolId"] = status.protocolId;
+            response["startBlockNumber"] = status.startBlockNumber;
+            response["highestBlockNumber"] = status.highestBlockNumber;
+            if (status.majorSyncing)
+                response["majorSyncing"] = true;
+            else
+                response["majorSyncing"] = false;
+            return response;
+        }
+        else
+            return Json::Value(Json::nullValue);
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::peers(const Json::Value& requestJson)
+Json::Value Rpc::peers()
 {
-    Json::Value responseJson;
+    Json::Value response = Json::Value(Json::arrayValue);
     try
     {
-        LOG(INFO) << "peers # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
-
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-
         SessionInfos peers = service()->sessionInfos();
         for (SessionInfo const& peer : peers)
         {
-            responseJson["result"] = Json::Value(Json::arrayValue);
             Json::Value peerJson;
             peerJson["NodeID"] = peer.nodeID.hex();
             peerJson["IP"] = peer.nodeIPEndpoint.address.to_string();
@@ -132,469 +175,409 @@ Json::Value Rpc::peers(const Json::Value& requestJson)
             peerJson["Topic"] = Json::Value(Json::arrayValue);
             for (std::string topic : peer.topics)
                 peerJson["Topic"].append(topic);
-            responseJson["result"].append(peerJson);
+            response.append(peerJson);
         }
-        return responseJson;
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::getBlockByHash(const Json::Value& requestJson)
+Json::Value Rpc::getBlockByHash(
+    int _groupID, const std::string& _blockHash, bool _includeTransactions)
 {
-    Json::Value responseJson;
+    Json::Value response;
     try
     {
-        LOG(INFO) << "getBlockByHash # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "getBlockByHash # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_blockHash\" : " << _blockHash << "," << std::endl
+                  << "\"_includeTransactions\" : " << _includeTransactions << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-        if (requestJson["params"].size() != 2)
-        {
-            return rpcErrorArray(responseJson, "Number of params error!");
-        }
-        else
-        {
-            std::string blockHash = requestJson["params"][0].asString();
-            bool includeTransactions = requestJson["params"][1].asBool();
-            auto blockchain = ledgerManager()->blockChain(groupId);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
 
-            h256 hash = jsToFixed<32>(blockHash);
+        if (blockchain)
+        {
+            h256 hash = jsToFixed<32>(_blockHash);
             auto block = blockchain->getBlockByHash(hash);
-            responseJson["result"]["number"] = toJS(block->header().number());
-            responseJson["result"]["hash"] = blockHash;
-            responseJson["result"]["parentHash"] = toJS(block->header().parentHash());
-            responseJson["result"]["logsBloom"] = toJS(block->header().logBloom());
-            responseJson["result"]["transactionsRoot"] = toJS(block->header().transactionsRoot());
-            responseJson["result"]["stateRoot"] = toJS(block->header().stateRoot());
-            responseJson["result"]["sealer"] = toJS(block->header().sealer());
-            responseJson["result"]["extraData"] = Json::Value(Json::arrayValue);
-            auto datas = block->header().extraData();
-            for (auto data : datas)
-                responseJson["result"]["extraData"].append(toJS(data));
-            responseJson["result"]["gasLimit"] = toJS(block->header().gasLimit());
-            responseJson["result"]["gasUsed"] = toJS(block->header().gasUsed());
-            responseJson["result"]["timestamp"] = toJS(block->header().timestamp());
-            auto transactions = block->transactions();
-            responseJson["result"]["transactions"] = Json::Value(Json::arrayValue);
-            for (unsigned i = 0; i < transactions.size(); i++)
+            if (block)
             {
-                if (includeTransactions)
+                response["number"] = toJS(block->header().number());
+                response["hash"] = _blockHash;
+                response["parentHash"] = toJS(block->header().parentHash());
+                response["logsBloom"] = toJS(block->header().logBloom());
+                response["transactionsRoot"] = toJS(block->header().transactionsRoot());
+                response["stateRoot"] = toJS(block->header().stateRoot());
+                response["sealer"] = toJS(block->header().sealer());
+                response["extraData"] = Json::Value(Json::arrayValue);
+                auto datas = block->header().extraData();
+                for (auto data : datas)
+                    response["extraData"].append(toJS(data));
+                response["gasLimit"] = toJS(block->header().gasLimit());
+                response["gasUsed"] = toJS(block->header().gasUsed());
+                response["timestamp"] = toJS(block->header().timestamp());
+                auto transactions = block->transactions();
+                response["transactions"] = Json::Value(Json::arrayValue);
+                for (unsigned i = 0; i < transactions.size(); i++)
                 {
-                    responseJson["result"]["transactions"].append(
-                        toJson(transactions[i], std::make_pair(hash, i), block->header().number()));
-                }
-                else
-                {
-                    responseJson["result"]["transactions"].append(toJS(transactions[i].sha3()));
+                    if (_includeTransactions)
+                    {
+                        response["transactions"].append(toJson(
+                            transactions[i], std::make_pair(hash, i), block->header().number()));
+                    }
+                    else
+                    {
+                        response["transactions"].append(toJS(transactions[i].sha3()));
+                    }
                 }
             }
-            return responseJson;
         }
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::getBlockByNumber(const Json::Value& requestJson)
+Json::Value Rpc::getBlockByNumber(
+    int _groupID, const std::string& _blockNumber, bool _includeTransactions)
 {
-    Json::Value responseJson;
+    Json::Value response;
     try
     {
-        LOG(INFO) << "getBlockByNumber # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "getBlockByNumber # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_blockNumber\" : " << _blockNumber << "," << std::endl
+                  << "\"_includeTransactions\" : " << _includeTransactions << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-        if (requestJson["params"].size() != 2)
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+        if (number > jsToBlockNumber(blockNumber(_groupID)))
+            return response;
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (blockchain)
         {
-            return rpcErrorArray(responseJson, "Number of params error!");
-        }
-        else
-        {
-            std::string blockNumber = requestJson["params"][0].asString();
-            bool includeTransactions = requestJson["params"][1].asBool();
-            auto blockchain = ledgerManager()->blockChain(groupId);
-
-            BlockNumber number = jsToBlockNumber(blockNumber);
             auto block = blockchain->getBlockByNumber(number);
-            responseJson["result"]["number"] = toJS(number);
-            responseJson["result"]["hash"] = toJS(block->headerHash());
-            responseJson["result"]["parentHash"] = toJS(block->header().parentHash());
-            responseJson["result"]["logsBloom"] = toJS(block->header().logBloom());
-            responseJson["result"]["transactionsRoot"] = toJS(block->header().transactionsRoot());
-            responseJson["result"]["stateRoot"] = toJS(block->header().stateRoot());
-            responseJson["result"]["sealer"] = toJS(block->header().sealer());
-            responseJson["result"]["extraData"] = Json::Value(Json::arrayValue);
-            auto datas = block->header().extraData();
-            for (auto data : datas)
-                responseJson["result"]["extraData"].append(toJS(data));
-            responseJson["result"]["gasLimit"] = toJS(block->header().gasLimit());
-            responseJson["result"]["gasUsed"] = toJS(block->header().gasUsed());
-            responseJson["result"]["timestamp"] = toJS(block->header().timestamp());
-            auto transactions = block->transactions();
-            responseJson["result"]["transactions"] = Json::Value(Json::arrayValue);
-            for (unsigned i = 0; i < transactions.size(); i++)
+            if (block)
             {
-                if (includeTransactions)
+                response["number"] = toJS(number);
+                response["hash"] = toJS(block->headerHash());
+                response["parentHash"] = toJS(block->header().parentHash());
+                response["logsBloom"] = toJS(block->header().logBloom());
+                response["transactionsRoot"] = toJS(block->header().transactionsRoot());
+                response["stateRoot"] = toJS(block->header().stateRoot());
+                response["sealer"] = toJS(block->header().sealer());
+                response["extraData"] = Json::Value(Json::arrayValue);
+                auto datas = block->header().extraData();
+                for (auto data : datas)
+                    response["extraData"].append(toJS(data));
+                response["gasLimit"] = toJS(block->header().gasLimit());
+                response["gasUsed"] = toJS(block->header().gasUsed());
+                response["timestamp"] = toJS(block->header().timestamp());
+                auto transactions = block->transactions();
+                response["transactions"] = Json::Value(Json::arrayValue);
+                for (unsigned i = 0; i < transactions.size(); i++)
                 {
-                    responseJson["result"]["transactions"].append(toJson(transactions[i],
-                        std::make_pair(block->headerHash(), i), block->header().number()));
-                }
-                else
-                {
-                    responseJson["result"]["transactions"].append(toJS(transactions[i].sha3()));
+                    if (_includeTransactions)
+                    {
+                        response["transactions"].append(toJson(transactions[i],
+                            std::make_pair(block->headerHash(), i), block->header().number()));
+                    }
+                    else
+                    {
+                        response["transactions"].append(toJS(transactions[i].sha3()));
+                    }
                 }
             }
-            return responseJson;
         }
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::getTransactionByHash(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transactionHash)
 {
-    Json::Value responseJson;
+    Json::Value response;
     try
     {
-        LOG(INFO) << "getTransactionByHash # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "getTransactionByHash # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_transactionHash\" : " << _transactionHash << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-        if (requestJson["params"].size() != 1)
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (blockchain)
         {
-            return rpcErrorArray(responseJson, "Number of params error!");
-        }
-        else
-        {
-            std::string txHash = requestJson["params"][0].asString();
-            auto blockchain = ledgerManager()->blockChain(groupId);
-
-            h256 hash = jsToFixed<32>(txHash);
+            h256 hash = jsToFixed<32>(_transactionHash);
             auto tx = blockchain->getLocalisedTxByHash(hash);
-            responseJson["result"]["blockHash"] = toJS(tx.blockHash());
-            responseJson["result"]["blockNumber"] = toJS(tx.blockNumber());
-            responseJson["result"]["from"] = toJS(tx.from());
-            responseJson["result"]["gas"] = toJS(tx.gas());
-            responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
-            responseJson["result"]["hash"] = toJS(hash);
-            responseJson["result"]["input"] = toJS(tx.data());
-            responseJson["result"]["nonce"] = toJS(tx.nonce());
-            responseJson["result"]["to"] = toJS(tx.to());
-            responseJson["result"]["transactionIndex"] = toJS(tx.transactionIndex());
-            responseJson["result"]["value"] = toJS(tx.value());
-
-            return responseJson;
+            response["blockHash"] = toJS(tx.blockHash());
+            response["blockNumber"] = toJS(tx.blockNumber());
+            response["from"] = toJS(tx.from());
+            response["gas"] = toJS(tx.gas());
+            response["gasPrice"] = toJS(tx.gasPrice());
+            response["hash"] = toJS(hash);
+            response["input"] = toJS(tx.data());
+            response["nonce"] = toJS(tx.nonce());
+            response["to"] = toJS(tx.to());
+            response["transactionIndex"] = toJS(tx.transactionIndex());
+            response["value"] = toJS(tx.value());
         }
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::getTransactionByBlockHashAndIndex(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionByBlockHashAndIndex(
+    int _groupID, const std::string& _blockHash, const std::string& _transactionIndex)
 {
-    Json::Value responseJson;
+    Json::Value response;
     try
     {
-        LOG(INFO) << "getTransactionByBlockHashAndIndex # requestJson = "
-                  << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "getTransactionByBlockHashAndIndex # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_blockHash\" : " << _blockHash << "," << std::endl
+                  << "\"_transactionIndex\" : " << _transactionIndex << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-        if (requestJson["params"].size() != 2)
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (blockchain)
         {
-            return rpcErrorArray(responseJson, "Number of params error!");
-        }
-        else
-        {
-            std::string blockHash = requestJson["params"][0].asString();
-            int index = jsToInt(requestJson["params"][1].asString());
-            auto blockchain = ledgerManager()->blockChain(groupId);
-
-            h256 hash = jsToFixed<32>(blockHash);
+            h256 hash = jsToFixed<32>(_blockHash);
             auto block = blockchain->getBlockByHash(hash);
-            auto transactions = block->transactions();
-            if (transactions[index])
+            if (block)
             {
-                Transaction tx = transactions[index];
-                responseJson["result"]["blockHash"] = blockHash;
-                responseJson["result"]["blockNumber"] = toJS(block->header().number());
-                responseJson["result"]["from"] = toJS(tx.from());
-                responseJson["result"]["gas"] = toJS(tx.gas());
-                responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
-                responseJson["result"]["hash"] = toJS(tx.sha3());
-                responseJson["result"]["input"] = toJS(tx.data());
-                responseJson["result"]["nonce"] = toJS(tx.nonce());
-                responseJson["result"]["to"] = toJS(tx.to());
-                responseJson["result"]["transactionIndex"] = toJS(index);
-                responseJson["result"]["value"] = toJS(tx.value());
+                auto transactions = block->transactions();
+                unsigned int txIndex = jsToInt(_transactionIndex);
+                if (txIndex >= transactions.size())
+                    return response;
+                Transaction tx = transactions[txIndex];
+                response["blockHash"] = _blockHash;
+                response["blockNumber"] = toJS(block->header().number());
+                response["from"] = toJS(tx.from());
+                response["gas"] = toJS(tx.gas());
+                response["gasPrice"] = toJS(tx.gasPrice());
+                response["hash"] = toJS(tx.sha3());
+                response["input"] = toJS(tx.data());
+                response["nonce"] = toJS(tx.nonce());
+                response["to"] = toJS(tx.to());
+                response["transactionIndex"] = toJS(txIndex);
+                response["value"] = toJS(tx.value());
             }
-            return responseJson;
         }
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::getTransactionByBlockNumberAndIndex(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionByBlockNumberAndIndex(
+    int _groupID, const std::string& _blockNumber, const std::string& _transactionIndex)
 {
-    Json::Value responseJson;
+    Json::Value response;
     try
     {
-        LOG(INFO) << "getTransactionByBlockNumberAndIndex # requestJson = "
-                  << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "getTransactionByBlockNumberAndIndex # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_blockNumber\" : " << _blockNumber << "," << std::endl
+                  << "\"_transactionIndex\" : " << _transactionIndex << std::endl
+                  << "}";
 
-        std::string method = requestJson["method"].asString();
-        int16_t groupId = requestJson["groupId"].asInt();
-        if (requestJson["params"].size() != 2)
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (blockchain)
         {
-            return rpcErrorArray(responseJson, "Number of params error!");
-        }
-        else
-        {
-            std::string blockNumber = requestJson["params"][0].asString();
-            unsigned int index = (unsigned)jsToInt(requestJson["params"][1].asString());
-            auto blockchain = ledgerManager()->blockChain(groupId);
-
-            BlockNumber number = jsToBlockNumber(blockNumber);
+            BlockNumber number = jsToBlockNumber(_blockNumber);
             auto block = blockchain->getBlockByNumber(number);
-            Transactions transactions = block->transactions();
-            if (index >= transactions.size())
+            if (block)
             {
-                return rpcErrorArray(responseJson, "Out of index error!");
-            }
-            else
-            {
-                Transaction tx = transactions[index];
-                responseJson["result"]["blockHash"] = toJS(block->header().hash());
-                responseJson["result"]["blockNumber"] = toJS(block->header().number());
-                responseJson["result"]["from"] = toJS(tx.from());
-                responseJson["result"]["gas"] = toJS(tx.gas());
-                responseJson["result"]["gasPrice"] = toJS(tx.gasPrice());
-                responseJson["result"]["hash"] = toJS(tx.sha3());
-                responseJson["result"]["input"] = toJS(tx.data());
-                responseJson["result"]["nonce"] = toJS(tx.nonce());
-                responseJson["result"]["to"] = toJS(tx.to());
-                responseJson["result"]["transactionIndex"] = toJS(index);
-                responseJson["result"]["value"] = toJS(tx.value());
-                return responseJson;
+                Transactions transactions = block->transactions();
+                unsigned int txIndex = jsToInt(_transactionIndex);
+                if (txIndex >= transactions.size())
+                    return response;
+                Transaction tx = transactions[txIndex];
+                response["blockHash"] = toJS(block->header().hash());
+                response["blockNumber"] = toJS(block->header().number());
+                response["from"] = toJS(tx.from());
+                response["gas"] = toJS(tx.gas());
+                response["gasPrice"] = toJS(tx.gasPrice());
+                response["hash"] = toJS(tx.sha3());
+                response["input"] = toJS(tx.data());
+                response["nonce"] = toJS(tx.nonce());
+                response["to"] = toJS(tx.to());
+                response["transactionIndex"] = toJS(txIndex);
+                response["value"] = toJS(tx.value());
             }
         }
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::getTransactionReceipt(const Json::Value& requestJson)
+Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transactionHash)
 {
-    Json::Value responseJson;
+    Json::Value response;
     try
     {
-        LOG(INFO) << "getTransactionReceipt # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "getTransactionReceipt # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_transactionHash\" : " << _transactionHash << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-        if (requestJson["params"].size() != 1)
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (blockchain)
         {
-            return rpcErrorArray(responseJson, "Number of params error!");
-        }
-        else
-        {
-            std::string txHash = requestJson["params"][0].asString();
-            auto blockchain = ledgerManager()->blockChain(groupId);
-
-            h256 hash = jsToFixed<32>(txHash);
+            h256 hash = jsToFixed<32>(_transactionHash);
             auto tx = blockchain->getLocalisedTxByHash(hash);
             auto txReceipt = blockchain->getTransactionReceiptByHash(hash);
-            responseJson["result"]["transactionHash"] = txHash;
-            responseJson["result"]["transactionIndex"] = toJS(tx.transactionIndex());
-            responseJson["result"]["blockNumber"] = toJS(tx.blockNumber());
-            responseJson["result"]["blockHash"] = toJS(tx.blockHash());
-            responseJson["result"]["from"] = toJS(tx.from());
-            responseJson["result"]["to"] = toJS(tx.to());
-            responseJson["result"]["gasUsed"] = toJS(txReceipt.gasUsed());
-            responseJson["result"]["contractAddress"] = toJS(txReceipt.contractAddress());
-            responseJson["result"]["logs"] = Json::Value(Json::arrayValue);
+            response["transactionHash"] = _transactionHash;
+            response["transactionIndex"] = toJS(tx.transactionIndex());
+            response["blockNumber"] = toJS(tx.blockNumber());
+            response["blockHash"] = toJS(tx.blockHash());
+            response["from"] = toJS(tx.from());
+            response["to"] = toJS(tx.to());
+            response["gasUsed"] = toJS(txReceipt.gasUsed());
+            response["contractAddress"] = toJS(txReceipt.contractAddress());
+            response["logs"] = Json::Value(Json::arrayValue);
             for (unsigned int i = 0; i < txReceipt.log().size(); ++i)
             {
                 Json::Value log;
                 log["address"] = toJS(txReceipt.log()[i].address);
                 log["topics"] = toJS(txReceipt.log()[i].topics);
                 log["data"] = toJS(txReceipt.log()[i].data);
-                responseJson["result"]["logs"].append(log);
+                response["logs"].append(log);
             }
-            responseJson["result"]["logsBloom"] = toJS(txReceipt.bloom());
-            responseJson["result"]["status"] = toJS(txReceipt.status());
-            return responseJson;
+            response["logsBloom"] = toJS(txReceipt.bloom());
+            response["status"] = toJS(txReceipt.status());
         }
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::pendingTransactions(const Json::Value& requestJson)
+Json::Value Rpc::pendingTransactions(int _groupID)
 {
-    Json::Value responseJson;
+    Json::Value response;
     try
     {
-        LOG(INFO) << "pendingTransactions # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "pendingTransactions # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        auto txPool = ledgerManager()->txPool(groupId);
-        auto blockchain = ledgerManager()->blockChain(groupId);
-
-        responseJson["result"]["pending"] = Json::Value(Json::arrayValue);
-        Transactions transactions = txPool->pendingList();
-        for (size_t i = 0; i < transactions.size(); ++i)
+        auto txPool = ledgerManager()->txPool(_groupID);
+        if (txPool)
         {
-            auto tx = transactions[i];
-            Json::Value txJson;
-            txJson["from"] = toJS(tx.from());
-            txJson["gas"] = toJS(tx.gas());
-            txJson["gasPrice"] = toJS(tx.gasPrice());
-            txJson["hash"] = toJS(tx.sha3());
-            txJson["input"] = toJS(tx.data());
-            txJson["nonce"] = toJS(tx.nonce());
-            txJson["to"] = toJS(tx.to());
-            txJson["value"] = toJS(tx.value());
-            responseJson["result"]["pending"].append(txJson);
+            response["pending"] = Json::Value(Json::arrayValue);
+            Transactions transactions = txPool->pendingList();
+            for (size_t i = 0; i < transactions.size(); ++i)
+            {
+                auto tx = transactions[i];
+                Json::Value txJson;
+                txJson["from"] = toJS(tx.from());
+                txJson["gas"] = toJS(tx.gas());
+                txJson["gasPrice"] = toJS(tx.gasPrice());
+                txJson["hash"] = toJS(tx.sha3());
+                txJson["input"] = toJS(tx.data());
+                txJson["nonce"] = toJS(tx.nonce());
+                txJson["to"] = toJS(tx.to());
+                txJson["value"] = toJS(tx.value());
+                response["pending"].append(txJson);
+            }
         }
-        return responseJson;
+        return response;
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::call(const Json::Value& requestJson)
+std::string Rpc::call(int _groupID, const Json::Value& request)
 {
-    Json::Value responseJson;
     try
     {
-        LOG(INFO) << "call # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "call # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << request.toStyledString() << "}";
 
-        int16_t groupId = requestJson["groupId"].asInt();
-        std::string method = requestJson["method"].asString();
-        TransactionSkeleton txSkeleton = toTransactionSkeleton(requestJson);
-        Transaction tx(txSkeleton.value, txSkeleton.gasPrice, txSkeleton.gas, txSkeleton.to,
-            txSkeleton.data, txSkeleton.nonce);
-
-        auto blockchain = ledgerManager()->blockChain(groupId);
-        BlockNumber blockNumber = blockchain->number();
-        auto blockHeader = blockchain->getBlockByNumber(blockNumber)->header();
-
-        auto blockVerfier = ledgerManager()->blockVerifier(groupId);
-        auto executionResult = blockVerfier->executeTransaction(blockHeader, tx);
-
-        responseJson["result"] = toJS(executionResult.first.output);
-        return responseJson;
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto blockverfier = ledgerManager()->blockVerifier(_groupID);
+        if (blockchain && blockverfier)
+        {
+            TransactionSkeleton txSkeleton = toTransactionSkeleton(request);
+            Transaction tx(txSkeleton.value, txSkeleton.gasPrice, txSkeleton.gas, txSkeleton.to,
+                txSkeleton.data, txSkeleton.nonce);
+            BlockNumber blockNumber = blockchain->number();
+            auto block = blockchain->getBlockByNumber(blockNumber);
+            if (block)
+            {
+                auto blockHeader = block->header();
+                auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
+                return toJS(executionResult.first.output);
+            }
+        }
+        return "";
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
 }
 
 
-Json::Value Rpc::sendRawTransaction(const Json::Value& requestJson)
+std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
-    Json::Value responseJson;
     try
     {
-        LOG(INFO) << "sendRawTransaction # requestJson = " << requestJson.toStyledString();
-        std::string id = requestJson["id"].asString();
-        std::string version = requestJson["jsonrpc"].asString();
-        responseJson["id"] = id;
-        responseJson["jsonrpc"] = version;
+        LOG(INFO) << "sendRawTransaction # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_rlp\" : " << _rlp << std::endl
+                  << "}";
 
-        std::string method = requestJson["method"].asString();
-        int16_t groupId = requestJson["groupId"].asInt();
-        if (requestJson["params"].size() != 1)
+        auto txPool = ledgerManager()->txPool(_groupID);
+        if (txPool)
         {
-            return rpcErrorArray(responseJson, "Number of params error!");
-        }
-        else
-        {
-            std::string signedData = requestJson["params"][0].asString();
-            Transaction tx(jsToBytes(signedData, OnFailed::Throw), CheckTransaction::Everything);
-
-            auto txPool = ledgerManager()->txPool(groupId);
+            Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
             std::pair<h256, Address> ret = txPool->submit(tx);
-            responseJson["result"] = toJS(ret.first);
-            return responseJson;
+            return toJS(ret.first);
         }
+        return "";
     }
-    catch (std::exception& e)
+    catch (...)
     {
-        return rpcErrorResult(responseJson, e);
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
     }
-}
-
-Json::Value Rpc::rpcErrorResult(Json::Value& responseJson, std::exception& e)
-{
-    responseJson["error"]["code"] = -1;
-    responseJson["error"]["message"] = e.what();
-    return responseJson;
-}
-
-Json::Value Rpc::rpcErrorArray(Json::Value& responseJson, std::string s)
-{
-    responseJson["error"]["code"] = -2;
-    responseJson["error"]["message"] = s;
-    return responseJson;
 }

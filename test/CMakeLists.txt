@@ -69,6 +69,7 @@ endforeach(file)
 
 
 add_executable(test-fisco-bcos ${sources})
+add_library(demo-fisco-bcos ${sources})
 
 target_include_directories(test-fisco-bcos PRIVATE ..)
 target_include_directories(test-fisco-bcos PRIVATE ../utils)
