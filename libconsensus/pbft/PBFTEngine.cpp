@@ -182,8 +182,8 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
     }
     catch (std::exception& e)
     {
-        PBFTENGINE_LOG(ERROR) << "[#reloadMsg] Reload PBFT message from db failed:" << e.what()
-                              << std::endl;
+        PBFTENGINE_LOG(ERROR) << "[#reloadMsg] Reload PBFT message from db failed:"
+                              << boost::diagnostic_information(e) << std::endl;
         return;
     }
 }
@@ -205,8 +205,8 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     }
     catch (std::exception& e)
     {
-        PBFTENGINE_LOG(ERROR) << "[#backupMsg] backupMsg for PBFT failed: " << e.what()
-                              << std::endl;
+        PBFTENGINE_LOG(ERROR) << "[#backupMsg] backupMsg for PBFT failed:  "
+                              << boost::diagnostic_information(e) << std::endl;
     }
 }
 
@@ -513,7 +513,8 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     catch (std::exception& e)
     {
         PBFTENGINE_LOG(WARNING) << "[#handlePrepareMsg] Block execute failed: [EINFO]:  "
-                                << e.what() << "  [INFO]: " << oss.str() << std::endl;
+                                << boost::diagnostic_information(e) << "  [INFO]: " << oss.str()
+                                << std::endl;
         return;
     }
     /// whether to omit empty block
@@ -1092,7 +1093,7 @@ void PBFTEngine::updateMinerList()
     catch (std::exception& e)
     {
         PBFTENGINE_LOG(ERROR) << "[#updateMinerList] update minerList failed [EINFO]:  "
-                              << e.what();
+                              << boost::diagnostic_information(e);
     }
 }
 

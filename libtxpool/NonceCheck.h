@@ -29,6 +29,7 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
+#include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <boost/timer.hpp>
 #include <thread>
@@ -36,6 +37,9 @@
 using namespace std;
 using namespace dev::eth;
 using namespace dev::blockchain;
+
+#define NONCECHECKER_LOG(LEVEL) LOG(LEVEL) << "[#NONCECHECKER] [PROTOCOL: " << m_protocolId << "] "
+
 namespace dev
 {
 namespace eth
@@ -44,7 +48,9 @@ class NonceCheck
 {
 public:
     static u256 maxblocksize;
-    NonceCheck(std::shared_ptr<BlockChainInterface> const& _blockChain) : m_blockChain(_blockChain)
+    NonceCheck(
+        std::shared_ptr<BlockChainInterface> const& _blockChain, dev::PROTOCOL_ID const& protocolId)
+      : m_blockChain(_blockChain), m_protocolId(protocolId)
     {
         init();
     }
@@ -56,6 +62,7 @@ public:
 
 private:
     std::shared_ptr<BlockChainInterface> m_blockChain;
+    dev::PROTOCOL_ID m_protocolId;
     std::unordered_map<std::string, bool> m_cache;
     unsigned m_startblk;
     unsigned m_endblk;

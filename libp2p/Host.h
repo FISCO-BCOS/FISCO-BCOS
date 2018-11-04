@@ -230,7 +230,7 @@ public:
     {
         if (m_groupID2NodeList.find(0) != m_groupID2NodeList.end())
         {
-            LOG(INFO) << "Host::setGroupID2NodeList, groupID can not be 0!";
+            HOST_LOG(WARNING) << "[#setGroupID2NodeList] groupID can not be 0" << std::endl;
             return;
         }
         m_groupID2NodeList = _groupID2NodeList;

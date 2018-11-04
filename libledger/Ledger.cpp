@@ -93,10 +93,11 @@ void Ledger::initConfig(std::string const& configPath)
     }
     catch (std::exception& e)
     {
-        std::string error_info =
-            "init config failed for " + toString(m_groupId) + " failed, error_msg: " + e.what();
+        std::string error_info = "init config failed for " + toString(m_groupId) +
+                                 " failed, error_msg: " + boost::diagnostic_information(e);
         LOG(ERROR) << error_info;
-        Ledger_LOG(ERROR) << "[#initConfig Failed] [EINFO]:  " << e.what() << std::endl;
+        Ledger_LOG(ERROR) << "[#initConfig Failed] [EINFO]:  " << boost::diagnostic_information(e)
+                          << std::endl;
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
 }
@@ -143,7 +144,8 @@ void Ledger::initConsensusConfig(ptree const& pt)
     }
     catch (std::exception& e)
     {
-        Ledger_LOG(ERROR) << "[#initConsensusConfig]: Parse consensus section failed: " << e.what();
+        Ledger_LOG(ERROR) << "[#initConsensusConfig]: Parse consensus section failed: "
+                          << boost::diagnostic_information(e) << std::endl;
     }
 }
 
