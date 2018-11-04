@@ -26,11 +26,13 @@
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
+#include <libstorage/Storage.h>
 using namespace dev::eth;
 using namespace dev::db;
 using namespace dev::blockverifier;
 using namespace dev::blockchain;
 using namespace dev::p2p;
+using namespace dev::storage;
 namespace dev
 {
 namespace consensus
@@ -116,17 +118,20 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 void PBFTEngine::resetConfig()
 {
     m_idx = u256(-1);
-    for (size_t i = 0; i < m_minerList.size(); i++)
+    updateMinerList();
     {
-        if (m_minerList[i] == m_keyPair.pub())
+        ReadGuard l(m_minerListMutex);
+        for (size_t i = 0; i < m_minerList.size(); i++)
         {
-            m_accountType = NodeAccountType::MinerAccount;
-            m_idx = u256(i);
-            break;
+            if (m_minerList[i] == m_keyPair.pub())
+            {
+                m_accountType = NodeAccountType::MinerAccount;
+                m_idx = u256(i);
+                break;
+            }
         }
+        m_nodeNum = u256(m_minerList.size());
     }
-    auto node_num = m_minerList.size();
-    m_nodeNum = u256(node_num);
     m_f = (m_nodeNum - u256(1)) / u256(3);
     m_cfgErr = (m_idx == u256(-1));
 }
@@ -177,8 +182,8 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
     }
     catch (std::exception& e)
     {
-        PBFTENGINE_LOG(ERROR) << "[#reloadMsg] Reload PBFT message from db failed:" << e.what()
-                              << std::endl;
+        PBFTENGINE_LOG(ERROR) << "[#reloadMsg] Reload PBFT message from db failed:"
+                              << boost::diagnostic_information(e) << std::endl;
         return;
     }
 }
@@ -200,8 +205,8 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     }
     catch (std::exception& e)
     {
-        PBFTENGINE_LOG(ERROR) << "[#backupMsg] backupMsg for PBFT failed: " << e.what()
-                              << std::endl;
+        PBFTENGINE_LOG(ERROR) << "[#backupMsg] backupMsg for PBFT failed:  "
+                              << boost::diagnostic_information(e) << std::endl;
     }
 }
 
@@ -394,6 +399,7 @@ bool PBFTEngine::isValidPrepare(
 /// check miner list
 void PBFTEngine::checkMinerList(Block const& block)
 {
+    ReadGuard l(m_minerListMutex);
     if (m_minerList != block.blockHeader().sealerList())
     {
 #if DEBUG
@@ -507,7 +513,8 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
     catch (std::exception& e)
     {
         PBFTENGINE_LOG(WARNING) << "[#handlePrepareMsg] Block execute failed: [EINFO]:  "
-                                << e.what() << "  [INFO]: " << oss.str() << std::endl;
+                                << boost::diagnostic_information(e) << "  [INFO]: " << oss.str()
+                                << std::endl;
         return;
     }
     /// whether to omit empty block
@@ -599,6 +606,7 @@ void PBFTEngine::checkAndSave()
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
             /// drop handled transactions
             dropHandledTransactions(block);
+            resetConfig();
         }
         else
         {
@@ -635,7 +643,6 @@ void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
             /// delete invalid view change requests from the cache
             m_reqCache->delInvalidViewChange(m_highestBlock);
         }
-        resetConfig();
         /// clear caches
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
@@ -1029,6 +1036,71 @@ const std::string PBFTEngine::consensusStatus() const
     json_spirit::Value value(status);
     std::string status_str = json_spirit::write_string(value, true);
     return status_str;
+}
+
+void PBFTEngine::updateMinerList()
+{
+    if (m_storage == nullptr)
+        return;
+    if (m_highestBlock.number() == m_lastObtainMinerNum)
+        return;
+    try
+    {
+        UpgradableGuard l(m_minerListMutex);
+        auto miner_list = m_minerList;
+        int64_t curBlockNum = m_highestBlock.number();
+        /// get node from storage DB
+        auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
+        /// obtain miner list
+        if (!nodes)
+            return;
+        for (size_t i = 0; i < nodes->size(); i++)
+        {
+            auto node = nodes->get(i);
+            if (!node)
+                return;
+            if ((node->getField("type") == "miner") &&
+                (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
+            {
+                h512 nodeID = h512(node->getField("node_id"));
+                if (find(miner_list.begin(), miner_list.end(), nodeID) != miner_list.end())
+                {
+                    miner_list.push_back(nodeID);
+                    PBFTENGINE_LOG(INFO)
+                        << "[#updateMinerList] Add nodeID [nodeID/idx]: " << toHex(nodeID) << "/"
+                        << i << std::endl;
+                }
+            }
+        }
+        /// remove observe nodes
+        for (size_t i = 0; i < miner_list.size(); i++)
+        {
+            auto node = nodes->get(i);
+            if (!node)
+                return;
+            if ((node->getField("type") == "observer") &&
+                (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
+            {
+                h512 nodeID = h512(node->getField("node_id"));
+                auto it = find(miner_list.begin(), miner_list.end(), nodeID);
+                if (it != miner_list.end())
+                {
+                    miner_list.erase(it);
+                    PBFTENGINE_LOG(INFO)
+                        << "[#updateMinerList] erase nodeID [nodeID/idx]:  " << toHex(nodeID) << "/"
+                        << i;
+                }
+            }
+        }
+
+        UpgradeGuard ul(l);
+        m_minerList = miner_list;
+    }
+    catch (std::exception& e)
+    {
+        PBFTENGINE_LOG(ERROR) << "[#updateMinerList] update minerList failed [EINFO]:  "
+                              << boost::diagnostic_information(e);
+    }
 }
 
 }  // namespace consensus

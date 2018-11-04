@@ -91,9 +91,10 @@ void NonceCheck::updateCache(bool _rebuild)
             else
                 m_startblk = 0;
 
-            LOG(TRACE) << "NonceCheck::updateCache m_startblk=" << m_startblk
-                       << ",m_endblk=" << m_endblk << ",prestartblk=" << prestartblk
-                       << ",preendblk=" << preendblk << ",_rebuild=" << _rebuild;
+            NONCECHECKER_LOG(TRACE)
+                << "[#updateCache] [rebuild/startBlk/endBlk/prestartBlk/preEndBlk]:  " << _rebuild
+                << "/" << m_startblk << "/" << m_endblk << "/" << prestartblk << "/" << preendblk
+                << std::endl;
             if (_rebuild)
             {
                 m_cache.clear();
@@ -128,16 +129,15 @@ void NonceCheck::updateCache(bool _rebuild)
                         m_cache.insert(std::pair<std::string, bool>(key, true));
                 }  // for
             }      // for
-
-            LOG(TRACE) << "NonceCheck::updateCache cache size=" << m_cache.size() << ",cost"
-                       << (timer.elapsed() * 1000);
+            NONCECHECKER_LOG(TRACE) << "[#updateCache] [cacheSize/costTime]:  " << m_cache.size()
+                                    << "/" << (timer.elapsed() * 1000) << std::endl;
         }
         catch (...)
         {
             // should not happen as exceptions
-            LOG(WARNING) << "o NO!!!!  NonceCheck::updateCache "
-                         << boost::current_exception_diagnostic_information();
-            // m_aborting=true;
+            NONCECHECKER_LOG(WARNING)
+                << "[#updateCache] update nonce cache failed: [EINFO]:  "
+                << boost::current_exception_diagnostic_information() << std::endl;
         }
     }
 }  // fun

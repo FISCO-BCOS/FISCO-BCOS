@@ -35,6 +35,14 @@ using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
+#define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[#CONSENSUS_MAIN] "
+static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
+{
+    CONSENSUS_MAIN_LOG(TRACE) << "[#rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
+                              << receiptPtr->blockNumber() << "/" << receiptPtr->hash() << "/"
+                              << receiptPtr->blockHash() << std::endl;
+}
+
 static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID const& groupSize,
     float txSpeed, KeyPair const& key_pair)
 {
@@ -51,10 +59,16 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
     /// get the consensus status
     /// m_txSpeed default is 10
     uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
+    u256 count = u256(0);
     while (true)
     {
         for (int i = 1; i <= groupSize; i++)
         {
+            /// set default RPC callback
+            if (count % u256(50) == u256(0))
+            {
+                tx.setRpcCallback(boost::bind(rpcCallbackTest, _1));
+            }
             tx.setNonce(tx.nonce() + u256(1));
             tx.setBlockLimit(u256(ledgerManager->blockChain(i)->number()) + maxBlockLimit);
             dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
@@ -62,6 +76,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
             ledgerManager->txPool(i)->submit(tx);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+        count++;
     }
 }
 
