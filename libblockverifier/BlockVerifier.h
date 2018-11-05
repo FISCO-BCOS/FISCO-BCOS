@@ -62,7 +62,7 @@ public:
 
     virtual ~BlockVerifier(){};
 
-    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
+    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, h256 parentStateRoot);
 
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
