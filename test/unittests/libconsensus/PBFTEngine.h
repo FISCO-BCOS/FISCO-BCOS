@@ -43,7 +43,7 @@ static void FakePBFTMinerByKeyPair(
 {
     fake_pbft.m_minerList.push_back(key_pair.pub());
     fake_pbft.m_secrets.push_back(key_pair.secret());
-    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+    fake_pbft.consensus()->appendMiner(key_pair.pub());
     fake_pbft.resetSessionInfo();
 }
 
@@ -309,6 +309,7 @@ static void checkBroadcastSpecifiedMsg(
 
     /// case2: the the peer node is a miner
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     if (packetType == SignReqPacket)
     {
@@ -431,6 +432,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     block.header().setSealerList(fake_pbft.consensus()->minerList());
     block.header().setSealer(req.idx);
     block.encode(req.block);
+    block.decode(ref(req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     fake_pbft.consensus()->mutableConsensusNumber() = req.height;

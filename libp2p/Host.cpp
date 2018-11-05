@@ -90,7 +90,7 @@ Host::Host(string const& _clientVersion, KeyPair const& _alias, NetworkConfig co
     m_lastSendTopicSeq(std::chrono::milliseconds(0)),
     m_topicSeq(0)
 {
-    LOG(INFO) << "Id:" << id();
+    HOST_LOG(INFO) << "[#SelfNodeId]:  " << toHex(id()) << std::endl;
     m_topics = std::make_shared<std::vector<std::string>>();
 }
 
@@ -118,7 +118,7 @@ void Host::start()
     if (isWorking())
         return;
     /// network start failed
-    LOG(WARNING) << "Network start failed!";
+    HOST_LOG(WARNING) << "[#start] start Host failed..." << std::endl;
     /// clean resources (include both network, socket resources) when stop working
     doneWorking();
 }
@@ -151,11 +151,12 @@ void Host::startedWorking()
     }
     else
     {
-        LOG(ERROR) << "p2p.start.notice id:" << id()
-                   << "TCP Listen port is invalid or unavailable. P2pPort Bind Fail!";
+        HOST_LOG(FATAL)
+            << "[#start] TCP Listen port is invalid or unavailable. P2pPort Bind Fail: [NodeId]:  "
+            << toHex(id()) << std::endl;
         exit(-1);
     }
-    LOG(INFO) << "p2p.started id:" << id();
+    HOST_LOG(INFO) << "[#start] [NodeId]:  " << toHex(id()) << std::endl;
     run(boost::system::error_code());
 }
 
@@ -176,8 +177,8 @@ void Host::runAcceptor(boost::system::error_code boost_error)
     if (m_run && !m_accepting)
     {
         m_accepting = true;
-        LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_tcpPublic
-                  << "), P2P Start Accept";
+        HOST_LOG(INFO) << "[#runAcceptor] [listenPort/publicIp]:  " << m_listenPort << "/"
+                       << m_tcpPublic << std::endl;
         std::shared_ptr<SocketFace> socket =
             m_socketFactory->create_socket(m_ioService, *m_sslContext, NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
@@ -186,8 +187,9 @@ void Host::runAcceptor(boost::system::error_code boost_error)
             [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
                 auto remoteEndpoint = socket->remote_endpoint();
-                LOG(INFO) << "P2P Recv Connect: " << remoteEndpoint.address().to_string() << ":"
-                          << remoteEndpoint.port();
+                HOST_LOG(DEBUG) << "[#runAcceptor-async_accept] [remoteAddr:remotePort]:  "
+                                << remoteEndpoint.address().to_string() << ":"
+                                << remoteEndpoint.port() << std::endl;
                 /// reset accepting status
                 m_accepting = false;
                 /// network acception failed
@@ -199,8 +201,9 @@ void Host::runAcceptor(boost::system::error_code boost_error)
                 /// if the connected peer over the limitation, drop socket
                 if (peerCount() > peerSlots(Ingress))
                 {
-                    LOG(INFO) << "Dropping incoming connect due to maximum peer count (" << Ingress
-                              << " * ideal peer count): " << socket->remoteEndpoint();
+                    HOST_LOG(WARNING) << "[#runAcceptor-async_accept] over Ingress-peerSlot limit: "
+                                         "[IngressSlotLimit/remoteEndPoint]:  "
+                                      << Ingress << "/" << socket->remoteEndpoint() << std::endl;
                     socket->close();
                     if (ec.value() < 1)
                     {
@@ -211,10 +214,13 @@ void Host::runAcceptor(boost::system::error_code boost_error)
                 m_tcpClient = socket->remoteEndpoint();
                 socket->setNodeIPEndpoint(
                     NodeIPEndpoint(m_tcpClient.address(), m_tcpClient.port(), m_tcpClient.port()));
-                LOG(DEBUG) << "client port:" << m_tcpClient.port()
-                           << "|ip:" << m_tcpClient.address().to_string();
-                LOG(DEBUG) << "server port:" << m_listenPort
-                           << "|ip:" << m_tcpPublic.address().to_string();
+                HOST_LOG(DEBUG) << "[#runAcceptor-async_accept] [clientIp:clientPort]:  "
+                                << m_tcpClient.address().to_string() << ":" << m_tcpClient.port()
+                                << std::endl;
+
+                HOST_LOG(DEBUG) << "[#runAcceptor-async_accept] [serverIp:serverPort]:  "
+                                << m_tcpPublic.address().to_string() << ":" << m_listenPort
+                                << std::endl;
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->set_verify_callback(socket, newVerifyCallback(endpointPublicKey));
@@ -267,14 +273,15 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             /// check certificate expiration
             if (Host::isExpired(ctx))
             {
-                LOG(ERROR) << "The Certificate has been expired";
+                HOST_LOG(ERROR) << "[#newVerifyCallback] [#checkCert] Expired Certificate"
+                                << std::endl;
                 return false;
             }
             /// get the object points to certificate
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                LOG(ERROR) << "Get cert failed";
+                HOST_LOG(ERROR) << "[#newVerifyCallback] [#obtainCertFailed]" << std::endl;
                 return preverified;
             }
 
@@ -283,34 +290,34 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                LOG(ERROR) << "Get ca casic failed";
+                HOST_LOG(ERROR) << "[#newVerifyCallback] [#obtainCAFailed]" << std::endl;
                 return preverified;
             }
             /// ignore ca
             if (basic->ca)
             {
                 // ca or agency certificate
-                LOG(TRACE) << "Ignore CA certificate";
+                HOST_LOG(TRACE) << "[#newVerifyCallback] Ignore CA certificate" << std::endl;
                 return preverified;
             }
             EVP_PKEY* evpPublicKey = X509_get_pubkey(cert);
             if (!evpPublicKey)
             {
-                LOG(ERROR) << "Get evpPublicKey failed";
+                HOST_LOG(TRACE) << "[#newVerifyCallback] [#obtainEvpPublicKeyFailed]" << std::endl;
                 return preverified;
             }
 
             ec_key_st* ecPublicKey = EVP_PKEY_get1_EC_KEY(evpPublicKey);
             if (!ecPublicKey)
             {
-                LOG(ERROR) << "Get ecPublicKey failed";
+                HOST_LOG(ERROR) << "[#newVerifyCallback] [#obtainEcPublicKeyFailed]" << std::endl;
                 return preverified;
             }
             /// get public key of the certificate
             const EC_POINT* ecPoint = EC_KEY_get0_public_key(ecPublicKey);
             if (!ecPoint)
             {
-                LOG(ERROR) << "Get ecPoint failed";
+                HOST_LOG(ERROR) << "[#newVerifyCallback] [#obtainEcPointFailed]" << std::endl;
                 return preverified;
             }
 
@@ -327,13 +334,15 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                     /// remove 04
                     nodeIDOut->erase(0, 2);
                 }
-                LOG(DEBUG) << "Get endpoint publickey:" << *nodeIDOut;
+                HOST_LOG(DEBUG) << "[#newVerifyCallback] [endPointPublicKey]:  " << *nodeIDOut
+                                << std::endl;
             }
             return preverified;
         }
         catch (std::exception& e)
         {
-            LOG(ERROR) << "Cert verify failed: " << boost::diagnostic_information(e);
+            HOST_LOG(ERROR) << "[#newVerifyCallback] [checkCert] cert verify failed: [EINFO]:  "
+                            << boost::diagnostic_information(e) << std::endl;
             return preverified;
         }
     };
@@ -355,14 +364,17 @@ void Host::handshakeServer(const boost::system::error_code& error,
     /// handshake failed
     if (error)
     {
-        LOG(ERROR) << "Host::async_handshake err:" << error.message();
+        HOST_LOG(ERROR) << "[#runAcceptor-async_handshake] [#handshakeServer]: [EINFO]  "
+                        << error.message();
         socket->close();
         return;
     }
     /// forbid connect to node-self
     if (node_id == id())
     {
-        LOG(TRACE) << "Disconnect self" << node_id;
+        HOST_LOG(TRACE)
+            << "[#runAcceptor-async_handshake] [#handshakeServer] disconnect self:  [NodeId]:  "
+            << toHex(node_id) << std::endl;
         socket->close();
         return;
     }
@@ -375,11 +387,15 @@ void Host::handshakeServer(const boost::system::error_code& error,
     }
     catch (Exception const& _e)
     {
-        LOG(ERROR) << "ERROR: " << diagnostic_information(_e);
+        HOST_LOG(ERROR) << "[#runAcceptor-async_handshake] [#handshakeServer] start peerSession "
+                           "failed:  [EINFO]:  "
+                        << diagnostic_information(_e) << std::endl;
     }
     catch (std::exception const& _e)
     {
-        LOG(ERROR) << "ERROR: " << _e.what();
+        HOST_LOG(ERROR) << "[#runAcceptor-async_handshake] [#handshakeServer] start peerSession "
+                           "failed:  [EINFO]:  "
+                        << _e.what() << std::endl;
     }
     if (!success)
         socket->close();
@@ -396,7 +412,8 @@ void Host::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const
     /// modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
     {
-        LOG(DEBUG) << "### update m_staticNodes to:" << toHex(nodeId);
+        HOST_LOG(DEBUG) << "[#startPeerSession-updateStaticNodes] [staticNodes]:  " << toHex(nodeId)
+                        << std::endl;
         it->second = nodeId;
     }
 }
@@ -415,17 +432,18 @@ void Host::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const
  */
 void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> const& _s)
 {
-    LOG(INFO) << "Host::startPeerSession! " << _pub;
+    HOST_LOG(INFO) << "[#startPeerSession] [remoteNode]:  " << toHex(_pub) << std::endl;
     Public node_id = _pub;
     if (node_id == NodeID())
     {
-        LOG(ERROR) << "No nodeid! disconnect";
+        HOST_LOG(ERROR) << "[#startPeerSession] Empty remoteNode" << std::endl;
         _s->close();
         return;
     }
     if (node_id == id())
     {
-        LOG(DEBUG) << "Ignore Connect to self! disconnect";
+        HOST_LOG(DEBUG) << "[#startPeerSession] Disconnect selfNode: [NodeId]:  " << toHex(node_id)
+                        << std::endl;
         _s->close();
         return;
     }
@@ -471,17 +489,19 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
             /// disconnect already-connected session
             if (s->isConnected())
             {
-                LOG(DEBUG) << "#### reconnect ip:" << _s->remoteEndpoint().address().to_string();
-                LOG(DEBUG) << "#### reconnect port:" << _s->remoteEndpoint().port();
+                HOST_LOG(DEBUG) << "[#startPeerSession] Reconnect [ip:port]:  "
+                                << _s->remoteEndpoint().address().to_string() << ":"
+                                << _s->remoteEndpoint().port() << std::endl;
                 updateStaticNodes(_s, node_id);
-                LOG(WARNING) << "Session already exists for peer with id: " << node_id;
+                HOST_LOG(WARNING) << "[#startPeerSession] Already existed node:  [NodeId]:  "
+                                  << toHex(node_id) << std::endl;
                 ps->disconnect(DisconnectReason::DuplicatePeer);
                 return;
             }
         }
         if (!peerSlotsAvailable())
         {
-            LOG(INFO) << "too many  peer ! ";
+            HOST_LOG(INFO) << "[#startPeerSession] Disconnect for too many sessions" << std::endl;
             ps->disconnect(TooManyPeers);
             return;
         }
@@ -492,11 +512,12 @@ void Host::startPeerSession(Public const& _pub, std::shared_ptr<SocketFace> cons
         ps->start();
         m_sessions[node_id] = ps;
         /// update the staticNodes
-        LOG(DEBUG) << "### ip:" << _s->remoteEndpoint().address().to_string()
-                   << ", port:" << _s->remoteEndpoint().port() << " , node_id" << node_id;
+        HOST_LOG(INFO) << "[#startPeerSession] update staticNodes: [ip:port/nodeId]:  "
+                       << _s->remoteEndpoint().address().to_string() << ":"
+                       << _s->remoteEndpoint().port() << "/" << toHex(node_id) << std::endl;
         updateStaticNodes(_s, node_id);
     }
-    LOG(INFO) << "start a new peer: " << node_id;
+    HOST_LOG(INFO) << "[#startPeerSession SUCCESS] [nodeId]:" << toHex(node_id) << std::endl;
     /// trigger send topic seq after starting a new peer
     m_lastSendTopicSeq = chrono::steady_clock::time_point::min();
 }
@@ -550,7 +571,8 @@ void Host::keepAlivePeers()
         {
             if (m_peers.count(p->info().id))
                 m_peers.erase(p->info().id);
-            LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << p->id();
+            HOST_LOG(WARNING) << "[#keepAlivePeers] Erase unconnected Session: [nodeId]:  "
+                              << toHex(p->id());
             it = m_sessions.erase(it);
         }
     }
@@ -559,8 +581,9 @@ void Host::keepAlivePeers()
     {
         if (!havePeerSession(it->second->id()))
         {
-            LOG(WARNING) << "Host::keepAlivePeers m_peers erase " << it->second->id() << ","
-                         << it->second->endpoint().name();
+            HOST_LOG(WARNING) << "[#keepAlivePeers] erase un-existed Session: [nodeId/endpoint]:  "
+                              << toHex(it->second->id()) << "/" << it->second->endpoint().name()
+                              << std::endl;
             it = m_peers.erase(it);
         }
         else
@@ -582,11 +605,12 @@ void Host::reconnectAllNodes()
     if (chrono::steady_clock::now() - c_reconnectNodesInterval < m_lastReconnect)
         return;
     RecursiveGuard l(x_sessions);
-    LOG(TRACE) << "Try reconnect all node: " << m_staticNodes.size();
     /// try to connect to nodes recorded in configurations
     for (auto it : m_staticNodes)
     {
-        LOG(DEBUG) << "try connect: " << it.first.address.to_string() << ":" << it.first.tcpPort;
+        HOST_LOG(DEBUG) << "[#reconnectAllNodes] [ip:port/remoteNodeId]:  "
+                        << it.first.address.to_string() << ":" << it.first.tcpPort << "/"
+                        << toHex(it.second) << std::endl;
         /// exclude myself
         if (((!m_netConfigs.listenIPAddress.empty() &&
                  it.first.address ==
@@ -601,25 +625,27 @@ void Host::reconnectAllNodes()
         {
             if (it.second == NodeID())
                 it.second = id();
-            LOG(DEBUG) << "Ignore connect self" << it.first;
+            HOST_LOG(DEBUG) << "[#reconnectAllNodes] Ignore connect to self: [nodeId]:  "
+                            << toHex(it.second) << std::endl;
             continue;
         }
         if (it.second == id())
         {
-            LOG(DEBUG) << "Ignore connect self: " << it.first;
+            HOST_LOG(DEBUG) << "[#reconnectAllNodes] Ignore connect to self: [nodeId]:  "
+                            << toHex(it.second) << std::endl;
             continue;
         }
-        LOG(DEBUG) << "##### determine node id:" << toHex(it.second);
-        LOG(DEBUG) << "##### determine node id, isconnected:" << isConnected(it.second);
         /// use node id as the key to avoid repeated connection
         if (it.second != NodeID() && isConnected(it.second))
         {
-            LOG(DEBUG) << "Ignore connected node: " << it.second;
+            HOST_LOG(DEBUG) << "[#reconnectAllNodes] ignore connected node: [nodeId]:  "
+                            << toHex(it.second) << std::endl;
             continue;
         }
         if (it.first.address.to_string().empty())
         {
-            LOG(INFO) << "Target Node Ip Is Empty  (" << it.first.name() << ")";
+            HOST_LOG(DEBUG) << "[#reconnectAllNodes] Ignore wrong endpoint with empty ip"
+                            << std::endl;
             continue;
         }
         connect(it.first);
@@ -631,8 +657,7 @@ void Host::sendTopicSeq()
 {
     if (chrono::steady_clock::now() - c_sendTopicSeqInterval < m_lastSendTopicSeq)
         return;
-    LOG(INFO) << "Send my current topic seq to all nodes, my current topic is :" << m_topicSeq;
-
+    HOST_LOG(DEBUG) << "[#sendTopicSeq] send topic: [curTopicSeq]:  " << m_topicSeq << std::endl;
     Message::Ptr msg = std::make_shared<Message>();
     msg->setProtocolID(dev::eth::ProtocolID::AMOP);
     msg->setPacketType(AMOPPacketType::SendTopicSeq);
@@ -668,8 +693,9 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
             return;
         m_pendingPeerConns.insert(_nodeIPEndpoint.name());
     }
-    LOG(INFO) << "Attempting connection to node "
-              << "@" << _nodeIPEndpoint.name() << "," << _nodeIPEndpoint.host << " from " << id();
+    HOST_LOG(INFO) << "[#connect] Attempting connection to node: [name@host/MyNodeId]:  "
+                   << _nodeIPEndpoint.name() << "@"
+                   << "/" << _nodeIPEndpoint.host << toHex(id()) << std::endl;
     std::shared_ptr<SocketFace> socket =
         m_socketFactory->create_socket(m_ioService, *m_sslContext, _nodeIPEndpoint);
     // socket.reset(socket);
@@ -681,8 +707,8 @@ void Host::connect(NodeIPEndpoint const& _nodeIPEndpoint, boost::system::error_c
         [=](boost::system::error_code const& ec) {
             if (ec)
             {
-                LOG(ERROR) << "Connection refused to node"
-                           << "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
+                HOST_LOG(ERROR) << "[#connect] Connection refused to node: [name/EINFO]:  "
+                                << _nodeIPEndpoint.name() << "/" << ec.message() << std::endl;
                 Guard l(x_pendingNodeConns);
                 m_pendingPeerConns.erase(_nodeIPEndpoint.name());
                 socket->close();
@@ -719,7 +745,8 @@ void Host::handshakeClient(const boost::system::error_code& error,
     {
         Guard l(x_pendingNodeConns);
         m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-        LOG(ERROR) << "P2P Handshake failed:" << error.message();
+        HOST_LOG(ERROR) << "[#connect-handshakeClient] P2P Handshake failed: [EINFO]:  "
+                        << error.message() << std::endl;
         socket->close();
         return;
     }
@@ -727,7 +754,8 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (node_id == id())
     {
         // connect to myself
-        LOG(TRACE) << "Disconnect self" << _nodeIPEndpoint;
+        HOST_LOG(TRACE) << "[#connect-handshakeClient] Disconnect self: [endpoint/nodeId]:  "
+                        << _nodeIPEndpoint.name() << "/" << toHex(node_id) << std::endl;
         Guard l(x_pendingNodeConns);
         m_pendingPeerConns.erase(_nodeIPEndpoint.name());
 
@@ -736,7 +764,8 @@ void Host::handshakeClient(const boost::system::error_code& error,
         auto it = m_staticNodes.find(_nodeIPEndpoint);
         if (it != m_staticNodes.end())
         {
-            LOG(DEBUG) << "### modify node id of m_staticNodes:" << toHex(node_id);
+            HOST_LOG(DEBUG) << "[#connect-handshakeClient] [#updateStaticNode] to [nodeId]:  "
+                            << toHex(node_id) << std::endl;
             it->second = node_id;  // modify node ID
         }
         socket->close();
@@ -815,7 +844,8 @@ void Host::doneWorking()
     }
     catch (std::exception& err)
     {
-        LOG(ERROR) << "callback doneWorking failed, error message:" << err.what();
+        HOST_LOG(ERROR) << "[#doneWorking] doneWorking Failed: [EINFO]:  "
+                        << boost::diagnostic_information(err) << std::endl;
     }
 }
 
@@ -840,7 +870,8 @@ void Host::doWork()
     }
     catch (std::exception const& _e)
     {
-        LOG(WARNING) << "Exception in Network Thread:" << _e.what();
+        HOST_LOG(WARNING) << "[#doWork] exception in ioService.run: [EINFO]:  "
+                          << boost::diagnostic_information(_e) << std::endl;
     }
     if (m_ioService.stopped())
         m_ioService.reset();
