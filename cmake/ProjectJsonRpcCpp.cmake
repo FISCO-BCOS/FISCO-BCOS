@@ -23,7 +23,7 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 find_package(CURL REQUIRED)
-find_package(MHD REQUIRED)
+# find_package(MHD REQUIRED)
 set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_BUILD_TYPE=Release
                # Build static lib but suitable to be included in a shared lib.

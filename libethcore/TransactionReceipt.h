@@ -187,10 +187,10 @@ using TransactionReceipts = std::vector<TransactionReceipt>;
 
 std::ostream& operator<<(std::ostream& _out, eth::TransactionReceipt const& _r);
 
-
 class LocalisedTransactionReceipt : public TransactionReceipt
 {
 public:
+    using Ptr = std::shared_ptr<LocalisedTransactionReceipt>;
     LocalisedTransactionReceipt(TransactionReceipt const& _t, h256 const& _hash,
         h256 const& _blockHash, BlockNumber _blockNumber, Address const& _from, Address const& _to,
         unsigned _transactionIndex, u256 const& _gasUsed,

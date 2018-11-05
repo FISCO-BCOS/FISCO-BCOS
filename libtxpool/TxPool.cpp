@@ -135,9 +135,15 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
     if (m_known.count(tx_hash))
+    {
+        TXPOOL_LOG(WARNING) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
         return ImportResult::AlreadyKnown;
+    }
     if (m_dropped.count(tx_hash) && _drop_policy == IfDropped::Ignore)
+    {
+        TXPOOL_LOG(WARNING) << "[#Verify] already dropped tx: " << tx_hash.abridged() << std::endl;
         return ImportResult::AlreadyInChain;
+    }
     /// check nonce
     if (false == isNonceOk(trans, _needinsert))
         return ImportResult::NonceCheckFail;
@@ -156,13 +162,13 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
  */
 bool TxPool::isBlockLimitOk(Transaction const& _tx) const
 {
-    if (_tx.blockLimit() == Invalid256 || m_blockChain->number() >= _tx.blockLimit() ||
-        _tx.blockLimit() > (m_blockChain->number() + m_maxBlockLimit))
+    if (_tx.blockLimit() == Invalid256 || u256(m_blockChain->number()) >= _tx.blockLimit() ||
+        _tx.blockLimit() > (u256(m_blockChain->number()) + m_maxBlockLimit))
     {
-        LOG(ERROR) << "TxPool::isBlockLimitOk Fail! t.sha3()=" << _tx.sha3()
-                   << ", t.blockLimit=" << _tx.blockLimit()
-                   << ", number() = " << m_blockChain->number()
-                   << ", maxBlockLimit = " << m_maxBlockLimit;
+        TXPOOL_LOG(ERROR) << "[#Verify] [#InvalidBlockLimit] invalid blockLimit: "
+                             "[blkLimit/maxBlkLimit/number/tx]:  "
+                          << _tx.blockLimit() << "/" << m_maxBlockLimit << "/"
+                          << m_blockChain->number() << "/" << _tx.sha3() << std::endl;
         return false;
     }
     return true;
@@ -179,8 +185,8 @@ bool TxPool::isNonceOk(Transaction const& _tx, bool _needInsert) const
 {
     if (_tx.nonce() == Invalid256 || (!m_nonceCheck->ok(_tx, _needInsert)))
     {
-        LOG(ERROR) << "TxPool::isNonceOk Fail!  t.sha3()= " << _tx.sha3()
-                   << ", t.nonce = " << _tx.nonce();
+        TXPOOL_LOG(ERROR) << "[#Verify] [#InvalidNonce] invalid Nonce: [nonce/tx]:  " << _tx.nonce()
+                          << "/" << _tx.sha3() << std::endl;
         return false;
     }
     return true;
@@ -189,14 +195,18 @@ bool TxPool::isNonceOk(Transaction const& _tx, bool _needInsert) const
 /**
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
-bool TxPool::removeTrans(h256 const& _txHash)
+bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
+    dev::eth::LocalisedTransactionReceipt::Ptr pReceipt)
 {
     auto p_tx = m_txsHash.find(_txHash);
     if (p_tx == m_txsHash.end())
     {
-        /// LOG(WARNING) << "txHash = " << toHex(_txHash)
-        ///             << " doesn't exist in the txpool, please check again";
         return false;
+    }
+    /// trigger callback from RPC
+    if (needTriggerCallback && pReceipt)
+    {
+        p_tx->second->tiggerRpcCallback(pReceipt);
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
@@ -209,8 +219,8 @@ bool TxPool::removeTrans(h256 const& _txHash)
 bool TxPool::removeOutOfBound(h256 const& _txHash)
 {
     bool ret = removeTrans(_txHash);
-    LOG(WARNING) << "Dropping out of bounds transaction, TransactionQueue::removeOutofBoundsTrans: "
-                 << toHex(_txHash);
+    TXPOOL_LOG(WARNING) << "[#removeOutOfBound] drop out of bound tx: [tx]:  " << toHex(_txHash)
+                        << std::endl;
     return ret;
 }
 
@@ -223,7 +233,7 @@ void TxPool::insert(Transaction const& _tx)
     h256 tx_hash = _tx.sha3();
     if (m_txsHash.count(tx_hash))
     {
-        LOG(WARNING) << "Transaction " << tx_hash << " already in transcation queue";
+        TXPOOL_LOG(WARNING) << "[#Insert] Already known tx:  " << tx_hash.abridged() << std::endl;
         return;
     }
     m_known.insert(tx_hash);
@@ -245,16 +255,32 @@ bool TxPool::drop(h256 const& _txHash)
     return removeTrans(_txHash);
 }
 
+dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
+    Transaction const& tx, TransactionReceipt const& receipt, Block const& block, unsigned index)
+{
+    dev::eth::LocalisedTransactionReceipt::Ptr pTxReceipt =
+        std::make_shared<LocalisedTransactionReceipt>(receipt, tx.sha3(),
+            block.blockHeader().hash(), block.blockHeader().number(), tx.safeSender(),
+            tx.receiveAddress(), index, receipt.gasUsed(), receipt.contractAddress());
+    return pTxReceipt;
+}
+
 bool TxPool::dropBlockTrans(Block const& block)
 {
     if (block.getTransactionSize() == 0)
         return true;
     WriteGuard l(m_lock);
     bool succ = true;
-    for (auto t : block.transactions())
+    for (size_t i = 0; i < block.transactions().size(); i++)
     {
-        m_dropped.insert(t.sha3());
-        if (removeTrans(t.sha3()) == false)
+        m_dropped.insert(block.transactions()[i].sha3());
+        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
+        if (block.transactionReceipts().size() > i)
+        {
+            pReceipt = constructTransactionReceipt(
+                block.transactions()[i], block.transactionReceipts()[i], block, i);
+        }
+        if (removeTrans(block.transactions()[i].sha3(), true, pReceipt) == false)
             succ = false;
     }
     return succ;

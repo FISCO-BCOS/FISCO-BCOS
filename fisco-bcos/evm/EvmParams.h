@@ -136,14 +136,16 @@ public:
                 }
                 catch (std::exception& e)
                 {
-                    EVMC_LOG(WARNING) << "[EvmParams/Parse Key Failed] " << e.what();
+                    EVMC_LOG(WARNING) << "[EvmParams/Parse Key Failed] "
+                                      << boost::diagnostic_information(e) << std::endl;
                     continue;
                 }
             }
         }
         catch (std::exception& e)
         {
-            EVMC_LOG(WARNING) << "[EvmParams/call section]  has not been set, " << e.what();
+            EVMC_LOG(WARNING) << "[EvmParams/call section]  has not been set, "
+                              << boost::diagnostic_information(e) << std::endl;
         }
     }
 
