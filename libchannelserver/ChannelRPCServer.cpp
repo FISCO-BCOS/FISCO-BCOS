@@ -16,15 +16,15 @@
 */
 /**
  * @file: ChannelRPCServer.cpp
- * @author: fisco-dev
- *
+ * @author: monan
  * @date: 2017
+ *
+ * @author xingqiangbai
+ * @date 2018.11.5
+ * @modify use libp2p to send message
  */
 
 #include "ChannelRPCServer.h"
-
-// #include "JsonHelper.h"
-// #include "RPCallback.h"
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <json/json.h>
@@ -80,7 +80,6 @@ void ChannelRPCServer::initSSLContext()
 
     vector<pair<string, Public> > certificates;
     string nodepri;
-    // CertificateServer::GetInstance().getCertificateList(certificates,nodepri);
 
     EC_KEY* ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
     SSL_CTX_set_tmp_ecdh(_sslContext->native_handle(), ecdh);
@@ -116,7 +115,6 @@ bool ChannelRPCServer::StopListening()
 {
     if (_running)
     {
-        //_ioService->stop();
         _server->stop();
     }
 
@@ -140,7 +138,6 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
         std::shared_ptr<bytes> resp(new bytes());
 
-        // dev::channel::ChannelMessage::Ptr message = make_shared<dev::channel::ChannelMessage>();
         auto message = it->second->messageFactory()->buildMessage();
         message->setSeq(it->first);
         message->setResult(0);
@@ -252,13 +249,7 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 
         switch (message->type())
         {
-#if 0
-		case 0x20: //链上链下请求 废弃
-		case 0x21: //链上链下响应 废弃
-			onClientMessage(session, message);
-			break;
-#endif
-        case 0x12:  //普通区块链请求
+        case 0x12:
             onClientEthereumRequest(session, message);
             break;
         case 0x13:
@@ -315,7 +306,6 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 
     OnRequest(body, addInfo);
     // TODO:txpool regist callback
-    // RPCallback::getInstance().parseAndSaveSession(body, message->seq(), session);
 }
 
 void dev::ChannelRPCServer::onClientTopicRequest(
@@ -407,11 +397,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             msg->setPacketType(AMOPPacketType::SendTopics);
             msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
 
-            m_service.lock()->sendMessageByTopic(topic, msg);
-            // h512 nodeID =
-            //     sendChannelMessageToNode(topic, it->second.message, it->second.failedNodeIDs);
-
-            // it->second.toNodeID = nodeID;
+            m_service->sendMessageByTopic(topic, msg);
         }
         catch (exception& e)
         {
@@ -466,7 +452,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                     msg->setProtocolID(dev::eth::ProtocolID::AMOP);
                     msg->setPacketType(AMOPPacketType::SendTopics);
                     msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
-                    m_service.lock()->sendMessageByNodeID(it->second.fromNodeID, msg);
+                    m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
                 }
             }
             else
@@ -479,7 +465,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                 msg->setProtocolID(dev::eth::ProtocolID::AMOP);
                 msg->setPacketType(AMOPPacketType::SendTopics);
                 msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
-                m_service.lock()->sendMessageByNodeID(it->second.fromNodeID, msg);
+                m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
 
                 LOG(DEBUG) << "send message to node:" << it->second.fromNodeID;
 
@@ -513,14 +499,8 @@ void dev::ChannelRPCServer::onNodeRequest(h512 nodeID, std::shared_ptr<dev::byte
 
     switch (msg->type())
     {
-#if 0
-	case 0x20: //链上链下请求 废弃
-	case 0x21: //链上链下响应 废弃
-		onNodeMessage(nodeID, msg);
-		break;
-#endif
-    case 0x30:  //链上链下二期请求
-    case 0x31:  //链上链下二期响应
+    case 0x30:  // request
+    case 0x31:  // response
         onNodeChannelRequest(nodeID, msg);
         break;
     default:
@@ -592,7 +572,7 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
                 msg->setProtocolID(dev::eth::ProtocolID::AMOP);
                 msg->setPacketType(AMOPPacketType::SendTopics);
                 msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
-                m_service.lock()->sendMessageByNodeID(it->second.fromNodeID, msg);
+                m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
             }
         }
         else if (message->type() == 0x31)
@@ -619,11 +599,7 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
                     msg->setPacketType(AMOPPacketType::SendTopics);
                     msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
 
-                    m_service.lock()->sendMessageByTopic(topic, msg);
-                    // h512 nodeID = sendChannelMessageToNode(
-                    //     topic, it->second.message, it->second.failedNodeIDs);
-                    // LOG(DEBUG) << "try send to node:" << nodeID << " success";
-                    // it->second.toNodeID = nodeID;
+                    m_service->sendMessageByTopic(topic, msg);
                 }
                 catch (std::exception& e)
                 {
@@ -696,7 +672,7 @@ dev::eth::Web3Observer::Ptr ChannelRPCServer::buildObserver()
     return std::make_shared<Web3ObserverImpl>(shared_from_this());
 }
 
-void ChannelRPCServer::setService(std::weak_ptr<dev::p2p::Service> _service)
+void ChannelRPCServer::setService(std::shared_ptr<dev::p2p::P2PInterface> _service)
 {
     m_service = _service;
 }
@@ -732,7 +708,6 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
             {
                 try
                 {
-                    //处理消息
                     if (e.errorCode() != 0)
                     {
                         LOG(ERROR) << "ERROR:" << e.errorCode() << " message:" << e.what();
@@ -871,42 +846,6 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
         }
 
         return response;
-
-#if 0
-		struct Callback {
-			typedef std::shared_ptr<Callback> Ptr;
-
-			Callback() {
-				_mutex.lock();
-			}
-
-			void onResponse(dev::channel::ChannelException error, dev::channel::Message::Ptr message) {
-				_error = error;
-				_response = message;
-
-				_mutex.unlock();
-			}
-
-			dev::channel::ChannelException _error;
-			dev::channel::Message::Ptr _response;
-			std::mutex _mutex;
-		};
-
-		Callback::Ptr callback = std::make_shared<Callback>();
-
-		std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> fp = std::bind(&Callback::onResponse, callback,
-						std::placeholders::_1, std::placeholders::_2);
-		asyncPushChannelMessage(topic, message, fp);
-
-		callback->_mutex.lock();
-		callback->_mutex.unlock();
-
-		if (callback->_error.errorCode() != 0) {
-			throw callback->_error;
-		}
-
-		return callback->_response;
-#endif
     }
     catch (dev::channel::ChannelException& e)
     {
@@ -925,60 +864,7 @@ std::string ChannelRPCServer::newSeq()
     s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
     return s;
 }
-#if 0
-h512 ChannelRPCServer::sendChannelMessageToNode(
-    std::string topic, dev::channel::Message::Ptr message, const std::set<h512>& exclude)
-{
-    try
-    {
-        std::vector<p2p::NodeID> peers = m_service.lock()->getPeersByTopic(topic);
 
-        for (auto it = peers.begin(); it != peers.end();)
-        {
-            if (exclude.find(*it) != exclude.end())
-            {
-                it = peers.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
-
-        if (peers.empty())
-        {
-            LOG(ERROR) << "send failed, no node follow topic:" << topic;
-
-            throw dev::channel::ChannelException(103, "send failed, no node follow topic:" + topic);
-        }
-
-        boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
-        boost::uniform_int<int> index(0, peers.size() - 1);
-
-        auto ri = index(rng);
-        LOG(DEBUG) << "random:" << ri;
-        p2p::NodeID targetNodeID = peers[ri];
-
-        auto buffer = std::make_shared<bytes>(message->data());
-        auto msg = make_shared<p2p::Message>();
-        msg->setBuffer(buffer);
-        msg->setProtocolID(dev::eth::ProtocolID::AMOP);
-        msg->setPacketType(AMOPPacketType::SendTopics);
-        msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
-        m_service.lock()->sendMessageByNodeID(targetNodeID, msg);
-
-        LOG(DEBUG) << "message send to:" << targetNodeID;
-
-        return targetNodeID;
-    }
-    catch (exception& e)
-    {
-        LOG(ERROR) << "ERROR:" << e.what();
-
-        return h512();
-    }
-}
-#endif
 dev::channel::ChannelSession::Ptr ChannelRPCServer::sendChannelMessageToSession(std::string topic,
     dev::channel::Message::Ptr message, const std::set<dev::channel::ChannelSession::Ptr>& exclude)
 {
@@ -1028,7 +914,7 @@ void ChannelRPCServer::updateHostTopics()
         allTopics->insert(allTopics->end(), topics->begin(), topics->end());
     }
 
-    m_service.lock()->setTopics(allTopics);
+    m_service->setTopics(allTopics);
 }
 
 std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTopic(
