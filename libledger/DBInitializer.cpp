@@ -42,10 +42,11 @@ namespace ledger
 {
 void DBInitializer::initStorageDB()
 {
-    if (dev::stringCmpIgnoreCase(m_param->dbType(), "AMDB") == 0)
+    /// TODO: implement AMOP storage
+    /*if (dev::stringCmpIgnoreCase(m_param->dbType(), "AMDB") == 0)
         initAMOPStorage();
-    if (dev::stringCmpIgnoreCase(m_param->dbType(), "LevelDB") == 0)
-        initLevelDBStorage();
+    if (dev::stringCmpIgnoreCase(m_param->dbType(), "LevelDB") == 0)*/
+    initLevelDBStorage();
 }
 
 /// init the storage with leveldb
@@ -97,7 +98,7 @@ void DBInitializer::createStateFactory()
 {
     if (m_param->enableMpt())
         createMptState();
-    else
+    else  /// default is storage state
         createStorageState();
 }
 

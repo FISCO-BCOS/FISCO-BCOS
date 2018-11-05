@@ -254,9 +254,11 @@ void Ledger::consensusInitFactory()
     {
         std::string error_msg =
             "Unsupported Consensus type: " + m_param->mutableConsensusParam().consensusType;
-        Ledger_LOG(ERROR) << "[#UnsupportConsensusType]" << std::endl;
-        LOG(ERROR) << error_msg;
-        BOOST_THROW_EXCEPTION(dev::InvalidConsensusType() << errinfo_comment(error_msg));
+        Ledger_LOG(ERROR) << "[#UnsupportConsensusType]:  "
+                          << m_param->mutableConsensusParam().consensusType
+                          << " use PBFT as default" << std::endl;
+        m_sealer = createPBFTSealer();
+        /// BOOST_THROW_EXCEPTION(dev::InvalidConsensusType() << errinfo_comment(error_msg));
     }
 }
 
