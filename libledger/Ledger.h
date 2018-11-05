@@ -99,7 +99,7 @@ public:
 
     virtual ~Ledger(){};
 
-    void initLedger() override;
+    bool initLedger() override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
@@ -120,14 +120,14 @@ public:
 
 protected:
     void initConfig(std::string const& configPath) override;
-    virtual void initTxPool();
+    virtual bool initTxPool();
     /// init blockverifier related
-    virtual void initBlockVerifier();
-    virtual void initBlockChain();
+    virtual bool initBlockVerifier();
+    virtual bool initBlockChain();
     /// create consensus moudle
-    virtual void consensusInitFactory();
+    virtual bool consensusInitFactory();
     /// init the blockSync
-    virtual void initSync();
+    virtual bool initSync();
 
 private:
     /// create PBFTConsensus
@@ -138,7 +138,7 @@ private:
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initDBConfig(boost::property_tree::ptree const& pt);
-    void initGenesisConfig(boost::property_tree::ptree const& pt);
+    /// void initGenesisConfig(boost::property_tree::ptree const& pt);
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

@@ -84,6 +84,12 @@ h256 BlockChainImp::numberHash(int64_t _i)
             auto entry = entries->get(0);
             numberHash = entry->getField(SYS_VALUE);
         }
+        if (_i == 0)
+        {
+            std::shared_ptr<Block> block = std::make_shared<Block>();
+            block->setEmptyBlock();
+            return block->headerHash();
+        }
     }
     LOG(TRACE) << "BlockChainImp::numberHash numberHash=" << numberHash;
     return h256(numberHash);
@@ -108,7 +114,14 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
     }
 
     if (strblock.size() == 0)
+    {
+        std::shared_ptr<Block> block = std::make_shared<Block>();
+        block->setEmptyBlock();
+        if (block->headerHash() == _blockHash)
+            return block;
         return nullptr;
+    }
+
 
     return std::make_shared<Block>(fromHex(strblock.c_str()));
 }
@@ -129,7 +142,9 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
             return getBlockByHash(h256(numberHash));
         }
     }
-    return std::make_shared<Block>();
+    std::shared_ptr<Block> block = std::make_shared<Block>();
+    block->setEmptyBlock();
+    return block;
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)

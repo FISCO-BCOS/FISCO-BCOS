@@ -308,11 +308,11 @@ public:
         /// init txPool
         initTxPool();
     }
-    void initLedger() override{};
+    bool initLedger() override{};
     /// init blockverifier related
-    void initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
-    void initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    void initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
+    bool initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
+    bool initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    bool initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);

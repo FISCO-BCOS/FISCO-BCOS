@@ -143,6 +143,14 @@ public:
         noteChange();
     }
 
+    void setEmptyBlock()
+    {
+        m_blockHeader.setNumber(0);
+        m_blockHeader.setGasUsed(u256(0));
+        m_blockHeader.setSealer(u256(0));
+        noteChange();
+    }
+
     void appendTransactionReceipt(TransactionReceipt const& _tran)
     {
         m_transactionReceipts.push_back(_tran);

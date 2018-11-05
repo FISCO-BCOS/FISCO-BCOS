@@ -36,7 +36,7 @@ struct ConsensusParam;
 struct BlockChainParam;
 struct SyncParam;
 struct P2pParam;
-struct GenesisParam;
+/// struct GenesisParam;
 struct AMDBParam;
 class LedgerParamInterface
 {
@@ -46,7 +46,7 @@ public:
     virtual TxPoolParam& mutableTxPoolParam() = 0;
     virtual ConsensusParam& mutableConsensusParam() = 0;
     virtual SyncParam& mutableSyncParam() = 0;
-    virtual GenesisParam& mutableGenesisParam() = 0;
+    /// virtual GenesisParam& mutableGenesisParam() = 0;
     virtual AMDBParam& mutableAMDBParam() = 0;
     virtual std::string const& dbType() const = 0;
     virtual bool enableMpt() const = 0;

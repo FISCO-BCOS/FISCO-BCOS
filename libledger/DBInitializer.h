@@ -39,26 +39,22 @@ class DBInitializer
 public:
     DBInitializer(std::shared_ptr<LedgerParamInterface> param) : m_param(param) {}
 
-    virtual void initDBModules()
+    virtual void initDBModules(dev::h256 const& genesisHash)
     {
-        assert(m_param);
+        if (!m_param)
+            return;
         /// init the storage DB
         initStorageDB();
         /// create state storage
-        createStateFactory();
+        createStateFactory(genesisHash);
         /// create executive context
         createExecutiveContext();
     }
 
-    dev::storage::Storage::Ptr storage() const
-    {
-        assert(m_storage);
-        return m_storage;
-    }
+    dev::storage::Storage::Ptr storage() const { return m_storage; }
 
     std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> executiveContextFactory() const
     {
-        assert(m_executiveContextFac);
         return m_executiveContextFac;
     }
 
@@ -68,7 +64,7 @@ protected:
     virtual void initStorageDB();
 
     /// create stateStorage (mpt or storageState options)
-    virtual void createStateFactory();
+    virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext();
 
@@ -79,7 +75,7 @@ private:
     void initLevelDBStorage();
     /// TOCHECK: create AMDB/mpt stateStorage
     void createStorageState();
-    void createMptState();
+    void createMptState(dev::h256 const& genesisHash);
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;
