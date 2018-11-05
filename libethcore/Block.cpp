@@ -154,10 +154,10 @@ bytes const& Block::encodeTransactions() const
 bytes const& Block::encodeTransactionReceipts() const
 {
     WriteGuard l(x_txReceiptsCache);
-    RLPStream txReceipts;
-    txReceipts.appendList(m_transactionReceipts.size());
     if (m_tReceiptsCache == bytes())
     {
+        RLPStream txReceipts;
+        txReceipts.appendList(m_transactionReceipts.size());
         BytesMap mapCache;
         for (size_t i = 0; i < m_transactionReceipts.size(); i++)
         {

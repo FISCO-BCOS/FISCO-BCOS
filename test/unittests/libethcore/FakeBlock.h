@@ -54,13 +54,17 @@ public:
         m_blockHeader.encode(m_blockHeaderData);
         m_block.encode(m_blockData, ref(m_blockHeaderData));
         m_block.decode(ref(m_blockData));
+        /// re-Encode blockHeaderData
+        m_blockHeader = m_block.header();
     }
 
     void reEncodeDecode()
     {
-        m_blockHeader.encode(m_blockHeaderData);
+        m_blockHeader = m_block.header();
+        m_block.header().encode(m_blockHeaderData);
         m_block.encode(m_blockData, ref(m_blockHeaderData));
         m_block.decode(ref(m_blockData));
+        m_blockHeader = m_block.header();
     }
 
     /// for empty case test
