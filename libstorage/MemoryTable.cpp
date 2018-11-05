@@ -106,7 +106,7 @@ size_t dev::storage::MemoryTable::update(
             entries = it->second;
         }
 
-        if (entries)
+        if (entries.get() == NULL)
         {
             LOG(ERROR) << "Can't find data";
 
