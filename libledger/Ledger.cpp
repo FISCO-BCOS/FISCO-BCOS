@@ -50,12 +50,13 @@ bool Ledger::initLedger()
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
     if (!m_dbInitializer)
         return false;
+    m_dbInitializer->initStorageDB();
     /// init the DB
     bool ret = initBlockChain();
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
-    m_dbInitializer->initDBModules(genesisHash);
+    m_dbInitializer->initStateDB(genesisHash);
     /// init blockChain
     /// init blockVerifier
     /// init txPool

@@ -31,7 +31,7 @@ using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::executive;
 
-ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
+ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, h256 const& parentStateRoot)
 {
     LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size()
                << " hash: " << block.blockHeader().hash()
@@ -44,7 +44,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
         blockInfo.hash = block.blockHeader().hash();
         blockInfo.number = block.blockHeader().number();
         m_executiveContextFactory->initExecutiveContext(
-            blockInfo, block.blockHeader().stateRoot(), executiveContext);
+            blockInfo, parentStateRoot, executiveContext);
     }
     catch (exception& e)
     {

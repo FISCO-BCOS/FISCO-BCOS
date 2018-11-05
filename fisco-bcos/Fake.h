@@ -158,7 +158,8 @@ public:
         std::srand(std::time(nullptr));
     };
     virtual ~FakeBlockVerifier(){};
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
+    std::shared_ptr<ExecutiveContext> executeBlock(
+        dev::eth::Block& block, dev::h256 const& parentState) override
     {
         /// execute time: 1000
         /// usleep(1000 * (block.getTransactionSize()));
@@ -202,8 +203,6 @@ public:
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
-        /// init the DB
-        m_dbInitializer->initDBModules(h256());
         /// init blockChain
         initBlockChain();
         /// intit blockVerifier

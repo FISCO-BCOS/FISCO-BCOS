@@ -60,8 +60,10 @@ void ConsensusEngineBase::stop()
 /// update m_sealing and receiptRoot
 dev::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(Block& block)
 {
+    dev::h256 parentRoot =
+        m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader().stateRoot();
     /// reset execute context
-    return m_blockVerifier->executeBlock(block);
+    return m_blockVerifier->executeBlock(block, parentRoot);
 }
 
 void ConsensusEngineBase::checkBlockValid(Block const& block)

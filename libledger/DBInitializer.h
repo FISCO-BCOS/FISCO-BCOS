@@ -38,13 +38,14 @@ class DBInitializer
 {
 public:
     DBInitializer(std::shared_ptr<LedgerParamInterface> param) : m_param(param) {}
+    /// create storage DB(must be storage)
+    ///  must be open before init
+    virtual void initStorageDB();
 
-    virtual void initDBModules(dev::h256 const& genesisHash)
+    virtual void initStateDB(dev::h256 const& genesisHash)
     {
         if (!m_param)
             return;
-        /// init the storage DB
-        initStorageDB();
         /// create state storage
         createStateFactory(genesisHash);
         /// create executive context
@@ -59,10 +60,6 @@ public:
     }
 
 protected:
-    /// create storage DB(must be storage)
-    ///  must be open before init
-    virtual void initStorageDB();
-
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory

@@ -379,7 +379,7 @@ int main(int argc, char* argv[])
             tx.updateSignature(SignatureStruct(sig));
             LOG(INFO) << "Tx" << tx.sha3();
             block.appendTransaction(tx);
-            auto context = blockVerifier->executeBlock(block);
+            auto context = blockVerifier->executeBlock(block, parentBlock->header().stateRoot());
             blockChain->commitBlock(block, context);
             dev::eth::TransactionReceipt receipt =
                 blockChain->getTransactionReceiptByHash(tx.sha3());

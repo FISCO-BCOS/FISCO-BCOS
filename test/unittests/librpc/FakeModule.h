@@ -215,7 +215,8 @@ public:
         std::srand(std::time(nullptr));
     };
     virtual ~MockBlockVerifier(){};
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
+    std::shared_ptr<ExecutiveContext> executeBlock(
+        dev::eth::Block& block, dev::h256 const& parentState) override
     {
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;

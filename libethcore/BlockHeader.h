@@ -232,14 +232,23 @@ public:
     /// ------ get interfaces related to block header------
     h256 const& parentHash() const { return m_parentHash; }  /// field 0
     h256 const& stateRoot() const { return m_stateRoot; }
-    void setStateRoot(h256 const& _stateRoot) { m_stateRoot = _stateRoot; }  /// field 1
-    h256 const& transactionsRoot() const { return m_transactionsRoot; }      /// field 2
+    void setStateRoot(h256 const& _stateRoot)  /// field 1
+    {
+        m_stateRoot = _stateRoot;
+        noteDirty();
+    }
+    h256 const& transactionsRoot() const { return m_transactionsRoot; }  /// field 2
     void setTransactionsRoot(h256 const& _transactionsRoot)
     {
         m_transactionsRoot = _transactionsRoot;
+        noteDirty();
     }
     h256 const& receiptsRoot() const { return m_receiptsRoot; }  /// field 3
-    void setReceiptsRoot(h256 const& _receiptsRoot) { m_receiptsRoot = _receiptsRoot; }
+    void setReceiptsRoot(h256 const& _receiptsRoot)
+    {
+        m_receiptsRoot = _receiptsRoot;
+        noteDirty();
+    }
     LogBloom const& logBloom() const { return m_logBloom; }                            /// field 4
     int64_t number() const { return m_number; }                                        /// field 5
     u256 const& gasLimit() const { return m_gasLimit; }                                /// field 6
