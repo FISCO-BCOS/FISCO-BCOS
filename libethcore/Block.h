@@ -99,6 +99,7 @@ public:
     void setTransactionReceipts(TransactionReceipts const& transReceipt)
     {
         m_transactionReceipts = transReceipt;
+        noteChange();
     }
     /// append a single transaction to m_transactions
     void appendTransaction(Transaction const& _trans)
@@ -129,7 +130,7 @@ public:
     h256 const getTransactionRoot()
     {
         encodeTransactions();
-        return m_txsRoot;
+        return header().transactionsRoot();
     }
 
     void resetCurrentBlock(BlockHeader& _parent)
@@ -139,13 +140,15 @@ public:
         m_transactionReceipts.clear();
         m_sigList.clear();
         m_txsCache.clear();
-        m_txsMapCache.clear();
-        m_txsRoot.clear();
+        noteChange();
     }
 
-    void appendTransactionReceipt(TransactionReceipt const& _tran) { m_receipts.push_back(_tran); }
+    void appendTransactionReceipt(TransactionReceipt const& _tran)
+    {
+        m_transactionReceipts.push_back(_tran);
+    }
 
-    const TransactionReceipts& getTransactionReceipts() const { return m_receipts; }
+    const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
 
 private:
     /// encode function
@@ -155,15 +158,19 @@ private:
     void noteChange()
     {
         /// RecursiveGuard l(m_txsCacheLock);
+        WriteGuard l_receipt(x_txReceiptsCache);
+        WriteGuard l_txscache(x_txsCache);
         m_txsCache = bytes();
-        m_txsMapCache = BytesMap();
+        m_tReceiptsCache = bytes();
     }
 
     bytes const& encodeTransactions() const;
 
+    bytes const& encodeTransactionReceipts() const;
+
 private:
     /// block header of the block (field 0)
-    BlockHeader m_blockHeader;
+    mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)
     Transactions m_transactions;
     TransactionReceipts m_transactionReceipts;
@@ -171,13 +178,12 @@ private:
     std::vector<std::pair<u256, Signature>> m_sigList;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
-    mutable bytes m_txsCache;
-    /// mutable RecursiveMutex m_txsCacheLock;
-    TransactionReceipts m_receipts;  ///< The corresponding list of transaction receipts.
-    mutable BytesMap m_txsMapCache;
-    mutable h256 m_txsRoot;
 
-    mutable SharedMutex x_txsMapCache;
+    mutable SharedMutex x_txsCache;
+    mutable bytes m_txsCache;
+
+    mutable SharedMutex x_txReceiptsCache;
+    mutable bytes m_tReceiptsCache;
 };
 }  // namespace eth
 }  // namespace dev

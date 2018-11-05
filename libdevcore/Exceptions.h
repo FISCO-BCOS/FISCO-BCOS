@@ -70,6 +70,7 @@ struct RLPException : virtual Exception
 
 /// RLP related Exceptions
 DEV_SIMPLE_EXCEPTION_RLP(BadCast);
+DEV_SIMPLE_EXCEPTION_RLP(ErrorBlockHash);
 DEV_SIMPLE_EXCEPTION_RLP(BadRLP);
 DEV_SIMPLE_EXCEPTION_RLP(OversizeRLP);
 DEV_SIMPLE_EXCEPTION_RLP(UndersizeRLP);

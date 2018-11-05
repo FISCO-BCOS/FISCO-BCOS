@@ -51,6 +51,7 @@ void DBInitializer::initStorageDB()
 /// init the storage with leveldb
 void DBInitializer::initLevelDBStorage()
 {
+    DBInitializer_LOG(INFO) << "[#initLevelDBStorage] ..." << std::endl;
     m_storage = std::make_shared<LevelDBStorage>();
     /// open and init the levelDB
     leveldb::Options ldb_option;
@@ -58,7 +59,7 @@ void DBInitializer::initLevelDBStorage()
     try
     {
         ldb_option.create_if_missing = true;
-        LOG(DEBUG) << "open leveldb handler";
+        DBInitializer_LOG(DEBUG) << "[#initLevelDBStorage]: open leveldb handler" << std::endl;
         leveldb::Status status = leveldb::DB::Open(ldb_option, m_param->baseDir(), &(pleveldb));
         std::shared_ptr<LevelDBStorage> leveldb_storage =
             std::dynamic_pointer_cast<LevelDBStorage>(m_storage);
@@ -68,17 +69,20 @@ void DBInitializer::initLevelDBStorage()
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "initLevelDBStorage failed, error information:" << e.what();
+        DBInitializer_LOG(ERROR) << "[#initLevelDBStorage] initLevelDBStorage failed, [EINFO]: "
+                                 << boost::diagnostic_information(e);
         BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
     }
 }
 
 /// TODO: init AMOP Storage
-void DBInitializer::initAMOPStorage() {}
+void DBInitializer::initAMOPStorage()
+{
+    DBInitializer_LOG(INFO) << "[#initAMOPStorage] ..." << std::endl;
+}
 
 /// create ExecutiveContextFactory
-void DBInitializer::createExecutiveContext(
-    std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompile)
+void DBInitializer::createExecutiveContext()
 {
     assert(m_storage && m_stateFactory);
     m_executiveContextFac = std::make_shared<ExecutiveContextFactory>();

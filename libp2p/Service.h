@@ -54,8 +54,7 @@ public:
     Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
 
     void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        Options const& options = Options()) override;
+        CallbackFunc callback = nullptr, Options const& options = Options()) override;
 
     Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
@@ -79,7 +78,7 @@ public:
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
 
     ///< Only connected node
-    SessionInfos sessionInfos() const override;
+    virtual SessionInfos sessionInfos() const override;
 
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const override;
 

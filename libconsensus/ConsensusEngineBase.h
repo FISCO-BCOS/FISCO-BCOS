@@ -68,17 +68,18 @@ public:
     virtual ~ConsensusEngineBase() { stop(); }
 
     /// get miner list
-    dev::h512s minerList() const override { return m_minerList; }
-    /// set the miner list
-    void setMinerList(dev::h512s const& _minerList) override
+    dev::h512s minerList() const override
     {
-        m_minerList = _minerList;
-        resetConfig();
+        ReadGuard l(m_minerListMutex);
+        return m_minerList;
     }
     /// append miner
     void appendMiner(h512 const& _miner) override
     {
-        m_minerList.push_back(_miner);
+        {
+            WriteGuard l(m_minerListMutex);
+            m_minerList.push_back(_miner);
+        }
         resetConfig();
     }
 
@@ -103,9 +104,12 @@ public:
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
         std::string miner_list;
-        for (auto miner : m_minerList)
         {
-            miner_list = toHex(miner) + "#";
+            ReadGuard l(m_minerListMutex);
+            for (auto miner : m_minerList)
+            {
+                miner_list = toHex(miner) + "#";
+            }
         }
         status_obj.push_back(json_spirit::Pair("minerList", miner_list));
         status_obj.push_back(json_spirit::Pair("allowFutureBlocks", m_allowFutureBlocks));
@@ -198,7 +202,7 @@ protected:
         }
         catch (std::exception& e)
         {
-            LOG(ERROR) << "invalid network-recevied packet";
+            ENGINE_LOG(WARNING) << "[#decodeToRequests] Invalid network-received packet";
             return false;
         }
     }
@@ -241,6 +245,7 @@ protected:
     /// index of this node
     u256 m_idx = u256(0);
     /// miner list
+    mutable SharedMutex m_minerListMutex;
     dev::h512s m_minerList;
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;
