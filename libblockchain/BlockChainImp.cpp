@@ -280,9 +280,12 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
 
 void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    writeNumber(block, context);
-    writeTxToBlock(block, context);
-    writeBlockInfo(block, context);
-    context->dbCommit();
-    m_onReady();
+    if (block.blockHeader().number() == number() + 1)
+    {
+        writeNumber(block, context);
+        writeTxToBlock(block, context);
+        writeBlockInfo(block, context);
+        context->dbCommit();
+        m_onReady();
+    }
 }
