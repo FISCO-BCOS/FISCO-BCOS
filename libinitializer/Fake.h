@@ -19,7 +19,6 @@
  * @brief: fake interface
  *         fake Block
  *         fake BlockChainInterface
- *         fake SyncInterface
  *         fake BlockVerifierInterface
  *         fake Ledger
  * @file: Fake.h
@@ -34,6 +33,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libethcore/TransactionReceipt.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerParam.h>
 #include <libsync/SyncInterface.h>
@@ -106,13 +106,10 @@ public:
     void commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        std::cout << "#### commitBlock before, block number:" << block.blockHeader().number()
-                  << std::endl;
         if (block.blockHeader().number() == number() + 1)
         {
             WriteGuard l(x_blockChain);
             {
-                std::cout << "##### commitBlock:" << block.blockHeader().number() << std::endl;
                 m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
                 m_blockChain.push_back(std::make_shared<Block>(block));
                 m_blockNumber = block.blockHeader().number() + 1;
@@ -164,9 +161,23 @@ public:
     std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
     {
         /// execute time: 1000
-        usleep(1000 * (block.getTransactionSize()));
+        /// usleep(1000 * (block.getTransactionSize()));
+        fakeExecuteResult(block);
         return m_executiveContext;
     };
+    /// fake the transaction receipt of the whole block
+    void fakeExecuteResult(dev::eth::Block& block)
+    {
+        TransactionReceipts receipts;
+        for (unsigned index = 0; index < block.getTransactionSize(); index++)
+        {
+            TransactionReceipt receipt(u256(0), u256(100), LogEntries(), u256(0), bytes(),
+                block.transactions()[index].receiveAddress());
+            receipts.push_back(receipt);
+        }
+        block.setTransactionReceipts(receipts);
+    }
+
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
     executeTransaction(const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
     {
@@ -191,6 +202,8 @@ public:
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        /// init the DB
+        m_dbInitializer->initDBModules();
         /// init blockChain
         initBlockChain();
         /// intit blockVerifier

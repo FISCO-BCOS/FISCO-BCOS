@@ -1,0 +1,43 @@
+/*
+    This file is part of FISCO-BCOS.
+
+    FISCO-BCOS is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    FISCO-BCOS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @file: Web3Observer.h
+ * @author: monan
+ *
+ * @date: 2017
+ */
+
+#pragma once
+
+namespace dev
+{
+namespace eth
+{
+class Web3Observer : public std::enable_shared_from_this<Web3Observer>
+{
+public:
+    typedef std::shared_ptr<Web3Observer> Ptr;
+
+    Web3Observer(){};
+    virtual ~Web3Observer(){};
+
+    virtual void onReceiveChannelMessage(const h512, std::shared_ptr<bytes>) = 0;
+};
+
+}  // namespace eth
+
+}  // namespace dev
