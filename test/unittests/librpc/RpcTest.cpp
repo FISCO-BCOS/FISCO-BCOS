@@ -41,7 +41,7 @@ class RpcTestFixure : public TestOutputHelperFixture
 public:
     RpcTestFixure()
     {
-        FakeHost* hostPtr = createFakeHostWithSession(clientVersion, listenIp, listenPort);
+        FakeHost* hostPtr = createFakeHostWithSession(clientVersion, listenIp, listenPort, 1);
         m_host = std::shared_ptr<Host>(hostPtr);
         m_p2pHandler = std::make_shared<P2PMsgHandler>();
         m_service = std::make_shared<MockService>(m_host, m_p2pHandler);
