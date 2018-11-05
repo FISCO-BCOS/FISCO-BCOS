@@ -106,6 +106,9 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
 
     response = rpc->groupPeers(0);
     BOOST_CHECK(response.size() == 2);
+
+    response = rpc->groupList();
+    BOOST_CHECK(response.size() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(testGetBlockByHash)

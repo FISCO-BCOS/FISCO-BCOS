@@ -125,13 +125,14 @@ Json::Value Rpc::consensusStatus(int _groupID)
 
 Json::Value Rpc::syncStatus(int _groupID)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "syncStatus # request = " << std::endl
                   << "{ " << std::endl
                   << "\"_groupID\" : " << _groupID << std::endl
                   << "}";
+
+        Json::Value response;
 
         auto sync = ledgerManager()->sync(_groupID);
         if (sync)
@@ -180,9 +181,10 @@ std::string Rpc::version()
 
 Json::Value Rpc::peers()
 {
-    Json::Value response = Json::Value(Json::arrayValue);
     try
     {
+        Json::Value response = Json::Value(Json::arrayValue);
+
         auto host = service()->getHost();
         if (host)
         {
@@ -212,9 +214,15 @@ Json::Value Rpc::peers()
 
 Json::Value Rpc::groupPeers(int _groupID)
 {
-    Json::Value response = Json::Value(Json::arrayValue);
     try
     {
+        LOG(INFO) << "groupPeers # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
+
+        Json::Value response = Json::Value(Json::arrayValue);
+
         auto host = service()->getHost();
         if (host)
         {
@@ -238,11 +246,11 @@ Json::Value Rpc::groupPeers(int _groupID)
 
 Json::Value Rpc::groupList()
 {
-    Json::Value response = Json::Value(Json::arrayValue);
     try
     {
-        //        auto groupList = ledgerManager()->getGrouplList(); //TODO
-        set<dev::GROUP_ID> groupList = {0, 1, 2};
+        Json::Value response = Json::Value(Json::arrayValue);
+
+        auto groupList = ledgerManager()->getGrouplList();
         for (dev::GROUP_ID id : groupList)
             response.append(id);
         return response;
@@ -257,7 +265,6 @@ Json::Value Rpc::groupList()
 Json::Value Rpc::getBlockByHash(
     int _groupID, const std::string& _blockHash, bool _includeTransactions)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "getBlockByHash # request = " << std::endl
@@ -266,6 +273,8 @@ Json::Value Rpc::getBlockByHash(
                   << "\"_blockHash\" : " << _blockHash << "," << std::endl
                   << "\"_includeTransactions\" : " << _includeTransactions << std::endl
                   << "}";
+
+        Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
 
@@ -317,7 +326,6 @@ Json::Value Rpc::getBlockByHash(
 Json::Value Rpc::getBlockByNumber(
     int _groupID, const std::string& _blockNumber, bool _includeTransactions)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "getBlockByNumber # request = " << std::endl
@@ -326,6 +334,8 @@ Json::Value Rpc::getBlockByNumber(
                   << "\"_blockNumber\" : " << _blockNumber << "," << std::endl
                   << "\"_includeTransactions\" : " << _includeTransactions << std::endl
                   << "}";
+
+        Json::Value response;
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         if (number > jsToBlockNumber(blockNumber(_groupID)))
@@ -377,7 +387,6 @@ Json::Value Rpc::getBlockByNumber(
 
 Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transactionHash)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "getTransactionByHash # request = " << std::endl
@@ -386,6 +395,7 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
                   << "\"_transactionHash\" : " << _transactionHash << std::endl
                   << "}";
 
+        Json::Value response;
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (blockchain)
         {
@@ -415,7 +425,6 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
 Json::Value Rpc::getTransactionByBlockHashAndIndex(
     int _groupID, const std::string& _blockHash, const std::string& _transactionIndex)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "getTransactionByBlockHashAndIndex # request = " << std::endl
@@ -424,6 +433,8 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                   << "\"_blockHash\" : " << _blockHash << "," << std::endl
                   << "\"_transactionIndex\" : " << _transactionIndex << std::endl
                   << "}";
+
+        Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (blockchain)
@@ -462,7 +473,6 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
 Json::Value Rpc::getTransactionByBlockNumberAndIndex(
     int _groupID, const std::string& _blockNumber, const std::string& _transactionIndex)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "getTransactionByBlockNumberAndIndex # request = " << std::endl
@@ -471,6 +481,8 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
                   << "\"_blockNumber\" : " << _blockNumber << "," << std::endl
                   << "\"_transactionIndex\" : " << _transactionIndex << std::endl
                   << "}";
+
+        Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (blockchain)
@@ -508,7 +520,6 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
 
 Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transactionHash)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "getTransactionReceipt # request = " << std::endl
@@ -516,6 +527,8 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
                   << "\"_groupID\" : " << _groupID << "," << std::endl
                   << "\"_transactionHash\" : " << _transactionHash << std::endl
                   << "}";
+
+        Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (blockchain)
@@ -554,13 +567,14 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
 
 Json::Value Rpc::pendingTransactions(int _groupID)
 {
-    Json::Value response;
     try
     {
         LOG(INFO) << "pendingTransactions # request = " << std::endl
                   << "{ " << std::endl
                   << "\"_groupID\" : " << _groupID << std::endl
                   << "}";
+
+        Json::Value response;
 
         auto txPool = ledgerManager()->txPool(_groupID);
         if (txPool)
