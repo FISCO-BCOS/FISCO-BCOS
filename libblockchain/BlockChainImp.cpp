@@ -93,6 +93,11 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
     LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
                << "_blockHash.hex()=" << _blockHash.hex();
+    if (_blockHash == h256(0))
+    {
+        return std::make_shared<Block>();
+    }
+
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
     if (tb)
@@ -106,6 +111,7 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
             return std::make_shared<Block>(fromHex(strblock.c_str()));
         }
     }
+
     return nullptr;
 }
 
