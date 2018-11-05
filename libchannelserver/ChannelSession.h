@@ -1,22 +1,22 @@
 /*
-    This file is part of cpp-ethereum.
+    This file is part of FISCO-BCOS.
 
-    cpp-ethereum is free software: you can redistribute it and/or modify
+    FISCO-BCOS is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    cpp-ethereum is distributed in the hope that it will be useful,
+    FISCO-BCOS is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: ChannelSession.h
- * @author: fisco-dev
+ * @author: monan
  *
  * @date: 2017
  */
@@ -55,13 +55,11 @@ public:
 
     const size_t bufferLength = 1024;
 
-    virtual Message::Ptr sendMessage(Message::Ptr request, size_t timeout = 0) throw(
-        ChannelException);
+    virtual Message::Ptr sendMessage(Message::Ptr request, size_t timeout = 0);
     virtual void asyncSendMessage(Message::Ptr request,
         std::function<void(dev::channel::ChannelException, Message::Ptr)> callback,
         uint32_t timeout = 0);
 
-    // virtual void handshake(bool enableSSL, bool isServer);
     virtual void run();
 
     virtual bool actived() { return _actived; };
@@ -157,7 +155,7 @@ private:
 
     std::map<std::string, ResponseCallback::Ptr> _responseCallbacks;
 
-    std::shared_ptr<std::set<std::string> > _topics;  //该session关注的topic
+    std::shared_ptr<std::set<std::string> > _topics;
     ThreadPool::Ptr _threadPool;
 
     size_t _idleTime = 30000;
