@@ -41,7 +41,7 @@ using namespace dev::rpc;
 
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-    std::shared_ptr<dev::p2p::Service> _service)
+    std::shared_ptr<dev::p2p::P2PInterface> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 

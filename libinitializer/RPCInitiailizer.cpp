@@ -33,10 +33,11 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 
     if (listenPort > 0)
     {
-        m_channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
-        m_channelRPCServer->setListenAddr(listenIP);
-        m_channelRPCServer->setListenPort(listenPort);
-        m_channelRPCServer->setSSLContext(m_sslContext);
+        ChannelRPCServer::Ptr channelRPCServer;
+        channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
+        channelRPCServer->setListenAddr(listenIP);
+        channelRPCServer->setListenPort(listenPort);
+        channelRPCServer->setSSLContext(m_sslContext);
 
         auto ioService = std::make_shared<boost::asio::io_service>();
 
@@ -50,18 +51,24 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 
         server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
 
-        m_channelRPCServer->setChannelServer(server);
+        channelRPCServer->setChannelServer(server);
+
+        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+        m_channelRPCHttpServer->addConnector(channelRPCServer.get());
+        m_channelRPCHttpServer->StartListening();
+        LOG(INFO) << "ChannelRPCHttpServer started.";
     }
 
-    ///< TODO: Wait for SafeHttpServer to commit and open this.
-    /*if (httpListenPort > 0)
+    if (httpListenPort > 0)
     {
-        m_safeHttpServer.reset(
+        std::shared_ptr<dev::SafeHttpServer> safeHttpServer;
+        safeHttpServer.reset(
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
-        ModularServer<>* jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
-        jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
-        jsonrpcHttpServer->StartListening();
-        cout << "JsonrpcHttpServer started." << std::endl;
-    }*/
+        m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+        m_jsonrpcHttpServer->addConnector(safeHttpServer.get());
+        m_jsonrpcHttpServer->StartListening();
+        LOG(INFO) << "JsonrpcHttpServer started.";
+    }
 }

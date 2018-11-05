@@ -27,7 +27,7 @@
 #include <libledger/LedgerManager.h>
 #include <libp2p/P2PInterface.h>
 #include <librpc/Rpc.h>
-/// #include <librpc/SafeHttpServer.h>
+#include <librpc/SafeHttpServer.h>
 
 namespace dev
 {
@@ -37,6 +37,20 @@ class RPCInitiailizer : public std::enable_shared_from_this<RPCInitiailizer>
 {
 public:
     typedef std::shared_ptr<RPCInitiailizer> Ptr;
+
+    virtual ~RPCInitiailizer()
+    {
+        if (m_channelRPCHttpServer)
+        {
+            m_channelRPCHttpServer->StopListening();
+            LOG(INFO) << "ChannelRPCHttpServer stoped.";
+        }
+        if (m_jsonrpcHttpServer)
+        {
+            m_jsonrpcHttpServer->StopListening();
+            LOG(INFO) << "JsonrpcHttpServer stoped.";
+        }
+    };
 
     void initConfig(boost::property_tree::ptree const& _pt);
     void setP2PService(std::shared_ptr<p2p::P2PInterface> _p2pService)
@@ -53,11 +67,11 @@ public:
     }
 
 private:
-    ChannelRPCServer::Ptr m_channelRPCServer;
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
-    /// std::shared_ptr<dev::SafeHttpServer> m_safeHttpServer;
+    ModularServer<>* m_channelRPCHttpServer;
+    ModularServer<>* m_jsonrpcHttpServer;
 };
 
 }  // namespace initializer
