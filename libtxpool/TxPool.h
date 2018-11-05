@@ -34,6 +34,9 @@
 #include <libp2p/Service.h>
 using namespace dev::eth;
 using namespace dev::p2p;
+
+#define TXPOOL_LOG(LEVEL) LOG(LEVEL) << "[#TXPOOL] [PROTOCOL: " << m_protocolId << "] "
+
 namespace dev
 {
 namespace txpool
@@ -71,7 +74,7 @@ public:
         /// register enqueue interface to p2p by protocalID
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
-        m_nonceCheck = std::make_shared<dev::eth::NonceCheck>(m_blockChain);
+        m_nonceCheck = std::make_shared<dev::eth::NonceCheck>(m_blockChain, m_protocolId);
     }
 
     virtual ~TxPool() { clear(); }
@@ -153,7 +156,11 @@ protected:
     void clear();
 
 private:
-    bool removeTrans(h256 const& _txHash);
+    dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(Transaction const& tx,
+        dev::eth::TransactionReceipt const& receipt, Block const& block, unsigned index);
+
+    bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
+        dev::eth::LocalisedTransactionReceipt::Ptr pReceipt = nullptr);
     bool removeOutOfBound(h256 const& _txHash);
     void insert(Transaction const& _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
@@ -182,7 +189,6 @@ private:
     /// Transaction is known by some peers
     mutable SharedMutex x_transactionKnownBy;
     std::map<h256, std::set<h512>> m_transactionKnownBy;
-
-};  // namespace txpool
+};
 }  // namespace txpool
 }  // namespace dev

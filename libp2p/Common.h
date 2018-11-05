@@ -52,7 +52,8 @@
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
-
+#define HOST_LOG(LEVEL) LOG(LEVEL) << "[#HOST] "
+#define SESSION_LOG(LEVEL) LOG(LEVEL) << "[#SESSION] "
 namespace dev
 {
 namespace p2p

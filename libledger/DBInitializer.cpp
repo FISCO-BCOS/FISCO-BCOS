@@ -51,6 +51,7 @@ void DBInitializer::initStorageDB()
 /// init the storage with leveldb
 void DBInitializer::initLevelDBStorage()
 {
+    DBInitializer_LOG(INFO) << "[#initLevelDBStorage] ..." << std::endl;
     m_storage = std::make_shared<LevelDBStorage>();
     /// open and init the levelDB
     leveldb::Options ldb_option;
@@ -69,13 +70,16 @@ void DBInitializer::initLevelDBStorage()
     catch (std::exception& e)
     {
         DBInitializer_LOG(ERROR) << "[#initLevelDBStorage] initLevelDBStorage failed, [EINFO]: "
-                                 << e.what();
+                                 << boost::diagnostic_information(e);
         BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
     }
 }
 
 /// TODO: init AMOP Storage
-void DBInitializer::initAMOPStorage() {}
+void DBInitializer::initAMOPStorage()
+{
+    DBInitializer_LOG(INFO) << "[#initAMOPStorage] ..." << std::endl;
+}
 
 /// create ExecutiveContextFactory
 void DBInitializer::createExecutiveContext()

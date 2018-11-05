@@ -70,7 +70,7 @@ static void updateSender(
 }
 
 /// deploy contract
-static Address deployContract(
+static void deployContract(
     std::shared_ptr<MPTState> mptState, EnvInfo& info, bytes const& code, EvmParams const& param)
 {
     /// LOG(DEBUG) << "[evm_main] codeData: " << toHex(code);

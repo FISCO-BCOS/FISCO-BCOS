@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     /// check resetConfig
     BOOST_CHECK(fake_pbft.consensus()->accountType() != NodeAccountType::MinerAccount);
     fake_pbft.m_minerList.push_back(fake_pbft.consensus()->keyPair().pub());
-    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+    fake_pbft.consensus()->appendMiner(fake_pbft.consensus()->keyPair().pub());
     fake_pbft.consensus()->resetConfig();
     BOOST_CHECK(fake_pbft.consensus()->accountType() == NodeAccountType::MinerAccount);
     BOOST_CHECK(fake_pbft.consensus()->nodeIdx() == u256(fake_pbft.m_minerList.size() - 1));
@@ -148,6 +148,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
 
     /// case2: only one peer is the miner, broadcast to one node
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
@@ -159,6 +160,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
 
     /// case3: two nodes are all miners , but one peer is in the cache, broadcast to one node
     fake_pbft.m_minerList.push_back(peer2_keyPair.pub());
+    fake_pbft.consensus()->appendMiner(peer2_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
@@ -172,6 +174,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     KeyPair peer3_keyPair = KeyPair::create();
     appendSessionInfo(fake_pbft, peer3_keyPair.pub());
     fake_pbft.m_minerList.push_back(peer3_keyPair.pub());
+    fake_pbft.consensus()->appendMiner(peer3_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     /// fake the filter with node id of peer3
     std::unordered_set<h512> filter;
@@ -223,6 +226,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastViewChangeReq)
 
     /// case2: the the peer node is a miner
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     fake_pbft.consensus()->broadcastViewChangeReq();
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
@@ -329,13 +333,6 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     /// normal case: test checkAndSave(import success)
     fake_pbft.consensus()->mutableHighest().setNumber(prepare_req.height - 1);
     CheckBlockChain(fake_pbft, true);
-    /// check reportBlock
-    /// BOOST_CHECK(fake_pbft.consensus()->mutableHighest().number() == prepare_req.height);
-    /// checkReportBlock(fake_pbft, highest, false);
-    /// set to miner
-    /// FakePBFTMiner(fake_pbft);
-    /// fake_pbft.consensus()->resetConfig();
-    /// checkResetConfig(fake_pbft, true);
 }
 /// test checkAndCommit
 BOOST_AUTO_TEST_CASE(testCheckAndCommit)
@@ -353,7 +350,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
 
     KeyPair peer_keyPair = KeyPair::create();
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
-    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+    fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
 
     FakeValidNodeNum(fake_pbft, u256(valid));
     FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash,
