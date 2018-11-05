@@ -171,31 +171,30 @@ public:
     FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         std::shared_ptr<AsioInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
         shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext,
-		bool forRpc = false)
+        bool forRpc = false)
       : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory,
             _sslContext)
     {
         setLastPing(chrono::steady_clock::now());
         m_run = true;
-        if(forRpc == true)
+        if (forRpc == true)
         {
-        	std::map<GROUP_ID, h512s> map;
-        	        h512s nodes;
-        	        NodeID node1 = KeyPair::create().pub();
-        	        NodeID node2 = KeyPair::create().pub();
-        	        nodes.push_back(node1);
-        	        nodes.push_back(node2);
-        	        map[0] = nodes;
-        	        m_groupID2NodeList = map;
-        	        NodeIPEndpoint peer_endpoint1(bi::address::from_string("127.0.0.1"), 30303, 30303);
-        	        NodeIPEndpoint peer_endpoint2(bi::address::from_string("127.0.0.1"), 30304, 30304);
+            std::map<GROUP_ID, h512s> map;
+            h512s nodes;
+            NodeID node1 = KeyPair::create().pub();
+            NodeID node2 = KeyPair::create().pub();
+            nodes.push_back(node1);
+            nodes.push_back(node2);
+            map[0] = nodes;
+            m_groupID2NodeList = map;
+            NodeIPEndpoint peer_endpoint1(bi::address::from_string("127.0.0.1"), 30303, 30303);
+            NodeIPEndpoint peer_endpoint2(bi::address::from_string("127.0.0.1"), 30304, 30304);
 
-        	        std::shared_ptr<SessionFace> session1 = FakeSession(peer_endpoint1);
-        	        std::shared_ptr<SessionFace> session2 = FakeSession(peer_endpoint2);
-        	        m_sessions[node1] = session1;
-        	        m_sessions[node2] = session2;
+            std::shared_ptr<SessionFace> session1 = FakeSession(peer_endpoint1);
+            std::shared_ptr<SessionFace> session2 = FakeSession(peer_endpoint2);
+            m_sessions[node1] = session1;
+            m_sessions[node2] = session2;
         }
-
     }
     ~FakeHost() {}
     bi::tcp::endpoint tcpClient() { return m_tcpClient; }
@@ -463,8 +462,8 @@ private:
 
 /// create Host with specified session factory
 static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
-    std::string const& client_version, std::string const& listenIp,
-	uint16_t const& listenPort, bool forRpc = false)
+    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort,
+    bool forRpc = false)
 {
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
@@ -484,17 +483,15 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
 
 /// creat fake host
 static FakeHost* createFakeHost(
-    std::string const& client_version, std::string const& listenIp,
-	uint16_t const& listenPort)
+    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
 {
     /// create m_sessionFactory
     std::shared_ptr<SessionFactory> m_sessionFactory = std::make_shared<FakeSessionFactory>();
     return createHost(m_sessionFactory, client_version, listenIp, listenPort);
 }
 /// create Host with real Session object
-static FakeHost* createFakeHostWithSession(
-    std::string const& client_version, std::string const& listenIp,
-	uint16_t const& listenPort, bool forRpc = false)
+static FakeHost* createFakeHostWithSession(std::string const& client_version,
+    std::string const& listenIp, uint16_t const& listenPort, bool forRpc = false)
 {
     /// create m_sessionFactory
     std::shared_ptr<SessionFactory> m_sessionFactory =
