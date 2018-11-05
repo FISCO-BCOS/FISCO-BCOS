@@ -58,6 +58,6 @@ int main(int argc, const char* argv[])
         new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
     jsonrpcHttpServer->addConnector(_safeHttpServer.get());
     jsonrpcHttpServer->StartListening();
-    cout << "JsonrpcHttpServer started." << std::endl;
+    LOG(INFO) << "JsonrpcHttpServer started.";
     sleep(10000);
 }

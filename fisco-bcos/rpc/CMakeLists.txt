@@ -35,7 +35,7 @@ target_link_libraries(mini-rpc Boost::UnitTestFramework)
 target_link_libraries(mini-rpc rpc)
 target_link_libraries(mini-rpc ledger)
 target_link_libraries(mini-rpc p2p)
-target_link_libraries(mini-rpc JsonRpcCpp::Server)
+target_link_libraries(mini-rpc JsonRpcCpp::Server ${MHD_LIBRARY})
 
 if (UNIX)
 target_link_libraries(mini-rpc pthread)
