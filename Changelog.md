@@ -6,7 +6,7 @@
 
 1. systemcontract的ConfigAction用tool.js设置时，默认10进制
 2. 搭链时生成的节点，默认eventlog关闭
-3. RPC接看eth_getTransactionReceipt的返回字段，带上16进制前缀"0x"
+3. RPC接口eth_getTransactionReceipt的返回字段，带上16进制前缀"0x"
 
 * Add
 
@@ -15,7 +15,7 @@
 * Fix
 
 1. 修复readthedocs文档问题
-2. 修复Session::write可能造成coredomp的问题
+2. 修复Session::write可能造成coredump的问题
 3. 修复PBFT转发包时，时间戳较大无法转发的问题
 4. 修复Ok.sol合约中的溢出问题
 
