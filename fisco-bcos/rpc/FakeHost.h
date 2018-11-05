@@ -22,6 +22,7 @@
  */
 #pragma once
 
+#include "Common.h"
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/SecureInitiailizer.h>
@@ -29,15 +30,13 @@
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Session.h>
 #include <libp2p/SessionFace.h>
-#include <test/tools/libutils/Common.h>
-#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::p2p;
 namespace dev
 {
-namespace test
+namespace demo
 {
 class FakeSessionForHost : public SessionFace,
                            public std::enable_shared_from_this<FakeSessionForHost>
@@ -359,13 +358,7 @@ public:
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code())
     {
-        /// execute handlers
-        // m_strand.dispatch(std::bind(handler, ec));
         handler(ec);
-        if (ec)
-            BOOST_CHECK(socket->isConnected() == false);
-        else
-            BOOST_CHECK(socket->isConnected() == true);
     }
 
     /// default implementation of async_handshake
@@ -381,10 +374,6 @@ public:
         Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
     {
         handler(ec);
-        if (ec)
-            BOOST_CHECK(socket->isConnected() == false);
-        else
-            BOOST_CHECK(socket->isConnected() == true);
     }
 
     virtual void set_verify_callback(
@@ -429,16 +418,6 @@ public:
             ec = boost::asio::error::eof;
             handler(ec, transferred_bytes);
         }
-        //        if (count == 1)
-        //        {
-        //            count++;
-        //            std::string s(32, 'a');
-        //            bytes data;
-        //            data.assign(s.begin(), s.end());
-        //            buffers = boost::asio::mutable_buffers_1(ref(data).data(), data.size());
-        //            transferred_bytes = data.size();
-        //            handler(ec, transferred_bytes);
-        //        }
         else
         {
             count++;
@@ -462,11 +441,11 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
-    setDataDir(dev::test::getTestPath().string() + "/fisco-bcos-data");
+    //    setDataDir(dev::demo::getTestPath().string() + "/fisco-bcos-data");
     boost::property_tree::ptree pt;
     auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
-    secureInitiailizer->setDataPath(dev::test::getTestPath().string() + "/fisco-bcos-data/");
-    secureInitiailizer->initConfig(pt);
+    //    secureInitiailizer->setDataPath(dev::demo::getTestPath().string() + "/fisco-bcos-data/");
+    //    secureInitiailizer->initConfig(pt);
     auto sslContext = secureInitiailizer->SSLContext();
     /// create m_socketFactory
     std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<FakeSocketFactory>();
@@ -492,5 +471,5 @@ static FakeHost* createFakeHostWithSession(
         std::make_shared<FakeSessionForTestFactory>();
     return createHost(m_sessionFactory, client_version, listenIp, listenPort);
 }
-}  // namespace test
+}  // namespace demo
 }  // namespace dev

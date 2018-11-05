@@ -22,6 +22,8 @@
  */
 #pragma once
 
+#include "Common.h"
+#include "FakePBFTEngine.h"
 #include <jsonrpccpp/common/exception.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
@@ -35,8 +37,6 @@
 #include <libledger/LedgerManager.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <test/tools/libutils/Common.h>
-#include <test/unittests/libconsensus/FakePBFTEngine.h>
 
 using namespace dev;
 using namespace dev::blockchain;
@@ -47,7 +47,7 @@ using namespace dev::ledger;
 
 namespace dev
 {
-namespace test
+namespace demo
 {
 class MockService : public Service
 {
@@ -110,9 +110,9 @@ class MockBlockChain : public BlockChainInterface
 public:
     MockBlockChain()
     {
-        m_blockNumber = 0;
+        m_blockNumber = 1;
         blockHash = h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
-        blockHeader.setNumber(m_blockNumber);
+        blockHeader.setNumber(1);
         blockHeader.setParentHash(h256(0x1));
         blockHeader.setLogBloom(h2048(0x2));
         blockHeader.setRoots(h256(0x3), h256(0x4), h256(0x5));
@@ -137,7 +137,7 @@ public:
 
     virtual ~MockBlockChain() {}
 
-    virtual int64_t number() override { return m_blockNumber; }
+    virtual int64_t number() override { return m_blockNumber - 1; }
 
     void createTransaction()
     {
@@ -164,7 +164,11 @@ public:
 
     virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
     {
-        return LocalisedTransaction(transaction, blockHash, 0, 0);
+        if (_txHash ==
+            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+            return LocalisedTransaction(transaction, blockHash, 0, 1);
+        else
+            return LocalisedTransaction(Transaction(), h256(0), -1);
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
@@ -172,18 +176,26 @@ public:
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(
         dev::h256 const& _txHash) override
     {
-        LogEntries entries;
-        LogEntry entry;
-        entry.address = Address(0x2000);
-        entry.data = bytes();
-        entry.topics = h256s();
-        entries.push_back(entry);
-        return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
+        if (_txHash ==
+            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+        {
+            LogEntries entries;
+            LogEntry entry;
+            entry.address = Address(0x2000);
+            entry.data = bytes();
+            entry.topics = h256s();
+            entries.push_back(entry);
+            return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
+        }
+        else
+        {
+            return TransactionReceipt();
+        }
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
     {
-        return getBlockByHash(numberHash(_i));
+        return m_blockChain[_i];
     }
 
     void commitBlock(
@@ -313,12 +325,11 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
-class FakeLedger : public Ledger
+class FakeLedger : public LedgerInterface
 {
 public:
     FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
-      : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {
         /// init blockChain
         initBlockChain();
@@ -327,14 +338,23 @@ public:
         /// init txPool
         initTxPool();
         /// init sync
-        initSync();
+        initBlockSync();
     }
-    void initLedger() override{};
-    /// init blockverifier related
-    void initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
-    void initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    void initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
-    void initSync() override { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual void initLedger() override{};
+    virtual void initConfig(std::string const& configPath) override{};
+    virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
+    {
+        return m_txPool;
+    }
+    virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier()
+        const override
+    {
+        return m_blockVerifier;
+    }
+    virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
+    {
+        return m_blockChain;
+    }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
@@ -342,7 +362,32 @@ public:
             fake_pbft.consensus();
         return consensusInterface;
     }
+    virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
+    void initBlockChain() { m_blockChain = std::make_shared<MockBlockChain>(); }
+    void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
+    void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
+    virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
+    virtual void startAll() override {}
+    virtual void stopAll() override {}
+
+private:
+    std::shared_ptr<LedgerParamInterface> m_param = nullptr;
+
+    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
+    dev::GROUP_ID m_groupId;
+    dev::KeyPair m_keyPair;
+    std::string m_configFileName = "config";
+    std::string m_postfix = ".ini";
+    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
+    std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
+    std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
+
+    std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
 };
 
-}  // namespace test
+}  // namespace demo
 }  // namespace dev
