@@ -99,6 +99,18 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
                             << std::endl;
         BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
     }
+    if (block.blockHeader().number() > 1)
+    {
+        if (m_blockChain->numberHash(block.blockHeader().number() - 1) !=
+            block.blockHeader().parentHash())
+        {
+            ENGINE_LOG(WARNING) << "[#checkBlockValid] Invalid block for unconsistent parentHash: "
+                                   "[block.parentHash/parentHash]:  "
+                                << toHex(block.blockHeader().parentHash()) << "/"
+                                << toHex(m_blockChain->numberHash(block.blockHeader().number() - 1))
+                                << std::endl;
+        }
+    }
 }
 
 }  // namespace consensus

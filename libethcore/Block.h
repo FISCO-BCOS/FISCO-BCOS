@@ -159,8 +159,7 @@ public:
     const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
 
 private:
-    /// encode function
-    inline void encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
+    void encodeBlock(bytes& _out, bytesConstRef block_header,
         std::vector<std::pair<u256, Signature>> const& sig_list) const;
     /// callback this function when transaction has changed
     void noteChange()

@@ -76,7 +76,7 @@ void Block::encode(bytes& _out, std::vector<std::pair<u256, Signature>> const& s
     /// get bytes of BlockHeader
     bytes header_bytes;
     m_blockHeader.encode(header_bytes);
-    encode(_out, ref(header_bytes), m_blockHeader.hash(), sig_list);
+    encodeBlock(_out, ref(header_bytes), sig_list);
 }
 
 /**
@@ -91,9 +91,9 @@ void Block::encode(bytes& _out, bytesConstRef _header,
 {
     /// check validition of block header before encode
     /// _header data validition has already been checked in "populate of BlockHeader"
-    BlockHeader tmpBlockHeader = BlockHeader(_header, HeaderData);
-    tmpBlockHeader.verify(CheckEverything);
-    encode(_out, _header, tmpBlockHeader.hash(), sig_list);
+    m_blockHeader = BlockHeader(_header, HeaderData);
+    m_blockHeader.verify(CheckEverything);
+    encodeBlock(_out, _header, sig_list);
 }
 
 /**
@@ -104,7 +104,7 @@ void Block::encode(bytes& _out, bytesConstRef _header,
  * @param hash : hash of the block hash
  * @param sig_list : signature list
  */
-void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
+void Block::encodeBlock(bytes& _out, bytesConstRef block_header,
     std::vector<std::pair<u256, Signature>> const& sig_list) const
 {
     /// refresh transaction list cache
@@ -120,7 +120,7 @@ void Block::encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
     // append transactionReceipts list
     block_stream.appendRaw(txReceiptsCache);
     // append block hash
-    block_stream.append(hash);
+    block_stream.append(m_blockHeader.hash());
     // append sig_list
     block_stream.appendVector(sig_list);
     block_stream.swapOut(_out);

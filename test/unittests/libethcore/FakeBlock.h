@@ -53,17 +53,7 @@ public:
         m_blockData.clear();
         m_blockHeader.encode(m_blockHeaderData);
         m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
         /// re-Encode blockHeaderData
-        m_blockHeader = m_block.header();
-    }
-
-    void reEncodeDecode()
-    {
-        m_blockHeader = m_block.header();
-        m_block.header().encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
         m_blockHeader = m_block.header();
     }
 
@@ -148,12 +138,11 @@ public:
         /// set sig list
         Signature sig;
         h256 block_hash;
-        Secret sec = KeyPair::create().secret();
         m_sigList.clear();
         for (size_t i = 0; i < size; i++)
         {
             block_hash = sha3(toString("block " + i));
-            sig = sign(sec, block_hash);
+            sig = sign(m_sec, block_hash);
             m_sigList.push_back(std::make_pair(u256(block_hash), sig));
         }
     }
@@ -181,7 +170,7 @@ public:
         u256 value = u256(100);
         u256 gas = u256(100000000);
         u256 gasPrice = u256(0);
-        Address dst = toAddress(KeyPair::create().pub());
+        Address dst;
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
         m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);
