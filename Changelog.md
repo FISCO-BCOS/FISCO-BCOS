@@ -17,6 +17,7 @@
 1. 修复readthedocs文档问题
 2. 修复Session::write可能造成coredomp的问题
 3. 修复PBFT转发包时，时间戳较大无法转发的问题
+4. 修复Ok.sol合约中的溢出问题
 
 * Delete
 
