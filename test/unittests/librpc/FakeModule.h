@@ -186,7 +186,7 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
-    void commitBlock(
+    int commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
         m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();

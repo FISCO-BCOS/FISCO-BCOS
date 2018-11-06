@@ -71,6 +71,7 @@ private:
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     dev::storage::Storage::Ptr m_stateStorage;
+    std::mutex commitMutex;
 };
 }  // namespace blockchain
 }  // namespace dev
