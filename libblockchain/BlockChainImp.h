@@ -54,7 +54,7 @@ public:
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
-    int commitBlock(dev::eth::Block& block,
+    CommitResult commitBlock(dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
