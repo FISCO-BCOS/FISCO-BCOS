@@ -153,13 +153,14 @@ Json::Value Rpc::syncStatus(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
-//        std::string status = sync->syncStatus();  //TODO
-//        Json::Reader reader;
-//        Json::Value statusJson;
-//        if (!reader.parse(status, statusJson))
-//            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::JsonParse, RPCMsg[RPCExceptionType::JsonParse]));
+        //        std::string status = sync->syncStatus();  //TODO
+        //        Json::Reader reader;
+        //        Json::Value statusJson;
+        //        if (!reader.parse(status, statusJson))
+        //            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::JsonParse,
+        //            RPCMsg[RPCExceptionType::JsonParse]));
 
-//        return statusJson;
+        //        return statusJson;
         return Json::Value(Json::nullValue);
     }
     catch (JsonRpcException& e)
