@@ -103,7 +103,7 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
-    CommitResult commitBlock(
+    dev::blockverifier::CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
         if (block.blockHeader().number() == number() + 1)
