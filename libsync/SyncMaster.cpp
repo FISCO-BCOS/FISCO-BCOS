@@ -305,7 +305,7 @@ void SyncMaster::maintainPeersStatus()
 
             ++shard;  // shard move
 
-            return shard < shardNumber;
+            return shard < shardNumber && shard < c_maxRequestShards;
         });
 
         if (!thisTurnFound)
