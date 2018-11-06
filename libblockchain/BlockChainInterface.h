@@ -29,6 +29,10 @@ namespace dev
 {
 namespace blockverifier
 {
+class ExecutiveContext;
+}  // namespace blockverifier
+namespace blockchain
+{
 enum class CommitResult
 {
     OK = 0,             // 0
@@ -36,10 +40,6 @@ enum class CommitResult
     ERROR_PARENT_HASH = -2,
     ERROR_COMMITTING = -3
 };
-class ExecutiveContext;
-}  // namespace blockverifier
-namespace blockchain
-{
 class BlockChainInterface
 {
 public:

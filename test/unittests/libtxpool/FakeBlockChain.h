@@ -155,7 +155,7 @@ public:
         return TransactionReceipt();
     }
 
-    virtual dev::blockverifier::CommitResult commitBlock(
+    virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
     {
         block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
