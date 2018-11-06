@@ -307,12 +307,12 @@ struct PrepareReq : public PBFTMsg
         height = req.height;
         view = req.view;
         idx = req.idx;
+        p_execContext = sealing.p_execContext;
         timestamp = u256(utcTime());
         block_hash = sealing.block.blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         sealing.block.encode(block);
-        p_execContext = sealing.p_execContext;
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp;
     }

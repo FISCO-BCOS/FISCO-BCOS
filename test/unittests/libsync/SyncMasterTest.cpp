@@ -68,10 +68,10 @@ public:
         std::shared_ptr<BlockVerifierInterface> verifier;
     };
 
-    FakeSyncToolsSet fakeSyncToolsSet(
-        uint64_t _blockNum, size_t const& _transSize, NodeID const& _nodeId)
+    FakeSyncToolsSet fakeSyncToolsSet(uint64_t _blockNum, size_t const& _transSize,
+        NodeID const& _nodeId, Secret const& sec = KeyPair::create().secret())
     {
-        TxPoolFixture txpool_creator(_blockNum, _transSize);
+        TxPoolFixture txpool_creator(_blockNum, _transSize, sec);
         m_genesisHash = txpool_creator.m_blockChain->getBlockByNumber(0)->headerHash();
 
         std::shared_ptr<BlockVerifierInterface> blockVerifier =
@@ -232,12 +232,13 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
 {
     int64_t currentBlockNumber = 0;
     int64_t latestNumber = 6;
-    FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100));
+    Secret sec = dev::KeyPair::create().secret();
+    FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100), sec);
     std::shared_ptr<SyncMaster> sync = syncTools.sync;
     std::shared_ptr<SyncMasterStatus> status = sync->syncStatus();
     std::shared_ptr<BlockChainInterface> blockChain = syncTools.blockChain;
 
-    FakeBlockChain latestBlockChain(latestNumber + 1, 5);
+    FakeBlockChain latestBlockChain(latestNumber + 1, 5, sec);
     status->knownHighestNumber = latestNumber;
     status->knownLatestHash = latestBlockChain.getBlockByNumber(latestNumber)->headerHash();
 

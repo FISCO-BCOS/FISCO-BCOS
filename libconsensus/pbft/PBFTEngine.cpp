@@ -604,6 +604,7 @@ void PBFTEngine::checkAndSave()
             /// callback block chain to commit block
             m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
             dropHandledTransactions(block);
             resetConfig();

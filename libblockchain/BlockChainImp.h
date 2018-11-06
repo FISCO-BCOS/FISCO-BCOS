@@ -42,6 +42,9 @@ class MemoryTableFactory;
 
 namespace blockchain
 {
+static const h256 c_genesisBlockHash =
+    h256("eb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c");
+
 class BlockChainImp : public BlockChainInterface
 {
 public:

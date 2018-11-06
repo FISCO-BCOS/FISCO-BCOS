@@ -41,29 +41,28 @@ namespace dev
 {
 namespace ledger
 {
-void Ledger::initLedger()
+bool Ledger::initLedger()
 {
-    assert(m_param);
+    if (!m_param)
+        return false;
     /// init dbInitializer
     Ledger_LOG(INFO) << "[#initLedger] [DBInitializer]" << std::endl;
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+    if (!m_dbInitializer)
+        return false;
+    m_dbInitializer->initStorageDB();
     /// init the DB
-    m_dbInitializer->initDBModules();
+    bool ret = initBlockChain();
+    if (!ret)
+        return false;
+    dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
+    m_dbInitializer->initStateDB(genesisHash);
     /// init blockChain
-    Ledger_LOG(INFO) << "[#initLedger] [initBlockChain]" << std::endl;
-    initBlockChain();
-    /// intit blockVerifier
-    Ledger_LOG(INFO) << "[#initLedger] [initBlockVerifier]" << std::endl;
-    initBlockVerifier();
+    /// init blockVerifier
     /// init txPool
-    Ledger_LOG(INFO) << "[#initLedger] [initTxPool]" << std::endl;
-    initTxPool();
     /// init sync
-    Ledger_LOG(INFO) << "[#initLedger] [initSync]" << std::endl;
-    initSync();
-    /// init consensus
-    Ledger_LOG(INFO) << "[#initLedger] [consensusInitFactory]" << std::endl;
-    consensusInitFactory();
+    /// /// init consensus
+    return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory());
 }
 
 /**
@@ -89,7 +88,7 @@ void Ledger::initConfig(std::string const& configPath)
         initSyncConfig(pt);
         /// db params initialization
         initDBConfig(pt);
-        initGenesisConfig(pt);
+        /// initGenesisConfig(pt);
     }
     catch (std::exception& e)
     {
@@ -175,45 +174,65 @@ void Ledger::initDBConfig(ptree const& pt)
 
 /// init genesis configuration
 /// 1. hash: hash of the genesis
-void Ledger::initGenesisConfig(ptree const& pt)
+/*void Ledger::initGenesisConfig(ptree const& pt)
 {
     m_param->mutableGenesisParam().genesisHash = pt.get<dev::h256>("genesis.hash", h256());
     m_param->mutableGenesisParam().accountStartNonce = pt.get<u256>("genesis.nonce", u256(0x0));
     Ledger_LOG(DEBUG) << "[#initGenesisConfig] [genHash/accountStartNonce]:  "
                       << m_param->mutableGenesisParam().genesisHash << "/"
                       << m_param->mutableGenesisParam().accountStartNonce << std::endl;
-}
+}*/
 
 /// init txpool
-void Ledger::initTxPool()
+bool Ledger::initTxPool()
 {
-    assert(m_blockChain);
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
-    Ledger_LOG(DEBUG) << "[#initTxPool] [Protocol ID]:  " << protocol_id;
-    ;
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initTxPool] [Protocol ID]:  " << protocol_id << std::endl;
+    if (!m_blockChain)
+    {
+        Ledger_LOG(ERROR) << "[#initLedger] [#initTxPool Failed]" << std::endl;
+        return false;
+    }
     m_txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initTxPool SUCC] [Protocol ID]:  " << protocol_id
+                      << std::endl;
+    return true;
 }
 
 /// init blockVerifier
-void Ledger::initBlockVerifier()
+bool Ledger::initBlockVerifier()
 {
-    Ledger_LOG(DEBUG) << "[#initBlockVerifier]";
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockVerifier]" << std::endl;
+    if (!m_blockChain || !m_dbInitializer->executiveContextFactory())
+    {
+        Ledger_LOG(ERROR) << "[#initLedger] [#initBlockVerifier Failed]" << std::endl;
+        return false;
+    }
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>();
-    m_blockVerifier = blockVerifier;
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
     blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
+    m_blockVerifier = blockVerifier;
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockVerifier SUCC]" << std::endl;
+    return true;
 }
 
-void Ledger::initBlockChain()
+bool Ledger::initBlockChain()
 {
-    Ledger_LOG(DEBUG) << "[#initBlockChain]";
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain]" << std::endl;
+    if (!m_dbInitializer->storage())
+    {
+        Ledger_LOG(ERROR) << "[#initLedger] [#initBlockChain Failed]" << std::endl;
+        return false;
+    }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
-    m_blockChain = std::shared_ptr<BlockChainInterface>(blockChain.get());
     blockChain->setStateStorage(m_dbInitializer->storage());
+    m_blockChain = blockChain;
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain SUCC]";
+    return true;
 }
 
 /**
@@ -223,11 +242,17 @@ void Ledger::initBlockChain()
  */
 std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 {
-    assert(m_txPool && m_blockChain && m_sync && m_blockVerifier && m_dbInitializer);
+    Ledger_LOG(DEBUG) << "[#initLedger] [#createPBFTSealer]" << std::endl;
+    if (!m_txPool || !m_blockChain || !m_sync || !m_blockVerifier || !m_dbInitializer)
+    {
+        Ledger_LOG(DEBUG) << "[#initLedger] [#createPBFTSealer Failed]" << std::endl;
+        return nullptr;
+    }
+
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
-    Ledger_LOG(DEBUG) << "[#createPBFTSealer] [baseDir/Protocol ID]:  " << m_param->baseDir() << "/"
-                      << protocol_id << std::endl;
+    Ledger_LOG(DEBUG) << "[#initLedger] [#createPBFTSealer] [baseDir/Protocol ID]:  "
+                      << m_param->baseDir() << "/" << protocol_id << std::endl;
     std::shared_ptr<Sealer> pbftSealer =
         std::make_shared<PBFTSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             protocol_id, m_param->baseDir(), m_keyPair, m_param->mutableConsensusParam().minerList);
@@ -241,34 +266,41 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 }
 
 /// init consensus
-void Ledger::consensusInitFactory()
+bool Ledger::consensusInitFactory()
 {
-    Ledger_LOG(DEBUG) << "[#consensusInitFactory] [type]:  "
+    Ledger_LOG(DEBUG) << "[#initLedger] [#consensusInitFactory] [type]:  "
                       << m_param->mutableConsensusParam().consensusType;
     /// default create pbft consensus
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
-    {
-        m_sealer = createPBFTSealer();
-    }
-    else
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
     {
         std::string error_msg =
             "Unsupported Consensus type: " + m_param->mutableConsensusParam().consensusType;
-        Ledger_LOG(ERROR) << "[#UnsupportConsensusType]" << std::endl;
-        LOG(ERROR) << error_msg;
-        BOOST_THROW_EXCEPTION(dev::InvalidConsensusType() << errinfo_comment(error_msg));
+        Ledger_LOG(ERROR) << "[#initLedger] [#UnsupportConsensusType]:  "
+                          << m_param->mutableConsensusParam().consensusType
+                          << " use PBFT as default" << std::endl;
     }
+    /// create PBFTSealer default
+    m_sealer = createPBFTSealer();
+    if (!m_sealer)
+        return false;
+    return true;
 }
 
 /// init sync
-void Ledger::initSync()
+bool Ledger::initSync()
 {
-    assert(m_txPool && m_blockChain && m_blockVerifier);
-    Ledger_LOG(DEBUG) << "[#initSync]" << std::endl;
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initSync]" << std::endl;
+    if (!m_txPool || !m_blockChain || !m_blockVerifier)
+    {
+        Ledger_LOG(DEBUG) << "[#initLedger] [#initSync Failed]" << std::endl;
+        return false;
+    }
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
+    dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
-        protocol_id, m_keyPair.pub(), m_param->mutableGenesisParam().genesisHash,
-        m_param->mutableSyncParam().idleWaitMs);
+        protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+    Ledger_LOG(DEBUG) << "[#initLedger] [#initSync SUCC]" << std::endl;
+    return true;
 }
 }  // namespace ledger
 }  // namespace dev

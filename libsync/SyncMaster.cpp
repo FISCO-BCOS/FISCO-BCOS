@@ -64,7 +64,8 @@ void SyncMaster::stop()
 void SyncMaster::doWork()
 {
     // Debug print
-    printSyncInfo();
+    if (isSyncing())
+        printSyncInfo();
 
     // Always do
     maintainPeersConnection();
@@ -304,7 +305,7 @@ void SyncMaster::maintainPeersStatus()
 
             ++shard;  // shard move
 
-            return shard < shardNumber;
+            return shard < shardNumber && shard < c_maxRequestShards;
         });
 
         if (!thisTurnFound)
@@ -333,7 +334,11 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         if (isNewBlock(topBlock))
         {
-            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock);
+            dev::h256 parentRoot =
+                m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1)
+                    ->blockHeader()
+                    .stateRoot();
+            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock, parentRoot);
             m_blockChain->commitBlock(*topBlock, exeCtx);
             m_txPool->dropBlockTrans(*topBlock);
             SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "

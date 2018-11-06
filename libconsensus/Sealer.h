@@ -134,13 +134,6 @@ protected:
     void resetSealingBlock(Sealing& sealing);
     void resetBlock(dev::eth::Block& block);
     void resetSealingHeader(dev::eth::BlockHeader& header);
-    /// functions for usage
-    void setSealingRoot(
-        dev::h256 const& transRoot, dev::h256 const& receiptRoot, dev::h256 const& stateRoot)
-    {
-        /// set transaction root, receipt root and state root
-        m_sealing.block.header().setRoots(transRoot, receiptRoot, stateRoot);
-    }
     /// reset timestamp of block header
     void resetCurrentTime()
     {

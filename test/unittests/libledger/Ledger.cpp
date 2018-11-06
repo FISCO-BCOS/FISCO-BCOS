@@ -23,7 +23,7 @@
  * @author: yujiechen
  * @date 2018-10-24
  */
-#include <libinitializer/Fake.h>
+#include <fisco-bcos/Fake.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <test/tools/libutils/Common.h>
@@ -47,7 +47,7 @@ public:
       : FakeLedger(service, _groupId, _keyPair, _baseDir, _configFile)
     {}
     /// init the ledger(called by initializer)
-    void initLedger() override
+    bool initLedger() override
     {
         std::cout << "##### callbaci initLedger for FakeLedgerForTest" << std::endl;
         /// init dbInitializer
@@ -60,6 +60,7 @@ public:
         FakeLedger::initTxPool();
         /// init sync
         FakeLedger::initSync();
+        return true;
     }
     std::string const& configFileName() { return m_configFileName; }
 };
@@ -87,10 +88,6 @@ void checkParam(std::shared_ptr<LedgerParam> param)
     /// check state DB param
     BOOST_CHECK(param->dbType() == "AMDB");
     BOOST_CHECK(param->enableMpt() == true);
-    /// check genesis param
-    BOOST_CHECK(toHex(param->mutableGenesisParam().genesisHash) ==
-                "633f252b048f5ac81a07f8696d9d806fae1baa2c8f665a6a07f07d7f683996ab");
-    BOOST_CHECK(param->mutableGenesisParam().accountStartNonce == u256(20));
 }
 /// test initConfig
 BOOST_AUTO_TEST_CASE(testInitConfig)

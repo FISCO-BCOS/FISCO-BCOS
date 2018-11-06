@@ -37,7 +37,7 @@ BOOST_FIXTURE_TEST_SUITE(BlockTest, TestOutputHelperFixture);
 void checkBlock(Block& m_block, FakeBlock const& fake_block, size_t trans_size, size_t sig_size)
 {
     BOOST_CHECK(m_block.blockHeader() == fake_block.m_blockHeader);
-    BOOST_CHECK(m_block.headerHash() == fake_block.m_blockHeader.hash());
+    BOOST_CHECK(m_block.headerHash() == fake_block.m_block.blockHeader().hash());
     BOOST_CHECK(m_block.transactions() == fake_block.m_transaction);
     BOOST_CHECK(m_block.transactions().size() == trans_size);
     BOOST_CHECK(m_block.sigList().size() == sig_size);
