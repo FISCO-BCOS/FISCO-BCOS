@@ -19,15 +19,16 @@
  * @date 2018-10-27
  */
 #include "FakeModule.h"
+#include <librpc/Rpc.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
-#include <librpc/Rpc.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libp2p/FakeHost.h>
+#include <jsonrpccpp/common/exception.h>
 #include <boost/test/unit_test.hpp>
 
-
+using namespace jsonrpc;
 using namespace dev;
 using namespace dev::rpc;
 using namespace dev::ledger;
@@ -72,14 +73,15 @@ BOOST_AUTO_TEST_CASE(testConsensusPart)
 {
     std::string blockNumber = rpc->blockNumber(0);
     BOOST_CHECK(blockNumber == "0x0");
+    BOOST_CHECK_THROW(rpc->blockNumber(1), JsonRpcException);
 
     std::string pbftView = rpc->pbftView(0);
     BOOST_CHECK(pbftView == "0x0");
+    BOOST_CHECK_THROW(rpc->pbftView(1), JsonRpcException);
 
     Json::Value status = rpc->consensusStatus(0);
     BOOST_CHECK(status.size() == 8);
-    status = rpc->consensusStatus(1);
-    BOOST_CHECK(status == Json::Value(Json::nullValue));
+    BOOST_CHECK_THROW(rpc->consensusStatus(1), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testSyncPart)
@@ -90,8 +92,7 @@ BOOST_AUTO_TEST_CASE(testSyncPart)
     BOOST_CHECK(status["majorSyncing"].asBool() == false);
     BOOST_CHECK(status["state"].asString() == "Idle");
 
-    status = rpc->consensusStatus(1);
-    BOOST_CHECK(status == Json::Value(Json::nullValue));
+    BOOST_CHECK_THROW(rpc->syncStatus(1), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testP2pPart)
@@ -106,6 +107,7 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
 
     response = rpc->groupPeers(0);
     BOOST_CHECK(response.size() == 2);
+    BOOST_CHECK_THROW(rpc->groupPeers(1), JsonRpcException);
 
     response = rpc->groupList();
     BOOST_CHECK(response.size() == 1);
@@ -144,6 +146,10 @@ BOOST_AUTO_TEST_CASE(testGetBlockByHash)
     response = rpc->getBlockByHash(0, blockHash, false);
     BOOST_CHECK(response["transactions"][0].asString() ==
                 "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
+
+    BOOST_CHECK_THROW(rpc->getBlockByHash(1, blockHash, false), JsonRpcException);
+    blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e0755480070";
+    BOOST_CHECK_THROW(rpc->getBlockByHash(0, blockHash, false), JsonRpcException);
 }
 BOOST_AUTO_TEST_CASE(getBlockByNumber)
 {
@@ -177,6 +183,8 @@ BOOST_AUTO_TEST_CASE(getBlockByNumber)
     response = rpc->getBlockByNumber(0, "0x0", false);
     BOOST_CHECK(response["transactions"][0].asString() ==
                 "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
+
+    BOOST_CHECK_THROW(rpc->getBlockByNumber(1, "0x0", false), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByHash)
@@ -195,6 +203,8 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByHash)
     BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
+
+    BOOST_CHECK_THROW(rpc->getTransactionByHash(1, txHash), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByBlockHashAndIndex)
@@ -216,6 +226,13 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockHashAndIndex)
     BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
+
+    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(1, blockHash, index), JsonRpcException);
+    blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e0755480070";
+    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(0, blockHash, index), JsonRpcException);
+    blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
+    index = "0x1";
+    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(0, blockHash, index), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByBlockNumberAndIndex)
@@ -237,6 +254,10 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockNumberAndIndex)
     BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
+
+    BOOST_CHECK_THROW(rpc->getTransactionByBlockNumberAndIndex(1, blockNumber, index), JsonRpcException);
+    index = "0x1";
+    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(0, blockNumber, index), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
@@ -260,6 +281,8 @@ BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
     BOOST_CHECK(response["logs"][0]["data"].asString() == "0x");
     BOOST_CHECK(response["logs"][0]["topics"].asString() == "0x[]");
     BOOST_CHECK(response["status"].asString() == "0x0");
+
+    BOOST_CHECK_THROW(rpc->getTransactionReceipt(1, txHash), JsonRpcException);
 }
 BOOST_AUTO_TEST_CASE(testPendingTransactions)
 {
@@ -274,6 +297,8 @@ BOOST_AUTO_TEST_CASE(testPendingTransactions)
     BOOST_CHECK(
         response["pending"][0]["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
     BOOST_CHECK(response["pending"][0]["value"].asString() == "0x0");
+
+    BOOST_CHECK_THROW(rpc->pendingTransactions(1), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testCall)
@@ -291,6 +316,8 @@ BOOST_AUTO_TEST_CASE(testCall)
     std::string response = rpc->call(0, request);
 
     BOOST_CHECK(response == "0x");
+
+    BOOST_CHECK_THROW(rpc->call(1, request), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testSendRawTransaction)
@@ -305,6 +332,8 @@ BOOST_AUTO_TEST_CASE(testSendRawTransaction)
     std::string response = rpc->sendRawTransaction(0, rlpStr);
 
     BOOST_CHECK(response == "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
+
+    BOOST_CHECK_THROW(rpc->sendRawTransaction(1, rlpStr), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
