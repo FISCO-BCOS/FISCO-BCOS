@@ -22,21 +22,21 @@
  */
 #pragma once
 
-#include <libp2p/Service.h>
+#include <jsonrpccpp/common/exception.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libconsensus/ConsensusInterface.h>
-#include <libtxpool/TxPoolInterface.h>
-#include <libsync/SyncStatus.h>
-#include <libsync/SyncInterface.h>
-#include <libethcore/Transaction.h>
-#include <libledger/LedgerManager.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
+#include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
-#include <jsonrpccpp/common/exception.h>
+#include <libledger/LedgerManager.h>
+#include <libp2p/Service.h>
+#include <libsync/SyncInterface.h>
+#include <libsync/SyncStatus.h>
+#include <libtxpool/TxPoolInterface.h>
 
 using namespace dev;
 using namespace dev::p2p;
@@ -335,7 +335,7 @@ public:
     virtual ~MockConsensus(){};
     virtual void start(){};
     virtual void stop(){};
-    virtual h512s minerList() const { return m_minerList;};
+    virtual h512s minerList() const { return m_minerList; };
     virtual void appendMiner(h512 const& _miner){};
     /// get status of consensus
     virtual const std::string consensusStatus() const
@@ -381,15 +381,16 @@ public:
     };
 
     /// protocol id used when register handler to p2p module
-    virtual PROTOCOL_ID const& protocolId() const {return 0;};
+    virtual PROTOCOL_ID const& protocolId() const { return 0; };
 
     /// get node account type
-    virtual NodeAccountType accountType(){return NodeAccountType::MinerAccount;};
+    virtual NodeAccountType accountType() { return NodeAccountType::MinerAccount; };
     /// set the node account type
     virtual void setNodeAccountType(NodeAccountType const&){};
-    virtual u256 nodeIdx() const {return u256(0);};
+    virtual u256 nodeIdx() const { return u256(0); };
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
+
 private:
     dev::h512s m_minerList;
 };
@@ -426,7 +427,8 @@ public:
     }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
-        std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface = make_shared<MockConsensus>();
+        std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface =
+            make_shared<MockConsensus>();
         return consensusInterface;
     }
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
@@ -451,7 +453,6 @@ private:
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
-
 };
 
 }  // namespace demo
