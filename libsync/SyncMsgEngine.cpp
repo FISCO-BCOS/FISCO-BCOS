@@ -205,8 +205,20 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     for (int64_t number = from; number < from + size; ++number)
     {
         shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
-        if (!block || block->header().number() != number)
+        if (!block)
+        {
+            SYNCLOG(TRACE)
+                << "[Rcv] [Send] [Download] Get block for node failed [reason/number/nodeId]: "
+                << "block is null/" << number << "/" << _packet.nodeId << endl;
             break;
+        }
+        else if (block->header().number() != number)
+        {
+            SYNCLOG(TRACE)
+                << "[Rcv] [Send] [Download] Get block for node failed [reason/number/nodeId]: "
+                << number << "number incorrect /" << _packet.nodeId << endl;
+            break;
+        }
 
         blockContainer.push(block);
     }

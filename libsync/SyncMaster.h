@@ -25,6 +25,7 @@
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -82,6 +83,7 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const override;
+    virtual string const syncInfo() const override;
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // virtual h256 latestBlockSent() override;
@@ -152,8 +154,7 @@ private:
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 
-    unsigned m_startingBlock = 0;  ///< Last block number for the start of sync
-    unsigned m_highestBlock = 0;   ///< Highest block number seen
+    unsigned m_highestBlock = 0;  ///< Highest block number seen
     uint64_t m_lastDownloadingRequestTime = 0;
     int64_t m_currentSealingNumber = 0;
 

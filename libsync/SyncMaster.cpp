@@ -38,7 +38,7 @@ void SyncMaster::printSyncInfo()
     SYNCLOG(TRACE) << "            Block number: " << m_blockChain->number() << endl;
     SYNCLOG(TRACE) << "            Block hash:   "
                    << m_blockChain->numberHash(m_blockChain->number()) << endl;
-    SYNCLOG(TRACE) << "            Genesis hash: " << m_blockChain->numberHash(0) << endl;
+    SYNCLOG(TRACE) << "            Genesis hash: " << m_syncStatus->genesisHash << endl;
     SYNCLOG(TRACE) << "            TxPool size:  " << m_txPool->pendingSize() << endl;
     SYNCLOG(TRACE) << "            Peers size:   " << m_syncStatus->peers().size() << endl;
     SYNCLOG(TRACE) << "[Peer Info] --------------------------------------------" << endl;
@@ -48,6 +48,65 @@ void SyncMaster::printSyncInfo()
     for (auto& peer : peers)
         SYNCLOG(TRACE) << "    Peer: " << peer << endl;
     SYNCLOG(TRACE) << "            --------------------------------------------" << endl;
+
+    /*
+        // recent block
+        for (int64_t i = 0; i < 10 && i < m_blockChain->number(); i++)
+        {
+            SYNCLOG(TRACE) << "parent[" << i
+                           << "]:" << m_blockChain->getBlockByNumber(i)->header().parentHash() <<
+       endl; SYNCLOG(TRACE) << "Block[" << i << "]: " <<
+       m_blockChain->getBlockByNumber(i)->headerHash()
+                           << endl;
+        }
+
+        SYNCLOG(TRACE) << syncInfo() << endl;
+        */
+}
+
+SyncStatus SyncMaster::status() const
+{
+    ReadGuard l(x_sync);
+    SyncStatus res;
+    res.state = m_syncStatus->state;
+    res.protocolId = m_protocolId;
+    res.currentBlockNumber = m_blockChain->number();
+    res.knownHighestNumber = m_syncStatus->knownHighestNumber;
+    res.knownLatestHash = m_syncStatus->knownLatestHash;
+    return res;
+}
+
+string const SyncMaster::syncInfo() const
+{
+    json_spirit::Object syncInfo;
+    syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));
+    syncInfo.push_back(json_spirit::Pair("protocolId", m_protocolId));
+    syncInfo.push_back(json_spirit::Pair("genesisHash", toHex(m_syncStatus->genesisHash)));
+
+    int64_t currentNumber = m_blockChain->number();
+    syncInfo.push_back(json_spirit::Pair("currentBlockNumber", currentNumber));
+    syncInfo.push_back(
+        json_spirit::Pair("currentBlockHash", toHex(m_blockChain->numberHash(currentNumber))));
+    syncInfo.push_back(json_spirit::Pair("knownHighestNumber", m_syncStatus->knownHighestNumber));
+    syncInfo.push_back(json_spirit::Pair("knownLatestHash", toHex(m_syncStatus->knownLatestHash)));
+    syncInfo.push_back(json_spirit::Pair("txPoolSize", m_txPool->pendingSize()));
+
+    json_spirit::Array peersInfo;
+    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        json_spirit::Object info;
+        info.push_back(json_spirit::Pair("nodeId", toHex(_p->nodeId)));
+        info.push_back(json_spirit::Pair("genesisHash", toHex(_p->genesisHash)));
+        info.push_back(json_spirit::Pair("blockNumber", _p->number));
+        info.push_back(json_spirit::Pair("latestHash", toHex(_p->latestHash)));
+        peersInfo.push_back(info);
+        return true;
+    });
+
+    syncInfo.push_back(json_spirit::Pair("peers", peersInfo));
+
+    json_spirit::Value value(syncInfo);
+    std::string statusStr = json_spirit::write_string(value, true);
+    return statusStr;
 }
 
 void SyncMaster::start()
@@ -64,8 +123,7 @@ void SyncMaster::stop()
 void SyncMaster::doWork()
 {
     // Debug print
-    if (isSyncing())
-        printSyncInfo();
+    printSyncInfo();
 
     // Always do
     maintainPeersConnection();
@@ -113,17 +171,6 @@ void SyncMaster::workLoop()
     }
 }
 
-SyncStatus SyncMaster::status() const
-{
-    ReadGuard l(x_sync);
-    SyncStatus res;
-    res.state = m_syncStatus->state;
-    res.protocolId = m_protocolId;
-    res.startBlockNumber = m_startingBlock;
-    res.currentBlockNumber = m_blockChain->number();
-    res.highestBlockNumber = m_highestBlock;
-    return res;
-}
 
 void SyncMaster::noteSealingBlockNumber(int64_t _number)
 {
@@ -343,11 +390,8 @@ bool SyncMaster::maintainDownloadingQueue()
             m_txPool->dropBlockTrans(*topBlock);
             SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
                            << topBlock->header().number() << "/" << topBlock->transactions().size()
-                           << "/" << topBlock->headerHash();
+                           << "/" << topBlock->headerHash() << endl;
         }
-        else
-            SYNCLOG(WARNING) << "[Rcv] [Download] Ignore illegal block [thisNumber/currentNumber]: "
-                             << topBlock->header().number() << "/" << m_blockChain->number();
 
         bq.pop();
         topBlock = bq.top();
@@ -420,9 +464,20 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
 
     int64_t currentNumber = m_blockChain->number();
     if (currentNumber + 1 != _block->header().number())
+    {
+        SYNCLOG(WARNING) << "[Rcv] [Download] Ignore illegal block [thisNumber/currentNumber]: "
+                         << _block->header().number() << "/" << currentNumber << endl;
         return false;
+    }
     if (m_blockChain->numberHash(currentNumber) != _block->header().parentHash())
+    {
+        SYNCLOG(WARNING) << "[Rcv] [Download] Ignore illegal block "
+                            "[thisNumber/currentNumber/thisParentHash/currentHash]: "
+                         << _block->header().number() << "/" << currentNumber << "/"
+                         << _block->header().parentHash() << "/"
+                         << m_blockChain->numberHash(currentNumber) << endl;
         return false;
+    }
 
     // TODO check block minerlist sig
     return true;
