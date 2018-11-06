@@ -25,7 +25,6 @@
 #include <libsync/SyncMaster.h>
 #include <libsync/SyncStatus.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 #include <functional>
 #include <set>

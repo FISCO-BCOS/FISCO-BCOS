@@ -34,8 +34,12 @@ namespace dev
 {
 namespace sync
 {
-struct DownloadBlocksShard
+class DownloadBlocksShard
 {
+public:
+    DownloadBlocksShard(int64_t _fromNumber, int64_t _size, bytes const& _blocksBytes)
+      : fromNumber(_fromNumber), size(_size), blocksBytes(_blocksBytes)
+    {}
     int64_t fromNumber;
     int64_t size;
     bytes blocksBytes;
@@ -74,7 +78,7 @@ public:
 
     /// PUsh a block packet
     void push(RLP const& _rlps);
-    void push(BlockPtr _block);
+    void push(BlockPtrVec _blocks);
 
     /// Is the queue empty?
     bool empty();
@@ -110,7 +114,7 @@ private:
     mutable SharedMutex x_buffer;
 
 private:
-    bool isNewerBlock(std::shared_ptr<dev::eth::Block> block);
+    bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);
 };
 
 }  // namespace sync

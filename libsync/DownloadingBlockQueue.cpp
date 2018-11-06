@@ -39,15 +39,25 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
                          << m_buffer->size();
         return;
     }
-    ShardPtr blocksShard =
-        make_shared<DownloadBlocksShard>(DownloadBlocksShard{0, 0, _rlps.data().toBytes()});
+    ShardPtr blocksShard = make_shared<DownloadBlocksShard>(0, 0, _rlps.data().toBytes());
     m_buffer->emplace_back(blocksShard);
 }
 
-void DownloadingBlockQueue::push(BlockPtr _block)
+void DownloadingBlockQueue::push(BlockPtrVec _blocks)
 {
-    bytes rlpBytes = _block->rlp();
-    RLP rlps = RLP(ref(rlpBytes));
+    RLPStream rlpStream;
+    rlpStream.appendList(_blocks.size());
+    for (BlockPtr block : _blocks)
+    {
+        rlpStream.append(block->rlp());
+        SYNCLOG(TRACE) << "[Rcv] [Download] DownloadingBlockQueueBuffer push  [number/hash]: "
+                       << block->header().number() << "/" << block->headerHash() << endl;
+    }
+
+    std::shared_ptr<bytes> b = std::make_shared<bytes>();
+    rlpStream.swapOut(*b);
+
+    RLP rlps = RLP(ref(*b));
     push(rlps);
 }
 
