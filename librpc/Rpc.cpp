@@ -179,7 +179,7 @@ std::string Rpc::version()
     try
     {
         auto host = service()->getHost();
-        if (host)
+        if (!host)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
 
