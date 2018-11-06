@@ -114,7 +114,8 @@ void Block::calTransactionRoot(bool update) const
             txsMapCache.insert(std::make_pair(s.out(), trans_data));
         }
         txs.swapOut(m_txsCache);
-        m_blockHeader.setTransactionsRoot(hash256(txsMapCache));
+        if (update == true)
+            m_blockHeader.setTransactionsRoot(hash256(txsMapCache));
     }
 }
 
@@ -137,7 +138,8 @@ void Block::calReceiptRoot(bool update) const
             mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
         }
         txReceipts.swapOut(m_tReceiptsCache);
-        m_blockHeader.setReceiptsRoot(hash256(mapCache));
+        if (update == true)
+            m_blockHeader.setReceiptsRoot(hash256(mapCache));
     }
 }
 

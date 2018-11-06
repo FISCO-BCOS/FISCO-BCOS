@@ -63,6 +63,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, h256 const& pare
         block.appendTransactionReceipt(resultReceipt.second);
         executiveContext->getState()->commit();
     }
+    block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
     return executiveContext;
 }

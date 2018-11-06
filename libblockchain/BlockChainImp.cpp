@@ -74,6 +74,12 @@ int64_t BlockChainImp::number()
 h256 BlockChainImp::numberHash(int64_t _i)
 {
     /// LOG(TRACE) << "BlockChainImp::numberHash _i=" << _i;
+    if (_i == 0)
+    {
+        std::shared_ptr<Block> block = std::make_shared<Block>();
+        block->setEmptyBlock();
+        return block->headerHash();
+    }
     string numberHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -83,12 +89,6 @@ h256 BlockChainImp::numberHash(int64_t _i)
         {
             auto entry = entries->get(0);
             numberHash = entry->getField(SYS_VALUE);
-        }
-        if (_i == 0)
-        {
-            std::shared_ptr<Block> block = std::make_shared<Block>();
-            block->setEmptyBlock();
-            return block->headerHash();
         }
     }
     /// LOG(TRACE) << "BlockChainImp::numberHash numberHash=" << numberHash;
@@ -126,6 +126,12 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
     /// LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
+    if (_i == 0)
+    {
+        std::shared_ptr<Block> block = std::make_shared<Block>();
+        block->setEmptyBlock();
+        return block;
+    }
     string numberHash = "";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
@@ -139,9 +145,6 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
             return getBlockByHash(h256(numberHash));
         }
     }
-    std::shared_ptr<Block> block = std::make_shared<Block>();
-    block->setEmptyBlock();
-    return block;
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
@@ -165,8 +168,6 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             }
         }
     }
-
-
     return Transaction();
 }
 
