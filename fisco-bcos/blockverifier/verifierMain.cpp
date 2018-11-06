@@ -32,6 +32,7 @@
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
+#include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
 INITIALIZE_EASYLOGGINGPP
@@ -56,9 +57,10 @@ int main(int argc, char* argv[])
     auto blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
     blockChain->setStateStorage(storage);
 
+    auto stateFactory = std::make_shared<dev::storagestate::StorageStateFactory>(dev::u256(0));
 
-    auto stateFactory = std::make_shared<dev::mptstate::MPTStateFactory>(
-        dev::u256(0), "test_state", dev::h256(0), dev::WithExisting::Trust);
+    // auto stateFactory = std::make_shared<dev::mptstate::MPTStateFactory>(
+    //    dev::u256(0), "test_state", dev::h256(0), dev::WithExisting::Trust);
 
     auto executiveContextFactory = std::make_shared<dev::blockverifier::ExecutiveContextFactory>();
     executiveContextFactory->setStateFactory(stateFactory);
@@ -72,7 +74,7 @@ int main(int argc, char* argv[])
 
     if (argc > 1 && std::string("insert") == argv[1])
     {
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < 2; ++i)
         {
             auto max = blockChain->number();
             auto parentBlock = blockChain->getBlockByNumber(max);
@@ -369,6 +371,21 @@ int main(int argc, char* argv[])
                 "5a6c7ccf9efa702f4e8888ff7e8a3310abcf8c511ca06fc1c64606152aec58be38aafd15de2b0bacea"
                 "5de6405f8d620c4c08ab6584aea01504e9a6d468b30a6886bee617364464f7d42f5bad3f29ff0e473e"
                 "7772792359");
+            dev::bytes rlpBytesCall = dev::fromHex(
+                "0xf90211a0034c5c8678ec8dd43f223ce9845677fdd8f346e936d7757ca3c889cbb3553f0085174876"
+                "e7ff8609184e729fff82020b94333dba703927161a9ca0830371ad01e2ff2bbb4680b90184a4286264"
+                "00000000000000000000000000000000000000000000000000000000000000c0000000000000000000"
+                "0000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+                "0000000000000000000000000140000000000000000000000000000000000000000000000000000000"
+                "000000001cc4e9906232b7344fc38c2e9c7274e0ce07d9c7a7c42ec69dda07a804d7d2de0b549f7740"
+                "a7b01f49da7964e1fec462f042d621e72f4aa969a1f2761121c309ed00000000000000000000000000"
+                "0000000000000000000000000000000000000236370000000000000000000000000000000000000000"
+                "0000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                "0236370000000000000000000000000000000000000000000000000000000000000000000000000000"
+                "0000000000000000000000000000000000000000000000023637000000000000000000000000000000"
+                "0000000000000000000000000000001ba0e5f5f9668bd1ebb4ee30b2606c0fbd9f7f4ba3b63ec5ca0f"
+                "8e6d27e759f04c22a03b826b0725d360c96ec60aba4e8a74d81c1a9fdc41e18c1e42b8efd7613052e"
+                "3");
             dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
             dev::KeyPair key_pair(dev::Secret::random());
             dev::Secret sec = key_pair.secret();
@@ -377,13 +394,19 @@ int main(int argc, char* argv[])
             tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
             dev::Signature sig = sign(sec, tx.sha3(dev::eth::WithoutSignature));
             tx.updateSignature(SignatureStruct(sig));
-            LOG(INFO) << "Tx" << tx.sha3();
+            LOG(INFO) << "Tx " << tx;
+
+            dev::eth::Transaction tx2(ref(rlpBytesCall), dev::eth::CheckTransaction::Everything);
             block.appendTransaction(tx);
+            block.appendTransaction(tx2);
+            LOG(INFO) << "Tx2 " << tx2;
             auto context = blockVerifier->executeBlock(block);
             blockChain->commitBlock(block, context);
             dev::eth::TransactionReceipt receipt =
                 blockChain->getTransactionReceiptByHash(tx.sha3());
             LOG(INFO) << "receipt " << receipt;
+            receipt = blockChain->getTransactionReceiptByHash(tx2.sha3());
+            LOG(INFO) << "receipt2 " << receipt;
         }
     }
     else if (argc > 1 && std::string("verify") == argv[1])

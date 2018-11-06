@@ -308,6 +308,12 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
     // TODO:txpool regist callback
 }
 
+void dev::ChannelRPCServer::onReceiveChannelMessage(
+    p2p::P2PException, std::shared_ptr<p2p::Session> s, p2p::Message::Ptr msg)
+{
+    onNodeRequest(s->id(), msg->buffer());
+}
+
 void dev::ChannelRPCServer::onClientTopicRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
@@ -324,7 +330,9 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 
         Json::Value root;
         ss >> root;
-
+        std::function<void(P2PException, std::shared_ptr<dev::p2p::Session>, p2p::Message::Ptr)>
+            fp = std::bind(&ChannelRPCServer::onReceiveChannelMessage, shared_from_this(),
+                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         std::shared_ptr<std::set<std::string> > topics = std::make_shared<std::set<std::string> >();
         Json::Value topicsValue = root;
         if (!topicsValue.empty())
@@ -336,6 +344,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(
                 LOG(DEBUG) << "topic:" << topic;
 
                 topics->insert(topic);
+                m_service->registerHandlerByTopic(topic, fp);
             }
         }
 
@@ -389,12 +398,12 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
             LOG(DEBUG) << "send to node:" << it->second.message->seq();
             it->second.failedNodeIDs.insert(it->second.toNodeID);
-            auto begin = it->second.message->data();
-            auto buffer = std::make_shared<bytes>(begin, begin + it->second.message->dataSize());
+            auto buffer = std::make_shared<bytes>();
+            it->second.message->encode(*buffer);
             auto msg = make_shared<p2p::Message>();
             msg->setBuffer(buffer);
-            msg->setProtocolID(dev::eth::ProtocolID::AMOP);
-            msg->setPacketType(AMOPPacketType::SendTopics);
+            msg->setProtocolID(dev::eth::ProtocolID::Topic);
+            msg->setPacketType(0u);
             msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
 
             m_service->sendMessageByTopic(topic, msg);
@@ -444,13 +453,12 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
                     message->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
                     message->setType(0x31);
-
-                    auto begin = message->data();
-                    auto buffer = std::make_shared<bytes>(begin, begin + message->dataSize());
+                    auto buffer = std::make_shared<bytes>();
+                    message->encode(*buffer);
                     auto msg = make_shared<p2p::Message>();
                     msg->setBuffer(buffer);
-                    msg->setProtocolID(dev::eth::ProtocolID::AMOP);
-                    msg->setPacketType(AMOPPacketType::SendTopics);
+                    msg->setProtocolID(dev::eth::ProtocolID::Topic);
+                    msg->setPacketType(0u);
                     msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
                     m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
                 }
@@ -458,12 +466,12 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             else
             {
                 LOG(DEBUG) << "from SDK channel2 response:" << message->seq();
-                auto begin = message->data();
-                auto buffer = std::make_shared<bytes>(begin, begin + message->dataSize());
+                auto buffer = std::make_shared<bytes>();
+                message->encode(*buffer);
                 auto msg = make_shared<p2p::Message>();
                 msg->setBuffer(buffer);
-                msg->setProtocolID(dev::eth::ProtocolID::AMOP);
-                msg->setPacketType(AMOPPacketType::SendTopics);
+                msg->setProtocolID(dev::eth::ProtocolID::Topic);
+                msg->setPacketType(0u);
                 msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
                 m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
 
@@ -565,12 +573,12 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
                 message->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
                 message->setType(0x31);
 
-                auto begin = message->data();
-                auto buffer = std::make_shared<bytes>(begin, begin + message->dataSize());
+                auto buffer = std::make_shared<bytes>();
+                message->encode(*buffer);
                 auto msg = make_shared<p2p::Message>();
                 msg->setBuffer(buffer);
-                msg->setProtocolID(dev::eth::ProtocolID::AMOP);
-                msg->setPacketType(AMOPPacketType::SendTopics);
+                msg->setProtocolID(dev::eth::ProtocolID::Topic);
+                msg->setPacketType(0u);
                 msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
                 m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
             }
@@ -590,13 +598,12 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
                 try
                 {
                     it->second.failedNodeIDs.insert(it->second.toNodeID);
-                    auto begin = it->second.message->data();
-                    auto buffer =
-                        std::make_shared<bytes>(begin, begin + it->second.message->dataSize());
+                    auto buffer = std::make_shared<bytes>();
+                    it->second.message->encode(*buffer);
                     auto msg = make_shared<p2p::Message>();
                     msg->setBuffer(buffer);
-                    msg->setProtocolID(dev::eth::ProtocolID::AMOP);
-                    msg->setPacketType(AMOPPacketType::SendTopics);
+                    msg->setProtocolID(dev::eth::ProtocolID::Topic);
+                    msg->setPacketType(0u);
                     msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
 
                     m_service->sendMessageByTopic(topic, msg);
@@ -650,26 +657,6 @@ void ChannelRPCServer::setListenPort(int listenPort)
 void ChannelRPCServer::CloseConnection(int _socket)
 {
     close(_socket);
-}
-
-dev::eth::Web3Observer::Ptr ChannelRPCServer::buildObserver()
-{
-    class Web3ObserverImpl : public dev::eth::Web3Observer
-    {
-    public:
-        Web3ObserverImpl(ChannelRPCServer::Ptr server) : _server(server){};
-        virtual ~Web3ObserverImpl() {}
-
-        virtual void onReceiveChannelMessage(const h512 nodeID, std::shared_ptr<bytes> buffer)
-        {
-            _server->onNodeRequest(nodeID, buffer);
-        }
-
-    private:
-        ChannelRPCServer::Ptr _server;
-    };
-
-    return std::make_shared<Web3ObserverImpl>(shared_from_this());
 }
 
 void ChannelRPCServer::setService(std::shared_ptr<dev::p2p::P2PInterface> _service)
