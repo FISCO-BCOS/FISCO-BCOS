@@ -22,27 +22,30 @@
  */
 #pragma once
 
-#include "Common.h"
-#include "FakePBFTEngine.h"
-#include <jsonrpccpp/common/exception.h>
+#include <libp2p/Service.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libconsensus/ConsensusInterface.h>
+#include <libtxpool/TxPoolInterface.h>
+#include <libsync/SyncStatus.h>
+#include <libsync/SyncInterface.h>
+#include <libethcore/Transaction.h>
+#include <libledger/LedgerManager.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
-#include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
-#include <libledger/LedgerManager.h>
-#include <libsync/SyncInterface.h>
-#include <libtxpool/TxPoolInterface.h>
+#include <jsonrpccpp/common/exception.h>
 
 using namespace dev;
+using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::sync;
+using namespace dev::txpool;
+using namespace dev::consensus;
 using namespace dev::ledger;
 
 namespace dev
@@ -325,6 +328,72 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
+class MockConsensus : public ConsensusInterface
+{
+public:
+    MockConsensus(){};
+    virtual ~MockConsensus(){};
+    virtual void start(){};
+    virtual void stop(){};
+    virtual h512s minerList() const { return m_minerList;};
+    virtual void appendMiner(h512 const& _miner){};
+    /// get status of consensus
+    virtual const std::string consensusStatus() const
+    {
+        std::string status =
+            "[\n    {\n        \"nodeNum\" : 0,\n        \"f\" : 0,\n        "
+            "\"consensusedBlockNumber\" : 0,\n        \"highestBlockHeader.blockNumber\" : 0,\n    "
+            "    \"highestBlockHeader.blockHash\" : "
+            "\"9a4d03c01903850ad99ee7994f51b50f729f6b7c29b04581b0fa7bb138c02a8e\",\n        "
+            "\"protocolId\" : 8,\n        \"accountType\" : 98376458,\n        \"minerList\" : "
+            "\"43686ea74ed41a4a37b7b5e28a27d0aee21a85477798bf4742754b50537477fc9fb5cc99d0e9c1f451be"
+            "a635cb4b9513fa964cc09a98153e59f25650170d3183#\",\n        \"allowFutureBlocks\" : "
+            "true,\n        \"connectedNodes\" : 0,\n        \"currentView\" : 0,\n        "
+            "\"toView\" : 0,\n        \"leaderFailed\" : false,\n        \"cfgErr\" : false,\n     "
+            "   \"omitEmptyBlock\" : true\n    },\n    {\n        \"prepareCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"prepareCache.height\" : -1,\n        \"prepareCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"prepareCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"rawPrepareCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"rawPrepareCache.height\" : -1,\n        \"rawPrepareCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"rawPrepareCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"committedPrepareCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"committedPrepareCache.height\" : -1,\n        \"committedPrepareCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"committedPrepareCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"futureCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"futureCache.height\" : -1,\n        \"futureCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"futureCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"signCache.cachedBlockSize\" : \"0\"\n    },\n    {\n        "
+            "\"commitCache.cachedBlockSize\" : \"0\"\n    },\n    {\n        "
+            "\"viewChangeCache.cachedBlockSize\" : \"0\"\n    }\n]";
+        return status;
+    };
+
+    /// protocol id used when register handler to p2p module
+    virtual PROTOCOL_ID const& protocolId() const {return 0;};
+
+    /// get node account type
+    virtual NodeAccountType accountType(){return NodeAccountType::MinerAccount;};
+    /// set the node account type
+    virtual void setNodeAccountType(NodeAccountType const&){};
+    virtual u256 nodeIdx() const {return u256(0);};
+    /// update the context of PBFT after commit a block into the block-chain
+    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
+private:
+    dev::h512s m_minerList;
+};
+
 class FakeLedger : public LedgerInterface
 {
 public:
@@ -357,9 +426,7 @@ public:
     }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
-        FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
-        std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface =
-            fake_pbft.consensus();
+        std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface = make_shared<MockConsensus>();
         return consensusInterface;
     }
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
@@ -383,10 +450,8 @@ private:
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
-    std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
 
-    std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
 };
 
 }  // namespace demo

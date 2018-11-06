@@ -18,7 +18,6 @@
  * @author: caryliao
  * @date 2018-11-2
  */
-#include "Common.h"
 #include "FakeHost.h"
 #include "FakeModule.h"
 #include <libdevcrypto/Common.h>

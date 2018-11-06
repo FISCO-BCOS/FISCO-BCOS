@@ -22,7 +22,6 @@
  */
 #pragma once
 
-#include "Common.h"
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/SecureInitiailizer.h>
