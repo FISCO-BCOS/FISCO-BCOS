@@ -91,7 +91,7 @@ void SyncMaster::doWork()
     // Not Idle do
     if (isSyncing())
     {
-        if (m_state == SyncState::Downloading)
+        if (m_syncStatus->state == SyncState::Downloading)
         {
             bool finished = maintainDownloadingQueue();
             if (finished)
@@ -117,7 +117,7 @@ SyncStatus SyncMaster::status() const
 {
     ReadGuard l(x_sync);
     SyncStatus res;
-    res.state = m_state;
+    res.state = m_syncStatus->state;
     res.protocolId = m_protocolId;
     res.startBlockNumber = m_startingBlock;
     res.currentBlockNumber = m_blockChain->number();
@@ -133,7 +133,7 @@ void SyncMaster::noteSealingBlockNumber(int64_t _number)
 
 bool SyncMaster::isSyncing() const
 {
-    return m_state != SyncState::Idle;
+    return m_syncStatus->state != SyncState::Idle;
 }
 
 void SyncMaster::maintainTransactions()
@@ -274,9 +274,9 @@ void SyncMaster::maintainPeersStatus()
     }
     if (currentNumber >= maxRequestNumber)
     {
-        SYNCLOG(TRACE)
-            << "[Idle] [Download] no need to sync with blocks are in queue, currentNumber:"
-            << currentNumber << " maxRequestNumber:" << maxRequestNumber << endl;
+        SYNCLOG(TRACE) << "[Idle] [Download] no need to sync with blocks are in queue "
+                          "[currentNumber/maxRequestNumber]: "
+                       << currentNumber << "/" << maxRequestNumber << endl;
         return;  // no need to send request block packet
     }
 
@@ -284,7 +284,7 @@ void SyncMaster::maintainPeersStatus()
     size_t shardNumber =
         (maxRequestNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
     size_t shard = 0;
-    while (shard < shardNumber)
+    while (shard < shardNumber && shard < c_maxRequestShards)
     {
         bool thisTurnFound = false;
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
@@ -404,7 +404,7 @@ void SyncMaster::maintainPeersConnection()
 
 void SyncMaster::maintainDownloadingQueueBuffer()
 {
-    if (m_state == SyncState::Downloading)
+    if (m_syncStatus->state == SyncState::Downloading)
     {
         m_syncStatus->bq().clearFullQueueIfNotHas(m_blockChain->number() + 1);
         m_syncStatus->bq().flushBufferToQueue();

@@ -50,7 +50,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 30)
+        unsigned _idleWaitMs = 200)
       : SyncInterface(),
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -61,7 +61,7 @@ public:
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash)
     {
-        m_syncStatus = std::make_shared<SyncMasterStatus>(_genesisHash);
+        m_syncStatus = std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash);
         m_msgEngine = std::make_shared<SyncMsgEngine>(
             _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 
@@ -113,14 +113,14 @@ public:
 
     void noteDownloadingBegin()
     {
-        if (m_state == SyncState::Idle)
-            m_state = SyncState::Downloading;
+        if (m_syncStatus->state == SyncState::Idle)
+            m_syncStatus->state = SyncState::Downloading;
     }
 
     void noteDownloadingFinish()
     {
-        if (m_state == SyncState::Downloading)
-            m_state = SyncState::Idle;
+        if (m_syncStatus->state == SyncState::Downloading)
+            m_syncStatus->state = SyncState::Idle;
     }
 
     int64_t protocolId() { return m_protocolId; }
@@ -169,7 +169,6 @@ private:
     std::condition_variable m_signalled;
 
     // sync state
-    SyncState m_state = SyncState::Idle;
     bool m_newTransactions = false;
     bool m_newBlocks = false;
 

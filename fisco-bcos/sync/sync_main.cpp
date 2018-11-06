@@ -77,12 +77,18 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
+
+    // loop forever
+    while (true)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+    }
 }
 
 static void startSync(Params& params)
 {
     ///< initialize component
-    auto initialize = std::make_shared<Initializer>();
+    auto initialize = std::make_shared<FakeInitializer>();
     initialize->init("./config.conf");
 
     auto p2pInitializer = initialize->p2pInitializer();
@@ -129,8 +135,8 @@ static void startSync(Params& params)
     shared_ptr<FakeBlockVerifier> blockVerifier = make_shared<FakeBlockVerifier>();
     shared_ptr<SyncMaster> sync = make_shared<SyncMaster>(p2pService, txPool, blockChain,
         blockVerifier, syncId, nodeId, blockChain->numberHash(0), 1000 / params.syncSpeed());
-    shared_ptr<FakeConcensus> concencus =
-        make_shared<FakeConcensus>(txPool, blockChain, blockVerifier, 1000 / params.blockSpeed());
+    shared_ptr<FakeConcensus> concencus = make_shared<FakeConcensus>(
+        txPool, blockChain, sync, blockVerifier, 1000 / params.blockSpeed());
 
     sync->start();
     LOG(INFO) << "sync started" << endl;

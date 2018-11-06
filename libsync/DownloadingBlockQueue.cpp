@@ -30,15 +30,35 @@ using namespace dev::eth;
 using namespace dev::sync;
 
 /// Push a block
-void DownloadingBlockQueue::push(BlockPtr _block)
+void DownloadingBlockQueue::push(RLP const& _rlps)
 {
     WriteGuard l(x_buffer);
     if (m_buffer->size() >= c_maxDownloadingBlockQueueBufferSize)
     {
-        LOG(WARNING) << "DownloadingBlockQueueBuffer is full with size " << m_buffer->size();
+        SYNCLOG(WARNING) << "[Rcv] [Download] DownloadingBlockQueueBuffer is full with size "
+                         << m_buffer->size();
         return;
     }
-    m_buffer->emplace_back(_block);
+    ShardPtr blocksShard = make_shared<DownloadBlocksShard>(0, 0, _rlps.data().toBytes());
+    m_buffer->emplace_back(blocksShard);
+}
+
+void DownloadingBlockQueue::push(BlockPtrVec _blocks)
+{
+    RLPStream rlpStream;
+    rlpStream.appendList(_blocks.size());
+    for (BlockPtr block : _blocks)
+    {
+        rlpStream.append(block->rlp());
+        SYNCLOG(TRACE) << "[Rcv] [Download] DownloadingBlockQueueBuffer push  [number/hash]: "
+                       << block->header().number() << "/" << block->headerHash() << endl;
+    }
+
+    std::shared_ptr<bytes> b = std::make_shared<bytes>();
+    rlpStream.swapOut(*b);
+
+    RLP rlps = RLP(ref(*b));
+    push(rlps);
 }
 
 /// Is the queue empty?
@@ -98,25 +118,55 @@ void DownloadingBlockQueue::clearQueue()
 
 void DownloadingBlockQueue::flushBufferToQueue()
 {
-    shared_ptr<BlockPtrVec> localBuffer;
+    shared_ptr<ShardPtrVec> localBuffer;
     {
         WriteGuard l(x_buffer);
         localBuffer = m_buffer;                 //
-        m_buffer = make_shared<BlockPtrVec>();  // m_buffer point to a new vector
+        m_buffer = make_shared<ShardPtrVec>();  // m_buffer point to a new vector
     }
 
     // pop buffer into queue
     WriteGuard l(x_blocks);
-    for (BlockPtr block : *localBuffer)
+
+
+    for (ShardPtr blocksShard : *localBuffer)
     {
         if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to control
                                                                 // insert
         {
-            LOG(WARNING) << "DownloadingBlockQueueBuffer is full with size " << m_blocks.size();
+            SYNCLOG(TRACE) << "[Rcv] [Download] DownloadingBlockQueueBuffer is full with size "
+                           << m_blocks.size();
             break;
         }
 
-        m_blocks.push(block);
+        SYNCLOG(TRACE) << "[Rcv] [Download] Decoding block buffer [size]: "
+                       << blocksShard->blocksBytes.size() << endl;
+
+        RLP const& rlps = RLP(ref(blocksShard->blocksBytes));
+        unsigned itemCount = rlps.itemCount();
+        size_t successCnt = 0;
+        for (unsigned i = 0; i < itemCount; ++i)
+        {
+            try
+            {
+                shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
+                if (isNewerBlock(block))
+                {
+                    successCnt++;
+                    m_blocks.push(block);
+                }
+            }
+            catch (std::exception& e)
+            {
+                SYNCLOG(WARNING) << "[Rcv] [Download] Invalid block RLP [reason/RLPDataSize]: "
+                                 << e.what() << "/" << rlps.data().size() << endl;
+                continue;
+            }
+        }
+
+        SYNCLOG(TRACE)
+            << "[Rcv] [Download] Flush buffer to block queue [import/rcv/downloadBlockQueue]: "
+            << successCnt << "/" << itemCount << "/" << m_blocks.size() << endl;
     }
 }
 
@@ -132,4 +182,16 @@ void DownloadingBlockQueue::clearFullQueueIfNotHas(int64_t _blockNumber)
     }
     if (needClear)
         clearQueue();
+}
+
+bool DownloadingBlockQueue::isNewerBlock(shared_ptr<Block> _block)
+{
+    if (m_blockChain != nullptr && _block->header().number() <= m_blockChain->number())
+        return false;
+
+    // if (block->header()->)
+    // if //Check sig list
+    // return false;
+
+    return true;
 }

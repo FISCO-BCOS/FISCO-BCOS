@@ -30,9 +30,16 @@ namespace dev
 namespace blockverifier
 {
 class ExecutiveContext;
-}
+}  // namespace blockverifier
 namespace blockchain
 {
+enum class CommitResult
+{
+    OK = 0,             // 0
+    ERROR_NUMBER = -1,  // 1
+    ERROR_PARENT_HASH = -2,
+    ERROR_COMMITTING = -3
+};
 class BlockChainInterface
 {
 public:
@@ -45,7 +52,7 @@ public:
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
-    virtual void commitBlock(
+    virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
 
     /// Register a handler that will be called once there is a new transaction imported
