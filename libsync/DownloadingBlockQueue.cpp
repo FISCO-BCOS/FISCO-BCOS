@@ -137,11 +137,20 @@ void DownloadingBlockQueue::flushBufferToQueue()
         size_t successCnt = 0;
         for (unsigned i = 0; i < itemCount; ++i)
         {
-            shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
-            if (isNewerBlock(block))
+            try
             {
-                successCnt++;
-                m_blocks.push(block);
+                shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
+                if (isNewerBlock(block))
+                {
+                    successCnt++;
+                    m_blocks.push(block);
+                }
+            }
+            catch (std::exception& e)
+            {
+                SYNCLOG(WARNING) << "[Rcv] [Download] Invalid block RLP [reason/RLPDataSize]: "
+                                 << e.what() << "/" << rlps.data().size() << endl;
+                continue;
             }
         }
 
@@ -165,9 +174,9 @@ void DownloadingBlockQueue::clearFullQueueIfNotHas(int64_t _blockNumber)
         clearQueue();
 }
 
-bool DownloadingBlockQueue::isNewerBlock(shared_ptr<Block> block)
+bool DownloadingBlockQueue::isNewerBlock(shared_ptr<Block> _block)
 {
-    if (m_blockChain != nullptr && block->header().number() <= m_blockChain->number())
+    if (m_blockChain != nullptr && _block->header().number() <= m_blockChain->number())
         return false;
 
     // if (block->header()->)
