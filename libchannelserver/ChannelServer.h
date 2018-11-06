@@ -1,18 +1,18 @@
 /*
-    This file is part of cpp-ethereum.
+    This file is part of FISCO-BCOS.
 
-    cpp-ethereum is free software: you can redistribute it and/or modify
+    FISCO-BCOS is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    cpp-ethereum is distributed in the hope that it will be useful,
+    FISCO-BCOS is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file: ChannelServer.h
@@ -53,10 +53,6 @@ public:
     void onAccept(const boost::system::error_code& error, ChannelSession::Ptr session);
 
     void startAccept();
-
-    // Session::Ptr connect(std::string host, int port) throw(Exception);
-    // void asyncConnect(std::string host, int port, std::function<void(Exception, Session::Ptr)>
-    // callback);
 
     void setBind(const std::string& host, int port)
     {

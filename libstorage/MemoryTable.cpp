@@ -45,7 +45,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
         auto it = m_cache.find(key);
         if (it == m_cache.end())
         {
-            if (m_remoteDB.get() != NULL)
+            if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
@@ -59,7 +59,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
             entries = it->second;
         }
 
-        if (entries.get() == NULL)
+        if (!entries)
         {
             LOG(ERROR) << "Can't find data";
             return Entries::Ptr();
@@ -92,7 +92,7 @@ size_t dev::storage::MemoryTable::update(
         auto it = m_cache.find(key);
         if (it == m_cache.end())
         {
-            if (m_remoteDB.get() != NULL)
+            if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
@@ -106,7 +106,7 @@ size_t dev::storage::MemoryTable::update(
             entries = it->second;
         }
 
-        if (entries.get() == NULL)
+        if (!entries)
         {
             LOG(ERROR) << "Can't find data";
 
@@ -151,7 +151,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
         auto it = m_cache.find(key);
         if (it == m_cache.end())
         {
-            if (m_remoteDB.get() != NULL)
+            if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
@@ -197,7 +197,7 @@ size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr 
     auto it = m_cache.find(key);
     if (it == m_cache.end())
     {
-        if (m_remoteDB.get() != NULL)
+        if (m_remoteDB)
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 

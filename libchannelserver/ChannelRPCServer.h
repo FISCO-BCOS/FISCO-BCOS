@@ -16,8 +16,12 @@
 */
 /**
  * @file: ChannelRPCServer.h
- * @author: fisco-dev
+ * @author: monan
  * @date: 2017
+ *
+ * @author xingqiangbai
+ * @date 2018.11.5
+ * @modify use libp2p to send message
  */
 
 #pragma once
@@ -42,7 +46,7 @@ namespace dev
 {
 namespace p2p
 {
-class Service;
+class P2PInterface;
 }
 
 class ChannelRPCServer : public jsonrpc::AbstractServerConnector,
@@ -116,7 +120,7 @@ public:
 
     dev::eth::Web3Observer::Ptr buildObserver();
 
-    void setService(std::weak_ptr<dev::p2p::Service> _service);
+    void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
 
     void setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext);
 
@@ -132,9 +136,6 @@ public:
 
 private:
     void initSSLContext();
-
-    // h512 sendChannelMessageToNode(
-    //     std::string topic, dev::channel::Message::Ptr message, const std::set<h512>& exclude);
 
     dev::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic,
         dev::channel::Message::Ptr message,
@@ -164,7 +165,7 @@ private:
 
     int _sessionCount = 1;
 
-    std::weak_ptr<dev::p2p::Service> m_service;
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
 };
 
 }  // namespace dev
