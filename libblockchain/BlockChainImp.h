@@ -54,7 +54,7 @@ public:
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
-    void commitBlock(dev::eth::Block& block,
+    CommitResult commitBlock(dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
@@ -71,7 +71,9 @@ private:
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     dev::storage::Storage::Ptr m_stateStorage;
-    mutable SharedMutex m_submitMutex;
+    std::mutex commitMutex;
+    const std::string c_genesisHash =
+        "0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c";
 };
 }  // namespace blockchain
 }  // namespace dev

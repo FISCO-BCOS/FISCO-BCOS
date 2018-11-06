@@ -114,9 +114,10 @@ void Block::calTransactionRoot(bool update) const
             txsMapCache.insert(std::make_pair(s.out(), trans_data));
         }
         txs.swapOut(m_txsCache);
-        if (update == true)
-            m_blockHeader.setTransactionsRoot(hash256(txsMapCache));
+        m_transRootCache = hash256(txsMapCache);
     }
+    if (update == true)
+        m_blockHeader.setTransactionsRoot(m_transRootCache);
 }
 
 /// encode transactionReceipts to bytes using rlp-encoding when transaction list has been changed
@@ -138,8 +139,11 @@ void Block::calReceiptRoot(bool update) const
             mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
         }
         txReceipts.swapOut(m_tReceiptsCache);
-        if (update == true)
-            m_blockHeader.setReceiptsRoot(hash256(mapCache));
+        m_receiptRootCache = hash256(mapCache);
+    }
+    if (update == true)
+    {
+        m_blockHeader.setReceiptsRoot(m_receiptRootCache);
     }
 }
 
@@ -169,11 +173,11 @@ void Block::decode(bytesConstRef _block_bytes)
         m_transactionReceipts[i].decode(transactionReceipts_rlp[i]);
     }
     /// get hash
-    // h256 hash = block_rlp[3].toHash<h256>();
-    // if(hash != m_blockHeader.hash())
-    //{
-    //    BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
-    //}
+    h256 hash = block_rlp[3].toHash<h256>();
+    if (hash != m_blockHeader.hash())
+    {
+        BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
+    }
     /// get sig_list
     m_sigList = block_rlp[4].toVector<std::pair<u256, Signature>>();
     noteChange();

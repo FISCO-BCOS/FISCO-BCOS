@@ -30,8 +30,8 @@
 #include "ChannelMessage.h"
 #include "ChannelServer.h"
 #include "ChannelSession.h"
-#include "Web3Observer.h"
 #include "libdevcore/ThreadPool.h"
+#include "libp2p/Common.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libdevcore/FixedHash.h>
 #include <netinet/in.h>
@@ -118,7 +118,8 @@ public:
 
     void CloseConnection(int _socket);
 
-    dev::eth::Web3Observer::Ptr buildObserver();
+    void onReceiveChannelMessage(
+        p2p::P2PException, std::shared_ptr<p2p::Session>, p2p::Message::Ptr);
 
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
 

@@ -154,6 +154,12 @@ public:
         noteChange();
     }
 
+    void clearAllReceipts()
+    {
+        m_transactionReceipts.clear();
+        noteChange();
+    }
+
     const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
     void calTransactionRoot(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
@@ -185,6 +191,9 @@ private:
 
     mutable SharedMutex x_txReceiptsCache;
     mutable bytes m_tReceiptsCache;
+
+    mutable dev::h256 m_transRootCache;
+    mutable dev::h256 m_receiptRootCache;
 };
 }  // namespace eth
 }  // namespace dev
