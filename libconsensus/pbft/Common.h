@@ -288,12 +288,11 @@ struct PrepareReq : public PBFTMsg
         height = blockStruct.blockHeader().number();
         view = _view;
         idx = _idx;
-        /// MUST be here for encode will modify the block hash
-        blockStruct.encode(block);
         timestamp = u256(utcTime());
         block_hash = blockStruct.blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
+        blockStruct.encode(block);
         p_execContext = nullptr;
     }
 
@@ -308,12 +307,12 @@ struct PrepareReq : public PBFTMsg
         height = req.height;
         view = req.view;
         idx = req.idx;
-        sealing.block.encode(block);
         p_execContext = sealing.p_execContext;
         timestamp = u256(utcTime());
         block_hash = sealing.block.blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
+        sealing.block.encode(block);
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp;
     }

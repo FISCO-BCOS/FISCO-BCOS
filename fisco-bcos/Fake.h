@@ -60,9 +60,9 @@ public:
         blockHeader.setNumber(0);
         blockHeader.setTimestamp(0);
         Block block;
-        blockHeader.encode(m_blockHeaderData);
-        block.encode(m_blockData, ref(m_blockHeaderData));
-        block.decode(ref(m_blockData));
+        block.setBlockHeader(blockHeader);
+        block.encode(m_blockData);
+        /// block.decode(ref(m_blockData));
         m_blockHash[block.blockHeaderHash()] = 0;
         m_blockChain.push_back(std::make_shared<Block>(block));
     }

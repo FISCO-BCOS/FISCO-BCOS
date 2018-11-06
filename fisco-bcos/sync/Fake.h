@@ -101,9 +101,7 @@ private:
         block->setTransactions(_txs);
 
         // Add block header into block
-        bytes blockBytes;
-        block->encode(blockBytes, ref(blockHeaderBytes));
-        block->decode(ref(blockBytes));
+        block->setBlockHeader(*header);
 
         return block;
     }

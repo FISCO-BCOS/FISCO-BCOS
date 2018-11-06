@@ -47,22 +47,18 @@ public:
         FakeTransaction(size);
         m_block.setSigList(m_sigList);
         m_block.setTransactions(m_transaction);
+        m_block.setBlockHeader(m_blockHeader);
         BOOST_CHECK(m_transaction == m_block.transactions());
         BOOST_CHECK(m_sigList == m_block.sigList());
-        m_blockHeaderData.clear();
-        m_blockData.clear();
-        m_blockHeader.encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        /// re-Encode blockHeaderData
-        m_blockHeader = m_block.header();
+        BOOST_CHECK(m_blockHeader = m_block.header());
+        m_block.encode(m_blockData);
     }
 
     /// for empty case test
     FakeBlock()
     {
-        m_blockHeader.encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
+        m_block.setBlockHeader(m_blockHeader);
+        m_block.encode(m_blockData);
     }
 
     /// fake invalid block data
@@ -94,15 +90,12 @@ public:
     void CheckInvalidBlockData(size_t size)
     {
         FakeBlockHeader();
+        m_block.setBlockHeader(m_blockHeader);
         BOOST_CHECK_THROW(m_block.decode(ref(m_blockHeaderData)), InvalidBlockFormat);
-        BOOST_REQUIRE_NO_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)));
-        m_blockHeader.setGasUsed(u256(3000000000));
+        BOOST_REQUIRE_NO_THROW(m_block.encode(m_blockData));
+        m_block.header().setGasUsed(u256(3000000000));
         m_blockHeader.encode(m_blockHeaderData);
-        BOOST_CHECK_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)), TooMuchGasUsed);
-        m_blockHeaderData[0] += 1;
-        /// construct block header failed, invalid rlp
-        BOOST_CHECK_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)), std::exception);
-        m_blockHeaderData[0] -= 1;
+        BOOST_CHECK_THROW(m_block.encode(m_blockData), TooMuchGasUsed);
         /// construct invalid block format
         for (size_t i = 1; i < 3; i++)
         {
