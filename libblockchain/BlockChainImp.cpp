@@ -93,6 +93,11 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
     LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
                << "_blockHash.hex()=" << _blockHash.hex();
+    if (_blockHash == h256(0))
+    {
+        return std::make_shared<Block>();
+    }
+
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
     if (tb)
@@ -107,15 +112,16 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
         }
     }
 
-    if (strblock.size() == 0)
-        return nullptr;
-
-    return std::make_shared<Block>(fromHex(strblock.c_str()));
+    return nullptr;
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
     LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
+    if (_i == 0)
+    {
+        return std::make_shared<Block>();
+    }
     string numberHash = "";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
@@ -129,7 +135,7 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
             return getBlockByHash(h256(numberHash));
         }
     }
-    return std::make_shared<Block>();
+    return nullptr;
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
@@ -272,11 +278,38 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
     writeHash2Block(block, context);
 }
 
-void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    writeNumber(block, context);
-    writeTxToBlock(block, context);
-    writeBlockInfo(block, context);
-    context->dbCommit();
-    m_onReady();
+    int64_t num = number();
+    if ((block.blockHeader().number() != num + 1))
+    {
+        LOG(WARNING) << "commit fail,need number: " << number()
+                     << " committed block number: " << block.blockHeader().number();
+        return CommitResult::ERROR_NUMBER;
+    }
+
+    h256 parentHash = numberHash(number());
+    if (block.blockHeader().parentHash() != numberHash(number()))
+    {
+        LOG(WARNING) << "commit fail,need parentHash: " << parentHash
+                     << " committed block parentHash: " << block.blockHeader().parentHash();
+        return CommitResult::ERROR_PARENT_HASH;
+    }
+    if (commitMutex.try_lock())
+    {
+        writeNumber(block, context);
+        writeTxToBlock(block, context);
+        writeBlockInfo(block, context);
+        context->dbCommit();
+        commitMutex.unlock();
+        m_onReady();
+        return CommitResult::OK;
+    }
+    else
+    {
+        LOG(INFO) << "commit try_lock fail, block number: " << block.blockHeader().number()
+                  << " block parentHash: " << block.blockHeader().parentHash() << " num: " << num
+                  << " parentHash: " << parentHash;
+        return CommitResult::ERROR_COMMITTING;
+    }
 }
