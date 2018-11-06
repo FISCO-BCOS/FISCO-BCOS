@@ -44,8 +44,7 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         auto server = std::make_shared<dev::channel::ChannelServer>();
         server->setIOService(ioService);
         server->setSSLContext(m_sslContext);
-        ///< TODO: The p2pService is passed to the ChannelServer module.
-        // server->setService(m_p2pService);
+        server->setService(m_p2pService);
         server->setEnableSSL(true);
         server->setBind(listenIP, listenPort);
 
