@@ -127,6 +127,18 @@ string Eth::eth_pbftView()
 	return "";
 }
 
+string Eth::eth_pbftToView()
+{
+	try {
+		if (dynamic_cast<PBFT*>(client()->sealEngine())) {
+			return toJS(dynamic_cast<PBFT*>(client()->sealEngine())->to_view());
+		}
+	} catch (...) {
+		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+	}
+	return "";
+}
+
 Json::Value Eth::eth_getProofMerkle(string const& _blockHash, string const& _transactionIndex)
 {
     h256 h = jsToFixed<32>(_blockHash);
