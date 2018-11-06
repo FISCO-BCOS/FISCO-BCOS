@@ -80,21 +80,29 @@ bool SyncMsgEngine::checkMessage(Message::Ptr _msg)
 bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
     SYNCLOG(TRACE) << "[Rcv] [Packet] interpret packet type: " << int(_packet.packetType) << endl;
-    switch (_packet.packetType)
+    try
     {
-    case StatusPacket:
-        onPeerStatus(_packet);
-        break;
-    case TransactionsPacket:
-        onPeerTransactions(_packet);
-        break;
-    case BlocksPacket:
-        onPeerBlocks(_packet);
-        break;
-    case ReqBlocskPacket:
-        onPeerRequestBlocks(_packet);
-        break;
-    default:
+        switch (_packet.packetType)
+        {
+        case StatusPacket:
+            onPeerStatus(_packet);
+            break;
+        case TransactionsPacket:
+            onPeerTransactions(_packet);
+            break;
+        case BlocksPacket:
+            onPeerBlocks(_packet);
+            break;
+        case ReqBlocskPacket:
+            onPeerRequestBlocks(_packet);
+            break;
+        default:
+            return false;
+        }
+    }
+    catch (std::exception& e)
+    {
+        SYNCLOG(WARNING) << "[Rcv] [Packet] Interpret error for " << e.what() << endl;
         return false;
     }
     return true;
@@ -103,7 +111,16 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
+
     RLP const& rlps = _packet.rlp();
+
+    if (rlps.itemCount() != 3)
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Status] Invalid status packet format. From" << _packet.nodeId
+                       << endl;
+        return;
+    }
+
     SyncPeerInfo info{
         _packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(), rlps[2].toHash<h256>()};
 
@@ -130,6 +147,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 
     RLP const& rlps = _packet.rlp();
     unsigned itemCount = rlps.itemCount();
+
     size_t successCnt = 0;
 
     for (unsigned i = 0; i < itemCount; ++i)
@@ -167,6 +185,13 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlp = _packet.rlp();
+
+    if (rlp.itemCount() != 2)
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Invalid request blocks packet format. From"
+                       << _packet.nodeId << endl;
+        return;
+    }
 
     // request
     int64_t from = rlp[0].toInt<int64_t>();
