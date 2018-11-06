@@ -30,7 +30,6 @@
 #include <json/json.h>
 #include <libdevcore/easylog.h>
 #include <libp2p/Service.h>
-// #include <libp2p/Session.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
