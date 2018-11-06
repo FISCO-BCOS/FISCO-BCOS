@@ -148,30 +148,19 @@ Json::Value Rpc::syncStatus(int _groupID)
                   << "\"_groupID\" : " << _groupID << std::endl
                   << "}";
 
-        Json::Value response;
-
         auto sync = ledgerManager()->sync(_groupID);
         if (!sync)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
-        auto status = sync->status();
-        if (status.state == SyncState::Idle)
-            response["state"] = "Idle";
-        else if (status.state == SyncState::Downloading)
-            response["state"] = "Downloading";
-        else
-            response["state"] = "size";
+//        std::string status = sync->syncStatus();  //TODO
+//        Json::Reader reader;
+//        Json::Value statusJson;
+//        if (!reader.parse(status, statusJson))
+//            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::JsonParse, RPCMsg[RPCExceptionType::JsonParse]));
 
-        response["protocolId"] = status.protocolId;
-        response["startBlockNumber"] = status.startBlockNumber;
-        response["highestBlockNumber"] = status.highestBlockNumber;
-        if (status.majorSyncing)
-            response["majorSyncing"] = true;
-        else
-            response["majorSyncing"] = false;
-
-        return response;
+//        return statusJson;
+        return Json::Value(Json::nullValue);
     }
     catch (JsonRpcException& e)
     {
