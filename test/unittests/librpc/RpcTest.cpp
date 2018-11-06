@@ -19,13 +19,13 @@
  * @date 2018-10-27
  */
 #include "FakeModule.h"
-#include <librpc/Rpc.h>
+#include <jsonrpccpp/common/exception.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
+#include <librpc/Rpc.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libp2p/FakeHost.h>
-#include <jsonrpccpp/common/exception.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace jsonrpc;
@@ -227,12 +227,15 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockHashAndIndex)
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
-    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(1, blockHash, index), JsonRpcException);
+    BOOST_CHECK_THROW(
+        rpc->getTransactionByBlockHashAndIndex(1, blockHash, index), JsonRpcException);
     blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e0755480070";
-    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(0, blockHash, index), JsonRpcException);
+    BOOST_CHECK_THROW(
+        rpc->getTransactionByBlockHashAndIndex(0, blockHash, index), JsonRpcException);
     blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
     index = "0x1";
-    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(0, blockHash, index), JsonRpcException);
+    BOOST_CHECK_THROW(
+        rpc->getTransactionByBlockHashAndIndex(0, blockHash, index), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByBlockNumberAndIndex)
@@ -255,9 +258,11 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockNumberAndIndex)
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
-    BOOST_CHECK_THROW(rpc->getTransactionByBlockNumberAndIndex(1, blockNumber, index), JsonRpcException);
+    BOOST_CHECK_THROW(
+        rpc->getTransactionByBlockNumberAndIndex(1, blockNumber, index), JsonRpcException);
     index = "0x1";
-    BOOST_CHECK_THROW(rpc->getTransactionByBlockHashAndIndex(0, blockNumber, index), JsonRpcException);
+    BOOST_CHECK_THROW(
+        rpc->getTransactionByBlockHashAndIndex(0, blockNumber, index), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
