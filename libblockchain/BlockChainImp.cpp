@@ -278,14 +278,39 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
     writeHash2Block(block, context);
 }
 
-void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+int BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    if (block.blockHeader().number() == number() + 1)
+    int64_t num = number();
+    if ((block.blockHeader().number() != num + 1))
     {
-        writeNumber(block, context);
-        writeTxToBlock(block, context);
-        writeBlockInfo(block, context);
+        LOG(WARNING) << "commit fail,need number: " << number()
+                     << " committed block number: " << block.blockHeader().number();
+        return -1;
+    }
+
+    h256 parentHash = numberHash(number());
+    if (block.blockHeader().parentHash() != numberHash(number()))
+    {
+        LOG(WARNING) << "commit fail,need parentHash: " << parentHash
+                     << " committed block parentHash: " << block.blockHeader().parentHash();
+        return -2;
+    }
+
+    writeNumber(block, context);
+    writeTxToBlock(block, context);
+    writeBlockInfo(block, context);
+    if (commitMutex.try_lock())
+    {
         context->dbCommit();
+        commitMutex.unlock();
         m_onReady();
+        return 0;
+    }
+    else
+    {
+        LOG(INFO) << "commit try_lock fail, block number: " << block.blockHeader().number()
+                  << " block parentHash: " << block.blockHeader().parentHash() << " num: " << num
+                  << " parentHash: " << parentHash;
+        return -3;
     }
 }

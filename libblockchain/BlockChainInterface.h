@@ -45,7 +45,7 @@ public:
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
-    virtual void commitBlock(
+    virtual int commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
 
     /// Register a handler that will be called once there is a new transaction imported
