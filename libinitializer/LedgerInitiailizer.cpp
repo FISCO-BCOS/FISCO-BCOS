@@ -70,7 +70,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 void LedgerInitiailizer::initSingleGroup(
     GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
 {
-    m_ledgerManager->initSingleLedger<FakeLedger>(_groupID, m_groupDataDir, _path);
+    m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
     _groudID2NodeList[_groupID] =
         m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 

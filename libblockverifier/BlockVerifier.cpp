@@ -20,6 +20,7 @@
  */
 #include "BlockVerifier.h"
 #include "ExecutiveContext.h"
+#include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/ExecutionResult.h>
@@ -31,12 +32,13 @@ using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::executive;
 
-ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
+ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, h256 const& parentStateRoot)
 {
     LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size()
                << " hash: " << block.blockHeader().hash()
                << " num: " << block.blockHeader().number()
-               << " stateRoot: " << block.blockHeader().stateRoot();
+               << " stateRoot: " << block.blockHeader().stateRoot()
+               << " parentStateRoot: " << parentStateRoot << std::endl;
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
     {
@@ -44,13 +46,15 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
         blockInfo.hash = block.blockHeader().hash();
         blockInfo.number = block.blockHeader().number();
         m_executiveContextFactory->initExecutiveContext(
-            blockInfo, block.blockHeader().stateRoot(), executiveContext);
+            blockInfo, parentStateRoot, executiveContext);
     }
     catch (exception& e)
     {
         LOG(ERROR) << "Error:" << e.what();
     }
     unsigned i = 0;
+    BlockHeader tmpHeader = block.blockHeader();
+    block.clearAllReceipts();
     for (Transaction const& tr : block.transactions())
     {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
@@ -63,7 +67,16 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block)
         block.appendTransactionReceipt(resultReceipt.second);
         executiveContext->getState()->commit();
     }
+    block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
+    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    {
+        if (tmpHeader != block.blockHeader())
+        {
+            BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
+                                      "Invalid Block with bad stateRoot or ReciptRoot"));
+        }
+    }
     return executiveContext;
 }
 
