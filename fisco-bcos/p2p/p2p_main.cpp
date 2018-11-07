@@ -48,6 +48,7 @@ int main(int argc, const char* argv[])
         topics->push_back(topic);
         LOG(INFO) << "Add topic periodically, now Topics[" << topics->size() - 1 << "]:" << topic;
         p2pService->setTopics(topics);
+        LogInitializer::logRotateByTime();
         this_thread::sleep_for(chrono::milliseconds((rand() % 50) * 100));
     }
 

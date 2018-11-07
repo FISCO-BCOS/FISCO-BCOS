@@ -352,6 +352,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
             tx.updateSignature(SignatureStruct(sig));
             ledgerManager->txPool(i)->submit(tx);
         }
+        LogInitializer::logRotateByTime();
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
         count++;
     }
