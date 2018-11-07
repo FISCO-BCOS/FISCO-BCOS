@@ -21,6 +21,7 @@
 
 #pragma once
 #include <libnetwork/Common.h>
+#include <libnetwork/SessionFace.h>
 
 namespace dev
 {

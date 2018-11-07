@@ -39,27 +39,18 @@ namespace p2p
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    ///< _p2pMsgHandler needs to be initialized before _host
-    Service(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
-      : m_host(_host), m_p2pMsgHandler(_p2pMsgHandler)
-    {
-        m_ioService = _host->ioService();
-        ///< Set m_p2pMsgHandler to host
-        ///< When a new session created, host set handler to the new session.
-        _host->setP2PMsgHandler(m_p2pMsgHandler);
-    }
+    Service();
+    virtual ~Service() {}
 
-    virtual ~Service() { }
+    Message::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) override;
 
-    P2PMessage::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
-
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
+    void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
         CallbackFunc callback = [](NetworkException e, Message::Ptr msg) {},
-        Options const& options = Options()) override;
+        Options options = Options()) override;
 
-    P2PMessage::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
+    P2PMessage::Ptr sendMessageByTopic(std::string const& topic, P2PMessage::Ptr message) override;
 
-    void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
+    void asyncSendMessageByTopic(std::string const& topic, P2PMessage::Ptr message,
         CallbackFunc callback, Options const& options) override;
 
     void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) override;
@@ -83,26 +74,27 @@ public:
 
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const override;
 
-    bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
+    bool isConnected(NodeID const& _nodeID) const override;
 
-    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) override
-    {
-        m_host->setGroupID2NodeList(_groupID2NodeList);
-    }
+    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) override { m_groupID2NodeList = _groupID2NodeList; }
 
-    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
-    {
-        m_host->setTopics(_topics);
-    }
+    std::shared_ptr<std::vector<std::string>> topics() const override { return m_topics; }
+    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override { m_topics = _topics; }
 
-    std::shared_ptr<std::vector<std::string>> topics() const override { return m_host->topics(); }
+    std::shared_ptr<Host> host() { return m_host; }
+    void setHost(std::shared_ptr<Host> host) { m_host = host; }
+
+    std::shared_ptr<P2PMsgHandler> p2pMsgHandler() { return m_p2pMsgHandler; }
+    void setP2PMsgHandler(std::shared_ptr<P2PMsgHandler> p2pMsgHandler) { m_p2pMsgHandler = p2pMsgHandler; }
 
 private:
     void onTimeoutByTopic(const boost::system::error_code& error,
-        std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
+        std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, P2PMessage::Ptr message,
         CallbackFunc callback, Options const& options, uint32_t totalTimeout);
+#if 0
     void onTimeoutByNode(
         const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);
+#endif
 
     NodeIDs getPeersByTopic(std::string const& topic);
 
@@ -117,9 +109,6 @@ private:
     /// maps from node ids to the sessions
     mutable std::unordered_map<NodeID, std::shared_ptr<SessionFace>> m_sessions;
     mutable RecursiveMutex x_sessions;
-
-    ///< This handler will be sent to sessions before session start.
-    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
 
     ///< Topics being concerned by myself
     std::shared_ptr<std::vector<std::string>> m_topics;
