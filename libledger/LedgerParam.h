@@ -56,10 +56,10 @@ struct SyncParam
     /// TODO: syncParam related
     unsigned idleWaitMs;
 };
+
 struct GenesisParam
 {
-    dev::h256 genesisHash;
-    u256 accountStartNonce;
+    std::string genesisMark;
 };
 
 class LedgerParam : public LedgerParamInterface

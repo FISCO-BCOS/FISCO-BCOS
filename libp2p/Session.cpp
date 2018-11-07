@@ -311,7 +311,7 @@ void Session::doRead()
     };
     if (m_socket->isConnected())
     {
-        LOG(TRACE) << "Start read:" << bufferLength;
+        /// LOG(TRACE) << "Start read:" << bufferLength;
         m_server->asioInterface()->async_read_some(
             m_socket, *m_strand, boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
     }

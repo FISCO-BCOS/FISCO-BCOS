@@ -151,7 +151,7 @@ void Host::startedWorking()
     }
     else
     {
-        HOST_LOG(FATAL)
+        HOST_LOG(ERROR)
             << "[#start] TCP Listen port is invalid or unavailable. P2pPort Bind Fail: [NodeId]:  "
             << toHex(id()) << std::endl;
         exit(-1);

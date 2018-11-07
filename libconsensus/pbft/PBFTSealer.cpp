@@ -62,7 +62,7 @@ void PBFTSealer::handleBlock()
 void PBFTSealer::setBlock()
 {
     resetSealingHeader(m_sealing.block.header());
-    setSealingRoot(m_sealing.block.getTransactionRoot(), h256(), h256());
+    m_sealing.block.calTransactionRoot();
 }
 
 /**

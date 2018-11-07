@@ -36,6 +36,7 @@ struct ConsensusParam;
 struct BlockChainParam;
 struct SyncParam;
 struct P2pParam;
+/// struct GenesisParam;
 struct GenesisParam;
 struct AMDBParam;
 class LedgerParamInterface
