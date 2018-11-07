@@ -84,6 +84,7 @@ public:
 	virtual Json::Value eth_accounts() override;
 	virtual std::string eth_blockNumber()override;
 	virtual std::string eth_pbftView()override;
+	virtual std::string eth_pbftToView()override;
     virtual Json::Value eth_getProofMerkle(string const& _blockHash, string const& _transactionIndex)override;
 	virtual std::string eth_getBalance(std::string const& _address, std::string const& _blockNumber) override;
 	virtual std::string eth_getStorageAt(std::string const& _address, std::string const& _position, std::string const& _blockNumber) override;
