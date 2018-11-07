@@ -74,6 +74,12 @@ int64_t BlockChainImp::number()
 h256 BlockChainImp::numberHash(int64_t _i)
 {
     /// LOG(TRACE) << "BlockChainImp::numberHash _i=" << _i;
+    if (_i == 0)
+    {
+        std::shared_ptr<Block> block = std::make_shared<Block>();
+        block->setEmptyBlock();
+        return block->headerHash();
+    }
     string numberHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -84,12 +90,6 @@ h256 BlockChainImp::numberHash(int64_t _i)
             auto entry = entries->get(0);
             numberHash = entry->getField(SYS_VALUE);
         }
-        if (_i == 0)
-        {
-            std::shared_ptr<Block> block = std::make_shared<Block>();
-            block->setEmptyBlock();
-            return block->headerHash();
-        }
     }
     /// LOG(TRACE) << "BlockChainImp::numberHash numberHash=" << numberHash;
     return h256(numberHash);
@@ -97,15 +97,14 @@ h256 BlockChainImp::numberHash(int64_t _i)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
-    LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
-               << "_blockHash.hex()=" << _blockHash.hex();
-    if (_blockHash == c_genesisBlockHash)
+    /*LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
+               << "_blockHash.hex()=" << _blockHash.hex();*/
+    if (_blockHash == h256(c_genesisHash))
     {
         std::shared_ptr<Block> block = std::make_shared<Block>();
         block->setEmptyBlock();
         return block;
     }
-
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
     if (tb)
@@ -118,21 +117,12 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
             return std::make_shared<Block>(fromHex(strblock.c_str()));
         }
     }
-
-    if (strblock.size() == 0)
-    {
-        std::shared_ptr<Block> block = std::make_shared<Block>();
-        block->setEmptyBlock();
-        if (block->headerHash() == _blockHash)
-            return block;
-        return nullptr;
-    }
-    return std::make_shared<Block>(fromHex(strblock.c_str()));
+    return nullptr;
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
-    LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
+    /// LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
     if (_i == 0)
     {
         std::shared_ptr<Block> block = std::make_shared<Block>();
@@ -176,8 +166,6 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             }
         }
     }
-
-
     return Transaction();
 }
 

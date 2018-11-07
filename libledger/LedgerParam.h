@@ -56,12 +56,11 @@ struct SyncParam
     /// TODO: syncParam related
     unsigned idleWaitMs;
 };
-/*
+
 struct GenesisParam
 {
-    dev::h256 genesisHash;
-    u256 accountStartNonce;
-};*/
+    std::string genesisMark;
+};
 
 class LedgerParam : public LedgerParamInterface
 {
@@ -69,7 +68,7 @@ public:
     TxPoolParam& mutableTxPoolParam() override { return m_txPoolParam; }
     ConsensusParam& mutableConsensusParam() override { return m_consensusParam; }
     SyncParam& mutableSyncParam() override { return m_syncParam; }
-    /// GenesisParam& mutableGenesisParam() override { return m_genesisParam; }
+    GenesisParam& mutableGenesisParam() override { return m_genesisParam; }
     AMDBParam& mutableAMDBParam() override { return m_amdbParam; }
     std::string const& dbType() const override { return m_dbType; }
     bool enableMpt() const override { return m_enableMpt; }
@@ -86,7 +85,7 @@ private:
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
     SyncParam m_syncParam;
-    /// GenesisParam m_genesisParam;
+    GenesisParam m_genesisParam;
     AMDBParam m_amdbParam;
     std::string m_dbType;
     bool m_enableMpt;

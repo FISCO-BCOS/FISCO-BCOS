@@ -308,13 +308,13 @@ struct PrepareReq : public PBFTMsg
         view = req.view;
         idx = req.idx;
         p_execContext = sealing.p_execContext;
+        sealing.block.encode(block);
         timestamp = u256(utcTime());
         block_hash = sealing.block.blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
-        sealing.block.encode(block);
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
-                   << timestamp;
+                   << timestamp << " , block_hash: " << toHex(block_hash) << std::endl;
     }
 
     bool operator==(PrepareReq const& req) const

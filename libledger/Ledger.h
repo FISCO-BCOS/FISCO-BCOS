@@ -138,7 +138,7 @@ private:
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initDBConfig(boost::property_tree::ptree const& pt);
-    /// void initGenesisConfig(boost::property_tree::ptree const& pt);
+    void initGenesisConfig(boost::property_tree::ptree const& pt);
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

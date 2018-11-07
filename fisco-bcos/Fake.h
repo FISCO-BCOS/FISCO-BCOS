@@ -118,6 +118,8 @@ public:
         }
     }
 
+    void setGroupMark(std::string const& groupMark) override {}
+
 private:
     std::map<h256, uint64_t> m_blockHash;
     std::vector<std::shared_ptr<Block>> m_blockChain;

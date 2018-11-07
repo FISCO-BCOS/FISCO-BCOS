@@ -166,6 +166,7 @@ public:
         m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
         m_blockNumber += 1;
     }
+    void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;

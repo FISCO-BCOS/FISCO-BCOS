@@ -88,7 +88,7 @@ void Ledger::initConfig(std::string const& configPath)
         initSyncConfig(pt);
         /// db params initialization
         initDBConfig(pt);
-        /// initGenesisConfig(pt);
+        initGenesisConfig(pt);
     }
     catch (std::exception& e)
     {
@@ -173,15 +173,13 @@ void Ledger::initDBConfig(ptree const& pt)
 }
 
 /// init genesis configuration
-/// 1. hash: hash of the genesis
-/*void Ledger::initGenesisConfig(ptree const& pt)
+void Ledger::initGenesisConfig(ptree const& pt)
 {
-    m_param->mutableGenesisParam().genesisHash = pt.get<dev::h256>("genesis.hash", h256());
-    m_param->mutableGenesisParam().accountStartNonce = pt.get<u256>("genesis.nonce", u256(0x0));
-    Ledger_LOG(DEBUG) << "[#initGenesisConfig] [genHash/accountStartNonce]:  "
-                      << m_param->mutableGenesisParam().genesisHash << "/"
-                      << m_param->mutableGenesisParam().accountStartNonce << std::endl;
-}*/
+    m_param->mutableGenesisParam().genesisMark =
+        pt.get<std::string>("genesis.mark", to_string(m_groupId));
+    Ledger_LOG(DEBUG) << "[#initGenesisConfig] [genesisMark]:  "
+                      << m_param->mutableGenesisParam().genesisMark << std::endl;
+}
 
 /// init txpool
 bool Ledger::initTxPool()
@@ -231,6 +229,7 @@ bool Ledger::initBlockChain()
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     m_blockChain = blockChain;
+    m_blockChain->setGroupMark(m_param->mutableGenesisParam().genesisMark);
     Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain SUCC]";
     return true;
 }
