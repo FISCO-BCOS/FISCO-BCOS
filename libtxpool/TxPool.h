@@ -188,7 +188,7 @@ private:
 
     /// Transaction is known by some peers
     mutable SharedMutex x_transactionKnownBy;
-    std::map<h256, std::set<h512>> m_transactionKnownBy;
+    std::unordered_map<h256, std::set<h512>> m_transactionKnownBy;
 };
 }  // namespace txpool
 }  // namespace dev

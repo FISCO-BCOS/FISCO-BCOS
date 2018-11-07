@@ -30,6 +30,12 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libinitializer/Common.h>
+#include <libinitializer/CommonInitializer.h>
+#include <libinitializer/InitializerInterface.h>
+#include <libinitializer/P2PInitializer.h>
+#include <libinitializer/SecureInitiailizer.h>
+#include <libsync/Common.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
 #include <unistd.h>
@@ -40,6 +46,7 @@ using namespace dev::blockchain;
 using namespace dev::eth;
 using namespace dev::sync;
 using namespace dev::blockverifier;
+using namespace dev::initializer;
 class FakeConcensus : public Worker
 {
     // FakeConcensus, only do: fetch tx from txPool and commit newBlock into blockchain
@@ -52,11 +59,13 @@ public:
 public:
     FakeConcensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::sync::SyncInterface> _sync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         unsigned _idleWaitMs = 30)
       : Worker("FakeConcensusForSync", _idleWaitMs),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
+        m_sync(_sync),
         m_blockVerifier(_blockVerifier),
         m_totalTxCommit(0),
         m_protocolId(0)
@@ -71,9 +80,15 @@ public:
     /// doWork every idleWaitMs
     virtual void doWork() override
     {
+        if (m_sync->status().state != SyncState::Idle)
+            return;
+
         Transactions const& txs = m_txPool->pendingList();
         int64_t currentNumber = m_blockChain->number();
         h256 const& parentHash = m_blockChain->numberHash(currentNumber);
+
+        m_sync->noteSealingBlockNumber(currentNumber + 1);
+
         BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
         ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block, h256());
         m_blockChain->commitBlock(*block, exeCtx);
@@ -81,9 +96,9 @@ public:
         m_totalTxCommit += txs.size();
 
         SYNCLOG(TRACE) << "[Commit] Conencus block commit "
-                          "[blockNumber/txNumber/totalTxCommitThisNode/blockHash]: "
+                          "[blockNumber/txNumber/totalTxCommitThisNode/blockHash/parentHash]: "
                        << currentNumber + 1 << "/" << txs.size() << "/" << m_totalTxCommit << "/"
-                       << block->headerHash() << endl;
+                       << block->headerHash() << "/" << parentHash << endl;
     }
 
 private:
@@ -149,9 +164,45 @@ private:
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     /// handler of the block chain module
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    /// sync
+    std::shared_ptr<dev::sync::SyncInterface> m_sync;
     /// block verifier
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
 
     size_t m_totalTxCommit;
     PROTOCOL_ID m_protocolId;
+};
+
+class FakeInitializer : public InitializerInterface
+{
+public:
+    typedef std::shared_ptr<FakeInitializer> Ptr;
+
+    void init(std::string const& _path)
+    {
+        boost::property_tree::ptree pt;
+        boost::property_tree::read_ini(_path, pt);
+
+        m_commonInitializer = std::make_shared<CommonInitializer>();
+        m_commonInitializer->initConfig(pt);
+
+        m_secureInitiailizer = std::make_shared<SecureInitiailizer>();
+        m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
+        m_secureInitiailizer->initConfig(pt);
+
+        m_p2pInitializer = std::make_shared<P2PInitializer>();
+        m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
+        m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
+        m_p2pInitializer->initConfig(pt);
+    }
+
+public:
+    CommonInitializer::Ptr commonInitializer() { return m_commonInitializer; }
+    SecureInitiailizer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
+    P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
+
+private:
+    CommonInitializer::Ptr m_commonInitializer;
+    P2PInitializer::Ptr m_p2pInitializer;
+    SecureInitiailizer::Ptr m_secureInitiailizer;
 };
