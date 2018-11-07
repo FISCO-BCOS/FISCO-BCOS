@@ -141,8 +141,17 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
     }
     else
     {
-        LOG(INFO) << "Already have the 0th block, groupMark "
-                  << asString(block->header().extraData(0));
+        if (groupMark.compare(asString(block->header().extraData(0))))
+        {
+            LOG(INFO) << "Already have the 0th block, groupMark "
+                      << asString(block->header().extraData(0));
+        }
+        else
+        {
+            LOG(WARNING) << "Already have the 0th block, groupMark:"
+                         << asString(block->header().extraData(0))
+                         << ", GroupMark does not allow modification!";
+        }
     }
 }
 
