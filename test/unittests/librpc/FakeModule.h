@@ -138,7 +138,7 @@ public:
     virtual ~MockBlockChain() {}
 
     virtual int64_t number() override { return m_blockNumber; }
-
+    void setGroupMark(std::string const& groupMark) override {}
     void createTransaction()
     {
         bytes rlpBytes = fromHex(
@@ -215,7 +215,8 @@ public:
         std::srand(std::time(nullptr));
     };
     virtual ~MockBlockVerifier(){};
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
+    std::shared_ptr<ExecutiveContext> executeBlock(
+        dev::eth::Block& block, dev::h256 const& parentState) override
     {
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
@@ -329,12 +330,12 @@ public:
         /// init sync
         initSync();
     }
-    void initLedger() override{};
+    bool initLedger() override{};
     /// init blockverifier related
-    void initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
-    void initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    void initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
-    void initSync() override { m_sync = std::make_shared<MockBlockSync>(); }
+    bool initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
+    bool initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    bool initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
+    bool initSync() override { m_sync = std::make_shared<MockBlockSync>(); }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);

@@ -34,8 +34,6 @@ Entries::Ptr LevelDBStorage::select(
 {
     try
     {
-        LOG(DEBUG) << "Query leveldb data";
-
         std::string entryKey = table + "_" + key;
         std::string value;
         auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
@@ -119,8 +117,7 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-
-                LOG(TRACE) << "leveldb commit key:" << entryKey << " value:" << ssOut.str();
+                /// LOG(TRACE) << "leveldb commit key:" << entryKey;
             }
         }
 

@@ -119,8 +119,9 @@ public:
             {
                 fake_block.m_block.header().setParentHash(
                     m_blockChain[blockHeight - 1]->headerHash());
+                std::cout << "### setParent:" << toHex(m_blockChain[blockHeight - 1]->headerHash())
+                          << std::endl;
                 fake_block.m_block.header().setNumber(blockHeight);
-                fake_block.reEncodeDecode();
             }
             std::cout << "#### push back:" << toHex(fake_block.m_block.header().hash())
                       << std::endl;
@@ -165,6 +166,7 @@ public:
         m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
         m_blockNumber += 1;
     }
+    void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;
@@ -173,14 +175,13 @@ public:
 class TxPoolFixture
 {
 public:
-    TxPoolFixture(uint64_t blockNum = 5, size_t const& transSize = 5)
+    TxPoolFixture(uint64_t blockNum = 5, size_t const& transSize = 5,
+        Secret const& sec = KeyPair::create().secret())
     {
-        FakeTxPoolFunc(blockNum, transSize);
+        FakeTxPoolFunc(blockNum, transSize, sec);
     }
-
-    void FakeTxPoolFunc(uint64_t _blockNum, size_t const& transSize)
+    void FakeTxPoolFunc(uint64_t _blockNum, size_t const& transSize, Secret const& sec)
     {
-        Secret sec = KeyPair::create().secret();
         /// fake block manager
         m_blockChain = std::make_shared<FakeBlockChain>(_blockNum, transSize, sec);
         /// fake host of p2p module

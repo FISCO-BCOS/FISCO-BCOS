@@ -75,7 +75,7 @@ public:
         int64_t currentNumber = m_blockChain->number();
         h256 const& parentHash = m_blockChain->numberHash(currentNumber);
         BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
-        ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block);
+        ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block, h256());
         m_blockChain->commitBlock(*block, exeCtx);
         m_txPool->dropBlockTrans(*block);
         m_totalTxCommit += txs.size();
@@ -101,9 +101,7 @@ private:
         block->setTransactions(_txs);
 
         // Add block header into block
-        bytes blockBytes;
-        block->encode(blockBytes, ref(blockHeaderBytes));
-        block->decode(ref(blockBytes));
+        block->setBlockHeader(*header);
 
         return block;
     }

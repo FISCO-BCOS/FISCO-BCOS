@@ -31,15 +31,13 @@ using namespace dev::storage;
 
 void dev::storage::MemoryTable::init(const std::string& tableName)
 {
-    LOG(DEBUG) << "Init MemoryTable:" << tableName;
+    /// LOG(DEBUG) << "Init MemoryTable:" << tableName;
 }
 
 Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
 {
     try
     {
-        LOG(DEBUG) << "Select MemoryTable: " << key;
-
         Entries::Ptr entries = std::make_shared<Entries>();
 
         auto it = m_cache.find(key);
@@ -49,7 +47,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-                LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+                /// LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
 
                 m_cache.insert(std::make_pair(key, entries));
             }
@@ -96,7 +94,7 @@ size_t dev::storage::MemoryTable::update(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-                LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+                /// LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
 
                 m_cache.insert(std::make_pair(key, entries));
             }
@@ -155,7 +153,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-                LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+                /// LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
 
                 m_cache.insert(std::make_pair(key, entries));
             }

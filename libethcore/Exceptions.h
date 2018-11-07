@@ -92,7 +92,7 @@ DEV_SIMPLE_EXCEPTION(GenesisBlockCannotBeCalculated);
 DEV_SIMPLE_EXCEPTION(InvalidLogBloom);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
-
+DEV_SIMPLE_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
 
 /// transactionReceipt related
 DEV_SIMPLE_EXCEPTION(InvalidTransactionReceiptFormat);

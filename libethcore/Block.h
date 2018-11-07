@@ -62,11 +62,11 @@ public:
     explicit operator bool() const { return bool(m_blockHeader); }
 
     ///-----encode functions
-    void encode(bytes& _out, bytesConstRef _header,
+    /*void encode(bytes& _out, bytesConstRef _header,
         std::vector<std::pair<u256, Signature>> const& sig_list) const;
-    void encode(bytes& _out, bytesConstRef _header) const { encode(_out, _header, m_sigList); }
-    void encode(bytes& _out, std::vector<std::pair<u256, Signature>> const& sig_list) const;
-    void encode(bytes& _out) const { encode(_out, m_sigList); }
+    void encode(bytes& _out, bytesConstRef _header) const { encode(_out, _header, m_sigList); }*/
+    /// void encode(bytes& _out, std::vector<std::pair<u256, Signature>> const& sig_list) const;
+    void encode(bytes& _out) const;
 
     ///-----decode functions
     void decode(bytesConstRef _block);
@@ -127,11 +127,8 @@ public:
     size_t getTransactionSize() const { return m_transactions.size(); }
 
     /// get transactionRoot
-    h256 const getTransactionRoot()
-    {
-        encodeTransactions();
-        return header().transactionsRoot();
-    }
+    h256 const transactionRoot() { return header().transactionsRoot(); }
+    h256 const receiptRoot() { return header().receiptsRoot(); }
 
     void resetCurrentBlock(BlockHeader& _parent)
     {
@@ -143,17 +140,31 @@ public:
         noteChange();
     }
 
+    void setEmptyBlock()
+    {
+        m_blockHeader.setNumber(0);
+        m_blockHeader.setGasUsed(u256(0));
+        m_blockHeader.setSealer(u256(0));
+        noteChange();
+    }
+
     void appendTransactionReceipt(TransactionReceipt const& _tran)
     {
         m_transactionReceipts.push_back(_tran);
+        noteChange();
+    }
+
+    void clearAllReceipts()
+    {
+        m_transactionReceipts.clear();
+        noteChange();
     }
 
     const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
+    void calTransactionRoot(bool update = true) const;
+    void calReceiptRoot(bool update = true) const;
 
 private:
-    /// encode function
-    inline void encode(bytes& _out, bytesConstRef block_header, h256 const& hash,
-        std::vector<std::pair<u256, Signature>> const& sig_list) const;
     /// callback this function when transaction has changed
     void noteChange()
     {
@@ -163,10 +174,6 @@ private:
         m_txsCache = bytes();
         m_tReceiptsCache = bytes();
     }
-
-    bytes const& encodeTransactions() const;
-
-    bytes const& encodeTransactionReceipts() const;
 
 private:
     /// block header of the block (field 0)
@@ -184,6 +191,9 @@ private:
 
     mutable SharedMutex x_txReceiptsCache;
     mutable bytes m_tReceiptsCache;
+
+    mutable dev::h256 m_transRootCache;
+    mutable dev::h256 m_receiptRootCache;
 };
 }  // namespace eth
 }  // namespace dev
