@@ -27,7 +27,7 @@
 #include <libdevcrypto/Common.h>
 #include <libledger/LedgerInterface.h>
 #include <libledger/LedgerManager.h>
-#include <libp2p/Service.h>
+#include <libp2p/P2PInterface.h>
 #include <iostream>
 #include <memory>
 
@@ -43,7 +43,7 @@ class Rpc : public RpcFace
 {
 public:
     Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-        std::shared_ptr<dev::p2p::Service> _service);
+        std::shared_ptr<dev::p2p::P2PInterface> _service);
 
     virtual RPCModules implementedModules() const override
     {
@@ -95,8 +95,8 @@ public:
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
-    std::shared_ptr<dev::p2p::Service> service() { return m_service; }
-    std::shared_ptr<dev::p2p::Service> m_service;
+    std::shared_ptr<dev::p2p::P2PInterface> service() { return m_service; }
+    std::shared_ptr<dev::p2p::P2PInterface> m_service;
 };
 
 }  // namespace rpc
