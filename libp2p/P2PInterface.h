@@ -26,6 +26,7 @@ namespace dev
 {
 namespace p2p
 {
+class Host;
 class P2PInterface
 {
 public:
@@ -76,6 +77,8 @@ public:
     virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
 
     virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
+
+    virtual std::shared_ptr<Host> host() const = 0;
 };
 
 }  // namespace p2p
