@@ -2,9 +2,10 @@
 set -e
 genesis_node_dir=
 output_dirs=
-god_address=0xf78451eb46e20bc5336e279c52bda3a3e92c09b6
+god_address=
 init_miners=
 this_script=$0
+contract_dir=`readlink -f ../contract`
 
 LOG_ERROR()
 {
@@ -43,7 +44,7 @@ help() {
     echo "Optional:"
     echo "    -i    <genesis node id>       Genesis node id  of the blockchain"
     echo "    -d    <genesis node dir>      Genesis node dir of the blockchain"
-    echo "    -s    <god address>           Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
+    echo "    -s    <god address>           Address of god account"
     echo "    -g                            Generate genesis node for guomi-FISCO-BCOS"
     echo "    -h                            This help"
     
@@ -74,7 +75,6 @@ done
 
 [ -z $genesis_node_dir ] && [ -z $init_miners ] && help 'Error: Please specify <genesis node dir> or <genesis node id> using -d or -i'
 [ -z $output_dirs ] && help 'Error: Please specify <output dirs> using -o'
-[ -z $god_address ] && help 'Error: Please specify <god account> using -s'
 
 
 if [ $genesis_node_dir ]; then
@@ -83,9 +83,6 @@ if [ $genesis_node_dir ]; then
         nodeid_file=$data_dir/node.nodeid
     else
         nodeid_file=$data_dir/gmnode.nodeid
-        if [ ${god_address} == "0xf78451eb46e20bc5336e279c52bda3a3e92c09b6" ];then
-            god_address=0x3b5b68db7502424007c6e6567fa690c5afd71721
-        fi
     fi
 
     if [ ! -d "$data_dir" ]; then
@@ -96,6 +93,20 @@ if [ $genesis_node_dir ]; then
 fi
 
 #Generate god account
+if [ -z $god_address ]; then
+    # if guomi ??
+    # else not guomi
+    mkdir -p god_info/
+    if [ ${guomi_support} -eq 0 ];then
+        node $contract_dir/accountManager.js > god_info/godInfo.txt
+        god_address=`cat god_info/godInfo.txt |grep address | awk '{print $3}'`
+    else
+        fisco-bcos --newaccount god_info/guomiDefaultGod.txt > /dev/null &
+        god_address=`cat god_info/guomiDefaultGod.txt|grep address| cut -d ':' -f 2`
+        echo "god address: "${god_address}
+    fi
+fi
+
 LOG_INFO "God account address: "$god_address
 
 #Get genesis account if not set
