@@ -40,7 +40,7 @@ using namespace dev::sync;
 
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-    std::shared_ptr<dev::p2p::Service> _service)
+    std::shared_ptr<dev::p2p::P2PInterface> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
@@ -178,7 +178,7 @@ std::string Rpc::version()
 {
     try
     {
-        auto host = service()->getHost();
+        auto host = service()->host();
         if (!host)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
@@ -201,7 +201,7 @@ Json::Value Rpc::peers()
     {
         Json::Value response = Json::Value(Json::arrayValue);
 
-        auto host = service()->getHost();
+        auto host = service()->host();
         if (!host)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
@@ -244,7 +244,7 @@ Json::Value Rpc::groupPeers(int _groupID)
 
         Json::Value response = Json::Value(Json::arrayValue);
 
-        auto host = service()->getHost();
+        auto host = service()->host();
         if (!host)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
