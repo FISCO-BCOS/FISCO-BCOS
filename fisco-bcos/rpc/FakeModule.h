@@ -210,6 +210,7 @@ public:
         m_onReady();
     }
 
+    void setGroupMark(std::string const& groupMark) override {}
     BlockHeader blockHeader;
     Transactions transactions;
     Transaction transaction;
@@ -230,7 +231,8 @@ public:
         std::srand(std::time(nullptr));
     };
     virtual ~MockBlockVerifier(){};
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
+    std::shared_ptr<ExecutiveContext> executeBlock(
+        dev::eth::Block& block, dev::h256 const& parentStateRoot) override
     {
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
@@ -410,7 +412,7 @@ public:
         /// init sync
         initBlockSync();
     }
-    virtual void initLedger() override{};
+    virtual bool initLedger() override{};
     virtual void initConfig(std::string const& configPath) override{};
     virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
     {
@@ -432,10 +434,10 @@ public:
         return consensusInterface;
     }
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    void initBlockChain() { m_blockChain = std::make_shared<MockBlockChain>(); }
-    void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
-    void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    bool initBlockChain() { m_blockChain = std::make_shared<MockBlockChain>(); }
+    bool initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    bool initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
+    bool initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
     virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
     virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
     virtual void startAll() override {}

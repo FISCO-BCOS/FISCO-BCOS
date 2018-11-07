@@ -138,7 +138,7 @@ public:
     virtual ~MockBlockChain() {}
 
     virtual int64_t number() override { return m_blockNumber; }
-
+    void setGroupMark(std::string const& groupMark) override {}
     void createTransaction()
     {
         bytes rlpBytes = fromHex(
