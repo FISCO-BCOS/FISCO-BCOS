@@ -44,9 +44,8 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 **基础功能**
 
-* [系统合约介绍](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO-BCOS%E7%B3%BB%E7%BB%9F%E5%90%88%E7%BA%A6%E4%BB%8B%E7%BB%8D)
-* [系统参数说明文档](https://github.com/FISCO-BCOS/Wiki/tree/master/%E7%B3%BB%E7%BB%9F%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E%E6%96%87%E6%A1%A3)
-* [CNS合约命名服务](https://github.com/FISCO-BCOS/Wiki/tree/master/Contract_Name%20Service%E6%9C%8D%E5%8A%A1)
+* [分布式存储AMDB](https://github.com/FISCO-BCOS/AMDB)
+* [链上信使协议AMOP](https://github.com/FISCO-BCOS/Wiki/tree/master/AMOP%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)
 
 **性能**
 
@@ -56,7 +55,6 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 **易用性**
 
 * [易用性提升](https://github.com/FISCO-BCOS/Wiki/tree/master/%E6%B5%85%E8%B0%88FISCO-BCOS%E7%9A%84%E6%98%93%E7%94%A8%E6%80%A7)
-* [链上信使协议AMOP](https://github.com/FISCO-BCOS/Wiki/tree/master/AMOP%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)
 * [弹性联盟链共识框架](doc/弹性联盟链共识框架说明文档.md)
 
 **安全**
