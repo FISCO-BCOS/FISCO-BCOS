@@ -60,35 +60,35 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
     if (!_json.isObject() || _json.empty())
         return ret;
 
-    if (!_json["params"]["from"].empty())
-        ret.from = jsToAddress(_json["params"]["from"].asString());
-    if ((!_json["params"]["to"].empty()) && (!_json["params"]["to"].asString().empty()) &&
-        _json["params"]["to"].asString() != "0x")
-        ret.to = jsToAddress(_json["params"]["to"].asString());
+    if (!_json["from"].empty())
+        ret.from = jsToAddress(_json["from"].asString());
+    if ((!_json["to"].empty()) && (!_json["to"].asString().empty()) &&
+        _json["to"].asString() != "0x")
+        ret.to = jsToAddress(_json["to"].asString());
     else
         ret.creation = true;
 
-    if (!_json["params"]["value"].empty())
-        ret.value = jsToU256(_json["params"]["value"].asString());
+    if (!_json["value"].empty())
+        ret.value = jsToU256(_json["value"].asString());
 
-    if (!_json["params"]["gas"].empty())
-        ret.gas = jsToU256(_json["params"]["gas"].asString());
+    if (!_json["gas"].empty())
+        ret.gas = jsToU256(_json["gas"].asString());
 
-    if (!_json["params"]["gasPrice"].empty())
-        ret.gasPrice = jsToU256(_json["params"]["gasPrice"].asString());
+    if (!_json["gasPrice"].empty())
+        ret.gasPrice = jsToU256(_json["gasPrice"].asString());
 
-    if (!_json["params"]["data"].empty() && _json["params"]["data"].isString())
-        ret.data = jsToBytes(_json["params"]["data"].asString(), OnFailed::Throw);
+    if (!_json["data"].empty() && _json["data"].isString())
+        ret.data = jsToBytes(_json["data"].asString(), OnFailed::Throw);
 
-    if (!_json["params"]["code"].empty())
-        ret.data = jsToBytes(_json["params"]["code"].asString(), OnFailed::Throw);
+    if (!_json["code"].empty())
+        ret.data = jsToBytes(_json["code"].asString(), OnFailed::Throw);
 
-    if (!_json["params"]["randomid"].empty())
-        ret.nonce = jsToU256(_json["params"]["randomid"].asString());
+    if (!_json["randomid"].empty())
+        ret.nonce = jsToU256(_json["randomid"].asString());
 
     // add blocklimit params
-    if (!_json["params"]["blockLimit"].empty())
-        ret.blockLimit = jsToU256(_json["params"]["blockLimit"].asString());
+    if (!_json["blockLimit"].empty())
+        ret.blockLimit = jsToU256(_json["blockLimit"].asString());
 
     return ret;
 }
