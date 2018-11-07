@@ -58,7 +58,7 @@ public:
     void init();
     bool ok(Transaction const& _transaction, bool _needinsert = false);
     void updateCache(bool _rebuild = false);
-    void delCache(Transactions const& _transcations);
+    void delCache(Transaction const& _transcation);
 
 private:
     std::shared_ptr<BlockChainInterface> m_blockChain;

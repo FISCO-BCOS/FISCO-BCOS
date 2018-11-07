@@ -32,7 +32,10 @@ void Initializer::init(std::string const& _path)
 
     m_commonInitializer = std::make_shared<CommonInitializer>();
     m_commonInitializer->initConfig(pt);
-
+    /// init log
+    m_logInitializer = std::make_shared<LogInitializer>(m_commonInitializer->logConfig());
+    m_logInitializer->initEasylogging();
+    /// init certificates
     m_secureInitiailizer = std::make_shared<SecureInitiailizer>();
     m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
     m_secureInitiailizer->initConfig(pt);

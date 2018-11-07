@@ -60,17 +60,14 @@ bool NonceCheck::ok(Transaction const& _transaction, bool _needinsert)
     return true;
 }
 
-void NonceCheck::delCache(Transactions const& _transcations)
+void NonceCheck::delCache(Transaction const& _transcation)
 {
     DEV_WRITE_GUARDED(m_lock)
     {
-        for (unsigned i = 0; i < _transcations.size(); i++)
-        {
-            string key = this->generateKey(_transcations[i]);
-            auto iter = m_cache.find(key);
-            if (iter != m_cache.end())
-                m_cache.erase(iter);
-        }  // for
+        string key = this->generateKey(_transcation);
+        auto iter = m_cache.find(key);
+        if (iter != m_cache.end())
+            m_cache.erase(iter);
     }
 }
 

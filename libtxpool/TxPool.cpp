@@ -195,7 +195,7 @@ bool TxPool::isNonceOk(Transaction const& _tx, bool _needInsert) const
 /**
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
-bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
+bool TxPool::removeTrans(h256 const& _txHash, bool needRemoveNonce, bool needTriggerCallback,
     dev::eth::LocalisedTransactionReceipt::Ptr pReceipt)
 {
     auto p_tx = m_txsHash.find(_txHash);
@@ -207,6 +207,10 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     if (needTriggerCallback && pReceipt)
     {
         p_tx->second->tiggerRpcCallback(pReceipt);
+    }
+    if (needRemoveNonce)
+    {
+        m_nonceCheck->delCache(*(p_tx->second));
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
@@ -280,7 +284,7 @@ bool TxPool::dropBlockTrans(Block const& block)
             pReceipt = constructTransactionReceipt(
                 block.transactions()[i], block.transactionReceipts()[i], block, i);
         }
-        if (removeTrans(block.transactions()[i].sha3(), true, pReceipt) == false)
+        if (removeTrans(block.transactions()[i].sha3(), false, true, pReceipt) == false)
             succ = false;
     }
     return succ;

@@ -146,7 +146,7 @@ protected:
         dev::p2p::P2PException exception, std::shared_ptr<Session> session, Message::Ptr pMessage);
     /// verify transcation
     virtual ImportResult verify(
-        Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
+        Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = true);
     /// check block limit
     virtual bool isBlockLimitOk(Transaction const& _ts) const;
     /// check nonce
@@ -159,7 +159,8 @@ private:
     dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(Transaction const& tx,
         dev::eth::TransactionReceipt const& receipt, Block const& block, unsigned index);
 
-    bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
+    bool removeTrans(h256 const& _txHash, bool needRemoveNonce = true,
+        bool needTriggerCallback = false,
         dev::eth::LocalisedTransactionReceipt::Ptr pReceipt = nullptr);
     bool removeOutOfBound(h256 const& _txHash);
     void insert(Transaction const& _tx);

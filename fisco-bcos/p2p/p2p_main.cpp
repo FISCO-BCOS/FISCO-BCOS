@@ -34,7 +34,7 @@ using namespace dev::initializer;
 int main(int argc, const char* argv[])
 {
     auto initialize = std::make_shared<Initializer>();
-    initialize->init("./config.conf");
+    initialize->init("./config.ini");
 
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
