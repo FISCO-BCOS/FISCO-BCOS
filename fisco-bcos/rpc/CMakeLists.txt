@@ -18,22 +18,27 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
- aux_source_directory(. SRC_LIST)
- file(GLOB HEADERS "*.h")
- include(EthDependencies)
- add_executable(test_verifier ${SRC_LIST} ${HEADERS})
- target_include_directories(test_verifier PRIVATE ${BOOST_INCLUDE_DIR})
- target_link_libraries(test_verifier devcrypto)
-target_link_libraries(test_verifier ethcore)
-target_link_libraries(test_verifier blockverifier)
-target_link_libraries(test_verifier executivecontext)
-target_link_libraries(test_verifier evm)
-target_link_libraries(test_verifier mptstate)
-target_link_libraries(test_verifier storagestate)
-target_link_libraries(test_verifier blockchain)
-target_link_libraries(test_verifier devcore)
- target_link_libraries(test_verifier Boost::program_options)
- if (UNIX)
-target_link_libraries(test_verifier pthread)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
+
+aux_source_directory(. SRC_LIST)
+
+file(GLOB HEADERS "*.h")
+include(EthDependencies)
+
+add_executable(mini-rpc ${SRC_LIST} ${HEADERS})
+
+target_include_directories(mini-rpc PRIVATE ..)
+target_include_directories(mini-rpc PRIVATE ${BOOST_INCLUDE_DIR})
+target_link_libraries(mini-rpc Boost::program_options)
+target_link_libraries(mini-rpc Boost::UnitTestFramework)
+target_link_libraries(mini-rpc rpc)
+target_link_libraries(mini-rpc ledger)
+target_link_libraries(mini-rpc p2p)
+target_link_libraries(mini-rpc JsonRpcCpp::Server ${MHD_LIBRARY})
+
+if (UNIX)
+target_link_libraries(mini-rpc pthread)
 endif()
- install(TARGETS test_verifier DESTINATION bin) 
+
+install(TARGETS mini-rpc DESTINATION bin)

@@ -84,6 +84,8 @@ public:
 
     bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
 
+    std::shared_ptr<Host> host() const { return m_host; }
+
     void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) override
     {
         m_host->setGroupID2NodeList(_groupID2NodeList);

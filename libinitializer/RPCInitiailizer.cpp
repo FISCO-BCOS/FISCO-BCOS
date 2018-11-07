@@ -38,13 +38,13 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         channelRPCServer->setListenAddr(listenIP);
         channelRPCServer->setListenPort(listenPort);
         channelRPCServer->setSSLContext(m_sslContext);
+        channelRPCServer->setService(m_p2pService);
 
         auto ioService = std::make_shared<boost::asio::io_service>();
 
         auto server = std::make_shared<dev::channel::ChannelServer>();
         server->setIOService(ioService);
         server->setSSLContext(m_sslContext);
-        server->setService(m_p2pService);
         server->setEnableSSL(true);
         server->setBind(listenIP, listenPort);
 

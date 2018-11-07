@@ -51,44 +51,45 @@ public:
     }
 
     // consensus part
-    virtual Json::Value blockNumber(const Json::Value& requestJson) override;
-    virtual Json::Value pbftView(const Json::Value& requestJson) override;
+    virtual std::string blockNumber(int _groupID) override;
+    virtual std::string pbftView(int _groupID) override;
+    virtual Json::Value consensusStatus(int _groupID) override;
+
+    // sync part
+    virtual Json::Value syncStatus(int _groupID) override;
 
     // p2p part
-    virtual Json::Value peers(const Json::Value& requestJson) override;
+    virtual std::string version() override;
+    virtual Json::Value peers() override;
+    virtual Json::Value groupPeers(int _groupID) override;
+    virtual Json::Value groupList() override;
 
     // block part
-    virtual Json::Value getBlockByHash(const Json::Value& requestJson) override;
-    virtual Json::Value getBlockByNumber(const Json::Value& requestJson) override;
+    virtual Json::Value getBlockByHash(
+        int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
+    virtual Json::Value getBlockByNumber(
+        int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
 
     // transaction part
     /// @return the information about a transaction requested by transaction hash.
-    virtual Json::Value getTransactionByHash(const Json::Value& requestJson) override;
+    virtual Json::Value getTransactionByHash(
+        int _groupID, const std::string& _transactionHash) override;
     /// @return information about a transaction by block hash and transaction index position.
-    virtual Json::Value getTransactionByBlockHashAndIndex(const Json::Value& requestJson) override;
+    virtual Json::Value getTransactionByBlockHashAndIndex(
+        int _groupID, const std::string& _blockHash, const std::string& _transactionIndex) override;
     /// @return information about a transaction by block number and transaction index position.
-    virtual Json::Value getTransactionByBlockNumberAndIndex(
-        const Json::Value& requestJson) override;
+    virtual Json::Value getTransactionByBlockNumberAndIndex(int _groupID,
+        const std::string& _blockNumber, const std::string& _transactionIndex) override;
     /// @return the receipt of a transaction by transaction hash.
     /// @note That the receipt is not available for pending transactions.
-    virtual Json::Value getTransactionReceipt(const Json::Value& requestJson) override;
+    virtual Json::Value getTransactionReceipt(
+        int _groupID, const std::string& _transactionHash) override;
     /// @return information about pendingTransactions.
-    virtual Json::Value pendingTransactions(const Json::Value& requestJson) override;
+    virtual Json::Value pendingTransactions(int _groupID) override;
     /// Executes a new message call immediately without creating a transaction on the blockchain.
-    virtual Json::Value call(const Json::Value& requestJson) override;
-
+    virtual std::string call(int _groupID, const Json::Value& request) override;
     // Creates new message call transaction or a contract creation for signed transactions.
-    virtual Json::Value sendRawTransaction(const Json::Value& requestJson) override;
-
-    // amop part
-    //    virtual Json::Value topics(const Json::Value& requestJson) override;
-    //    virtual Json::Value setTopics(const Json::Value& requestJson) override;
-    //    virtual Json::Value sendMessage(const Json::Value& requestJson) override;
-
-    // push event part
-    //	virtual Json::Value blockAccepted  (const Json::Value &requestJson) override;
-    //	virtual Json::Value transactionAccepted (const Json::Value &requestJson) override;
-    //	virtual Json::Value amop_push (const Json::Value &requestJson) override;
+    virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
 
 protected:
@@ -96,8 +97,6 @@ protected:
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
     std::shared_ptr<dev::p2p::P2PInterface> service() { return m_service; }
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
-    Json::Value rpcErrorResult(Json::Value& responseJson, std::exception& e);
-    Json::Value rpcErrorArray(Json::Value& responseJson, std::string s);
 };
 
 }  // namespace rpc
