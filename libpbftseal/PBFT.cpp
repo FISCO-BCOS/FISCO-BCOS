@@ -542,8 +542,9 @@ bool PBFT::broadcastViewChangeReq() {
 
 	if (!m_empty_block_flag) {
 		LOGCOMWARNING << WarningMap.at(ChangeViewWarning) << "|blockNumber:" << req.height << " ChangeView:" << req.view;
-		m_empty_block_flag = false;
 	}
+	m_empty_block_flag = false;
+	
 	RLPStream ts;
 	req.streamRLPFields(ts);
 	bool ret = broadcastMsg(req.sig.hex() + toJS(req.view), ViewChangeReqPacket, ts.out());
