@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
 #include <climits>
@@ -33,6 +34,17 @@ namespace dev
 {
 namespace sync
 {
+class DownloadBlocksShard
+{
+public:
+    DownloadBlocksShard(int64_t _fromNumber, int64_t _size, bytes const& _blocksBytes)
+      : fromNumber(_fromNumber), size(_size), blocksBytes(_blocksBytes)
+    {}
+    int64_t fromNumber;
+    int64_t size;
+    bytes blocksBytes;
+};
+
 struct BlockQueueCmp
 {
     bool operator()(BlockPtr const& _a, BlockPtr const& _b)
@@ -45,9 +57,28 @@ struct BlockQueueCmp
 class DownloadingBlockQueue
 {
 public:
-    DownloadingBlockQueue() : m_blocks(), m_buffer(std::make_shared<BlockPtrVec>()) {}
-    /// Push a block
-    void push(BlockPtr _block);
+    using ShardPtr = std::shared_ptr<DownloadBlocksShard>;
+    using ShardPtrVec = std::vector<ShardPtr>;
+
+public:
+    DownloadingBlockQueue(
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain, PROTOCOL_ID _protocolId)
+      : m_blockChain(_blockChain),
+        m_protocolId(_protocolId),
+        m_blocks(),
+        m_buffer(std::make_shared<ShardPtrVec>())
+    {}
+
+    DownloadingBlockQueue()
+      : m_blockChain(nullptr),
+        m_protocolId(0),
+        m_blocks(),
+        m_buffer(std::make_shared<ShardPtrVec>())
+    {}
+
+    /// PUsh a block packet
+    void push(RLP const& _rlps);
+    void push(BlockPtrVec _blocks);
 
     /// Is the queue empty?
     bool empty();
@@ -73,11 +104,17 @@ public:
     void clearFullQueueIfNotHas(int64_t _blockNumber);
 
 private:
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    PROTOCOL_ID m_protocolId;
+
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //
-    std::shared_ptr<BlockPtrVec> m_buffer;  // use buffer for faster push return
+    std::shared_ptr<ShardPtrVec> m_buffer;  // use buffer for faster push return
 
     mutable SharedMutex x_blocks;
     mutable SharedMutex x_buffer;
+
+private:
+    bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);
 };
 
 }  // namespace sync

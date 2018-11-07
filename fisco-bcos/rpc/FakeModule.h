@@ -317,6 +317,7 @@ public:
     void start() override {}
     void stop() override {}
     SyncStatus status() const override { return m_syncStatus; }
+    std::string const syncInfo() const override { return std::string(); }
     bool isSyncing() const override { return m_isSyncing; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };

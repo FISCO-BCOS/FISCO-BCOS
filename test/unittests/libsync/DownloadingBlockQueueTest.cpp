@@ -43,13 +43,15 @@ BOOST_AUTO_TEST_CASE(AllTest)
 {
     DownloadingBlockQueue fakeQueue;
     auto pushFunc = [&fakeQueue](int start, int end) {
+        vector<shared_ptr<Block>> blocks;
         for (auto i = start; i < end; ++i)
         {
             FakeBlock fakeBlock;
             fakeBlock.getBlock().header().setNumber(static_cast<int64_t>(i));
             shared_ptr<Block> blockPtr = make_shared<Block>(fakeBlock.getBlock());
-            fakeQueue.push(blockPtr);
+            blocks.emplace_back(blockPtr);
         }
+        fakeQueue.push(blocks);
     };
 
     // Empty
@@ -88,21 +90,25 @@ BOOST_AUTO_TEST_CASE(AllTest)
     BOOST_CHECK(fakeQueue.size() == 0);
 
     // buffer full test
-    pushFunc(0, c_maxDownloadingBlockQueueBufferSize);
+    for (size_t i = 0; i < c_maxDownloadingBlockQueueBufferSize; i++)
+        pushFunc(0, 1);
     BOOST_CHECK(fakeQueue.size() == c_maxDownloadingBlockQueueBufferSize);
     pushFunc(0, 1);
     BOOST_CHECK(fakeQueue.size() == c_maxDownloadingBlockQueueBufferSize);
 
     // queue full test
-    fakeQueue.flushBufferToQueue();
+    fakeQueue.clear();
     pushFunc(0, c_maxDownloadingBlockQueueSize);
     fakeQueue.flushBufferToQueue();
     pushFunc(0, c_maxDownloadingBlockQueueSize);
     fakeQueue.flushBufferToQueue();
+    cout << "fakeQueue size: " << fakeQueue.size()
+         << " c_maxDownloadingBlockQueueSize: " << c_maxDownloadingBlockQueueSize << endl;
     BOOST_CHECK(fakeQueue.size() == c_maxDownloadingBlockQueueSize);
 
     // all full test
-    pushFunc(0, c_maxDownloadingBlockQueueBufferSize);
+    for (size_t i = 0; i < c_maxDownloadingBlockQueueBufferSize; i++)
+        pushFunc(0, 1);
     BOOST_CHECK(
         fakeQueue.size() == c_maxDownloadingBlockQueueSize + c_maxDownloadingBlockQueueBufferSize);
     pushFunc(0, 1);

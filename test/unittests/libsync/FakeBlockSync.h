@@ -40,6 +40,7 @@ public:
     void start() override {}
     void stop() override {}
     SyncStatus status() const override { return m_syncStatus; }
+    std::string const syncInfo() const override { return m_syncInfo; }
     bool isSyncing() const override { return m_isSyncing; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
@@ -51,6 +52,7 @@ private:
     bool m_forceSync;
     Block m_latestSentBlock;
     PROTOCOL_ID m_protocolId;
+    std::string m_syncInfo;
 };
 }  // namespace test
 }  // namespace dev
