@@ -22,6 +22,7 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("eth_accounts", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_ARRAY,  NULL), &dev::rpc::EthFace::eth_accountsI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_blockNumber", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_blockNumberI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_pbftView", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_pbftViewI);
+        this->bindAndAddMethod(jsonrpc::Procedure("eth_pbftToView", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_pbftToViewI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_getProofMerkle", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getProofMerkleI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_getBalance", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getBalanceI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_getStorageAt", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getStorageAtI);
@@ -126,6 +127,11 @@ public:
     {
         (void)request;
         response = this->eth_pbftView();
+    }
+    inline virtual void eth_pbftToViewI(const Json::Value &request, Json::Value &response)
+    {
+        (void)request;
+        response = this->eth_pbftToView();
     }
     inline virtual void eth_getProofMerkleI(const Json::Value &request, Json::Value &response)
     {
@@ -375,6 +381,7 @@ public:
     virtual Json::Value eth_accounts() = 0;
     virtual std::string eth_blockNumber() = 0;
     virtual std::string eth_pbftView() = 0;
+    virtual std::string eth_pbftToView() = 0;
     virtual Json::Value eth_getProofMerkle(string const& blockHash, string const& transactionIndex) = 0;
     virtual std::string eth_getBalance(const std::string& param1, const std::string& param2) = 0;
     virtual std::string eth_getStorageAt(const std::string& param1, const std::string& param2, const std::string& param3) = 0;
