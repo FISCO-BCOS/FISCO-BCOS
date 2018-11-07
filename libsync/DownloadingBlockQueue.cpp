@@ -50,8 +50,8 @@ void DownloadingBlockQueue::push(BlockPtrVec _blocks)
     for (BlockPtr block : _blocks)
     {
         rlpStream.append(block->rlp());
-        SYNCLOG(TRACE) << "[Rcv] [Download] DownloadingBlockQueueBuffer push  [number/hash]: "
-                       << block->header().number() << "/" << block->headerHash() << endl;
+        // SYNCLOG(TRACE) << "[Rcv] [Download] DownloadingBlockQueueBuffer push  [number/hash]: "
+        //<< block->header().number() << "/" << block->headerHash() << endl;
     }
 
     std::shared_ptr<bytes> b = std::make_shared<bytes>();
