@@ -58,7 +58,7 @@ public:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
-    void setGroupMark(std::string const& groupMark) override {}
+    void setGroupMark(std::string const& groupMark) override;
 
 private:
     void writeNumber(const dev::eth::Block& block,
