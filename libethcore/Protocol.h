@@ -58,8 +58,9 @@ inline PROTOCOL_ID getGroupProtoclID(GROUP_ID groupID, MODULE_ID moduleID)
 
 inline std::pair<GROUP_ID, MODULE_ID> getGroupAndProtocol(PROTOCOL_ID id)
 {
-    int32_t high = (2 << (8 * sizeof(GROUP_ID))) - 1;
-    int32_t low = (2 << (8 * sizeof(MODULE_ID))) - 1;
+    ///< The base should be 1, not 2.
+    int32_t high = (1 << (8 * sizeof(GROUP_ID))) - 1;
+    int32_t low = (1 << (8 * sizeof(MODULE_ID))) - 1;
     return std::make_pair((id >> (8 * sizeof(MODULE_ID))) & high, id & low);
 }
 

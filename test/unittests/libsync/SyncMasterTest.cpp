@@ -222,12 +222,10 @@ BOOST_AUTO_TEST_CASE(MaintainPeersStatusTest)
     sync->maintainPeersStatus();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(103)) << endl;
 
-    BOOST_CHECK(service->getAsyncSendSizeByNodeID(NodeID(103)) >= 5);
-
     size_t reqPacketSum = service->getAsyncSendSizeByNodeID(NodeID(101)) +
                           service->getAsyncSendSizeByNodeID(NodeID(102)) +
                           service->getAsyncSendSizeByNodeID(NodeID(103));
-    BOOST_CHECK_EQUAL(reqPacketSum, 10);
+    BOOST_CHECK_EQUAL(reqPacketSum, c_maxRequestShards);
 }
 
 BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
@@ -245,11 +243,14 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     status->knownLatestHash = latestBlockChain.getBlockByNumber(latestNumber)->headerHash();
 
     int64_t currentNumber = 0;
+    vector<shared_ptr<Block>> blocks;
 
     cout << " latestNumber: 6  curr:[0] -> downloadqueue:[1] -> curr:[0, 1]  not finish " << endl;
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b1 = latestBlockChain.getBlockByNumber(1);
-    status->bq().push(b1);
+    blocks.clear();
+    blocks.emplace_back(b1);
+    status->bq().push(blocks);
     status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 0);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
@@ -260,8 +261,10 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b3 = latestBlockChain.getBlockByNumber(3);
     shared_ptr<Block> b4 = latestBlockChain.getBlockByNumber(4);
-    status->bq().push(b3);
-    status->bq().push(b4);
+    blocks.clear();
+    blocks.emplace_back(b3);
+    blocks.emplace_back(b4);
+    status->bq().push(blocks);
     status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
@@ -272,8 +275,10 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     cout << "Number: " << blockChain->number() << endl;
     b1 = latestBlockChain.getBlockByNumber(1);
     b3 = latestBlockChain.getBlockByNumber(3);
-    status->bq().push(b1);
-    status->bq().push(b3);
+    blocks.clear();
+    blocks.emplace_back(b1);
+    blocks.emplace_back(b3);
+    status->bq().push(blocks);
     status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
@@ -283,7 +288,9 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
          << endl;
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b2 = latestBlockChain.getBlockByNumber(2);
-    status->bq().push(b2);
+    blocks.clear();
+    blocks.emplace_back(b2);
+    status->bq().push(blocks);
     status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
@@ -293,8 +300,10 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     cout << "Number: " << blockChain->number() << endl;
     shared_ptr<Block> b5 = latestBlockChain.getBlockByNumber(5);
     shared_ptr<Block> b6 = latestBlockChain.getBlockByNumber(6);
-    status->bq().push(b5);
-    status->bq().push(b6);
+    blocks.clear();
+    blocks.emplace_back(b5);
+    blocks.emplace_back(b6);
+    status->bq().push(blocks);
     status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 4);
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), true);  // finish
