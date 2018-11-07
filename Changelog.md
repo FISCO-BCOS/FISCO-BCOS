@@ -7,6 +7,8 @@
 1. systemcontract的ConfigAction用tool.js设置时，默认10进制
 2. 搭链时生成的节点，默认eventlog关闭
 3. RPC接口eth_getTransactionReceipt的返回字段，带上16进制前缀"0x"
+4. tools/scripts/下，在生成创世块文件时，默认生成god账号
+5. 调整节点日志生成格式，默认只生成全局日志和stat日志
 
 * Add
 
