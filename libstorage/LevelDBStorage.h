@@ -26,6 +26,7 @@
 #include <json/json.h>
 #include <leveldb/db.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/Guards.h>
 namespace dev
 {
 namespace storage
@@ -47,6 +48,7 @@ public:
 
 private:
     std::shared_ptr<leveldb::DB> m_db;
+    dev::SharedMutex m_remoteDBMutex;
 };
 
 }  // namespace storage
