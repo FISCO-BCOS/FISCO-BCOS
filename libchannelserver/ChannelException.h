@@ -23,7 +23,7 @@
 #pragma once
 
 #include <string>
-
+#define CHANNEL_LOG(LEVEL) LOG(LEVEL) << "[#channel] "
 namespace dev
 {
 namespace channel
