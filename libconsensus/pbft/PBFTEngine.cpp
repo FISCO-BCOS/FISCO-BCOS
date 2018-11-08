@@ -318,7 +318,6 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     m_connectedNode = u256(sessions.size());
     for (auto session : sessions)
     {
-        /// LOG(DEBUG) << "#### session id:" << session.nodeID;
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
             continue;

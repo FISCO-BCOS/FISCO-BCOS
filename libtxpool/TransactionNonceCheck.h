@@ -32,7 +32,7 @@ using namespace dev::eth;
 using namespace dev::blockchain;
 
 #define NONCECHECKER_LOG(LEVEL) \
-    LOG(LEVEL) << "[#TransactionNonceCheckER] [PROTOCOL: " << m_protocolId << "] "
+    LOG(LEVEL) << "[#LIBTXPOOL][#TransactionNonceChecker] [PROTOCOL: " << m_protocolId << "] "
 
 namespace dev
 {
