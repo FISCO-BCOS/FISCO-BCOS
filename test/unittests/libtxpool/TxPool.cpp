@@ -70,8 +70,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     BOOST_CHECK(result == ImportResult::TransactionNonceCheckFail);
     /// submit invalid transaction
     Transaction tx(trans_data, CheckTransaction::Everything);
-    std::pair<h256, Address> ret_result = pool_test.m_txPool->submit(tx);
-    BOOST_CHECK(ret_result == std::make_pair(tx.sha3(), Address(1)));
+    BOOST_CHECK_THROW(pool_test.m_txPool->submit(tx), TransactionRefused);
     Transactions transaction_vec =
         pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
             ->transactions();
@@ -83,7 +82,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
         tx.setBlockLimit(pool_test.m_blockChain->number() + u256(1));
         bytes trans_bytes2;
         tx.encode(trans_bytes2);
-        BOOST_CHECK_THROW(pool_test.m_txPool->import(ref(trans_bytes2)), InvalidSignature);
+        BOOST_CHECK(pool_test.m_txPool->import(ref(trans_bytes2)) == ImportResult::Malformed);
         /// resignature
         sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));

@@ -65,20 +65,27 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     ImportResult ret = import(_tx);
     if (ret == ImportResult::TransactionNonceCheckFail)
     {
-        return make_pair(_tx.sha3(), Address(1));
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "ImportResult::TransactionNonceCheckFail, txHash: " + toHex(_tx.sha3())));
     }
     else if (ImportResult::TransactionPoolIsFull == ret)
     {
-        return make_pair(_tx.sha3(), Address(2));
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "ImportResult::TransactionPoolIsFull, txHash: " + toHex(_tx.sha3())));
     }
     else if (ImportResult::TxPoolNonceCheckFail == ret)
-        return std::make_pair(_tx.sha3(), Address(3));
-    m_onReady();
+    {
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "ImportResult::TxPoolNonceCheckFail, txHash: " + toHex(_tx.sha3())));
+    }
     return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
 }
 
 /**
- * @brief : veirfy specified transaction
+ * @brief : veirfy specified transaction (called by libsync)
  *          && insert the valid transaction into the transaction queue
  * @param _txBytes : encoded data of the transaction
  * @param _ik :  Import transaction policy,
@@ -89,12 +96,19 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
 ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
 {
     Transaction tx;
-
-    tx.decode(_txBytes, CheckTransaction::Everything);
-    /// check sha3
-    if (sha3(_txBytes.toBytes()) != tx.sha3())
-        BOOST_THROW_EXCEPTION(
-            InconsistentTransactionSha3() << errinfo_comment("Transaction sha3 is inconsistent"));
+    try
+    {
+        tx.decode(_txBytes, CheckTransaction::Everything);
+        /// check sha3
+        if (sha3(_txBytes.toBytes()) != tx.sha3())
+            return ImportResult::Malformed;
+    }
+    catch (std::exception& e)
+    {
+        TXPOOL_LOG(ERROR) << "[#import] import transaction failed, [EINFO]:  "
+                          << boost::diagnostic_information(e) << std::endl;
+        return ImportResult::Malformed;
+    }
     return import(tx, _ik);
 }
 
