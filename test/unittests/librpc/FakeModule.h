@@ -301,7 +301,34 @@ public:
     void start() override {}
     void stop() override {}
     SyncStatus status() const override { return m_syncStatus; }
-    std::string const syncInfo() const override { return std::string(); }
+    std::string const syncInfo() const override
+    {
+        const std::string syncStatus =
+            "{\"isSyncing\":true,\"protocolId\":265,\"genesisHash\":"
+            "\"eb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c\","
+            "\"currentBlockNumber\":2826,\"currentBlockHash\":"
+            "\"1f7a714a5b2f31b6d5b609afb98bcea35c65dd42cfa999f39d0733798f371ca9\","
+            "\"knownHighestNumber\":3533,\"knownLatestHash\":"
+            "\"c8f36c588f40d280258722c75e927e113d1b69b2e9db230201cc199ab3986b39\",\"txPoolSize\":"
+            "562,\"peers\":[{\"nodeId\":"
+            "\"46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491"
+            "cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1\",\"genesisHash\":"
+            "\"eb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c\",\"blockNumber\":"
+            "3533,\"latestHash\":"
+            "\"c8f36c588f40d280258722c75e927e113d1b69b2e9db230201cc199ab3986b39\"},{\"nodeId\":"
+            "\"7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191"
+            "cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61\",\"genesisHash\":"
+            "\"eb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c\",\"blockNumber\":"
+            "3533,\"latestHash\":"
+            "\"c8f36c588f40d280258722c75e927e113d1b69b2e9db230201cc199ab3986b39\"},{\"nodeId\":"
+            "\"f6f4931f56b9963851f43bb857ed5a6170ec1a4208ddcf1a1f2bb66f6d7e7a5c4749a89b5277d6265b1c"
+            "12fdbc89290bed7cccf905eef359989275319b331753\",\"genesisHash\":"
+            "\"eb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c\",\"blockNumber\":"
+            "3535,\"latestHash\":"
+            "\"e2e1ccebe2ace9f45560b970c38b7edb4f80d0592ac7d345394852ff08ec8c08\"}]}";
+
+        return syncStatus;
+    }
     bool isSyncing() const override { return m_isSyncing; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
@@ -315,12 +342,11 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
-class FakeLedger : public Ledger
+class FakeLedger : public LedgerInterface
 {
 public:
     FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
-      : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {
         /// init blockChain
         initBlockChain();
@@ -329,14 +355,23 @@ public:
         /// init txPool
         initTxPool();
         /// init sync
-        initSync();
+        initBlockSync();
     }
-    bool initLedger() override{};
-    /// init blockverifier related
-    bool initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
-    bool initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    bool initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
-    bool initSync() override { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual bool initLedger() override { return true; };
+    virtual void initConfig(std::string const& configPath) override{};
+    virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
+    {
+        return m_txPool;
+    }
+    virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier()
+        const override
+    {
+        return m_blockVerifier;
+    }
+    virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
+    {
+        return m_blockChain;
+    }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
@@ -344,6 +379,28 @@ public:
             fake_pbft.consensus();
         return consensusInterface;
     }
+    virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
+    void initBlockChain() { m_blockChain = std::make_shared<MockBlockChain>(); }
+    void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
+    void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
+    virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
+    virtual void startAll() override {}
+    virtual void stopAll() override {}
+
+private:
+    std::shared_ptr<LedgerParamInterface> m_param = nullptr;
+
+    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
+    dev::GROUP_ID m_groupId;
+    dev::KeyPair m_keyPair;
+    std::string m_configFileName = "config";
+    std::string m_postfix = ".ini";
+    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
+    std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
 };
 
 }  // namespace test
