@@ -34,7 +34,7 @@
 #include <libinitializer/CommonInitializer.h>
 #include <libinitializer/InitializerInterface.h>
 #include <libinitializer/P2PInitializer.h>
-#include <libinitializer/SecureInitiailizer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <libsync/Common.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
@@ -186,7 +186,7 @@ public:
         m_commonInitializer = std::make_shared<CommonInitializer>();
         m_commonInitializer->initConfig(pt);
 
-        m_secureInitiailizer = std::make_shared<SecureInitiailizer>();
+        m_secureInitiailizer = std::make_shared<SecureInitializer>();
         m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
         m_secureInitiailizer->initConfig(pt);
 
@@ -198,11 +198,11 @@ public:
 
 public:
     CommonInitializer::Ptr commonInitializer() { return m_commonInitializer; }
-    SecureInitiailizer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
+    SecureInitializer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
 
 private:
     CommonInitializer::Ptr m_commonInitializer;
     P2PInitializer::Ptr m_p2pInitializer;
-    SecureInitiailizer::Ptr m_secureInitiailizer;
+    SecureInitializer::Ptr m_secureInitiailizer;
 };

@@ -52,7 +52,7 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        asyncSendMessageByNodeID(nodeID, message, fp, Options(1000, 1000));
+        asyncSendMessageByNodeID(nodeID, message, fp, Options{500, 2000});
 
         callback->mutex.lock();
         callback->mutex.unlock();
@@ -264,7 +264,7 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        asyncSendMessageByTopic(topic, message, fp, Options(1000, 1000));
+        asyncSendMessageByTopic(topic, message, fp, Options{500, 2000});
 
         callback->mutex.lock();
         callback->mutex.unlock();
