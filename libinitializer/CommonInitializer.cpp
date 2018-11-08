@@ -29,11 +29,11 @@ void CommonInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
     m_dataPath = _pt.get<std::string>("common.data_path", "");
     m_logConfig = _pt.get<std::string>("common.log_config", "${DATAPATH}/log.conf");
-    LOG(INFO) << "CommonInitializer::initConfig, dataPath:" << m_dataPath
-              << ",logConfig:" << m_logConfig;
+    INITIALIZER_LOG(DEBUG) << "[#CommonInitializer::initConfig] [dataPath/logConfig]: "
+                           << m_dataPath << "/" << m_logConfig;
     if (m_dataPath.empty())
     {
-        LOG(ERROR) << "Data path unspecified.";
+        INITIALIZER_LOG(ERROR) << "[#CommonInitializer::initConfig] data path unspecified.";
         BOOST_THROW_EXCEPTION(DataPathUnspecified());
     }
 }

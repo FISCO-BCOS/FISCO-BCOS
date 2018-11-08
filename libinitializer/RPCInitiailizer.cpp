@@ -58,7 +58,7 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
         m_channelRPCHttpServer->StartListening();
-        LOG(INFO) << "ChannelRPCHttpServer started.";
+        SESSION_LOG(INFO) << "ChannelRPCHttpServer started.";
     }
 
     if (httpListenPort > 0)
@@ -70,6 +70,6 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
         m_jsonrpcHttpServer->StartListening();
-        LOG(INFO) << "JsonrpcHttpServer started.";
+        SESSION_LOG(INFO) << "JsonrpcHttpServer started.";
     }
 }
