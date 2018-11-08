@@ -27,6 +27,7 @@
 #include <libledger/LedgerManager.h>
 #include <libp2p/P2PInterface.h>
 #include <librpc/Rpc.h>
+#include <librpc/SafeHttpServer.h>
 
 namespace dev
 {
@@ -69,6 +70,8 @@ private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
+    std::shared_ptr<dev::SafeHttpServer> m_safeHttpServer;
+    ChannelRPCServer::Ptr m_channelRPCServer;
     ModularServer<>* m_channelRPCHttpServer;
     ModularServer<>* m_jsonrpcHttpServer;
 };

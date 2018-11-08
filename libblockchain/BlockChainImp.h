@@ -58,6 +58,7 @@ public:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
+    void setGroupMark(std::string const& groupMark) override;
 
 private:
     void writeNumber(const dev::eth::Block& block,
@@ -72,6 +73,8 @@ private:
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
+    const std::string c_genesisHash =
+        "0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c";
 };
 }  // namespace blockchain
 }  // namespace dev

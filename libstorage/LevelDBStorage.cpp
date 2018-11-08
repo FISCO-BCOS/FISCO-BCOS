@@ -34,10 +34,9 @@ Entries::Ptr LevelDBStorage::select(
 {
     try
     {
-        LOG(DEBUG) << "Query leveldb data";
-
         std::string entryKey = table + "_" + key;
         std::string value;
+        ReadGuard l(m_remoteDBMutex);
         auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
         if (!s.ok() && !s.IsNotFound())
         {
@@ -119,14 +118,13 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-
-                LOG(TRACE) << "leveldb commit key:" << entryKey << " value:" << ssOut.str();
+                /// LOG(TRACE) << "leveldb commit key:" << entryKey;
             }
         }
 
         leveldb::WriteOptions writeOptions;
         writeOptions.sync = false;
-
+        WriteGuard l(m_remoteDBMutex);
         auto s = m_db->Write(writeOptions, &batch);
         if (!s.ok())
         {

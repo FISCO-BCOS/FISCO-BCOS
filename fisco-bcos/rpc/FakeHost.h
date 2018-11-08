@@ -24,20 +24,18 @@
 
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
-#include <libinitializer/SecureInitializer.h>
+#include <libinitializer/SecureInitiailizer.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Session.h>
 #include <libp2p/SessionFace.h>
-#include <test/tools/libutils/Common.h>
-#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::p2p;
 namespace dev
 {
-namespace test
+namespace demo
 {
 class FakeSessionForHost : public SessionFace,
                            public std::enable_shared_from_this<FakeSessionForHost>
@@ -163,38 +161,33 @@ class FakeSessionFactory : public SessionFactory
     }
 };
 
-
 /// Fakes of Host
 class FakeHost : public Host
 {
 public:
     FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
         std::shared_ptr<AsioInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext,
-        bool forRpc = false)
+        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext)
       : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory,
             _sslContext)
     {
         setLastPing(chrono::steady_clock::now());
         m_run = true;
-        if (forRpc == true)
-        {
-            std::map<GROUP_ID, h512s> map;
-            h512s nodes;
-            NodeID node1 = KeyPair::create().pub();
-            NodeID node2 = KeyPair::create().pub();
-            nodes.push_back(node1);
-            nodes.push_back(node2);
-            map[0] = nodes;
-            m_groupID2NodeList = map;
-            NodeIPEndpoint peer_endpoint1(bi::address::from_string("127.0.0.1"), 30303, 30303);
-            NodeIPEndpoint peer_endpoint2(bi::address::from_string("127.0.0.1"), 30304, 30304);
+        std::map<GROUP_ID, h512s> map;
+        h512s nodes;
+        NodeID node1 = KeyPair::create().pub();
+        NodeID node2 = KeyPair::create().pub();
+        nodes.push_back(node1);
+        nodes.push_back(node2);
+        map[0] = nodes;
+        m_groupID2NodeList = map;
+        NodeIPEndpoint peer_endpoint1(bi::address::from_string("127.0.0.1"), 30303, 30303);
+        NodeIPEndpoint peer_endpoint2(bi::address::from_string("127.0.0.1"), 30304, 30304);
 
-            std::shared_ptr<SessionFace> session1 = FakeSession(peer_endpoint1);
-            std::shared_ptr<SessionFace> session2 = FakeSession(peer_endpoint2);
-            m_sessions[node1] = session1;
-            m_sessions[node2] = session2;
-        }
+        std::shared_ptr<SessionFace> session1 = FakeSession(peer_endpoint1);
+        std::shared_ptr<SessionFace> session2 = FakeSession(peer_endpoint2);
+        m_sessions[node1] = session1;
+        m_sessions[node2] = session2;
     }
     ~FakeHost() {}
     bi::tcp::endpoint tcpClient() { return m_tcpClient; }
@@ -364,13 +357,7 @@ public:
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code())
     {
-        /// execute handlers
-        // m_strand.dispatch(std::bind(handler, ec));
         handler(ec);
-        if (ec)
-            BOOST_CHECK(socket->isConnected() == false);
-        else
-            BOOST_CHECK(socket->isConnected() == true);
     }
 
     /// default implementation of async_handshake
@@ -386,10 +373,6 @@ public:
         Handler_Type handler, boost::system::error_code ec = boost::system::error_code())
     {
         handler(ec);
-        if (ec)
-            BOOST_CHECK(socket->isConnected() == false);
-        else
-            BOOST_CHECK(socket->isConnected() == true);
     }
 
     virtual void set_verify_callback(
@@ -434,16 +417,6 @@ public:
             ec = boost::asio::error::eof;
             handler(ec, transferred_bytes);
         }
-        //        if (count == 1)
-        //        {
-        //            count++;
-        //            std::string s(32, 'a');
-        //            bytes data;
-        //            data.assign(s.begin(), s.end());
-        //            buffers = boost::asio::mutable_buffers_1(ref(data).data(), data.size());
-        //            transferred_bytes = data.size();
-        //            handler(ec, transferred_bytes);
-        //        }
         else
         {
             count++;
@@ -462,22 +435,21 @@ private:
 
 /// create Host with specified session factory
 static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
-    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort,
-    bool forRpc = false)
+    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
 {
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
-    setDataDir(dev::test::getTestPath().string() + "/fisco-bcos-data");
+    //    setDataDir(dev::demo::getTestPath().string() + "/fisco-bcos-data");
     boost::property_tree::ptree pt;
-    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitializer>();
-    secureInitiailizer->setDataPath(dev::test::getTestPath().string() + "/fisco-bcos-data/");
-    secureInitiailizer->initConfig(pt);
+    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
+    //    secureInitiailizer->setDataPath(dev::demo::getTestPath().string() + "/fisco-bcos-data/");
+    //    secureInitiailizer->initConfig(pt);
     auto sslContext = secureInitiailizer->SSLContext();
     /// create m_socketFactory
     std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<FakeSocketFactory>();
     FakeHost* m_host = new FakeHost(client_version, key_pair, network_config, m_asioInterface,
-        m_socketFactory, m_sessionFactory, sslContext, forRpc);
+        m_socketFactory, m_sessionFactory, sslContext);
     return m_host;
 }
 
@@ -490,13 +462,13 @@ static FakeHost* createFakeHost(
     return createHost(m_sessionFactory, client_version, listenIp, listenPort);
 }
 /// create Host with real Session object
-static FakeHost* createFakeHostWithSession(std::string const& client_version,
-    std::string const& listenIp, uint16_t const& listenPort, bool forRpc = false)
+static FakeHost* createFakeHostWithSession(
+    std::string const& client_version, std::string const& listenIp, uint16_t const& listenPort)
 {
     /// create m_sessionFactory
     std::shared_ptr<SessionFactory> m_sessionFactory =
         std::make_shared<FakeSessionForTestFactory>();
-    return createHost(m_sessionFactory, client_version, listenIp, listenPort, forRpc);
+    return createHost(m_sessionFactory, client_version, listenIp, listenPort);
 }
-}  // namespace test
+}  // namespace demo
 }  // namespace dev

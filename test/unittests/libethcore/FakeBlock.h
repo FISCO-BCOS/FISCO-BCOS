@@ -47,32 +47,18 @@ public:
         FakeTransaction(size);
         m_block.setSigList(m_sigList);
         m_block.setTransactions(m_transaction);
+        m_block.setBlockHeader(m_blockHeader);
         BOOST_CHECK(m_transaction == m_block.transactions());
         BOOST_CHECK(m_sigList == m_block.sigList());
-        m_blockHeaderData.clear();
-        m_blockData.clear();
-        m_blockHeader.encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
-        /// re-Encode blockHeaderData
-        m_blockHeader = m_block.header();
-    }
-
-    void reEncodeDecode()
-    {
-        m_blockHeader = m_block.header();
-        m_block.header().encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
-        m_blockHeader = m_block.header();
+        BOOST_CHECK(m_blockHeader = m_block.header());
+        m_block.encode(m_blockData);
     }
 
     /// for empty case test
     FakeBlock()
     {
-        m_blockHeader.encode(m_blockHeaderData);
-        m_block.encode(m_blockData, ref(m_blockHeaderData));
-        m_block.decode(ref(m_blockData));
+        m_block.setBlockHeader(m_blockHeader);
+        m_block.encode(m_blockData);
     }
 
     /// fake invalid block data
@@ -104,15 +90,12 @@ public:
     void CheckInvalidBlockData(size_t size)
     {
         FakeBlockHeader();
+        m_block.setBlockHeader(m_blockHeader);
         BOOST_CHECK_THROW(m_block.decode(ref(m_blockHeaderData)), InvalidBlockFormat);
-        BOOST_REQUIRE_NO_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)));
-        m_blockHeader.setGasUsed(u256(3000000000));
+        BOOST_REQUIRE_NO_THROW(m_block.encode(m_blockData));
+        m_block.header().setGasUsed(u256(3000000000));
         m_blockHeader.encode(m_blockHeaderData);
-        BOOST_CHECK_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)), TooMuchGasUsed);
-        m_blockHeaderData[0] += 1;
-        /// construct block header failed, invalid rlp
-        BOOST_CHECK_THROW(m_block.encode(m_blockData, ref(m_blockHeaderData)), std::exception);
-        m_blockHeaderData[0] -= 1;
+        BOOST_CHECK_THROW(m_block.encode(m_blockData), TooMuchGasUsed);
         /// construct invalid block format
         for (size_t i = 1; i < 3; i++)
         {
@@ -148,12 +131,11 @@ public:
         /// set sig list
         Signature sig;
         h256 block_hash;
-        Secret sec = KeyPair::create().secret();
         m_sigList.clear();
         for (size_t i = 0; i < size; i++)
         {
             block_hash = sha3(toString("block " + i));
-            sig = sign(sec, block_hash);
+            sig = sign(m_sec, block_hash);
             m_sigList.push_back(std::make_pair(u256(block_hash), sig));
         }
     }
@@ -181,7 +163,7 @@ public:
         u256 value = u256(100);
         u256 gas = u256(100000000);
         u256 gasPrice = u256(0);
-        Address dst = toAddress(KeyPair::create().pub());
+        Address dst;
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
         m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);

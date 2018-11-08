@@ -33,21 +33,24 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libledger/LedgerManager.h>
+#include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
+#include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <test/tools/libutils/Common.h>
-#include <test/unittests/libconsensus/FakePBFTEngine.h>
 
 using namespace dev;
+using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::sync;
+using namespace dev::txpool;
+using namespace dev::consensus;
 using namespace dev::ledger;
 
 namespace dev
 {
-namespace test
+namespace demo
 {
 class MockService : public Service
 {
@@ -110,9 +113,9 @@ class MockBlockChain : public BlockChainInterface
 public:
     MockBlockChain()
     {
-        m_blockNumber = 0;
+        m_blockNumber = 1;
         blockHash = h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
-        blockHeader.setNumber(m_blockNumber);
+        blockHeader.setNumber(1);
         blockHeader.setParentHash(h256(0x1));
         blockHeader.setLogBloom(h2048(0x2));
         blockHeader.setRoots(h256(0x3), h256(0x4), h256(0x5));
@@ -137,8 +140,8 @@ public:
 
     virtual ~MockBlockChain() {}
 
-    virtual int64_t number() override { return m_blockNumber; }
-    void setGroupMark(std::string const& groupMark) override {}
+    virtual int64_t number() override { return m_blockNumber - 1; }
+
     void createTransaction()
     {
         bytes rlpBytes = fromHex(
@@ -164,7 +167,11 @@ public:
 
     virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
     {
-        return LocalisedTransaction(transaction, blockHash, 0, 0);
+        if (_txHash ==
+            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+            return LocalisedTransaction(transaction, blockHash, 0, 1);
+        else
+            return LocalisedTransaction(Transaction(), h256(0), -1);
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
@@ -172,21 +179,29 @@ public:
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(
         dev::h256 const& _txHash) override
     {
-        LogEntries entries;
-        LogEntry entry;
-        entry.address = Address(0x2000);
-        entry.data = bytes();
-        entry.topics = h256s();
-        entries.push_back(entry);
-        return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
+        if (_txHash ==
+            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+        {
+            LogEntries entries;
+            LogEntry entry;
+            entry.address = Address(0x2000);
+            entry.data = bytes();
+            entry.topics = h256s();
+            entries.push_back(entry);
+            return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
+        }
+        else
+        {
+            return TransactionReceipt();
+        }
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
     {
-        return getBlockByHash(numberHash(_i));
+        return m_blockChain[_i];
     }
 
-    CommitResult commitBlock(
+    virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
         m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
@@ -195,6 +210,7 @@ public:
         m_onReady();
     }
 
+    void setGroupMark(std::string const& groupMark) override {}
     BlockHeader blockHeader;
     Transactions transactions;
     Transaction transaction;
@@ -216,7 +232,7 @@ public:
     };
     virtual ~MockBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, dev::h256 const& parentState) override
+        dev::eth::Block& block, dev::h256 const& parentStateRoot) override
     {
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
@@ -315,12 +331,78 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
-class FakeLedger : public Ledger
+class MockConsensus : public ConsensusInterface
+{
+public:
+    MockConsensus(){};
+    virtual ~MockConsensus(){};
+    virtual void start(){};
+    virtual void stop(){};
+    virtual h512s minerList() const { return m_minerList; };
+    virtual void appendMiner(h512 const& _miner){};
+    /// get status of consensus
+    virtual const std::string consensusStatus() const
+    {
+        std::string status =
+            "[\n    {\n        \"nodeNum\" : 0,\n        \"f\" : 0,\n        "
+            "\"consensusedBlockNumber\" : 0,\n        \"highestBlockHeader.blockNumber\" : 0,\n    "
+            "    \"highestBlockHeader.blockHash\" : "
+            "\"9a4d03c01903850ad99ee7994f51b50f729f6b7c29b04581b0fa7bb138c02a8e\",\n        "
+            "\"protocolId\" : 8,\n        \"accountType\" : 98376458,\n        \"minerList\" : "
+            "\"43686ea74ed41a4a37b7b5e28a27d0aee21a85477798bf4742754b50537477fc9fb5cc99d0e9c1f451be"
+            "a635cb4b9513fa964cc09a98153e59f25650170d3183#\",\n        \"allowFutureBlocks\" : "
+            "true,\n        \"connectedNodes\" : 0,\n        \"currentView\" : 0,\n        "
+            "\"toView\" : 0,\n        \"leaderFailed\" : false,\n        \"cfgErr\" : false,\n     "
+            "   \"omitEmptyBlock\" : true\n    },\n    {\n        \"prepareCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"prepareCache.height\" : -1,\n        \"prepareCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"prepareCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"rawPrepareCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"rawPrepareCache.height\" : -1,\n        \"rawPrepareCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"rawPrepareCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"committedPrepareCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"committedPrepareCache.height\" : -1,\n        \"committedPrepareCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"committedPrepareCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"futureCache.block_hash\" : "
+            "\"0000000000000000000000000000000000000000000000000000000000000000\",\n        "
+            "\"futureCache.height\" : -1,\n        \"futureCache.idx\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\",\n "
+            "       \"futureCache.view\" : "
+            "\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"\n  "
+            "  },\n    {\n        \"signCache.cachedBlockSize\" : \"0\"\n    },\n    {\n        "
+            "\"commitCache.cachedBlockSize\" : \"0\"\n    },\n    {\n        "
+            "\"viewChangeCache.cachedBlockSize\" : \"0\"\n    }\n]";
+        return status;
+    };
+
+    /// protocol id used when register handler to p2p module
+    virtual PROTOCOL_ID const& protocolId() const { return 0; };
+
+    /// get node account type
+    virtual NodeAccountType accountType() { return NodeAccountType::MinerAccount; };
+    /// set the node account type
+    virtual void setNodeAccountType(NodeAccountType const&){};
+    virtual u256 nodeIdx() const { return u256(0); };
+    /// update the context of PBFT after commit a block into the block-chain
+    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
+
+private:
+    dev::h512s m_minerList;
+};
+
+class FakeLedger : public LedgerInterface
 {
 public:
     FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
-      : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {
         /// init blockChain
         initBlockChain();
@@ -329,22 +411,52 @@ public:
         /// init txPool
         initTxPool();
         /// init sync
-        initSync();
+        initBlockSync();
     }
-    bool initLedger() override{};
-    /// init blockverifier related
-    bool initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
-    bool initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    bool initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
-    bool initSync() override { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual bool initLedger() override{};
+    virtual void initConfig(std::string const& configPath) override{};
+    virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
+    {
+        return m_txPool;
+    }
+    virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier()
+        const override
+    {
+        return m_blockVerifier;
+    }
+    virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
+    {
+        return m_blockChain;
+    }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
-        FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
         std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface =
-            fake_pbft.consensus();
+            make_shared<MockConsensus>();
         return consensusInterface;
     }
+    virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
+    bool initBlockChain() { m_blockChain = std::make_shared<MockBlockChain>(); }
+    bool initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    bool initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
+    bool initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
+    virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
+    virtual void startAll() override {}
+    virtual void stopAll() override {}
+
+private:
+    std::shared_ptr<LedgerParamInterface> m_param = nullptr;
+
+    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
+    dev::GROUP_ID m_groupId;
+    dev::KeyPair m_keyPair;
+    std::string m_configFileName = "config";
+    std::string m_postfix = ".ini";
+    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
+    std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
 };
 
-}  // namespace test
+}  // namespace demo
 }  // namespace dev

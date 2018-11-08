@@ -21,11 +21,9 @@
  */
 
 #pragma once
-
-///< TODO: We're using the 'Fake.h' and 'FakeLedger' to run demo, we will delete that later.
 #include "Common.h"
-#include "Fake.h"
 #include <libethcore/PrecompiledContract.h>
+#include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/P2PInterface.h>
 

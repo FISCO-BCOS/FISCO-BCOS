@@ -36,11 +36,7 @@ class P2PMessageFactory : public MessageFactory
 {
 public:
     virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override
-    {
-        std::cout << "### begine build message" << std::endl;
-        return std::make_shared<Message>();
-    }
+    virtual Message::Ptr buildMessage() override { return std::make_shared<Message>(); }
 };
 
 class P2PInitializer : public std::enable_shared_from_this<P2PInitializer>

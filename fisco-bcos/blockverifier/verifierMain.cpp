@@ -398,9 +398,10 @@ int main(int argc, char* argv[])
 
             dev::eth::Transaction tx2(ref(rlpBytesCall), dev::eth::CheckTransaction::Everything);
             block.appendTransaction(tx);
+
             block.appendTransaction(tx2);
             LOG(INFO) << "Tx2 " << tx2;
-            auto context = blockVerifier->executeBlock(block);
+            auto context = blockVerifier->executeBlock(block, parentBlock->header().stateRoot());
             blockChain->commitBlock(block, context);
             dev::eth::TransactionReceipt receipt =
                 blockChain->getTransactionReceiptByHash(tx.sha3());

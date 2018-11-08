@@ -55,6 +55,9 @@ public:
     virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
 
+    /// set group mark to genesis block
+    virtual void setGroupMark(std::string const& groupMark) = 0;
+
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
     dev::eth::Handler<> onReady(T const& _t)

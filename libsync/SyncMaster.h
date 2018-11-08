@@ -25,6 +25,7 @@
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -50,7 +51,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 30)
+        unsigned _idleWaitMs = 200)
       : SyncInterface(),
         Worker("SyncMaster-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -61,7 +62,7 @@ public:
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash)
     {
-        m_syncStatus = std::make_shared<SyncMasterStatus>(_genesisHash);
+        m_syncStatus = std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash);
         m_msgEngine = std::make_shared<SyncMsgEngine>(
             _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 
@@ -82,6 +83,7 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const override;
+    virtual string const syncInfo() const override;
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // virtual h256 latestBlockSent() override;
@@ -113,14 +115,14 @@ public:
 
     void noteDownloadingBegin()
     {
-        if (m_state == SyncState::Idle)
-            m_state = SyncState::Downloading;
+        if (m_syncStatus->state == SyncState::Idle)
+            m_syncStatus->state = SyncState::Downloading;
     }
 
     void noteDownloadingFinish()
     {
-        if (m_state == SyncState::Downloading)
-            m_state = SyncState::Idle;
+        if (m_syncStatus->state == SyncState::Downloading)
+            m_syncStatus->state = SyncState::Idle;
     }
 
     int64_t protocolId() { return m_protocolId; }
@@ -152,8 +154,7 @@ private:
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 
-    unsigned m_startingBlock = 0;  ///< Last block number for the start of sync
-    unsigned m_highestBlock = 0;   ///< Highest block number seen
+    unsigned m_highestBlock = 0;  ///< Highest block number seen
     uint64_t m_lastDownloadingRequestTime = 0;
     int64_t m_currentSealingNumber = 0;
 
@@ -169,7 +170,6 @@ private:
     std::condition_variable m_signalled;
 
     // sync state
-    SyncState m_state = SyncState::Idle;
     bool m_newTransactions = false;
     bool m_newBlocks = false;
 
