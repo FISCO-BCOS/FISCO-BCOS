@@ -27,6 +27,7 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
 #include "P2PSession.h"
+#include "P2PInterface.h"
 
 namespace dev
 {
@@ -66,11 +67,11 @@ private:
     void registerAMOP();
 
     ///< A call B, the function to call after the request is received by B.
-    mutable RecursiveMutex x_protocolID2Handler;
+    RecursiveMutex x_protocolID2Handler;
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
 
     ///< A call B, the function to call after the request is received by B in topic.
-    mutable RecursiveMutex x_topic2Handler;
+    RecursiveMutex x_topic2Handler;
     std::shared_ptr<std::unordered_map<std::string, CallbackFuncWithSession>> m_topic2Handler;
 };
 

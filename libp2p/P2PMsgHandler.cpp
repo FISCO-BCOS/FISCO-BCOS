@@ -125,7 +125,7 @@ bool P2PMsgHandler::eraseHandlerByTopic(std::string const& topic)
 void P2PMsgHandler::registerAMOP()
 {
     addProtocolID2Handler(dev::eth::ProtocolID::AMOP,
-        [](NetworkException e, std::shared_ptr<Session> s, P2PMessage::Ptr msg) {
+        [](NetworkException e, std::shared_ptr<P2PSession> s, P2PMessage::Ptr msg) {
             msg->printMsgWithPrefix("Message received in AMOP handler,");
             switch (msg->packetType())
             {
