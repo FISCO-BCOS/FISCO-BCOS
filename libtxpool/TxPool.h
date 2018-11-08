@@ -94,7 +94,7 @@ public:
 
     /**
      * @brief Remove transaction from the queue
-     * @param _txHash: transaction hash
+     * @param _txHash: Remove bad transaction from the queue
      */
     bool drop(h256 const& _txHash) override;
     bool dropBlockTrans(dev::eth::Block const& block) override;

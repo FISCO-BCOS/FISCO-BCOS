@@ -221,7 +221,7 @@ bool TxPool::insert(Transaction const& _tx)
 }
 
 /**
- * @brief Remove transaction from the queue
+ * @brief Remove bad transaction from the queue
  * @param _txHash: transaction hash
  */
 bool TxPool::drop(h256 const& _txHash)
@@ -229,8 +229,6 @@ bool TxPool::drop(h256 const& _txHash)
     UpgradableGuard l(m_lock);
     if (!m_known.count(_txHash))
         return false;
-    UpgradeGuard ul(l);
-    m_dropped.insert(_txHash);
     return removeTrans(_txHash);
 }
 
