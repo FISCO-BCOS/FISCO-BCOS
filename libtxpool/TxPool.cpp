@@ -146,6 +146,7 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
         TXPOOL_LOG(WARNING) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
         return ImportResult::AlreadyKnown;
     }
+    /// the transaction has been dropped before
     if (m_dropped.count(tx_hash) && _drop_policy == IfDropped::Ignore)
     {
         TXPOOL_LOG(WARNING) << "[#Verify] already dropped tx: " << tx_hash.abridged() << std::endl;
@@ -229,6 +230,11 @@ bool TxPool::drop(h256 const& _txHash)
     UpgradableGuard l(m_lock);
     if (!m_known.count(_txHash))
         return false;
+    UpgradeGuard ul(l);
+    if (m_dropped.size() < m_limit)
+        m_dropped.insert(_txHash);
+    else
+        m_dropped.clear();
     return removeTrans(_txHash);
 }
 
@@ -250,7 +256,6 @@ bool TxPool::dropTransactions(Block const& block, bool needNotify)
     bool succ = true;
     for (size_t i = 0; i < block.transactions().size(); i++)
     {
-        m_dropped.insert(block.transactions()[i].sha3());
         LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
         if (block.transactionReceipts().size() > i)
         {
@@ -369,6 +374,7 @@ void TxPool::clear()
     m_known.clear();
     m_txsQueue.clear();
     m_txsHash.clear();
+    m_dropped.clear();
     WriteGuard l_trans(x_transactionKnownBy);
     m_transactionKnownBy.clear();
 }
