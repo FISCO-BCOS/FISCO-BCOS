@@ -94,7 +94,7 @@ public:
     /// broadcast prepare message
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
-    void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
+    void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
     bool inline shouldReset(dev::eth::Block const& block)
     {
@@ -132,7 +132,8 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::P2PException exception,
         std::shared_ptr<dev::p2p::Session> session, dev::p2p::Message::Ptr message);
-    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
+    void handlePrepareMsg(
+        PrepareReq const& prepare_req, std::string const& endpoint, bool self = true);
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
@@ -334,16 +335,27 @@ protected:
     template <class T>
     inline bool hasConsensused(T const& req) const
     {
-        return req.height < m_consensusBlockNumber || req.view < m_view;
+        if (req.height < m_consensusBlockNumber || req.view < m_view)
+        {
+            PBFTENGINE_LOG(DEBUG) << "[#hasConsensused] [height/consNum/reqView/Cview]:  "
+                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
+                                  << "/" << m_view << std::endl;
+            return true;
+        }
+        return false;
     }
 
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
-        if (req.height > m_consensusBlockNumber)
+        if (req.height > m_consensusBlockNumber ||
+            (req.height == m_consensusBlockNumber && req.view > m_view))
+        {
+            PBFTENGINE_LOG(DEBUG) << "[#FutureBlock] [height/consNum/reqView/Cview]:  "
+                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
+                                  << "/" << m_view << std::endl;
             return true;
-        if (req.height == m_consensusBlockNumber && req.view > m_view)
-            return true;
+        }
         return false;
     }
 
@@ -351,7 +363,15 @@ protected:
     {
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
+        {
+            PBFTENGINE_LOG(DEBUG) << "[#isHashSavedAfterCommit] hasn't been cached after commit:  "
+                                     "[height/cacheHeight/hash/cachHash]:  "
+                                  << req.height << "/" << m_reqCache->committedPrepareCache().height
+                                  << "/" << req.block_hash.abridged() << "/"
+                                  << m_reqCache->committedPrepareCache().block_hash.abridged()
+                                  << std::endl;
             return false;
+        }
         return true;
     }
 

@@ -109,7 +109,6 @@ protected:
     /// sealing block
     virtual bool shouldSeal();
     virtual bool shouldWait(bool const& wait) const;
-    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
     virtual uint64_t calculateMaxPackTxNum() { return m_maxBlockTransactions; }

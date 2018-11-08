@@ -145,9 +145,10 @@ public:
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     inline std::pair<bool, u256> getLeader() const { return PBFTEngine::getLeader(); }
-    void handlePrepareMsg(PrepareReq const& prepareReq, bool self)
+    void handlePrepareMsg(
+        PrepareReq const& prepareReq, bool self = true, std::string const& ip = "")
     {
-        return PBFTEngine::handlePrepareMsg(prepareReq, self);
+        return PBFTEngine::handlePrepareMsg(prepareReq, ip, self);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
     void handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)

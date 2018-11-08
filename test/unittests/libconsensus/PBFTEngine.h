@@ -473,7 +473,7 @@ void FakePBFTMsgPacket(
 {
     req.encode(packet.data);
     packet.packet_id = type;
-    packet.setOtherField(idx, nodeId);
+    packet.setOtherField(idx, nodeId, "");
 }
 
 /// fake valid signReq or commitReq

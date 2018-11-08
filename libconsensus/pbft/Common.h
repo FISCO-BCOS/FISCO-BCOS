@@ -61,6 +61,8 @@ struct PBFTMsgPacket
     bytes data;
     /// timestamp of receive this pbft message
     u256 timestamp;
+    /// endpoint
+    std::string endpoint;
     /// default constructor
     PBFTMsgPacket() : node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(u256(utcTime()))
     {}
@@ -96,10 +98,11 @@ struct PBFTMsgPacket
      * @param idx: the index of the node that send the PBFTMsgPacket
      * @param nodeId : the id of the node that send the PBFTMsgPacket
      */
-    void setOtherField(u256 const& idx, h512 const& nodeId)
+    void setOtherField(u256 const& idx, h512 const& nodeId, std::string const& _endpoint)
     {
         node_idx = idx;
         node_id = nodeId;
+        endpoint = _endpoint;
         timestamp = u256(utcTime());
     }
     /// populate PBFTMsgPacket from RLP object

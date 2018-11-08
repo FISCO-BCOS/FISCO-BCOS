@@ -30,6 +30,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
+#include <libp2p/Host.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Session.h>
 #include <libsync/SyncInterface.h>
@@ -61,6 +62,8 @@ public:
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
+        std::shared_ptr<dev::p2p::Host> host = m_service->host();
+        endpoint = host->tcpPublic().address().to_string();
     }
 
     void start() override;
@@ -137,7 +140,7 @@ public:
 
     u256 minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader) {}
+    virtual void reportBlock(dev::eth::Block const& block) {}
 
 protected:
     virtual void resetConfig() { m_nodeNum = u256(m_minerList.size()); }
@@ -179,7 +182,8 @@ protected:
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
-                req.setOtherField(u256(peer_index), session->id());
+                req.setOtherField(
+                    u256(peer_index), session->id(), session->nodeIPEndpoint().name());
         }
         return valid;
     }
@@ -229,6 +233,7 @@ protected:
     std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
     /// handler of the block-verifier module
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
+    std::string endpoint;
 
     // the block which is waiting consensus
     int64_t m_consensusBlockNumber;
