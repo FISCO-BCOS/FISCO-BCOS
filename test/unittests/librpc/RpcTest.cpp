@@ -87,11 +87,7 @@ BOOST_AUTO_TEST_CASE(testConsensusPart)
 BOOST_AUTO_TEST_CASE(testSyncPart)
 {
     Json::Value status = rpc->syncStatus(0);
-    //    BOOST_CHECK(status["highestBlockNumber"].asInt() == 0); //TODO
-    //    BOOST_CHECK(status["startBlockNumber"].asInt() == 0);
-    //    BOOST_CHECK(status["majorSyncing"].asBool() == false);
-    //    BOOST_CHECK(status["state"].asString() == "Idle");
-
+    BOOST_CHECK(status.size() == 9);
     BOOST_CHECK_THROW(rpc->syncStatus(1), JsonRpcException);
 }
 
