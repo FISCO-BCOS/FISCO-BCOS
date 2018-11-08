@@ -23,6 +23,7 @@
  */
 #include "TxPool.h"
 #include <libethcore/Exceptions.h>
+using namespace std;
 using namespace dev::p2p;
 using namespace dev::eth;
 namespace dev
@@ -36,7 +37,7 @@ namespace txpool
  * @param pMessage : p2p handler returned by p2p module to obtain messages
  */
 void TxPool::enqueue(
-    dev::p2p::NetworkException exception, std::shared_ptr<Session> session, P2PMessage::Ptr pMessage)
+    dev::p2p::NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr pMessage)
 {
     if (exception.errorCode() != 0)
         BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed()

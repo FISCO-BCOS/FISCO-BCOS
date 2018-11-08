@@ -22,7 +22,8 @@
  */
 
 #include "SyncMsgPacket.h"
-
+#include <libp2p/Service.h>
+#include <libp2p/P2PSession.h>
 
 using namespace std;
 using namespace dev;
@@ -31,7 +32,7 @@ using namespace dev::p2p;
 using namespace dev::eth;
 
 bool SyncMsgPacket::decode(
-    std::shared_ptr<dev::p2p::SessionFace> _session, dev::p2p::Message::Ptr _msg)
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg)
 {
     if (_msg == nullptr)
         return false;
@@ -47,9 +48,9 @@ bool SyncMsgPacket::decode(
     return true;
 }
 
-Message::Ptr SyncMsgPacket::toMessage(PROTOCOL_ID _protocolId)
+P2PMessage::Ptr SyncMsgPacket::toMessage(PROTOCOL_ID _protocolId)
 {
-    Message::Ptr msg = std::make_shared<Message>();
+    P2PMessage::Ptr msg = std::make_shared<P2PMessage>();
 
     std::shared_ptr<bytes> b = std::make_shared<bytes>();
     m_rlpStream.swapOut(*b);

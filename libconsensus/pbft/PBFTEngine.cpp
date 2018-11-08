@@ -450,7 +450,7 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
  * @param message: message constructed from data received from the network
  */
 void PBFTEngine::onRecvPBFTMessage(
-    P2PException exception, std::shared_ptr<Session> session, Message::Ptr message)
+    NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
 {
     PBFTMsgPacket pbft_msg;
     bool valid = decodeToRequests(pbft_msg, message, session);

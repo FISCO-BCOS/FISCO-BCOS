@@ -23,9 +23,11 @@
 #include "P2PInitializer.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include "../libnetwork/Host.h"
-#include "../libnetwork/Network.h"
-#include "../libnetwork/P2pFactory.h"
+#include <libnetwork/Host.h>
+#include <libnetwork/Network.h>
+#include <libnetwork/P2pFactory.h>
+#include <libp2p/P2PMsgHandler.h>
+#include <libdevcore/easylog.h>
 
 using namespace dev;
 using namespace dev::p2p;
@@ -72,14 +74,30 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         }
     }
 
-    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+    auto ioService = std::make_shared<ba::io_service>();
+    auto strand = std::make_shared<boost::asio::io_service::strand>(*ioService);
+    auto acceptor = std::make_shared<bi::tcp::acceptor>(*ioService);
     auto asioInterface = std::make_shared<AsioInterface>();
     auto socketFactory = std::make_shared<SocketFactory>();
     auto sessionFactory = std::make_shared<SessionFactory>();
+#if 0
     auto host = std::make_shared<Host>("2.0", m_keyPair, network_config, asioInterface,
         socketFactory, sessionFactory, m_SSLContext);
-    host->setStaticNodes(nodes);
-    m_p2pService = std::make_shared<Service>(host, p2pMsgHandler);
-    m_p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
+#endif
+    auto host = std::make_shared<Host>();
+    host->setIOService(ioService);
+    host->setStrand(strand);
+    host->setAcceptor(acceptor);
+    host->setASIOInterface(asioInterface);
+    host->setSocketFactory(socketFactory);
+    host->setSessionFactory(sessionFactory);
+    host->setSSLContext(m_SSLContext);
+    host->setMessageFactory(std::make_shared<P2PMessageFactory>());
+
+    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
+    m_p2pService = std::make_shared<Service>();
+    m_p2pService->setHost(host);
+    m_p2pService->setStaticNodes(nodes);
+    m_p2pService->setP2PMsgHandler(p2pMsgHandler);
     host->start();
 }

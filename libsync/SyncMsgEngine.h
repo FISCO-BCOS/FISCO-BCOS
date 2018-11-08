@@ -29,9 +29,9 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
-#include "../libnetwork/Common.h"
-#include "../libnetwork/Session.h"
-#include "../libp2p/P2PInterface.h"
+#include <libnetwork/Common.h>
+#include <libnetwork/Session.h>
+#include <libp2p/P2PInterface.h>
 
 
 namespace dev
@@ -58,12 +58,12 @@ public:
             m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
     }
 
-    void messageHandler(dev::p2p::NetworkException _e, std::shared_ptr<dev::p2p::SessionFace> _session,
+    void messageHandler(dev::p2p::NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session,
         dev::p2p::P2PMessage::Ptr _msg);
 
 private:
-    bool checkSession(std::shared_ptr<dev::p2p::SessionFace> _session);
-    bool checkMessage(dev::p2p::Message::Ptr _msg);
+    bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
+    bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
     bool isNewerBlock(std::shared_ptr<dev::eth::Block> block);
     bool interpret(SyncMsgPacket const& _packet);
 

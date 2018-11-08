@@ -26,13 +26,16 @@
 #include <memory>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
+#include "P2PSession.h"
 
 namespace dev
 {
 namespace p2p
 {
+
 class P2PMsgHandler
 {
+
 public:
     P2PMsgHandler()
     {
@@ -48,15 +51,15 @@ public:
     ///< Add, Get, Erase interface of protocolID2Handler.
     ///< The return true indicates that the operation was successful.
     ///< The return false indicates that the operation failed.
-    bool addProtocolID2Handler(PROTOCOL_ID protocolID, CallbackFuncWithSession const& callback);
-    bool getHandlerByProtocolID(PROTOCOL_ID protocolID, CallbackFuncWithSession& callback);
+    bool addProtocolID2Handler(PROTOCOL_ID protocolID, CallbackFuncWithSession callback);
+    bool getHandlerByProtocolID(PROTOCOL_ID protocolID, CallbackFuncWithSession callback);
     bool eraseHandlerByProtocolID(PROTOCOL_ID protocolID);
 
     ///< Add, Get, Erase interface of topic2Handler.
     ///< The return true indicates that the operation was successful.
     ///< The return false indicates that the operation failed.
-    bool addTopic2Handler(std::string const& topic, CallbackFuncWithSession const& callback);
-    bool getHandlerByTopic(std::string const& topic, CallbackFuncWithSession& callback);
+    bool addTopic2Handler(std::string const& topic, CallbackFuncWithSession callback);
+    bool getHandlerByTopic(std::string const& topic, CallbackFuncWithSession callback);
     bool eraseHandlerByTopic(std::string const& topic);
 
 private:

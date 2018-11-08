@@ -22,17 +22,41 @@
 #include "Service.h"
 
 #include <libdevcore/CommonJS.h>
+#include <libnetwork/Common.h>
+#include <libp2p/Service.h>
+#include <boost/random.hpp>
+#include <libdevcore/easylog.h>
+
 namespace dev
 {
 namespace p2p
 {
-Message::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message)
+P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message)
 {
     LOG(INFO) << "Call Service::sendMessageByNodeID";
     try
     {
+        struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
+        {
+        public:
+            typedef std::shared_ptr<SessionCallback> Ptr;
+
+            SessionCallback() { mutex.lock(); }
+
+            void onResponse(NetworkException _error, std::shared_ptr<P2PSession> session, P2PMessage::Ptr _message)
+            {
+                error = _error;
+                response = _message;
+                mutex.unlock();
+            }
+
+            NetworkException error;
+            P2PMessage::Ptr response;
+            std::mutex mutex;
+        };
+
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
-        CallbackFunc fp = std::bind(
+        CallbackFuncWithSession fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
 
@@ -59,7 +83,7 @@ Message::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message
 }
 
 void Service::asyncSendMessageByNodeID(
-    NodeID nodeID, P2PMessage::Ptr message, CallbackFunc callback, Options options)
+    NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
     LOG(INFO) << "Call Service::asyncSendMessageByNodeID to NodeID=" << toJS(nodeID);
     try
@@ -67,7 +91,7 @@ void Service::asyncSendMessageByNodeID(
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(nodeID);
 
-        if(it != m_sessions.end() && it->second->isConnected()) {
+        if(it != m_sessions.end() && it->second->session()->isConnected()) {
             std::shared_ptr<SessionFace> p = it->second;
             uint32_t seq = ++m_seq;
 
@@ -92,7 +116,12 @@ void Service::asyncSendMessageByNodeID(
             ///< update seq and length
             message->setSeq(seq);
 
-            it->second->asyncSendMessage(message, options, callback);
+            auto session = it->second;
+            it->second->session()->asyncSendMessage(message, options, [session, callback](NetworkException e, Message::Ptr message) {
+                P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+                callback(e, session, p2pMessage);
+            });
+
             message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
         }
     }
@@ -239,7 +268,7 @@ void Service::onTimeoutByNode(
 }
 #endif
 
-P2PMessage::Ptr Service::sendMessageByTopic(std::string const& topic, P2PMessage::Ptr message)
+P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr message)
 {
     LOG(INFO) << "Call Service::sendMessageByTopic";
     try
@@ -272,7 +301,7 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string const& topic, P2PMessage
 }
 
 void Service::asyncSendMessageByTopic(
-    std::string const& topic, P2PMessage::Ptr message, CallbackFunc callback, Options const& options)
+    std::string topic, P2PMessage::Ptr message, CallbackFunc callback, Options options)
 {
     LOG(INFO) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
     //assert(options.timeout > 0 && options.subTimeout > 0);
@@ -282,6 +311,63 @@ void Service::asyncSendMessageByTopic(
         LOG(INFO) << "Call Service::asyncSendMessageByTopic, nodeIDsToSend size=0.";
         return;
     }
+
+    class TopicStatus: public std::enable_shared_from_this<TopicStatus> {
+    public:
+        void onResponse(NetworkException e, P2PSession::Ptr session, Message::Ptr message) {
+            if(e.errorCode() != 0 || !current) {
+                if(e.errorCode() != 0) {
+                    LOG(WARNING) << "Send topics message to " << current << "error once: " << e.what();
+                }
+
+                if(nodeIDs.empty()) {
+                    LOG(WARNING) << "Send topics message all failed";
+                    callback(NetworkException(), Message::Ptr());
+
+                    return;
+                }
+
+                boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
+                boost::uniform_int<int> index(0, nodeIDs.size() - 1);
+
+                auto ri = index(rng);
+
+                current = nodeIDs[ri];
+                nodeIDs.erase(nodeIDs.begin() + ri);
+
+                auto s = service.lock();
+                if(s) {
+                    auto self = shared_from_this();
+
+                    //s->asyncSendMessageByNodeID(current, message, std::bind(&TopicStatus::onResponse, shared_from_this(), std::placeholders::_1, std::placeholders::_2), options);
+                    s->asyncSendMessageByNodeID(current, message, [self](NetworkException e, P2PSession::Ptr session, P2PMessage::Ptr message) {
+                        self->onResponse(e, message);
+                    }, options);
+                }
+            }
+            else {
+                callback(e, message);
+            }
+        }
+
+        NodeID current;
+        NodeIDs nodeIDs;
+        CallbackFunc callback;
+        P2PMessage::Ptr message;
+        std::weak_ptr<Service> service;
+        Options options;
+    };
+
+    auto topicStatus = std::make_shared<TopicStatus>();
+    topicStatus->nodeIDs = nodeIDsToSend;
+    topicStatus->callback = callback;
+    topicStatus->message = message;
+    topicStatus->service = std::weak_ptr(shared_from_this());
+    topicStatus->options = options;
+
+    topicStatus->onResponse(NetworkException(), P2PSession::Ptr(), message);
+
+#if 0
     NodeID nodeID = nodeIDsToSend[0];
     nodeIDsToSend.erase(nodeIDsToSend.begin());
     LOG(INFO) << "Call Service::asyncSendMessageByTopic to NodeID=" << toJS(nodeID);
@@ -323,8 +409,10 @@ void Service::asyncSendMessageByTopic(
     {
         LOG(ERROR) << "ERROR:" << e.what();
     }
+#endif
 }
 
+#if 0
 void Service::asyncMulticastMessageByTopic(std::string const& topic, P2PMessage::Ptr message)
 {
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
@@ -337,12 +425,12 @@ void Service::asyncMulticastMessageByTopic(std::string const& topic, P2PMessage:
         std::shared_ptr<bytes> buf = std::make_shared<bytes>();
         message->encode(*buf);
 
-        RecursiveGuard l(m_host->mutexSessions());
-        auto s = m_host->sessions();
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;
         for (auto const& i : s)
         {
             if (isSessionInNodeIDList(i.first, nodeIDsToSend))
-                i.second->send(buf);
+                //i.second->send(buf);
         }
     }
     catch (std::exception& e)
@@ -375,6 +463,7 @@ void Service::asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, P2PMessa
         LOG(ERROR) << "Service::asyncMulticastMessageByNodeIDList error:" << e.what();
     }
 }
+#endif
 
 bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs)
 {
@@ -386,6 +475,7 @@ bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& n
     return false;
 }
 
+#if 0
 void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options const& options)
 {
     LOG(INFO) << "Call Service::asyncBroadcastMessage";
@@ -409,6 +499,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options const& opti
         LOG(ERROR) << "Service::asyncBroadcastMessage error:" << e.what();
     }
 }
+#endif
 
 void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler)
 {
@@ -587,15 +678,15 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     NodeIDs nodeList;
     try
     {
-        RecursiveGuard l(m_host->mutexSessions());
-        auto s = m_host->sessions();
-        for (auto const& i : s)
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;
+        for (auto const& it : s)
         {
-            for (auto j : *(i.second->topics()))
+            for (auto j : *(it.second->topics()))
             {
                 if (j == topic)
                 {
-                    nodeList.push_back(i.first);
+                    nodeList.push_back(it.first);
                 }
             }
         }

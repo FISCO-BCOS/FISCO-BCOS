@@ -20,13 +20,15 @@
  */
 
 #include "P2PMsgHandler.h"
+#include "P2PSession.h"
 
 namespace dev
 {
 namespace p2p
 {
+
 bool P2PMsgHandler::addProtocolID2Handler(
-    PROTOCOL_ID protocolID, CallbackFuncWithSession const& callback)
+    PROTOCOL_ID protocolID, CallbackFuncWithSession callback)
 {
     RecursiveGuard l(x_protocolID2Handler);
     if (m_protocolID2Handler->find(protocolID) == m_protocolID2Handler->end())
@@ -42,7 +44,7 @@ bool P2PMsgHandler::addProtocolID2Handler(
 }
 
 bool P2PMsgHandler::getHandlerByProtocolID(
-    PROTOCOL_ID protocolID, CallbackFuncWithSession& callback)
+    PROTOCOL_ID protocolID, CallbackFuncWithSession callback)
 {
     RecursiveGuard l(x_protocolID2Handler);
     auto it = m_protocolID2Handler->find(protocolID);
@@ -74,7 +76,7 @@ bool P2PMsgHandler::eraseHandlerByProtocolID(PROTOCOL_ID protocolID)
 }
 
 bool P2PMsgHandler::addTopic2Handler(
-    std::string const& topic, CallbackFuncWithSession const& callback)
+    std::string const& topic, CallbackFuncWithSession callback)
 {
     RecursiveGuard l(x_topic2Handler);
     if (m_topic2Handler->find(topic) == m_topic2Handler->end())
@@ -89,7 +91,7 @@ bool P2PMsgHandler::addTopic2Handler(
     }
 }
 
-bool P2PMsgHandler::getHandlerByTopic(std::string const& topic, CallbackFuncWithSession& callback)
+bool P2PMsgHandler::getHandlerByTopic(std::string const& topic, CallbackFuncWithSession callback)
 {
     RecursiveGuard l(x_topic2Handler);
     auto it = m_topic2Handler->find(topic);

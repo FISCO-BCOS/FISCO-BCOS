@@ -31,6 +31,7 @@
 #include <libnetwork/Host.h>
 #include "P2PInterface.h"
 #include "P2PMsgHandler.h"
+#include "P2PSession.h"
 
 namespace dev
 {
@@ -42,22 +43,25 @@ public:
     Service();
     virtual ~Service() {}
 
-    Message::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) override;
+    typedef std::shared_ptr<Service> Ptr;
+
+    P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) override;
 
     void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFunc callback = [](NetworkException e, Message::Ptr msg) {},
-        Options options = Options()) override;
+        CallbackFuncWithSession callback, Options options = Options()) override;
 
-    P2PMessage::Ptr sendMessageByTopic(std::string const& topic, P2PMessage::Ptr message) override;
+    P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) override;
 
-    void asyncSendMessageByTopic(std::string const& topic, P2PMessage::Ptr message,
-        CallbackFunc callback, Options const& options) override;
+    void asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options) override;
 
+#if 0
     void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) override;
 
     void asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message) override;
 
     void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
+#endif
 
     void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
@@ -68,6 +72,9 @@ public:
         NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) override;
 
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
+
+    std::map<NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
+    void setStaticNodes(std::map<NodeIPEndpoint, NodeID> staticNodes) { m_staticNodes = staticNodes; }
 
     ///< Only connected node
     SessionInfos sessionInfos() const override;
@@ -91,6 +98,7 @@ private:
     void onTimeoutByTopic(const boost::system::error_code& error,
         std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, P2PMessage::Ptr message,
         CallbackFunc callback, Options const& options, uint32_t totalTimeout);
+
 #if 0
     void onTimeoutByNode(
         const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);
@@ -100,6 +108,8 @@ private:
 
     bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
 
+    std::map<NodeIPEndpoint, NodeID> m_staticNodes;
+
     std::shared_ptr<Host> m_host;
 
     std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
@@ -107,7 +117,7 @@ private:
 
     //add for p2p
     /// maps from node ids to the sessions
-    mutable std::unordered_map<NodeID, std::shared_ptr<SessionFace>> m_sessions;
+    mutable std::unordered_map<NodeID, P2PSession::Ptr> m_sessions;
     mutable RecursiveMutex x_sessions;
 
     ///< Topics being concerned by myself

@@ -223,7 +223,7 @@ public:
     typedef std::shared_ptr<MessageFactory> Ptr;
 
     virtual ~MessageFactory(){};
-    virtual P2PMessage::Ptr buildMessage() = 0;
+    virtual Message::Ptr buildMessage() = 0;
 };
 
 class NetworkException : public std::exception
@@ -242,25 +242,6 @@ private:
 };
 
 class Session;
-
-struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
-{
-public:
-    typedef std::shared_ptr<SessionCallback> Ptr;
-
-    SessionCallback() { mutex.lock(); }
-
-    void onResponse(NetworkException _error, P2PMessage::Ptr _message)
-    {
-        error = _error;
-        response = _message;
-        mutex.unlock();
-    }
-
-    NetworkException error;
-    P2PMessage::Ptr response;
-    std::mutex mutex;
-};
 
 /// @returns the string form of the given disconnection reason.
 std::string reasonOf(DisconnectReason _r);

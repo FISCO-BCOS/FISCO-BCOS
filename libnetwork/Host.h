@@ -58,7 +58,7 @@ public:
     virtual NodeID id() const { return m_alias.pub(); }
     virtual uint16_t listenPort() const { return m_listenPort; }
 
-    virtual void start(boost::system::error_code const& error);
+    virtual void start();
     virtual void stop();
 
     virtual void asyncConnect(

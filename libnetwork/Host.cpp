@@ -289,7 +289,7 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
  *         modify alived peers to m_peers
  *         reconnect all nodes recorded in m_staticNodes periodically
  */
-void Host::start(boost::system::error_code const&)
+void Host::start()
 {
     /// if the p2p network has been stoped, then stop related service
     if (!m_run)

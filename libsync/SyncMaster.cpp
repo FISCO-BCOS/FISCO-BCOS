@@ -183,7 +183,7 @@ void SyncMaster::maintainTransactions()
         packet.encode(txsSize, txRLPs);
 
         auto msg = packet.toMessage(m_protocolId);
-        m_service->asyncSendMessageByNodeID(_p->nodeId, msg);
+        m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
         SYNCLOG(TRACE) << "[Send] [Tx] Transaction send [txNum/toNodeId/messageSize]: "
                        << int(txsSize) << "/" << _p->nodeId << "/" << msg->buffer()->size() << "B"
                        << endl;
@@ -202,7 +202,7 @@ void SyncMaster::maintainBlocks()
         SyncStatusPacket packet;
         packet.encode(number, m_genesisHash, currentHash);
 
-        m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
+        m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
         SYNCLOG(TRACE) << "[Send] [Status] Status [number/genesisHash/currentHash] :" << int(number)
                        << "/" << m_genesisHash << "/" << currentHash << " to " << _p->nodeId
                        << endl;
@@ -298,7 +298,7 @@ void SyncMaster::maintainPeersStatus()
             SyncReqBlockPacket packet;
             unsigned size = to - from + 1;
             packet.encode(from, size);
-            m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId));
+            m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
             SYNCLOG(TRACE) << "[Send] [Download] Request blocks [from, to] : [" << from << ", "
                            << to << "] to " << _p->nodeId << endl;
 
@@ -388,7 +388,7 @@ void SyncMaster::maintainPeersConnection()
             SyncStatusPacket packet;
             packet.encode(currentNumber, m_genesisHash, currentHash);
 
-            m_service->asyncSendMessageByNodeID(session.nodeID, packet.toMessage(m_protocolId));
+            m_service->asyncSendMessageByNodeID(session.nodeID, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
             SYNCLOG(TRACE)
                 << "[Send] [Status] Status to new peer [number/genesisHash/currentHash] :"
                 << int(currentNumber) << "/" << m_genesisHash << "/" << currentHash << " to "

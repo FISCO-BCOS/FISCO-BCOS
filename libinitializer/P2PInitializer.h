@@ -39,8 +39,8 @@ public:
     virtual ~P2PMessageFactory() {}
     virtual Message::Ptr buildMessage() override
     {
-        std::cout << "### begine build message" << std::endl;
-        return std::make_shared<Message>();
+        //std::cout << "### begine build message" << std::endl;
+        return std::make_shared<P2PMessage>();
     }
 };
 
@@ -51,14 +51,14 @@ public:
 
     void initConfig(boost::property_tree::ptree const& _pt);
 
-    std::shared_ptr<P2PInterface> p2pService() { return m_p2pService; }
+    std::shared_ptr<Service> p2pService() { return m_p2pService; }
 
     void setSSLContext(std::shared_ptr<bas::context> _SSLContext) { m_SSLContext = _SSLContext; }
 
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
 private:
-    std::shared_ptr<P2PInterface> m_p2pService;
+    std::shared_ptr<Service> m_p2pService;
     std::shared_ptr<bas::context> m_SSLContext;
     KeyPair m_keyPair;
 };

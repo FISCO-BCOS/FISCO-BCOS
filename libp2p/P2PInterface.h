@@ -22,6 +22,10 @@
 #pragma once
 #include <libnetwork/Common.h>
 #include <libnetwork/SessionFace.h>
+#include <memory>
+#include "P2PSession.h"
+
+#define CallbackFuncWithSession std::function<void(dev::p2p::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr)>
 
 namespace dev
 {
@@ -33,23 +37,24 @@ public:
     virtual ~P2PInterface() {};
 
     /// < protocolID stored in Message struct
-    virtual P2PMessage::Ptr sendMessageByNodeID(NodeID const& nodeID, P2PMessage::Ptr message) = 0;
+    virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](NetworkException e, Message::Ptr msg) {},
-        Options const& options = Options()) = 0;
+    virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options = Options()) = 0;
 
-    virtual Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
+    virtual P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
-        CallbackFunc callback, Options const& options) = 0;
+    virtual void asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options) = 0;
 
+#if 0
     virtual void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
 
     virtual void asyncMulticastMessageByNodeIDList(
         NodeIDs const& nodeIDs, Message::Ptr message) = 0;
 
     virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
+#endif
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;

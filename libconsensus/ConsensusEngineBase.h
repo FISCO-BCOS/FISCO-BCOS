@@ -150,7 +150,7 @@ protected:
     }
 
     virtual bool isValidReq(dev::p2p::P2PMessage::Ptr message,
-        std::shared_ptr<dev::p2p::Session> session, ssize_t& peerIndex)
+        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex)
     {
         return false;
     }
@@ -167,7 +167,7 @@ protected:
      */
     template <class T>
     inline bool decodeToRequests(
-        T& req, dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::Session> session)
+        T& req, dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::P2PSession> session)
     {
         ssize_t peer_index = 0;
         bool valid = isValidReq(message, session, peer_index);

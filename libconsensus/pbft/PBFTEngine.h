@@ -32,8 +32,8 @@
 #include <libdevcore/concurrent_queue.h>
 #include <sstream>
 
-#include "../../libnetwork/Session.h"
-#include "../../libnetwork/SessionFace.h"
+#include <libp2p/Service.h>
+//#include "../../libnetwork/SessionFace.h"
 namespace dev
 {
 namespace consensus
@@ -131,7 +131,7 @@ protected:
     bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
-        std::shared_ptr<dev::p2p::Session> session, dev::p2p::P2PMessage::Ptr message);
+        std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
     void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
@@ -243,7 +243,7 @@ protected:
      * @return true : the network-received message is valid
      * @return false: the network-received message is invalid
      */
-    bool isValidReq(dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::Session> session,
+    bool isValidReq(dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::P2PSession> session,
         ssize_t& peerIndex) override
     {
         /// check message size

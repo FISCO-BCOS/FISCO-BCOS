@@ -30,14 +30,14 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 
 void SyncMsgEngine::messageHandler(
-    NetworkException _e, std::shared_ptr<dev::p2p::SessionFace> _session, P2PMessage::Ptr _msg)
+    NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
     SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->id() << endl;
     if (!checkSession(_session) || !checkMessage(_msg))
     {
         SYNCLOG(WARNING) << "[Rcv] [Packet] Reject packet: [reason]: session or msg illegal"
                          << endl;
-        _session->disconnect(LocalIdentity);
+        _session->session()->disconnect(LocalIdentity);
         return;
     }
 
@@ -48,7 +48,7 @@ void SyncMsgEngine::messageHandler(
             << "[Rcv] [Packet] Reject packet: [reason/nodeId/size/message]: decode failed/"
             << _session->id() << "/" << _msg->buffer()->size() << "/" << toHex(*_msg->buffer())
             << endl;
-        _session->disconnect(BadProtocol);
+        _session->session()->disconnect(BadProtocol);
         return;
     }
 
@@ -59,7 +59,7 @@ void SyncMsgEngine::messageHandler(
             << int(packet.packetType) << endl;
 }
 
-bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::SessionFace> _session)
+bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
     if (_session->id() == m_nodeId)
@@ -67,7 +67,7 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::SessionFace> _session
     return true;
 }
 
-bool SyncMsgEngine::checkMessage(Message::Ptr _msg)
+bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
 {
     bytesConstRef msgBytes = ref(*_msg->buffer());
     if (msgBytes.size() < 2 || msgBytes[0] > 0x7f)
@@ -230,7 +230,7 @@ void DownloadBlocksContainer::send(NodeID _nodeId)
         retPacket.encode(shard);
 
         auto msg = retPacket.toMessage(m_protocolId);
-        m_service->asyncSendMessageByNodeID(_nodeId, msg);
+        m_service->asyncSendMessageByNodeID(_nodeId, msg, CallbackFuncWithSession(), Options());
         SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << _nodeId << " back["
                        << m_startBlockNumber + numberOffset << ", "
                        << m_startBlockNumber + numberOffset + shard.size() - 1 << "/ "

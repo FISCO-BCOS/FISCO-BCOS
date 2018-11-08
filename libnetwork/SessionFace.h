@@ -34,8 +34,6 @@ namespace p2p
 {
 
 #define CallbackFunc std::function<void(NetworkException, Message::Ptr)>
-#define CallbackFuncWithSession \
-    std::function<void(NetworkException, std::shared_ptr<dev::p2p::Session>, Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
