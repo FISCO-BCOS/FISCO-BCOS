@@ -602,11 +602,14 @@ void PBFTEngine::checkAndSave()
                                   << m_reqCache->prepareCache().block_hash.abridged() << "/"
                                   << m_reqCache->prepareCache().idx << std::endl;
             /// callback block chain to commit block
-            m_blockChain->commitBlock(
+            CommitResult ret = m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
             PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
-            dropHandledTransactions(block);
+            if (ret == CommitResult::OK)
+                dropHandledTransactions(block);
+            else
+                m_txPool->handleBadBlock(block);
             resetConfig();
         }
         else

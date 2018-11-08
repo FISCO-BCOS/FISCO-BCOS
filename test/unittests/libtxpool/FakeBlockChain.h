@@ -165,6 +165,7 @@ public:
         m_blockChain.push_back(p_block);
         m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
         m_blockNumber += 1;
+        return CommitResult::OK;
     }
     void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;

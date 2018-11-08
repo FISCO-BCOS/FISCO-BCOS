@@ -24,6 +24,7 @@
 #include "Ledger.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
+#include <libconfig/SystemConfigMgr.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libdevcore/OverlayDB.h>
@@ -37,6 +38,7 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 using namespace dev::consensus;
 using namespace dev::sync;
+using namespace dev::config;
 namespace dev
 {
 namespace ledger
@@ -121,13 +123,12 @@ void Ledger::initConsensusConfig(ptree const& pt)
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.maxTransNum", 1000);
 
-    m_param->mutableConsensusParam().intervalBlockTime =
-        pt.get<unsigned>("consensus.intervalBlockTime", 1000);
+    // m_param->mutableConsensusParam().intervalBlockTime =
+    ///    pt.get<unsigned>("consensus.intervalBlockTime", 1000);
 
-    Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum/interval]:  "
+    Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum]:  "
                       << m_param->mutableConsensusParam().consensusType << "/"
-                      << m_param->mutableConsensusParam().maxTransactions << "/"
-                      << m_param->mutableConsensusParam().intervalBlockTime;
+                      << m_param->mutableConsensusParam().maxTransactions << std::endl;
     try
     {
         for (auto it : pt.get_child("consensus"))
@@ -193,6 +194,7 @@ bool Ledger::initTxPool()
     }
     m_txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
+    m_txPool->setMaxBlockLimit(SystemConfigMgr::c_blockLimit);
     Ledger_LOG(DEBUG) << "[#initLedger] [#initTxPool SUCC] [Protocol ID]:  " << protocol_id
                       << std::endl;
     return true;
@@ -259,8 +261,9 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =
         std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
-    pbftEngine->setIntervalBlockTime(m_param->mutableConsensusParam().intervalBlockTime);
+    pbftEngine->setIntervalBlockTime(SystemConfigMgr::c_intervalBlockTime);
     pbftEngine->setStorage(m_dbInitializer->storage());
+    pbftEngine->setOmitEmptyBlock(SystemConfigMgr::c_omitEmptyBlock);
     return pbftSealer;
 }
 

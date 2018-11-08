@@ -266,6 +266,7 @@ public:
     }
     virtual bool drop(h256 const& _txHash) override { return true; }
     virtual bool dropBlockTrans(dev::eth::Block const& block) override { return true; }
+    bool handleBadBlock(Block const& block) override { return true; }
     virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
     virtual TxPoolStatus status() const override
     {
@@ -331,12 +332,28 @@ public:
         /// init sync
         initSync();
     }
-    bool initLedger() override{};
+    bool initLedger() override { return true; }
     /// init blockverifier related
-    bool initBlockChain() override { m_blockChain = std::make_shared<MockBlockChain>(); }
-    bool initBlockVerifier() override { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    bool initTxPool() override { m_txPool = std::make_shared<MockTxPool>(); }
-    bool initSync() override { m_sync = std::make_shared<MockBlockSync>(); }
+    bool initBlockChain() override
+    {
+        m_blockChain = std::make_shared<MockBlockChain>();
+        return true;
+    }
+    bool initBlockVerifier() override
+    {
+        m_blockVerifier = std::make_shared<MockBlockVerifier>();
+        return true;
+    }
+    bool initTxPool() override
+    {
+        m_txPool = std::make_shared<MockTxPool>();
+        return true;
+    }
+    bool initSync() override
+    {
+        m_sync = std::make_shared<MockBlockSync>();
+        return true;
+    }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);

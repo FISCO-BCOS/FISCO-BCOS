@@ -208,6 +208,7 @@ public:
         m_blockChain.push_back(std::make_shared<Block>(block));
         m_blockNumber = block.blockHeader().number() + 1;
         m_onReady();
+        return CommitResult::OK;
     }
 
     void setGroupMark(std::string const& groupMark) override {}
@@ -282,6 +283,7 @@ public:
     }
     virtual bool drop(h256 const& _txHash) override { return true; }
     virtual bool dropBlockTrans(dev::eth::Block const& block) override { return true; }
+    bool handleBadBlock(Block const& block) override { return true; }
     virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
     virtual TxPoolStatus status() const override
     {
@@ -413,7 +415,7 @@ public:
         /// init sync
         initBlockSync();
     }
-    virtual bool initLedger() override{};
+    virtual bool initLedger() override { return true; };
     virtual void initConfig(std::string const& configPath) override{};
     virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
     {
@@ -435,10 +437,26 @@ public:
         return consensusInterface;
     }
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    bool initBlockChain() { m_blockChain = std::make_shared<MockBlockChain>(); }
-    bool initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    bool initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
-    bool initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    bool initBlockChain()
+    {
+        m_blockChain = std::make_shared<MockBlockChain>();
+        return true;
+    }
+    bool initBlockVerifier()
+    {
+        m_blockVerifier = std::make_shared<MockBlockVerifier>();
+        return true;
+    }
+    bool initTxPool()
+    {
+        m_txPool = std::make_shared<MockTxPool>();
+        return true;
+    }
+    bool initBlockSync()
+    {
+        m_sync = std::make_shared<MockBlockSync>();
+        return true;
+    }
     virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
     virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
     virtual void startAll() override {}

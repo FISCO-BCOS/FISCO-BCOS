@@ -49,8 +49,6 @@ private:
 static void version()
 {
     std::cout << "FISCO-BCOS version " << dev::Version << "\n";
-    std::cout << "FISCO-BCOS network protocol version: " << dev::eth::c_protocolVersion << "\n";
-    std::cout << "Client database version: " << dev::eth::c_databaseVersion << "\n";
     std::cout << "Build: " << DEV_QUOTED(ETH_BUILD_PLATFORM) << "/" << DEV_QUOTED(ETH_BUILD_TYPE)
               << "\n";
     exit(0);
