@@ -25,4 +25,38 @@
 using namespace dev;
 using namespace dev::initializer;
 
-void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt) {}
+void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
+{
+    std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
+    int listenPort = _pt.get<int>("rpc.listen_port", 30301);
+    int httpListenPort = _pt.get<int>("rpc.http_listen_port", 0);
+
+    if (listenPort > 0)
+    {
+        ChannelRPCServer::Ptr channelRPCServer;
+        channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
+        channelRPCServer->setListenAddr(listenIP);
+        channelRPCServer->setListenPort(listenPort);
+        channelRPCServer->setSSLContext(m_sslContext);
+        channelRPCServer->setService(m_p2pService);
+
+        auto ioService = std::make_shared<boost::asio::io_service>();
+
+        auto server = std::make_shared<dev::channel::ChannelServer>();
+        server->setIOService(ioService);
+        server->setSSLContext(m_sslContext);
+        server->setEnableSSL(true);
+        server->setBind(listenIP, listenPort);
+
+        server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
+
+        channelRPCServer->setChannelServer(server);
+
+        // auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        // m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+        // m_channelRPCHttpServer->addConnector(channelRPCServer.get());
+        // m_channelRPCHttpServer->StartListening();
+        channelRPCServer->StartListening();
+        LOG(INFO) << "ChannelRPCHttpServer started.";
+    }
+}

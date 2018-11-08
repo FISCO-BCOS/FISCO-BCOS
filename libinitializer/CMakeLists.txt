@@ -16,6 +16,7 @@ target_link_libraries(initializer txpool)
 target_link_libraries(initializer blockchain)
 target_link_libraries(initializer consensus)
 target_link_libraries(initializer ledger)
+target_link_libraries(initializer channelserver)
 
 
 install(TARGETS initializer RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)

@@ -33,7 +33,7 @@ void Initializer::init(std::string const& _path)
     m_commonInitializer = std::make_shared<CommonInitializer>();
     m_commonInitializer->initConfig(pt);
 
-    m_secureInitiailizer = std::make_shared<SecureInitiailizer>();
+    m_secureInitiailizer = std::make_shared<SecureInitializer>();
     m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
     m_secureInitiailizer->initConfig(pt);
 
@@ -49,5 +49,8 @@ void Initializer::init(std::string const& _path)
 
     ///< TODO: The Ledger is passed to the RPC module as a handle.
     m_rpcInitiailizer = std::make_shared<RPCInitiailizer>();
+    m_rpcInitiailizer->setP2PService(m_p2pInitializer->p2pService());
+    m_rpcInitiailizer->setSSLContext(m_secureInitiailizer->SSLContext());
+    m_rpcInitiailizer->setLedgerManager(m_ledgerInitiailizer->ledgerManager());
     m_rpcInitiailizer->initConfig(pt);
 }
