@@ -62,8 +62,6 @@ public:
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
-        std::shared_ptr<dev::p2p::Host> host = m_service->host();
-        endpoint = host->tcpPublic().address().to_string();
     }
 
     void start() override;
@@ -233,7 +231,6 @@ protected:
     std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
     /// handler of the block-verifier module
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
-    std::string endpoint;
 
     // the block which is waiting consensus
     int64_t m_consensusBlockNumber;
