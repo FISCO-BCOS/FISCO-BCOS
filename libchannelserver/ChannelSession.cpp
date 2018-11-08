@@ -345,12 +345,15 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			if (it->second->callback) {
 				_threadPool->enqueue([=]() {
 					it->second->callback(e, message);
+
+					std::lock_guard<std::recursive_mutex> lock(_mutex);
 					_responseCallbacks.erase(it);
 				});
 			}
 			else {
 				LOG(ERROR) << "Callback empty";
 
+				std::lock_guard<std::recursive_mutex> lock(_mutex);
 				_responseCallbacks.erase(it);
 			}
 		}
@@ -391,6 +394,7 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
 				LOG(ERROR) << "Callback empty";
 			}
 
+			std::lock_guard<std::recursive_mutex> lock(_mutex);
 			_responseCallbacks.erase(it);
 		} else {
 			LOG(WARNING) << "Seq timeout: " << seq;
