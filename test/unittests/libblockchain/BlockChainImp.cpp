@@ -26,8 +26,10 @@
 #include <libethcore/Block.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Transaction.h>
+#include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstoragestate/StorageState.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
@@ -37,6 +39,7 @@ using namespace dev::eth;
 using namespace dev::storage;
 using namespace dev::blockchain;
 using namespace dev::blockverifier;
+using namespace dev::storagestate;
 namespace dev
 {
 namespace test
@@ -56,7 +59,7 @@ public:
 
     Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
-        // std::cout << "key " << key << " table " << m_table << std::endl;
+        std::cout << "key " << key << " table " << m_table << std::endl;
         Entries::Ptr entries = std::make_shared<Entries>();
         Entry::Ptr entry = std::make_shared<Entry>();
 
@@ -85,6 +88,10 @@ public:
     }
 
     virtual size_t insert(const std::string& key, Entry::Ptr entry) override { return 0; }
+    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition)
+    {
+        return 0;
+    }
 
     void setFakeBlock(std::shared_ptr<FakeBlock> fakeBlock) { m_fakeBlock = fakeBlock; }
 
@@ -125,6 +132,12 @@ public:
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
 };
 
+class MockState : public StorageState
+{
+public:
+    MockState() : StorageState(u256(0)) {}
+    void dbCommit(h256 const& _blockHash, int64_t _blockNumber) override {}
+};
 
 struct MemoryTableFactoryFixture
 {
@@ -133,21 +146,23 @@ struct MemoryTableFactoryFixture
         m_executiveContext = std::make_shared<ExecutiveContext>();
         m_blockChainImp = std::make_shared<MockBlockChainImp>();
         m_fakeBlock = std::make_shared<FakeBlock>(5);
-        std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory =
-            std::make_shared<MockMemoryTableFactory>();
+        mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();
         mockMemoryTableFactory->setFakeBlock(m_fakeBlock);
         m_blockChainImp->setMemoryTableFactory(mockMemoryTableFactory);
+        m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
+        m_executiveContext->setState(std::make_shared<MockState>());
+        m_executiveContext->dbCommit();
         // std::cout << "blockChainImp " << m_blockChainImp << std::endl;
     }
+
+    std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory;
     std::shared_ptr<MockBlockChainImp> m_blockChainImp;
     std::shared_ptr<FakeBlock> m_fakeBlock;
     std::shared_ptr<ExecutiveContext> m_executiveContext;
 };
 
-BOOST_FIXTURE_TEST_SUITE(BlockChainImp1, MemoryTableFactoryFixture);
+BOOST_FIXTURE_TEST_SUITE(BlockChainImpl, MemoryTableFactoryFixture);
 
-
-/// test constructors and operators
 BOOST_AUTO_TEST_CASE(testnumber)
 {
     // int64_t number() const override;
@@ -155,8 +170,6 @@ BOOST_AUTO_TEST_CASE(testnumber)
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 1);
 }
 
-
-/// test constructors and operators
 BOOST_AUTO_TEST_CASE(number2hash)
 {
     // int64_t number() const override;
@@ -190,9 +203,28 @@ BOOST_AUTO_TEST_CASE(getTxByHash)
     BOOST_CHECK_EQUAL(tx.sha3(), m_fakeBlock->m_transaction[0].sha3());
 }
 
+BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
+{
+    auto txReceipt = m_blockChainImp->getTransactionReceiptByHash(
+        h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
+
+    BOOST_CHECK_EQUAL(sha3(txReceipt.rlp()), sha3(m_fakeBlock->m_transactionReceipt[0].rlp()));
+}
+
 BOOST_AUTO_TEST_CASE(commitBlock)
 {
-    // m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
+    m_fakeBlock->getBlock().header().setNumber(m_blockChainImp->number());
+    auto commitResult = m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
+    BOOST_CHECK(commitResult == CommitResult::ERROR_NUMBER);
+
+    m_fakeBlock->getBlock().header().setNumber(m_blockChainImp->number() + 1);
+    commitResult = m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
+    BOOST_CHECK(commitResult == CommitResult::ERROR_PARENT_HASH);
+
+    m_fakeBlock->getBlock().header().setParentHash(
+        h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e"));
+    commitResult = m_blockChainImp->commitBlock(m_fakeBlock->getBlock(), m_executiveContext);
+    BOOST_CHECK(commitResult == CommitResult::OK);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
