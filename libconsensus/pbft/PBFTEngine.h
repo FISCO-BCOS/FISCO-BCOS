@@ -132,8 +132,7 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::P2PException exception,
         std::shared_ptr<dev::p2p::Session> session, dev::p2p::Message::Ptr message);
-    void handlePrepareMsg(
-        PrepareReq const& prepare_req, std::string const& endpoint, bool self = true);
+    void handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
@@ -268,7 +267,7 @@ protected:
     }
 
     /// check the specified prepareReq is valid or not
-    bool isValidPrepare(PrepareReq const& req, bool self, std::ostringstream& oss) const;
+    bool isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
 
     /**
      * @brief: common check process when handle SignReq and CommitReq

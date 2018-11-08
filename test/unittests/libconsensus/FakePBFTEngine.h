@@ -138,17 +138,16 @@ public:
     bool broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
     void checkTimeout() { return PBFTEngine::checkTimeout(); }
     void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
-    bool isValidPrepare(PrepareReq const& req, bool self) const
+    bool isValidPrepare(PrepareReq const& req) const
     {
         std::ostringstream oss;
-        return PBFTEngine::isValidPrepare(req, self, oss);
+        return PBFTEngine::isValidPrepare(req, oss);
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     inline std::pair<bool, u256> getLeader() const { return PBFTEngine::getLeader(); }
-    void handlePrepareMsg(
-        PrepareReq const& prepareReq, bool self = true, std::string const& ip = "")
+    void handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
-        return PBFTEngine::handlePrepareMsg(prepareReq, ip, self);
+        return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
     void handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)

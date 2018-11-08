@@ -111,7 +111,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     prepare_req.encode(prepare_data);
     /// broadcast prepare message
     broadcastMsg(PrepareReqPacket, prepare_req.block_hash.hex(), ref(prepare_data));
-    handlePrepareMsg(prepare_req, endpoint);
+    handlePrepareMsg(prepare_req);
 }
 
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
@@ -227,7 +227,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
             m_leaderFailed = true;
             m_signalled.notify_all();
         }
-        handlePrepareMsg(prepare_req, endpoint);
+        handlePrepareMsg(prepare_req);
     }
     /// reset the block according to broadcast result
     PBFTENGINE_LOG(DEBUG) << "[#generateLocalPrepare] [prepHash/prepHeight]:  "
@@ -355,17 +355,11 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
  * @return true: the specified prepareReq is valid
  * @return false: the specified prepareReq is invalid
  */
-bool PBFTEngine::isValidPrepare(
-    PrepareReq const& req, bool allowSelf, std::ostringstream& oss) const
+bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistPrepare(req))
     {
         PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
-        return false;
-    }
-    if (!allowSelf && req.idx == m_idx)
-    {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Own Req: [INFO]:  " << oss.str();
         return false;
     }
     if (hasConsensused(req))
@@ -495,8 +489,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
  * @param self: if generated-prepare-request need to handled, then set self to be true;
  *              else this function will filter the self-generated prepareReq
  */
-void PBFTEngine::handlePrepareMsg(
-    PrepareReq const& prepareReq, std::string const& endpoint, bool self)
+void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string const& endpoint)
 {
     Timer t;
     std::ostringstream oss;
@@ -505,7 +498,7 @@ void PBFTEngine::handlePrepareMsg(
         << "/" << m_consensusBlockNumber << "/" << endpoint << "/"
         << prepareReq.block_hash.abridged() << "\n";
     /// check the prepare request is valid or not
-    if (!isValidPrepare(prepareReq, self, oss))
+    if (!isValidPrepare(prepareReq, oss))
         return;
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
@@ -1019,7 +1012,7 @@ void PBFTEngine::handleFutureBlock()
                              << m_highestBlock.number() << "/" << m_view << "/"
                              << m_consensusBlockNumber << "/"
                              << m_reqCache->futurePrepareCache().block_hash.abridged() << std::endl;
-        handlePrepareMsg(future_req, endpoint);
+        handlePrepareMsg(future_req);
         m_reqCache->resetFuturePrepare();
     }
 }
