@@ -295,9 +295,9 @@ contract DBTest {
             user_name_bytes_list[uint256(i)] = entry.getBytes32("name");
             item_id_list[uint256(i)] = entry.getInt("item_id");
             item_name_bytes_list[uint256(i)] = entry.getBytes32("item_name");
+            selectResult(user_name_bytes_list[uint256(i)], item_id_list[uint256(i)], item_name_bytes_list[uint256(i)]);
         }
-        selectResult(user_name_bytes_list, item_id_list, item_name_bytes_list);
-        
+ 
         return (user_name_bytes_list, item_id_list, item_name_bytes_list);
     }
     //插入数据
