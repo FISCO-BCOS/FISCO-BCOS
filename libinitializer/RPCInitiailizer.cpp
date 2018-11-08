@@ -49,7 +49,6 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         server->setSSLContext(m_sslContext);
         server->setEnableSSL(true);
         server->setBind(listenIP, listenPort);
-
         server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
 
         m_channelRPCServer->setChannelServer(server);

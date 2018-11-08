@@ -24,7 +24,7 @@
 
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
-#include <libinitializer/SecureInitiailizer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <libp2p/Host.h>
 #include <libp2p/P2pFactory.h>
 #include <libp2p/Session.h>
@@ -470,7 +470,7 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
     setDataDir(dev::test::getTestPath().string() + "/fisco-bcos-data");
     boost::property_tree::ptree pt;
-    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
+    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitializer>();
     secureInitiailizer->setDataPath(dev::test::getTestPath().string() + "/fisco-bcos-data/");
     secureInitiailizer->initConfig(pt);
     auto sslContext = secureInitiailizer->SSLContext();
