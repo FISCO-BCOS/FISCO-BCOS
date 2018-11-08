@@ -48,7 +48,6 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     bytes keyContent;
     if (!key.empty())
     {
-        //指定了key目录
         try
         {
             keyContent = contents(key);
