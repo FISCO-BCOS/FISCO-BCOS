@@ -68,10 +68,12 @@ public:
 
     virtual void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
 
+#if 0
     void setTopicsByNode(
         NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) override;
 
     std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
+#endif
 
     std::map<NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
     void setStaticNodes(std::map<NodeIPEndpoint, NodeID> staticNodes) { m_staticNodes = staticNodes; }
