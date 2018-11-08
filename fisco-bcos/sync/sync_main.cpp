@@ -29,7 +29,7 @@
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitiailizer.h>
 #include <libinitializer/P2PInitializer.h>
-#include <libinitializer/SecureInitiailizer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/P2PInterface.h>
 #include <libsync/Common.h>
