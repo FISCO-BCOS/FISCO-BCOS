@@ -90,7 +90,8 @@ public:
         m_sync->noteSealingBlockNumber(currentNumber + 1);
 
         BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
-        ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block, h256());
+        BlockInfo parentBlockInfo;
+        ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block, parentBlockInfo);
         m_blockChain->commitBlock(*block, exeCtx);
         m_txPool->dropBlockTrans(*block);
         m_totalTxCommit += txs.size();

@@ -20,15 +20,18 @@
  */
 #pragma once
 
+#include "Common.h"
 #include "Precompiled.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ChainOperationParams.h>
 #include <libethcore/PrecompiledContract.h>
+#include <libethcore/block.h>
 #include <libexecutive/StateFace.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <memory>
+
 namespace dev
 {
 namespace storage
@@ -82,7 +85,7 @@ public:
     void setPrecompiledContract(
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
 
-    void dbCommit();
+    void dbCommit(dev::eth::Block& block);
 
     void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory)
     {

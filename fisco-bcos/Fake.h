@@ -161,7 +161,7 @@ public:
     };
     virtual ~FakeBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, dev::h256 const& parentState) override
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override
     {
         /// execute time: 1000
         /// usleep(1000 * (block.getTransactionSize()));

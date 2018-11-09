@@ -381,11 +381,13 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         if (isNewBlock(topBlock))
         {
-            dev::h256 parentRoot =
-                m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1)
-                    ->blockHeader()
-                    .stateRoot();
-            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock, parentRoot);
+            auto parentBlock = m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
+            BlockInfo parentBlockInfo;
+            parentBlockInfo.hash = parentBlock->header().hash();
+            parentBlockInfo.number = parentBlock->header().number();
+            parentBlockInfo.stateRoot = parentBlock->header().stateRoot();
+            ExecutiveContext::Ptr exeCtx =
+                m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
             m_blockChain->commitBlock(*topBlock, exeCtx);
             m_txPool->dropBlockTrans(*topBlock);
             SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
