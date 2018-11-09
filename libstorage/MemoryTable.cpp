@@ -61,7 +61,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
         if (!entries)
         {
             STORAGE_LOG(DEBUG) << "Can't find data";
-            return Entries::Ptr();
+            return std::make_shared<Entries>();
         }
         auto indexes = processEntries(entries, condition);
         Entries::Ptr resultEntries = std::make_shared<Entries>();
@@ -76,7 +76,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
         STORAGE_LOG(ERROR) << "Table select failed for:" << e.what();
     }
 
-    return Entries::Ptr();
+    return std::make_shared<Entries>();
 }
 
 size_t dev::storage::MemoryTable::update(
