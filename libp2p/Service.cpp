@@ -52,7 +52,8 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        asyncSendMessageByNodeID(nodeID, message, fp, Options{500, 2000});
+        asyncSendMessageByNodeID(
+            nodeID, message, fp, Options{SINGLE_NODE_TIMEOUT_THRESHOLD, GLOBAL_TIMEOUT_THRESHOLD});
 
         callback->mutex.lock();
         callback->mutex.unlock();
@@ -262,7 +263,8 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        asyncSendMessageByTopic(topic, message, fp, Options{500, 2000});
+        asyncSendMessageByTopic(
+            topic, message, fp, Options{SINGLE_NODE_TIMEOUT_THRESHOLD, GLOBAL_TIMEOUT_THRESHOLD});
 
         callback->mutex.lock();
         callback->mutex.unlock();
@@ -452,14 +454,19 @@ void Service::registerHandlerByTopic(std::string const& topic, CallbackFuncWithS
 
                     ///< This above topic get this node/host attention or not.
                     bool bFind = false;
+                    std::stringstream topicList;
                     for (size_t i = 0; i < topics->size(); i++)
                     {
+                        topicList << (*topics)[i] << ",";
                         if (topic == (*topics)[i])
                         {
                             bFind = true;
                             break;
                         }
                     }
+                    P2PMSG_LOG(DEBUG)
+                        << "[#handlerByTopic] get topic from msg: [topic/topicList]: " << topic
+                        << "/" << topicList.str();
 
                     if (bFind)
                     {
