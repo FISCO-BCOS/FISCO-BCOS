@@ -10,5 +10,6 @@ eth_use(p2p OPTIONAL OpenSSL)
 
 target_link_libraries(p2p devcore devcrypto)
 target_link_libraries(p2p ${OPENSSL_SSL_LIBRARIE} ${OPENSSL_CRYPTO_LIBRARIE})
+add_dependencies(p2p Boost::Thread)
 
 install(TARGETS p2p RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)

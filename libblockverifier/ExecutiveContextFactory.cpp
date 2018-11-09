@@ -2,6 +2,7 @@
 #include <libdevcore/Common.h>
 #include <libstorage/CRUDPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstorage/MinerPrecompiled.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
@@ -24,6 +25,8 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
     context->setAddress2Precompiled(
         Address(0x1002), std::make_shared<dev::blockverifier::CRUDPrecompiled>());
+    context->setAddress2Precompiled(
+        Address(0x1003), std::make_shared<dev::blockverifier::MinerPrecompiled>());
     context->setMemoryTableFactory(memoryTableFactory);
 
     context->setBlockInfo(blockInfo);

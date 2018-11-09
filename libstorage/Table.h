@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common.h"
 #include <libdevcore/FixedHash.h>
 #include <map>
 #include <memory>

@@ -35,12 +35,12 @@ std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<Exe
 bytes dev::blockverifier::EntriesPrecompiled::call(
     std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
 {
-    LOG(DEBUG) << "call Entries:" << toHex(param);
+    STORAGE_LOG(DEBUG) << "call Entries:" << toHex(param);
 
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    LOG(DEBUG) << "func:" << std::hex << func;
+    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
     dev::eth::ContractABI abi;
 
