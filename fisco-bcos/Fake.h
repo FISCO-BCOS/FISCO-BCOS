@@ -116,6 +116,7 @@ public:
             }
             m_onReady();
         }
+        return CommitResult::OK;
     }
 
     void setGroupMark(std::string const& groupMark) override {}

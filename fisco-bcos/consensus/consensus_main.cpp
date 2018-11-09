@@ -352,6 +352,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
             tx.updateSignature(SignatureStruct(sig));
             ledgerManager->txPool(i)->submit(tx);
         }
+        LogInitializer::logRotateByTime();
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
         count++;
     }
@@ -361,10 +362,8 @@ static void startConsensus(Params& params)
 {
     ///< initialize component
     auto initialize = std::make_shared<Initializer>();
-    initialize->init("./config.conf");
+    initialize->init("./config.ini");
 
-    /// auto p2pInitializer = initialize->p2pInitializer();
-    /// auto p2pService = p2pInitializer->p2pService();
     auto secureInitiailizer = initialize->secureInitiailizer();
     KeyPair key_pair = secureInitiailizer->keyPair();
     auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
