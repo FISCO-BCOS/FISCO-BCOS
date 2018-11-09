@@ -151,7 +151,6 @@ struct MemoryTableFactoryFixture
         m_blockChainImp->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setState(std::make_shared<MockState>());
-        m_executiveContext->dbCommit();
         // std::cout << "blockChainImp " << m_blockChainImp << std::endl;
     }
 
