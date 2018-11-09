@@ -400,6 +400,13 @@ void Session::write()
 			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
 		}
 
+		if (queue_elapsed >= 60 * 1000) {
+			LOG(WARNING) << "Queue timeout and disconnect";
+			drop(PingTimeout);
+
+			return;
+		}
+
 		auto session = shared_from_this();
 		auto socket = m_socket;
 		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
