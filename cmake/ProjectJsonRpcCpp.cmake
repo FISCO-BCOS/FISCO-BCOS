@@ -91,6 +91,7 @@ set_property(TARGET JsonRpcCpp::Server PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}
 set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common ${MHD_LIBRARY})
 set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
 add_dependencies(JsonRpcCpp::Server jsonrpccpp)
+add_dependencies(JsonRpcCpp::Server MHD)
 
 unset(BINARY_DIR)
 unset(INSTALL_DIR)
