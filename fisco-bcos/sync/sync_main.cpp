@@ -76,7 +76,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
                 tx.updateSignature(SignatureStruct(sig));
                 _txPool->submit(tx);
             }
-            catch(std::exception& e)
+            catch (std::exception& e)
             {
                 LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e) << std::endl;
