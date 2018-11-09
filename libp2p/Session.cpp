@@ -340,8 +340,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length, std::sha
 		return;
 
 		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
-		if (elapsed >= 10) {
-			LOG(WARNING) << "ba::async_write write-time=" << elapsed << ",len=" << length << ",id=" << id();
+		if (elapsed >= 1000) {
+			LOG(WARNING) << "[NETWORK] msg callback timecost=" << elapsed << ",len=" << length << ",id=" << id();
 		}
 		ThreadContext tc(info().id.abridged());
 		ThreadContext tc2(info().clientVersion);
@@ -379,7 +379,7 @@ void Session::write()
 
 		auto data = std::make_shared<bytes>();
 		bytes const* out = nullptr;
-		u256 enter_time = 0;
+		uint64_t enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
 			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
@@ -389,9 +389,15 @@ void Session::write()
 		}
 		
 		m_start_t = utcTime();
-		unsigned queue_elapsed = (unsigned)(m_start_t - enter_time);
-		if (queue_elapsed > 10) {
-			LOG(WARNING) << "Session::write queue-time=" << queue_elapsed;
+		uint64_t queue_elapsed = m_start_t > enter_time ? (m_start_t - enter_time) : 0;
+		/*if (queue_elapsed >= 60 * 1000) {
+			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed << ", give up";
+			return;
+		} else if (queue_elapsed > 1000) {
+			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
+		}*/
+		if (queue_elapsed > 1000) {
+			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
 		}
 
 		auto session = shared_from_this();
