@@ -778,7 +778,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         << "/" << viewChange_req.view << "/" << m_view << "/" << pbftMsg.node_id << "/"
         << pbftMsg.endpoint << "/" << viewChange_req.block_hash.abridged() << "\n";
 
-    valid = isValidViewChangeReq(viewChange_req, oss);
+    valid = isValidViewChangeReq(viewChange_req, pbftMsg.node_idx, oss);
     if (!valid)
         return;
 
@@ -802,7 +802,8 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
     }
 }
 
-bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss)
+bool PBFTEngine::isValidViewChangeReq(
+    ViewChangeReq const& req, u256 const& source, std::ostringstream& oss)
 {
     if (m_reqCache->isExistViewChange(req))
     {
@@ -814,7 +815,8 @@ bool PBFTEngine::isValidViewChangeReq(ViewChangeReq const& req, std::ostringstre
         PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
         return false;
     }
-    catchupView(req, oss);
+    if (req.idx == source)
+        catchupView(req, oss);
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
@@ -858,7 +860,6 @@ void PBFTEngine::checkAndChangeView()
         m_leaderFailed = false;
         m_view = m_toView;
         m_reqCache->triggerViewChange(m_view);
-        m_broadCastCache->clearAll();
     }
 }
 
