@@ -390,21 +390,12 @@ void Session::write()
 		
 		m_start_t = utcTime();
 		uint64_t queue_elapsed = m_start_t > enter_time ? (m_start_t - enter_time) : 0;
-		/*if (queue_elapsed >= 60 * 1000) {
-			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed << ", give up";
-			return;
-		} else if (queue_elapsed > 1000) {
-			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
-		}*/
-		if (queue_elapsed > 1000) {
-			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
-		}
-
 		if (queue_elapsed >= 60 * 1000) {
-			LOG(WARNING) << "Queue timeout and disconnect";
+			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed << ", disconnect...";
 			drop(PingTimeout);
-
 			return;
+		} else if (queue_elapsed >= 1000) {
+			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
 		}
 
 		auto session = shared_from_this();
