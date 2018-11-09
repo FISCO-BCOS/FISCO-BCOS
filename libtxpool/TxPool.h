@@ -126,13 +126,13 @@ public:
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
     /// Set transaction is known by a node
-    virtual void transactionIsKonwnBy(h256 const& _txHash, h512 const& _nodeId) override;
+    virtual void transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
 
     /// Is the transaction is known by the node ?
-    virtual bool isTransactionKonwnBy(h256 const& _txHash, h512 const& _nodeId) override;
+    virtual bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
 
     /// Is the transaction is known by someone
-    virtual bool isTransactionKonwnBySomeone(h256 const& _txHash) override;
+    virtual bool isTransactionKnownBySomeone(h256 const& _txHash) override;
 
 protected:
     /**

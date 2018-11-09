@@ -394,14 +394,14 @@ void TxPool::clear()
 }
 
 /// Set transaction is known by a node
-void TxPool::transactionIsKonwnBy(h256 const& _txHash, h512 const& _nodeId)
+void TxPool::transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
 {
     WriteGuard l(x_transactionKnownBy);
     m_transactionKnownBy[_txHash].insert(_nodeId);
 }
 
 /// Is the transaction is known by the node ?
-bool TxPool::isTransactionKonwnBy(h256 const& _txHash, h512 const& _nodeId)
+bool TxPool::isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId)
 {
     ReadGuard l(x_transactionKnownBy);
     auto p = m_transactionKnownBy.find(_txHash);
@@ -411,7 +411,7 @@ bool TxPool::isTransactionKonwnBy(h256 const& _txHash, h512 const& _nodeId)
 }
 
 /// Is the transaction is known by someone
-bool TxPool::isTransactionKonwnBySomeone(h256 const& _txHash)
+bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
 {
     ReadGuard l(x_transactionKnownBy);
     auto p = m_transactionKnownBy.find(_txHash);
