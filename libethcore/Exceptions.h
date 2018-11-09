@@ -61,54 +61,35 @@ DEV_SIMPLE_EXCEPTION(DatabaseAlreadyOpen);
 /// transaction releated exceptions
 DEV_SIMPLE_EXCEPTION(InvalidTransactionFormat);
 DEV_SIMPLE_EXCEPTION(TransactionIsUnsigned);
-DEV_SIMPLE_EXCEPTION(InvalidZeroSignatureTransaction);
 DEV_SIMPLE_EXCEPTION(TransactionRefused);
-DEV_SIMPLE_EXCEPTION(ZeroSignatureTransaction);
-DEV_SIMPLE_EXCEPTION(PendingTransactionAlreadyExists);
 DEV_SIMPLE_EXCEPTION(TransactionAlreadyInChain);
-DEV_SIMPLE_EXCEPTION(UnknownTransactionValidationError);
 DEV_SIMPLE_EXCEPTION(InconsistentTransactionSha3);
 DEV_SIMPLE_EXCEPTION(P2pEnqueueTransactionFailed);
-DEV_SIMPLE_EXCEPTION(MalformedTransactionException);
 
 /// state trie related
-DEV_SIMPLE_EXCEPTION(InvalidStateRoot);
 DEV_SIMPLE_EXCEPTION(InvalidTransactionsRoot);
 DEV_SIMPLE_EXCEPTION(InvalidReceiptsStateRoot);
-DEV_SIMPLE_EXCEPTION(StateTrieReconstructionFailed);
-DEV_SIMPLE_EXCEPTION(InvalidStateChunkData);
-DEV_SIMPLE_EXCEPTION(InvalidBlockChunkData);
 DEV_SIMPLE_EXCEPTION(InvalidAccountStartNonceInState);
 DEV_SIMPLE_EXCEPTION(IncorrectAccountStartNonceInState);
 
 /// block && block header related
-DEV_SIMPLE_EXCEPTION(InvalidBlockNonce);
-DEV_SIMPLE_EXCEPTION(BlockNotFound);
 DEV_SIMPLE_EXCEPTION(InvalidParentHash);
 DEV_SIMPLE_EXCEPTION(InvalidNumber);
 DEV_SIMPLE_EXCEPTION(UnknownParent);
-DEV_SIMPLE_EXCEPTION(NoHashRecorded);
-DEV_SIMPLE_EXCEPTION(GenesisBlockCannotBeCalculated);
-DEV_SIMPLE_EXCEPTION(InvalidLogBloom);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
 DEV_SIMPLE_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
-
-/// transactionReceipt related
-DEV_SIMPLE_EXCEPTION(InvalidTransactionReceiptFormat);
-DEV_SIMPLE_EXCEPTION(TransactionReceiptVersionError);
+DEV_SIMPLE_EXCEPTION_RLP(ErrorBlockHash);
 
 /// sync related
 DEV_SIMPLE_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
 DEV_SIMPLE_EXCEPTION(InvalidSyncPeerCreation);
-
 
 /// common exceptions
 DEV_SIMPLE_EXCEPTION(InvalidNonce);
 DEV_SIMPLE_EXCEPTION(InvalidSignature);
 DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
-DEV_SIMPLE_EXCEPTION(UnknownError);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
 DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
 
