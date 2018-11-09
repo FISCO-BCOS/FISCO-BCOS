@@ -346,11 +346,19 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
             {
                 tx.setRpcCallback(boost::bind(rpcCallbackTest, _1));
             }
-            tx.setNonce(tx.nonce() + u256(1));
-            tx.setBlockLimit(u256(ledgerManager->blockChain(i)->number()) + maxBlockLimit);
-            dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
-            tx.updateSignature(SignatureStruct(sig));
-            ledgerManager->txPool(i)->submit(tx);
+            try
+            {
+                tx.setNonce(tx.nonce() + u256(1));
+                tx.setBlockLimit(u256(ledgerManager->blockChain(i)->number()) + maxBlockLimit);
+                dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
+                tx.updateSignature(SignatureStruct(sig));
+                ledgerManager->txPool(i)->submit(tx);
+            }
+            catch (std::exception& e)
+            {
+                LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                           << boost::diagnostic_information(e) << std::endl;
+            }
         }
         LogInitializer::logRotateByTime();
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));

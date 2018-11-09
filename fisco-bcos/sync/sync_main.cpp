@@ -68,11 +68,19 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         _totalTransactions -= _groupSize;
         for (int i = 1; i <= _groupSize; i++)
         {
-            tx.setNonce(u256(rand()));
-            tx.setBlockLimit(u256(_blockChain->number()) + 50);
-            dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
-            tx.updateSignature(SignatureStruct(sig));
-            _txPool->submit(tx);
+            try
+            {
+                tx.setNonce(u256(rand()));
+                tx.setBlockLimit(u256(_blockChain->number()) + 50);
+                dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
+                tx.updateSignature(SignatureStruct(sig));
+                _txPool->submit(tx);
+            }
+            catch(std::exception& e)
+            {
+                LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                           << boost::diagnostic_information(e) << std::endl;
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
