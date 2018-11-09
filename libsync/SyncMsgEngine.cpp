@@ -165,7 +165,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                            << endl;
 
 
-        m_txPool->transactionIsKonwnBy(tx.sha3(), _packet.nodeId);
+        m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
     }
     SYNCLOG(TRACE) << "[Rcv] [Tx] Peer transactions import [import/rcv/txPool]: " << successCnt
                    << "/" << itemCount << "/" << m_txPool->pendingSize() << " from "
