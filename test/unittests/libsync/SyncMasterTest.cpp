@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     for (auto& tx : *txs)
     {
         txPool->submit(tx);
-        txPool->transactionIsKonwnBy(tx.sha3(), NodeID(101));
+        txPool->transactionIsKnownBy(tx.sha3(), NodeID(101));
     }
     sync->maintainTransactions();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
