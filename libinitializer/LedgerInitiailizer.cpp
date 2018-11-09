@@ -42,7 +42,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         if (it.first.find("group_config.") == 0)
         {
             INITIALIZER_LOG(TRACE)
-                << "[#LedgerInitiailizer::initConfig] load group config: [goupID/config]: "
+                << "[#LedgerInitiailizer::initConfig] load group config: [groupID/config]: "
                 << it.first << "/" << it.second.data();
 
             std::vector<std::string> s;
