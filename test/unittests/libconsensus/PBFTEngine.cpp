@@ -421,11 +421,10 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     {
         appendSessionInfo(fake_pbft, fake_pbft.m_minerList[i]);
     }
-
     /// case1: without omit empty block, re-generate prepareReq and broadcast
     fake_pbft.consensus()->reqCache()->clearAll();
     fake_pbft.consensus()->setOmitEmpty(false);
-    fake_pbft.consensus()->handlePrepareMsg(req, false);
+    fake_pbft.consensus()->handlePrepareMsg(req);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->prepareCache().block_hash == req.block_hash);
     /// check broadcastSign
     for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
@@ -442,7 +441,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     FakeSignAndCommitCache(fake_pbft, req, highest, 0, 0,
         fake_pbft.consensus()->minValidNodes().convert_to<size_t>() - 1, 2, false, false);
     int64_t block_number = obtainBlockNumber(fake_pbft);
-    fake_pbft.consensus()->handlePrepareMsg(req, false);
+    fake_pbft.consensus()->handlePrepareMsg(req);
 
     /// BOOST_CHECK(fake_pbft.consensus()->reqCache()->prepareCache().block_hash == h256());
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==

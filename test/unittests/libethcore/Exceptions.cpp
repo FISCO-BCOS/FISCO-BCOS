@@ -84,70 +84,32 @@ BOOST_AUTO_TEST_CASE(testEthcoreException)
     BOOST_CHECK_THROW(
         assertThrow(false, TransactionIsUnsigned, "TransactionIsUnsigned"), TransactionIsUnsigned);
     BOOST_CHECK_THROW(
-        assertThrow(false, InvalidZeroSignatureTransaction, "InvalidZeroSignatureTransaction"),
-        InvalidZeroSignatureTransaction);
-    BOOST_CHECK_THROW(
         assertThrow(false, TransactionRefused, "TransactionRefused"), TransactionRefused);
-    BOOST_CHECK_THROW(assertThrow(false, ZeroSignatureTransaction, "ZeroSignatureTransaction"),
-        ZeroSignatureTransaction);
-    BOOST_CHECK_THROW(
-        assertThrow(false, PendingTransactionAlreadyExists, "PendingTransactionAlreadyExists"),
-        PendingTransactionAlreadyExists);
     BOOST_CHECK_THROW(assertThrow(false, TransactionAlreadyInChain, "TransactionAlreadyInChain"),
         TransactionAlreadyInChain);
-    BOOST_CHECK_THROW(
-        assertThrow(false, UnknownTransactionValidationError, "UnknownTransactionValidationError"),
-        UnknownTransactionValidationError);
     /// state trie realted exceptions
-    BOOST_CHECK_THROW(assertThrow(false, InvalidStateRoot, "InvalidStateRoot"), InvalidStateRoot);
     BOOST_CHECK_THROW(assertThrow(false, InvalidTransactionsRoot, "InvalidTransactionsRoot"),
         InvalidTransactionsRoot);
     BOOST_CHECK_THROW(assertThrow(false, InvalidReceiptsStateRoot, "InvalidReceiptsStateRoot"),
         InvalidReceiptsStateRoot);
     BOOST_CHECK_THROW(assertThrow(false, InvalidReceiptsStateRoot, "InvalidReceiptsStateRoot"),
         InvalidReceiptsStateRoot);
-    BOOST_CHECK_THROW(
-        assertThrow(false, StateTrieReconstructionFailed, "StateTrieReconstructionFailed"),
-        StateTrieReconstructionFailed);
-    BOOST_CHECK_THROW(
-        assertThrow(false, InvalidStateChunkData, "InvalidStateChunkData"), InvalidStateChunkData);
     /// block && block header related exceptions
-    BOOST_CHECK_THROW(
-        assertThrow(false, InvalidBlockChunkData, "InvalidBlockChunkData"), InvalidBlockChunkData);
-    BOOST_CHECK_THROW(
-        assertThrow(false, InvalidBlockNonce, "InvalidBlockNonce"), InvalidBlockNonce);
-    BOOST_CHECK_THROW(assertThrow(false, BlockNotFound, "BlockNotFound"), BlockNotFound);
     BOOST_CHECK_THROW(
         assertThrow(false, InvalidParentHash, "InvalidParentHash"), InvalidParentHash);
     BOOST_CHECK_THROW(assertThrow(false, InvalidNumber, "InvalidNumber"), InvalidNumber);
     BOOST_CHECK_THROW(assertThrow(false, UnknownParent, "UnknownParent"), UnknownParent);
-    BOOST_CHECK_THROW(assertThrow(false, NoHashRecorded, "NoHashRecorded"), NoHashRecorded);
-    BOOST_CHECK_THROW(
-        assertThrow(false, GenesisBlockCannotBeCalculated, "GenesisBlockCannotBeCalculated"),
-        GenesisBlockCannotBeCalculated);
-    BOOST_CHECK_THROW(assertThrow(false, InvalidLogBloom, "InvalidLogBloom"), InvalidLogBloom);
-    BOOST_CHECK_THROW(
-        assertThrow(false, GenesisBlockCannotBeCalculated, "GenesisBlockCannotBeCalculated"),
-        GenesisBlockCannotBeCalculated);
-    BOOST_CHECK_THROW(assertThrow(false, InvalidLogBloom, "InvalidLogBloom"), InvalidLogBloom);
     BOOST_CHECK_THROW(
         assertThrow(false, InvalidBlockFormat, "InvalidBlockFormat"), InvalidBlockFormat);
     BOOST_CHECK_THROW(
         assertThrow(false, InvalidBlockHeaderItemCount, "InvalidBlockHeaderItemCount"),
         InvalidBlockHeaderItemCount);
-    BOOST_CHECK_THROW(
-        assertThrow(false, InvalidTransactionReceiptFormat, "InvalidTransactionReceiptFormat"),
-        InvalidTransactionReceiptFormat);
-    BOOST_CHECK_THROW(
-        assertThrow(false, TransactionReceiptVersionError, "TransactionReceiptVersionError"),
-        TransactionReceiptVersionError);
     /// common exceptions
     BOOST_CHECK_THROW(assertThrow(false, InvalidNonce, "invalidNonce"), InvalidNonce);
     BOOST_CHECK_THROW(assertThrow(false, InvalidSignature, "InvalidSignature"), InvalidSignature);
     BOOST_CHECK_THROW(assertThrow(false, InvalidAddress, "InvalidAddress"), InvalidAddress);
     BOOST_CHECK_THROW(
         assertThrow(false, AddressAlreadyUsed, "AddressAlreadyUsed"), AddressAlreadyUsed);
-    BOOST_CHECK_THROW(assertThrow(false, UnknownError, "UnknownError"), UnknownError);
     BOOST_CHECK_THROW(assertThrow(false, InvalidTimestamp, "InvalidTimestamp"), InvalidTimestamp);
     /// EVM related exceptions
     BOOST_CHECK_THROW(assertThrow(false, VMException, "VMException"), VMException);

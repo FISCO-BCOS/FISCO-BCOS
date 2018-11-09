@@ -50,7 +50,7 @@ include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
 
 configure_project(TESTS)
 # generate executable binary fisco-bcos
-add_subdirectory(fisco-bcos)
+add_subdirectory(fisco-bcos/main)
 add_subdirectory(fisco-bcos/p2p)
 add_subdirectory(fisco-bcos/consensus)
 add_subdirectory(fisco-bcos/blockverifier)

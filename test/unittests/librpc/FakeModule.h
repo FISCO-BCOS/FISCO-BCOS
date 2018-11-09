@@ -266,6 +266,7 @@ public:
     }
     virtual bool drop(h256 const& _txHash) override { return true; }
     virtual bool dropBlockTrans(dev::eth::Block const& block) override { return true; }
+    bool handleBadBlock(Block const& block) override { return true; }
     virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
     virtual TxPoolStatus status() const override
     {

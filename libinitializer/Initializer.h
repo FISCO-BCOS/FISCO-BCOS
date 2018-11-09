@@ -26,6 +26,7 @@
 #include "CommonInitializer.h"
 #include "InitializerInterface.h"
 #include "LedgerInitiailizer.h"
+#include "LogInitializer.h"
 #include "P2PInitializer.h"
 #include "RPCInitiailizer.h"
 #include "SecureInitializer.h"
@@ -46,12 +47,15 @@ public:
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
     LedgerInitiailizer::Ptr ledgerInitiailizer() { return m_ledgerInitiailizer; }
     RPCInitiailizer::Ptr rpcInitiailizer() { return m_rpcInitiailizer; }
+    LogInitializer::Ptr logInitializer() { return m_logInitializer; }
 
 private:
     CommonInitializer::Ptr m_commonInitializer;
     LedgerInitiailizer::Ptr m_ledgerInitiailizer;
     P2PInitializer::Ptr m_p2pInitializer;
     RPCInitiailizer::Ptr m_rpcInitiailizer;
+
+    LogInitializer::Ptr m_logInitializer;
     SecureInitializer::Ptr m_secureInitiailizer;
 };
 

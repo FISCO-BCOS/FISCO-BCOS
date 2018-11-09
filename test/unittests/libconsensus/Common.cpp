@@ -195,7 +195,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
     packet_data[1] += 1;
     BOOST_CHECK_THROW(tmp_packet.decode(ref(packet_data));, std::exception);
     /// set other field
-    tmp_packet.setOtherField(u256(12), key_pair.pub());
+    tmp_packet.setOtherField(u256(12), key_pair.pub(), "");
     BOOST_CHECK(tmp_packet != packet);
     BOOST_CHECK(tmp_packet.timestamp >= packet.timestamp);
 }
