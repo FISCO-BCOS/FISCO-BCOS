@@ -17,7 +17,7 @@ ExternalProject_Add(mhd
     INSTALL_COMMAND ""
 )
 
-ExternalProject_Get_Property(MHD SOURCE_DIR)
+ExternalProject_Get_Property(mhd SOURCE_DIR)
 add_library(MHD STATIC IMPORTED)
 set(MHD_INCLUDE_DIR ${SOURCE_DIR}/src/include/)
 set(MHD_LIBRARY ${SOURCE_DIR}/src/microhttpd/.libs/libmicrohttpd.a)
