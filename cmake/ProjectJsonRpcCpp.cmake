@@ -70,6 +70,7 @@ ExternalProject_Add(jsonrpccpp
 
 add_dependencies(jsonrpccpp jsoncpp)
 add_dependencies(jsonrpccpp MHD)
+
 ExternalProject_Get_Property(jsonrpccpp INSTALL_DIR)
 set(JSONRPCCPP_INCLUDE_DIR ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${JSONRPCCPP_INCLUDE_DIR})  # Must exist.
@@ -89,7 +90,7 @@ add_dependencies(JsonRpcCpp::Client jsonrpccpp)
 add_library(JsonRpcCpp::Server STATIC IMPORTED)
 set_property(TARGET JsonRpcCpp::Server PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsonrpccpp-server${CMAKE_STATIC_LIBRARY_SUFFIX})
 set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common ${MHD_LIBRARY})
-set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
+# set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
 add_dependencies(JsonRpcCpp::Server jsonrpccpp)
 
 unset(BINARY_DIR)
