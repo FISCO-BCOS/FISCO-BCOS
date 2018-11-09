@@ -37,12 +37,12 @@ std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 
 bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
 {
-    LOG(DEBUG) << "call Table";
+    STORAGE_LOG(DEBUG) << "call Table";
 
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    LOG(DEBUG) << "func:" << std::hex << func;
+    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
     dev::eth::ContractABI abi;
 
@@ -143,83 +143,6 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-#if 0
-	case 0xbc902ad2: { //insert(address)
-		Address address;
-		abi.abiOut(data, address);
-
-		EntryPrecompiled::Ptr entryPrecompiled = std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(address));
-		auto entry = entryPrecompiled->getEntry();
-
-		size_t count = m_table->insert(entry);
-		out = abi.abiIn("", u256(count));
-
-		break;
-	}
-	case 0x7857d7c9: { //newCondition()
-		auto condition = m_table->newCondition();
-		auto conditionPrecompiled = std::make_shared<ConditionPrecompiled>();
-		conditionPrecompiled->setCondition(condition);
-
-		auto newAddress = context->registerPrecompiled(conditionPrecompiled);
-		out = abi.abiIn("", newAddress);
-
-		break;
-	}
-	case 0x13db9346: { //newEntry()
-		auto entry = m_table->newEntry();
-		auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
-		entryPrecompiled->setEntry(entry);
-
-		auto newAddress = context->registerPrecompiled(entryPrecompiled);
-		out = abi.abiIn("", newAddress);
-
-		break;
-	}
-	case 0x29092d0e: { //remove(address)
-		Address address;
-		abi.abiOut(data, address);
-
-		ConditionPrecompiled::Ptr conditionPrecompiled = std::dynamic_pointer_cast<ConditionPrecompiled>(context->getPrecompiled(address));
-		auto condition = conditionPrecompiled->getCondition();
-
-		size_t count = m_table->remove(condition);
-		out = abi.abiIn("", u256(count));
-
-		break;
-	}
-	case 0x4f49f01c: { //select(address)
-		Address address;
-		abi.abiOut(data, address);
-
-		ConditionPrecompiled::Ptr conditionPrecompiled = std::dynamic_pointer_cast<ConditionPrecompiled>(context->getPrecompiled(address));
-		auto condition = conditionPrecompiled->getCondition();
-
-		auto entries = m_table->select(condition);
-		auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
-		entriesPrecompiled->setEntries(entries);
-
-		auto newAddress = context->registerPrecompiled(entriesPrecompiled);
-		out = abi.abiIn("", newAddress);
-
-		break;
-	}
-	case 0xc640752d: { //update(address,address)
-		Address entryAddress;
-		Address conditionAddress;
-		abi.abiOut(data, entryAddress, conditionAddress);
-
-		EntryPrecompiled::Ptr entryPrecompiled = std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
-		ConditionPrecompiled::Ptr conditionPrecompiled = std::dynamic_pointer_cast<ConditionPrecompiled>(context->getPrecompiled(conditionAddress));
-		auto entry = entryPrecompiled->getEntry();
-		auto condition = conditionPrecompiled->getCondition();
-
-		size_t count = m_table->update(entry, condition);
-		out = abi.abiIn("", u256(count));
-
-		break;
-	}
-#endif
     default:
     {
         break;

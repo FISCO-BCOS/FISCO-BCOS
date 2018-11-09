@@ -37,12 +37,12 @@ include(EthCompilerSettings)
 include(EthDependencies)
 
 # install dependencies
+include(ProjectMHD)
 include(ProjectCryptopp)
 include(ProjectSecp256k1)
 include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
 include(ProjectBoost)
-include(ProjectMHD)
 
 #Global include path for all libs.
 include_directories("${CMAKE_SOURCE_DIR}" "utils")
