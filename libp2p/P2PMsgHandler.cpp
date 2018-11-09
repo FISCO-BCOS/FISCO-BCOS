@@ -36,7 +36,8 @@ bool P2PMsgHandler::addProtocolID2Handler(
     }
     else
     {
-        LOG(ERROR) << "Handler repetition! ProtocolID = " << protocolID;
+        P2PMSG_LOG(WARNING) << "[#addProtocolID2Handler] handler repetition: [ProtocolID]: "
+                            << protocolID;
         return false;
     }
 }
@@ -53,7 +54,8 @@ bool P2PMsgHandler::getHandlerByProtocolID(
     }
     else
     {
-        LOG(ERROR) << "Handler not found! ProtocolID = " << protocolID;
+        P2PMSG_LOG(WARNING) << "[#getHandlerByProtocolID] handler not found: [ProtocolID]: "
+                            << protocolID;
         return false;
     }
 }
@@ -68,7 +70,8 @@ bool P2PMsgHandler::eraseHandlerByProtocolID(PROTOCOL_ID protocolID)
     }
     else
     {
-        LOG(ERROR) << "Handler not found! ProtocolID = " << protocolID;
+        P2PMSG_LOG(WARNING) << "[#eraseHandlerByProtocolID] handler not found: [ProtocolID]: "
+                            << protocolID;
         return false;
     }
 }
@@ -84,7 +87,7 @@ bool P2PMsgHandler::addTopic2Handler(
     }
     else
     {
-        LOG(ERROR) << "Handler repetition! Topic = " << topic;
+        P2PMSG_LOG(WARNING) << "[#addTopic2Handler] handler repetition: [Topic]: " << topic;
         return false;
     }
 }
@@ -100,7 +103,7 @@ bool P2PMsgHandler::getHandlerByTopic(std::string const& topic, CallbackFuncWith
     }
     else
     {
-        LOG(ERROR) << "Handler not found! Topic = " << topic;
+        P2PMSG_LOG(WARNING) << "[#getHandlerByTopic] handler not found: [Topic]: " << topic;
         return false;
     }
 }
@@ -115,7 +118,7 @@ bool P2PMsgHandler::eraseHandlerByTopic(std::string const& topic)
     }
     else
     {
-        LOG(ERROR) << "Handler not found! Topic = " << topic;
+        P2PMSG_LOG(WARNING) << "[#eraseHandlerByTopic] handler not found: [Topic]: " << topic;
         return false;
     }
 }
@@ -132,7 +135,8 @@ void P2PMsgHandler::registerAMOP()
                 uint32_t msgSeq = std::stoul(
                     std::string((const char*)msg->buffer()->data(), msg->buffer()->size()));
                 uint32_t recordSeq = s->peerTopicSeq(s->id());
-                LOG(INFO) << "HandleSendTopicSeq recordSeq:" << recordSeq << ", msgSeq:" << msgSeq;
+                P2PMSG_LOG(DEBUG) << "[#registerAMOP] handle SendTopicSeq: [recordSeq/msgSeq]: "
+                                  << recordSeq << "/" << msgSeq;
                 if (recordSeq < msgSeq)
                 {
                     Message::Ptr retMsg = std::make_shared<Message>();
@@ -162,7 +166,7 @@ void P2PMsgHandler::registerAMOP()
                 }
                 std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
                 std::string content = str.str();
-                LOG(INFO) << "HandleRequestTopics, the buffer content of message sent:" << content;
+                P2PMSG_LOG(DEBUG) << "[#registerAMOP] handle RequestTopics: [buffer]: " << content;
                 buffer->assign(content.begin(), content.end());
                 retMsg->setBuffer(buffer);
                 retMsg->setLength(Message::HEADER_LENGTH + retMsg->buffer()->size());
@@ -194,14 +198,14 @@ void P2PMsgHandler::registerAMOP()
                     last = index + 1;
                     index = buffer.find_first_of("|", last);
                 }
-                LOG(INFO) << "HandleSendTopics, counter node topicSeq:" << topicSeq
-                          << ", topics size:" << topics->size();
+                P2PMSG_LOG(DEBUG) << "[#registerAMOP] handle SendTopics: [counter seq/size]: "
+                                  << topicSeq << "/" << topics->size();
                 s->setTopicsAndTopicSeq(s->id(), topics, topicSeq);
                 break;
             }
             default:
             {
-                LOG(INFO) << "Invalid packetType in AMOP message.";
+                P2PMSG_LOG(WARNING) << "[#registerAMOP] invalid packetType in AMOP message.";
                 break;
             }
             }

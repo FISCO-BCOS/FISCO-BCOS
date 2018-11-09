@@ -35,7 +35,7 @@ std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
 storage::Table::Ptr CRUDPrecompiled::openTable(
     ExecutiveContext::Ptr context, const std::string& tableName)
 {
-    LOG(DEBUG) << "CRUD open table:" << tableName;
+    STORAGE_LOG(DEBUG) << "CRUD open table:" << tableName;
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
@@ -44,13 +44,13 @@ storage::Table::Ptr CRUDPrecompiled::openTable(
 
 bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 {
-    LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
+    STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
 
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    LOG(DEBUG) << "func:" << std::hex << func;
+    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
     dev::eth::ContractABI abi;
     bytes out;

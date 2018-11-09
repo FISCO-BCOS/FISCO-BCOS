@@ -189,7 +189,7 @@ void SyncMaster::maintainTransactions()
 
     auto ts =
         m_txPool->topTransactionsCondition(c_maxSendTransactions, [&](Transaction const& _tx) {
-            bool unsent = !m_txPool->isTransactionKonwnBy(_tx.sha3(), m_nodeId);
+            bool unsent = !m_txPool->isTransactionKnownBy(_tx.sha3(), m_nodeId);
             return unsent;
         });
 
@@ -200,21 +200,21 @@ void SyncMaster::maintainTransactions()
     {
         auto const& t = ts[i];
         NodeIDs peers;
-        unsigned _percent = m_txPool->isTransactionKonwnBySomeone(t.sha3()) ? 25 : 100;
+        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t.sha3()) ? 25 : 100;
 
         peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
-            bool unsent = !m_txPool->isTransactionKonwnBy(t.sha3(), m_nodeId);
-            return unsent && !m_txPool->isTransactionKonwnBy(t.sha3(), _p->nodeId);
+            bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
+            return unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
 
         for (auto const& p : peers)
         {
             peerTransactions[p].push_back(i);
-            m_txPool->transactionIsKonwnBy(t.sha3(), p);
+            m_txPool->transactionIsKnownBy(t.sha3(), p);
         }
 
         if (0 != peers.size())
-            m_txPool->transactionIsKonwnBy(t.sha3(), m_nodeId);
+            m_txPool->transactionIsKnownBy(t.sha3(), m_nodeId);
     }
 
 
@@ -381,11 +381,11 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         if (isNewBlock(topBlock))
         {
-            dev::h256 parentRoot =
-                m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1)
-                    ->blockHeader()
-                    .stateRoot();
-            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock, parentRoot);
+            auto parentBlock = m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
+            BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
+                parentBlock->header().stateRoot()};
+            ExecutiveContext::Ptr exeCtx =
+                m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
             CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
             if (ret == CommitResult::OK)
                 m_txPool->dropBlockTrans(*topBlock);

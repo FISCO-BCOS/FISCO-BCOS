@@ -178,6 +178,9 @@ protected:
     inline void broadcastMark(
         h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
+        /// in case of useless insert
+        if (m_broadCastCache->keyExists(nodeId, packetType, key))
+            return;
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
     inline void clearMask() { m_broadCastCache->clearAll(); }
@@ -329,7 +332,8 @@ protected:
 
     bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
     bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
-    bool isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss);
+    bool isValidViewChangeReq(
+        ViewChangeReq const& req, u256 const& source, std::ostringstream& oss);
 
     template <class T>
     inline bool hasConsensused(T const& req) const

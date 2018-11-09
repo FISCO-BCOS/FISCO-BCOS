@@ -41,7 +41,7 @@ struct TableFactoryPrecompiledFixture
     TableFactoryPrecompiledFixture()
     {
         context = std::make_shared<MockPrecompiledEngine>();
-        BlockInfo blockInfo{h256(0x001), u256(1)};
+        BlockInfo blockInfo{h256(0x001), 1, h256(0x001)};
         context->setBlockInfo(blockInfo);
         tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
         memStorage = std::make_shared<MemoryStorage>();

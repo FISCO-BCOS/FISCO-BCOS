@@ -32,21 +32,19 @@ using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::executive;
 
-ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, h256 const& parentStateRoot)
+ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
     LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size()
-               << " hash: " << block.blockHeader().hash()
                << " num: " << block.blockHeader().number()
-               << " stateRoot: " << block.blockHeader().stateRoot()
-               << " parentStateRoot: " << parentStateRoot << std::endl;
+               << " parent hash: " << parentBlockInfo.hash
+               << " parent num: " << parentBlockInfo.number
+               << " parent stateRoot: " << parentBlockInfo.stateRoot;
+
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
     {
-        BlockInfo blockInfo;
-        blockInfo.hash = block.blockHeader().hash();
-        blockInfo.number = block.blockHeader().number();
         m_executiveContextFactory->initExecutiveContext(
-            blockInfo, parentStateRoot, executiveContext);
+            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
     }
     catch (exception& e)
     {
@@ -86,9 +84,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
     {
-        BlockInfo blockInfo;
-        blockInfo.hash = blockHeader.hash();
-        blockInfo.number = blockHeader.number();
+        BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
         m_executiveContextFactory->initExecutiveContext(
             blockInfo, blockHeader.stateRoot(), executiveContext);
     }
