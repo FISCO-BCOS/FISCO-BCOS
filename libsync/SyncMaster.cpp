@@ -386,8 +386,11 @@ bool SyncMaster::maintainDownloadingQueue()
                     ->blockHeader()
                     .stateRoot();
             ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock, parentRoot);
-            m_blockChain->commitBlock(*topBlock, exeCtx);
-            m_txPool->dropBlockTrans(*topBlock);
+            CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+            if (ret == CommitResult::OK)
+                m_txPool->dropBlockTrans(*topBlock);
+            else
+                m_txPool->handleBadBlock(*topBlock);
             SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
                            << topBlock->header().number() << "/" << topBlock->transactions().size()
                            << "/" << topBlock->headerHash() << endl;

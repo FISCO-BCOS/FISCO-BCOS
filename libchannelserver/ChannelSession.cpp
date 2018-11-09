@@ -21,15 +21,13 @@
  * @date: 2018
  */
 
+#include "ChannelSession.h"
+#include "ChannelException.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
-#include <iostream>
-
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
-
-#include "ChannelException.h"
-#include "ChannelSession.h"
+#include <iostream>
 
 using namespace dev::channel;
 
@@ -73,8 +71,8 @@ Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 
         if (callback->_error.errorCode() != 0)
         {
-            LOG(ERROR) << "asyncSendMessage ERROR:" << callback->_error.errorCode() << " "
-                       << callback->_error.what();
+            CHANNEL_LOG(ERROR) << "asyncSendMessage ERROR:" << callback->_error.errorCode() << " "
+                               << callback->_error.what();
             throw callback->_error;
         }
 
@@ -82,7 +80,7 @@ Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 
     return Message::Ptr();
@@ -132,7 +130,7 @@ void ChannelSession::asyncSendMessage(Message::Ptr request,
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -151,7 +149,7 @@ void ChannelSession::run()
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -169,7 +167,7 @@ void ChannelSession::startRead()
     {
         if (_actived)
         {
-            LOG(TRACE) << "Start read:" << bufferLength;
+            CHANNEL_LOG(TRACE) << "Start read:" << bufferLength;
 
             std::lock_guard<std::recursive_mutex> lock(_mutex);
 
@@ -200,12 +198,12 @@ void ChannelSession::startRead()
         }
         else
         {
-            LOG(ERROR) << "ChannelSession inactived";
+            CHANNEL_LOG(ERROR) << "ChannelSession inactived";
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -216,7 +214,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
     {
         if (!_actived)
         {
-            LOG(ERROR) << "ChannelSession inactived";
+            CHANNEL_LOG(ERROR) << "ChannelSession inactived";
 
             return;
         }
@@ -225,8 +223,8 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
         if (!error)
         {
-            LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:"
-                       << std::string(_recvBuffer, _recvBuffer + bytesTransferred);
+            CHANNEL_LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:"
+                               << std::string(_recvBuffer, _recvBuffer + bytesTransferred);
 
             _recvProtocolBuffer.insert(
                 _recvProtocolBuffer.end(), _recvBuffer, _recvBuffer + bytesTransferred);
@@ -237,12 +235,12 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
                 ssize_t result =
                     message->decode(_recvProtocolBuffer.data(), _recvProtocolBuffer.size());
-                LOG(TRACE) << "Parse result: " << result;
+                CHANNEL_LOG(TRACE) << "Parse result: " << result;
 
 
                 if (result > 0)
                 {
-                    LOG(TRACE) << "Decode success: " << result;
+                    CHANNEL_LOG(TRACE) << "Decode success: " << result;
 
                     onMessage(ChannelException(0, ""), message);
 
@@ -257,7 +255,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
                 }
                 else if (result < 0)
                 {
-                    LOG(ERROR) << "Protocol parser error: " << result;
+                    CHANNEL_LOG(ERROR) << "Protocol parser error: " << result;
 
                     disconnect(ChannelException(-1, "Protocol parser error, disconnect"));
 
@@ -267,7 +265,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
         }
         else
         {
-            LOG(ERROR) << "Read failed:" << error.value() << "," << error.message();
+            CHANNEL_LOG(ERROR) << "Read failed:" << error.value() << "," << error.message();
 
             if (_actived)
             {
@@ -277,7 +275,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -285,7 +283,7 @@ void ChannelSession::startWrite()
 {
     if (!_actived)
     {
-        LOG(ERROR) << "ChannelSession inactived";
+        CHANNEL_LOG(ERROR) << "ChannelSession inactived";
 
         return;
     }
@@ -353,7 +351,7 @@ void ChannelSession::writeBuffer(std::shared_ptr<bytes> buffer)
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -364,7 +362,7 @@ void ChannelSession::onWrite(
     {
         if (!_actived)
         {
-            LOG(ERROR) << "ChannelSession inactived";
+            CHANNEL_LOG(ERROR) << "ChannelSession inactived";
 
             return;
         }
@@ -375,11 +373,11 @@ void ChannelSession::onWrite(
 
         if (!error)
         {
-            LOG(TRACE) << "Write: " << bytesTransferred;
+            CHANNEL_LOG(TRACE) << "Write: " << bytesTransferred;
         }
         else
         {
-            LOG(ERROR) << "Write error: " << error.message();
+            CHANNEL_LOG(ERROR) << "Write error: " << error.message();
 
             disconnect(ChannelException(-1, "Write error, disconnect"));
         }
@@ -389,7 +387,7 @@ void ChannelSession::onWrite(
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -399,7 +397,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
     {
         if (!_actived)
         {
-            LOG(ERROR) << "ChannelSession inactived";
+            CHANNEL_LOG(ERROR) << "ChannelSession inactived";
 
             return;
         }
@@ -421,7 +419,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
             }
             else
             {
-                LOG(ERROR) << "Callback empty";
+                CHANNEL_LOG(ERROR) << "Callback empty";
 
                 _responseCallbacks.erase(it);
             }
@@ -441,13 +439,13 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
             }
             else
             {
-                LOG(ERROR) << "MessageHandler empty";
+                CHANNEL_LOG(ERROR) << "MessageHandler empty";
             }
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -457,7 +455,7 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
     {
         if (!_actived)
         {
-            LOG(ERROR) << "ChannelSession inactived";
+            CHANNEL_LOG(ERROR) << "ChannelSession inactived";
 
             return;
         }
@@ -471,19 +469,19 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
             }
             else
             {
-                LOG(ERROR) << "Callback empty";
+                CHANNEL_LOG(ERROR) << "Callback empty";
             }
 
             _responseCallbacks.erase(it);
         }
         else
         {
-            LOG(WARNING) << "Seq timeout: " << seq;
+            CHANNEL_LOG(WARNING) << "Seq timeout: " << seq;
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -493,14 +491,14 @@ void ChannelSession::onIdle(const boost::system::error_code& error)
     {
         if (!_actived)
         {
-            LOG(ERROR) << "ChannelSession inactived";
+            CHANNEL_LOG(ERROR) << "ChannelSession inactived";
 
             return;
         }
 
         if (error != boost::asio::error::operation_aborted)
         {
-            LOG(ERROR) << "Idle connection, disconnect " << _host << ":" << _port;
+            CHANNEL_LOG(ERROR) << "Idle connection, disconnect " << _host << ":" << _port;
 
             disconnect(ChannelException(-1, "Idle connection, disconnect"));
         }
@@ -510,7 +508,7 @@ void ChannelSession::onIdle(const boost::system::error_code& error)
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -540,12 +538,12 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
                         }
                         else
                         {
-                            LOG(ERROR) << "Callback empty";
+                            CHANNEL_LOG(ERROR) << "Callback empty";
                         }
                     }
                     catch (std::exception& e)
                     {
-                        LOG(ERROR)
+                        CHANNEL_LOG(ERROR)
                             << "Disconnect responseCallback: " << it.first << " error:" << e.what();
                     }
                 }
@@ -561,7 +559,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
                 }
                 catch (std::exception& e)
                 {
-                    LOG(ERROR) << "disconnect messageHandler error:" << e.what();
+                    CHANNEL_LOG(ERROR) << "disconnect messageHandler error:" << e.what();
                 }
 
                 _messageHandler = std::function<void(
@@ -571,12 +569,12 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
             _actived = false;
             _sslSocket->lowest_layer().close();
 
-            LOG(DEBUG) << "Disconnected";
+            CHANNEL_LOG(DEBUG) << "Disconnected";
         }
     }
     catch (std::exception& e)
     {
-        LOG(WARNING) << "Close error: " << e.what();
+        CHANNEL_LOG(WARNING) << "Close error: " << e.what();
     }
 }
 
@@ -584,7 +582,7 @@ void ChannelSession::updateIdleTimer()
 {
     if (!_actived)
     {
-        LOG(ERROR) << "ChannelSession inactived";
+        CHANNEL_LOG(ERROR) << "ChannelSession inactived";
 
         return;
     }

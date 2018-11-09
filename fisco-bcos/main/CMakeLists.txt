@@ -28,12 +28,13 @@ include(EthDependencies)
 add_executable(fisco-bcos ${SRC_LIST} ${HEADERS})
 
 target_include_directories(fisco-bcos PRIVATE ..)
-target_include_directories(fisco-bcos PRIVATE ../utils)
+#target_include_directories(fisco-bcos PRIVATE ../utils)
 target_include_directories(fisco-bcos PRIVATE ${BOOST_INCLUDE_DIR})
 
-target_link_libraries(fisco-bcos devcore)
-target_link_libraries(fisco-bcos devcrypto)
-target_link_libraries(fisco-bcos ethcore)
+target_link_libraries(fisco-bcos Boost::program_options)
+target_link_libraries(fisco-bcos initializer)
+#target_link_libraries(fisco-bcos devcrypto)
+#target_link_libraries(fisco-bcos ethcore)
 
 if (UNIX AND NOT APPLE)
 	target_link_libraries(fisco-bcos pthread)

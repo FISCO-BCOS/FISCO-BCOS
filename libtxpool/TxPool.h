@@ -22,7 +22,7 @@
  * @date: 2018-09-23
  */
 #pragma once
-#include "NonceCheck.h"
+#include "TransactionNonceCheck.h"
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/easylog.h>
@@ -35,7 +35,7 @@
 using namespace dev::eth;
 using namespace dev::p2p;
 
-#define TXPOOL_LOG(LEVEL) LOG(LEVEL) << "[#TXPOOL] [PROTOCOL: " << m_protocolId << "] "
+#define TXPOOL_LOG(LEVEL) LOG(LEVEL) << "[#LIBTXPOOL] [#TXPOOL] [PROTOCOL: " << m_protocolId << "] "
 
 namespace dev
 {
@@ -49,9 +49,12 @@ struct TxPoolStatus
     size_t dropped;
 };
 
-struct PriorityCompare
+class TxPoolNonceManager
 {
-    /// Compare transaction by nonce height and gas price.
+public:
+};
+struct transactionCompare
+{
     bool operator()(Transaction const& _first, Transaction const& _second) const
     {
         return _first.importTime() <= _second.importTime();
@@ -74,9 +77,11 @@ public:
         /// register enqueue interface to p2p by protocalID
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
-        m_nonceCheck = std::make_shared<dev::eth::NonceCheck>(m_blockChain, m_protocolId);
+        m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain, m_protocolId);
+        m_commonNonceCheck = std::make_shared<CommonTransactionNonceCheck>(m_protocolId);
     }
-
+    void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
+    unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
     virtual ~TxPool() { clear(); }
 
     /**
@@ -89,10 +94,11 @@ public:
 
     /**
      * @brief Remove transaction from the queue
-     * @param _txHash: transaction hash
+     * @param _txHash: Remove bad transaction from the queue
      */
     bool drop(h256 const& _txHash) override;
-    bool dropBlockTrans(Block const& block) override;
+    bool dropBlockTrans(dev::eth::Block const& block) override;
+    bool handleBadBlock(dev::eth::Block const& block) override;
     /**
      * @brief Get top transactions from the queue
      *
@@ -117,8 +123,6 @@ public:
 
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& getProtocolId() const { return m_protocolId; }
-    virtual void setMaxBlockLimit(u256 const& _maxBlockLimit) { m_maxBlockLimit = _maxBlockLimit; }
-    virtual const u256 maxBlockLimit() const { return m_maxBlockLimit; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
     /// Set transaction is known by a node
@@ -147,13 +151,12 @@ protected:
     /// verify transcation
     virtual ImportResult verify(
         Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
-    /// check block limit
-    virtual bool isBlockLimitOk(Transaction const& _ts) const;
     /// check nonce
-    virtual bool isNonceOk(Transaction const& _ts, bool _needinsert) const;
+    virtual bool isBlockLimitOrNonceOk(Transaction const& _ts, bool _needinsert) const;
     /// interface for filter check
     virtual u256 filterCheck(const Transaction& _t) const { return u256(0); };
     void clear();
+    bool dropTransactions(Block const& block, bool needNotify = false);
 
 private:
     dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(Transaction const& tx,
@@ -161,26 +164,34 @@ private:
 
     bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
         dev::eth::LocalisedTransactionReceipt::Ptr pReceipt = nullptr);
-    bool removeOutOfBound(h256 const& _txHash);
-    void insert(Transaction const& _tx);
+    bool insert(Transaction const& _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
+    bool inline txPoolNonceCheck(dev::eth::Transaction const& tx)
+    {
+        if (!m_commonNonceCheck->isNonceOk(tx))
+        {
+            TXPOOL_LOG(WARNING) << "[#txPoolNonceCheck] check TxPool Nonce Failed" << std::endl;
+            return false;
+        }
+        return true;
+    }
 
 private:
     /// p2p module
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    std::shared_ptr<dev::eth::NonceCheck> m_nonceCheck;
+    std::shared_ptr<TransactionNonceCheck> m_txNonceCheck;
+    /// nonce check for txpool
+    std::shared_ptr<CommonTransactionNonceCheck> m_commonNonceCheck;
     /// Max number of pending transactions
     uint64_t m_limit;
     mutable SharedMutex m_lock;
     /// protocolId
     PROTOCOL_ID m_protocolId;
-    /// max block limit
-    u256 m_maxBlockLimit = u256(1000);
     /// transaction queue
-    using PriorityQueue = std::multiset<Transaction, PriorityCompare>;
-    PriorityQueue m_txsQueue;
-    std::unordered_map<h256, PriorityQueue::iterator> m_txsHash;
+    using TransactionQueue = std::set<dev::eth::Transaction, transactionCompare>;
+    TransactionQueue m_txsQueue;
+    std::unordered_map<h256, TransactionQueue::iterator> m_txsHash;
     /// hash of imported transactions
     h256Hash m_known;
     /// hash of dropped transactions

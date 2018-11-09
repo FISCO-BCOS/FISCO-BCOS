@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file SecureInitiailizer.h
+/** @file SecureInitializer.h
  *  @author chaychen
  *  @modify first draft
  *  @date 20181022
@@ -24,7 +24,6 @@
 
 #include "Common.h"
 #include <boost/asio.hpp>
-#include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
 
 namespace bas = boost::asio::ssl;
@@ -32,30 +31,28 @@ namespace dev
 {
 namespace initializer
 {
-class SecureInitiailizer : public std::enable_shared_from_this<SecureInitiailizer>
+DEV_SIMPLE_EXCEPTION(PrivateKeyError);
+DEV_SIMPLE_EXCEPTION(PrivateKeyNotExists);
+DEV_SIMPLE_EXCEPTION(CertificateError);
+DEV_SIMPLE_EXCEPTION(CertificateNotExists);
+
+class SecureInitializer : public std::enable_shared_from_this<SecureInitializer>
 {
 public:
-    typedef std::shared_ptr<SecureInitiailizer> Ptr;
+    typedef std::shared_ptr<SecureInitializer> Ptr;
 
-    void initConfig(boost::property_tree::ptree const& _pt);
+    void initConfig(const boost::property_tree::ptree& _pt);
 
-    std::shared_ptr<bas::context> SSLContext() { return m_SSLContext; }
-    const KeyPair& keyPair() { return m_keyPair; }
+    std::shared_ptr<bas::context> SSLContext() { return m_sslContext; }
+    const KeyPair& keyPair() { return m_key; }
     void setDataPath(std::string const& _dataPath) { m_dataPath = _dataPath; }
 
 private:
-    void loadFile(boost::property_tree::ptree const& _pt);
     void completePath(std::string& _path);
-
-    std::shared_ptr<bas::context> m_SSLContext;
+    KeyPair m_key;
+    std::shared_ptr<boost::asio::ssl::context> m_sslContext;
 
     std::string m_dataPath;
-
-    std::string m_ca;
-    std::string m_agency;
-    std::string m_node;
-    std::string m_nodeKey;
-    KeyPair m_keyPair;
 };
 
 }  // namespace initializer

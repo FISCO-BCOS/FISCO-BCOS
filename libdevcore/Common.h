@@ -40,6 +40,8 @@
 #ifdef __INTEL_COMPILER
 #pragma warning(disable : 3682)  // call through incomplete class
 #endif
+#define DEV_QUOTED_HELPER(s) #s
+#define DEV_QUOTED(s) DEV_QUOTED_HELPER(s)
 
 #include <sys/time.h>
 #include <chrono>

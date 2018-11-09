@@ -71,8 +71,6 @@ BOOST_AUTO_TEST_CASE(testExceptions)
     BOOST_CHECK_THROW(
         assertThrow(false, NoNetworking, "Throw NoNetworking Exception"), NoNetworking);
     BOOST_CHECK_THROW(
-        assertThrow(false, NoUPnPDevice, "Throw NoUPnPDevice Exception"), NoUPnPDevice);
-    BOOST_CHECK_THROW(
         assertThrow(false, RootNotFound, "Throw RootNotFound Exception"), RootNotFound);
     BOOST_CHECK_THROW(assertThrow(false, BadRoot, "Throw BadRoot Exception"), BadRoot);
     BOOST_CHECK_THROW(assertThrow(false, FileError, "Throw FileError Exception"), FileError);

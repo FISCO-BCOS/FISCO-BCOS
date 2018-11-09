@@ -56,10 +56,10 @@ void dev::channel::ChannelServer::run()
             }
             catch (std::exception& e)
             {
-                LOG(ERROR) << "IO thread error:" << e.what();
+                CHANNEL_LOG(ERROR) << "IO thread error:" << e.what();
             }
 
-            LOG(ERROR) << "Try restart";
+            CHANNEL_LOG(ERROR) << "Try restart";
 
             sleep(1);
 
@@ -80,22 +80,22 @@ void dev::channel::ChannelServer::onAccept(
     if (!error)
     {
         auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint();
-        LOG(TRACE) << "Receive new connection: " << remoteEndpoint.address().to_string() << ":"
-                   << remoteEndpoint.port();
+        CHANNEL_LOG(TRACE) << "Receive new connection: " << remoteEndpoint.address().to_string()
+                           << ":" << remoteEndpoint.port();
 
         session->setHost(remoteEndpoint.address().to_string());
         session->setPort(remoteEndpoint.port());
 
         if (_enableSSL)
         {
-            LOG(TRACE) << "Start SSL handshake";
+            CHANNEL_LOG(TRACE) << "Start SSL handshake";
             session->sslSocket()->async_handshake(boost::asio::ssl::stream_base::server,
                 boost::bind(&ChannelServer::onHandshake, shared_from_this(),
                     boost::asio::placeholders::error, session));
         }
         else
         {
-            LOG(TRACE) << "Call connectionHandler";
+            CHANNEL_LOG(TRACE) << "Call connectionHandler";
 
             if (_connectionHandler)
             {
@@ -105,7 +105,7 @@ void dev::channel::ChannelServer::onAccept(
     }
     else
     {
-        LOG(ERROR) << "Accept failed: " << error.message();
+        CHANNEL_LOG(ERROR) << "Accept failed: " << error.message();
 
         try
         {
@@ -113,7 +113,7 @@ void dev::channel::ChannelServer::onAccept(
         }
         catch (std::exception& e)
         {
-            LOG(ERROR) << "Close error" << e.what();
+            CHANNEL_LOG(ERROR) << "Close error" << e.what();
         }
     }
 
@@ -140,7 +140,7 @@ void dev::channel::ChannelServer::startAccept()
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -148,23 +148,23 @@ void dev::channel::ChannelServer::stop()
 {
     try
     {
-        LOG(DEBUG) << "Close acceptor";
+        CHANNEL_LOG(DEBUG) << "Close acceptor";
 
         _acceptor->close();
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 
     try
     {
-        LOG(DEBUG) << "Close ioService";
+        CHANNEL_LOG(DEBUG) << "Close ioService";
         _ioService->stop();
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
 
@@ -175,19 +175,19 @@ void dev::channel::ChannelServer::onHandshake(
     {
         if (!error)
         {
-            LOG(TRACE) << "SSL handshake success";
+            CHANNEL_LOG(TRACE) << "SSL handshake success";
             if (_connectionHandler)
             {
                 _connectionHandler(ChannelException(), session);
             }
             else
             {
-                LOG(ERROR) << "connectionHandler empty";
+                CHANNEL_LOG(ERROR) << "connectionHandler empty";
             }
         }
         else
         {
-            LOG(ERROR) << "SSL handshake error: " << error.message();
+            CHANNEL_LOG(ERROR) << "SSL handshake error: " << error.message();
 
             try
             {
@@ -195,12 +195,12 @@ void dev::channel::ChannelServer::onHandshake(
             }
             catch (std::exception& e)
             {
-                LOG(ERROR) << "Close error:" << e.what();
+                CHANNEL_LOG(ERROR) << "Close error:" << e.what();
             }
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
 }
