@@ -111,7 +111,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     prepare_req.encode(prepare_data);
     /// broadcast prepare message
     broadcastMsg(PrepareReqPacket, prepare_req.block_hash.hex(), ref(prepare_data));
-    handlePrepareMsg(prepare_req, true);
+    handlePrepareMsg(prepare_req);
 }
 
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
@@ -318,7 +318,6 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     m_connectedNode = u256(sessions.size());
     for (auto session : sessions)
     {
-        /// LOG(DEBUG) << "#### session id:" << session.nodeID;
         /// get node index of the miner from m_minerList failed ?
         if (getIndexByMiner(session.nodeID) < 0)
             continue;
@@ -331,6 +330,9 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         /// packet has been broadcasted?
         if (broadcastFilter(session.nodeID, packetType, key))
             continue;
+        PBFTENGINE_LOG(TRACE) << "[#broadcastMsg] [dstId/dstIp/packetType]:  "
+                              << toHex(session.nodeID) << "/" << session.nodeIPEndpoint.name()
+                              << "/" << packetType << std::endl;
         /// send messages
         m_service->asyncSendMessageByNodeID(
             session.nodeID, transDataToMessage(data, packetType), nullptr);
@@ -353,17 +355,11 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
  * @return true: the specified prepareReq is valid
  * @return false: the specified prepareReq is invalid
  */
-bool PBFTEngine::isValidPrepare(
-    PrepareReq const& req, bool allowSelf, std::ostringstream& oss) const
+bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistPrepare(req))
     {
         PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
-        return false;
-    }
-    if (!allowSelf && req.idx == m_idx)
-    {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Own Req: [INFO]:  " << oss.str();
         return false;
     }
     if (hasConsensused(req))
@@ -468,8 +464,8 @@ void PBFTEngine::onRecvPBFTMessage(
     }
     else
     {
-        PBFTENGINE_LOG(WARNING) << "[#onRecvPBFTMessage] Illegal msg: [idx]:  "
-                                << pbft_msg.packet_id << std::endl;
+        PBFTENGINE_LOG(WARNING) << "[#onRecvPBFTMessage] Illegal msg: [idx/fromIp]:  "
+                                << pbft_msg.packet_id << "/" << pbft_msg.endpoint << std::endl;
     }
 }
 
@@ -478,7 +474,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
     bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
     if (!valid)
         return;
-    handlePrepareMsg(prepare_req);
+    handlePrepareMsg(prepare_req, pbftMsg.endpoint);
 }
 
 /**
@@ -493,15 +489,16 @@ void PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
  * @param self: if generated-prepare-request need to handled, then set self to be true;
  *              else this function will filter the self-generated prepareReq
  */
-void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, bool self)
+void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string const& endpoint)
 {
     Timer t;
     std::ostringstream oss;
-    oss << "[#handlePrepareMsg] [idx/view/number/highNum/consNum/hash]:  " << prepareReq.idx << "/"
-        << prepareReq.view << "/" << prepareReq.height << "/" << m_highestBlock.number() << "/"
-        << m_consensusBlockNumber << "/" << prepareReq.block_hash.abridged() << "\n";
+    oss << "[#handlePrepareMsg] [idx/view/number/highNum/consNum/fromIp/hash]:  " << prepareReq.idx
+        << "/" << prepareReq.view << "/" << prepareReq.height << "/" << m_highestBlock.number()
+        << "/" << m_consensusBlockNumber << "/" << endpoint << "/"
+        << prepareReq.block_hash.abridged() << "\n";
     /// check the prepare request is valid or not
-    if (!isValidPrepare(prepareReq, self, oss))
+    if (!isValidPrepare(prepareReq, oss))
         return;
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
@@ -580,7 +577,7 @@ void PBFTEngine::checkAndSave()
     u256 commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
     if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
     {
-        PBFTENGINE_LOG(TRACE) << "[#checkAndSave: CommitReq enough] [number/comitSize/hash]:  "
+        PBFTENGINE_LOG(TRACE) << "[#checkAndSave: CommitReq enough] [number/commitSize/hash]:  "
                               << m_reqCache->prepareCache().height << "/" << commit_size << "/"
                               << m_reqCache->prepareCache().block_hash.abridged() << std::endl;
         if (m_reqCache->prepareCache().view != m_view)
@@ -602,11 +599,14 @@ void PBFTEngine::checkAndSave()
                                   << m_reqCache->prepareCache().block_hash.abridged() << "/"
                                   << m_reqCache->prepareCache().idx << std::endl;
             /// callback block chain to commit block
-            m_blockChain->commitBlock(
+            CommitResult ret = m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
             PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
-            dropHandledTransactions(block);
+            if (ret == CommitResult::OK)
+                dropHandledTransactions(block);
+            else
+                m_txPool->handleBadBlock(block);
             resetConfig();
         }
         else
@@ -627,13 +627,13 @@ void PBFTEngine::checkAndSave()
 /// 3. delete invalid view-change requests according to new highestBlock
 /// 4. recalculate the m_nodeNum/m_f according to newer MinerList
 /// 5. clear all caches related to prepareReq and signReq
-void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
+void PBFTEngine::reportBlock(Block const& block)
 {
     Guard l(m_mutex);
-    if (m_blockChain->number() == 0 || m_highestBlock.number() < blockHeader.number())
+    if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
         /// update the highest block
-        m_highestBlock = blockHeader;
+        m_highestBlock = block.blockHeader();
         if (m_highestBlock.number() >= m_consensusBlockNumber)
         {
             m_view = m_toView = u256(0);
@@ -650,7 +650,8 @@ void PBFTEngine::reportBlock(BlockHeader const& blockHeader)
         PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "
                              << m_highestBlock.number() << ", idx= " << m_highestBlock.sealer()
                              << " , hash= " << m_highestBlock.hash().abridged()
-                             << ", next= " << m_consensusBlockNumber;
+                             << ", next= " << m_consensusBlockNumber
+                             << " , txNum=" << block.getTransactionSize() << std::endl;
     }
 }
 
@@ -669,9 +670,10 @@ void PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     if (!valid)
         return;
     std::ostringstream oss;
-    oss << "[#handleSignMsg] [number/highNum/idx/Sview/view/from/hash]:  " << sign_req.height << "/"
-        << m_highestBlock.number() << "/" << sign_req.idx << "/" << sign_req.view << "/" << m_view
-        << "/" << pbftMsg.node_id << "/" << sign_req.block_hash.abridged() << "\n";
+    oss << "[#handleSignMsg] [number/highNum/idx/Sview/view/from/fromIp/hash]:  " << sign_req.height
+        << "/" << m_highestBlock.number() << "/" << sign_req.idx << "/" << sign_req.view << "/"
+        << m_view << "/" << pbftMsg.node_id << "/" << pbftMsg.endpoint << "/"
+        << sign_req.block_hash.abridged() << "\n";
 
     valid = isValidSignReq(sign_req, oss);
     if (!valid)
@@ -725,9 +727,10 @@ void PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
     if (!valid)
         return;
     std::ostringstream oss;
-    oss << "[#handleCommitMsg] [number/highNum/idx/Cview/view/from/hash]:  " << commit_req.height
-        << "/" << m_highestBlock.number() << "/" << commit_req.idx << "/" << commit_req.view << "/"
-        << m_view << "/" << pbftMsg.node_id << "/" << commit_req.block_hash.abridged() << "\n";
+    oss << "[#handleCommitMsg] [number/highNum/idx/Cview/view/from/fromIp/hash]:  "
+        << commit_req.height << "/" << m_highestBlock.number() << "/" << commit_req.idx << "/"
+        << commit_req.view << "/" << m_view << "/" << pbftMsg.node_id << "/" << pbftMsg.endpoint
+        << "/" << commit_req.block_hash.abridged() << "\n";
 
     valid = isValidCommitReq(commit_req, oss);
     if (!valid)
@@ -770,10 +773,10 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
     if (!valid)
         return;
     std::ostringstream oss;
-    oss << "[handleViewChangeMsg] [number/highNum/idx/Cview/view/from/hash]:  "
+    oss << "[handleViewChangeMsg] [number/highNum/idx/Cview/view/from/fromIp/hash]:  "
         << viewChange_req.height << "/" << m_highestBlock.number() << "/" << viewChange_req.idx
         << "/" << viewChange_req.view << "/" << m_view << "/" << pbftMsg.node_id << "/"
-        << viewChange_req.block_hash.abridged() << "\n";
+        << pbftMsg.endpoint << "/" << viewChange_req.block_hash.abridged() << "\n";
 
     valid = isValidViewChangeReq(viewChange_req, oss);
     if (!valid)
@@ -1004,9 +1007,10 @@ void PBFTEngine::handleFutureBlock()
     PrepareReq future_req = m_reqCache->futurePrepareCache();
     if (future_req.height == m_consensusBlockNumber && future_req.view == m_view)
     {
-        PBFTENGINE_LOG(INFO) << "[#handleFutureBlock] [number/highNum/hash]:  "
+        PBFTENGINE_LOG(INFO) << "[#handleFutureBlock] [number/highNum/view/conNum/hash]:  "
                              << m_reqCache->futurePrepareCache().height << "/"
-                             << m_highestBlock.number() << "/"
+                             << m_highestBlock.number() << "/" << m_view << "/"
+                             << m_consensusBlockNumber << "/"
                              << m_reqCache->futurePrepareCache().block_hash.abridged() << std::endl;
         handlePrepareMsg(future_req);
         m_reqCache->resetFuturePrepare();

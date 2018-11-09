@@ -208,6 +208,7 @@ public:
         m_blockChain.push_back(std::make_shared<Block>(block));
         m_blockNumber = block.blockHeader().number() + 1;
         m_onReady();
+        return CommitResult::OK;
     }
 
     void setGroupMark(std::string const& groupMark) override {}
@@ -282,6 +283,7 @@ public:
     }
     virtual bool drop(h256 const& _txHash) override { return true; }
     virtual bool dropBlockTrans(dev::eth::Block const& block) override { return true; }
+    bool handleBadBlock(Block const& block) override { return true; }
     virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
     virtual TxPoolStatus status() const override
     {
@@ -419,7 +421,7 @@ public:
     virtual void setNodeAccountType(NodeAccountType const&){};
     virtual u256 nodeIdx() const { return u256(0); };
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
+    virtual void reportBlock(dev::eth::Block const& block){};
 
 private:
     dev::h512s m_minerList;

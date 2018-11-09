@@ -100,8 +100,9 @@ enum class ImportResult
     Malformed,
     BadChain,
     ZeroSignature,
-    NonceCheckFail,
-    BlockLimitCheckFail
+    TransactionNonceCheckFail,
+    TxPoolNonceCheckFail,
+    TransactionPoolIsFull
 };
 
 struct ImportRequirements
