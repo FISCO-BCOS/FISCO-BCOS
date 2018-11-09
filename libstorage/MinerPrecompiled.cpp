@@ -23,7 +23,7 @@
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-
+#include <boost/lexical_cast.hpp>
 using namespace dev;
 using namespace dev::blockverifier;
 
@@ -63,7 +63,8 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 
             if (entries->size() == 0u)
             {
-                entry->setField(NODE_KEY_ENABLENUM, (context->blockInfo().number).str());
+                entry->setField(NODE_KEY_ENABLENUM,
+                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 table->insert(PRI_KEY, entry);
                 STORAGE_LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
@@ -103,7 +104,8 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
                 STORAGE_LOG(DEBUG)
                     << "MinerPrecompiled remove node not in _sys_miners_, nodeID : " << nodeID;
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                entry->setField(NODE_KEY_ENABLENUM, context->blockInfo().number.str());
+                entry->setField(NODE_KEY_ENABLENUM,
+                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
                 table->insert(PRI_KEY, entry);
             }
             else

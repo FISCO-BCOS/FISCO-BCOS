@@ -14,43 +14,25 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file Precompiled.h
+/** @file BlockVerifier.h
  *  @author mingzhenliu
  *  @date 20180921
  */
+
 #pragma once
 
+#include <libdevcore/Common.h>
+#include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
-#include <memory>
-
 namespace dev
 {
 namespace blockverifier
 {
-class ExecutiveContext;
-class Precompiled : public std::enable_shared_from_this<Precompiled>
+struct BlockInfo
 {
-public:
-    typedef std::shared_ptr<Precompiled> Ptr;
-
-    virtual ~Precompiled(){};
-
-    virtual std::string toString(std::shared_ptr<ExecutiveContext>) { return ""; }
-
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param) = 0;
-
-    virtual uint32_t getParamFunc(bytesConstRef param)
-    {
-        auto funcBytes = param.cropped(0, 4);
-        uint32_t func = *((uint32_t*)(funcBytes.data()));
-
-        return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
-               ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
-    }
-
-    virtual bytesConstRef getParamData(bytesConstRef param) { return param.cropped(4); }
+    dev::h256 hash;
+    int64_t number;
+    dev::h256 stateRoot;
 };
-
 }  // namespace blockverifier
-
 }  // namespace dev

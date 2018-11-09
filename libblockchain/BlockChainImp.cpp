@@ -334,7 +334,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         writeNumber(block, context);
         writeTxToBlock(block, context);
         writeBlockInfo(block, context);
-        context->dbCommit();
+        context->dbCommit(block);
         commitMutex.unlock();
         m_onReady();
         return CommitResult::OK;

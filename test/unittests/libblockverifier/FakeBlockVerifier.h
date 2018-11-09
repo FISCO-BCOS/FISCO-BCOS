@@ -35,7 +35,7 @@ class FakeBlockverifier : public BlockVerifierInterface
 {
 public:
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, dev::h256 const& parentStateRoot) override
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override
     {
         return m_execContext;
     }
