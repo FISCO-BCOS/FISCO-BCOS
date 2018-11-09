@@ -20,9 +20,40 @@
  * @author: yujiechen
  * @date 2018-08-24
  */
+#include "ExitHandler.h"
+#include "Param.h"
 #include <libdevcore/easylog.h>
+#include <libinitializer/Initializer.h>
+#include <libinitializer/LogInitializer.h>
+#include <clocale>
 INITIALIZE_EASYLOGGINGPP
+using namespace dev::initializer;
+void setDefaultOrCLocale()
+{
+#if __unix__
+    if (!std::setlocale(LC_ALL, ""))
+    {
+        setenv("LC_ALL", "C", 1);
+    }
+#endif
+}
 int main(int argc, const char* argv[])
 {
-    return 0;
+    /// set LC_ALL
+    setDefaultOrCLocale();
+    /// init params
+    MainParams param = initCommandLine(argc, argv);
+    /// callback initializer to init all ledgers
+    auto initialize = std::make_shared<Initializer>();
+    initialize->init(param.configPath());
+    ExitHandler exitHandler;
+    signal(SIGABRT, &ExitHandler::exitHandler);
+    signal(SIGTERM, &ExitHandler::exitHandler);
+    signal(SIGINT, &ExitHandler::exitHandler);
+
+    while (!exitHandler.shouldExit())
+    {
+        this_thread::sleep_for(chrono::milliseconds(100));
+        LogInitializer::logRotateByTime();
+    }
 }

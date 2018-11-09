@@ -56,7 +56,7 @@ public:
     virtual void setNodeAccountType(NodeAccountType const&) = 0;
     virtual u256 nodeIdx() const = 0;
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader) = 0;
+    virtual void reportBlock(dev::eth::Block const& block) = 0;
 };
 }  // namespace consensus
 }  // namespace dev
