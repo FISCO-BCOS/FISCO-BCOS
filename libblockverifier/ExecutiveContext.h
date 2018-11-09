@@ -27,7 +27,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ChainOperationParams.h>
 #include <libethcore/PrecompiledContract.h>
-#include <libethcore/block.h>
+#include <libethcore/Block.h>
 #include <libexecutive/StateFace.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <memory>
