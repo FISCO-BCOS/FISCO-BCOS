@@ -22,7 +22,7 @@
  */
 
 #include <libdevcore/FileSystem.h>
-#include <libinitializer/SecureInitiailizer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <libp2p/Socket.h>
 #include <openssl/ssl.h>
 #include <test/tools/libutils/Common.h>
@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(testSocket)
     setDataDir(getTestPath().string() + "/fisco-bcos-data");
 
     boost::property_tree::ptree pt;
-    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();
+    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitializer>();
     secureInitiailizer->setDataPath(getTestPath().string() + "/fisco-bcos-data/");
     secureInitiailizer->initConfig(pt);
     auto sslContext = secureInitiailizer->SSLContext();

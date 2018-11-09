@@ -52,7 +52,7 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        asyncSendMessageByNodeID(nodeID, message, fp, Options());
+        asyncSendMessageByNodeID(nodeID, message, fp, Options{500, 2000});
 
         callback->mutex.lock();
         callback->mutex.unlock();
@@ -264,7 +264,7 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
         CallbackFunc fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
-        asyncSendMessageByTopic(topic, message, fp, Options());
+        asyncSendMessageByTopic(topic, message, fp, Options{500, 2000});
 
         callback->mutex.lock();
         callback->mutex.unlock();
@@ -330,6 +330,7 @@ void Service::asyncSendMessageByTopic(
                     p->addSeq2Callback(seq, responseCallback);
                 }
                 std::shared_ptr<bytes> buf = std::make_shared<bytes>();
+                message->encodeAMOPBuffer(topic);
                 message->encode(*buf);
                 p->send(buf);
                 return;
