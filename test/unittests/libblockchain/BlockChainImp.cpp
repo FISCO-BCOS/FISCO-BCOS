@@ -59,7 +59,7 @@ public:
 
     Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
-        //std::cout << "key " << key << " table " << m_table << std::endl;
+        // std::cout << "key " << key << " table " << m_table << std::endl;
         Entries::Ptr entries = std::make_shared<Entries>();
         Entry::Ptr entry = std::make_shared<Entry>();
 
