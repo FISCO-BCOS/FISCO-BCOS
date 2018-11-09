@@ -62,8 +62,8 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
         P2PException error = callback->error;
         if (error.errorCode() != 0)
         {
-            P2PMSG_LOG(ERROR) << "[#sendMessageByNodeID] [ECODE/EINFO]: " << error.errorCode()
-                              << "/" << error.what();
+            P2PMSG_LOG(WARNING) << "[#sendMessageByNodeID] [ECODE/EINFO]: " << error.errorCode()
+                                << "/" << error.what();
             throw error;
         }
 
@@ -71,7 +71,7 @@ Message::Ptr Service::sendMessageByNodeID(NodeID const& nodeID, Message::Ptr mes
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#sendMessageByNodeID] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#sendMessageByNodeID] [EINFO]: " << e.what();
     }
 
     return Message::Ptr();
@@ -118,7 +118,7 @@ void Service::asyncSendMessageByNodeID(
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#asyncSendMessageByNodeID] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#asyncSendMessageByNodeID] [EINFO]: " << e.what();
     }
 }
 
@@ -179,7 +179,7 @@ void Service::onTimeoutByTopic(const boost::system::error_code& error,
                     }
                     catch (std::exception& e)
                     {
-                        P2PMSG_LOG(ERROR) << "[#onTimeoutByTopic] [EINFO]: " << e.what();
+                        P2PMSG_LOG(WARNING) << "[#onTimeoutByTopic] [EINFO]: " << e.what();
                     }
                     nodeIDsToSend.erase(nodeIDsToSend.begin());
                 }
@@ -207,7 +207,7 @@ void Service::onTimeoutByTopic(const boost::system::error_code& error,
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#onTimeoutByTopic] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#onTimeoutByTopic] [EINFO]: " << e.what();
     }
 }
 
@@ -251,7 +251,7 @@ void Service::onTimeoutByNode(
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#onTimeoutByNode] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#onTimeoutByNode] [EINFO]: " << e.what();
     }
 }
 
@@ -273,8 +273,8 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
         P2PException error = callback->error;
         if (error.errorCode() != 0)
         {
-            P2PMSG_LOG(ERROR) << "[#sendMessageByTopic] [ECODE/EINFO]: " << error.errorCode() << "/"
-                              << error.what();
+            P2PMSG_LOG(WARNING) << "[#sendMessageByTopic] [ECODE/EINFO]: " << error.errorCode()
+                                << "/" << error.what();
             throw error;
         }
 
@@ -282,7 +282,7 @@ Message::Ptr Service::sendMessageByTopic(std::string const& topic, Message::Ptr 
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#sendMessageByTopic] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#sendMessageByTopic] [EINFO]: " << e.what();
     }
 
     return Message::Ptr();
@@ -339,7 +339,7 @@ void Service::asyncSendMessageByTopic(
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#asyncSendMessageByTopic] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#asyncSendMessageByTopic] [EINFO]: " << e.what();
     }
 }
 
@@ -365,7 +365,7 @@ void Service::asyncMulticastMessageByTopic(std::string const& topic, Message::Pt
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#asyncMulticastMessageByTopic] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#asyncMulticastMessageByTopic] [EINFO]: " << e.what();
     }
 }
 
@@ -390,7 +390,7 @@ void Service::asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message:
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#asyncMulticastMessageByNodeIDList] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#asyncMulticastMessageByNodeIDList] [EINFO]: " << e.what();
     }
 }
 
@@ -424,7 +424,7 @@ void Service::asyncBroadcastMessage(Message::Ptr message, Options const& options
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#asyncBroadcastMessage] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#asyncBroadcastMessage] [EINFO]: " << e.what();
     }
 }
 
@@ -523,7 +523,7 @@ void Service::setTopicsByNode(
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#setTopicsByNode] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#setTopicsByNode] [EINFO]: " << e.what();
     }
 }
 
@@ -547,7 +547,7 @@ std::shared_ptr<std::vector<std::string>> Service::getTopicsByNode(NodeID const&
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#getTopicsByNode] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#getTopicsByNode] [EINFO]: " << e.what();
     }
 
     return ret;
@@ -568,7 +568,7 @@ SessionInfos Service::sessionInfos() const
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#sessionInfos] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#sessionInfos] [EINFO]: " << e.what();
     }
     return infos;
 }
@@ -598,7 +598,7 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
         }
         catch (std::exception& e)
         {
-            P2PMSG_LOG(ERROR) << "[#sessionInfosByProtocolID] [EINFO]: " << e.what();
+            P2PMSG_LOG(WARNING) << "[#sessionInfosByProtocolID] [EINFO]: " << e.what();
         }
     }
 
@@ -626,7 +626,7 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(ERROR) << "[#getPeersByTopic] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << "[#getPeersByTopic] [EINFO]: " << e.what();
     }
     P2PMSG_LOG(DEBUG) << "[#getPeersByTopic] [topic/peers size]: " << topic << "/"
                       << nodeList.size();
