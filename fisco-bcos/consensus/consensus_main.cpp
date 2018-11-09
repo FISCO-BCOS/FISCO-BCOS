@@ -27,7 +27,7 @@
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitiailizer.h>
 #include <libinitializer/P2PInitializer.h>
-#include <libinitializer/SecureInitiailizer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
 using namespace dev;
