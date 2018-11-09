@@ -21,6 +21,8 @@ ExternalProject_Get_Property(mhd SOURCE_DIR)
 add_library(MHD STATIC IMPORTED)
 set(MHD_INCLUDE_DIR ${SOURCE_DIR}/src/include/)
 set(MHD_LIBRARY ${SOURCE_DIR}/src/microhttpd/.libs/libmicrohttpd.a)
+file(MAKE_DIRECTORY ${MHD_INCLUDE_DIR})  # Must exist.
+
 set_property(TARGET MHD PROPERTY IMPORTED_LOCATION ${MHD_LIBRARY})
 set_property(TARGET MHD PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
 add_dependencies(MHD mhd)
