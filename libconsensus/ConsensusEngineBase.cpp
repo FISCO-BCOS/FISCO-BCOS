@@ -61,10 +61,8 @@ void ConsensusEngineBase::stop()
 dev::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(Block& block)
 {
     auto parentBlock = m_blockChain->getBlockByNumber(m_blockChain->number());
-    BlockInfo parentBlockInfo;
-    parentBlockInfo.hash = parentBlock->header().hash();
-    parentBlockInfo.number = parentBlock->header().number();
-    parentBlockInfo.stateRoot = parentBlock->header().stateRoot();
+    BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
+        parentBlock->header().stateRoot()};
     /// reset execute context
     return m_blockVerifier->executeBlock(block, parentBlockInfo);
 }

@@ -382,10 +382,8 @@ bool SyncMaster::maintainDownloadingQueue()
         if (isNewBlock(topBlock))
         {
             auto parentBlock = m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
-            BlockInfo parentBlockInfo;
-            parentBlockInfo.hash = parentBlock->header().hash();
-            parentBlockInfo.number = parentBlock->header().number();
-            parentBlockInfo.stateRoot = parentBlock->header().stateRoot();
+            BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
+                parentBlock->header().stateRoot()};
             ExecutiveContext::Ptr exeCtx =
                 m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
             CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);

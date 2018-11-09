@@ -84,9 +84,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
     {
-        BlockInfo blockInfo;
-        blockInfo.hash = blockHeader.hash();
-        blockInfo.number = blockHeader.number();
+        BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
         m_executiveContextFactory->initExecutiveContext(
             blockInfo, blockHeader.stateRoot(), executiveContext);
     }

@@ -28,8 +28,6 @@ namespace dev
 {
 namespace blockverifier
 {
-const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
-const int64_t maxBlockGasLimit = 0x7fffffffffffffff;
 struct BlockInfo
 {
     dev::h256 hash;

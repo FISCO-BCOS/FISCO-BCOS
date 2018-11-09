@@ -319,10 +319,8 @@ int main(int argc, char* argv[])
 
             block.appendTransaction(tx2);
             LOG(INFO) << "Tx2 " << tx2;
-            dev::blockverifier::BlockInfo parentBlockInfo;
-            parentBlockInfo.hash = parentBlock->header().hash();
-            parentBlockInfo.number = parentBlock->header().number();
-            parentBlockInfo.stateRoot = parentBlock->header().stateRoot();
+            dev::blockverifier::BlockInfo parentBlockInfo = {parentBlock->header().hash(),
+                parentBlock->header().number(), parentBlock->header().stateRoot()};
             auto context = blockVerifier->executeBlock(block, parentBlockInfo);
             blockChain->commitBlock(block, context);
             dev::eth::TransactionReceipt receipt =
