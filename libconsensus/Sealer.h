@@ -133,7 +133,11 @@ protected:
     virtual void doWork(bool wait);
     void doWork() override { doWork(true); }
     bool isBlockSyncing();
-    inline void resetSealingBlock() { resetSealingBlock(m_sealing); }
+    inline void resetSealingBlock()
+    {
+        m_blockSync->noteSealingBlockNumber(m_sealing.block.blockHeader().number());
+        resetSealingBlock(m_sealing);
+    }
     void resetSealingBlock(Sealing& sealing);
     void resetBlock(dev::eth::Block& block);
     void resetSealingHeader(dev::eth::BlockHeader& header);
