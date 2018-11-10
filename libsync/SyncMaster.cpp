@@ -390,7 +390,7 @@ bool SyncMaster::maintainDownloadingQueue()
             if (ret != CommitResult::OK)
             {
                 m_txPool->handleBadBlock(*topBlock);
-                return;
+                return false;
             }
 
             else
