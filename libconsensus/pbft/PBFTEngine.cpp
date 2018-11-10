@@ -601,12 +601,23 @@ void PBFTEngine::checkAndSave()
             /// callback block chain to commit block
             CommitResult ret = m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
-            PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
             if (ret == CommitResult::OK)
+            {
                 dropHandledTransactions(block);
+                PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
+            }
             else
+            {
+                PBFTENGINE_LOG(ERROR)
+                    << "[#commitBlock Failed] [highNum/SNum/Shash]:  " << m_highestBlock.number()
+                    << "/" << block.blockHeader().number() << "/"
+                    << block.blockHeader().hash().abridged() << std::endl;
+                m_onViewChange();
+                m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
+                /// note blocksync to sync
+            }
             resetConfig();
         }
         else
