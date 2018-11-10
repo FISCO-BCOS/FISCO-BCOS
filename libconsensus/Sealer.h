@@ -121,6 +121,10 @@ protected:
             SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num << std::endl;
             m_syncTxPool = false;
         }
+        else if (m_txPool->status().current > 0)
+        {
+            m_syncTxPool = true;
+        }
         return enough;
     }
 
