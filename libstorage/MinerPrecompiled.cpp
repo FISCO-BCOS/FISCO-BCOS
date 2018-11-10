@@ -23,19 +23,19 @@
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-
+#include <boost/lexical_cast.hpp>
 using namespace dev;
 using namespace dev::blockverifier;
 
 bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 {
-    LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
+    STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
 
 
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    LOG(DEBUG) << "func:" << std::hex << func;
+    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
     dev::eth::ContractABI abi;
     bytes out;
@@ -48,7 +48,7 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)
         {
-            LOG(DEBUG) << "NodeID length error. " << nodeID;
+            STORAGE_LOG(DEBUG) << "NodeID length error. " << nodeID;
             break;
         }
         storage::Table::Ptr table = openTable(context, "_sys_miners_");
@@ -63,19 +63,20 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 
             if (entries->size() == 0u)
             {
-                entry->setField(NODE_KEY_ENABLENUM, (context->blockInfo().number).str());
+                entry->setField(NODE_KEY_ENABLENUM,
+                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 table->insert(PRI_KEY, entry);
-                LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
+                STORAGE_LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
             }
             else
             {
                 table->update(PRI_KEY, entry, condition);
-                LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
+                STORAGE_LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
             }
             break;
         }
-        LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
+        STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
 
         break;
     }
@@ -85,7 +86,7 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)
         {
-            LOG(DEBUG) << "NodeID length error. " << nodeID;
+            STORAGE_LOG(DEBUG) << "NodeID length error. " << nodeID;
             break;
         }
         storage::Table::Ptr table = openTable(context, "_sys_miners_");
@@ -100,20 +101,21 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 
             if (entries->size() == 0u)
             {
-                LOG(DEBUG) << "MinerPrecompiled remove node not in _sys_miners_, nodeID : "
-                           << nodeID;
+                STORAGE_LOG(DEBUG)
+                    << "MinerPrecompiled remove node not in _sys_miners_, nodeID : " << nodeID;
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                entry->setField(NODE_KEY_ENABLENUM, context->blockInfo().number.str());
+                entry->setField(NODE_KEY_ENABLENUM,
+                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
                 table->insert(PRI_KEY, entry);
             }
             else
             {
                 table->update(PRI_KEY, entry, condition);
-                LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
+                STORAGE_LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
             }
             break;
         }
-        LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
+        STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
         break;
     }
     default:

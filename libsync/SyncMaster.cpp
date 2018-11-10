@@ -381,12 +381,13 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         if (isNewBlock(topBlock))
         {
-            dev::h256 parentRoot =
-                m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1)
-                    ->blockHeader()
-                    .stateRoot();
-            ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*topBlock, parentRoot);
+            auto parentBlock = m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
+            BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
+                parentBlock->header().stateRoot()};
+            ExecutiveContext::Ptr exeCtx =
+                m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
             CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+            /// if commit failed, shouldn't pop block from blockQueue
             if (ret != CommitResult::OK)
             {
                 m_txPool->handleBadBlock(*topBlock);
@@ -395,7 +396,6 @@ bool SyncMaster::maintainDownloadingQueue()
 
             else
                 m_txPool->dropBlockTrans(*topBlock);
-
             SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
                            << topBlock->header().number() << "/" << topBlock->transactions().size()
                            << "/" << topBlock->headerHash() << endl;

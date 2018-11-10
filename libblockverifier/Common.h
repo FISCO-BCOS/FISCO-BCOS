@@ -14,17 +14,25 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file Common.h
- *  @author chaychen
- *  @modify first draft
- *  @date 20181022
+/** @file BlockVerifier.h
+ *  @author mingzhenliu
+ *  @date 20180921
  */
 
 #pragma once
 
-#include <libdevcore/easylog.h>
-#include <libdevcrypto/Common.h>
-#include <boost/property_tree/ini_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
-
-#define INITIALIZER_LOG(LEVEL) LOG(LEVEL) << "[#INITIALIZER] "
+#include <libdevcore/Common.h>
+#include <libdevcore/CommonData.h>
+#include <libdevcore/FixedHash.h>
+namespace dev
+{
+namespace blockverifier
+{
+struct BlockInfo
+{
+    dev::h256 hash;
+    int64_t number;
+    dev::h256 stateRoot;
+};
+}  // namespace blockverifier
+}  // namespace dev

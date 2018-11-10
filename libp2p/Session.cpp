@@ -59,7 +59,7 @@ Session::~Session()
 {
     ThreadContext tc(info().id.abridged());
     ThreadContext tc2(info().host);
-    LOG(INFO) << "Closing peer session :-(";
+    SESSION_LOG(INFO) << "[#Session] closing peer session :-(";
     m_peer->m_lastConnected = m_peer->m_lastAttempted - chrono::seconds(1);
 
     try
@@ -76,7 +76,7 @@ Session::~Session()
     }
     catch (...)
     {
-        LOG(ERROR) << "Deconstruct Session exception";
+        SESSION_LOG(ERROR) << "[#Session] deconstruct Session exception";
     }
 }
 
@@ -107,15 +107,15 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
         unsigned elapsed = (unsigned)(utcTime() - m_start_t);
         if (elapsed >= 10)
         {
-            LOG(WARNING) << "ba::async_write write-time=" << elapsed << ",len=" << length
-                         << ",id=" << id();
+            SESSION_LOG(WARNING) << "[#onWrite] ba::async_write [write-time/len/id]: " << elapsed
+                                 << ",len=" << length << "/" << id();
         }
         ThreadContext tc(info().id.abridged());
         ThreadContext tc2(info().host);
         // must check queue, as write callback can occur following dropped()
         if (ec)
         {
-            LOG(WARNING) << "Error sending: " << ec.message();
+            SESSION_LOG(WARNING) << "[#onWrite] error sending: [EINFO]: " << ec.message();
             drop(TCPError);
             return;
         }
@@ -131,7 +131,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
     }
     catch (exception& e)
     {
-        LOG(ERROR) << "Error:" << e.what();
+        SESSION_LOG(ERROR) << "[#onWrite] [EINFO]: " << e.what();
         drop(TCPError);
         return;
     }
@@ -153,7 +153,7 @@ void Session::write()
         unsigned queue_elapsed = (unsigned)(m_start_t - enter_time);
         if (queue_elapsed > 10)
         {
-            LOG(WARNING) << "Session::write queue-time=" << queue_elapsed;
+            SESSION_LOG(WARNING) << "[#write] [queue-time]: " << queue_elapsed;
         }
 
         auto session = shared_from_this();
@@ -168,14 +168,14 @@ void Session::write()
         }
         else
         {
-            LOG(WARNING) << "Error sending ssl socket is close!";
+            SESSION_LOG(WARNING) << "[#write] error sending ssl socket is close!";
             drop(TCPError);
             return;
         }
     }
     catch (exception& e)
     {
-        LOG(ERROR) << "Error:" << e.what();
+        SESSION_LOG(ERROR) << "[#write] [EINFO]: " << e.what();
         drop(TCPError);
         return;
     }
@@ -187,7 +187,7 @@ void Session::drop(DisconnectReason _reason)
         return;
     m_dropped = true;
 
-    LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
+    SESSION_LOG(DEBUG) << "[#drop] call and erase all callbackFunc in this session!";
     for (auto it : *m_seq2Callback)
     {
         if (it.second->timeoutHandler)
@@ -197,7 +197,7 @@ void Session::drop(DisconnectReason _reason)
         }
         if (it.second->callbackFunc)
         {
-            LOG(INFO) << "Session::drop, call callbackFunc by seq=" << it.first;
+            SESSION_LOG(DEBUG) << "[#drop] call callbackFunc [seq]: " << it.first;
             ///< TODO: use threadPool
             P2PException e(
                 P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
@@ -217,8 +217,9 @@ void Session::drop(DisconnectReason _reason)
 
             // shutdown may block servals seconds - morebtcg
             // socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-            LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason)
-                         << ")" << m_peer->address() << "," << ec.message();
+            SESSION_LOG(WARNING) << "[#drop] closing: [socket/reason/address/ec]: "
+                                 << socket.remote_endpoint(ec) << "/" << reasonOf(_reason) << "/"
+                                 << m_peer->address() << "/" << ec.message();
 
             socket.close();
         }
@@ -232,7 +233,7 @@ void Session::drop(DisconnectReason _reason)
 
 void Session::disconnect(DisconnectReason _reason)
 {
-    LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")";
+    SESSION_LOG(WARNING) << "[#disconnect] disconnecting: [our reason] :" << reasonOf(_reason);
     drop(_reason);
 }
 
@@ -252,13 +253,10 @@ void Session::doRead()
     auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
         if (ec)
         {
-            LOG(WARNING) << "Error sending: " << ec.message();
+            SESSION_LOG(WARNING) << "[#doRead] error Reading ssl socket is close!";
             drop(TCPError);
             return;
         }
-        // LOG(TRACE) << "Read: " << bytesTransferred
-        ///           << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer +
-        ///           bytesTransferred);
         m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
         ThreadContext tc(info().id.abridged());
@@ -268,10 +266,9 @@ void Session::doRead()
         {
             Message::Ptr message = m_messageFactory->buildMessage();
             ssize_t result = message->decode(m_data.data(), m_data.size());
-            /// LOG(TRACE) << "Parse result: " << result;
             if (result > 0)
             {
-                LOG(TRACE) << "Decode success: " << result;
+                SESSION_LOG(TRACE) << "[#doRead] decode success: [result]: " << result;
                 P2PException e(
                     P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
                 onMessage(e, self, message);
@@ -293,13 +290,12 @@ void Session::doRead()
     };
     if (m_socket->isConnected())
     {
-        /// LOG(TRACE) << "Start read:" << bufferLength;
         m_server->asioInterface()->async_read_some(
             m_socket, *m_strand, boost::asio::buffer(m_recvBuffer, bufferLength), asyncRead);
     }
     else
     {
-        LOG(WARNING) << "Error Reading ssl socket is close!";
+        SESSION_LOG(WARNING) << "[#doRead] error Reading ssl socket is close!";
         drop(TCPError);
         return;
     }
@@ -310,7 +306,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
         _ec.value() != boost::asio::error::eof)
     {
-        LOG(WARNING) << "Error reading: " << _ec.message();
+        SESSION_LOG(WARNING) << "[#checkRead] error reading: [EINFO]: " << _ec.message();
         drop(TCPError);
 
         return false;
@@ -332,14 +328,15 @@ bool Session::CheckGroupIDAndSender(PROTOCOL_ID protocolID, std::shared_ptr<Sess
         if (find(nodeList.begin(), nodeList.end(), session->id()) == nodeList.end())
         {
             ///< The message sender is not a member of the group
-            LOG(ERROR) << "Session::onMessage, The message sender is not a member of the group!";
+            SESSION_LOG(WARNING)
+                << "[#CheckGroupIDAndSender] the message sender is not a member of the group!";
             return false;
         }
     }
     else
     {
         ///< I didn't join the group
-        LOG(ERROR) << "Session::onMessage, I didn't join the group!";
+        SESSION_LOG(WARNING) << "[#CheckGroupIDAndSender] I didn't join the group!";
         return false;
     }
 
@@ -362,7 +359,7 @@ void Session::onMessage(
         bool ret = m_p2pMsgHandler->getHandlerByProtocolID(protocolID, callbackFunc);
         if (ret && callbackFunc)
         {
-            LOG(INFO) << "Session::onMessage, call callbackFunc by protocolID=" << protocolID;
+            SESSION_LOG(DEBUG) << "[#onMessage] call callbackFunc: [protocolID]: " << protocolID;
             ///< execute funtion, send response packet by user in callbackFunc
             ///< TODO: use threadPool
             m_threadPool->enqueue(
@@ -370,7 +367,7 @@ void Session::onMessage(
         }
         else
         {
-            LOG(ERROR) << "Session::onMessage, handler not found by protocolID=" << protocolID;
+            SESSION_LOG(WARNING) << "[#onMessage] handler not found: [protocolID]: " << protocolID;
         }
     }
     else if (protocolID != 0)
@@ -386,24 +383,27 @@ void Session::onMessage(
             }
             if (callback->callbackFunc)
             {
-                LOG(INFO) << "Session::onMessage, call callbackFunc by seq=" << message->seq();
+                SESSION_LOG(WARNING)
+                    << "[#onMessage] call callbackFunc in seq: [seq]: " << message->seq();
                 ///< TODO: use threadPool
                 m_threadPool->enqueue(
                     [callback, e, message]() { callback->callbackFunc(e, message); });
             }
             else
             {
-                LOG(INFO) << "Session::onMessage, callbackFunc is null.";
+                SESSION_LOG(WARNING)
+                    << "[#onMessage] callbackFunc not found in seq: [seq]: " << message->seq();
             }
         }
         else
         {
-            LOG(WARNING) << "Session::onMessage, callback not found by seq=" << message->seq();
+            SESSION_LOG(WARNING) << "[#onMessage] callback not found by seq: [seq]: "
+                                 << message->seq();
         }
     }
     else
     {
-        LOG(ERROR) << "Session::onMessage, protocolID=0 Error!";
+        SESSION_LOG(WARNING) << "[#onMessage] protocolID cannot be 0.";
     }
 }
 
@@ -417,7 +417,7 @@ bool Session::addSeq2Callback(uint32_t seq, ResponseCallback::Ptr const& callbac
     }
     else
     {
-        LOG(ERROR) << "Handler repetition! SeqID = " << seq;
+        SESSION_LOG(WARNING) << "[#getCallbackBySeq] handler repetition: [seqID]: " << seq;
         return false;
     }
 }
@@ -432,7 +432,7 @@ ResponseCallback::Ptr Session::getCallbackBySeq(uint32_t seq)
     }
     else
     {
-        LOG(ERROR) << "Handler not found! SeqID = " << seq;
+        SESSION_LOG(WARNING) << "[#getCallbackBySeq] handler not found: [seqID]: " << seq;
         return NULL;
     }
 }
@@ -447,7 +447,7 @@ bool Session::eraseCallbackBySeq(uint32_t seq)
     }
     else
     {
-        LOG(ERROR) << "Handler not found! SeqID = " << seq;
+        SESSION_LOG(WARNING) << "[#eraseCallbackBySeq] handler not found: [seqID]: " << seq;
         return false;
     }
 }
@@ -470,7 +470,7 @@ uint32_t Session::peerTopicSeq(NodeID const& nodeID)
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Session::peerTopicSeq error:" << e.what();
+        SESSION_LOG(ERROR) << "[#peerTopicSeq] [EINFO]: " << e.what();
     }
     return seq;
 }
@@ -495,6 +495,6 @@ void Session::setTopicsAndTopicSeq(
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Session::setTopicsAndTopicSeq error:" << e.what();
+        SESSION_LOG(ERROR) << "[#setTopicsAndTopicSeq] [EINFO]: " << e.what();
     }
 }

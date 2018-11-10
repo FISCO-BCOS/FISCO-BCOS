@@ -33,6 +33,9 @@ public:
     static const bool c_omitEmptyBlock = true;
     /// default blockLimit
     static const unsigned c_blockLimit = 1000;
+
+    static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
+    static const int64_t maxBlockGasLimit = 0x7fffffffffffffff;
 };
 }  // namespace config
 }  // namespace dev

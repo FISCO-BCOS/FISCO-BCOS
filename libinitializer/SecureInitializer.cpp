@@ -54,7 +54,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         }
         catch (std::exception& e)
         {
-            LOG(ERROR) << "Open PrivateKey file: " << key << " failed";
+            INITIALIZER_LOG(ERROR)
+                << "[#SecureInitializer::initConfig] open privateKey failed: [file]: " << key;
 
             BOOST_THROW_EXCEPTION(PrivateKeyError());
         }
@@ -65,7 +66,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            LOG(DEBUG) << "Load existing PrivateKey";
+            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] load existing privateKey.";
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
             BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
 
@@ -82,14 +83,16 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         }
         catch (dev::Exception& e)
         {
-            LOG(ERROR) << "Parse PrivateKey failed: " << e.what();
+            INITIALIZER_LOG(ERROR)
+                << "[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
+                << e.what();
 
             BOOST_THROW_EXCEPTION(e);
         }
     }
     else
     {
-        LOG(ERROR) << "Privatekey not exists!";
+        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] privatekey not exists!";
 
         BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
     }
@@ -117,21 +120,23 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         SSL_CTX_set_tmp_ecdh(m_sslContext->native_handle(), ecdh.get());
 
         m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
-        LOG(DEBUG) << "NodeID:" << m_key.pub().hex();
+        INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] [nodeID]: "
+                               << m_key.pub().hex();
 
         boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
         m_sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
         if (!cert.empty() && !contents(cert).empty())
         {
-            LOG(DEBUG) << "Use user certificate file: " << cert;
+            INITIALIZER_LOG(DEBUG)
+                << "[#SecureInitializer::initConfig] use user certificate: [file]: " << cert;
 
             m_sslContext->use_certificate_chain_file(cert);
             m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
-            LOG(ERROR) << "Certificate not exists!";
+            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate not exists!";
 
             BOOST_THROW_EXCEPTION(CertificateNotExists());
         }
@@ -139,7 +144,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         auto caCertContent = contents(caCert);
         if (!caCert.empty() && !caCertContent.empty())
         {
-            LOG(DEBUG) << "Use ca certificate file: " << caCert;
+            INITIALIZER_LOG(DEBUG)
+                << "[#SecureInitializer::initConfig] use ca certificate: [file]: " << caCert;
 
             m_sslContext->add_certificate_authority(
                 boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
@@ -148,7 +154,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 
         if (!caPath.empty())
         {
-            LOG(DEBUG) << "Use ca path: " << caPath;
+            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use ca: [path]: " << caPath;
 
             m_sslContext->add_verify_path(caPath);
             m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
@@ -156,7 +162,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     }
     catch (Exception& e)
     {
-        LOG(ERROR) << "load verify file failed: ";
+        INITIALIZER_LOG(ERROR)
+            << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: " << e.what();
 
         BOOST_THROW_EXCEPTION(e);
     }

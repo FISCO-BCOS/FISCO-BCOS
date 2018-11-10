@@ -39,13 +39,13 @@ std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 
 bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
 {
-    LOG(TRACE) << "this: " << this << " call TableFactory:" << toHex(param);
+    STORAGE_LOG(DEBUG) << "this: " << this << " call TableFactory:" << toHex(param);
 
 
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    LOG(DEBUG) << "func:" << hex << func;
+    STORAGE_LOG(DEBUG) << "func:" << hex << func;
 
     dev::eth::ContractABI abi;
     bytes out;
@@ -58,7 +58,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         string tableName;
         abi.abiOut(data, tableName);
 
-        LOG(DEBUG) << "DBFactory open table:" << tableName;
+        STORAGE_LOG(DEBUG) << "DBFactory open table:" << tableName;
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
         if (table)
@@ -69,7 +69,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         }
         else
         {
-            LOG(DEBUG) << "Open new table:" << tableName << " failed.";
+            STORAGE_LOG(DEBUG) << "Open new table:" << tableName << " failed.";
         }
 
         out = abi.abiIn("", address);
@@ -92,7 +92,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         unsigned errorCode = 0;
         if (!table == 0u)
         {
-            LOG(ERROR) << "table:" << tableName << " conflict.";
+            STORAGE_LOG(ERROR) << "table:" << tableName << " conflict.";
             errorCode = 1;
         }
         out = abi.abiIn("", errorCode);

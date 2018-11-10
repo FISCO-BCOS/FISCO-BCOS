@@ -54,6 +54,8 @@ namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
 #define HOST_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#HOST] "
 #define SESSION_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#SESSION] "
+#define P2PMSG_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#P2PMSG] "
+#define NETWORK_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#NETWORK] "
 namespace dev
 {
 namespace p2p
@@ -123,6 +125,9 @@ struct Options
     uint32_t timeout;     ///< The timeout value of async function, in milliseconds.
 };
 
+#define SINGLE_NODE_TIMEOUT_THRESHOLD 500  ///< ms
+#define GLOBAL_TIMEOUT_THRESHOLD 2000      ///< ms
+
 class Message : public std::enable_shared_from_this<Message>
 {
 public:
@@ -186,7 +191,7 @@ public:
             strMsg << topic << "," << std::string((const char*)temp->data(), temp->size());
         }
         strMsg << ")";
-        LOG(INFO) << strMsg.str();
+        P2PMSG_LOG(DEBUG) << strMsg.str();
     }
 
 private:

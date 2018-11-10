@@ -87,9 +87,10 @@ int Network::tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkConfig const& _netP
     }
     catch (...)
     {
-        LOG(WARNING) << "Couldn't start accepting connections on host. Failed to accept socket on "
-                     << listenIP << ":" << _netPrefs.listenPort << ".\n"
-                     << boost::current_exception_diagnostic_information();
+        NETWORK_LOG(WARNING) << "[#tcp4Listen] Couldn't start accepting connections on host. "
+                                "Failed to accept socket on "
+                             << listenIP << ":" << _netPrefs.listenPort << ".\n"
+                             << boost::current_exception_diagnostic_information();
         return -1;
     }
     bi::tcp::endpoint endpoint(listenIP, _netPrefs.listenPort);
@@ -105,9 +106,10 @@ int Network::tcp4Listen(bi::tcp::acceptor& _acceptor, NetworkConfig const& _netP
     catch (...)
     {
         // bind failed
-        LOG(WARNING) << "Couldn't start accepting connections on host. Failed to accept socket on "
-                     << listenIP << ":" << _netPrefs.listenPort << ".\n"
-                     << boost::current_exception_diagnostic_information();
+        NETWORK_LOG(WARNING) << "[#tcp4Listen] Couldn't start accepting connections on host. "
+                                "Failed to accept socket on "
+                             << listenIP << ":" << _netPrefs.listenPort << ".\n"
+                             << boost::current_exception_diagnostic_information();
         _acceptor.close();
         return -1;
         _acceptor.close();
@@ -131,7 +133,7 @@ bi::tcp::endpoint Network::resolveHost(string const& _addr)
     }
     catch (...)
     {
-        LOG(WARNING) << "Obtain Port from " << _addr << " Failed!";
+        NETWORK_LOG(WARNING) << "Obtain Port from " << _addr << " Failed!";
     }
     boost::system::error_code ec;
     /// get ip address
@@ -148,7 +150,8 @@ bi::tcp::endpoint Network::resolveHost(string const& _addr)
         auto it = r.resolve({bi::tcp::v4(), split[0], toString(port)}, ec);
         if (ec)
         {
-            LOG(WARNING) << "Error resolving host address..." << _addr << ":" << ec.message();
+            NETWORK_LOG(WARNING) << "Error resolving host address..." << _addr << ":"
+                                 << ec.message();
             return bi::tcp::endpoint();
         }
         else
@@ -174,7 +177,7 @@ bi::tcp::endpoint Network::determinePublic(NetworkConfig const& network_config)
     }
     catch (...)
     {
-        LOG(ERROR) << "MUST SET LISTEN IP Address!";
+        NETWORK_LOG(ERROR) << "MUST SET LISTEN IP Address!";
         return bi::tcp::endpoint();
     }
     auto lset = !laddr.is_unspecified();
@@ -186,7 +189,7 @@ bi::tcp::endpoint Network::determinePublic(NetworkConfig const& network_config)
     }
     catch (...)
     {
-        LOG(WARNING) << "public address has not been setted, obtain from interfaces now";
+        NETWORK_LOG(WARNING) << "public address has not been setted, obtain from interfaces now";
     }
     auto pset = !paddr.is_unspecified();
     /// add paddr obtain function
@@ -210,13 +213,13 @@ bi::tcp::endpoint Network::determinePublic(NetworkConfig const& network_config)
     /// set listen address as public address
     if (listenIsPublic)
     {
-        LOG(INFO) << "Listen address set to Public address:" << laddr;
+        NETWORK_LOG(DEBUG) << "Listen address set to Public address:" << laddr;
         ep.address(laddr);
     }
     /// set address obtained from interfaces as public address
     else if (publicIsHost)
     {
-        LOG(INFO) << "Public address set to Host configured address:" << paddr;
+        NETWORK_LOG(DEBUG) << "Public address set to Host configured address:" << paddr;
         ep.address(paddr);
     }
     else if (pset)

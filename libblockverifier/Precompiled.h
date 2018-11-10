@@ -28,13 +28,6 @@ namespace dev
 namespace blockverifier
 {
 class ExecutiveContext;
-
-struct BlockInfo
-{
-    h256 hash;
-    u256 number;
-};
-
 class Precompiled : public std::enable_shared_from_this<Precompiled>
 {
 public:
