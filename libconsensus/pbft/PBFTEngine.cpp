@@ -102,6 +102,9 @@ bool PBFTEngine::shouldSeal()
  */
 void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 {
+    /// note blockSync to the latest number, in case of the block number of other nodes
+    /// is larger than this node
+    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     PBFTENGINE_LOG(INFO) << "[#shouldSeal:rehandleCommittedPrepare] Post out "
                             "committed-but-not-saved block: [hash/height]:  "
                          << req.block_hash.abridged() << "/" << req.height << std::endl;
