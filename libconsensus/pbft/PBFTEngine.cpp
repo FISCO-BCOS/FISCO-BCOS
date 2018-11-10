@@ -102,9 +102,6 @@ bool PBFTEngine::shouldSeal()
  */
 void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 {
-    /// note blockSync to the latest number, in case of the block number of other nodes
-    /// is larger than this node
-    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     PBFTENGINE_LOG(INFO) << "[#shouldSeal:rehandleCommittedPrepare] Post out "
                             "committed-but-not-saved block: [hash/height]:  "
                          << req.block_hash.abridged() << "/" << req.height << std::endl;
@@ -115,6 +112,9 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     /// broadcast prepare message
     broadcastMsg(PrepareReqPacket, prepare_req.block_hash.hex(), ref(prepare_data));
     handlePrepareMsg(prepare_req);
+    /// note blockSync to the latest number, in case of the block number of other nodes
+    /// is larger than this node
+    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
 }
 
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
