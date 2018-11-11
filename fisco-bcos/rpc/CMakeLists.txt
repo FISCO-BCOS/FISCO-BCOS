@@ -1,12 +1,5 @@
 #------------------------------------------------------------------------------
-# Find microhttpd
-# Find the microhttpd includes and library
-# if you need to add a custom library search path, do it via via CMAKE_PREFIX_PATH
-#
-# This module defines
-#  MHD_INCLUDE_DIRS, where to find header, etc.
-#  MHD_LIBRARIES, the libraries needed to use jsoncpp.
-#  MHD_FOUND, If false, do not try to use jsoncpp.
+# Link libraries into main.cpp to generate executable binrary fisco-bcos
 # ------------------------------------------------------------------------------
 # This file is part of FISCO-BCOS.
 #
@@ -25,23 +18,22 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-find_path(
-    MHD_INCLUDE_DIR
-    NAMES microhttpd.h
-    DOC "microhttpd include dir"
-)
 
-find_library(
-    MHD_LIBRARY
-    NAMES microhttpd microhttpd-10 libmicrohttpd libmicrohttpd-dll
-    DOC "microhttpd library"
-)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
-set(MHD_INCLUDE_DIRS ${MHD_INCLUDE_DIR})
-set(MHD_LIBRARIES ${MHD_LIBRARY})
+aux_source_directory(. SRC_LIST)
 
-include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(mhd DEFAULT_MSG
-    MHD_LIBRARY MHD_INCLUDE_DIR)
+file(GLOB HEADERS "*.h")
+include(EthDependencies)
 
-mark_as_advanced(MHD_INCLUDE_DIR MHD_LIBRARY)
+add_executable(mini-rpc ${SRC_LIST} ${HEADERS})
+
+target_include_directories(mini-rpc PRIVATE ..)
+target_include_directories(mini-rpc PRIVATE ${BOOST_INCLUDE_DIR})
+target_link_libraries(mini-rpc Boost::program_options)
+target_link_libraries(mini-rpc Boost::UnitTestFramework)
+target_link_libraries(mini-rpc rpc)
+target_link_libraries(mini-rpc ledger)
+target_link_libraries(mini-rpc p2p)
+
+install(TARGETS mini-rpc DESTINATION bin)

@@ -32,7 +32,7 @@ using namespace dev::initializer;
 
 void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    LOG(INFO) << "P2PInitializer::initConfig";
+    INITIALIZER_LOG(DEBUG) << "[#P2PInitializer::initConfig]";
     std::string publicID = _pt.get<std::string>("p2p.public_ip", "127.0.0.1");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
@@ -42,7 +42,8 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     {
         if (it.first.find("node.") == 0)
         {
-            LOG(INFO) << "Add staticNode: " << it.first << " : " << it.second.data();
+            SESSION_LOG(TRACE) << "[#P2PInitializer::initConfig] add staticNode: " << it.first
+                               << "/" << it.second.data();
 
             std::vector<std::string> s;
             try
@@ -51,7 +52,9 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
                 if (s.size() != 2)
                 {
-                    LOG(ERROR) << "Parse address failed:" << it.second.data();
+                    INITIALIZER_LOG(DEBUG)
+                        << "[#P2PInitializer::initConfig] parse address faield: [data]: "
+                        << it.second.data();
                     continue;
                 }
 
@@ -64,7 +67,9 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             }
             catch (std::exception& e)
             {
-                LOG(ERROR) << "Parse address faield:" << it.second.data() << ", " << e.what();
+                INITIALIZER_LOG(ERROR)
+                    << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]: "
+                    << it.second.data() << "/" << e.what();
                 continue;
             }
         }

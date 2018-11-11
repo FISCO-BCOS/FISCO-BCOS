@@ -60,8 +60,11 @@ void ConsensusEngineBase::stop()
 /// update m_sealing and receiptRoot
 dev::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(Block& block)
 {
+    auto parentBlock = m_blockChain->getBlockByNumber(m_blockChain->number());
+    BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
+        parentBlock->header().stateRoot()};
     /// reset execute context
-    return m_blockVerifier->executeBlock(block);
+    return m_blockVerifier->executeBlock(block, parentBlockInfo);
 }
 
 void ConsensusEngineBase::checkBlockValid(Block const& block)
@@ -96,6 +99,18 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
         ENGINE_LOG(WARNING) << "[#checkBlockValid] Parent doesn't exist: [hash]:  " << block_hash
                             << std::endl;
         BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
+    }
+    if (block.blockHeader().number() > 1)
+    {
+        if (m_blockChain->numberHash(block.blockHeader().number() - 1) !=
+            block.blockHeader().parentHash())
+        {
+            ENGINE_LOG(WARNING) << "[#checkBlockValid] Invalid block for unconsistent parentHash: "
+                                   "[block.parentHash/parentHash]:  "
+                                << toHex(block.blockHeader().parentHash()) << "/"
+                                << toHex(m_blockChain->numberHash(block.blockHeader().number() - 1))
+                                << std::endl;
+        }
     }
 }
 

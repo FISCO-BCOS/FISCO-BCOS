@@ -23,7 +23,7 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 find_package(CURL REQUIRED)
-find_package(MHD REQUIRED)
+# find_package(MHD REQUIRED)
 set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_BUILD_TYPE=Release
                # Build static lib but suitable to be included in a shared lib.
@@ -69,6 +69,7 @@ ExternalProject_Add(jsonrpccpp
 )
 
 add_dependencies(jsonrpccpp jsoncpp)
+add_dependencies(jsonrpccpp MHD)
 
 ExternalProject_Get_Property(jsonrpccpp INSTALL_DIR)
 set(JSONRPCCPP_INCLUDE_DIR ${INSTALL_DIR}/include)
@@ -88,8 +89,8 @@ add_dependencies(JsonRpcCpp::Client jsonrpccpp)
 
 add_library(JsonRpcCpp::Server STATIC IMPORTED)
 set_property(TARGET JsonRpcCpp::Server PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsonrpccpp-server${CMAKE_STATIC_LIBRARY_SUFFIX})
-set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common ${MHD_LIBRARY})
-set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
+set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common MHD)
+# set_property(TARGET JsonRpcCpp::Server PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
 add_dependencies(JsonRpcCpp::Server jsonrpccpp)
 
 unset(BINARY_DIR)

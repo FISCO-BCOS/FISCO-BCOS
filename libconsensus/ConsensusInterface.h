@@ -42,7 +42,7 @@ public:
     /// get miner list
     virtual h512s minerList() const = 0;
     /// set the miner list
-    virtual void setMinerList(h512s const& _minerList) = 0;
+    /// virtual void setMinerList(h512s const& _minerList) = 0;
     virtual void appendMiner(h512 const& _miner) = 0;
     /// get status of consensus
     virtual const std::string consensusStatus() const = 0;
@@ -56,7 +56,7 @@ public:
     virtual void setNodeAccountType(NodeAccountType const&) = 0;
     virtual u256 nodeIdx() const = 0;
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader) = 0;
+    virtual void reportBlock(dev::eth::Block const& block) = 0;
 };
 }  // namespace consensus
 }  // namespace dev

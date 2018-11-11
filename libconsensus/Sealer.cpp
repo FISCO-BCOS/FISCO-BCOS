@@ -47,8 +47,7 @@ void Sealer::start()
     }
     SEAL_LOG(INFO) << "[#Start sealer module]" << std::endl;
     resetSealingBlock();
-    m_consensusEngine->reportBlock(
-        m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+    m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     m_syncBlock = false;
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
@@ -72,7 +71,7 @@ void Sealer::reportNewBlock()
         DEV_WRITE_GUARDED(x_sealing)
         {
             m_consensusEngine->reportBlock(
-                m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+                *(m_blockChain->getBlockByNumber(m_blockChain->number())));
             if (shouldResetSealing())
             {
                 SEAL_LOG(DEBUG) << "[#reportNewBlock] Reset sealing: [number]:  "
@@ -130,6 +129,10 @@ void Sealer::loadTransactions(uint64_t const& transToFetch)
     /// fetch transactions and update m_transactionSet
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
+    if (m_txPool->status().current > 0)
+        m_syncTxPool = true;
+    else
+        m_syncTxPool = false;
 }
 
 /// check whether the blocksync module is syncing

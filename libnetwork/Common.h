@@ -52,7 +52,10 @@
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
-
+#define HOST_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#HOST] "
+#define SESSION_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#SESSION] "
+#define P2PMSG_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#P2PMSG] "
+#define NETWORK_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#NETWORK] "
 namespace dev
 {
 namespace p2p

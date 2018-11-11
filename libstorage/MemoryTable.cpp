@@ -31,25 +31,24 @@ using namespace dev::storage;
 
 void dev::storage::MemoryTable::init(const std::string& tableName)
 {
-    LOG(DEBUG) << "Init MemoryTable:" << tableName;
+    /// STORAGE_LOG(DEBUG) << "Init MemoryTable:" << tableName;
 }
 
 Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
 {
     try
     {
-        LOG(DEBUG) << "Select MemoryTable: " << key;
-
         Entries::Ptr entries = std::make_shared<Entries>();
 
         auto it = m_cache.find(key);
         if (it == m_cache.end())
         {
-            if (m_remoteDB.get() != NULL)
+            if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-                LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+                STORAGE_LOG(TRACE)
+                    << m_tableInfo->name << "selects:" << entries->size() << " record(s)";
 
                 m_cache.insert(std::make_pair(key, entries));
             }
@@ -59,10 +58,10 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
             entries = it->second;
         }
 
-        if (entries.get() == NULL)
+        if (!entries)
         {
-            LOG(ERROR) << "Can't find data";
-            return Entries::Ptr();
+            STORAGE_LOG(DEBUG) << "Can't find data";
+            return std::make_shared<Entries>();
         }
         auto indexes = processEntries(entries, condition);
         Entries::Ptr resultEntries = std::make_shared<Entries>();
@@ -74,10 +73,10 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Table select failed for:" << e.what();
+        STORAGE_LOG(ERROR) << "Table select failed for:" << e.what();
     }
 
-    return Entries::Ptr();
+    return std::make_shared<Entries>();
 }
 
 size_t dev::storage::MemoryTable::update(
@@ -85,18 +84,18 @@ size_t dev::storage::MemoryTable::update(
 {
     try
     {
-        LOG(DEBUG) << "Update MemoryTable: " << key;
+        STORAGE_LOG(DEBUG) << "Update MemoryTable: " << key;
 
         Entries::Ptr entries = std::make_shared<Entries>();
 
         auto it = m_cache.find(key);
         if (it == m_cache.end())
         {
-            if (m_remoteDB.get() != NULL)
+            if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-                LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+                /// STORAGE_LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
 
                 m_cache.insert(std::make_pair(key, entries));
             }
@@ -106,9 +105,9 @@ size_t dev::storage::MemoryTable::update(
             entries = it->second;
         }
 
-        if (entries.get() == NULL)
+        if (!entries)
         {
-            LOG(ERROR) << "Can't find data";
+            STORAGE_LOG(ERROR) << "Can't find data";
 
             return 0;
         }
@@ -133,7 +132,7 @@ size_t dev::storage::MemoryTable::update(
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
+        STORAGE_LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
     }
 
     return 0;
@@ -143,7 +142,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
 {
     try
     {
-        LOG(DEBUG) << "Insert MemoryTable: " << key;
+        STORAGE_LOG(DEBUG) << "Insert MemoryTable: " << key;
 
         Entries::Ptr entries = std::make_shared<Entries>();
         Condition::Ptr condition = std::make_shared<Condition>();
@@ -151,11 +150,11 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
         auto it = m_cache.find(key);
         if (it == m_cache.end())
         {
-            if (m_remoteDB.get() != NULL)
+            if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-                LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+                /// STORAGE_LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
 
                 m_cache.insert(std::make_pair(key, entries));
             }
@@ -182,7 +181,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
+        STORAGE_LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
     }
 
     return 1;
@@ -190,18 +189,18 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
 
 size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr condition)
 {
-    LOG(DEBUG) << "Remove MemoryTable data" << key;
+    STORAGE_LOG(DEBUG) << "Remove MemoryTable data" << key;
 
     Entries::Ptr entries = std::make_shared<Entries>();
 
     auto it = m_cache.find(key);
     if (it == m_cache.end())
     {
-        if (m_remoteDB.get() != NULL)
+        if (m_remoteDB)
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-            LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+            STORAGE_LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
 
             m_cache.insert(std::make_pair(key, entries));
         }
@@ -391,7 +390,7 @@ bool dev::storage::MemoryTable::processCondition(Entry::Ptr entry, Condition::Pt
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Compare error:" << e.what();
+        STORAGE_LOG(ERROR) << "Compare error:" << e.what();
 
         return false;
     }
@@ -416,11 +415,9 @@ bool MemoryTable::isHashField(const std::string& _key)
         return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
                 (_key == STATUS));
     }
-    else
-    {
-        LOG(ERROR) << "Empty key error.";
-        return false;
-    }
+
+    STORAGE_LOG(ERROR) << "Empty key error.";
+    return false;
 }
 
 void MemoryTable::setTableInfo(TableInfo::Ptr _tableInfo)
@@ -435,7 +432,8 @@ void MemoryTable::checkFiled(Entry::Ptr entry)
         if (m_tableInfo->fields.end() ==
             find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
         {
-            LOG(ERROR) << "table:" << m_tableInfo->name << " doesn't have field:" << it.first;
+            STORAGE_LOG(ERROR) << "table:" << m_tableInfo->name
+                               << " doesn't have field:" << it.first;
             throw std::invalid_argument("Invalid key.");
         }
     }

@@ -11,18 +11,37 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * along with FISCO-BCOS.  If not, see <http:www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of lab-bcos
- *
- * @file: main.cpp
- * @author: yujiechen
- * @date 2018-08-24
+ * @file Rpc.cpp
+ * @author: caryliao
+ * @date 2018-11-6
  */
-#include <libdevcore/easylog.h>
-INITIALIZE_EASYLOGGINGPP
-int main(int argc, const char* argv[])
+
+#pragma once
+
+#include <string>
+
+namespace dev
 {
-    return 0;
-}
+namespace rpc
+{
+///< RPCExceptionCode
+enum RPCExceptionType
+{
+    Success = 0,
+    GroupID,
+    JsonParse,
+    Host,
+    BlockHash,
+    BlockNumberT,
+    TransactionIndex
+};
+
+const std::string RPCMsg[] = {"Success", "GroupID does not exist.", "Response json parse error.",
+    "Host is null", "BlockHash does not exist.", "BlockNumber does not exist.",
+    "TransactionIndex is out of bounds."};
+
+}  // namespace rpc
+}  // namespace dev

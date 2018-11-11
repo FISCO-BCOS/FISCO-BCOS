@@ -27,14 +27,25 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
-#define PBFTENGINE_LOG(LEVEL) LOG(LEVEL) << "[#PBFTENGINE] [PROTOCOL: " << m_protocolId << "] "
+#define PBFTENGINE_LOG(LEVEL) \
+    LOG(LEVEL) << "[#LIBCONSENSUS][#PBFTENGINE] [PROTOCOL: " << m_protocolId << "] "
 #define PBFTSEALER_LOG(LEVEL) \
-    LOG(LEVEL) << "[#PBFTSEALER] [PROTOCOL: " << m_pbftEngine->protocolId() << "] "
-#define PBFTReqCache_LOG(LEVEL) LOG(LEVEL) << "[#PBFTREQCACHE] [PROTOCOL: " << m_protocolId << "] "
+    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTSEALER] [PROTOCOL: " << m_pbftEngine->protocolId() << "] "
+#define PBFTReqCache_LOG(LEVEL) \
+    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << m_protocolId << "] "
 namespace dev
 {
 namespace consensus
 {
+struct PBFTCacheMsg
+{
+    PBFTCacheMsg() = default;
+    PBFTCacheMsg(std::string const& _hash, int64_t _height) : blockHash(_hash), height(_height) {}
+    bool operator<(PBFTCacheMsg const& rhs) const { return height < rhs.height; }
+    bool operator==(PBFTCacheMsg const& rhs) const { return blockHash == rhs.blockHash; }
+    int64_t height = 0;
+    std::string blockHash = "";
+};
 // for pbft
 enum PBFTPacketType : byte
 {
@@ -59,6 +70,8 @@ struct PBFTMsgPacket
     bytes data;
     /// timestamp of receive this pbft message
     u256 timestamp;
+    /// endpoint
+    std::string endpoint;
     /// default constructor
     PBFTMsgPacket() : node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(u256(utcTime()))
     {}
@@ -94,10 +107,11 @@ struct PBFTMsgPacket
      * @param idx: the index of the node that send the PBFTMsgPacket
      * @param nodeId : the id of the node that send the PBFTMsgPacket
      */
-    void setOtherField(u256 const& idx, h512 const& nodeId)
+    void setOtherField(u256 const& idx, h512 const& nodeId, std::string const& _endpoint)
     {
         node_idx = idx;
         node_id = nodeId;
+        endpoint = _endpoint;
         timestamp = u256(utcTime());
     }
     /// populate PBFTMsgPacket from RLP object
@@ -307,14 +321,14 @@ struct PrepareReq : public PBFTMsg
         height = req.height;
         view = req.view;
         idx = req.idx;
+        p_execContext = sealing.p_execContext;
+        sealing.block.encode(block);
         timestamp = u256(utcTime());
         block_hash = sealing.block.blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
-        sealing.block.encode(block);
-        p_execContext = sealing.p_execContext;
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
-                   << timestamp;
+                   << timestamp << " , block_hash: " << toHex(block_hash) << std::endl;
     }
 
     bool operator==(PrepareReq const& req) const

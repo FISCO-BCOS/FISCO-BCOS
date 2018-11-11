@@ -30,6 +30,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
+#include <libp2p/Host.h>
+#include <libp2p/P2PInterface.h>
+#include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include "../libnetwork/Session.h"
@@ -68,17 +71,18 @@ public:
     virtual ~ConsensusEngineBase() { stop(); }
 
     /// get miner list
-    dev::h512s minerList() const override { return m_minerList; }
-    /// set the miner list
-    void setMinerList(dev::h512s const& _minerList) override
+    dev::h512s minerList() const override
     {
-        m_minerList = _minerList;
-        resetConfig();
+        ReadGuard l(m_minerListMutex);
+        return m_minerList;
     }
     /// append miner
     void appendMiner(h512 const& _miner) override
     {
-        m_minerList.push_back(_miner);
+        {
+            WriteGuard l(m_minerListMutex);
+            m_minerList.push_back(_miner);
+        }
         resetConfig();
     }
 
@@ -103,9 +107,12 @@ public:
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
         std::string miner_list;
-        for (auto miner : m_minerList)
         {
-            miner_list = toHex(miner) + "#";
+            ReadGuard l(m_minerListMutex);
+            for (auto miner : m_minerList)
+            {
+                miner_list = toHex(miner) + "#";
+            }
         }
         status_obj.push_back(json_spirit::Pair("minerList", miner_list));
         status_obj.push_back(json_spirit::Pair("allowFutureBlocks", m_allowFutureBlocks));
@@ -133,7 +140,7 @@ public:
 
     u256 minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader) {}
+    virtual void reportBlock(dev::eth::Block const& block) {}
 
 protected:
     virtual void resetConfig() { m_nodeNum = u256(m_minerList.size()); }
@@ -175,7 +182,8 @@ protected:
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
-                req.setOtherField(u256(peer_index), session->nodeID());
+                req.setOtherField(
+                    u256(peer_index), session->id(), session->nodeIPEndpoint().name());
         }
         return valid;
     }
@@ -241,6 +249,7 @@ protected:
     /// index of this node
     u256 m_idx = u256(0);
     /// miner list
+    mutable SharedMutex m_minerListMutex;
     dev::h512s m_minerList;
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;

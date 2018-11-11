@@ -24,7 +24,7 @@
 
 #include <libp2p/Service.h>
 #include "Common.h"
-#include "SecureInitiailizer.h"
+#include "SecureInitializer.h"
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 

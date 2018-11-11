@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "Common.h"
 #include "ExecutiveContext.h"
 #include "Precompiled.h"
 #include <libdevcore/FixedHash.h>
@@ -32,6 +33,7 @@
 #include <libexecutive/ExecutionResult.h>
 #include <libmptstate/State.h>
 #include <memory>
+
 namespace dev
 {
 namespace eth
@@ -48,7 +50,8 @@ public:
 
     virtual ~BlockVerifierInterface(){};
 
-    virtual ExecutiveContext::Ptr executeBlock(dev::eth::Block& block) = 0;
+    virtual ExecutiveContext::Ptr executeBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo) = 0;
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
     executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) = 0;

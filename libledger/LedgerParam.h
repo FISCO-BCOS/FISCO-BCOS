@@ -41,7 +41,7 @@ struct ConsensusParam
     std::string consensusType;
     dev::h512s minerList = dev::h512s();
     uint64_t maxTransactions;
-    unsigned intervalBlockTime;
+    /// unsigned intervalBlockTime;
 };
 
 struct AMDBParam
@@ -56,10 +56,10 @@ struct SyncParam
     /// TODO: syncParam related
     unsigned idleWaitMs;
 };
+
 struct GenesisParam
 {
-    dev::h256 genesisHash;
-    u256 accountStartNonce;
+    std::string genesisMark;
 };
 
 class LedgerParam : public LedgerParamInterface

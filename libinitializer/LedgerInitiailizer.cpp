@@ -30,7 +30,7 @@ using namespace dev::initializer;
 
 void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    LOG(INFO) << "LedgerInitiailizer::initConfig";
+    INITIALIZER_LOG(DEBUG) << "[#LedgerInitiailizer::initConfig]";
     m_groupDataDir = _pt.get<std::string>("group.group_data_path", "data/");
     assert(m_p2pService);
     /// TODO: modify FakeLedger to the real Ledger after all modules ready
@@ -41,7 +41,9 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
     {
         if (it.first.find("group_config.") == 0)
         {
-            LOG(INFO) << "Load group config, GoupID:" << it.first << ",config:" << it.second.data();
+            INITIALIZER_LOG(TRACE)
+                << "[#LedgerInitiailizer::initConfig] load group config: [groupID/config]: "
+                << it.first << "/" << it.second.data();
 
             std::vector<std::string> s;
             try
@@ -50,7 +52,9 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 
                 if (s.size() != 2)
                 {
-                    LOG(ERROR) << "Parse groupID failed:" << it.first.data();
+                    INITIALIZER_LOG(TRACE)
+                        << "[#LedgerInitiailizer::initConfig] parse groupID failed: [data]: "
+                        << it.first.data();
                     continue;
                 }
 
@@ -58,7 +62,9 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
             }
             catch (std::exception& e)
             {
-                LOG(ERROR) << "Parse group config faield:" << e.what();
+                SESSION_LOG(WARNING)
+                    << "[#LedgerInitiailizer::initConfig] parse group config faield: [EINFO]: "
+                    << e.what();
                 continue;
             }
         }
@@ -70,13 +76,13 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 void LedgerInitiailizer::initSingleGroup(
     GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
 {
-    m_ledgerManager->initSingleLedger<FakeLedger>(_groupID, m_groupDataDir, _path);
+    m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
     _groudID2NodeList[_groupID] =
         m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 
-    LOG(INFO) << "LedgerInitiailizer::initSingleGroup, groupID:" << std::to_string(_groupID)
-              << ",minerList count:" << _groudID2NodeList[_groupID].size()
-              << ",consensus status:" << m_ledgerManager->consensus(_groupID)->consensusStatus();
+    INITIALIZER_LOG(DEBUG) << "[#initSingleGroup] [groupID/count/status]: "
+                           << std::to_string(_groupID) << "/" << _groudID2NodeList[_groupID].size()
+                           << "/" << m_ledgerManager->consensus(_groupID)->consensusStatus();
     for (auto i : _groudID2NodeList[_groupID])
-        LOG(INFO) << "miner:" << toHex(i);
+        INITIALIZER_LOG(TRACE) << "miner:" << toHex(i);
 }

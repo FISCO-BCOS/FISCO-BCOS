@@ -104,9 +104,7 @@ public:
     explicit operator bool() const { return m_timestamp != UINT64_MAX; }
     bool operator==(BlockHeader const& _cmp) const
     {
-        return m_parentHash == _cmp.parentHash() && m_stateRoot == _cmp.stateRoot() &&
-               m_transactionsRoot == _cmp.transactionsRoot() &&
-               m_receiptsRoot == _cmp.receiptsRoot() && m_logBloom == _cmp.logBloom() &&
+        return m_parentHash == _cmp.parentHash() && m_logBloom == _cmp.logBloom() &&
                m_number == _cmp.number() && m_gasLimit == _cmp.gasLimit() &&
                m_gasUsed == _cmp.gasUsed() && m_timestamp == _cmp.timestamp() &&
                m_extraData == _cmp.extraData() && m_sealer == _cmp.sealer() &&
@@ -232,10 +230,25 @@ public:
     ///------set interfaces related to block header END------
 
     /// ------ get interfaces related to block header------
-    h256 const& parentHash() const { return m_parentHash; }                            /// field 0
-    h256 const& stateRoot() const { return m_stateRoot; }                              /// field 1
-    h256 const& transactionsRoot() const { return m_transactionsRoot; }                /// field 2
-    h256 const& receiptsRoot() const { return m_receiptsRoot; }                        /// field 3
+    h256 const& parentHash() const { return m_parentHash; }  /// field 0
+    h256 const& stateRoot() const { return m_stateRoot; }
+    void setStateRoot(h256 const& _stateRoot)  /// field 1
+    {
+        m_stateRoot = _stateRoot;
+        noteDirty();
+    }
+    h256 const& transactionsRoot() const { return m_transactionsRoot; }  /// field 2
+    void setTransactionsRoot(h256 const& _transactionsRoot)
+    {
+        m_transactionsRoot = _transactionsRoot;
+        noteDirty();
+    }
+    h256 const& receiptsRoot() const { return m_receiptsRoot; }  /// field 3
+    void setReceiptsRoot(h256 const& _receiptsRoot)
+    {
+        m_receiptsRoot = _receiptsRoot;
+        noteDirty();
+    }
     LogBloom const& logBloom() const { return m_logBloom; }                            /// field 4
     int64_t number() const { return m_number; }                                        /// field 5
     u256 const& gasLimit() const { return m_gasLimit; }                                /// field 6
@@ -261,10 +274,10 @@ private:  /// private function fileds
 private:  /// private data fields
     /// -------structure of block header------
     h256 m_parentHash;
-    h256 m_stateRoot;  // from state
-    h256 m_dbHash;     // from MemoryTableFactory
-    h256 m_transactionsRoot;
-    h256 m_receiptsRoot;
+    mutable h256 m_stateRoot;  // from state
+    h256 m_dbHash;             // from MemoryTableFactory
+    mutable h256 m_transactionsRoot;
+    mutable h256 m_receiptsRoot;
     LogBloom m_logBloom;
     int64_t m_number = 0;
     u256 m_gasLimit;

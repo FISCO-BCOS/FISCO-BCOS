@@ -43,11 +43,10 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName)
 {
-    LOG(DEBUG) << "Open table:" << m_blockHash << " num:" << m_blockNum << " table:" << tableName;
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
-        LOG(DEBUG) << "Table:" << tableName << " already open:" << it->second;
+        STORAGE_LOG(DEBUG) << "Table:" << tableName << " already open:" << it->second;
         return it->second;
     }
     auto tableInfo = make_shared<storage::TableInfo>();
@@ -62,7 +61,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
-            LOG(DEBUG) << tableName << " not exist in _sys_tables_.";
+            STORAGE_LOG(DEBUG) << tableName << " not exist in _sys_tables_.";
             return nullptr;
         }
         auto entry = tableEntries->get(0);
@@ -91,7 +90,8 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
 Table::Ptr MemoryTableFactory::createTable(
     const string& tableName, const string& keyField, const std::string& valueField)
 {
-    LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum << " table:" << tableName;
+    /// STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum << " table:"
+    /// << tableName;
 
     auto sysTable = openTable(SYS_TABLES);
 
@@ -99,7 +99,7 @@ Table::Ptr MemoryTableFactory::createTable(
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
     if (tableEntries->size() != 0)
     {
-        LOG(ERROR) << "tableName " << tableName << " already exist in " << SYS_TABLES;
+        STORAGE_LOG(ERROR) << "tableName " << tableName << " already exist in " << SYS_TABLES;
         return nullptr;
     }
     // Write table entry
@@ -125,12 +125,12 @@ void MemoryTableFactory::setBlockNum(int64_t blockNum)
 h256 MemoryTableFactory::hash()
 {
     bytes data;
-    LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
+    /// STORAGE_LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
     for (auto& it : m_name2Table)
     {
         auto table = it.second;
         h256 hash = table->hash();
-        LOG(DEBUG) << "table:" << it.first << " hash:" << hash;
+        /// STORAGE_LOG(DEBUG) << "table:" << it.first << " hash:" << hash;
         if (hash == h256())
         {
             continue;
@@ -143,7 +143,6 @@ h256 MemoryTableFactory::hash()
     {
         return h256();
     }
-    LOG(DEBUG) << "MemoryTableFactory data:" << data << " hash:" << dev::sha256(&data);
     m_hash = dev::sha256(&data);
     return m_hash;
 }
@@ -203,7 +202,7 @@ void MemoryTableFactory::commit() {}
 
 void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
-    LOG(DEBUG) << "Submiting TablePrecompiled";
+    /// STORAGE_LOG(DEBUG) << "Submiting TablePrecompiled";
 
     vector<dev::storage::TableData::Ptr> datas;
 
@@ -231,14 +230,14 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
         }
     }
 
-    LOG(DEBUG) << "Total: " << datas.size() << " key";
+    /// STORAGE_LOG(DEBUG) << "Total: " << datas.size() << " key";
     if (!datas.empty())
     {
         if (m_hash == h256())
         {
             hash();
         }
-        LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
+        /// STORAGE_LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
         stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
     }
 

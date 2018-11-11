@@ -43,7 +43,7 @@ static void FakePBFTMinerByKeyPair(
 {
     fake_pbft.m_minerList.push_back(key_pair.pub());
     fake_pbft.m_secrets.push_back(key_pair.secret());
-    fake_pbft.consensus()->setMinerList(fake_pbft.m_minerList);
+    fake_pbft.consensus()->appendMiner(key_pair.pub());
     fake_pbft.resetSessionInfo();
 }
 
@@ -288,7 +288,7 @@ static void checkBroadcastSpecifiedMsg(
     PrepareReq prepare_req = FakePrepareReq(key_pair);
     /// obtain sig of SignReq
     tmp_req = T(prepare_req, fake_pbft.consensus()->keyPair(), prepare_req.idx);
-    std::string key = tmp_req.sig.hex();
+    PBFTCacheMsg key(tmp_req.sig.hex(), tmp_req.height);
     /// append session info
     appendSessionInfo(fake_pbft, peer_keyPair.pub());
     /// case1: the peer node is not miner
@@ -309,6 +309,7 @@ static void checkBroadcastSpecifiedMsg(
 
     /// case2: the the peer node is a miner
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
+    fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     if (packetType == SignReqPacket)
     {
@@ -331,30 +332,17 @@ static void testIsExistPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, Prepare
     if (!succ)
     {
         fake_pbft.consensus()->reqCache()->addRawPrepare(req);
-        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == false);
         fake_pbft.consensus()->reqCache()->clearAllExceptCommitCache();
     }
 }
-
-/// check isFromSelf
-static void testIsFromSelf(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq& req, bool succ)
-{
-    if (!succ)
-    {
-        u256 origin = req.idx;
-        req.idx = fake_pbft.consensus()->nodeIdx();
-        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
-        req.idx = origin;
-    }
-}
-
 static void testIsConsensused(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq& req, bool succ)
 {
     if (!succ)
     {
         int64_t org_height = req.height;
         req.view = fake_pbft.consensus()->view() - u256(1);
-        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == false);
         req.height = org_height;
     }
 }
@@ -368,7 +356,7 @@ static void testIsFuture(
         u256 org_view = req.view;
         req.height = fake_pbft.consensus()->mutableConsensusNumber();
         req.view = fake_pbft.consensus()->view() + u256(1);
-        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == false);
         if (shouldFix)
         {
             req.height = org_height;
@@ -382,7 +370,7 @@ static void testIsValidLeader(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareR
     if (!succ)
     {
         fake_pbft.consensus()->mutableLeaderFailed() = true;
-        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == false);
         fake_pbft.consensus()->mutableLeaderFailed() = false;
     }
 }
@@ -396,7 +384,7 @@ static void testIsHashSavedAfterCommit(
         h256 org_hash = req.block_hash;
         req.height = fake_pbft.consensus()->reqCache()->committedPrepareCache().height;
         req.block_hash = sha3("invalid");
-        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == false);
         req.height = org_height;
         req.block_hash = org_hash;
     }
@@ -408,7 +396,7 @@ static void testCheckSign(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq& 
     {
         Signature org_sig2 = req.sig2;
         req.sig2 = Signature();
-        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == false);
+        BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == false);
         req.sig2 = org_sig2;
     }
 }
@@ -431,6 +419,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     block.header().setSealerList(fake_pbft.consensus()->minerList());
     block.header().setSealer(req.idx);
     block.encode(req.block);
+    block.decode(ref(req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     fake_pbft.consensus()->mutableConsensusNumber() = req.height;
@@ -447,11 +436,10 @@ static void TestIsValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, Prepare
     req = FakePrepareReq(key_pair);
     /// normal case: fake a valid prepare
     fakeValidPrepare(fake_pbft, req);
-    BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req, false) == true);
+    BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == true);
     /// exception case: prepareReq has already been cached
     testIsExistPrepare(fake_pbft, req, succ);
     /// exception case: allowSelf is false && the prepare generated from the node-self
-    testIsFromSelf(fake_pbft, req, succ);
     /// exception case: hasConsensused
     testIsConsensused(fake_pbft, req, succ);
     /// exception case: isFutureBlock
@@ -471,7 +459,7 @@ void FakePBFTMsgPacket(
 {
     req.encode(packet.data);
     packet.packet_id = type;
-    packet.setOtherField(idx, nodeId);
+    packet.setOtherField(idx, nodeId, "");
 }
 
 /// fake valid signReq or commitReq
@@ -584,11 +572,12 @@ static void TestIsValidCommitReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PBFTM
 static void testReHandleCommitPrepareCache(
     FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq const& req)
 {
+    PBFTCacheMsg msg(req.block_hash.hex(), req.height);
     /// check callback broadcastMsg
     for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
     {
         BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-            fake_pbft.m_minerList[i], PrepareReqPacket, req.block_hash.hex()));
+            fake_pbft.m_minerList[i], PrepareReqPacket, msg));
     }
 }
 

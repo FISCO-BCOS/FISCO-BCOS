@@ -33,13 +33,13 @@ std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 
 bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
 {
-    LOG(DEBUG) << "call Entry:";
+    STORAGE_LOG(DEBUG) << "call Entry:";
 
 
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    LOG(DEBUG) << "func:" << std::hex << func;
+    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
     dev::eth::ContractABI abi;
 

@@ -67,6 +67,10 @@ public:
                 << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId) << std::endl;
             ledger->initLedger();
             m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+            {
+                WriteGuard l(x_groupListCache);
+                m_groupListCache.insert(_groupId);
+            }
             return true;
         }
         else
@@ -164,7 +168,16 @@ public:
         return m_ledgerMap[groupId]->getParam();
     }
 
+    std::set<dev::GROUP_ID> const& getGrouplList() const
+    {
+        ReadGuard l(x_groupListCache);
+        return m_groupListCache;
+    }
+
 private:
+    mutable SharedMutex x_groupListCache;
+    /// cache for the group List
+    std::set<dev::GROUP_ID> m_groupListCache;
     /// map used to store the mappings between groupId and created ledger objects
     std::map<dev::GROUP_ID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
     /// p2p service shared by all the ledgers

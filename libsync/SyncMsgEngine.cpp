@@ -77,36 +77,32 @@ bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
     return true;
 }
 
-bool SyncMsgEngine::isNewerBlock(shared_ptr<Block> block)
-{
-    if (block->header().number() <= m_blockChain->number())
-        return false;
-
-    // if (block->header()->)
-    // if //Check sig list
-    // return false;
-
-    return true;
-}
-
 bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
     SYNCLOG(TRACE) << "[Rcv] [Packet] interpret packet type: " << int(_packet.packetType) << endl;
-    switch (_packet.packetType)
+    try
     {
-    case StatusPacket:
-        onPeerStatus(_packet);
-        break;
-    case TransactionsPacket:
-        onPeerTransactions(_packet);
-        break;
-    case BlocksPacket:
-        onPeerBlocks(_packet);
-        break;
-    case ReqBlocskPacket:
-        onPeerRequestBlocks(_packet);
-        break;
-    default:
+        switch (_packet.packetType)
+        {
+        case StatusPacket:
+            onPeerStatus(_packet);
+            break;
+        case TransactionsPacket:
+            onPeerTransactions(_packet);
+            break;
+        case BlocksPacket:
+            onPeerBlocks(_packet);
+            break;
+        case ReqBlocskPacket:
+            onPeerRequestBlocks(_packet);
+            break;
+        default:
+            return false;
+        }
+    }
+    catch (std::exception& e)
+    {
+        SYNCLOG(WARNING) << "[Rcv] [Packet] Interpret error for " << e.what() << endl;
         return false;
     }
     return true;
@@ -115,8 +111,18 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
-    SyncPeerInfo info{_packet.nodeId, _packet.rlp()[0].toInt<int64_t>(),
-        _packet.rlp()[1].toHash<h256>(), _packet.rlp()[2].toHash<h256>()};
+
+    RLP const& rlps = _packet.rlp();
+
+    if (rlps.itemCount() != 3)
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Status] Invalid status packet format. From" << _packet.nodeId
+                       << endl;
+        return;
+    }
+
+    SyncPeerInfo info{
+        _packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(), rlps[2].toHash<h256>()};
 
     if (status == nullptr)
     {
@@ -132,8 +138,16 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 {
+    if (m_syncStatus->state == SyncState::Downloading)
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Tx] Transaction dropped when downloading blocks [fromNodeId]: "
+                       << _packet.nodeId << endl;
+        return;
+    }
+
     RLP const& rlps = _packet.rlp();
     unsigned itemCount = rlps.itemCount();
+
     size_t successCnt = 0;
 
     for (unsigned i = 0; i < itemCount; ++i)
@@ -151,7 +165,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                            << endl;
 
 
-        m_txPool->transactionIsKonwnBy(tx.sha3(), _packet.nodeId);
+        m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
     }
     SYNCLOG(TRACE) << "[Rcv] [Tx] Peer transactions import [import/rcv/txPool]: " << successCnt
                    << "/" << itemCount << "/" << m_txPool->pendingSize() << " from "
@@ -161,24 +175,23 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlps = _packet.rlp();
-    unsigned itemCount = rlps.itemCount();
-    size_t successCnt = 0;
-    for (unsigned i = 0; i < itemCount; ++i)
-    {
-        shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
-        if (isNewerBlock(block))
-        {
-            successCnt++;
-            m_syncStatus->bq().push(block);
-        }
-    }
-    SYNCLOG(TRACE) << "[Rcv] [Download] Peer block receive [import/rcv/downloadBlockQueue]: "
-                   << successCnt << "/" << itemCount << "/" << m_syncStatus->bq().size() << endl;
+
+    SYNCLOG(TRACE) << "[Rcv] [Download] Peer block packet received [packetSize]: "
+                   << rlps.data().size() << "B" << endl;
+
+    m_syncStatus->bq().push(rlps);
 }
 
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlp = _packet.rlp();
+
+    if (rlp.itemCount() != 2)
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Invalid request blocks packet format. From"
+                       << _packet.nodeId << endl;
+        return;
+    }
 
     // request
     int64_t from = rlp[0].toInt<int64_t>();
@@ -192,8 +205,20 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     for (int64_t number = from; number < from + size; ++number)
     {
         shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
-        if (!block || block->header().number() != number)
+        if (!block)
+        {
+            SYNCLOG(TRACE)
+                << "[Rcv] [Send] [Download] Get block for node failed [reason/number/nodeId]: "
+                << "block is null/" << number << "/" << _packet.nodeId << endl;
             break;
+        }
+        else if (block->header().number() != number)
+        {
+            SYNCLOG(TRACE)
+                << "[Rcv] [Send] [Download] Get block for node failed [reason/number/nodeId]: "
+                << number << "number incorrect /" << _packet.nodeId << endl;
+            break;
+        }
 
         blockContainer.push(block);
     }
@@ -205,13 +230,17 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 void DownloadBlocksContainer::push(BlockPtr _block)
 {
     bytes blockRLP = _block->rlp();
-    if ((m_currentShardSize + blockRLP.size()) > c_maxPayload)
+    if ((m_currentShardSize + blockRLP.size()) > c_maxPayload &&
+        0 != m_blockRLPShards.back().size())
     {
         m_blockRLPShards.emplace_back(vector<bytes>());
         m_currentShardSize = 0;
     }
     m_blockRLPShards.back().emplace_back(blockRLP);
     m_currentShardSize += blockRLP.size();
+
+    // Note that: if _block->rlp().size() > c_maxPayload
+    // We also send it as a packet
 }
 
 void DownloadBlocksContainer::send(NodeID _nodeId)
@@ -226,6 +255,8 @@ void DownloadBlocksContainer::send(NodeID _nodeId)
     int64_t numberOffset = 0;
     for (vector<bytes> const& shard : m_blockRLPShards)
     {
+        if (0 == shard.size())
+            continue;
         SyncBlocksPacket retPacket;
         retPacket.encode(shard);
 

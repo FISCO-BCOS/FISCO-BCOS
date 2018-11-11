@@ -25,4 +25,50 @@
 using namespace dev;
 using namespace dev::initializer;
 
-void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt) {}
+void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
+{
+    std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
+    int listenPort = _pt.get<int>("rpc.listen_port", 30301);
+    int httpListenPort = _pt.get<int>("rpc.http_listen_port", 0);
+
+    if (listenPort > 0)
+    {
+        ChannelRPCServer::Ptr m_channelRPCServer;
+        ///< TODO: Double free or no free?
+        ///< Donot to set destructions, the ModularServer will destruct.
+        m_channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
+        m_channelRPCServer->setListenAddr(listenIP);
+        m_channelRPCServer->setListenPort(listenPort);
+        m_channelRPCServer->setSSLContext(m_sslContext);
+        m_channelRPCServer->setService(m_p2pService);
+
+        auto ioService = std::make_shared<boost::asio::io_service>();
+
+        auto server = std::make_shared<dev::channel::ChannelServer>();
+        server->setIOService(ioService);
+        server->setSSLContext(m_sslContext);
+        server->setEnableSSL(true);
+        server->setBind(listenIP, listenPort);
+        server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
+
+        m_channelRPCServer->setChannelServer(server);
+
+        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+        m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+        m_channelRPCHttpServer->StartListening();
+        INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer started.";
+    }
+
+    if (httpListenPort > 0)
+    {
+        ///< Donot to set destructions, the ModularServer will destruct.
+        m_safeHttpServer.reset(
+            new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
+        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+        m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
+        m_jsonrpcHttpServer->StartListening();
+        INITIALIZER_LOG(INFO) << "JsonrpcHttpServer started.";
+    }
+}

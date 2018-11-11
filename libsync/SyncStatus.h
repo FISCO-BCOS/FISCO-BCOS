@@ -44,10 +44,9 @@ struct SyncStatus
 {
     SyncState state = SyncState::Idle;
     PROTOCOL_ID protocolId;
-    unsigned startBlockNumber;
-    unsigned currentBlockNumber;
-    unsigned highestBlockNumber;
-    bool majorSyncing = false;
+    int64_t currentBlockNumber;
+    int64_t knownHighestNumber;
+    h256 knownLatestHash;
 };
 
 class SyncPeerStatus
@@ -82,8 +81,21 @@ public:
 class SyncMasterStatus
 {
 public:
+    SyncMasterStatus(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        PROTOCOL_ID const& _protocolId, h256 const& _genesisHash)
+      : protocolId(_protocolId),
+        genesisHash(_genesisHash),
+        knownHighestNumber(0),
+        knownLatestHash(_genesisHash),
+        m_downloadingBlockQueue(_blockChain, _protocolId)
+    {}
+
     SyncMasterStatus(h256 const& _genesisHash)
-      : knownHighestNumber(0), knownLatestHash(_genesisHash)
+      : protocolId(0),
+        genesisHash(_genesisHash),
+        knownHighestNumber(0),
+        knownLatestHash(_genesisHash),
+        m_downloadingBlockQueue(nullptr, 0)
     {}
 
     bool hasPeer(NodeID const& _id);
@@ -111,9 +123,12 @@ public:
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
 public:
+    PROTOCOL_ID protocolId;
+    h256 genesisHash;
     mutable SharedMutex x_known;
     int64_t knownHighestNumber;
     h256 knownLatestHash;
+    SyncState state = SyncState::Idle;
 
 private:
     mutable SharedMutex x_peerStatus;

@@ -61,6 +61,8 @@ public:
         m_consensusEngine(nullptr)
     {
         assert(m_txPool && m_blockSync && m_blockChain);
+        if (m_txPool->status().current > 0)
+            m_syncTxPool = true;
         /// register a handler to be called once new transactions imported
         m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
         m_blockSubmitted = m_blockChain->onReady([=]() { this->onBlockChanged(); });
@@ -109,7 +111,6 @@ protected:
     /// sealing block
     virtual bool shouldSeal();
     virtual bool shouldWait(bool const& wait) const;
-    virtual void reportBlock(dev::eth::BlockHeader const& blockHeader){};
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
     virtual uint64_t calculateMaxPackTxNum() { return m_maxBlockTransactions; }
@@ -120,7 +121,6 @@ protected:
         if (enough)
         {
             SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num << std::endl;
-            m_syncTxPool = false;
         }
         return enough;
     }
@@ -130,17 +130,14 @@ protected:
     virtual void doWork(bool wait);
     void doWork() override { doWork(true); }
     bool isBlockSyncing();
-    inline void resetSealingBlock() { resetSealingBlock(m_sealing); }
+    inline void resetSealingBlock()
+    {
+        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+        resetSealingBlock(m_sealing);
+    }
     void resetSealingBlock(Sealing& sealing);
     void resetBlock(dev::eth::Block& block);
     void resetSealingHeader(dev::eth::BlockHeader& header);
-    /// functions for usage
-    void setSealingRoot(
-        dev::h256 const& transRoot, dev::h256 const& receiptRoot, dev::h256 const& stateRoot)
-    {
-        /// set transaction root, receipt root and state root
-        m_sealing.block.header().setRoots(transRoot, receiptRoot, stateRoot);
-    }
     /// reset timestamp of block header
     void resetCurrentTime()
     {

@@ -36,13 +36,14 @@ class TxPoolInterface
 public:
     TxPoolInterface() = default;
     virtual ~TxPoolInterface(){};
-
+    void setMaxBlockLimit(unsigned const& limit) {}
     /**
      * @brief Remove transaction from the queue
      * @param _txHash: transaction hash
      */
     virtual bool drop(h256 const& _txHash) = 0;
     virtual bool dropBlockTrans(dev::eth::Block const& block) = 0;
+    virtual bool handleBadBlock(dev::eth::Block const& block) = 0;
     /**
      * @brief Get top transactions from the queue
      *
@@ -90,13 +91,13 @@ public:
     virtual PROTOCOL_ID const& getProtocolId() const = 0;
 
     /// Set transaction is known by a node
-    virtual void transactionIsKonwnBy(h256 const& _txHash, h512 const& _nodeId){};
+    virtual void transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId){};
 
     /// Is the transaction is known by the node ?
-    virtual bool isTransactionKonwnBy(h256 const& _txHash, h512 const& _nodeId) { return false; };
+    virtual bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) { return false; };
 
     /// Is the transaction is known by someone
-    virtual bool isTransactionKonwnBySomeone(h256 const& _txHash) { return false; };
+    virtual bool isTransactionKnownBySomeone(h256 const& _txHash) { return false; };
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>

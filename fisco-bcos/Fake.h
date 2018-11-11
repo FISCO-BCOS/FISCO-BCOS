@@ -19,7 +19,6 @@
  * @brief: fake interface
  *         fake Block
  *         fake BlockChainInterface
- *         fake SyncInterface
  *         fake BlockVerifierInterface
  *         fake Ledger
  * @file: Fake.h
@@ -34,6 +33,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libethcore/TransactionReceipt.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerParam.h>
 #include <libsync/SyncInterface.h>
@@ -60,9 +60,9 @@ public:
         blockHeader.setNumber(0);
         blockHeader.setTimestamp(0);
         Block block;
-        blockHeader.encode(m_blockHeaderData);
-        block.encode(m_blockData, ref(m_blockHeaderData));
-        block.decode(ref(m_blockData));
+        block.setBlockHeader(blockHeader);
+        block.encode(m_blockData);
+        /// block.decode(ref(m_blockData));
         m_blockHash[block.blockHeaderHash()] = 0;
         m_blockChain.push_back(std::make_shared<Block>(block));
     }
@@ -103,23 +103,23 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
-    void commitBlock(
+    CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        std::cout << "#### commitBlock before, block number:" << block.blockHeader().number()
-                  << std::endl;
         if (block.blockHeader().number() == number() + 1)
         {
             WriteGuard l(x_blockChain);
             {
-                std::cout << "##### commitBlock:" << block.blockHeader().number() << std::endl;
                 m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
                 m_blockChain.push_back(std::make_shared<Block>(block));
                 m_blockNumber = block.blockHeader().number() + 1;
             }
             m_onReady();
         }
+        return CommitResult::OK;
     }
+
+    void setGroupMark(std::string const& groupMark) override {}
 
 private:
     std::map<h256, uint64_t> m_blockHash;
@@ -161,12 +161,27 @@ public:
         std::srand(std::time(nullptr));
     };
     virtual ~FakeBlockVerifier(){};
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block& block) override
+    std::shared_ptr<ExecutiveContext> executeBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override
     {
         /// execute time: 1000
-        usleep(1000 * (block.getTransactionSize()));
+        /// usleep(1000 * (block.getTransactionSize()));
+        fakeExecuteResult(block);
         return m_executiveContext;
     };
+    /// fake the transaction receipt of the whole block
+    void fakeExecuteResult(dev::eth::Block& block)
+    {
+        TransactionReceipts receipts;
+        for (unsigned index = 0; index < block.getTransactionSize(); index++)
+        {
+            TransactionReceipt receipt(u256(0), u256(100), LogEntries(), u256(0), bytes(),
+                block.transactions()[index].receiveAddress());
+            receipts.push_back(receipt);
+        }
+        block.setTransactionReceipts(receipts);
+    }
+
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
     executeTransaction(const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
     {
@@ -187,7 +202,7 @@ public:
       : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
     {}
     /// init the ledger(called by initializer)
-    void initLedger() override
+    bool initLedger() override
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
@@ -201,11 +216,20 @@ public:
         Ledger::initSync();
         /// init consensus
         Ledger::consensusInitFactory();
+        return true;
     }
 
     /// init blockverifier related
-    void initBlockVerifier() override { m_blockVerifier = std::make_shared<FakeBlockVerifier>(); }
-    void initBlockChain() override { m_blockChain = std::make_shared<FakeBlockChain>(); }
+    bool initBlockVerifier() override
+    {
+        m_blockVerifier = std::make_shared<FakeBlockVerifier>();
+        return true;
+    }
+    bool initBlockChain() override
+    {
+        m_blockChain = std::make_shared<FakeBlockChain>();
+        return true;
+    }
     /// init the blockSync
     /// void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
 };

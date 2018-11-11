@@ -67,13 +67,13 @@ int64_t BlockChainImp::number()
             num = lexical_cast<int64_t>(currentNumber.c_str());
         }
     }
-    LOG(TRACE) << "BlockChainImp::number num=" << num;
+    /// LOG(TRACE) << "BlockChainImp::number num=" << num;
     return num;
 }
 
 h256 BlockChainImp::numberHash(int64_t _i)
 {
-    LOG(TRACE) << "BlockChainImp::numberHash _i=" << _i;
+    /// LOG(TRACE) << "BlockChainImp::numberHash _i=" << _i;
     string numberHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -85,14 +85,14 @@ h256 BlockChainImp::numberHash(int64_t _i)
             numberHash = entry->getField(SYS_VALUE);
         }
     }
-    LOG(TRACE) << "BlockChainImp::numberHash numberHash=" << numberHash;
+    /// LOG(TRACE) << "BlockChainImp::numberHash numberHash=" << numberHash;
     return h256(numberHash);
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
-    LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
-               << "_blockHash.hex()=" << _blockHash.hex();
+    /*LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
+               << "_blockHash.hex()=" << _blockHash.hex();*/
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
     if (tb)
@@ -102,20 +102,62 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
         {
             auto entry = entries->get(0);
             strblock = entry->getField(SYS_VALUE);
-            LOG(TRACE) << "BlockChainImp::getBlockByHash strblock=" << strblock;
             return std::make_shared<Block>(fromHex(strblock.c_str()));
         }
     }
+    return nullptr;
+}
 
-    if (strblock.size() == 0)
-        return nullptr;
 
-    return std::make_shared<Block>(fromHex(strblock.c_str()));
+void BlockChainImp::setGroupMark(std::string const& groupMark)
+{
+    std::shared_ptr<Block> block = getBlockByNumber(0);
+    if (block == nullptr)
+    {
+        block = std::make_shared<Block>();
+        block->setEmptyBlock();
+        block->header().appendExtraDataArray(asBytes(groupMark));
+        shared_ptr<MemoryTableFactory> mtb = getMemoryTableFactory();
+        Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH);
+        if (tb)
+        {
+            Entry::Ptr entry = std::make_shared<Entry>();
+            entry->setField(SYS_VALUE, block->blockHeader().hash().hex());
+            tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
+        }
+
+        tb = mtb->openTable(SYS_HASH_2_BLOCK);
+        if (tb)
+        {
+            Entry::Ptr entry = std::make_shared<Entry>();
+            bytes out;
+            block->encode(out);
+            entry->setField(SYS_VALUE, toHexPrefixed(out));
+            tb->insert(block->blockHeader().hash().hex(), entry);
+        }
+
+        mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
+        LOG(INFO) << "insert the 0th block";
+    }
+    else
+    {
+        if (groupMark.compare(asString(block->header().extraData(0))))
+        {
+            LOG(INFO) << "Already have the 0th block, groupMark "
+                      << asString(block->header().extraData(0));
+        }
+        else
+        {
+            LOG(WARNING) << "Already have the 0th block, groupMark:"
+                         << asString(block->header().extraData(0))
+                         << ", GroupMark does not allow modification!";
+        }
+    }
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
-    LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
+    /// LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
     string numberHash = "";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
@@ -129,7 +171,7 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
             return getBlockByHash(h256(numberHash));
         }
     }
-    return std::make_shared<Block>();
+    return nullptr;
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
@@ -153,8 +195,6 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             }
         }
     }
-
-
     return Transaction();
 }
 
@@ -212,9 +252,17 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
     if (tb)
     {
-        Entry::Ptr entry = std::make_shared<Entry>();
+        auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
+        auto entry = tb->newEntry();
         entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
-        tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
+        if (entries->size() > 0)
+        {
+            tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());
+        }
+        else
+        {
+            tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
+        }
     }
 }
 
@@ -264,11 +312,38 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
     writeHash2Block(block, context);
 }
 
-void BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    writeNumber(block, context);
-    writeTxToBlock(block, context);
-    writeBlockInfo(block, context);
-    context->dbCommit();
-    m_onReady();
+    int64_t num = number();
+    if ((block.blockHeader().number() != num + 1))
+    {
+        LOG(WARNING) << "commit fail,need number: " << number()
+                     << " committed block number: " << block.blockHeader().number();
+        return CommitResult::ERROR_NUMBER;
+    }
+
+    h256 parentHash = numberHash(number());
+    if (block.blockHeader().parentHash() != numberHash(number()))
+    {
+        LOG(WARNING) << "commit fail,need parentHash: " << parentHash
+                     << " committed block parentHash: " << block.blockHeader().parentHash();
+        return CommitResult::ERROR_PARENT_HASH;
+    }
+    if (commitMutex.try_lock())
+    {
+        writeNumber(block, context);
+        writeTxToBlock(block, context);
+        writeBlockInfo(block, context);
+        context->dbCommit(block);
+        commitMutex.unlock();
+        m_onReady();
+        return CommitResult::OK;
+    }
+    else
+    {
+        LOG(INFO) << "commit try_lock fail, block number: " << block.blockHeader().number()
+                  << " block parentHash: " << block.blockHeader().parentHash() << " num: " << num
+                  << " parentHash: " << parentHash;
+        return CommitResult::ERROR_COMMITTING;
+    }
 }

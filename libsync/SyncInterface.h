@@ -42,6 +42,9 @@ public:
     /// @returns Synchonization status
     virtual SyncStatus status() const = 0;
 
+    /// get all sync info as string for rpc
+    virtual std::string const syncInfo() const = 0;
+
     /// note sync module the sealing number
     virtual void noteSealingBlockNumber(int64_t _number) = 0;
 

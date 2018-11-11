@@ -33,7 +33,9 @@
 #include <sstream>
 
 #include <libp2p/Service.h>
-//#include "../../libnetwork/SessionFace.h"
+#include <libp2p/P2PSession.h>
+#include <libp2p/P2PMessage.h>
+
 namespace dev
 {
 namespace consensus
@@ -63,7 +65,7 @@ public:
         PBFTENGINE_LOG(INFO) << "[Register handler for PBFTEngine, protocol id]:  " << m_protocolId;
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
-        m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
+        m_broadCastCache = std::make_shared<PBFTBroadcastCache<PBFTCacheMsg>>();
         m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
     }
 
@@ -95,14 +97,15 @@ public:
     /// broadcast prepare message
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
-    void reportBlock(dev::eth::BlockHeader const& blockHeader) override;
+    void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
-
+    void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
     const std::string consensusStatus() const override;
+    void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
 protected:
     void workLoop() override;
@@ -118,7 +121,7 @@ protected:
     bool needOmit(Sealing const& sealing);
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+    bool broadcastMsg(unsigned const& packetType, PBFTCacheMsg const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>());
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
@@ -132,7 +135,7 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
-    void handlePrepareMsg(PrepareReq const& prepare_req, bool self = true);
+    void handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
@@ -150,6 +153,27 @@ protected:
     void checkAndSave();
     void checkAndChangeView();
 
+    template <typename T>
+    void clearSingleCache(unsigned const& type, T& cache)
+    {
+        PBFTCacheMsg msg;
+        msg.height = cache.height;
+        msg.blockHash = cache.block_hash.hex();
+        m_broadCastCache->clearByKey(type, msg);
+    }
+
+    template <typename T>
+    void clearCommitOrSignCache(unsigned const& type, T& cache)
+    {
+        for (auto it : cache)
+        {
+            PBFTCacheMsg msg;
+            msg.height = m_consensusBlockNumber;
+            msg.blockHash = it.first.hex();
+            m_broadCastCache->clearByKey(type, msg);
+        }
+    }
+
 protected:
     void initPBFTEnv(unsigned _view_timeout);
     /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
@@ -160,8 +184,9 @@ protected:
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
-    inline bool broadcastFilter(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+
+    template <typename T>
+    inline bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, T const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
@@ -175,9 +200,12 @@ protected:
      * @param key: the key of the broadcast-message, is the signature of the broadcast-message in
      * common
      */
-    inline void broadcastMark(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+    template <typename T>
+    inline void broadcastMark(h512 const& nodeId, unsigned const& packetType, T const& key)
     {
+        /// in case of useless insert
+        if (m_broadCastCache->keyExists(nodeId, packetType, key))
+            return;
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
     inline void clearMask() { m_broadCastCache->clearAll(); }
@@ -185,8 +213,9 @@ protected:
     /// @param nodeId: the node id of the miner
     /// @return : 1. >0: the index of the miner
     ///           2. equal to -1: the node is not a miner(not exists in miner list)
-    inline ssize_t getIndexByMiner(dev::h512 const& nodeId) const
+    inline ssize_t getIndexByMiner(dev::h512 const& nodeId)
     {
+        ReadGuard l(m_minerListMutex);
         ssize_t index = -1;
         for (size_t i = 0; i < m_minerList.size(); ++i)
         {
@@ -266,7 +295,7 @@ protected:
     }
 
     /// check the specified prepareReq is valid or not
-    bool isValidPrepare(PrepareReq const& req, bool self, std::ostringstream& oss) const;
+    bool isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
 
     /**
      * @brief: common check process when handle SignReq and CommitReq
@@ -328,21 +357,33 @@ protected:
 
     bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
     bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
-    bool isValidViewChangeReq(ViewChangeReq const& req, std::ostringstream& oss);
+    bool isValidViewChangeReq(
+        ViewChangeReq const& req, u256 const& source, std::ostringstream& oss);
 
     template <class T>
     inline bool hasConsensused(T const& req) const
     {
-        return req.height < m_consensusBlockNumber || req.view < m_view;
+        if (req.height < m_consensusBlockNumber || req.view < m_view)
+        {
+            PBFTENGINE_LOG(DEBUG) << "[#hasConsensused] [height/consNum/reqView/Cview]:  "
+                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
+                                  << "/" << m_view << std::endl;
+            return true;
+        }
+        return false;
     }
 
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
-        if (req.height > m_consensusBlockNumber)
+        if (req.height > m_consensusBlockNumber ||
+            (req.height == m_consensusBlockNumber && req.view > m_view))
+        {
+            PBFTENGINE_LOG(DEBUG) << "[#FutureBlock] [height/consNum/reqView/Cview]:  "
+                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
+                                  << "/" << m_view << std::endl;
             return true;
-        if (req.height == m_consensusBlockNumber && req.view > m_view)
-            return true;
+        }
         return false;
     }
 
@@ -350,7 +391,15 @@ protected:
     {
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
+        {
+            PBFTENGINE_LOG(DEBUG) << "[#isHashSavedAfterCommit] hasn't been cached after commit:  "
+                                     "[height/cacheHeight/hash/cachHash]:  "
+                                  << req.height << "/" << m_reqCache->committedPrepareCache().height
+                                  << "/" << req.block_hash.abridged() << "/"
+                                  << m_reqCache->committedPrepareCache().block_hash.abridged()
+                                  << std::endl;
             return false;
+        }
         return true;
     }
 
@@ -386,6 +435,7 @@ protected:
     {
         return boost::filesystem::space(path).available > 1024;
     }
+    void updateMinerList();
 
 protected:
     u256 m_view = u256(0);
@@ -395,6 +445,8 @@ protected:
     std::string m_baseDir;
     bool m_cfgErr = false;
     bool m_leaderFailed = false;
+
+    dev::storage::Storage::Ptr m_storage;
 
     /// whether to omit empty block
     bool m_omitEmptyBlock = true;
@@ -406,7 +458,7 @@ protected:
     static const std::string c_backupMsgDirName;
     static const unsigned c_PopWaitSeconds = 5;
 
-    std::shared_ptr<PBFTBroadcastCache> m_broadCastCache;
+    std::shared_ptr<PBFTBroadcastCache<PBFTCacheMsg>> m_broadCastCache;
     std::shared_ptr<PBFTReqCache> m_reqCache;
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;
@@ -416,6 +468,9 @@ protected:
     Mutex x_signalled;
 
     std::function<void()> m_onViewChange;
+
+    /// the block number that update the miner list
+    int64_t m_lastObtainMinerNum = 0;
 };
 }  // namespace consensus
 }  // namespace dev

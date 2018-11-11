@@ -62,9 +62,8 @@ public:
         dev::p2p::P2PMessage::Ptr _msg);
 
 private:
-    bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
-    bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
-    bool isNewerBlock(std::shared_ptr<dev::eth::Block> block);
+    bool checkSession(std::shared_ptr<dev::p2p::SessionFace> _session);
+    bool checkMessage(dev::p2p::Message::Ptr _msg);
     bool interpret(SyncMsgPacket const& _packet);
 
 private:

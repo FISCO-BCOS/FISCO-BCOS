@@ -15,66 +15,50 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @file: NonceCheck.cpp
+ * @file: TransactionNonceCheck.cpp
  * @author: toxotguo
  *
  * @date: 2017
  */
 
-#include "NonceCheck.h"
+#include "TransactionNonceCheck.h"
 #include <libdevcore/Common.h>
 
 using namespace dev;
+using namespace dev::eth;
 using namespace dev::blockchain;
-NonceCheck::~NonceCheck() {}
-
-u256 NonceCheck::maxblocksize = u256(1000);
-
-void NonceCheck::init()
+namespace dev
+{
+namespace txpool
+{
+void TransactionNonceCheck::init()
 {
     m_startblk = 0;
     m_endblk = 0;
     updateCache(true);
 }
-std::string NonceCheck::generateKey(Transaction const& _t)
+bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
 {
-    Address account = _t.from();
-    std::string key = toHex(account.ref());
-    key += "_" + toString(_t.nonce());
-    return key;
-}
-
-bool NonceCheck::ok(Transaction const& _transaction, bool _needinsert)
-{
-    DEV_WRITE_GUARDED(m_lock)
+    if (_tx.blockLimit() == Invalid256 || u256(m_blockChain->number()) >= _tx.blockLimit() ||
+        _tx.blockLimit() > (u256(m_blockChain->number()) + m_maxBlockLimit))
     {
-        std::string key = this->generateKey(_transaction);
-        auto iter = m_cache.find(key);
-        if (iter != m_cache.end())
-            return false;
-        if (_needinsert)
-        {
-            m_cache.insert(std::pair<std::string, bool>(key, true));
-        }
+        NONCECHECKER_LOG(ERROR) << "[#Verify] [#InvalidBlockLimit] invalid blockLimit: "
+                                   "[blkLimit/maxBlkLimit/number/tx]:  "
+                                << _tx.blockLimit() << "/" << m_maxBlockLimit << "/"
+                                << m_blockChain->number() << "/" << _tx.sha3() << std::endl;
+        return false;
     }
     return true;
 }
 
-void NonceCheck::delCache(Transactions const& _transcations)
+bool TransactionNonceCheck::ok(Transaction const& _transaction, bool _needinsert)
 {
-    DEV_WRITE_GUARDED(m_lock)
-    {
-        for (unsigned i = 0; i < _transcations.size(); i++)
-        {
-            std::string key = this->generateKey(_transcations[i]);
-            auto iter = m_cache.find(key);
-            if (iter != m_cache.end())
-                m_cache.erase(iter);
-        }  // for
-    }
+    if (!isBlockLimitOk(_transaction))
+        return false;
+    return isNonceOk(_transaction, _needinsert);
 }
 
-void NonceCheck::updateCache(bool _rebuild)
+void TransactionNonceCheck::updateCache(bool _rebuild)
 {
     DEV_WRITE_GUARDED(m_lock)
     {
@@ -86,14 +70,15 @@ void NonceCheck::updateCache(bool _rebuild)
             unsigned preendblk = m_endblk;
 
             m_endblk = lastnumber;
-            if (lastnumber > (unsigned)NonceCheck::maxblocksize)
-                m_startblk = lastnumber - (unsigned)NonceCheck::maxblocksize;
+            if (lastnumber > m_maxBlockLimit)
+                m_startblk = lastnumber - m_maxBlockLimit;
             else
                 m_startblk = 0;
 
-            LOG(TRACE) << "NonceCheck::updateCache m_startblk=" << m_startblk
-                       << ",m_endblk=" << m_endblk << ",prestartblk=" << prestartblk
-                       << ",preendblk=" << preendblk << ",_rebuild=" << _rebuild;
+            NONCECHECKER_LOG(TRACE)
+                << "[#updateCache] [rebuild/startBlk/endBlk/prestartBlk/preEndBlk]:  " << _rebuild
+                << "/" << m_startblk << "/" << m_endblk << "/" << prestartblk << "/" << preendblk
+                << std::endl;
             if (_rebuild)
             {
                 m_cache.clear();
@@ -125,19 +110,20 @@ void NonceCheck::updateCache(bool _rebuild)
                     std::string key = this->generateKey(trans[j]);
                     auto iter = m_cache.find(key);
                     if (iter == m_cache.end())
-                        m_cache.insert(std::pair<std::string, bool>(key, true));
+                        m_cache.insert(key);
                 }  // for
             }      // for
-
-            LOG(TRACE) << "NonceCheck::updateCache cache size=" << m_cache.size() << ",cost"
-                       << (timer.elapsed() * 1000);
+            NONCECHECKER_LOG(TRACE) << "[#updateCache] [cacheSize/costTime]:  " << m_cache.size()
+                                    << "/" << (timer.elapsed() * 1000) << std::endl;
         }
         catch (...)
         {
             // should not happen as exceptions
-            LOG(WARNING) << "o NO!!!!  NonceCheck::updateCache "
-                         << boost::current_exception_diagnostic_information();
-            // m_aborting=true;
+            NONCECHECKER_LOG(WARNING)
+                << "[#updateCache] update nonce cache failed: [EINFO]:  "
+                << boost::current_exception_diagnostic_information() << std::endl;
         }
     }
 }  // fun
+}  // namespace txpool
+}  // namespace dev
