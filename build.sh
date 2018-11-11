@@ -10,6 +10,10 @@
 current_dir=`pwd`
 
 enable_guomi=0
+build_source=0
+version=`cat release_note.txt| sed "s/^[vV]//"`
+# binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/fisco-bcos
+binary_link=https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/release-1.3.5/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -189,9 +193,9 @@ build_ubuntu_source()
 	# build source
 	execute_cmd "mkdir -p build && cd build/"
 	if [ ${enable_guomi} -eq 0 ];then
-		execute_cmd "cmake -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake -DEVMJIT=OFF -DTESTS=OFF .. "
 	else
-		execute_cmd "cmake -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF .. "
 	fi
 	execute_cmd "make && sudo make install"
 }
@@ -201,9 +205,9 @@ build_centos_source()
 	# build source
 	execute_cmd "mkdir -p build && cd build/"
 	if [ ${enable_guomi} -eq 0 ];then
-		execute_cmd "cmake3 -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake3 -DEVMJIT=OFF -DTESTS=OFF .. "
 	else
-		execute_cmd "cmake3 -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF -DMINIUPNPC=OFF .. "
+		execute_cmd "cmake3 -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF .. "
 	fi
 	execute_cmd "make && sudo make install && cd ${current_dir}"
 }
@@ -221,6 +225,13 @@ build_source()
 		LOG_ERROR "Unsupported Platform, Exit"
 		exit 1
 	fi
+}
+
+download_binary()
+{
+	execute_cmd "curl -LO ${binary_link}"
+	execute_cmd "chmod a+x fisco-bcos"
+	execute_cmd "sudo mv fisco-bcos /usr/local/bin/"
 }
 
 nodejs_init()
@@ -264,37 +275,41 @@ check()
 
 Usage()
 {
-	LOG_INFO "sudo ./build.sh: \tfisco-bcos build and install"
-	LOG_INFO "sudo ./build.sh -g: \tguomi-fisco-bcos build and install"
-	LOG_INFO "sudo ./build.sh -h: \tprint help info"
+	echo $1
+	cat << EOF
+Usage:
+Optional:
+    -b       Compile from source code 
+    -g       Compile fisco-bcos with guomi algorithms
+    -h       Help
+Example: 
+    bash build.sh 
+    bash build.sh -g
+EOF
 	exit 0
 }
 
-check_input_param()
+parse_param()
 {
-	if [ $# -ge 1 ] && [ "${1}" != "-g" ] && [ "${1}" != "-g" ] && [ "${1}" != "-h" ] && [ "${1}" != "--help" ];then
-		Usage
-	fi
-
-	if [ "${1}" = "-h" ] || [ "${1}" = "--help" ];then
-		Usage
-	fi
-
-	if [ "${1}" = "-g" ] || [ "${1}" = "--guomi" ];then
-		enable_guomi=1
-	fi
+	while getopts "hgb" option;do
+		case $option in
+		b) build_source=1;;
+		g) enable_guomi=1;;
+		h) Usage;;
+		esac
+	done
 }
 
 install_all()
 {
-	### install all deps
 	install_all_deps
-	### build source
-	build_source
-	### init nodejs
+	if [ ${build_source} -eq 0 ];then
+		download_binary
+	else
+		build_source
+	fi
 	nodejs_init
-	### check
 	check
 }
-check_input_param "$@"
+parse_param "$@"
 install_all

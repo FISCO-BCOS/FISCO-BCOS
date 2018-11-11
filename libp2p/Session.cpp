@@ -332,7 +332,7 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	}
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t length)
+void Session::onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> data)
 {
 	try
 	{
@@ -340,8 +340,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 		return;
 
 		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
-		if (elapsed >= 10) {
-			LOG(WARNING) << "ba::async_write write-time=" << elapsed << ",len=" << length << ",id=" << id();
+		if (elapsed >= 1000) {
+			LOG(WARNING) << "[NETWORK] msg callback timecost=" << elapsed << ",len=" << length << ",id=" << id();
 		}
 		ThreadContext tc(info().id.abridged());
 		ThreadContext tc2(info().clientVersion);
@@ -377,32 +377,39 @@ void Session::write()
 		if (m_dropped)
 			return;
 
+		auto data = std::make_shared<bytes>();
 		bytes const* out = nullptr;
-		u256 enter_time = 0;
+		uint64_t enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
 			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
 			out = &m_writeQueue[0];
+			data->assign(out->begin(), out->end());
 			enter_time = m_writeTimeQueue[0];
 		}
 		
 		m_start_t = utcTime();
-		unsigned queue_elapsed = (unsigned)(m_start_t - enter_time);
-		if (queue_elapsed > 10) {
-			LOG(WARNING) << "Session::write queue-time=" << queue_elapsed;
+		uint64_t queue_elapsed = m_start_t > enter_time ? (m_start_t - enter_time) : 0;
+		if (queue_elapsed >= 60 * 1000) {
+			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed << ", disconnect...";
+			drop(PingTimeout);
+			return;
+		} else if (queue_elapsed >= 1000) {
+			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
 		}
 
 		auto session = shared_from_this();
+		auto socket = m_socket;
 		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
 		{
 			if( m_socket->isConnected())
 			{
 				
 				m_server->getIOService()->post(
-					[ = ] {
-						boost::asio::async_write(m_socket->sslref(),
-						boost::asio::buffer(*out),
-						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+					[ socket, session, data  ] {
+						boost::asio::async_write(socket->sslref(),
+						boost::asio::buffer(*data),
+						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
 					});
 			}
 			else
@@ -414,7 +421,7 @@ void Session::write()
 		}
 		else
 		{
-			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
 		}
 		
 	}
@@ -830,6 +837,7 @@ void Session::saveCABaseData(CABaseData* baseData)
 	m_CABaseData = baseData;
 }
 
+#if 0
 bool Session::setStatistics(dev::InterfaceStatistics *stats)
 {
 		if (stats && m_statistics.get() == nullptr)
@@ -839,3 +847,4 @@ bool Session::setStatistics(dev::InterfaceStatistics *stats)
 		}
 		return false;
 }
+#endif

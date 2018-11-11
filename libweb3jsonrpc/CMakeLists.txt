@@ -1,8 +1,6 @@
 aux_source_directory(. SRC_LIST)
-aux_source_directory(./dfs SRC_LIST)
 
 file(GLOB HEADERS "*.h")
-include_directories(./dfs)
 
 add_library(web3jsonrpc ${SRC_LIST} ${HEADERS})
 
@@ -69,14 +67,9 @@ target_include_directories(web3jsonrpc PRIVATE ..)
 target_link_libraries(web3jsonrpc ${Web3_WEBTHREE_LIBRARIES}
                                   ${Web3_WHISPER_LIBRARIES}
                                   JsonRpcCpp::Server
-				                  statistics
-                                  contract
-                                  curl
+				                #   statistics
+								  channelserver
                                   ${OPENSSL_SSL_LIBRARIE}
-                                  ${OPENSSL_CRYPTO_LIBRARIE}
-                                  krb5
-                                  uuid
-                                  z
-                                  dl
-                                  )
-target_link_libraries(web3jsonrpc channelserver)
+								  ${OPENSSL_CRYPTO_LIBRARIE}
+								  ${MHD_LIBRARY}
+                                  dl)

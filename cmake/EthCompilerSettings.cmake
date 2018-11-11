@@ -40,7 +40,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 	add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
 	add_compile_options(-DELPP_THREAD_SAFE)
 	
-	add_compile_options(-Wa,-march=generic64)
+	# add_compile_options(-Wa,-march=generic64)
 	
 	if(STATIC_BUILD)
 		SET(BUILD_SHARED_LIBRARIES OFF)
@@ -53,10 +53,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 	add_compile_options(-fno-omit-frame-pointer)
 	
 	# Configuration-specific compiler settings.
-	set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -DETH_DEBUG -DELPP_THREAD_SAFE")
-	set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -DETH_RELEASE -DELPP_THREAD_SAFE")
-	set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -DETH_RELEASE -DELPP_THREAD_SAFE")
-	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DETH_RELEASE -DELPP_THREAD_SAFE")
+	set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG -DELPP_THREAD_SAFE")
+	set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread -DETH_RELEASE -DELPP_THREAD_SAFE")
+	set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread -DETH_RELEASE -DELPP_THREAD_SAFE")
+	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread -DETH_RELEASE -DELPP_THREAD_SAFE")
 
 	option(USE_LD_GOLD "Use GNU gold linker" ON)
 	if (USE_LD_GOLD)

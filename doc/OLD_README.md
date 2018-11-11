@@ -36,7 +36,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 如果您希望使用Docker进行安装部署，可以参阅[使用Docker安装部署FISCO BCOS指南](docker/)。[(FISCO BCOS Docker Installation Manual)](docker/README_EN.md)
 
-如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书](doc/manual)。[(FISCO-BCOS Manual)](doc/manual/README_EN.md)
+如果您想编译源码并亲自动手配置、搭建FISCO BCOS，请参考[FISCO BCOS使用说明书](manual/README.md)。[(FISCO-BCOS Manual)](manual/README_EN.md)
 
 如果你想快速搭建生产上的可用环境, 请参考[FISCO-BCOS物料包工具](https://github.com/FISCO-BCOS/fisco-package-build-tool)。
 
@@ -65,14 +65,14 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 * [易用性提升](https://github.com/FISCO-BCOS/Wiki/tree/master/%E6%B5%85%E8%B0%88FISCO-BCOS%E7%9A%84%E6%98%93%E7%94%A8%E6%80%A7)
 * [链上信使协议AMOP](https://github.com/FISCO-BCOS/Wiki/tree/master/AMOP%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)
-* [弹性联盟链共识框架](doc/弹性联盟链共识框架说明文档.md)
+* [弹性联盟链共识框架](弹性联盟链共识框架说明文档.md)
 
 **安全**
 
 * [FISCO BCOS权限模型](https://github.com/FISCO-BCOS/Wiki/tree/master/FISCO%20BCOS%E6%9D%83%E9%99%90%E6%A8%A1%E5%9E%8B)
-* [群签名和环签名链上验证](doc/启用_关闭群签名环签名ethcall.md)
-* [可监管的零知识证明说明](doc/可监管的零知识证明说明.md)
-* [FISCO-BCOS开启国密特性](doc/%E5%9B%BD%E5%AF%86%E6%93%8D%E4%BD%9C%E6%96%87%E6%A1%A3.md)
+* [群签名和环签名链上验证](启用_关闭群签名环签名ethcall.md)
+* [可监管的零知识证明说明](可监管的零知识证明说明.md)
+* [FISCO-BCOS开启国密特性](%E5%9B%BD%E5%AF%86%E6%93%8D%E4%BD%9C%E6%96%87%E6%A1%A3.md)
 
 # 4.应用案例
 * [FISCO BCOS应用实践](https://github.com/FISCO-BCOS/Wiki/blob/master/FISCO%20BCOS%E5%BA%94%E7%94%A8%E5%AE%9E%E8%B7%B5.pdf) 
