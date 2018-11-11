@@ -78,14 +78,6 @@ static void startConsensus(Params& params)
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.conf");
 
-<<<<<<< HEAD
-    auto p2pInitializer = initialize->p2pInitializer();
-    auto p2pService = p2pInitializer->p2pService();
-    p2pService->setMessageFactory(std::make_shared<MockP2PMessageFactory>());
-=======
-    /// auto p2pInitializer = initialize->p2pInitializer();
-    /// auto p2pService = p2pInitializer->p2pService();
->>>>>>> upstream/dev
     auto secureInitiailizer = initialize->secureInitiailizer();
     KeyPair key_pair = secureInitiailizer->keyPair();
     auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
