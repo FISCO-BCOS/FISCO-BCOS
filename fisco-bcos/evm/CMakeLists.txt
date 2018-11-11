@@ -36,8 +36,4 @@ target_link_libraries(mini-evm evm)
 target_link_libraries(mini-evm executivecontext)
 target_link_libraries(mini-evm mptstate)
 
-if (UNIX)
-target_link_libraries(mini-evm pthread)
-endif()
-
 install(TARGETS mini-evm DESTINATION bin)
