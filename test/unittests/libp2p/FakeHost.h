@@ -168,7 +168,7 @@ class FakeHost : public Host
 {
 public:
     FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
-        std::shared_ptr<AsioInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
+        std::shared_ptr<ASIOInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
         shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext)
       : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory,
             _sslContext)
@@ -337,7 +337,7 @@ public:
     }
 };
 
-class AsioTest : public AsioInterface
+class AsioTest : public ASIOInterface
 {
 public:
     virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace>& socket,
@@ -379,7 +379,7 @@ public:
         callback(verify_succ, context);
     }
 
-    virtual void async_wait(boost::asio::deadline_timer* m_timer,
+    virtual void asyncWait(boost::asio::deadline_timer* m_timer,
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code())
     {
@@ -448,7 +448,7 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
 {
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
-    std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
+    std::shared_ptr<ASIOInterface> m_asioInterface = std::make_shared<AsioTest>();
     setDataDir(dev::test::getTestPath().string() + "/fisco-bcos-data");
     boost::property_tree::ptree pt;
     auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitiailizer>();

@@ -32,7 +32,7 @@ using namespace dev::txpool;
 void SyncMsgEngine::messageHandler(
     NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
-    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->id() << endl;
+    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->nodeID() << endl;
     if (!checkSession(_session) || !checkMessage(_msg))
     {
         SYNCLOG(WARNING) << "[Rcv] [Packet] Reject packet: [reason]: session or msg illegal"
@@ -46,7 +46,7 @@ void SyncMsgEngine::messageHandler(
     {
         SYNCLOG(WARNING)
             << "[Rcv] [Packet] Reject packet: [reason/nodeId/size/message]: decode failed/"
-            << _session->id() << "/" << _msg->buffer()->size() << "/" << toHex(*_msg->buffer())
+            << _session->nodeID() << "/" << _msg->buffer()->size() << "/" << toHex(*_msg->buffer())
             << endl;
         _session->session()->disconnect(BadProtocol);
         return;
@@ -62,7 +62,7 @@ void SyncMsgEngine::messageHandler(
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
-    if (_session->id() == m_nodeId)
+    if (_session->nodeID() == m_nodeId)
         return false;
     return true;
 }

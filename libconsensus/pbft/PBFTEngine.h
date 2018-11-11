@@ -250,17 +250,17 @@ protected:
         if (message->buffer()->size() <= 0)
             return false;
         /// check whether in the miner list
-        peerIndex = getIndexByMiner(session->id());
+        peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
             PBFTENGINE_LOG(WARNING)
-                << "[#isValidReq] Recv PBFT msg from unkown peer:  " << session->id();
+                << "[#isValidReq] Recv PBFT msg from unkown peer:  " << session->nodeID();
             return false;
         }
         /// check whether this node is in the miner list
         h512 node_id;
         bool is_miner = getNodeIDByIndex(node_id, m_idx);
-        if (!is_miner || session->id() == node_id)
+        if (!is_miner || session->nodeID() == node_id)
             return false;
         return true;
     }

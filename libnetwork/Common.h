@@ -135,88 +135,6 @@ public:
 	virtual ssize_t decode(const byte *buffer, size_t size) = 0;
 };
 
-class P2PMessage : public Message
-{
-public:
-    typedef std::shared_ptr<P2PMessage> Ptr;
-
-    const static size_t HEADER_LENGTH = 12;
-    const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
-
-    P2PMessage() { m_buffer = std::make_shared<bytes>(); }
-
-    virtual ~P2PMessage() {}
-
-    virtual uint32_t length() override { return m_length; }
-    void setLength(uint32_t _length) { m_length = _length; }
-
-    PROTOCOL_ID protocolID() { return m_protocolID; }
-    void setProtocolID(PROTOCOL_ID _protocolID) { m_protocolID = _protocolID; }
-    PACKET_TYPE packetType() { return m_packetType; }
-    void setPacketType(PACKET_TYPE _packetType) { m_packetType = _packetType; }
-
-    uint32_t seq() { return m_seq; }
-    void setSeq(uint32_t _seq) { m_seq = _seq; }
-
-    std::shared_ptr<bytes> buffer() { return m_buffer; }
-    void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
-
-    bool isRequestPacket() { return (m_protocolID > 0); }
-    PROTOCOL_ID getResponceProtocolID()
-    {
-        if (isRequestPacket())
-            return -m_protocolID;
-        else
-            return 0;
-    }
-
-    virtual void encode(bytes& buffer) override;
-
-    /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
-    /// returned.
-    virtual ssize_t decode(const byte* buffer, size_t size) override;
-
-    ///< This buffer param is the m_buffer member stored in struct Messger, and the topic info will
-    ///< be encoded in buffer.
-    void encodeAMOPBuffer(std::string const& topic);
-    ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
-
-    void printMsgWithPrefix(std::string const& strPrefix)
-    {
-        std::stringstream strMsg;
-        strMsg << strPrefix << "Message(" << m_length << "," << m_protocolID << "," << m_packetType
-               << "," << m_seq << ",";
-        if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
-        {
-            strMsg << std::string((const char*)m_buffer->data(), m_buffer->size());
-        }
-        else
-        {
-            std::string topic;
-            std::shared_ptr<bytes> temp = std::make_shared<bytes>();
-            decodeAMOPBuffer(temp, topic);
-            strMsg << topic << "," << std::string((const char*)temp->data(), temp->size());
-        }
-        strMsg << ")";
-        LOG(INFO) << strMsg.str();
-    }
-
-private:
-    uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
-    PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
-                                      ///< greater than 0 is the ID of the request package.
-    PACKET_TYPE m_packetType = 0;     ///< message sub type, the second two bytes of information
-    uint32_t m_seq = 0;               ///< the message identify
-    std::shared_ptr<bytes> m_buffer;  ///< message data
-};
-
-enum AMOPPacketType
-{
-    SendTopicSeq = 1,
-    RequestTopics = 2,
-    SendTopics = 3
-};
-
 class MessageFactory : public std::enable_shared_from_this<MessageFactory>
 {
 public:
@@ -245,35 +163,6 @@ class Session;
 
 /// @returns the string form of the given disconnection reason.
 std::string reasonOf(DisconnectReason _r);
-
-class HostResolver
-{
-public:
-    static boost::asio::ip::address query(std::string);
-};
-enum PeerSlotType
-{
-    Egress,
-    Ingress
-};
-struct NodeInfo
-{
-    NodeInfo() = default;
-    NodeInfo(
-        NodeID const& _id, std::string const& _address, unsigned _port, std::string const& _version)
-      : id(_id), address(_address), port(_port), version(_version)
-    {}
-
-    std::string enode() const
-    {
-        return "enode://" + id.hex() + "@" + address + ":" + toString(port);
-    }
-
-    NodeID id;
-    std::string address;
-    unsigned port = 0;
-    std::string version;
-};
 
 /**
  * @brief IPv4,UDP/TCP endpoints.
@@ -351,48 +240,13 @@ struct PeerSessionInfo
 
 using PeerSessionInfos = std::vector<PeerSessionInfo>;
 
-class NodeSpec
-{
-public:
-    NodeSpec() = default;
-    /// Accepts user-readable strings of the form (enode://pubkey@)host({:port,:tcpport.udpport})
-    NodeSpec(std::string const& _user);
-
-    NodeSpec(NodeID const& node_id, std::string const& _addr, uint16_t _port, int _udpPort = -1)
-      : m_id(node_id),
-        m_address(_addr),
-        m_tcpPort(_port),
-        m_udpPort(_udpPort == -1 ? _port : (uint16_t)_udpPort)
-    {}
-
-    /// get interfaces
-    NodeID id() const { return m_id; }
-    uint16_t tcpPort() const { return m_tcpPort; }
-    uint16_t udpPort() const { return m_udpPort; }
-    std::string const& address() const { return m_address; }
-    NodeIPEndpoint nodeIPEndpoint() const;
-    std::string enode() const;
-
-    /// set interfaces
-    void setNodeId(NodeID const& _node) { m_id = _node; }
-    void setAddress(std::string const& _address) { m_address = _address; }
-    void setTcpPort(uint16_t const _port) { m_tcpPort = _port; }
-    void setUdpPort(uint16_t const _port) { m_udpPort = _port; }
-
-private:
-    NodeID m_id;
-    std::string m_address;
-    uint16_t m_tcpPort = 0;
-    uint16_t m_udpPort = 0;
-};
-
 struct SessionInfo
 {
     NodeID nodeID;
     NodeIPEndpoint nodeIPEndpoint;
-    std::vector<std::string> topics;
-    SessionInfo(NodeID const& _nodeID, NodeIPEndpoint const& _nodeIPEndpoint,
-        std::vector<std::string> const& _topics)
+    std::set<std::string> topics;
+    SessionInfo(NodeID _nodeID, NodeIPEndpoint _nodeIPEndpoint,
+        std::set<std::string> _topics)
     {
         nodeID = _nodeID;
         nodeIPEndpoint = _nodeIPEndpoint;

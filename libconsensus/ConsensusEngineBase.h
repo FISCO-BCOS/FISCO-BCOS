@@ -175,7 +175,7 @@ protected:
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
-                req.setOtherField(u256(peer_index), session->id());
+                req.setOtherField(u256(peer_index), session->nodeID());
         }
         return valid;
     }

@@ -130,5 +130,22 @@ private:
     std::function<void(NetworkException, Session::Ptr, Message::Ptr)> m_messageHandler;
 };
 
+class SessionFactory
+{
+public:
+    virtual ~SessionFactory() {};
+
+    virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
+        std::shared_ptr<SocketFace> const& _socket,
+        MessageFactory::Ptr _messageFactory)
+    {
+        std::shared_ptr<Session> session = std::make_shared<Session>();
+        session->setServer(_server);
+        session->setSocket(_socket);
+        session->setMessageFactory(_messageFactory);
+        return session;
+    }
+};
+
 }  // namespace p2p
 }  // namespace dev

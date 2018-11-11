@@ -35,11 +35,10 @@
 #include <thread>
 #include <utility>
 #include <vector>
-#include "AsioInterface.h"
+
+#include "ASIOInterface.h"
 #include "Common.h"
-#include "Network.h"
-#include "P2pFactory.h"
-#include "Peer.h"
+#include "Session.h"
 #include "SessionFace.h"
 #include "Socket.h"
 
@@ -63,47 +62,32 @@ public:
 
     virtual void asyncConnect(
         NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>)> callback
+        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback
     );
 
     virtual bool haveNetwork() const { return m_run; }
 
+    virtual std::string listenHost() { return m_listenHost; }
+    virtual uint16_t listenPort() { return m_listenPort; }
+    virtual void setHostPort(std::string host, uint16_t port) { m_listenHost = host; m_listenPort = port; }
+
+    virtual std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> connectionHandler() { return m_connectionHandler; }
+    virtual void setConnectionHandler(std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> connectionHandler) { m_connectionHandler = connectionHandler; }
+
     virtual std::shared_ptr<dev::ThreadPool> threadPool() { return m_threadPool; }
     virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) { m_threadPool = threadPool; }
 
-    virtual std::shared_ptr<ba::io_service> ioService() { return m_ioService; }
-    virtual void setIOService(std::shared_ptr<ba::io_service> ioService) { m_ioService = ioService; }
-
-    virtual std::shared_ptr<boost::asio::io_service::strand> strand() { return m_strand; }
-    virtual void setStrand(std::shared_ptr<boost::asio::io_service::strand> strand) { m_strand = strand; }
-
-    virtual std::shared_ptr<bi::tcp::acceptor> acceptor() { return m_acceptor; }
-    virtual void setAcceptor(std::shared_ptr<bi::tcp::acceptor> acceptor) { m_acceptor = acceptor; }
-
-    virtual std::shared_ptr<AsioInterface>  asioInterface() { return m_asioInterface; }
-    virtual void setASIOInterface(std::shared_ptr<AsioInterface> asioInterface) { m_asioInterface = asioInterface; }
-
-    virtual std::shared_ptr<SocketFactory> socketFactory() { return m_socketFactory; }
-    virtual void setSocketFactory(std::shared_ptr<SocketFactory> socketFactory) { m_socketFactory = socketFactory; }
+    virtual std::shared_ptr<ASIOInterface>  asioInterface() { return m_asioInterface; }
+    virtual void setASIOInterface(std::shared_ptr<ASIOInterface> asioInterface) { m_asioInterface = asioInterface; }
 
     virtual std::shared_ptr<SessionFactory> sessionFactory() { return m_sessionFactory; }
     virtual void setSessionFactory(std::shared_ptr<SessionFactory> sessionFactory) { m_sessionFactory = sessionFactory; }
-
-    virtual std::shared_ptr<ba::ssl::context> sslContext() { return m_sslContext; }
-    virtual void setSSLContext(std::shared_ptr<ba::ssl::context> sslContext) { m_sslContext = sslContext; }
 
     virtual MessageFactory::Ptr messageFactory() { return m_messageFactory; }
     virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
 
     virtual KeyPair keyPair() { return m_alias; }
     virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
-
-    virtual std::string listenHost() { return m_listenHost; }
-    virtual uint16_t listenPort() { return m_listenPort; }
-    virtual void setHostPort(std::string host, uint16_t port) { m_listenHost = host; m_listenPort = port; }
-
-    virtual std::function<void(NetworkException, std::shared_ptr<SessionFace>)> connectionHandler() { return m_connectionHandler; }
-    virtual void setConnectionHandler(std::function<void(NetworkException, std::shared_ptr<SessionFace>)> connectionHandler) { m_connectionHandler = connectionHandler; }
 
 private:
     /// called by 'startedWorking' to accept connections
@@ -113,9 +97,6 @@ private:
     /// @return: node id of the connected peer
     std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut);
-    /// @return true: the given certificate has been expired
-    /// @return false: the given certificate has not been expired
-    bool isExpired(ba::ssl::verify_context& ctx);
     /// server calls handshakeServer to after handshake, mainly calls RLPxHandshake to obtain
     /// informations(client version, caps, etc),start peer session and start accepting procedure
     /// repeatedly
@@ -124,7 +105,7 @@ private:
 
     void startPeerSession(NodeID nodeID,
         std::shared_ptr<SocketFace> const& socket,
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>)> handler);
+        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> handler);
 
     void handshakeClient(const boost::system::error_code& error,
         std::shared_ptr<SocketFace> socket,
@@ -133,23 +114,18 @@ private:
         NodeIPEndpoint _nodeIPEndpoint);
 
     std::shared_ptr<dev::ThreadPool> m_threadPool;
-    /// I/O handler
-    std::shared_ptr<ba::io_service> m_ioService;
-    std::shared_ptr<ba::io_service::strand > m_strand;
-    std::shared_ptr<bi::tcp::acceptor> m_acceptor;
 
     /// representing to the network state
-    std::shared_ptr<AsioInterface> m_asioInterface;
-    std::shared_ptr<SocketFactory> m_socketFactory;
+    std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<SessionFactory> m_sessionFactory;
-    std::shared_ptr<ba::ssl::context> m_sslContext;
+
     MessageFactory::Ptr m_messageFactory;
 
     KeyPair m_alias;
     std::string m_listenHost = "";
     uint16_t m_listenPort = 0;
 
-    std::function<void(NetworkException, std::shared_ptr<SessionFace>)> m_connectionHandler;
+    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> m_connectionHandler;
 
     Mutex x_runTimer;
     bool m_run = false;

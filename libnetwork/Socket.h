@@ -60,7 +60,9 @@ public:
         LOG(INFO) << "CERTIFICATE LOAD SUC!";
     }
     ~Socket() { close(); }
-    bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
+
+    virtual bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
+
     virtual void close()
     {
         try
@@ -75,18 +77,18 @@ public:
         }
     }
 
-    bi::tcp::endpoint remoteEndpoint()
+    virtual bi::tcp::endpoint remoteEndpoint()
     {
         boost::system::error_code ec;
         return m_sslSocket->lowest_layer().remote_endpoint(ec);
     }
 
-    bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    virtual bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
+    virtual ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
 
-    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) { m_nodeIPEndpoint = _nodeIPEndpoint; }
-    boost::asio::ip::tcp::endpoint remote_endpoint() { return ref().remote_endpoint(); }
+    virtual const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
+    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) { m_nodeIPEndpoint = _nodeIPEndpoint; }
+    virtual boost::asio::ip::tcp::endpoint remote_endpoint() { return ref().remote_endpoint(); }
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;

@@ -24,9 +24,6 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <libnetwork/Host.h>
-#include <libnetwork/Network.h>
-#include <libnetwork/P2pFactory.h>
-#include <libp2p/P2PMsgHandler.h>
 #include <libdevcore/easylog.h>
 
 using namespace dev;
@@ -39,7 +36,6 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     std::string publicID = _pt.get<std::string>("p2p.public_ip", "127.0.0.1");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-    NetworkConfig network_config = NetworkConfig(publicID, listenIP, listenPort);
 
     std::map<NodeIPEndpoint, NodeID> nodes;
     for (auto it : _pt.get_child("p2p"))
@@ -74,30 +70,18 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         }
     }
 
-    auto ioService = std::make_shared<ba::io_service>();
-    auto strand = std::make_shared<boost::asio::io_service::strand>(*ioService);
-    auto acceptor = std::make_shared<bi::tcp::acceptor>(*ioService);
-    auto asioInterface = std::make_shared<AsioInterface>();
-    auto socketFactory = std::make_shared<SocketFactory>();
-    auto sessionFactory = std::make_shared<SessionFactory>();
-#if 0
-    auto host = std::make_shared<Host>("2.0", m_keyPair, network_config, asioInterface,
-        socketFactory, sessionFactory, m_SSLContext);
-#endif
+    auto asioInterface = std::make_shared<ASIOInterface>();
+    asioInterface->setIOService(std::make_shared<ba::io_service>());
+    asioInterface->setSSLContext(m_SSLContext);
+
     auto host = std::make_shared<Host>();
-    host->setIOService(ioService);
-    host->setStrand(strand);
-    host->setAcceptor(acceptor);
-    host->setASIOInterface(asioInterface);
-    host->setSocketFactory(socketFactory);
-    host->setSessionFactory(sessionFactory);
-    host->setSSLContext(m_SSLContext);
+    host->setASIOInterface(std::make_shared<ASIOInterface>());
+    host->setSessionFactory(std::make_shared<SessionFactory>());
     host->setMessageFactory(std::make_shared<P2PMessageFactory>());
 
-    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
     m_p2pService = std::make_shared<Service>();
     m_p2pService->setHost(host);
     m_p2pService->setStaticNodes(nodes);
-    m_p2pService->setP2PMsgHandler(p2pMsgHandler);
-    host->start();
+
+    m_p2pService->start();
 }

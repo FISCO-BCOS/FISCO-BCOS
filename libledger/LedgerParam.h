@@ -27,7 +27,6 @@
 #include <memory>
 #include <vector>
 
-#include "../libnetwork/Network.h"
 namespace dev
 {
 namespace ledger

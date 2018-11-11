@@ -25,14 +25,16 @@ public:
 
     virtual ~P2PSession() {};
 
-    virtual Session::Ptr session() { return m_session; }
-    virtual void setSession(std::shared_ptr<Session> session) { m_session = session; }
+    virtual SessionFace::Ptr session() { return m_session; }
+    virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
 
-    virtual NodeID id() { return m_nodeID; }
+    virtual NodeID nodeID() { return m_nodeID; }
+    virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
+
     virtual std::shared_ptr<std::set<std::string> > topics() { return m_topics; }
 
 private:
-    Session::Ptr m_session;
+    SessionFace::Ptr m_session;
     NodeID m_nodeID;
     std::shared_ptr<std::set<std::string> > m_topics;
 };

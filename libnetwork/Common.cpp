@@ -22,7 +22,6 @@
 #include "Common.h"
 
 #include <libdevcore/CommonIO.h>
-#include "Network.h"
 
 using namespace std;
 using namespace dev;
@@ -96,135 +95,6 @@ std::string p2p::reasonOf(DisconnectReason _r)
     }
 }
 
-void P2PMessage::encode(bytes& buffer)
-{
-    buffer.clear();  ///< It is not allowed to be assembled outside.
-    m_length = HEADER_LENGTH + m_buffer->size();
-
-    uint32_t length = htonl(m_length);
-    PROTOCOL_ID protocolID = htons(m_protocolID);
-    PACKET_TYPE packetType = htons(m_packetType);
-    uint32_t seq = htonl(m_seq);
-
-    buffer.insert(buffer.end(), (byte*)&length, (byte*)&length + sizeof(length));
-    buffer.insert(buffer.end(), (byte*)&protocolID, (byte*)&protocolID + sizeof(protocolID));
-    buffer.insert(buffer.end(), (byte*)&packetType, (byte*)&packetType + sizeof(packetType));
-    buffer.insert(buffer.end(), (byte*)&seq, (byte*)&seq + sizeof(seq));
-    buffer.insert(buffer.end(), m_buffer->begin(), m_buffer->end());
-}
-
-ssize_t P2PMessage::decode(const byte* buffer, size_t size)
-{
-    if (size < HEADER_LENGTH)
-    {
-        return PACKET_INCOMPLETE;
-    }
-
-    int32_t offset = 0;
-    m_length = ntohl(*((uint32_t*)&buffer[offset]));
-
-    /*if (m_length > MAX_LENGTH)
-    {
-        return PACKET_ERROR;
-    }*/
-
-    if (size < m_length)
-    {
-        return PACKET_INCOMPLETE;
-    }
-
-    offset += sizeof(m_length);
-    m_protocolID = ntohs(*((PROTOCOL_ID*)&buffer[offset]));
-    offset += sizeof(m_protocolID);
-    m_packetType = ntohs(*((PACKET_TYPE*)&buffer[offset]));
-    offset += sizeof(m_packetType);
-    m_seq = ntohl(*((uint32_t*)&buffer[offset]));
-    ///< TODO: assign to std::move
-    m_buffer->assign(&buffer[HEADER_LENGTH], &buffer[HEADER_LENGTH] + m_length - HEADER_LENGTH);
-
-    return m_length;
-}
-
-void P2PMessage::encodeAMOPBuffer(std::string const& topic)
-{
-    ///< check protocolID is AMOP message or not
-    if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
-    {
-        return;
-    }
-
-    ///< new buffer format:topic lenght + topic data + ori buffer data
-    m_buffer->insert(m_buffer->begin(), topic.begin(), topic.end());
-    uint32_t topicLen = htonl(topic.size());
-    m_buffer->insert(m_buffer->begin(), (byte*)&topicLen, (byte*)&topicLen + sizeof(topicLen));
-}
-
-ssize_t P2PMessage::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic)
-{
-    ///< check protocolID is AMOP message or not
-    if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
-    {
-        return PACKET_ERROR;
-    }
-
-    uint32_t topicLen = ntohl(*((uint32_t*)m_buffer->data()));
-    LOG(INFO) << "Message::decodeAMOPBuffer topic len=" << topicLen
-              << ", buffer size=" << m_buffer->size();
-    if (topicLen + 4 > m_buffer->size())
-    {
-        return PACKET_ERROR;
-    }
-    topic = std::string((char*)(m_buffer->data()) + 4, topicLen);
-    buffer->insert(buffer->end(), m_buffer->begin() + 4 + topicLen, m_buffer->end());
-
-    return buffer->size();
-}
-
-NodeSpec::NodeSpec(string const& _user)
-{
-    m_address = _user;
-    if (m_address.substr(0, 8) == "enode://" && m_address.find('@') == 136)
-    {
-        m_id = p2p::NodeID(m_address.substr(8, 128));
-        m_address = m_address.substr(137);
-    }
-    size_t colon = m_address.find_first_of(":");
-    if (colon != string::npos)
-    {
-        string ports = m_address.substr(colon + 1);
-        m_address = m_address.substr(0, colon);
-        size_t p2 = ports.find_first_of(".");
-        if (p2 != string::npos)
-        {
-            m_udpPort = stoi(ports.substr(p2 + 1));
-            m_tcpPort = stoi(ports.substr(0, p2));
-        }
-        else
-            m_tcpPort = m_udpPort = boost::lexical_cast<int>(ports);
-    }
-}
-
-NodeIPEndpoint NodeSpec::nodeIPEndpoint() const
-{
-    return NodeIPEndpoint(p2p::Network::resolveHost(m_address).address(), m_udpPort, m_tcpPort);
-}
-
-std::string NodeSpec::enode() const
-{
-    string ret = m_address;
-
-    if (m_tcpPort)
-        if (m_udpPort && m_tcpPort != m_udpPort)
-            ret += ":" + dev::toString(m_tcpPort) + "." + dev::toString(m_udpPort);
-        else
-            ret += ":" + dev::toString(m_tcpPort);
-    else if (m_udpPort)
-        ret += ":" + dev::toString(m_udpPort);
-
-    if (m_id)
-        return "enode://" + m_id.hex() + "@" + ret;
-    return ret;
-}
 namespace dev
 {
 std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep)
@@ -234,32 +104,3 @@ std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep
 }
 
 }  // namespace dev
-
-
-boost::asio::ip::address HostResolver::query(std::string host)
-{
-    ba::ip::address result;
-    try
-    {
-        ba::io_service ioService;
-        ba::ip::tcp::resolver resolver(ioService);
-        ba::ip::tcp::resolver::query query(host, "");
-
-        for (ba::ip::tcp::resolver::iterator i = resolver.resolve(query);
-             i != ba::ip::tcp::resolver::iterator(); ++i)
-        {
-            ba::ip::tcp::endpoint end = *i;
-            if (result.to_string().empty() || result.to_string() == "0.0.0.0")
-                result = end.address();
-            LOG(INFO) << "HostResolver::query " << host << ":" << end.address().to_string();
-        }
-    }
-    catch (std::exception const& _e)
-    {
-        LOG(WARNING) << "Exception in HostResolver::query " << _e.what();
-    }
-    if (result.to_string().empty() || result.to_string() == "0.0.0.0")
-        LOG(WARNING) << "HostResolver::query " << host << " Is Emtpy! ";
-
-    return result;
-}

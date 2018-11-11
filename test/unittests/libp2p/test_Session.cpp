@@ -43,7 +43,7 @@ public:
     virtual P2PMessage::Ptr buildMessage() override { return std::make_shared<P2PMessage>(); }
 };
 
-class MockASIO: public AsioInterface {
+class MockASIO: public ASIOInterface {
     virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace>& socket,
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code()) override
@@ -94,7 +94,7 @@ class MockASIO: public AsioInterface {
         socket->sslref().async_handshake(type, m_strand.wrap(handler));
     }
     /// default implementation of async_wait
-    virtual void async_wait(boost::asio::deadline_timer* m_timer,
+    virtual void asyncWait(boost::asio::deadline_timer* m_timer,
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code()) override
     {
@@ -136,10 +136,10 @@ public:
 
     virtual bool haveNetwork() const override { return run; }
 
-    virtual std::shared_ptr<AsioInterface>  asioInterface() override { return asio; }
+    virtual std::shared_ptr<ASIOInterface>  asioInterface() override { return asio; }
 
     bool run = false;
-    std::shared_ptr<AsioInterface> asio;
+    std::shared_ptr<ASIOInterface> asio;
 };
 
 class MockSocket: public Socket {

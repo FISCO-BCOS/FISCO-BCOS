@@ -42,7 +42,7 @@ bool SyncMsgPacket::decode(
         return false;
 
     packetType = (SyncPacketType)(RLP(frame.cropped(0, 1)).toInt<unsigned>() - c_syncPacketIDBase);
-    nodeId = _session->id();
+    nodeId = _session->nodeID();
     m_rlp = RLP(frame.cropped(1));
 
     return true;

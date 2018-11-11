@@ -53,7 +53,6 @@
 #include <functional>
 
 #include "Common.h"
-#include "ParseCert.h"
 #include "Session.h"
 
 using namespace std;
@@ -86,12 +85,10 @@ void Host::startAccept(boost::system::error_code boost_error)
     {
         LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_listenHost
                   << "), P2P Start Accept";
-        std::shared_ptr<SocketFace> socket =
-            m_socketFactory->create_socket(*m_ioService, *m_sslContext, NodeIPEndpoint());
+        auto socket = m_asioInterface->newSocket(NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
         /// define callback after accept connections
-        m_asioInterface->async_accept(*m_acceptor, socket, *m_strand,
-            [=](boost::system::error_code ec) {
+        m_asioInterface->asyncAccept(socket, [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
                 auto remoteEndpoint = socket->remote_endpoint();
                 LOG(INFO) << "P2P Recv Connect: " << remoteEndpoint.address().to_string() << ":"
@@ -113,21 +110,13 @@ void Host::startAccept(boost::system::error_code boost_error)
                            << "|ip:" << m_listenHost;
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-                m_asioInterface->set_verify_callback(socket, newVerifyCallback(endpointPublicKey));
-                m_asioInterface->async_handshake(socket, *m_strand, ba::ssl::stream_base::server,
-                    boost::bind(&Host::handshakeServer, this, ba::placeholders::error,
+                m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
+                m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::server,
+                    boost::bind(&Host::handshakeServer, shared_from_this(), ba::placeholders::error,
                         endpointPublicKey, socket));
             },
             boost_error);
     }
-}
-
-/// @return true: the given certificate has been expired
-/// @return false: the given certificate has not been expired
-bool Host::isExpired(ba::ssl::verify_context& ctx)
-{
-    ParseCert certParser(ctx);
-    return certParser.isExpire();
 }
 
 /**
@@ -145,12 +134,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
     return [host, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
         try
         {
-            /// check certificate expiration
-            if (host->isExpired(ctx))
-            {
-                LOG(ERROR) << "The Certificate has been expired";
-                return false;
-            }
             /// get the object points to certificate
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
@@ -260,25 +243,14 @@ void Host::handshakeServer(const boost::system::error_code& error,
  *              now include protocolVersion, clientVersion, caps and listenPort
  * @param _s : connected socket(used to init session object)
  */
-void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket, std::function<void(NetworkException, std::shared_ptr<SessionFace>)> handler)
+void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket, std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> handler)
 {
-    shared_ptr<Peer> p;
-    NodeIPEndpoint nodeIPEndpoint;
-    nodeIPEndpoint.address = socket->remoteEndpoint().address();
-    nodeIPEndpoint.tcpPort = socket->remoteEndpoint().port();
-    nodeIPEndpoint.host = socket->nodeIPEndpoint().host;
-
-    p = make_shared<Peer>(Node(nodeID, nodeIPEndpoint));
-    NodeIPEndpoint remote_endpoint(socket->remoteEndpoint().address(), socket->remoteEndpoint().port(),
-                    socket->remoteEndpoint().port());
-    p->setEndpoint(remote_endpoint);
-
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
     std::shared_ptr<SessionFace> ps = m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
 
     auto connectionHandler = m_connectionHandler;
-    m_threadPool->enqueue([ps, connectionHandler]() {
-        connectionHandler(NetworkException(0, ""), ps);
+    m_threadPool->enqueue([ps, connectionHandler, nodeID]() {
+        connectionHandler(NetworkException(0, ""), nodeID, ps);
     });
 
     LOG(INFO) << "start a new peer: " << nodeID;
@@ -294,30 +266,26 @@ void Host::start()
     /// if the p2p network has been stoped, then stop related service
     if (!m_run)
     {
-        if(!m_listenHost.empty() && m_listenPort > 0)
-        {
-            m_acceptor =
-                    std::make_shared<bi::tcp::acceptor>(*m_ioService, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(m_listenHost), m_listenPort));
-            boost::asio::socket_base::reuse_address optionReuseAddress(true);
-            m_acceptor->set_option(optionReuseAddress);
-        }
+        m_asioInterface->init(m_listenHost, m_listenPort);
 
         auto work = [=]
         {
-            while(m_run && m_acceptor && m_acceptor->is_open())
+            while(m_run)
             {
                 try
                 {
-                    startAccept();
-                    m_ioService->run();
+                    if(m_asioInterface->acceptor()) {
+                        startAccept();
+                    }
+
+                    m_asioInterface->run();
                 }
                 catch (std::exception &e)
                 {
                     LOG(WARNING) << "Exception in Network Thread:" << boost::diagnostic_information(e);
                 }
 
-                if (m_ioService->stopped())
-                    m_ioService->reset();
+                m_asioInterface->reset();
             }
 
             LOG(WARNING) << "Host exit";
@@ -346,14 +314,13 @@ void Host::asyncConnect(
     }
     LOG(INFO) << "Attempting connection to node "
               << "@" << _nodeIPEndpoint.name() << "," << _nodeIPEndpoint.host << " from " << id();
-    std::shared_ptr<SocketFace> socket =
-        m_socketFactory->create_socket(*m_ioService, *m_sslContext, _nodeIPEndpoint);
+    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
     // socket.reset(socket);
     auto endpoint = socket->remoteEndpoint();
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
 
     /// connect to the server
-    m_asioInterface->async_connect(socket, *m_strand, _nodeIPEndpoint,
+    m_asioInterface->asyncConnect(socket, _nodeIPEndpoint,
         [=](boost::system::error_code const& ec) {
             if (ec)
             {
@@ -368,9 +335,9 @@ void Host::asyncConnect(
             {
                 /// get the public key of the server during handshake
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-                m_asioInterface->set_verify_callback(socket, newVerifyCallback(endpointPublicKey));
+                m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
                 /// call handshakeClient after handshake succeed
-                m_asioInterface->async_handshake(socket, *m_strand, ba::ssl::stream_base::client,
+                m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
                     boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error, socket,
                         endpointPublicKey, callback, _nodeIPEndpoint));
             }
@@ -419,8 +386,8 @@ void Host::stop()
             return;
         // signal run() to prepare for shutdown and reset m_timer
         m_run = false;
-        m_acceptor->close();
-        m_ioService->stop();
+
+        m_asioInterface->stop();
     }
 }
 
