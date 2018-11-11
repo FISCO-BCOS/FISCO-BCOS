@@ -18,7 +18,6 @@ include_directories(../libodbc/include
 					../libodbc/include/ss_linux
 					../libodbc/include/sybase)
 					
-
 target_include_directories(ethcore PRIVATE ..)
 target_include_directories(ethcore PRIVATE ../utils)
 target_link_libraries(ethcore ${Dev_DEVCORE_LIBRARIES})

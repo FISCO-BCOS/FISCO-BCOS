@@ -1,3 +1,31 @@
+### V1.3.5
+
+(2018-10-25)
+
+* Update
+
+1. systemcontract的ConfigAction用tool.js设置时，默认10进制
+2. 搭链时生成的节点，默认eventlog关闭
+3. RPC接口eth_getTransactionReceipt的返回字段，带上16进制前缀"0x"
+4. tools/scripts/下，在生成创世块文件时，默认生成god账号
+5. 调整节点日志生成格式，默认只生成全局日志和stat日志
+
+* Add
+
+1. 增加静态编译的fisco-bcos程序，安装时默认采用静态程序
+
+* Fix
+
+1. 修复readthedocs文档问题
+2. 修复Session::write可能造成coredump的问题
+3. 修复PBFT转发包时，时间戳较大无法转发的问题
+4. 修复Ok.sol合约中的溢出问题
+
+* Delete
+
+1. 删除dfs和minupnp
+
+
 ### V1.3.4
 
 (2018-09-14)

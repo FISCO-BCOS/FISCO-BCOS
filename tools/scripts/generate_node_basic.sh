@@ -148,7 +148,7 @@ generate_config() {
         "networkid":"12345",
         "logverbosity":"4",
         "coverlog":"OFF",
-        "eventlog":"ON",
+        "eventlog":"OFF",
         "statlog":"ON",
         "logconf":"./log.conf"
 }' > $out_file
@@ -169,34 +169,34 @@ generate_logconf() {
     PERFORMANCE_TRACKING    =   false  
     MAX_LOG_FILE_SIZE       =   209715200 ## 200MB - Comment starts with two hashes (##)
     LOG_FLUSH_THRESHOLD     =   100  ## Flush after every 100 logs
-      
-* TRACE:  
-    ENABLED                 =   true
-    FILENAME                =   "./log/trace_log_%datetime{%Y%M%d%H}.log"  
-      
-* DEBUG:  
-    ENABLED                 =   true
-    FILENAME                =   "./log/debug_log_%datetime{%Y%M%d%H}.log"  
 
 * FATAL:  
-    ENABLED                 =   true  
-    FILENAME                =   "./log/fatal_log_%datetime{%Y%M%d%H}.log"
-      
+    ENABLED                 =   false
+    TO_FILE                 =   false
+    
 * ERROR:  
     ENABLED                 =   true
-    FILENAME                =   "./log/error_log_%datetime{%Y%M%d%H}.log"  
+    TO_FILE                 =   false
       
 * WARNING: 
      ENABLED                 =   true
-     FILENAME                =   "./log/warn_log_%datetime{%Y%M%d%H}.log"
+     TO_FILE                 =   false
  
 * INFO: 
     ENABLED                 =   true
-    FILENAME                =   "./log/info_log_%datetime{%Y%M%d%H}.log"  
+    TO_FILE                 =   false 
       
+* DEBUG:  
+    ENABLED                 =   false
+    TO_FILE                 =   false
+      
+* TRACE:  
+    ENABLED                 =   false
+    TO_FILE                 =   false
+
 * VERBOSE:  
-    ENABLED                 =   true
-    FILENAME                =   "./log/verbose_log_%datetime{%Y%M%d%H}.log"
+    ENABLED                 =   false
+    TO_FILE                 =   false
 ' > $out_file
     LOG_INFO "`readlink -f $out_file` is generated"
 }
