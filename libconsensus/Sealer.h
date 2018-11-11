@@ -61,6 +61,8 @@ public:
         m_consensusEngine(nullptr)
     {
         assert(m_txPool && m_blockSync && m_blockChain);
+        if (m_txPool->status().current > 0)
+            m_syncTxPool = true;
         /// register a handler to be called once new transactions imported
         m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
         m_blockSubmitted = m_blockChain->onReady([=]() { this->onBlockChanged(); });
@@ -119,11 +121,6 @@ protected:
         if (enough)
         {
             SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num << std::endl;
-            m_syncTxPool = false;
-        }
-        else if (m_txPool->status().current > 0)
-        {
-            m_syncTxPool = true;
         }
         return enough;
     }
