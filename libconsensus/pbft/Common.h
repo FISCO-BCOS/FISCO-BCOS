@@ -37,6 +37,15 @@ namespace dev
 {
 namespace consensus
 {
+struct PBFTCacheMsg
+{
+    PBFTCacheMsg() = default;
+    PBFTCacheMsg(std::string const& _hash, int64_t _height) : blockHash(_hash), height(_height) {}
+    bool operator<(PBFTCacheMsg const& rhs) const { return height < rhs.height; }
+    bool operator==(PBFTCacheMsg const& rhs) const { return blockHash == rhs.blockHash; }
+    int64_t height = 0;
+    std::string blockHash = "";
+};
 // for pbft
 enum PBFTPacketType : byte
 {
