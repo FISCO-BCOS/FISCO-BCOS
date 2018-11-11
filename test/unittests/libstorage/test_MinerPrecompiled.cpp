@@ -21,7 +21,7 @@ struct MinerPrecompiledFixture
     MinerPrecompiledFixture()
     {
         blockInfo.hash = h256(0);
-        blockInfo.number = u256(0);
+        blockInfo.number = 0;
         context = std::make_shared<ExecutiveContext>();
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();

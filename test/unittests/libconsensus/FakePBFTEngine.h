@@ -55,7 +55,10 @@ public:
     {}
 
     KeyPair const& keyPair() const { return m_keyPair; }
-    const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
+    const std::shared_ptr<PBFTBroadcastCache<PBFTCacheMsg> > broadCastCache() const
+    {
+        return m_broadCastCache;
+    }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
     TimeManager const& timeManager() const { return m_timeManager; }
     TimeManager& mutableTimeManager() { return m_timeManager; }
@@ -103,13 +106,13 @@ public:
         return PBFTEngine::transDataToMessage(data, packetType, protocolId);
     }
 
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+    bool broadcastMsg(unsigned const& packetType, PBFTCacheMsg const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>())
     {
         return PBFTEngine::broadcastMsg(packetType, key, data, filter);
     }
 
-    bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)
+    bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, PBFTCacheMsg const& key)
     {
         return PBFTEngine::broadcastFilter(nodeId, packetType, key);
     }

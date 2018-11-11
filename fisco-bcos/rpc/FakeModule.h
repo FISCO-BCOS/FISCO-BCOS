@@ -233,7 +233,7 @@ public:
     };
     virtual ~MockBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, dev::h256 const& parentStateRoot) override
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override
     {
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;

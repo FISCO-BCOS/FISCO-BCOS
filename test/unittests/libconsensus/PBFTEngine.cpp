@@ -138,11 +138,13 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     bytes data;
     prepare_req.encode(data);
     /// case1: all peer is not the miner, stop broadcasting
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
+    PBFTCacheMsg msg(prepare_req.sig.hex(), prepare_req.height);
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, msg, ref(data));
+
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), PrepareReqPacket, msg) == false);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == false);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == false);
+                    peer2_keyPair.pub(), PrepareReqPacket, msg) == false);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
 
@@ -150,11 +152,13 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
+
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, msg, ref(data));
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), PrepareReqPacket, msg) == true);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == false);
+                    peer2_keyPair.pub(), PrepareReqPacket, msg) == false);
+
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
 
@@ -162,11 +166,11 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_minerList.push_back(peer2_keyPair.pub());
     fake_pbft.consensus()->appendMiner(peer2_keyPair.pub());
     FakePBFTMiner(fake_pbft);
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data));
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, msg, ref(data));
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), PrepareReqPacket, msg) == true);
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer2_keyPair.pub(), PrepareReqPacket, msg) == true);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 1);
 
@@ -179,9 +183,9 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     /// fake the filter with node id of peer3
     std::unordered_set<h512> filter;
     filter.insert(peer3_keyPair.pub());
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(data), filter);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer3_keyPair.pub(), PrepareReqPacket, prepare_req.sig.hex()) == true);
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, msg, ref(data), filter);
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer3_keyPair.pub(), PrepareReqPacket, msg) == true);
     compareAsyncSendTime(fake_pbft, peer3_keyPair.pub(), 0);
 }
 
@@ -212,7 +216,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastViewChangeReq)
 
     ViewChangeReq viewChange_req(fake_pbft.consensus()->keyPair(), highest.number(),
         fake_pbft.consensus()->toView(), 0, highest.hash());
-    std::string key = viewChange_req.sig.hex() + toJS(viewChange_req.view);
+    PBFTCacheMsg key(viewChange_req.sig.hex() + toJS(viewChange_req.view), viewChange_req.height);
 
     KeyPair peer_keyPair = KeyPair::create();
     /// append session info
@@ -366,13 +370,14 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() !=
                 fake_pbft.consensus()->reqCache()->committedPrepareCache());
 
+    PBFTCacheMsg msg(prepare_req.sig.hex(), prepare_req.height);
     /// check backupMsg failed
     bytes data = bytes();
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
 
     //// check no broadcast
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), CommitReqPacket, prepare_req.sig.hex()) == false);
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), CommitReqPacket, msg) == false);
 
     /// case2: valid view
     fake_pbft.consensus()->setView(prepare_req.view);

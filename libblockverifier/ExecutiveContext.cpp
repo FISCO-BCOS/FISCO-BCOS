@@ -133,8 +133,8 @@ void ExecutiveContext::setPrecompiledContract(
     m_precompiledContract = precompiledContract;
 }
 
-void ExecutiveContext::dbCommit()
+void ExecutiveContext::dbCommit(Block& block)
 {
-    m_stateFace->dbCommit(m_blockInfo.hash, m_blockInfo.number.convert_to<int64_t>());
-    m_memoryTableFactory->commitDB(m_blockInfo.hash, m_blockInfo.number.convert_to<int64_t>());
+    m_stateFace->dbCommit(block.header().hash(), block.header().number());
+    m_memoryTableFactory->commitDB(block.header().hash(), block.header().number());
 }

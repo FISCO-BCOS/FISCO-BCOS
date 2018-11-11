@@ -43,12 +43,12 @@ public:
         if (m_channelRPCHttpServer)
         {
             m_channelRPCHttpServer->StopListening();
-            LOG(INFO) << "ChannelRPCHttpServer stoped.";
+            INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer stoped.";
         }
         if (m_jsonrpcHttpServer)
         {
             m_jsonrpcHttpServer->StopListening();
-            LOG(INFO) << "JsonrpcHttpServer stoped.";
+            INITIALIZER_LOG(INFO) << "JsonrpcHttpServer stoped.";
         }
     };
 
