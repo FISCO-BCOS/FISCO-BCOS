@@ -43,7 +43,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <libp2p/P2PMessage.h>
 
+using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::channel;
@@ -310,11 +312,11 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 }
 
 void dev::ChannelRPCServer::onReceiveChannelMessage(
-    p2p::P2PException, std::shared_ptr<p2p::Session> s, p2p::Message::Ptr msg)
+        p2p::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
 {
     uint32_t topicLen = ntohl(*((uint32_t*)msg->buffer()->data()));
     auto data = make_shared<bytes>(msg->buffer()->begin() + 4 + topicLen, msg->buffer()->end());
-    onNodeRequest(s->id(), data);
+    onNodeRequest(s->nodeID(), data);
 }
 
 void dev::ChannelRPCServer::onClientTopicRequest(
@@ -333,7 +335,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 
         Json::Value root;
         ss >> root;
-        std::function<void(P2PException, std::shared_ptr<dev::p2p::Session>, p2p::Message::Ptr)>
+        std::function<void(dev::p2p::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, p2p::P2PMessage::Ptr)>
             fp = std::bind(&ChannelRPCServer::onReceiveChannelMessage, shared_from_this(),
                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         std::shared_ptr<std::set<std::string> > topics = std::make_shared<std::set<std::string> >();
@@ -403,11 +405,11 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             it->second.failedNodeIDs.insert(it->second.toNodeID);
             auto buffer = std::make_shared<bytes>();
             it->second.message->encode(*buffer);
-            auto msg = make_shared<p2p::Message>();
+            auto msg = std::dynamic_pointer_cast<p2p::P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
             msg->setBuffer(buffer);
             msg->setProtocolID(dev::eth::ProtocolID::Topic);
             msg->setPacketType(0u);
-            msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
+            msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
 
             m_service->sendMessageByTopic(topic, msg);
         }
@@ -458,11 +460,11 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                     message->setType(0x31);
                     auto buffer = std::make_shared<bytes>();
                     message->encode(*buffer);
-                    auto msg = make_shared<p2p::Message>();
+                    auto msg = std::dynamic_pointer_cast<p2p::P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
                     msg->setBuffer(buffer);
                     msg->setProtocolID(dev::eth::ProtocolID::Topic);
                     msg->setPacketType(0u);
-                    msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
+                    msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
                     m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
                 }
             }
@@ -471,11 +473,11 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                 CHANNEL_LOG(DEBUG) << "from SDK channel2 response:" << message->seq();
                 auto buffer = std::make_shared<bytes>();
                 message->encode(*buffer);
-                auto msg = make_shared<p2p::Message>();
+                auto msg = std::dynamic_pointer_cast<p2p::P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
                 msg->setBuffer(buffer);
                 msg->setProtocolID(dev::eth::ProtocolID::Topic);
                 msg->setPacketType(0u);
-                msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
+                msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
                 m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
 
                 CHANNEL_LOG(DEBUG) << "send message to node:" << it->second.fromNodeID;
@@ -579,11 +581,11 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 
                 auto buffer = std::make_shared<bytes>();
                 message->encode(*buffer);
-                auto msg = make_shared<p2p::Message>();
+                auto msg = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
                 msg->setBuffer(buffer);
                 msg->setProtocolID(dev::eth::ProtocolID::Topic);
                 msg->setPacketType(0u);
-                msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
+                msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
                 m_service->sendMessageByNodeID(it->second.fromNodeID, msg);
             }
         }
@@ -604,11 +606,11 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
                     it->second.failedNodeIDs.insert(it->second.toNodeID);
                     auto buffer = std::make_shared<bytes>();
                     it->second.message->encode(*buffer);
-                    auto msg = make_shared<p2p::Message>();
+                    auto msg = std::dynamic_pointer_cast<p2p::P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
                     msg->setBuffer(buffer);
                     msg->setProtocolID(dev::eth::ProtocolID::Topic);
                     msg->setPacketType(0u);
-                    msg->setLength(p2p::Message::HEADER_LENGTH + msg->buffer()->size());
+                    msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
 
                     m_service->sendMessageByTopic(topic, msg);
                 }

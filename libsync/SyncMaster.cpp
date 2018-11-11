@@ -76,7 +76,7 @@ SyncStatus SyncMaster::status() const
     return res;
 }
 
-string const SyncMaster::syncInfo() const
+std::string const SyncMaster::syncInfo() const
 {
     json_spirit::Object syncInfo;
     syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));

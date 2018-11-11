@@ -77,11 +77,6 @@ void Service::heartBeat() {
         m_host->asyncConnect(it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     }
 
-#if 0
-    //Broadcast channel topic
-    auto message = m_host->messageFactory()->buildMessage();
-#endif
-
     auto self = shared_from_this();
     auto timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
     timer->async_wait([self](const boost::system::error_code& error) {
@@ -122,6 +117,23 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     }
 
     p2pSession->session()->start();
+}
+
+void Service::onDisconnect(NetworkException e, NodeID nodeID) {
+    {
+        RecursiveGuard l(x_sessions);
+        m_sessions.erase(nodeID);
+    }
+
+    {
+        RecursiveGuard l(x_nodes);
+        for(auto it: m_staticNodes) {
+            if(it.second == nodeID) {
+                it.second = NodeID();
+                break;
+            }
+        }
+    }
 }
 
 void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message, P2PSession::Ptr p2pSession) {
@@ -528,6 +540,21 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     P2PMSG_LOG(DEBUG) << "[#getPeersByTopic] [topic/peers size]: " << topic << "/"
                       << nodeList.size();
     return nodeList;
+}
+
+bool Service::isConnected(NodeID nodeID) {
+    RecursiveGuard l(x_sessions);
+    auto it = m_sessions.find(nodeID);
+
+    if(it == m_sessions.end()) {
+        return false;
+    }
+
+    if(!it->second->running()) {
+        return false;
+    }
+
+    return true;
 }
 
 }  // namespace p2p

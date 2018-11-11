@@ -14,8 +14,14 @@ using namespace dev;
 using namespace dev::p2p;
 
 void P2PSession::start() {
+    m_run = true;
     m_session->start();
     heartBeat();
+}
+
+void P2PSession::stop() {
+    m_run = false;
+    m_session->disconnect(UserReason);
 }
 
 void P2PSession::heartBeat() {

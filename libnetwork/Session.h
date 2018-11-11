@@ -41,7 +41,6 @@ namespace dev
 {
 namespace p2p
 {
-class Peer;
 class Host;
 
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
@@ -59,7 +58,7 @@ public:
     virtual bool isConnected() const override { return m_socket->isConnected(); }
 
     virtual void asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback) override;
-    virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
+    //virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
 

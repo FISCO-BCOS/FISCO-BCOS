@@ -36,7 +36,7 @@
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 
-
+using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::ledger;
@@ -99,7 +99,7 @@ static void startSync(Params& params)
     initialize->init("./config.conf");
 
     auto p2pInitializer = initialize->p2pInitializer();
-    shared_ptr<P2PInterface> p2pService = p2pInitializer->p2pService();
+    std::shared_ptr<P2PInterface> p2pService = p2pInitializer->p2pService();
 
     GROUP_ID groupId = 1;
     std::map<GROUP_ID, h512s> groudID2NodeList;
@@ -117,7 +117,7 @@ static void startSync(Params& params)
     ///< Read the KeyPair of node from configuration file.
     auto nodePrivate = contents(getDataDir().string() + "/node.private");
     KeyPair key_pair;
-    string pri = asString(nodePrivate);
+    std::string pri = asString(nodePrivate);
     if (pri.size() >= 64)
     {
         key_pair = KeyPair(Secret(fromHex(pri.substr(0, 64))));

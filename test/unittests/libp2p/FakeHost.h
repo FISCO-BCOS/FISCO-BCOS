@@ -24,12 +24,11 @@
 
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
-#include <libinitializer/SecureInitiailizer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <libnetwork/Host.h>
-#include <libnetwork/P2pFactory.h>
 #include <libnetwork/Session.h>
 #include <libnetwork/SessionFace.h>
 

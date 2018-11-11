@@ -67,7 +67,7 @@ class Node;
 extern const NodeIPEndpoint UnspecifiedNodeIPEndpoint;
 extern const Node UnspecifiedNode;
 
-using NodeID = h512;
+using NodeID = dev::h512;
 /// Nice name for vector of NodeID.
 using NodeIDs = std::vector<NodeID>;
 

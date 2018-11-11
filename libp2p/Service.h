@@ -27,6 +27,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <unordered_map>
 #include <memory>
 #include <libnetwork/Host.h>
 #include "P2PInterface.h"
@@ -40,7 +41,7 @@ namespace p2p
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service();
+    Service() {};
     virtual ~Service() {}
 
     typedef std::shared_ptr<Service> Ptr;
@@ -77,20 +78,21 @@ public:
 
     virtual SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override;
 
-    virtual bool isConnected(NodeID _nodeID) override;
+    virtual bool isConnected(NodeID nodeID) override;
 
+    virtual h512s getNodeListByGroupID(GROUP_ID groupID) override { return m_groupID2NodeList[groupID]; }
     virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> _groupID2NodeList) override { m_groupID2NodeList = _groupID2NodeList; }
 
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
     virtual std::shared_ptr<std::vector<std::string>> topics() override { return m_topics; }
-    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) { RecursiveMutex(x_topics); m_topics = _topics; }
+    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override { RecursiveMutex(x_topics); m_topics = _topics; ++m_topicSeq; }
 
     virtual std::shared_ptr<Host> host() { return m_host; }
     virtual void setHost(std::shared_ptr<Host> host) { m_host = host; }
 
-    virtual P2PMessageFactory::Ptr p2pMessageFactory() { return m_p2pMessageFactory; }
+    virtual P2PMessageFactory::Ptr p2pMessageFactory() override { return m_p2pMessageFactory; }
     virtual void setP2PMessageFactory(P2PMessageFactory::Ptr _p2pMessageFactory) { m_p2pMessageFactory = _p2pMessageFactory; }
 
 private:
@@ -99,6 +101,8 @@ private:
     bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
 
     std::map<NodeIPEndpoint, NodeID> m_staticNodes;
+    RecursiveMutex x_nodes;
+
     std::shared_ptr<Host> m_host;
 
     std::unordered_map<NodeID, P2PSession::Ptr> m_sessions;

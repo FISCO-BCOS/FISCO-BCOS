@@ -53,7 +53,7 @@ static size_t const c_maxDownloadingBlockQueueSize = 4096;
 static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 2;
 
 static unsigned const c_syncPacketIDBase = 1;
-static size_t const c_maxPayload = dev::p2p::Message::MAX_LENGTH - 2048;
+static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;

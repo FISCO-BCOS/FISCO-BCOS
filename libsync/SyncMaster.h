@@ -83,7 +83,7 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const override;
-    virtual string const syncInfo() const override;
+    virtual std::string const syncInfo() const override;
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // virtual h256 latestBlockSent() override;

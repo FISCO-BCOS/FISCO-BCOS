@@ -30,6 +30,7 @@ public:
 
     virtual void start();
     virtual void stop();
+    virtual bool running() { return m_run; }
     virtual void heartBeat();
 
     virtual SessionFace::Ptr session() { return m_session; }
@@ -50,6 +51,7 @@ private:
     std::weak_ptr<Service> m_service;
     uint32_t failTimes = 0;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
+    bool m_run = false;
 
     const uint32_t HEARTBEAT_INTERVEL = 5000;
     const uint32_t MAX_IDLE = HEARTBEAT_INTERVEL * 10;

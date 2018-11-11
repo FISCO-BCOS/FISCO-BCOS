@@ -8,6 +8,8 @@
 #pragma once
 
 #include <libnetwork/Common.h>
+#include <memory>
+#include <libdevcore/FixedHash.h>
 
 namespace dev {
 namespace p2p {
@@ -25,21 +27,21 @@ public:
     virtual ~P2PMessage() {}
 
     virtual uint32_t length() override { return m_length; }
-    void setLength(uint32_t _length) { m_length = _length; }
+    virtual void setLength(uint32_t _length) { m_length = _length; }
 
-    PROTOCOL_ID protocolID() { return m_protocolID; }
-    void setProtocolID(PROTOCOL_ID _protocolID) { m_protocolID = _protocolID; }
-    PACKET_TYPE packetType() { return m_packetType; }
-    void setPacketType(PACKET_TYPE _packetType) { m_packetType = _packetType; }
+    virtual PROTOCOL_ID protocolID() { return m_protocolID; }
+    virtual void setProtocolID(PROTOCOL_ID _protocolID) { m_protocolID = _protocolID; }
+    virtual PACKET_TYPE packetType() { return m_packetType; }
+    virtual void setPacketType(PACKET_TYPE _packetType) { m_packetType = _packetType; }
 
-    uint32_t seq() { return m_seq; }
-    void setSeq(uint32_t _seq) { m_seq = _seq; }
+    virtual uint32_t seq() override { return m_seq; }
+    virtual void setSeq(uint32_t _seq) { m_seq = _seq; }
 
-    std::shared_ptr<bytes> buffer() { return m_buffer; }
-    void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
+    virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
+    virtual void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
 
-    bool isRequestPacket() { return (m_protocolID > 0); }
-    PROTOCOL_ID getResponceProtocolID()
+    virtual bool isRequestPacket() { return (m_protocolID > 0); }
+    virtual PROTOCOL_ID getResponceProtocolID()
     {
         if (isRequestPacket())
             return -m_protocolID;
@@ -56,7 +58,7 @@ public:
     ///< This buffer param is the m_buffer member stored in struct Messger, and the topic info will
     ///< be encoded in buffer.
     void encodeAMOPBuffer(std::string const& topic);
-    ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
+    virtual ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
 
     void printMsgWithPrefix(std::string const& strPrefix)
     {

@@ -30,13 +30,12 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
-#include <libp2p/Host.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
-#include "../libnetwork/Session.h"
-#include "../libp2p/P2PInterface.h"
+#include <libnetwork/Session.h>
+#include <libp2p/P2PInterface.h>
 
 namespace dev
 {
@@ -183,7 +182,7 @@ protected:
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
                 req.setOtherField(
-                    u256(peer_index), session->id(), session->nodeIPEndpoint().name());
+                    u256(peer_index), session->nodeID(), session->session()->nodeIPEndpoint().name());
         }
         return valid;
     }

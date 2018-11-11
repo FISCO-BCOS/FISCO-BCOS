@@ -47,7 +47,6 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 class SessionFace
 {
 public:
-    SessionFace();
     virtual ~SessionFace() {};
 
     typedef std::shared_ptr<SessionFace> Ptr;
@@ -58,7 +57,7 @@ public:
     virtual bool isConnected() const = 0;
 
     virtual void asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc()) = 0;
-    virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
+    //virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
 
     virtual void setMessageHandler(std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)> messageHandler) = 0;
 

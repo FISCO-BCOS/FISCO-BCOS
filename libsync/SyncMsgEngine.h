@@ -32,7 +32,7 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
-
+#include <libp2p/P2PMessage.h>
 
 namespace dev
 {
@@ -62,8 +62,8 @@ public:
         dev::p2p::P2PMessage::Ptr _msg);
 
 private:
-    bool checkSession(std::shared_ptr<dev::p2p::SessionFace> _session);
-    bool checkMessage(dev::p2p::Message::Ptr _msg);
+    bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
+    bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
     bool interpret(SyncMsgPacket const& _packet);
 
 private:

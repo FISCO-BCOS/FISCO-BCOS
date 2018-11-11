@@ -99,7 +99,7 @@ public:
         SYNCLOG(TRACE) << "[Commit] Conencus block commit "
                           "[blockNumber/txNumber/totalTxCommitThisNode/blockHash/parentHash]: "
                        << currentNumber + 1 << "/" << txs.size() << "/" << m_totalTxCommit << "/"
-                       << block->headerHash() << "/" << parentHash << endl;
+                       << block->headerHash() << "/" << parentHash << std::endl;
     }
 
 private:
@@ -112,7 +112,7 @@ private:
         header->encode(blockHeaderBytes);
 
         // Generate block
-        BlockPtr block = make_shared<Block>();
+        BlockPtr block = std::make_shared<Block>();
         block->setSigList(sigList(_txs.size()));
         block->setTransactions(_txs);
 
@@ -124,7 +124,7 @@ private:
 
     BlockHeaderPtr newBlockHeader(dev::h256 _parentHash, int64_t _currentNumner)
     {
-        BlockHeaderPtr blockHeader = make_shared<BlockHeader>();
+        BlockHeaderPtr blockHeader = std::make_shared<BlockHeader>();
         blockHeader->setParentHash(_parentHash);
         blockHeader->setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
         blockHeader->setLogBloom(LogBloom(0));

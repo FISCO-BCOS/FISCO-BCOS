@@ -177,12 +177,14 @@ std::string Rpc::version()
 {
     try
     {
+#if 0
         auto host = service()->host();
         if (!host)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
+#endif
 
-        return host->clientVersion();
+        return "FISCO-BCOS 2.0";
     }
     catch (JsonRpcException& e)
     {
@@ -200,22 +202,21 @@ Json::Value Rpc::peers()
     {
         Json::Value response = Json::Value(Json::arrayValue);
 
+#if 0
         auto host = service()->host();
         if (!host)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
+#endif
 
-        auto sessions = host->sessions();
+        auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
-            auto session = it->second;
             Json::Value node;
-            if (!session)
-                response.append("This is a not session node.");
-            node["NodeID"] = session->id().hex();
-            node["IP & Port"] = session->peer()->endpoint().name();
+            node["NodeID"] = it->nodeID.hex();
+            node["IP & Port"] = it->nodeIPEndpoint.name();
             node["Topic"] = Json::Value(Json::arrayValue);
-            for (std::string topic : *(session->topics()))
+            for (std::string topic : it->topics)
                 node["Topic"].append(topic);
             response.append(node);
         }
@@ -243,16 +244,14 @@ Json::Value Rpc::groupPeers(int _groupID)
 
         Json::Value response = Json::Value(Json::arrayValue);
 
-        auto host = service()->host();
+#if 0
+        //auto host = service()->host();
         if (!host)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
+#endif
 
-        h512s _nodeList;
-        bool flag = host->getNodeListByGroupID(_groupID, _nodeList);
-        if (!flag)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        auto _nodeList = service()->getNodeListByGroupID(_groupID);
 
         for (auto it = _nodeList.begin(); it != _nodeList.end(); ++it)
         {

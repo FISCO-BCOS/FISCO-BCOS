@@ -32,8 +32,8 @@
 #include <libdevcore/ThreadPool.h>
 #include <chrono>
 
+#include "SessionFace.h"
 #include "ASIOInterface.h"
-#include "Host.h"
 #include "Host.h"
 
 using namespace dev;

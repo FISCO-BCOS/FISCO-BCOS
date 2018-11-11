@@ -32,7 +32,7 @@ using namespace dev::txpool;
 void SyncMsgEngine::messageHandler(
     NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
-    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->nodeID() << endl;
+    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->nodeID() << std::endl;
     if (!checkSession(_session) || !checkMessage(_msg))
     {
         SYNCLOG(WARNING) << "[Rcv] [Packet] Reject packet: [reason]: session or msg illegal"

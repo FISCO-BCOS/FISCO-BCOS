@@ -49,7 +49,7 @@ namespace p2p
 class Host: public std::enable_shared_from_this<Host>
 {
 public:
-    Host();
+    Host() {};
     virtual ~Host();
 
     typedef std::shared_ptr<Host> Ptr;
