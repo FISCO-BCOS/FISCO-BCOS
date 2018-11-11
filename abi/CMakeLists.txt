@@ -6,8 +6,6 @@ file(GLOB HEADERS "*.h")
 
 add_library(abi ${SRC_LIST} ${HEADERS})
 
-eth_use(abi OPTIONAL Miniupnpc)
-
 target_include_directories(abi PRIVATE ..)
 target_link_libraries(abi ${Dev_DEVCORE_LIBRARIES})
 target_link_libraries(abi devcore)

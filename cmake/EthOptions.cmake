@@ -15,7 +15,6 @@ macro(configure_project)
 	eth_default_option(FATDB ON)
 	eth_default_option(ROCKSDB OFF)
 	eth_default_option(PARANOID OFF)
-	eth_default_option(MINIUPNPC ON)
 	
 	#ARCH TYPE
 	eth_default_option(STATIC_BUILD OFF)
@@ -28,6 +27,10 @@ macro(configure_project)
 	eth_default_option(ENCRYPTTYPE OFF)
 	eth_default_option(GROUPSIG OFF)
 	eth_default_option(ZKG_VERIFY OFF)
+	
+	#Boost
+	eth_default_option(BUILD_BOOST ON)
+
 	# Resolve any clashes between incompatible options.
 	if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
 		if (PARANOID)
@@ -88,6 +91,12 @@ macro(configure_project)
 	if (ZKG_VERIFY)
 		add_definitions(-DETH_ZKG_VERIFY)
 	endif()
+	
+	
+	if(BUILD_BOOST)
+		add_definitions(-DBUILD_BOOST)
+	endif ()
+	
 	# CI Builds should provide (for user builds this is totally optional)
 	# -DBUILD_NUMBER - A number to identify the current build with. Becomes TWEAK component of project version.
 	# -DVERSION_SUFFIX - A string to append to the end of the version string where applicable.
@@ -118,6 +127,7 @@ macro(print_config NAME)
 	message("-- TARGET_PLATFORM  Target platform                          ${CMAKE_SYSTEM_NAME}")
 	message("-- STATIC_BUILD                                              ${STATIC_BUILD}")
 	message("-- ARCH_TYPE                                                 ${ARCH_TYPE}")
+	message("-- BUILD_BOOST                                               ${BUILD_BOOST}")
 	message("--------------------------------------------------------------- features")
 if (SUPPORT_CPUID)
 	message("--                  Hardware identification support          ${CPUID_FOUND}")
@@ -137,9 +147,6 @@ if (SUPPORT_ROCKSDB)
 endif()
 if (SUPPORT_PARANOID)
 	message("-- PARANOID         -                                        ${PARANOID}")
-endif()
-if (SUPPORT_MINIUPNPC)
-	message("-- MINIUPNPC        -                                        ${MINIUPNPC}")
 endif()
 	message("------------------------------------------------------------- components")
 if (SUPPORT_TESTS)

@@ -93,11 +93,13 @@ void GenKey::setDataKeyPath(string datakeyPath)
 
 string GenKey::getKeycenterData(string const& b64data,string const& kcUrl,int keyType)
 {
+	string strJson = "";
+	string reqData = "";
+#ifdef USE_LIBCURL
 	CURL *curl;
 	CURLcode res;
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	curl = curl_easy_init();
-	string strJson = "";
 	if (keyType == KEY_DATA)
 	{
 		strJson = "{\"reqdata\": \""+ b64data + "\", \"id\": 3, \"jsonrpc\": \"2.0\"}";
@@ -105,7 +107,6 @@ string GenKey::getKeycenterData(string const& b64data,string const& kcUrl,int ke
 	{                    
 		strJson = "{\"reqdata\": \""+ b64data + "\", \"id\": 1, \"jsonrpc\": \"2.0\"}";
 	}
-	string reqData = "";
 	if(NULL != curl)
 	{
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
@@ -126,6 +127,7 @@ string GenKey::getKeycenterData(string const& b64data,string const& kcUrl,int ke
 		curl_easy_cleanup(curl);
 	}
 	curl_global_cleanup();
+#endif
 	return reqData;
 }
 
