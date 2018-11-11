@@ -28,10 +28,13 @@
  */
 #pragma once
 #include <libnetwork/Common.h>
+#include <libp2p/P2PMessage.h>
 
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
+
+
 #include <set>
 
 namespace dev

@@ -88,7 +88,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options = Options()
         handler->m_startTime = utcTime();
     }
 
-    m_seq2Callback->insert(std::make_pair(message->seq(), handler));
+    addSeqCallback(message->seq(), handler);
+    //m_seq2Callback->insert(std::make_pair(message->seq(), handler));
 
     auto buffer = std::make_shared<bytes>();
     message->encode(*buffer);
@@ -224,17 +225,24 @@ void Session::drop(DisconnectReason _reason)
         }
         if (it.second->callbackFunc)
         {
-            LOG(INFO) << "Session::drop, call callbackFunc by seq=" << it.first;
-            NetworkException e(
-                P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]);
+            LOG(TRACE) << "Session::drop, call callbackFunc by seq=" << it.first;
             if(server) {
-                server->threadPool()->enqueue([=]() {
-                    it.second->callbackFunc(e, Message::Ptr());
+                auto callback = it.second;
+                server->threadPool()->enqueue([callback]() {
+                    callback->callbackFunc(NetworkException(P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]), Message::Ptr());
                 });
             }
         }
     }
     m_seq2Callback->clear();
+
+    if(server && m_messageHandler) {
+        auto handler = m_messageHandler;
+        auto self = shared_from_this();
+        server->threadPool()->enqueue([handler, self]() {
+            handler(NetworkException(P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]), self, Message::Ptr());
+        });
+    }
 
     bi::tcp::socket& socket = m_socket->ref();
     if (m_socket->isConnected())
@@ -354,9 +362,15 @@ void Session::onMessage(
             }
 
             if(it->second->callbackFunc) {
-                server->threadPool()->enqueue([=]() {
-                    it->second->callbackFunc(e, message);
-                    m_seq2Callback->erase(message->seq());
+                auto callback = it->second;
+                auto self = std::weak_ptr<Session>(shared_from_this());
+                server->threadPool()->enqueue([e, callback, self, message]() {
+                    callback->callbackFunc(e, message);
+
+                    auto s = self.lock();
+                    if(s) {
+                        s->removeSeqCallback(message->seq());
+                    }
                 });
             }
         }

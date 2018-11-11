@@ -36,12 +36,26 @@ namespace p2p
 const uint32_t CHECK_INTERVEL = 5000;
 
 void Service::start() {
-    m_host->start();
+    if(!m_run) {
+        m_run = true;
+        m_host->start();
 
-    heartBeat();
+        heartBeat();
+    }
+}
+
+void Service::stop() {
+    if(m_run) {
+        m_run = false;
+        m_host->stop();
+    }
 }
 
 void Service::heartBeat() {
+    if(!m_run) {
+        return;
+    }
+
     std::map<NodeIPEndpoint, NodeID> staticNodes;
     std::unordered_map<NodeID, P2PSession::Ptr> sessions;
 
@@ -51,6 +65,7 @@ void Service::heartBeat() {
         staticNodes = m_staticNodes;
     }
 
+    //Reconnect all nodes
     for(auto it: staticNodes) {
         if(it.second != NodeID()) {
             auto its = sessions.find(it.second);
@@ -62,11 +77,10 @@ void Service::heartBeat() {
         m_host->asyncConnect(it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     }
 
-    for(auto it: sessions) {
-        if(it.second->session()->isConnected()) {
-            auto message = m_host->messageFactory()->buildMessage();
-        }
-    }
+#if 0
+    //Broadcast channel topic
+    auto message = m_host->messageFactory()->buildMessage();
+#endif
 
     auto self = shared_from_this();
     auto timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
@@ -81,7 +95,7 @@ void Service::heartBeat() {
 }
 
 void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session) {
-    if(e) {
+    if(e.errorCode()) {
         LOG(ERROR) << "Connect error: " << boost::diagnostic_information(e);
 
         return;
@@ -98,6 +112,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(session);
     p2pSession->setNodeID(nodeID);
+    p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
 
     if(it != m_sessions.end()) {
         it->second = p2pSession;
@@ -107,6 +122,43 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     }
 
     p2pSession->session()->start();
+}
+
+void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message, P2PSession::Ptr p2pSession) {
+    try {
+        if(e.errorCode()) {
+            LOG(ERROR) << "P2PSession error, disconnect: " << boost::diagnostic_information(e);
+
+            p2pSession->stop();
+            onDisconnect(e, p2pSession->nodeID());
+
+            return;
+        }
+
+        auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+        if(p2pMessage->isRequestPacket()) {
+            CallbackFuncWithSession callback;
+            {
+                RecursiveGuard lock(x_protocolID2Handler);
+                auto it = m_protocolID2Handler->find(p2pMessage->protocolID());
+                if(it != m_protocolID2Handler->end()) {
+                    callback = it->second;
+                }
+            }
+
+            if(callback) {
+                m_host->threadPool()->enqueue([callback, p2pSession, p2pMessage, e]() {
+                    callback(e, p2pSession, p2pMessage);
+                });
+            }
+        }
+        else {
+            LOG(WARNING) << "Not found seq: " << p2pMessage->seq() << " response, may be timeout";
+        }
+    }
+    catch(std::exception &e) {
+        LOG(ERROR) << "onMessage error: " << boost::diagnostic_information(e);
+    }
 }
 
 P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message)
@@ -171,8 +223,6 @@ void Service::asyncSendMessageByNodeID(
         auto it = m_sessions.find(nodeID);
 
         if(it != m_sessions.end() && it->second->session()->isConnected()) {
-            uint32_t seq = ++m_seq;
-            message->setSeq(seq);
             message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
 
             auto session = it->second;

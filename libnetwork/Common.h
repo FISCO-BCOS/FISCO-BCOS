@@ -176,11 +176,6 @@ struct NodeIPEndpoint
     NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp)
       : address(_addr), udpPort(_udp), tcpPort(_tcp)
     {}
-    NodeIPEndpoint(std::string _host, uint16_t _udp, uint16_t _tcp)
-      : udpPort(_udp), tcpPort(_tcp), host(_host)
-    {
-        address = HostResolver::query(host);
-    }
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
     {
         address = _nodeIPEndpoint.address;

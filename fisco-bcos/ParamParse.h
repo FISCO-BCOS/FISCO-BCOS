@@ -29,10 +29,8 @@
 #include <libethcore/Protocol.h>
 #include <boost/program_options.hpp>
 #include <memory>
-#include "../libnetwork/Host.h"
-#include "../libnetwork/Network.h"
-#include "../libnetwork/P2pFactory.h"
-#include "../libp2p/Service.h"
+#include <libnetwork/Host.h>
+#include <libp2p/Service.h>
 
 INITIALIZE_EASYLOGGINGPP
 using namespace dev;

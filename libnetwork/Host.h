@@ -110,7 +110,7 @@ private:
     void handshakeClient(const boost::system::error_code& error,
         std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string>& endpointPublicKey,
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>)> callback,
+        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
         NodeIPEndpoint _nodeIPEndpoint);
 
     std::shared_ptr<dev::ThreadPool> m_threadPool;

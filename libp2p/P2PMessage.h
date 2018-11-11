@@ -5,8 +5,7 @@
  *      Author: monan
  */
 
-#ifndef LIBP2P_P2PMESSAGE_H_
-#define LIBP2P_P2PMESSAGE_H_
+#pragma once
 
 #include <libnetwork/Common.h>
 
@@ -95,9 +94,21 @@ enum AMOPPacketType
     SendTopics = 3
 };
 
+class P2PMessageFactory : public MessageFactory
+{
+public:
+    virtual ~P2PMessageFactory() {}
+    virtual Message::Ptr buildMessage() override
+    {
+        auto message = std::make_shared<P2PMessage>();
+        uint32_t seq = ++m_seq;
+        message->setSeq(seq);
+
+        return message;
+    }
+
+    std::atomic<uint32_t> m_seq = {1};
+};
+
 }
 }
-
-
-
-#endif /* LIBP2P_P2PMESSAGE_H_ */

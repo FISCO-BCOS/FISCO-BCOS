@@ -299,7 +299,7 @@ void Host::start()
  */
 void Host::asyncConnect(
         NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>)> callback)
+        std::function<void(NetworkException, NodeID nodeID, std::shared_ptr<SessionFace>)> callback)
 {
     if (!m_run) {
         return;
@@ -353,7 +353,7 @@ void Host::asyncConnect(
  */
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
-    std::function<void(NetworkException, std::shared_ptr<SessionFace>)> callback,
+    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
     NodeIPEndpoint _nodeIPEndpoint)
 {
     if(m_run) {

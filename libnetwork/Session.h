@@ -68,14 +68,17 @@ public:
     virtual std::weak_ptr<Host> host() { return m_server; }
     virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
 
-    virtual std::weak_ptr<Host> server() { return m_server; }
-    virtual void setServer(std::weak_ptr<Host> server) { m_server = server; }
-
     virtual std::shared_ptr<SocketFace> socket() { return m_socket; }
     virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
 
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
     virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
+
+    virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler() { return m_messageHandler; }
+    virtual void setMessageHandler(std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler) override { m_messageHandler = messageHandler; }
+
+    virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback) { RecursiveGuard l(x_seq2Callback); m_seq2Callback->insert(std::make_pair(seq, callback)); }
+    virtual void removeSeqCallback(uint32_t seq) { RecursiveGuard l(x_seq2Callback); m_seq2Callback->erase(seq); }
 
 private:
     void send(std::shared_ptr<bytes> _msg);
@@ -127,7 +130,7 @@ private:
     mutable RecursiveMutex x_seq2Callback;
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr> > m_seq2Callback;
 
-    std::function<void(NetworkException, Session::Ptr, Message::Ptr)> m_messageHandler;
+    std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
 };
 
 class SessionFactory
@@ -140,7 +143,7 @@ public:
         MessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
-        session->setServer(_server);
+        session->setHost(_server);
         session->setSocket(_socket);
         session->setMessageFactory(_messageFactory);
         return session;
