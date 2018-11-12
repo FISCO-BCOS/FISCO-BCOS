@@ -20,9 +20,9 @@ void P2PSession::start() {
     heartBeat();
 }
 
-void P2PSession::stop() {
+void P2PSession::stop(DisconnectReason reason) {
     m_run = false;
-    m_session->disconnect(UserReason);
+    m_session->disconnect(reason);
 }
 
 void P2PSession::heartBeat() {

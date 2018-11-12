@@ -31,6 +31,25 @@ namespace dev
 {
 namespace test
 {
+
+class FakeSession: public P2PSession {
+public:
+    FakeSession():P2PSession() {};
+    virtual ~FakeSession() {};
+
+    virtual bool actived() override { return m_run; }
+
+    virtual void start() override {
+        m_run = true;
+    }
+
+    virtual void stop(DisconnectReason reason) {
+        m_run = false;
+    }
+
+    bool m_run = false;
+};
+
 class FakeSyncToolsSet
 {
     using TxPoolPtr = std::shared_ptr<dev::txpool::TxPoolInterface>;
@@ -67,7 +86,7 @@ public:
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
 #endif
-        std::shared_ptr<P2PSession> session = std::make_shared<P2PSession>();
+        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>();
         session->start();
         return session;
     }
@@ -83,7 +102,7 @@ public:
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
 #endif
-        std::shared_ptr<P2PSession> session = std::make_shared<P2PSession>();
+        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>();
         session->start();
         return session;
     }

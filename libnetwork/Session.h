@@ -104,7 +104,7 @@ private:
 
     std::weak_ptr<Host> m_server;                        ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
-    Mutex x_framing;                       ///< Mutex for the write queue.
+
     MessageFactory::Ptr m_messageFactory;
 
     class QueueCompare
@@ -120,6 +120,8 @@ private:
     boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
         m_writeQueue;
+    bool m_writing = false;
+    Mutex x_writeQueue;
 
     mutable Mutex x_info;
 

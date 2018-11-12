@@ -29,6 +29,7 @@
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <libnetwork/Common.h>
+#include "FakeSyncToolsSet.h"
 
 using namespace std;
 using namespace dev;
@@ -64,7 +65,7 @@ public:
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
 #endif
-        std::shared_ptr<P2PSession> session = std::make_shared<P2PSession>();
+        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>();
         session->start();
         return session;
     }

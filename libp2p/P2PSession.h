@@ -29,7 +29,7 @@ public:
     virtual ~P2PSession() {};
 
     virtual void start();
-    virtual void stop();
+    virtual void stop(DisconnectReason reason);
     virtual bool actived() { return m_run; }
     virtual void heartBeat();
 

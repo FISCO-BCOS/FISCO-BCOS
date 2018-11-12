@@ -250,7 +250,12 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
 
     auto connectionHandler = m_connectionHandler;
     m_threadPool->enqueue([ps, connectionHandler, nodeID]() {
-        connectionHandler(NetworkException(0, ""), nodeID, ps);
+        if(connectionHandler) {
+            connectionHandler(NetworkException(0, ""), nodeID, ps);
+        }
+        else {
+            LOG(WARNING) << "No connectionHandler, new connection may lost";
+        }
     });
 
     LOG(INFO) << "start a new peer: " << nodeID;
@@ -266,30 +271,35 @@ void Host::start()
     /// if the p2p network has been stoped, then stop related service
     if (!m_run)
     {
+        m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
 
-        auto work = [=]
+        auto self = std::weak_ptr<Host>(shared_from_this());
+        m_hostThread = std::make_shared<std::thread>([self]
         {
-            while(m_run)
+            auto host = self.lock();
+            while(host && host->haveNetwork())
             {
                 try
                 {
-                    if(m_asioInterface->acceptor()) {
-                        startAccept();
+                    if(host->asioInterface()->acceptor()) {
+                        host->startAccept();
                     }
 
-                    m_asioInterface->run();
+                    host->asioInterface()->run();
                 }
                 catch (std::exception &e)
                 {
                     LOG(WARNING) << "Exception in Network Thread:" << boost::diagnostic_information(e);
                 }
 
-                m_asioInterface->reset();
+                host->asioInterface()->reset();
             }
 
             LOG(WARNING) << "Host exit";
-        };
+        });
+
+        m_hostThread->detach();
     }
 }
 
@@ -313,7 +323,7 @@ void Host::asyncConnect(
         m_pendingPeerConns.insert(_nodeIPEndpoint.name());
     }
     LOG(INFO) << "Attempting connection to node "
-              << "@" << _nodeIPEndpoint.name() << "," << _nodeIPEndpoint.host << " from " << id();
+              << "@" << _nodeIPEndpoint.name();
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
     // socket.reset(socket);
     auto endpoint = socket->remoteEndpoint();
@@ -388,6 +398,8 @@ void Host::stop()
         m_run = false;
 
         m_asioInterface->stop();
+
+        m_hostThread->join();
     }
 }
 

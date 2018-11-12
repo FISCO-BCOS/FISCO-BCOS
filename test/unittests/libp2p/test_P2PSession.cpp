@@ -98,7 +98,7 @@ BOOST_AUTO_TEST_CASE(stop) {
     session->start();
     BOOST_CHECK(session->actived() == true );
 
-    session->stop();
+    session->stop(UserReason);
     BOOST_CHECK(session->actived() == false );
 }
 

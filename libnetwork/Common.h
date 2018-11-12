@@ -47,6 +47,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Protocol.h>
+#include <libdevcore/FixedHash.h>
 #include <chrono>
 #include <sstream>
 
@@ -213,7 +214,8 @@ struct NodeIPEndpoint
     std::string name() const
     {
         std::ostringstream os;
-        os << address.to_string() << ":" << tcpPort << ":" << udpPort;
+        //os << address.to_string() << ":" << tcpPort << ":" << udpPort;
+        os << address.to_string() << ":" << tcpPort;
         return os.str();
     }
     bool isValid() { return (!address.to_string().empty()) && (tcpPort != 0); }

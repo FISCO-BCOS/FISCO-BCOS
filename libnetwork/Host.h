@@ -54,7 +54,6 @@ public:
 
     typedef std::shared_ptr<Host> Ptr;
 
-    virtual NodeID id() const { return m_alias.pub(); }
     virtual uint16_t listenPort() const { return m_listenPort; }
 
     virtual void start();
@@ -85,9 +84,6 @@ public:
 
     virtual MessageFactory::Ptr messageFactory() { return m_messageFactory; }
     virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
-
-    virtual KeyPair keyPair() { return m_alias; }
-    virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
 
 private:
     /// called by 'startedWorking' to accept connections
@@ -121,7 +117,6 @@ private:
 
     MessageFactory::Ptr m_messageFactory;
 
-    KeyPair m_alias;
     std::string m_listenHost = "";
     uint16_t m_listenPort = 0;
 
@@ -130,10 +125,10 @@ private:
     Mutex x_runTimer;
     bool m_run = false;
 
-    std::shared_ptr<boost::asio::deadline_timer> m_timer;
-
     std::set<std::string> m_pendingPeerConns;
     Mutex x_pendingNodeConns;
+
+    std::shared_ptr<std::thread> m_hostThread;
 };
 }  // namespace p2p
 

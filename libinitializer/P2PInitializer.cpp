@@ -84,10 +84,12 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     host->setSessionFactory(std::make_shared<SessionFactory>());
     host->setMessageFactory(std::make_shared<P2PMessageFactory>());
     host->setHostPort(listenIP, listenPort);
+    host->setThreadPool(std::make_shared<ThreadPool>("P2P", 4));
 
     m_p2pService = std::make_shared<Service>();
     m_p2pService->setHost(host);
     m_p2pService->setStaticNodes(nodes);
+    m_p2pService->setKeyPair(m_keyPair);
 
     m_p2pService->start();
 }

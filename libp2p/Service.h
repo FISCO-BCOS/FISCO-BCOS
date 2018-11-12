@@ -52,6 +52,7 @@ public:
     virtual void heartBeat();
 
     virtual bool actived() { return m_run; }
+    virtual NodeID id() const { return m_alias.pub(); }
 
     virtual void onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session);
     virtual void onDisconnect(NetworkException e, NodeID nodeID);
@@ -96,6 +97,9 @@ public:
     virtual P2PMessageFactory::Ptr p2pMessageFactory() override { return m_p2pMessageFactory; }
     virtual void setP2PMessageFactory(P2PMessageFactory::Ptr _p2pMessageFactory) { m_p2pMessageFactory = _p2pMessageFactory; }
 
+    virtual KeyPair keyPair() { return m_alias; }
+    virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
@@ -126,6 +130,9 @@ private:
     RecursiveMutex x_topic2Handler;
 
     P2PMessageFactory::Ptr m_p2pMessageFactory;
+    KeyPair m_alias;
+
+    std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
     bool m_run = false;
 };

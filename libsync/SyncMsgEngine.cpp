@@ -37,7 +37,7 @@ void SyncMsgEngine::messageHandler(
     {
         SYNCLOG(WARNING) << "[Rcv] [Packet] Reject packet: [reason]: session or msg illegal"
                          << endl;
-        _session->session()->disconnect(LocalIdentity);
+        _session->stop(LocalIdentity);
         return;
     }
 
@@ -48,7 +48,7 @@ void SyncMsgEngine::messageHandler(
             << "[Rcv] [Packet] Reject packet: [reason/nodeId/size/message]: decode failed/"
             << _session->nodeID() << "/" << _msg->buffer()->size() << "/" << toHex(*_msg->buffer())
             << endl;
-        _session->session()->disconnect(BadProtocol);
+        _session->stop(BadProtocol);
         return;
     }
 

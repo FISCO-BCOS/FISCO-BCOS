@@ -50,12 +50,14 @@ Session::~Session()
 
     try
     {
-        bi::tcp::socket& socket = m_socket->ref();
-        if (m_socket->isConnected())
-        {
-            boost::system::error_code ec;
+        if(m_socket) {
+            bi::tcp::socket& socket = m_socket->ref();
+            if (m_socket->isConnected())
+            {
+                boost::system::error_code ec;
 
-            socket.close();
+                socket.close();
+            }
         }
     }
     catch (...)
@@ -67,6 +69,8 @@ Session::~Session()
 void Session::asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc()) {
     auto server = m_server.lock();
     if(!actived()) {
+        LOG(WARNING) << "Session inactived";
+
         server->threadPool()->enqueue([callback] {
             callback(NetworkException(-1, "Session inactived"), Message::Ptr());
         });
@@ -112,14 +116,14 @@ void Session::send(std::shared_ptr<bytes> _msg)
     if (!m_socket->isConnected())
         return;
 
-    bool doWrite = false;
-    DEV_GUARDED(x_framing)
+    LOG(TRACE) << "Session send, writeQueue: " << m_writeQueue.size();
     {
+        Guard l(x_writeQueue);
+
         m_writeQueue.push(make_pair(_msg, u256(utcTime())));
-        doWrite = (m_writeQueue.size() == 1);
     }
-    if (doWrite)
-        write();
+
+    write();
 }
 
 void Session::onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer)
@@ -137,9 +141,16 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length, std::sha
             return;
         }
 
-        if(!m_writeQueue.empty()) {
-            write();
+        LOG(TRACE) << "Successfully send " << length << " bytes";
+
+        {
+            Guard l(x_writeQueue);
+            if(m_writing) {
+                m_writing = false;
+            }
         }
+
+        write();
     }
     catch (std::exception& e)
     {
@@ -157,13 +168,24 @@ void Session::write()
 
     try
     {
+        Guard l(x_writeQueue);
+
+        if(m_writing) {
+            return;
+        }
+
+        m_writing = true;
+
         std::pair<std::shared_ptr<bytes>, u256> task;
         u256 enter_time = u256(0);
-        DEV_GUARDED(x_framing)
-        {
-            task = m_writeQueue.top();
-            m_writeQueue.pop();
+
+        if(m_writeQueue.empty()) {
+            m_writing = false;
+            return;
         }
+
+        task = m_writeQueue.top();
+        m_writeQueue.pop();
 
         enter_time = task.second;
         auto session = shared_from_this();
@@ -173,19 +195,17 @@ void Session::write()
         if(server && server->haveNetwork()) {
             if (m_socket->isConnected())
             {
-                auto socket = m_socket;
-                server->asioInterface()->strandPost([socket, server, session, buffer] {
-                    server->asioInterface()->asyncWrite(
-                        socket,
-                        boost::asio::buffer(*buffer),
-                        boost::bind(
-                            &Session::onWrite,
-                            session, boost::asio::placeholders::error,
-                            boost::asio::placeholders::bytes_transferred,
-                            buffer
-                        )
-                    );
-                });
+                LOG(TRACE) << "Start send " << buffer->size() << " bytes data";
+                server->asioInterface()->asyncWrite(
+                    m_socket,
+                    boost::asio::buffer(*buffer),
+                    boost::bind(
+                        &Session::onWrite,
+                        session, boost::asio::placeholders::error,
+                        boost::asio::placeholders::bytes_transferred,
+                        buffer
+                    )
+                );
             }
             else
             {
@@ -357,6 +377,8 @@ void Session::onMessage(
     if(m_actived && server && server->haveNetwork()) {
         auto it = m_seq2Callback->find(message->seq());
         if(it != m_seq2Callback->end()) {
+            LOG(TRACE) << "Found callback: " << message->seq();
+
             if(it->second->timeoutHandler) {
                 it->second->timeoutHandler->cancel();
             }
@@ -374,15 +396,20 @@ void Session::onMessage(
                 });
             }
         }
-    }
-    else {
-        if(m_messageHandler) {
-            auto session = shared_from_this();
-            auto handler = m_messageHandler;
+        else {
+            LOG(TRACE) << "Not found callback, call messageHandler: " << message->seq();
 
-            server->threadPool()->enqueue([session, handler, e, message]() {
-                handler(e, session, message);
-            });
+            if(m_messageHandler) {
+                auto session = shared_from_this();
+                auto handler = m_messageHandler;
+
+                server->threadPool()->enqueue([session, handler, e, message]() {
+                    handler(e, session, message);
+                });
+            }
+            else {
+                LOG(WARNING) << "MessageHandler not found";
+            }
         }
     }
 }
