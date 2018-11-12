@@ -110,7 +110,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast prepare message
-    broadcastMsg(PrepareReqPacket, prepare_req.block_hash.hex(), ref(prepare_data));
+    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
     handlePrepareMsg(prepare_req);
     /// note blockSync to the latest number, in case of the block number of other nodes
     /// is larger than this node
@@ -221,7 +221,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast the generated preparePacket
-    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(prepare_data));
+    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
     if (succ)
     {
         if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -248,7 +248,7 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
     SignReq sign_req(req, m_keyPair, m_idx);
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
-    bool succ = broadcastMsg(SignReqPacket, sign_req.sig.hex(), ref(sign_req_data));
+    bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
     if (succ)
         m_reqCache->addSignReq(sign_req);
     return succ;
@@ -287,7 +287,7 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
     CommitReq commit_req(req, m_keyPair, m_idx);
     bytes commit_req_data;
     commit_req.encode(commit_req_data);
-    bool succ = broadcastMsg(CommitReqPacket, commit_req.sig.hex(), ref(commit_req_data));
+    bool succ = broadcastMsg(CommitReqPacket, commit_req.uniqueKey(), ref(commit_req_data));
     if (succ)
         m_reqCache->addCommitReq(commit_req);
     return succ;
@@ -300,7 +300,8 @@ bool PBFTEngine::broadcastViewChangeReq()
                           << "/" << m_highestBlock.number() << std::endl;
     bytes view_change_data;
     req.encode(view_change_data);
-    return broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
+    return broadcastMsg(
+        ViewChangeReqPacket, req.uniqueKey() + toJS(req.view), ref(view_change_data));
 }
 
 /**
@@ -873,6 +874,7 @@ void PBFTEngine::checkAndChangeView()
         m_leaderFailed = false;
         m_view = m_toView;
         m_reqCache->triggerViewChange(m_view);
+        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     }
 }
 
@@ -933,7 +935,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         PrepareReq prepare_req;
         handlePrepareMsg(prepare_req, pbftMsg);
-        key = prepare_req.block_hash.hex();
+        key = prepare_req.uniqueKey();
         pbft_msg = prepare_req;
         break;
     }
@@ -941,7 +943,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         SignReq req;
         handleSignMsg(req, pbftMsg);
-        key = req.sig.hex();
+        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
@@ -949,7 +951,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         CommitReq req;
         handleCommitMsg(req, pbftMsg);
-        key = req.sig.hex();
+        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
@@ -957,7 +959,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         ViewChangeReq req;
         handleViewChangeMsg(req, pbftMsg);
-        key = req.sig.hex() + toJS(req.view);
+        key = req.uniqueKey() + toJS(req.view);
         pbft_msg = req;
         break;
     }
