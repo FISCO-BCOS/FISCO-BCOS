@@ -61,12 +61,6 @@ function getAbi0(file){
     var ConfigActionReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "ConfigAction");
     var ConfigAction=web3.eth.contract(getAbi("ConfigAction")).at(ConfigActionReicpt.contractAddress);
 
-    var FileInfoManagerReicept= await web3sync.rawDeploy(config.account, config.privKey,  "FileInfoManager");
-    var FileInfoManager=web3.eth.contract(getAbi("FileInfoManager")).at(FileInfoManagerReicept.contractAddress);
-
-    var FileServerReicept= await web3sync.rawDeploy(config.account, config.privKey,  "FileServerManager");
-    var FileServerManager=web3.eth.contract(getAbi("FileServerManager")).at(FileServerReicept.contractAddress);
-
     // add consensuscontrol
     var ConsensusControlMgrReicpt= await web3sync.rawDeploy(config.account, config.privKey,  "ConsensusControlMgr");
     var ConsensusControlMgr=web3.eth.contract(getAbi("ConsensusControlMgr")).at(ConsensusControlMgrReicpt.contractAddress);
@@ -155,16 +149,6 @@ function getAbi0(file){
     func = "setRoute(string,address,bool)";
     params = ["ConsensusControlMgr", ConsensusControlMgr.address, false];
     receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
-
-    console.log("register FileInfoManager.....");
-    func = "setRoute(string,address,bool)";
-	params = ["FileInfoManager", FileInfoManager.address, false];
-	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
-
-	console.log("register FileServerManager.....");
-    func = "setRoute(string,address,bool)";
-	params = ["FileServerManager", FileServerManager.address, false];
-	receipt = await web3sync.sendRawTransaction(config.account, config.privKey, SystemProxy.address, func, params);
 
 	console.log("SystemProxy address :" + SystemProxy.address);
     //console.log(SystemProxy);
