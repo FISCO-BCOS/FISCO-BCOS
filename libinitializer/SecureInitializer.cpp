@@ -86,14 +86,12 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             INITIALIZER_LOG(ERROR)
                 << "[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
                 << e.what();
-
             BOOST_THROW_EXCEPTION(e);
         }
     }
     else
     {
         INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] privatekey not exists!";
-
         BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
     }
 
@@ -130,14 +128,12 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         {
             INITIALIZER_LOG(DEBUG)
                 << "[#SecureInitializer::initConfig] use user certificate: [file]: " << cert;
-
             m_sslContext->use_certificate_chain_file(cert);
             m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
             INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate not exists!";
-
             BOOST_THROW_EXCEPTION(CertificateNotExists());
         }
 
@@ -150,6 +146,11 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             m_sslContext->add_certificate_authority(
                 boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
             m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+        }
+        else
+        {
+            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] CA Certificate not exists!";
+            BOOST_THROW_EXCEPTION(CertificateNotExists());
         }
 
         if (!caPath.empty())
@@ -164,7 +165,6 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     {
         INITIALIZER_LOG(ERROR)
             << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: " << e.what();
-
         BOOST_THROW_EXCEPTION(e);
     }
 }

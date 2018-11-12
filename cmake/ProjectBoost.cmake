@@ -53,6 +53,7 @@ ExternalProject_Add(boost
         --with-regex
         --with-test
         --with-thread
+        --with-serialization
         --with-program_options
     LOG_BUILD 1
     INSTALL_COMMAND ""

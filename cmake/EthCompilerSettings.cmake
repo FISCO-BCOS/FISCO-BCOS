@@ -44,8 +44,9 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-Wa,-march=generic64)
 
     if(STATIC_BUILD)
+        SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
         SET(BUILD_SHARED_LIBRARIES OFF)
-        SET(CMAKE_EXE_LINKER_FLAGS "-static")
+        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
 
     # Disable warnings about unknown pragmas (which is enabled by -Wall).

@@ -39,7 +39,12 @@ find_library(
 
 set(LEVELDB_INCLUDE_DIRS ${LEVELDB_INCLUDE_DIR})
 set(LEVELDB_LIBRARIES ${LEVELDB_LIBRARY})
-
+if (STATIC_BUILD)
+	find_path(SNAPPY_INCLUDE_DIR snappy.h PATH_SUFFIXES snappy)
+	find_library(SNAPPY_LIBRARY snappy)
+	set(LEVELDB_INCLUDE_DIRS ${LEVELDB_INCLUDE_DIR} ${SNAPPY_INCLUDE_DIR})
+	set(LEVELDB_LIBRARIES ${LEVELDB_LIBRARY} ${SNAPPY_LIBRARY})
+endif()
 # handle the QUIETLY and REQUIRED arguments and set LEVELDB_FOUND to TRUE
 # if all listed variables are TRUE, hide their existence from configuration view
 include(FindPackageHandleStandardArgs)
