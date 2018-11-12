@@ -61,8 +61,6 @@ public:
         m_consensusEngine(nullptr)
     {
         assert(m_txPool && m_blockSync && m_blockChain);
-        if (m_txPool->status().current > 0)
-            m_syncTxPool = true;
         /// register a handler to be called once new transactions imported
         m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
         m_blockSubmitted = m_blockChain->onReady([=]() { this->onBlockChanged(); });
@@ -121,6 +119,7 @@ protected:
         if (enough)
         {
             SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num << std::endl;
+            m_syncTxPool = false;
         }
         return enough;
     }
@@ -130,11 +129,7 @@ protected:
     virtual void doWork(bool wait);
     void doWork() override { doWork(true); }
     bool isBlockSyncing();
-    inline void resetSealingBlock()
-    {
-        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-        resetSealingBlock(m_sealing);
-    }
+    inline void resetSealingBlock() { resetSealingBlock(m_sealing); }
     void resetSealingBlock(Sealing& sealing);
     void resetBlock(dev::eth::Block& block);
     void resetSealingHeader(dev::eth::BlockHeader& header);
