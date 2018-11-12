@@ -47,8 +47,9 @@ using namespace dev::sync;
 using namespace dev::blockchain;
 
 static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain, GROUP_ID const& _groupSize,
-    float _txSpeed, int _totalTransactions, KeyPair const& key_pair)
+    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    std::shared_ptr<dev::sync::SyncInterface> _sync, GROUP_ID const& _groupSize, float _txSpeed,
+    int _totalTransactions)
 {
     ///< transaction related
     bytes rlpBytes = fromHex(
@@ -59,12 +60,16 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
         "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
-    Secret sec = key_pair.secret();
+    Secret sec = KeyPair::create().secret();
     srand(time(NULL));
 
     uint16_t sleep_interval = (uint16_t)(1000.0 / _txSpeed);
     while (_totalTransactions > 0)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+        if (_sync->status().state != SyncState::Idle)
+            continue;
+
         _totalTransactions -= _groupSize;
         for (int i = 1; i <= _groupSize; i++)
         {
@@ -82,7 +87,6 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
                            << boost::diagnostic_information(e) << std::endl;
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
 
     // loop forever
@@ -96,7 +100,7 @@ static void startSync(Params& params)
 {
     ///< initialize component
     auto initialize = std::make_shared<FakeInitializer>();
-    initialize->init("./config.conf");
+    initialize->init("./config.ini");
 
     auto p2pInitializer = initialize->p2pInitializer();
     shared_ptr<P2PInterface> p2pService = p2pInitializer->p2pService();
@@ -104,30 +108,16 @@ static void startSync(Params& params)
     GROUP_ID groupId = 1;
     std::map<GROUP_ID, h512s> groudID2NodeList;
     groudID2NodeList[groupId] = {
-        h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191c"
-             "c2aebf4746846c0db2604adebf9c70c7f418d4d5a61"),
-        h512("46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491c"
-             "c1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1"),
-        h512("f6f4931f56b9963851f43bb857ed5a6170ec1a4208ddcf1a1f2bb66f6d7e7a5c4749a89b5277d6265b1c1"
-             "2fdbc89290bed7cccf905eef359989275319b331753"),
-        h512("4525966a74f9b2ba564fcceee50bf1c4d2faa35a307983df026a18b3486da6ad5bf4b9a56a8d7e35484af"
-             "2cafb6224059c4ee332c9ec02bd304c0292c2f9efb8")};
+        h512("e961da2f050bffc81fdae4bed17adfe53f8b3112cc8d720d9379d8503fe41325e2fce3f93b571d8341a4b"
+             "97b3bc7f3edee123635b56b2ada6ca97a9306835f93"),
+        h512("1ac670bc00b477601b28b2a63e02359b5f6e2b25ce07f98601100cf252d9af484dfec2b65ae46dfa6d3a4"
+             "1f44a8952e3d1ea72a0a718dbeed93aacedd4717726"),
+        h512("051f68a0950bdc86a415f7a15039b9397705e6e8e6b3f37f5bf1460fbec1cad2c16581ccb5e98530c6509"
+             "b7410fa42c38df882a0247515850b3b7286f357f5f8"),
+        h512("2fb8fb18be34bbc0eec1163b30520fbf4d845b7c59b95fd6dc4612c22b4682f0650a2bd754c3dd68b59a5"
+             "9d328c3184948c69e950bb107cca1b8c89f89e7c164")};
     p2pService->setGroupID2NodeList(groudID2NodeList);
 
-    ///< Read the KeyPair of node from configuration file.
-    auto nodePrivate = contents(getDataDir().string() + "/node.private");
-    KeyPair key_pair;
-    string pri = asString(nodePrivate);
-    if (pri.size() >= 64)
-    {
-        key_pair = KeyPair(Secret(fromHex(pri.substr(0, 64))));
-        LOG(INFO) << "Sync Load KeyPair " << toPublic(key_pair.secret());
-    }
-    else
-    {
-        LOG(ERROR) << "Sync Load KeyPair Fail! Please Check node.private File.";
-        exit(-1);
-    }
     // NodeID nodeId = NodeID(fromHex(asString(contents(getDataDir().string() + "/node.nodeid"))));
     auto nodeIdstr = asString(contents(getDataDir().string() + "/node.nodeid"));
     NodeID nodeId = NodeID(nodeIdstr.substr(0, 128));
@@ -151,8 +141,8 @@ static void startSync(Params& params)
     LOG(INFO) << "concencus started" << endl;
 
     /// create transaction
-    createTx(txPool, blockChain, params.groupSize(), params.txSpeed(), params.totalTransactions(),
-        key_pair);
+    createTx(
+        txPool, blockChain, sync, params.groupSize(), params.txSpeed(), params.totalTransactions());
 }
 
 int main(int argc, const char* argv[])
