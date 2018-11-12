@@ -85,8 +85,25 @@ NodeID Session::id() const
     return m_peer ? m_peer->id() : NodeID();
 }
 
+template <class T>
+vector<T> randomSelection(vector<T> const& _t, unsigned _n)
+{
+    if (_t.size() <= _n)
+        return _t;
+    vector<T> ret = _t;
+    while (ret.size() > _n)
+    {
+        auto i = ret.begin();
+        advance(i, rand() % ret.size());
+        ret.erase(i);
+    }
+    return ret;
+}
+
 void Session::send(std::shared_ptr<bytes> _msg)
 {
+    bytesConstRef msg(_msg.get());
+
     if (!m_socket->isConnected())
         return;
 
@@ -149,6 +166,7 @@ void Session::write()
             enter_time = task.second;
         }
 
+        auto self(shared_from_this());
         m_start_t = utcTime();
         unsigned queue_elapsed = (unsigned)(m_start_t - enter_time);
         if (queue_elapsed > 10)
