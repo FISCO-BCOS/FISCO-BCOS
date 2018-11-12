@@ -62,7 +62,7 @@ public:
         PBFTENGINE_LOG(INFO) << "[Register handler for PBFTEngine, protocol id]:  " << m_protocolId;
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
-        m_broadCastCache = std::make_shared<PBFTBroadcastCache<PBFTCacheMsg>>();
+        m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
         m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
     }
 
@@ -118,7 +118,7 @@ protected:
     bool needOmit(Sealing const& sealing);
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
-    bool broadcastMsg(unsigned const& packetType, PBFTCacheMsg const& key, bytesConstRef data,
+    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>());
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
@@ -150,27 +150,6 @@ protected:
     void checkAndSave();
     void checkAndChangeView();
 
-    template <typename T>
-    void clearSingleCache(unsigned const& type, T& cache)
-    {
-        PBFTCacheMsg msg;
-        msg.height = cache.height;
-        msg.blockHash = cache.block_hash.hex();
-        m_broadCastCache->clearByKey(type, msg);
-    }
-
-    template <typename T>
-    void clearCommitOrSignCache(unsigned const& type, T& cache)
-    {
-        for (auto it : cache)
-        {
-            PBFTCacheMsg msg;
-            msg.height = m_consensusBlockNumber;
-            msg.blockHash = it.first.hex();
-            m_broadCastCache->clearByKey(type, msg);
-        }
-    }
-
 protected:
     void initPBFTEnv(unsigned _view_timeout);
     /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
@@ -181,9 +160,8 @@ protected:
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
-
-    template <typename T>
-    inline bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, T const& key)
+    inline bool broadcastFilter(
+        h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
@@ -197,8 +175,8 @@ protected:
      * @param key: the key of the broadcast-message, is the signature of the broadcast-message in
      * common
      */
-    template <typename T>
-    inline void broadcastMark(h512 const& nodeId, unsigned const& packetType, T const& key)
+    inline void broadcastMark(
+        h512 const& nodeId, unsigned const& packetType, std::string const& key)
     {
         /// in case of useless insert
         if (m_broadCastCache->keyExists(nodeId, packetType, key))
@@ -455,7 +433,7 @@ protected:
     static const std::string c_backupMsgDirName;
     static const unsigned c_PopWaitSeconds = 5;
 
-    std::shared_ptr<PBFTBroadcastCache<PBFTCacheMsg>> m_broadCastCache;
+    std::shared_ptr<PBFTBroadcastCache> m_broadCastCache;
     std::shared_ptr<PBFTReqCache> m_reqCache;
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;

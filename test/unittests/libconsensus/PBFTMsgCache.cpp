@@ -31,13 +31,10 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(consensusTest, TestOutputHelperFixture)
 
-void checkKeyExist(PBFTBroadcastCache<PBFTCacheMsg>& cache, unsigned const& type,
-    KeyPair const& keyPair, std::string const& str, bool const& insert = true,
-    bool const& exist = true)
+void checkKeyExist(PBFTBroadcastCache& cache, unsigned const& type, KeyPair const& keyPair,
+    std::string const& str, bool const& insert = true, bool const& exist = true)
 {
-    PBFTCacheMsg key;
-    key.blockHash = dev::sign(keyPair.secret(), sha3(str)).hex();
-    key.height = 10;
+    std::string key = dev::sign(keyPair.secret(), sha3(str)).hex();
     if (insert)
         cache.insertKey(keyPair.pub(), type, key);
     if (exist)
@@ -48,7 +45,7 @@ void checkKeyExist(PBFTBroadcastCache<PBFTCacheMsg>& cache, unsigned const& type
 
 BOOST_AUTO_TEST_CASE(testInsertKey)
 {
-    PBFTBroadcastCache<PBFTCacheMsg> broadCast_cache;
+    PBFTBroadcastCache broadCast_cache;
     KeyPair key_pair = KeyPair::create();
     std::string key = dev::sign(key_pair.secret(), sha3("test")).hex();
     /// test insertKey && keyExist

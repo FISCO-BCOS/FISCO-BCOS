@@ -288,7 +288,7 @@ static void checkBroadcastSpecifiedMsg(
     PrepareReq prepare_req = FakePrepareReq(key_pair);
     /// obtain sig of SignReq
     tmp_req = T(prepare_req, fake_pbft.consensus()->keyPair(), prepare_req.idx);
-    PBFTCacheMsg key(tmp_req.sig.hex(), tmp_req.height);
+    std::string key = tmp_req.sig.hex();
     /// append session info
     appendSessionInfo(fake_pbft, peer_keyPair.pub());
     /// case1: the peer node is not miner
@@ -572,12 +572,11 @@ static void TestIsValidCommitReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PBFTM
 static void testReHandleCommitPrepareCache(
     FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq const& req)
 {
-    PBFTCacheMsg msg(req.block_hash.hex(), req.height);
     /// check callback broadcastMsg
     for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
     {
         BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-            fake_pbft.m_minerList[i], PrepareReqPacket, msg));
+            fake_pbft.m_minerList[i], PrepareReqPacket, req.block_hash.hex()));
     }
 }
 

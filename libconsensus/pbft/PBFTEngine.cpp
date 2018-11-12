@@ -110,12 +110,8 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast prepare message
-    PBFTCacheMsg msg(prepare_req.block_hash.hex(), prepare_req.height);
-    broadcastMsg(PrepareReqPacket, msg, ref(prepare_data));
+    broadcastMsg(PrepareReqPacket, prepare_req.block_hash.hex(), ref(prepare_data));
     handlePrepareMsg(prepare_req);
-    /// note blockSync to the latest number, in case of the block number of other nodes
-    /// is larger than this node
-    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
 }
 
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
@@ -222,8 +218,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast the generated preparePacket
-    PBFTCacheMsg msg(prepare_req.block_hash.hex(), prepare_req.height);
-    bool succ = broadcastMsg(PrepareReqPacket, msg, ref(prepare_data));
+    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(prepare_data));
     if (succ)
     {
         if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -250,9 +245,7 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
     SignReq sign_req(req, m_keyPair, m_idx);
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
-
-    PBFTCacheMsg msg(sign_req.block_hash.hex(), sign_req.height);
-    bool succ = broadcastMsg(SignReqPacket, msg, ref(sign_req_data));
+    bool succ = broadcastMsg(SignReqPacket, sign_req.sig.hex(), ref(sign_req_data));
     if (succ)
         m_reqCache->addSignReq(sign_req);
     return succ;
@@ -291,9 +284,7 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
     CommitReq commit_req(req, m_keyPair, m_idx);
     bytes commit_req_data;
     commit_req.encode(commit_req_data);
-
-    PBFTCacheMsg msg(commit_req.block_hash.hex(), commit_req.height);
-    bool succ = broadcastMsg(CommitReqPacket, msg, ref(commit_req_data));
+    bool succ = broadcastMsg(CommitReqPacket, commit_req.sig.hex(), ref(commit_req_data));
     if (succ)
         m_reqCache->addCommitReq(commit_req);
     return succ;
@@ -306,9 +297,7 @@ bool PBFTEngine::broadcastViewChangeReq()
                           << "/" << m_highestBlock.number() << std::endl;
     bytes view_change_data;
     req.encode(view_change_data);
-
-    PBFTCacheMsg msg(req.sig.hex() + toJS(req.view), req.height);
-    return broadcastMsg(ViewChangeReqPacket, msg, ref(view_change_data));
+    return broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
 }
 
 /**
@@ -322,7 +311,7 @@ bool PBFTEngine::broadcastViewChangeReq()
  * @param data: the encoded data of to be broadcasted(RLP encoder now)
  * @param filter: the list that shouldn't be broadcasted to
  */
-bool PBFTEngine::broadcastMsg(unsigned const& packetType, PBFTCacheMsg const& key,
+bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
@@ -612,22 +601,12 @@ void PBFTEngine::checkAndSave()
             /// callback block chain to commit block
             CommitResult ret = m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
             if (ret == CommitResult::OK)
-            {
                 dropHandledTransactions(block);
-                PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
-            }
             else
-            {
-                PBFTENGINE_LOG(ERROR)
-                    << "[#commitBlock Failed] [highNum/SNum/Shash]:  " << m_highestBlock.number()
-                    << "/" << block.blockHeader().number() << "/"
-                    << block.blockHeader().hash().abridged() << std::endl;
-                m_onViewChange();
                 m_txPool->handleBadBlock(block);
-                /// note blocksync to sync
-            }
             resetConfig();
         }
         else
@@ -881,13 +860,8 @@ void PBFTEngine::checkAndChangeView()
         m_leaderFailed = false;
         m_view = m_toView;
         m_reqCache->triggerViewChange(m_view);
-        clearSingleCache(PrepareReqPacket, m_reqCache->rawPrepareCache());
-        clearSingleCache(PrepareReqPacket, m_reqCache->prepareCache());
-        clearCommitOrSignCache(SignReqPacket, m_reqCache->mutableSignCache());
-        clearCommitOrSignCache(CommitReqPacket, m_reqCache->mutableCommitCache());
     }
 }
-
 
 /// collect all caches
 void PBFTEngine::collectGarbage()
@@ -939,15 +913,14 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
 {
     Guard l(m_mutex);
     PBFTMsg pbft_msg;
-    PBFTCacheMsg key;
+    std::string key;
     switch (pbftMsg.packet_id)
     {
     case PrepareReqPacket:
     {
         PrepareReq prepare_req;
         handlePrepareMsg(prepare_req, pbftMsg);
-        key.blockHash = prepare_req.block_hash.hex();
-        key.height = prepare_req.height;
+        key = prepare_req.block_hash.hex();
         pbft_msg = prepare_req;
         break;
     }
@@ -955,8 +928,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         SignReq req;
         handleSignMsg(req, pbftMsg);
-        key.blockHash = req.block_hash.hex();
-        key.height = req.height;
+        key = req.sig.hex();
         pbft_msg = req;
         break;
     }
@@ -964,8 +936,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         CommitReq req;
         handleCommitMsg(req, pbftMsg);
-        key.blockHash = req.sig.hex();
-        key.height = req.height;
+        key = req.sig.hex();
         pbft_msg = req;
         break;
     }
@@ -973,8 +944,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         ViewChangeReq req;
         handleViewChangeMsg(req, pbftMsg);
-        key.blockHash = req.sig.hex() + toJS(req.view);
-        key.height = req.height;
+        key = req.sig.hex() + toJS(req.view);
         pbft_msg = req;
         break;
     }
@@ -987,7 +957,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     }
     bool height_flag = (pbft_msg.height > m_highestBlock.number()) ||
                        (m_highestBlock.number() - pbft_msg.height < 10);
-    if (key.blockHash.size() > 0 && height_flag)
+    if (key.size() > 0 && height_flag)
     {
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);
