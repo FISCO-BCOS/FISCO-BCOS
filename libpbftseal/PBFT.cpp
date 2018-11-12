@@ -269,7 +269,7 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 	LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[" << toString(req.block_hash) << "][" << req.height << "][" <<  utcTime() << "][" << "broadcastPrepareReq" << "]";
 	RLPStream ts;
 	req.streamRLPFields(ts);
-	broadcastMsg(req.block_hash.hex(), PrepareReqPacket, ts.out());
+	broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out());
 
 	handlePrepareMsg(m_node_idx, req, true); // 指明是来自自己的Req
 }
@@ -364,7 +364,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		PrepareReq req;
 		req.populate(_r);
 		handlePrepareMsg(_from, req);
-		key = req.block_hash.hex();
 		pbft_msg = req;
 		break;
 	}
@@ -372,7 +371,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		SignReq req;
 		req.populate(_r);
 		handleSignMsg(_from, req);
-		key = req.sig.hex();
 		pbft_msg = req;
 		break;
 	}
@@ -380,7 +378,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		CommitReq req;
 		req.populate(_r);
 		handleCommitMsg(_from, req);
-		key = req.sig.hex();
 		pbft_msg = req;
 		break;
 	}
@@ -388,7 +385,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		ViewChangeReq req;
 		req.populate(_r);
 		handleViewChangeMsg(_from, req);
-		key = req.sig.hex() + toJS(req.view);
 		pbft_msg = req;
 		break;
 	}
@@ -402,14 +398,14 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 	bool height_flag = (pbft_msg.height > m_highest_block.number()) || (m_highest_block.number() - pbft_msg.height < 10);
 	//LOG(TRACE) << "key=" << key << ",time_flag=" << time_flag << ",height_flag=" << height_flag;
 	//if (key.size() > 0 && time_flag && height_flag) {
-	if (key.size() > 0 && height_flag) { // omit the time_flag due to unequal sysmtem timestamp between nodes
+	if (height_flag) { // omit the time_flag due to unequal sysmtem timestamp between nodes
 		std::unordered_set<h512> filter;
 		filter.insert(_node);
 		h512 gen_node_id = h512(0);
 		if (NodeConnManagerSingleton::GetInstance().getPublicKey(pbft_msg.idx, gen_node_id)) {
 			filter.insert(gen_node_id);
 		}
-		broadcastMsg(key, _id, _r.toBytes(), filter);
+		broadcastMsg(pbft_msg.uniqueKey(), _id, _r.toBytes(), filter);
 	}
 }
 
@@ -547,7 +543,7 @@ bool PBFT::broadcastViewChangeReq() {
 	
 	RLPStream ts;
 	req.streamRLPFields(ts);
-	bool ret = broadcastMsg(req.sig.hex() + toJS(req.view), ViewChangeReqPacket, ts.out());
+	bool ret = broadcastMsg(req.uniqueKey() + toJS(req.view), ViewChangeReqPacket, ts.out());
 	return ret;
 }
 
@@ -562,7 +558,7 @@ bool PBFT::broadcastSignReq(PrepareReq const & _req) {
 	sign_req.sig2 = signHash(sign_req.fieldsWithoutBlock());
 	RLPStream ts;
 	sign_req.streamRLPFields(ts);
-	if (broadcastMsg(sign_req.sig.hex(), SignReqPacket, ts.out())) {
+	if (broadcastMsg(sign_req.uniqueKey(), SignReqPacket, ts.out())) {
 		addSignReq(sign_req);
 		return true;
 	}
@@ -581,7 +577,7 @@ bool PBFT::broadcastCommitReq(PrepareReq const & _req) {
 
 	RLPStream ts;
 	commit_req.streamRLPFields(ts);
-	if (broadcastMsg(commit_req.sig.hex(), CommitReqPacket, ts.out())) {
+	if (broadcastMsg(commit_req.uniqueKey(), CommitReqPacket, ts.out())) {
 		addCommitReq(commit_req);
 		return true;
 	}
@@ -601,7 +597,7 @@ bool PBFT::broadcastPrepareReq(BlockHeader const & _bi, bytes const & _block_dat
 
 	RLPStream ts;
 	req.streamRLPFields(ts);
-	if (broadcastMsg(req.block_hash.hex(), PrepareReqPacket, ts.out())) {
+	if (broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out())) {
 		addRawPrepare(req);
 		return true;
 	}

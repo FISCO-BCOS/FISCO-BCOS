@@ -113,6 +113,10 @@ struct PBFTMsg {
 		ts << height << view << idx << timestamp;
 		return dev::sha3(ts.out());
 	}
+
+	std::string uniqueKey() const {
+		return sig.hex() + sig2.hex();
+	}
 };
 
 struct PrepareReq : public PBFTMsg {
