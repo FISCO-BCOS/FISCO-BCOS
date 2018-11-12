@@ -300,8 +300,7 @@ bool PBFTEngine::broadcastViewChangeReq()
                           << "/" << m_highestBlock.number() << std::endl;
     bytes view_change_data;
     req.encode(view_change_data);
-    return broadcastMsg(
-        ViewChangeReqPacket, req.uniqueKey() + toJS(req.view), ref(view_change_data));
+    return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
 /**
@@ -961,7 +960,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         ViewChangeReq req;
         handleViewChangeMsg(req, pbftMsg);
-        key = req.uniqueKey() + toJS(req.view);
+        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
