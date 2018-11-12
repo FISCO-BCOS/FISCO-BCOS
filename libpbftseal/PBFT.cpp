@@ -542,8 +542,9 @@ bool PBFT::broadcastViewChangeReq() {
 
 	if (!m_empty_block_flag) {
 		LOGCOMWARNING << WarningMap.at(ChangeViewWarning) << "|blockNumber:" << req.height << " ChangeView:" << req.view;
-		m_empty_block_flag = false;
 	}
+	m_empty_block_flag = false;
+	
 	RLPStream ts;
 	req.streamRLPFields(ts);
 	bool ret = broadcastMsg(req.sig.hex() + toJS(req.view), ViewChangeReqPacket, ts.out());
@@ -667,6 +668,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	if (_id == PrepareReqPacket) {
 		DEV_GUARDED(_p->x_knownPrepare)
 		{
+			if (_p->m_knownPrepare.exist(_key)) return;
 			if (_p->m_knownPrepare.size() > kKnownPrepare) {
 				_p->m_knownPrepare.pop();
 			}
@@ -675,6 +677,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	} else if (_id == SignReqPacket) {
 		DEV_GUARDED(_p->x_knownSign)
 		{
+			if (_p->m_knownSign.exist(_key)) return;
 			if (_p->m_knownSign.size() > kKnownSign) {
 				_p->m_knownSign.pop();
 			}
@@ -683,6 +686,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	} else if (_id == ViewChangeReqPacket) {
 		DEV_GUARDED(_p->x_knownViewChange)
 		{
+			if (_p->m_knownViewChange.exist(_key)) return;
 			if (_p->m_knownViewChange.size() > kKnownViewChange) {
 				_p->m_knownViewChange.pop();
 			}
@@ -691,6 +695,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	} else if (_id == CommitReqPacket) {
 		DEV_GUARDED(_p->x_knownCommit)
 		{
+			if (_p->m_knownCommit.exist(_key)) return;
 			if (_p->m_knownCommit.size() > kKnownCommit) {
 				_p->m_knownCommit.pop();
 			}
@@ -982,7 +987,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	// this is for motivating viewchange, for the envs that if one node crash and other node's view has increased to a large number, than the node restart, it should broadcast a viewchange to other node
 	// other node receive the low view viewchange, would trigger follow code to motivate the node. +1 is to prevent the case that the view just change, for the reason
 	// which the new started node' view must fall behind(>2) the excited node
-	if (_req.view + 1 < m_to_view) {
+	if (_req.view + 1 < m_to_view && _req.idx == _from) { // do not motivate by others transfer
 		LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
 		broadcastViewChangeReq();
 	}
@@ -1164,7 +1169,7 @@ void PBFT::checkAndChangeView() {
 		}
 		
 
-		clearMask();
+		// clearMask(); // can not clear mask here, it will lead to rebroadcast for many old message
 		// start new block log
 		PBFTFlowLog(m_highest_block.number() + m_view, "from viewchange", (int)isLeader(), true);
 	}
