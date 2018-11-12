@@ -80,9 +80,10 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     asioInterface->setSSLContext(m_SSLContext);
 
     auto host = std::make_shared<Host>();
-    host->setASIOInterface(std::make_shared<ASIOInterface>());
+    host->setASIOInterface(asioInterface);
     host->setSessionFactory(std::make_shared<SessionFactory>());
     host->setMessageFactory(std::make_shared<P2PMessageFactory>());
+    host->setHostPort(listenIP, listenPort);
 
     m_p2pService = std::make_shared<Service>();
     m_p2pService->setHost(host);

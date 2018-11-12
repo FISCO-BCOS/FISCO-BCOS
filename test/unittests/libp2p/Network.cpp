@@ -20,6 +20,8 @@
  * @author: yujiechen
  * @date 2018-09-11
  */
+
+#if 0
 #include "../../../libnetwork/Network.h"
 
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -106,3 +108,4 @@ BOOST_AUTO_TEST_CASE(testDeterminPublic)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
+#endif

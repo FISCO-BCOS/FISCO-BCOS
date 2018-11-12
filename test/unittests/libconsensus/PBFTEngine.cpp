@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     NodeIPEndpoint endpoint;
     /// fake session
-    std::shared_ptr<Session> session = FakeSession(key_pair.pub());
+    std::shared_ptr<P2PSession> session = FakeSession(key_pair.pub());
     ///------ test invalid case(recv message from own-node)
     /// check onreceive prepare request
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, prepare_req, PrepareReqPacket, false);
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
         fake_pbft.consensus(), session, viewChange_req, ViewChangeReqPacket, false);
 
     KeyPair key_pair2 = KeyPair::create();
-    std::shared_ptr<Session> session2 = FakeSession(fake_pbft.m_minerList[0]);
+    std::shared_ptr<P2PSession> session2 = FakeSession(fake_pbft.m_minerList[0]);
     /// test invalid case: this node is not miner
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, false);
     ///----- test valid case

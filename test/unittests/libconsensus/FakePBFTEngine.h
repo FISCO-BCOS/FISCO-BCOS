@@ -95,9 +95,9 @@ public:
     void resetConfig() { PBFTEngine::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
-        NetworkException exception, std::shared_ptr<Session> session, P2PMessage::Ptr message)
+        NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
     {
-        return PBFTEngine::onRecvPBFTMessage(exception, session, message);
+        PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }
 
     P2PMessage::Ptr transDataToMessage(
@@ -204,7 +204,7 @@ public:
         for (size_t i = 0; i < m_minerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-            SessionInfo info(m_minerList[i], m_endpoint, std::vector<std::string>());
+            SessionInfo info(m_minerList[i], m_endpoint, std::set<std::string>());
             service->appendSessionInfo(info);
         }
     }

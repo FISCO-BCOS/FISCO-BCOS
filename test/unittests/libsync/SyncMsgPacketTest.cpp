@@ -28,7 +28,7 @@
 #include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
-#include "../../../libnetwork/Common.h"
+#include <libnetwork/Common.h>
 
 using namespace std;
 using namespace dev;
@@ -45,23 +45,26 @@ class SyncMsgPacketFixture : public TestOutputHelperFixture
 public:
     SyncMsgPacketFixture()
     {
-        m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
+        //m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
 
         fakeSessionPtr = createFakeSession();
         fakeTransaction = createFakeTransaction(0);
     }
 
-    std::shared_ptr<SessionFace> createFakeSession(std::string ip = "127.0.0.1")
+    std::shared_ptr<P2PSession> createFakeSession(std::string ip = "127.0.0.1")
     {
         unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(ip), m_listenPort, m_listenPort);
         ;
         KeyPair key_pair = KeyPair::create();
+#if 0
         std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), peer_endpoint);
         PeerSessionInfo peer_info({key_pair.pub(), peer_endpoint.address.to_string(),
             chrono::steady_clock::duration(), 0});
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
+#endif
+        std::shared_ptr<P2PSession> session = std::make_shared<P2PSession>();
         session->start();
         return session;
     }
@@ -86,11 +89,11 @@ public:
         return tx;
     }
 
-    std::shared_ptr<SessionFace> fakeSessionPtr;
+    std::shared_ptr<P2PSession> fakeSessionPtr;
     Transaction fakeTransaction;
 
 protected:
-    FakeHost* m_host;
+    //FakeHost* m_host;
     std::string m_clientVersion = "2.0";
     std::string m_listenIp = "127.0.0.1";
     uint16_t m_listenPort = 30304;

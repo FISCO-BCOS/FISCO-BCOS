@@ -27,6 +27,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <map>
 #include <unordered_map>
 #include <memory>
 #include <libnetwork/Host.h>
@@ -41,7 +42,7 @@ namespace p2p
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service() {};
+    Service();
     virtual ~Service() {}
 
     typedef std::shared_ptr<Service> Ptr;
@@ -50,7 +51,7 @@ public:
     virtual void stop();
     virtual void heartBeat();
 
-    virtual bool running() { return m_run; }
+    virtual bool actived() { return m_run; }
 
     virtual void onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session);
     virtual void onDisconnect(NetworkException e, NodeID nodeID);

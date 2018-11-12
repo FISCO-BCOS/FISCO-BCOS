@@ -23,6 +23,7 @@
 
 #include <libdevcore/CommonJS.h>
 #include <libnetwork/Common.h>
+#include <libdevcore/Common.h>
 #include <libp2p/Service.h>
 #include <boost/random.hpp>
 #include <libdevcore/easylog.h>
@@ -34,6 +35,11 @@ namespace p2p
 {
 
 const uint32_t CHECK_INTERVEL = 5000;
+
+Service::Service() {
+    m_protocolID2Handler = std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
+    m_topic2Handler = std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
+}
 
 void Service::start() {
     if(!m_run) {
@@ -550,7 +556,7 @@ bool Service::isConnected(NodeID nodeID) {
         return false;
     }
 
-    if(!it->second->running()) {
+    if(!it->second->actived()) {
         return false;
     }
 

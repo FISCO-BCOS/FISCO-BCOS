@@ -30,7 +30,7 @@ public:
 
     virtual void start();
     virtual void stop();
-    virtual bool running() { return m_run; }
+    virtual bool actived() { return m_run; }
     virtual void heartBeat();
 
     virtual SessionFace::Ptr session() { return m_session; }

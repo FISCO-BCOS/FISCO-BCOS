@@ -20,6 +20,8 @@
  * @author: yujiechen
  * @date 2018-09-10
  */
+
+#if 0
 #include "../../../libnetwork/Common.h"
 
 #include <libdevcore/Assertions.h>
@@ -242,3 +244,4 @@ BOOST_AUTO_TEST_CASE(testNodeSpec)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
+#endif

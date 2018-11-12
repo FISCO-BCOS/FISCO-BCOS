@@ -43,7 +43,7 @@ public:
     FakeSyncToolsSet(uint64_t _blockNum = 5, size_t const& _transSize = 5)
       : m_txPoolFixture(_blockNum, _transSize), m_fakeBlock()
     {
-        m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
+        //m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
     }
 
     TxPoolPtr getTxPoolPtr() const { return m_txPoolFixture.m_txPool; }
@@ -54,31 +54,36 @@ public:
 
     Block& getBlock() { return m_fakeBlock.getBlock(); }
 
-    SessionPtr createSession(std::string _ip = "127.0.0.1")
+    P2PSession::Ptr createSession(std::string _ip = "127.0.0.1")
     {
         unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(_ip), m_listenPort, m_listenPort);
         KeyPair key_pair = KeyPair::create();
+#if 0
         std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), peer_endpoint);
         PeerSessionInfo peer_info({key_pair.pub(), peer_endpoint.address.to_string(),
             chrono::steady_clock::duration(), 0});
 
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
+#endif
+        std::shared_ptr<P2PSession> session = std::make_shared<P2PSession>();
         session->start();
         return session;
     }
 
-    SessionPtr createSessionWithID(NodeID _peerID, std::string _ip = "127.0.0.1")
+    P2PSession::Ptr createSessionWithID(NodeID _peerID, std::string _ip = "127.0.0.1")
     {
         unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(_ip), m_listenPort, m_listenPort);
-        std::shared_ptr<Peer> peer = std::make_shared<Peer>(_peerID, peer_endpoint);
         PeerSessionInfo peer_info(
-            {_peerID, peer_endpoint.address.to_string(), chrono::steady_clock::duration(), 0});
+            {_peerID, peer_endpoint.address.to_string(), std::chrono::steady_clock::duration(), 0});
 
+#if 0
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
+#endif
+        std::shared_ptr<P2PSession> session = std::make_shared<P2PSession>();
         session->start();
         return session;
     }
@@ -104,7 +109,6 @@ public:
     }
 
 private:
-    FakeHost* m_host;
     std::string m_clientVersion = "2.0";
     std::string m_listenIp = "127.0.0.1";
     uint16_t m_listenPort = 30304;

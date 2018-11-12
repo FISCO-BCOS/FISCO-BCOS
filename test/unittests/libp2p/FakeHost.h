@@ -20,6 +20,7 @@
  * @author: yujiechen
  * @date 2018-09-10
  */
+#if 0
 #pragma once
 
 #include <libdevcore/FileSystem.h>
@@ -500,3 +501,4 @@ static FakeHost* createFakeHostWithSession(std::string const& client_version,
 }
 }  // namespace test
 }  // namespace dev
+#endif

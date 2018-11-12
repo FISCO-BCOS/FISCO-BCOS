@@ -8,6 +8,7 @@
 #include "P2PSession.h"
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
+#include <libdevcore/Common.h>
 #include "Service.h"
 
 using namespace dev;
@@ -26,7 +27,7 @@ void P2PSession::stop() {
 
 void P2PSession::heartBeat() {
     auto service = m_service.lock();
-    if(service && service->running()) {
+    if(service && service->actived()) {
         if(m_session->isConnected()) {
             auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
