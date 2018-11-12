@@ -21,6 +21,7 @@
  */
 
 #include "SyncMaster.h"
+#include <libblockchain/BlockChainInterface.h>
 
 using namespace std;
 using namespace dev;
@@ -76,7 +77,7 @@ SyncStatus SyncMaster::status() const
     return res;
 }
 
-std::string const SyncMaster::syncInfo() const
+string const SyncMaster::syncInfo() const
 {
     json_spirit::Object syncInfo;
     syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));
@@ -387,15 +388,13 @@ bool SyncMaster::maintainDownloadingQueue()
             ExecutiveContext::Ptr exeCtx =
                 m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
             CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
-            /// if commit failed, shouldn't pop block from blockQueue
             if (ret != CommitResult::OK)
             {
-                m_txPool->handleBadBlock(*topBlock);
+                m_txPool->dropBlockTrans(*topBlock);
                 return false;
             }
-
             else
-                m_txPool->dropBlockTrans(*topBlock);
+                m_txPool->handleBadBlock(*topBlock);
             SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
                            << topBlock->header().number() << "/" << topBlock->transactions().size()
                            << "/" << topBlock->headerHash() << endl;

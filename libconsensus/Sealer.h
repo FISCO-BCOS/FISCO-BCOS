@@ -132,7 +132,7 @@ protected:
     bool isBlockSyncing();
     inline void resetSealingBlock()
     {
-        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+        m_blockSync->noteSealingBlockNumber(m_sealing.block.blockHeader().number());
         resetSealingBlock(m_sealing);
     }
     void resetSealingBlock(Sealing& sealing);

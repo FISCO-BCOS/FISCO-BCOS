@@ -384,16 +384,18 @@ void Session::onMessage(
             }
 
             if(it->second->callbackFunc) {
-                auto callback = it->second;
-                auto self = std::weak_ptr<Session>(shared_from_this());
-                server->threadPool()->enqueue([e, callback, self, message]() {
-                    callback->callbackFunc(e, message);
+                auto callback = it->second->callbackFunc;
+                if(callback) {
+                    auto self = std::weak_ptr<Session>(shared_from_this());
+                    server->threadPool()->enqueue([e, callback, self, message]() {
+                        callback(e, message);
 
-                    auto s = self.lock();
-                    if(s) {
-                        s->removeSeqCallback(message->seq());
-                    }
-                });
+                        auto s = self.lock();
+                        if(s) {
+                            s->removeSeqCallback(message->seq());
+                        }
+                    });
+                }
             }
         }
         else {

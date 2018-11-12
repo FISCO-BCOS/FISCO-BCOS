@@ -168,7 +168,7 @@ void Service::onDisconnect(NetworkException e, NodeID nodeID) {
 void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message, P2PSession::Ptr p2pSession) {
     try {
         if(e.errorCode()) {
-            LOG(ERROR) << "P2PSession error, disconnect: " << boost::diagnostic_information(e);
+            LOG(ERROR) << "P2PSession error, disconnect: " << e.errorCode() << ", " << e.what();
 
             p2pSession->stop(UserReason);
             onDisconnect(e, p2pSession->nodeID());
@@ -271,6 +271,9 @@ void Service::asyncSendMessageByNodeID(
 
         if(it != m_sessions.end() && it->second->session()->isConnected()) {
             message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
+            if(message->seq() == 0) {
+                message->setSeq(m_p2pMessageFactory->newSeq());
+            }
 
             auto session = it->second;
             session->session()->asyncSendMessage(message, options, [session, callback](NetworkException e, Message::Ptr message) {

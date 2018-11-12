@@ -71,7 +71,7 @@ public:
 
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
 
-    virtual P2PMessageFactory::Ptr p2pMessageFactory() = 0;
+    virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() = 0;
 };
 
 }  // namespace p2p

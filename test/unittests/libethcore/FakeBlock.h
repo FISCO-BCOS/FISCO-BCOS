@@ -45,9 +45,11 @@ public:
         FakeBlockHeader();
         FakeSigList(size);
         FakeTransaction(size);
+        FakeTransactionReceipt(size);
         m_block.setSigList(m_sigList);
         m_block.setTransactions(m_transaction);
         m_block.setBlockHeader(m_blockHeader);
+        m_block.setTransactionReceipts(m_transactionReceipt);
         BOOST_CHECK(m_transaction == m_block.transactions());
         BOOST_CHECK(m_sigList == m_block.sigList());
         BOOST_CHECK(m_blockHeader = m_block.header());
@@ -157,6 +159,15 @@ public:
         txs.swapOut(m_transactionData);
     }
 
+    void FakeTransactionReceipt(size_t size)
+    {
+        m_transactionReceipt.resize(size);
+        for (size_t i = 0; i < size; ++i)
+        {
+            m_transactionReceipt[i] = m_singleTransactionReceipt;
+        }
+    }
+
     /// fake single transaction
     void fakeSingleTransaction()
     {
@@ -172,6 +183,18 @@ public:
         m_singleTransaction.updateSignature(sig);
     }
 
+    void fakeSingleTransactionReceipt()
+    {
+        h256 root = h256("0x1024");
+        u256 gasUsed = u256(10000);
+        LogEntries logEntries = LogEntries();
+        u256 status = u256(1);
+        bytes outputBytes = bytes();
+        Address address = toAddress(KeyPair::create().pub());
+        m_singleTransactionReceipt =
+            TransactionReceipt(root, gasUsed, logEntries, status, outputBytes, address);
+    }
+
     Block& getBlock() { return m_block; }
     BlockHeader& getBlockHeader() { return m_blockHeader; }
     bytes& getBlockHeaderData() { return m_blockHeaderData; }
@@ -183,6 +206,8 @@ public:
     BlockHeader m_blockHeader;
     Transactions m_transaction;
     Transaction m_singleTransaction;
+    TransactionReceipts m_transactionReceipt;
+    TransactionReceipt m_singleTransactionReceipt;
     std::vector<std::pair<u256, Signature>> m_sigList;
     bytes m_blockHeaderData;
     bytes m_blockData;

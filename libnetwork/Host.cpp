@@ -339,6 +339,12 @@ void Host::asyncConnect(
                 Guard l(x_pendingNodeConns);
                 m_pendingPeerConns.erase(_nodeIPEndpoint.name());
                 socket->close();
+
+                m_threadPool->enqueue([callback, _nodeIPEndpoint] () {
+                    LOG(ERROR) << "Connect to " << _nodeIPEndpoint.name() << " error";
+                    callback(NetworkException(ConnectError, "Connect failed"), NodeID(), std::shared_ptr<SessionFace>());
+                });
+
                 return;
             }
             else

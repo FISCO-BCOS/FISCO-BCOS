@@ -15,7 +15,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Service.h
- *  @author molan
+ *  @author monan
  *  @modify first draft
  *  @date 20180910
  *  @author chaychen
@@ -94,8 +94,8 @@ public:
     virtual std::shared_ptr<Host> host() { return m_host; }
     virtual void setHost(std::shared_ptr<Host> host) { m_host = host; }
 
-    virtual P2PMessageFactory::Ptr p2pMessageFactory() override { return m_p2pMessageFactory; }
-    virtual void setP2PMessageFactory(P2PMessageFactory::Ptr _p2pMessageFactory) { m_p2pMessageFactory = _p2pMessageFactory; }
+    virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override { return m_p2pMessageFactory; }
+    virtual void setP2PMessageFactory(std::shared_ptr<P2PMessageFactory> _p2pMessageFactory) { m_p2pMessageFactory = _p2pMessageFactory; }
 
     virtual KeyPair keyPair() { return m_alias; }
     virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
@@ -129,7 +129,7 @@ private:
     std::shared_ptr<std::unordered_map<std::string, CallbackFuncWithSession>> m_topic2Handler;
     RecursiveMutex x_topic2Handler;
 
-    P2PMessageFactory::Ptr m_p2pMessageFactory;
+    std::shared_ptr<P2PMessageFactory> m_p2pMessageFactory;
     KeyPair m_alias;
 
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
