@@ -296,14 +296,14 @@ static void checkBroadcastSpecifiedMsg(
     {
         fake_pbft.consensus()->broadcastSignReq(prepare_req);
         /// check broadcast cache
-        /*BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        peer_keyPair.pub(), SignReqPacket, key) == false);*/
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                        peer_keyPair.pub(), SignReqPacket, key) == false);
     }
     if (packetType == CommitReqPacket)
     {
         fake_pbft.consensus()->broadcastCommitReq(prepare_req);
-        /*BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        peer_keyPair.pub(), CommitReqPacket, key) == false);*/
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                        peer_keyPair.pub(), CommitReqPacket, key) == false);
     }
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
 
@@ -311,19 +311,14 @@ static void checkBroadcastSpecifiedMsg(
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
-    if (packetType == SignReqPacket)
-    {
-        fake_pbft.consensus()->broadcastSignReq(prepare_req);
-        /// BOOST_CHECK(
-        ///    fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) ==
-        ///    true);
-    }
-    if (packetType == CommitReqPacket)
-    {
-        fake_pbft.consensus()->broadcastCommitReq(prepare_req);
-        /*BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        peer_keyPair.pub(), CommitReqPacket, key) == true);*/
-    }
+
+    T req(prepare_req, fake_pbft.consensus()->keyPair(), fake_pbft.consensus()->nodeIdx());
+    key = req.uniqueKey();
+    bytes data;
+    req.encode(data);
+    fake_pbft.consensus()->broadcastMsg(SignReqPacket, key, ref(data));
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) == true);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
 }
 
@@ -574,11 +569,11 @@ static void testReHandleCommitPrepareCache(
     FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq const& req)
 {
     /// check callback broadcastMsg
-    /*for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
+    for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
     {
         BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-            fake_pbft.m_minerList[i], PrepareReqPacket, req.uniqueKey()));
-    }*/
+                        fake_pbft.m_minerList[i], PrepareReqPacket, req.uniqueKey()) == false);
+    }
 }
 
 }  // namespace test
