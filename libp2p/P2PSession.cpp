@@ -29,14 +29,20 @@ using namespace dev;
 using namespace dev::p2p;
 
 void P2PSession::start() {
-    m_run = true;
-    m_session->start();
-    heartBeat();
+    if(!m_run) {
+        m_run = true;
+        m_session->start();
+        heartBeat();
+    }
 }
 
 void P2PSession::stop(DisconnectReason reason) {
-    m_run = false;
-    m_session->disconnect(reason);
+    if(m_run) {
+        m_run = false;
+        if(m_session->actived()) {
+            m_session->disconnect(reason);
+        }
+    }
 }
 
 void P2PSession::heartBeat() {

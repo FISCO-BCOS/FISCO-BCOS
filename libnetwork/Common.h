@@ -109,10 +109,12 @@ enum P2PExceptionType
     Disconnect,
     P2PExceptionTypeCnt,
     ConnectError,
+    DuplicateSession,
+    ALL,
 };
 
-static std::string g_P2PExceptionMsg[ConnectError] = {
-    "Success", "ProtocolError", "NetworkTimeout", "Disconnect", "P2PError"};
+static std::string g_P2PExceptionMsg[ALL] = {
+    "Success", "ProtocolError", "NetworkTimeout", "Disconnect", "P2PError", "ConnectError", "DuplicateSession"};
 
 enum PacketDecodeStatus
 {

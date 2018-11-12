@@ -136,7 +136,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length, std::sha
     {
         if (ec)
         {
-            LOG(WARNING) << "Error sending: " << ec.message();
+            LOG(WARNING) << "Error sending: " << ec.message()  << " at " << nodeIPEndpoint().name();;
             drop(TCPError);
             return;
         }
@@ -236,6 +236,11 @@ void Session::drop(DisconnectReason _reason)
 
     m_actived = false;
 
+    int errorCode = P2PExceptionType::Disconnect;
+    if(_reason == DuplicatePeer) {
+        errorCode = P2PExceptionType::DuplicateSession;
+    }
+
     LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
     for (auto it : *m_seq2Callback)
     {
@@ -248,8 +253,8 @@ void Session::drop(DisconnectReason _reason)
             LOG(TRACE) << "Session::drop, call callbackFunc by seq=" << it.first;
             if(server) {
                 auto callback = it.second;
-                server->threadPool()->enqueue([callback]() {
-                    callback->callbackFunc(NetworkException(P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]), Message::Ptr());
+                server->threadPool()->enqueue([callback, errorCode]() {
+                    callback->callbackFunc(NetworkException(errorCode, g_P2PExceptionMsg[errorCode]), Message::Ptr());
                 });
             }
         }
@@ -259,8 +264,8 @@ void Session::drop(DisconnectReason _reason)
     if(server && m_messageHandler) {
         auto handler = m_messageHandler;
         auto self = shared_from_this();
-        server->threadPool()->enqueue([handler, self]() {
-            handler(NetworkException(P2PExceptionType::Disconnect, g_P2PExceptionMsg[P2PExceptionType::Disconnect]), self, Message::Ptr());
+        server->threadPool()->enqueue([handler, self, errorCode]() {
+            handler(NetworkException(errorCode, g_P2PExceptionMsg[errorCode]), self, Message::Ptr());
         });
     }
 
@@ -309,7 +314,7 @@ void Session::doRead()
         auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
             if (ec)
             {
-                LOG(WARNING) << "Error sending: " << ec.message();
+                LOG(WARNING) << "Error reading: " << ec.message() << " at " << self->nodeIPEndpoint().name();
                 drop(TCPError);
                 return;
             }
@@ -336,6 +341,7 @@ void Session::doRead()
                 }
                 else
                 {
+                    LOG(ERROR) << "Decode message error: " << result;
                     onMessage(NetworkException(P2PExceptionType::ProtocolError, g_P2PExceptionMsg[P2PExceptionType::ProtocolError]), self, message);
                     break;
                 }

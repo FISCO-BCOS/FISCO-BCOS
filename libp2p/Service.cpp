@@ -28,6 +28,7 @@
 #include <boost/random.hpp>
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
+#include <unordered_map>
 
 namespace dev
 {
@@ -116,7 +117,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
 
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
-    if(it != m_sessions.end() && it->second->session()->isConnected()) {
+    if(it != m_sessions.end() && it->second->actived()) {
         LOG(TRACE) << "Disconnect duplicate peer";
 
         session->disconnect(DuplicatePeer);
@@ -133,7 +134,9 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(session);
     p2pSession->setNodeID(nodeID);
+    p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
+    p2pSession->start();
 
     it = m_sessions.find(nodeID);
     if(it != m_sessions.end()) {
@@ -144,11 +147,10 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     }
 
     LOG(INFO) << "Connection established to: " << nodeID << "@" << session->nodeIPEndpoint().name();
-    p2pSession->session()->start();
 }
 
 void Service::onDisconnect(NetworkException e, NodeID nodeID) {
-    LOG(TRACE) << "Service onDisconnect: " << nodeID;
+    LOG(TRACE) << "Service onDisconnect: " << nodeID << " remove from m_sessions";
     {
         RecursiveGuard l(x_sessions);
         m_sessions.erase(nodeID);
@@ -168,19 +170,21 @@ void Service::onDisconnect(NetworkException e, NodeID nodeID) {
 void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message, P2PSession::Ptr p2pSession) {
     try {
         if(e.errorCode()) {
-            LOG(ERROR) << "P2PSession error, disconnect: " << e.errorCode() << ", " << e.what();
+            LOG(ERROR) << "P2PSession " << p2pSession->nodeID() << "@" << session->nodeIPEndpoint().name() << " error, disconnect: " << e.errorCode() << ", " << e.what();
 
-            p2pSession->stop(UserReason);
-            onDisconnect(e, p2pSession->nodeID());
+            if(e.errorCode() != P2PExceptionType::DuplicateSession) {
+                p2pSession->stop(UserReason);
+                onDisconnect(e, p2pSession->nodeID());
+            }
 
             return;
         }
 
-        LOG(TRACE) << "Service onMessage" << message->seq();
+        LOG(TRACE) << "Service onMessage: " << message->seq();
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
         if(p2pMessage->isRequestPacket()) {
-            LOG(TRACE) << "Request packet";
+            LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-" << p2pMessage->packetType();
             CallbackFuncWithSession callback;
             {
                 RecursiveGuard lock(x_protocolID2Handler);
@@ -269,7 +273,7 @@ void Service::asyncSendMessageByNodeID(
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(nodeID);
 
-        if(it != m_sessions.end() && it->second->session()->isConnected()) {
+        if(it != m_sessions.end() && it->second->actived()) {
             message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
             if(message->seq() == 0) {
                 message->setSeq(m_p2pMessageFactory->newSeq());
@@ -289,13 +293,24 @@ void Service::asyncSendMessageByNodeID(
             BOOST_THROW_EXCEPTION(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]));
         }
     }
+#if 0
+    catch (NetworkException &e) {
+        LOG(ERROR) << "NetworkException:" << boost::diagnostic_information(e);
+
+        m_host->threadPool()->enqueue([callback, e] {
+            callback(e, P2PSession::Ptr(), P2PMessage::Ptr());
+        });
+    }
+#endif
     catch (std::exception& e)
     {
         LOG(ERROR) << "ERROR:" << boost::diagnostic_information(e);
 
-        m_host->threadPool()->enqueue([callback] {
-            callback(NetworkException(), P2PSession::Ptr(), P2PMessage::Ptr());
-        });
+        if(callback) {
+            m_host->threadPool()->enqueue([callback, e] {
+                callback(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]), P2PSession::Ptr(), P2PMessage::Ptr());
+            });
+        }
     }
 }
 
