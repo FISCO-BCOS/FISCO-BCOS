@@ -287,8 +287,8 @@ static void checkBroadcastSpecifiedMsg(
     /// fake prepare_req
     PrepareReq prepare_req = FakePrepareReq(key_pair);
     /// obtain sig of SignReq
-    tmp_req = T(prepare_req, fake_pbft.consensus()->keyPair(), prepare_req.idx);
-    std::string key = tmp_req.sig.hex();
+    tmp_req = T(prepare_req, fake_pbft.consensus()->keyPair(), fake_pbft.consensus()->nodeIdx());
+    std::string key = tmp_req.uniqueKey();
     /// append session info
     appendSessionInfo(fake_pbft, peer_keyPair.pub());
     /// case1: the peer node is not miner
@@ -311,18 +311,14 @@ static void checkBroadcastSpecifiedMsg(
     fake_pbft.m_minerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
-    if (packetType == SignReqPacket)
-    {
-        fake_pbft.consensus()->broadcastSignReq(prepare_req);
-        BOOST_CHECK(
-            fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) == true);
-    }
-    if (packetType == CommitReqPacket)
-    {
-        fake_pbft.consensus()->broadcastCommitReq(prepare_req);
-        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        peer_keyPair.pub(), CommitReqPacket, key) == true);
-    }
+
+    T req(prepare_req, fake_pbft.consensus()->keyPair(), fake_pbft.consensus()->nodeIdx());
+    key = req.uniqueKey();
+    bytes data;
+    req.encode(data);
+    fake_pbft.consensus()->broadcastMsg(SignReqPacket, key, ref(data));
+    BOOST_CHECK(
+        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) == true);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
 }
 
@@ -576,7 +572,7 @@ static void testReHandleCommitPrepareCache(
     for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
     {
         BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-            fake_pbft.m_minerList[i], PrepareReqPacket, req.block_hash.hex()));
+                        fake_pbft.m_minerList[i], PrepareReqPacket, req.uniqueKey()) == false);
     }
 }
 
