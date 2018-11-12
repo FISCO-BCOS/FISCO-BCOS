@@ -112,6 +112,9 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     /// broadcast prepare message
     broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
     handlePrepareMsg(prepare_req);
+    /// note blockSync to the latest number, in case of the block number of other nodes is larger
+    /// than this node
+    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
 }
 
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
@@ -605,9 +608,21 @@ void PBFTEngine::checkAndSave()
             PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
             if (ret == CommitResult::OK)
+            {
                 dropHandledTransactions(block);
+                PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
+            }
             else
+            {
+                PBFTENGINE_LOG(ERROR)
+                    << "[#commitBlock Failed] [highNum/SNum/Shash]:  " << m_highestBlock.number()
+                    << "/" << block.blockHeader().number() << "/"
+                    << block.blockHeader().hash().abridged() << std::endl;
+                /// note blocksync to sync
+                m_onViewChange();
+                m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
+            }
             resetConfig();
         }
         else
