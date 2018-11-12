@@ -543,7 +543,7 @@ bool PBFT::broadcastViewChangeReq() {
 	
 	RLPStream ts;
 	req.streamRLPFields(ts);
-	bool ret = broadcastMsg(req.uniqueKey() + toJS(req.view), ViewChangeReqPacket, ts.out());
+	bool ret = broadcastMsg(req.uniqueKey(), ViewChangeReqPacket, ts.out());
 	return ret;
 }
 
