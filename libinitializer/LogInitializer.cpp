@@ -57,22 +57,22 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
     std::string logPostfix = "log_%datetime{%Y%M%d%H}.log";
     /// init the defaultConf
     /// init global configurations
-    defaultConf.setGlobally(
-        el::ConfigurationType::Enabled, pt.get<std::string>("log.GLOBAL-ENABLED", "true"));
-    defaultConf.setGlobally(el::ConfigurationType::ToFile, "true");
-    defaultConf.setGlobally(el::ConfigurationType::ToStandardOutput, "false");
-    defaultConf.setGlobally(el::ConfigurationType::Format,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::Enabled,
+        pt.get<std::string>("log.GLOBAL-ENABLED", "true"));
+    defaultConf.set(el::Level::Global, el::ConfigurationType::ToFile, "true");
+    defaultConf.set(el::Level::Global, el::ConfigurationType::ToStandardOutput, "false");
+    defaultConf.set(el::Level::Global, el::ConfigurationType::Format,
         pt.get<std::string>(
             "log.GLOBAL-FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"));
-    defaultConf.setGlobally(el::ConfigurationType::MillisecondsWidth,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::MillisecondsWidth,
         pt.get<std::string>("log.GLOBAL-MILLISECONDS_WIDTH", "3"));
-    defaultConf.setGlobally(el::ConfigurationType::PerformanceTracking,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::PerformanceTracking,
         pt.get<std::string>("log.GLOBAL-PERFORMANCE_TRACKING", "false"));
-    defaultConf.setGlobally(el::ConfigurationType::MaxLogFileSize,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::MaxLogFileSize,
         pt.get<std::string>("log.GLOBAL-MAX_LOG_FILE_SIZE", "209715200"));
-    defaultConf.setGlobally(el::ConfigurationType::LogFlushThreshold,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::LogFlushThreshold,
         pt.get<std::string>("log.GLOBAL-LOG_FLUSH_THRESHOLD", "100"));
-    defaultConf.setGlobally(el::ConfigurationType::Filename, logPath + "/" + logPostfix);
+    defaultConf.set(el::Level::Global, el::ConfigurationType::Filename, logPath + "/" + logPostfix);
 
     /// init level log
     defaultConf.set(el::Level::Info, el::ConfigurationType::Enabled,
