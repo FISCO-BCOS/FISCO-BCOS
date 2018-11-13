@@ -158,6 +158,11 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         auto importResult = m_txPool->import(tx);
         if (ImportResult::Success == importResult)
             successCnt++;
+        else if (ImportResult::AlreadyKnown == importResult)
+            SYNCLOG(TRACE) << "[Rcv] [Tx] Duplicate transaction import into txPool from peer "
+                              "[reason/txHash/peer]: "
+                           << int(importResult) << "/" << _packet.nodeId << "/" << move(tx.sha3())
+                           << endl;
         else
             SYNCLOG(TRACE) << "[Rcv] [Tx] Transaction import into txPool FAILED from peer "
                               "[reason/txHash/peer]: "
