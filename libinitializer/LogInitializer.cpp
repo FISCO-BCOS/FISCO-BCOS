@@ -51,7 +51,6 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
     el::Loggers::addFlag(el::LoggingFlag::MultiLoggerSupport);
     el::Loggers::addFlag(el::LoggingFlag::StrictLogFileSizeCheck);
     el::Loggers::setVerboseLevel(10);
-    el::Configurations allConf;
     el::Configurations defaultConf;
     el::Logger* fileLogger = el::Loggers::getLogger("fileLogger");
     std::string logPath = pt.get<std::string>("log.LOG_PATH", "./log/");
@@ -60,6 +59,8 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
     /// init global configurations
     defaultConf.setGlobally(
         el::ConfigurationType::Enabled, pt.get<std::string>("log.GLOBAL-ENABLED", "true"));
+    defaultConf.setGlobally(el::ConfigurationType::ToFile, "true");
+    defaultConf.setGlobally(el::ConfigurationType::ToStandardOutput, "false");
     defaultConf.setGlobally(el::ConfigurationType::Format,
         pt.get<std::string>(
             "log.GLOBAL-FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"));
@@ -107,7 +108,7 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
         pt.get<std::string>("log.VERBOSE-ENABLED", "false"));
     defaultConf.set(
         el::Level::Verbose, el::ConfigurationType::Filename, logPath + "verbose_" + logPostfix);
-    el::Loggers::reconfigureLogger("default", allConf);
+    el::Loggers::reconfigureLogger("default", defaultConf);
     el::Loggers::reconfigureLogger(fileLogger, defaultConf);
     el::Helpers::installPreRollOutCallback(rolloutHandler);
 }
