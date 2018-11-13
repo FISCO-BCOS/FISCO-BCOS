@@ -908,6 +908,7 @@ void PBFTEngine::checkTimeout()
             m_toView += u256(1);
             m_leaderFailed = true;
             m_timeManager.updateChangeCycle();
+            m_blockSync->noteSealingBlockNumber(m_blockChain->number());
             m_timeManager.m_lastConsensusTime = utcTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
