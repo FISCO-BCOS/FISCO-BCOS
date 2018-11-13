@@ -593,6 +593,10 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getLocalisedTxByHash(hash);
         auto txReceipt = blockchain->getTransactionReceiptByHash(hash);
+        if (tx.blockNumber() == 0 &&
+            tx.blockHash() ==
+                jsToFixed<32>("0x0000000000000000000000000000000000000000000000000000000000000000"))
+            return Json::Value(Json::nullValue);
         response["transactionHash"] = _transactionHash;
         response["transactionIndex"] = toJS(tx.transactionIndex());
         response["blockNumber"] = toJS(tx.blockNumber());
