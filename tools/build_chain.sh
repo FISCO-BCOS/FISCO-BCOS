@@ -282,13 +282,13 @@ generate_config_ini()
     listen_port=$(( port_start + index * 4 ))
     $ip_list
 [group]
-    group_config.1=group.1.ini
+    group_config.1=conf/group.1.ini
 [secure]
     ;\${DATAPATH} == data_path
     data_path=conf/
-    key=\${DATAPATH}/node.key
-    cert=\${DATAPATH}/node.crt
-    ca_cert=\${DATAPATH}/ca.crt
+    key=node.key
+    cert=node.crt
+    ca_cert=ca.crt
 [log]
     LOG_PATH=./log
     GLOBAL-ENABLED=true
@@ -300,10 +300,10 @@ generate_config_ini()
     INFO-ENABLED=true
     WARNING-ENABLED=true
     ERROR-ENABLED=true
-    DEBUG-ENABLED=true
-    TRACE-ENABLED=true
-    FATAL-ENABLED=true
-    VERBOSE-ENABLED=true
+    DEBUG-ENABLED=false
+    TRACE-ENABLED=false
+    FATAL-ENABLED=false
+    VERBOSE-ENABLED=false
 EOF
 }
 
@@ -448,9 +448,9 @@ fi
 if [ ! -e "$ca_file" ]; then
     echo "Generating CA key..."
     dir_must_not_exists $output_dir/chain
-    gen_chain_cert "" $output_dir/chain >$output_dir/$0.log 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
+    gen_chain_cert "" $output_dir/chain >$output_dir/build.log 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
     mv $output_dir/chain $output_dir/cert
-    gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/$0.log 2>&1
+    gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/build.log 2>&1
     ca_file="$output_dir/cert/ca.key"
 fi
 
@@ -469,7 +469,7 @@ for line in ${ip_array[*]};do
         
         while :
         do
-            gen_node_cert "" ${output_dir}/cert/agency $node_dir >$output_dir/$0.log 2>&1
+            gen_node_cert "" ${output_dir}/cert/agency $node_dir >$output_dir/build.log 2>&1
             mkdir -p ${conf_path}/
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
@@ -518,7 +518,7 @@ for line in ${ip_array[*]};do
     done
     chmod +x "$output_dir/start_all.sh"
 done 
-rm $output_dir/$0.log cert.cnf
+rm $output_dir/build.log cert.cnf
 echo "=========================================="
 echo "FISCO-BCOS Path : $eth_path"
 [ ! -z $ip_file ] && echo "IP List File    : $ip_file"
