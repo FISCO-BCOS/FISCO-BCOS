@@ -53,6 +53,13 @@ void pthread_setThreadName(std::string const& _n);
 std::string getThreadName();
 }  // namespace dev
 
+#define MY_CUSTOM_LOGGER(LEVEL) CLOG(LEVEL, "default", "fileLogger")
+#undef LOG
+#define LOG(LEVEL) CLOG(LEVEL, "default", "fileLogger")
+#undef VLOG
+#define VLOG(LEVEL) CVLOG(LEVEL, "default", "fileLogger")
+#define LOGCOMWARNING LOG(WARNING) << "common|"
+
 namespace dev
 {
 class LogOutputStreamBase
