@@ -106,8 +106,10 @@ void Host::startAccept(boost::system::error_code boost_error)
                     NodeIPEndpoint(endpoint.address(), endpoint.port(), endpoint.port()));
                 LOG(DEBUG) << "client port:" << endpoint.port()
                            << "|ip:" << endpoint.address().to_string();
+#if 0
                 LOG(DEBUG) << "server port:" << m_listenPort
                            << "|ip:" << m_listenHost;
+#endif
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
@@ -214,6 +216,13 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 void Host::handshakeServer(const boost::system::error_code& error,
     std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket)
 {
+    if(error) {
+        LOG(WARNING) << "Handshake failed: " << error << socket->nodeIPEndpoint().name();
+        socket->close();
+
+        return;
+    }
+
     if(m_run) {
         std::string node_id_str(*endpointPublicKey);
         NodeID nodeID = NodeID(node_id_str);
@@ -372,6 +381,18 @@ void Host::handshakeClient(const boost::system::error_code& error,
     std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
     NodeIPEndpoint _nodeIPEndpoint)
 {
+    {
+        Guard l(x_pendingNodeConns);
+        m_pendingPeerConns.erase(_nodeIPEndpoint.name());
+    }
+
+    if(error) {
+        LOG(WARNING) << "Handshake failed: " << error << " " << _nodeIPEndpoint.name();
+        socket->close();
+
+        return;
+    }
+
     if(m_run) {
        std::string node_id_str(*endpointPublicKey);
        NodeID nodeID = NodeID(node_id_str);

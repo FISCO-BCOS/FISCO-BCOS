@@ -46,9 +46,11 @@ void P2PSession::stop(DisconnectReason reason) {
 }
 
 void P2PSession::heartBeat() {
+    LOG(TRACE) << "P2PSession onHeartBeat: " << m_nodeID << "@" << m_session->nodeIPEndpoint().name();
     auto service = m_service.lock();
     if(service && service->actived()) {
         if(m_session->isConnected()) {
+#if 0
             auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
             message->setProtocolID(dev::eth::ProtocolID::AMOP);
@@ -61,6 +63,7 @@ void P2PSession::heartBeat() {
             std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
 
             m_session->asyncSendMessage(message);
+#endif
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());

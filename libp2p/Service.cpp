@@ -200,7 +200,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
                 });
             }
             else {
-                LOG(WARNING) << "Request callback not found" << message->seq();
+                LOG(WARNING) << "Request protocolID not found" << message->seq();
             }
         }
         else {
@@ -214,7 +214,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
 
 P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message)
 {
-    P2PMSG_LOG(DEBUG) << "[#sendMessageByNodeID] [nodeID]: " << toJS(nodeID);
+    //P2PMSG_LOG(DEBUG) << "[#sendMessageByNodeID] [nodeID]: " << nodeID;
     try
     {
         struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
@@ -267,7 +267,7 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
 void Service::asyncSendMessageByNodeID(
     NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
-    P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] [nodeID]: " << toJS(nodeID);
+    P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] nodeID: " << nodeID.hex();
     try
     {
         RecursiveGuard l(x_sessions);
@@ -279,6 +279,8 @@ void Service::asyncSendMessageByNodeID(
                 message->setSeq(m_p2pMessageFactory->newSeq());
             }
 
+            P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] seq: " << message->seq() << " nodeID: " << nodeID.hex();
+
             auto session = it->second;
             session->session()->asyncSendMessage(message, options, [session, callback](NetworkException e, Message::Ptr message) {
                 P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
@@ -288,7 +290,7 @@ void Service::asyncSendMessageByNodeID(
             });
         }
         else {
-            LOG(WARNING) << "NodeID: " << nodeID << " inactived";
+            LOG(WARNING) << "NodeID: " << nodeID.hex() << " inactived";
 
             BOOST_THROW_EXCEPTION(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]));
         }
@@ -553,9 +555,9 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
             auto s = m_sessions;
             for (auto const& i : s)
             {
-                LOG(TRACE) << "Finding nodeID: " << i.first;
                 if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
                 {
+                    LOG(TRACE) << "Finding nodeID: " << i.first;
                     infos.push_back(
                         SessionInfo(i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
                 }

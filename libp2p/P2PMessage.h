@@ -24,6 +24,7 @@
 #include <libnetwork/Common.h>
 #include <memory>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Protocol.h>
 
 namespace dev {
 namespace p2p {
@@ -117,7 +118,6 @@ public:
     virtual Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
-        message->setSeq(newSeq());
 
         return message;
     }

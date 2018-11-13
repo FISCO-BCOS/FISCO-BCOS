@@ -78,6 +78,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options = Options()
         return;
     }
 
+    LOG(TRACE) << "Session sendMessage seq: " << message->seq();
     auto handler = std::make_shared<ResponseCallback>();
     handler->callbackFunc = callback;
     if(options.timeout > 0) {
