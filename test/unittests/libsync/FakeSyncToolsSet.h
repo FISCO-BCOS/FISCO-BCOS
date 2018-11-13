@@ -31,21 +31,17 @@ namespace dev
 {
 namespace test
 {
-
-class FakeSession: public P2PSession {
+class FakeSession : public P2PSession
+{
 public:
-    FakeSession():P2PSession() {};
-    virtual ~FakeSession() {};
+    FakeSession() : P2PSession(){};
+    virtual ~FakeSession(){};
 
     virtual bool actived() override { return m_run; }
 
-    virtual void start() override {
-        m_run = true;
-    }
+    virtual void start() override { m_run = true; }
 
-    virtual void stop(DisconnectReason reason) {
-        m_run = false;
-    }
+    virtual void stop(DisconnectReason reason) { m_run = false; }
 
     bool m_run = false;
 };
@@ -62,7 +58,7 @@ public:
     FakeSyncToolsSet(uint64_t _blockNum = 5, size_t const& _transSize = 5)
       : m_txPoolFixture(_blockNum, _transSize), m_fakeBlock()
     {
-        //m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
+        // m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
     }
 
     TxPoolPtr getTxPoolPtr() const { return m_txPoolFixture.m_txPool; }

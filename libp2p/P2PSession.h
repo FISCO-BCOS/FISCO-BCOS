@@ -21,26 +21,24 @@
 
 #pragma once
 
-#include <memory>
-#include <libnetwork/Session.h>
 #include <libnetwork/Common.h>
+#include <libnetwork/Session.h>
+#include <memory>
 
 namespace dev
 {
 namespace p2p
 {
-
 class Service;
 
-class P2PSession: public std::enable_shared_from_this<P2PSession> {
+class P2PSession : public std::enable_shared_from_this<P2PSession>
+{
 public:
     typedef std::shared_ptr<P2PSession> Ptr;
 
-    P2PSession() {
-        m_topics = std::make_shared<std::set<std::string> >();
-    }
+    P2PSession() { m_topics = std::make_shared<std::set<std::string> >(); }
 
-    virtual ~P2PSession() {};
+    virtual ~P2PSession(){};
 
     virtual void start();
     virtual void stop(DisconnectReason reason);
@@ -71,5 +69,5 @@ private:
     const uint32_t MAX_IDLE = HEARTBEAT_INTERVEL * 10;
 };
 
-}
-}
+}  // namespace p2p
+}  // namespace dev

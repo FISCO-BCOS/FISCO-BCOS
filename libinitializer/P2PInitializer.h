@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include <libp2p/Service.h>
 #include "Common.h"
 #include "SecureInitializer.h"
 #include <libp2p/P2PInterface.h>
@@ -33,7 +32,6 @@ namespace dev
 {
 namespace initializer
 {
-
 class P2PInitializer : public std::enable_shared_from_this<P2PInitializer>
 {
 public:

@@ -80,7 +80,8 @@ static std::shared_ptr<P2PSession> FakeSession(Public node_id)
 {
     ba::io_service m_ioservice(2);
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-    //std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice, m_endpoint);
+    // std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice,
+    // m_endpoint);
 #if 0
     std::shared_ptr<Session> session = std::make_shared<Session>(
         nullptr, fake_socket, std::make_shared<Peer>(node_id, m_endpoint), PeerSessionInfo());
@@ -101,8 +102,9 @@ P2PMessage::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& re
 
 /// check the data received from the network
 template <typename T>
-void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft, std::shared_ptr<P2PSession> session,
-    T const& req, PACKET_TYPE const& packetType, bool const& valid = false)
+void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft,
+    std::shared_ptr<P2PSession> session, T const& req, PACKET_TYPE const& packetType,
+    bool const& valid = false)
 {
     P2PMessage::Ptr message_ptr = FakeReqMessage(pbft, req, packetType, ProtocolID::PBFT);
     pbft->onRecvPBFTMessage(NetworkException(), session, message_ptr);

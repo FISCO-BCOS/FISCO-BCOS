@@ -22,6 +22,8 @@
  * @date: 2018-09-23
  */
 #pragma once
+#include "../libp2p/P2PInterface.h"
+#include "../libp2p/Service.h"
 #include "TransactionNonceCheck.h"
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
@@ -30,8 +32,6 @@
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
-#include "../libp2p/P2PInterface.h"
-#include "../libp2p/Service.h"
 using namespace dev::eth;
 using namespace dev::p2p;
 
@@ -146,8 +146,8 @@ protected:
     ImportResult import(Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
     /// obtain a transaction from lower network
-    void enqueue(
-        dev::p2p::NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr pMessage);
+    void enqueue(dev::p2p::NetworkException exception, std::shared_ptr<P2PSession> session,
+        P2PMessage::Ptr pMessage);
     /// verify transcation
     virtual ImportResult verify(
         Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);

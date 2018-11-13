@@ -20,14 +20,16 @@
  */
 
 #pragma once
+#include "P2PMessage.h"
+#include "P2PSession.h"
+#include <libdevcore/FixedHash.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/SessionFace.h>
-#include <libdevcore/FixedHash.h>
 #include <memory>
-#include "P2PSession.h"
-#include "P2PMessage.h"
 
-#define CallbackFuncWithSession std::function<void(dev::p2p::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr)>
+#define CallbackFuncWithSession                                                           \
+    std::function<void(dev::p2p::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, \
+        dev::p2p::P2PMessage::Ptr)>
 
 namespace dev
 {
@@ -37,7 +39,7 @@ class Host;
 class P2PInterface
 {
 public:
-    virtual ~P2PInterface() {};
+    virtual ~P2PInterface(){};
 
     virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) = 0;
 
@@ -55,7 +57,8 @@ public:
 
     virtual void asyncBroadcastMessage(P2PMessage::Ptr message, Options options) = 0;
 
-    virtual void registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
+    virtual void registerHandlerByProtoclID(
+        PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
 
     virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) = 0;
 

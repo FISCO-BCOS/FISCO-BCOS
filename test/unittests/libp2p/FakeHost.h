@@ -26,12 +26,12 @@
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/SecureInitializer.h>
-#include <test/tools/libutils/Common.h>
-#include <test/tools/libutils/TestOutputHelper.h>
-#include <boost/test/unit_test.hpp>
 #include <libnetwork/Host.h>
 #include <libnetwork/Session.h>
 #include <libnetwork/SessionFace.h>
+#include <test/tools/libutils/Common.h>
+#include <test/tools/libutils/TestOutputHelper.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::p2p;

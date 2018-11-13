@@ -27,10 +27,10 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Protocol.h>
-#include <boost/program_options.hpp>
-#include <memory>
 #include <libnetwork/Host.h>
 #include <libp2p/Service.h>
+#include <boost/program_options.hpp>
+#include <memory>
 
 INITIALIZE_EASYLOGGINGPP
 using namespace dev;

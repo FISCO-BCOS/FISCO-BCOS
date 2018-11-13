@@ -22,8 +22,8 @@
  */
 
 #include "SyncMsgPacket.h"
-#include <libp2p/Service.h>
 #include <libp2p/P2PSession.h>
+#include <libp2p/Service.h>
 
 using namespace std;
 using namespace dev;

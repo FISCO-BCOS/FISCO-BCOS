@@ -20,6 +20,9 @@
  * @date: 2018-10-16
  */
 #pragma once
+#include "../libnetwork/Common.h"
+#include "../libnetwork/Session.h"
+#include "../libp2p/P2PInterface.h"
 #include "Common.h"
 #include "DownloadingBlockQueue.h"
 #include <libblockchain/BlockChainInterface.h>
@@ -31,9 +34,6 @@
 #include <queue>
 #include <set>
 #include <vector>
-#include "../libnetwork/Common.h"
-#include "../libnetwork/Session.h"
-#include "../libp2p/P2PInterface.h"
 
 
 namespace dev

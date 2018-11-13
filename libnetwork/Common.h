@@ -42,12 +42,12 @@
 #include <boost/logic/tribool.hpp>
 
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Protocol.h>
-#include <libdevcore/FixedHash.h>
 #include <chrono>
 #include <sstream>
 
@@ -113,8 +113,8 @@ enum P2PExceptionType
     ALL,
 };
 
-static std::string g_P2PExceptionMsg[ALL] = {
-    "Success", "ProtocolError", "NetworkTimeout", "Disconnect", "P2PError", "ConnectError", "DuplicateSession"};
+static std::string g_P2PExceptionMsg[ALL] = {"Success", "ProtocolError", "NetworkTimeout",
+    "Disconnect", "P2PError", "ConnectError", "DuplicateSession"};
 
 enum PacketDecodeStatus
 {
@@ -124,22 +124,23 @@ enum PacketDecodeStatus
 
 struct Options
 {
-    uint32_t subTimeout = 0;  ///< The timeout value of every node, used in send message to topic, in
-                          ///< milliseconds.
-    uint32_t timeout = 0;     ///< The timeout value of async function, in milliseconds.
+    uint32_t subTimeout = 0;  ///< The timeout value of every node, used in send message to topic,
+                              ///< in milliseconds.
+    uint32_t timeout = 0;  ///< The timeout value of async function, in milliseconds.
 };
 
-class Message: public std::enable_shared_from_this<Message> {
+class Message : public std::enable_shared_from_this<Message>
+{
 public:
-	virtual ~Message() {};
+    virtual ~Message(){};
 
-	typedef std::shared_ptr<Message> Ptr;
+    typedef std::shared_ptr<Message> Ptr;
 
-	virtual uint32_t length() = 0;
-	virtual uint32_t seq() = 0;
+    virtual uint32_t length() = 0;
+    virtual uint32_t seq() = 0;
 
-	virtual void encode(bytes &buffer) = 0;
-	virtual ssize_t decode(const byte *buffer, size_t size) = 0;
+    virtual void encode(bytes& buffer) = 0;
+    virtual ssize_t decode(const byte* buffer, size_t size) = 0;
 };
 
 class MessageFactory : public std::enable_shared_from_this<MessageFactory>
@@ -155,7 +156,8 @@ class NetworkException : public std::exception
 {
 public:
     NetworkException(){};
-    NetworkException(int _errorCode, const std::string& _msg) : m_errorCode(_errorCode), m_msg(_msg){};
+    NetworkException(int _errorCode, const std::string& _msg)
+      : m_errorCode(_errorCode), m_msg(_msg){};
 
     virtual int errorCode() { return m_errorCode; };
     virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return m_msg.c_str(); };
@@ -217,7 +219,7 @@ struct NodeIPEndpoint
     std::string name() const
     {
         std::ostringstream os;
-        //os << address.to_string() << ":" << tcpPort << ":" << udpPort;
+        // os << address.to_string() << ":" << tcpPort << ":" << udpPort;
         os << address.to_string() << ":" << tcpPort;
         return os.str();
     }
@@ -248,8 +250,7 @@ struct SessionInfo
     NodeID nodeID;
     NodeIPEndpoint nodeIPEndpoint;
     std::set<std::string> topics;
-    SessionInfo(NodeID _nodeID, NodeIPEndpoint _nodeIPEndpoint,
-        std::set<std::string> _topics)
+    SessionInfo(NodeID _nodeID, NodeIPEndpoint _nodeIPEndpoint, std::set<std::string> _topics)
     {
         nodeID = _nodeID;
         nodeIPEndpoint = _nodeIPEndpoint;

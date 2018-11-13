@@ -24,16 +24,16 @@
  */
 
 #pragma once
+#include "P2PInterface.h"
+#include "P2PMessage.h"
+#include "P2PSession.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
-#include <map>
-#include <unordered_map>
-#include <memory>
 #include <libnetwork/Host.h>
-#include "P2PInterface.h"
-#include "P2PSession.h"
-#include "P2PMessage.h"
+#include <map>
+#include <memory>
+#include <unordered_map>
 
 namespace dev
 {
@@ -56,7 +56,8 @@ public:
 
     virtual void onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session);
     virtual void onDisconnect(NetworkException e, NodeID nodeID);
-    virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message, P2PSession::Ptr p2pSession);
+    virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
+        P2PSession::Ptr p2pSession);
 
     virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) override;
     virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
@@ -67,35 +68,58 @@ public:
         CallbackFuncWithSession callback, Options options) override;
 
     virtual void asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message) override;
-    virtual void asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message) override;
+    virtual void asyncMulticastMessageByNodeIDList(
+        NodeIDs nodeIDs, P2PMessage::Ptr message) override;
     virtual void asyncBroadcastMessage(P2PMessage::Ptr message, Options options) override;
 
-    virtual void registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
-    virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
+    virtual void registerHandlerByProtoclID(
+        PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
+    virtual void registerHandlerByTopic(
+        std::string topic, CallbackFuncWithSession handler) override;
 
     virtual std::map<NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
-    virtual void setStaticNodes(std::map<NodeIPEndpoint, NodeID> staticNodes) { m_staticNodes = staticNodes; }
+    virtual void setStaticNodes(std::map<NodeIPEndpoint, NodeID> staticNodes)
+    {
+        m_staticNodes = staticNodes;
+    }
 
-    virtual SessionInfos sessionInfos() override; ///< Only connected node
+    virtual SessionInfos sessionInfos() override;  ///< Only connected node
 
     virtual SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override;
 
     virtual bool isConnected(NodeID nodeID) override;
 
-    virtual h512s getNodeListByGroupID(GROUP_ID groupID) override { return m_groupID2NodeList[groupID]; }
-    virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> _groupID2NodeList) override { m_groupID2NodeList = _groupID2NodeList; }
+    virtual h512s getNodeListByGroupID(GROUP_ID groupID) override
+    {
+        return m_groupID2NodeList[groupID];
+    }
+    virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> _groupID2NodeList) override
+    {
+        m_groupID2NodeList = _groupID2NodeList;
+    }
 
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
     virtual std::shared_ptr<std::vector<std::string>> topics() override { return m_topics; }
-    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override { RecursiveMutex(x_topics); m_topics = _topics; ++m_topicSeq; }
+    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    {
+        RecursiveMutex(x_topics);
+        m_topics = _topics;
+        ++m_topicSeq;
+    }
 
     virtual std::shared_ptr<Host> host() { return m_host; }
     virtual void setHost(std::shared_ptr<Host> host) { m_host = host; }
 
-    virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override { return m_p2pMessageFactory; }
-    virtual void setP2PMessageFactory(std::shared_ptr<P2PMessageFactory> _p2pMessageFactory) { m_p2pMessageFactory = _p2pMessageFactory; }
+    virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override
+    {
+        return m_p2pMessageFactory;
+    }
+    virtual void setP2PMessageFactory(std::shared_ptr<P2PMessageFactory> _p2pMessageFactory)
+    {
+        m_p2pMessageFactory = _p2pMessageFactory;
+    }
 
     virtual KeyPair keyPair() { return m_alias; }
     virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }

@@ -33,6 +33,7 @@
 #include "libdevcore/ThreadPool.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libdevcore/FixedHash.h>
+#include <libp2p/Service.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -41,7 +42,6 @@
 #include <queue>
 #include <string>
 #include <thread>
-#include <libp2p/Service.h>
 
 namespace dev
 {

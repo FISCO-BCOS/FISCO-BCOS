@@ -28,13 +28,13 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/easylog.h>
 #include <libdevcore/ThreadPool.h>
+#include <libdevcore/easylog.h>
 #include <chrono>
 
-#include "SessionFace.h"
 #include "ASIOInterface.h"
 #include "Host.h"
+#include "SessionFace.h"
 
 using namespace dev;
 using namespace dev::p2p;
@@ -50,7 +50,8 @@ Session::~Session()
 
     try
     {
-        if(m_socket) {
+        if (m_socket)
+        {
             bi::tcp::socket& socket = m_socket->ref();
             if (m_socket->isConnected())
             {
@@ -66,14 +67,16 @@ Session::~Session()
     }
 }
 
-void Session::asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc()) {
+void Session::asyncSendMessage(
+    Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc())
+{
     auto server = m_server.lock();
-    if(!actived()) {
+    if (!actived())
+    {
         LOG(WARNING) << "Session inactived";
 
-        server->threadPool()->enqueue([callback] {
-            callback(NetworkException(-1, "Session inactived"), Message::Ptr());
-        });
+        server->threadPool()->enqueue(
+            [callback] { callback(NetworkException(-1, "Session inactived"), Message::Ptr()); });
 
         return;
     }
@@ -81,20 +84,21 @@ void Session::asyncSendMessage(Message::Ptr message, Options options = Options()
     LOG(TRACE) << "Session sendMessage seq: " << message->seq();
     auto handler = std::make_shared<ResponseCallback>();
     handler->callbackFunc = callback;
-    if(options.timeout > 0) {
-        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler = server->asioInterface()->newTimer(options.timeout);
+    if (options.timeout > 0)
+    {
+        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
+            server->asioInterface()->newTimer(options.timeout);
 
         auto session = std::weak_ptr<Session>(shared_from_this());
-        timeoutHandler->async_wait(
-            boost::bind(&Session::onTimeout, shared_from_this(),
-                        boost::asio::placeholders::error, message->seq()));
+        timeoutHandler->async_wait(boost::bind(&Session::onTimeout, shared_from_this(),
+            boost::asio::placeholders::error, message->seq()));
 
         handler->timeoutHandler = timeoutHandler;
         handler->m_startTime = utcTime();
     }
 
     addSeqCallback(message->seq(), handler);
-    //m_seq2Callback->insert(std::make_pair(message->seq(), handler));
+    // m_seq2Callback->insert(std::make_pair(message->seq(), handler));
 
     auto buffer = std::make_shared<bytes>();
     message->encode(*buffer);
@@ -102,15 +106,18 @@ void Session::asyncSendMessage(Message::Ptr message, Options options = Options()
     send(buffer);
 }
 
-bool Session::actived() const {
+bool Session::actived() const
+{
     auto server = m_server.lock();
-    if(m_actived && server && server->haveNetwork()) return true;
+    if (m_actived && server && server->haveNetwork())
+        return true;
     return false;
 }
 
 void Session::send(std::shared_ptr<bytes> _msg)
 {
-    if(!actived()) {
+    if (!actived())
+    {
         return;
     }
 
@@ -127,9 +134,11 @@ void Session::send(std::shared_ptr<bytes> _msg)
     write();
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer)
+void Session::onWrite(
+    boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer)
 {
-    if(!actived()) {
+    if (!actived())
+    {
         return;
     }
 
@@ -137,7 +146,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length, std::sha
     {
         if (ec)
         {
-            LOG(WARNING) << "Error sending: " << ec.message()  << " at " << nodeIPEndpoint().name();;
+            LOG(WARNING) << "Error sending: " << ec.message() << " at " << nodeIPEndpoint().name();
+            ;
             drop(TCPError);
             return;
         }
@@ -146,7 +156,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length, std::sha
 
         {
             Guard l(x_writeQueue);
-            if(m_writing) {
+            if (m_writing)
+            {
                 m_writing = false;
             }
         }
@@ -163,7 +174,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length, std::sha
 
 void Session::write()
 {
-    if(!actived()) {
+    if (!actived())
+    {
         return;
     }
 
@@ -171,7 +183,8 @@ void Session::write()
     {
         Guard l(x_writeQueue);
 
-        if(m_writing) {
+        if (m_writing)
+        {
             return;
         }
 
@@ -180,7 +193,8 @@ void Session::write()
         std::pair<std::shared_ptr<bytes>, u256> task;
         u256 enter_time = u256(0);
 
-        if(m_writeQueue.empty()) {
+        if (m_writeQueue.empty())
+        {
             m_writing = false;
             return;
         }
@@ -193,20 +207,14 @@ void Session::write()
         auto buffer = task.first;
 
         auto server = m_server.lock();
-        if(server && server->haveNetwork()) {
+        if (server && server->haveNetwork())
+        {
             if (m_socket->isConnected())
             {
                 LOG(TRACE) << "Start send " << buffer->size() << " bytes data";
-                server->asioInterface()->asyncWrite(
-                    m_socket,
-                    boost::asio::buffer(*buffer),
-                    boost::bind(
-                        &Session::onWrite,
-                        session, boost::asio::placeholders::error,
-                        boost::asio::placeholders::bytes_transferred,
-                        buffer
-                    )
-                );
+                server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
+                    boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
+                        boost::asio::placeholders::bytes_transferred, buffer));
             }
             else
             {
@@ -215,7 +223,8 @@ void Session::write()
                 return;
             }
         }
-        else {
+        else
+        {
             LOG(WARNING) << "Host is gone";
             drop(TCPError);
             return;
@@ -238,7 +247,8 @@ void Session::drop(DisconnectReason _reason)
     m_actived = false;
 
     int errorCode = P2PExceptionType::Disconnect;
-    if(_reason == DuplicatePeer) {
+    if (_reason == DuplicatePeer)
+    {
         errorCode = P2PExceptionType::DuplicateSession;
     }
 
@@ -252,21 +262,25 @@ void Session::drop(DisconnectReason _reason)
         if (it.second->callbackFunc)
         {
             LOG(TRACE) << "Session::drop, call callbackFunc by seq=" << it.first;
-            if(server) {
+            if (server)
+            {
                 auto callback = it.second;
                 server->threadPool()->enqueue([callback, errorCode]() {
-                    callback->callbackFunc(NetworkException(errorCode, g_P2PExceptionMsg[errorCode]), Message::Ptr());
+                    callback->callbackFunc(
+                        NetworkException(errorCode, g_P2PExceptionMsg[errorCode]), Message::Ptr());
                 });
             }
         }
     }
     m_seq2Callback->clear();
 
-    if(server && m_messageHandler) {
+    if (server && m_messageHandler)
+    {
         auto handler = m_messageHandler;
         auto self = shared_from_this();
         server->threadPool()->enqueue([handler, self, errorCode]() {
-            handler(NetworkException(errorCode, g_P2PExceptionMsg[errorCode]), self, Message::Ptr());
+            handler(
+                NetworkException(errorCode, g_P2PExceptionMsg[errorCode]), self, Message::Ptr());
         });
     }
 
@@ -296,9 +310,11 @@ void Session::disconnect(DisconnectReason _reason)
 
 void Session::start()
 {
-    if(!m_actived) {
+    if (!m_actived)
+    {
         auto server = m_server.lock();
-        if(server && server->haveNetwork()) {
+        if (server && server->haveNetwork())
+        {
             server->asioInterface()->strandPost(
                 boost::bind(&Session::doRead, shared_from_this()));  // doRead();
 
@@ -310,17 +326,19 @@ void Session::start()
 void Session::doRead()
 {
     auto server = m_server.lock();
-    if(m_actived && server && server->haveNetwork()) {
+    if (m_actived && server && server->haveNetwork())
+    {
         auto self(shared_from_this());
         auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
             if (ec)
             {
-                LOG(WARNING) << "Error reading: " << ec.message() << " at " << self->nodeIPEndpoint().name();
+                LOG(WARNING) << "Error reading: " << ec.message() << " at "
+                             << self->nodeIPEndpoint().name();
                 drop(TCPError);
                 return;
             }
-            LOG(TRACE) << "Read: " << bytesTransferred
-                       << " bytes data:" << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
+            LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:"
+                       << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
             m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
             while (true)
@@ -331,7 +349,8 @@ void Session::doRead()
                 if (result > 0)
                 {
                     LOG(TRACE) << "Decode success: " << result;
-                    NetworkException e(P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
+                    NetworkException e(
+                        P2PExceptionType::Success, g_P2PExceptionMsg[P2PExceptionType::Success]);
                     onMessage(e, self, message);
                     m_data.erase(m_data.begin(), m_data.begin() + result);
                 }
@@ -343,7 +362,9 @@ void Session::doRead()
                 else
                 {
                     LOG(ERROR) << "Decode message error: " << result;
-                    onMessage(NetworkException(P2PExceptionType::ProtocolError, g_P2PExceptionMsg[P2PExceptionType::ProtocolError]), self, message);
+                    onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                  g_P2PExceptionMsg[P2PExceptionType::ProtocolError]),
+                        self, message);
                     break;
                 }
             }
@@ -352,7 +373,8 @@ void Session::doRead()
         if (m_socket->isConnected())
         {
             LOG(TRACE) << "Start read";
-            server->asioInterface()->asyncReadSome(m_socket, boost::asio::buffer(m_recvBuffer, BUFFER_LENGTH), asyncRead);
+            server->asioInterface()->asyncReadSome(
+                m_socket, boost::asio::buffer(m_recvBuffer, BUFFER_LENGTH), asyncRead);
         }
         else
         {
@@ -381,42 +403,50 @@ void Session::onMessage(
     NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message)
 {
     auto server = m_server.lock();
-    if(m_actived && server && server->haveNetwork()) {
+    if (m_actived && server && server->haveNetwork())
+    {
         auto it = m_seq2Callback->find(message->seq());
-        if(it != m_seq2Callback->end()) {
+        if (it != m_seq2Callback->end())
+        {
             LOG(TRACE) << "Found callback: " << message->seq();
 
-            if(it->second->timeoutHandler) {
+            if (it->second->timeoutHandler)
+            {
                 it->second->timeoutHandler->cancel();
             }
 
-            if(it->second->callbackFunc) {
+            if (it->second->callbackFunc)
+            {
                 auto callback = it->second->callbackFunc;
-                if(callback) {
+                if (callback)
+                {
                     auto self = std::weak_ptr<Session>(shared_from_this());
                     server->threadPool()->enqueue([e, callback, self, message]() {
                         callback(e, message);
 
                         auto s = self.lock();
-                        if(s) {
+                        if (s)
+                        {
                             s->removeSeqCallback(message->seq());
                         }
                     });
                 }
             }
         }
-        else {
+        else
+        {
             LOG(TRACE) << "Not found callback, call messageHandler: " << message->seq();
 
-            if(m_messageHandler) {
+            if (m_messageHandler)
+            {
                 auto session = shared_from_this();
                 auto handler = m_messageHandler;
 
-                server->threadPool()->enqueue([session, handler, e, message]() {
-                    handler(e, session, message);
-                });
+                server->threadPool()->enqueue(
+                    [session, handler, e, message]() { handler(e, session, message); });
             }
-            else {
+            else
+            {
                 LOG(WARNING) << "MessageHandler not found";
             }
         }
@@ -425,7 +455,8 @@ void Session::onMessage(
 
 void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
 {
-    if(error) {
+    if (error)
+    {
         LOG(TRACE) << "timer cancel" << error;
         return;
     }
@@ -433,10 +464,13 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     auto server = m_server.lock();
 
     auto it = m_seq2Callback->find(seq);
-    if(it != m_seq2Callback->end()) {
-        if(server) {
+    if (it != m_seq2Callback->end())
+    {
+        if (server)
+        {
             server->threadPool()->enqueue([=]() {
-                NetworkException e(P2PExceptionType::NetworkTimeout, g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
+                NetworkException e(P2PExceptionType::NetworkTimeout,
+                    g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
                 it->second->callbackFunc(e, Message::Ptr());
 
                 m_seq2Callback->erase(it);

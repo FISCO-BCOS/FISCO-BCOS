@@ -32,10 +32,7 @@ namespace dev
 class OverlayDB : public MemoryDB
 {
 public:
-    explicit OverlayDB(std::shared_ptr<db::DatabaseFace> _db = nullptr)
-    {
-        m_db = _db;
-    }
+    explicit OverlayDB(std::shared_ptr<db::DatabaseFace> _db = nullptr) { m_db = _db; }
 
 
     ~OverlayDB();

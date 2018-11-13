@@ -21,10 +21,10 @@
  */
 
 #include "P2PInitializer.h"
+#include <libdevcore/easylog.h>
+#include <libnetwork/Host.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <libnetwork/Host.h>
-#include <libdevcore/easylog.h>
 
 using namespace dev;
 using namespace dev::p2p;

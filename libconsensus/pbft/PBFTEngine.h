@@ -32,9 +32,9 @@
 #include <libdevcore/concurrent_queue.h>
 #include <sstream>
 
-#include <libp2p/Service.h>
-#include <libp2p/P2PSession.h>
 #include <libp2p/P2PMessage.h>
+#include <libp2p/P2PSession.h>
+#include <libp2p/Service.h>
 
 namespace dev
 {
@@ -250,8 +250,8 @@ protected:
      * @return true : the network-received message is valid
      * @return false: the network-received message is invalid
      */
-    bool isValidReq(dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::P2PSession> session,
-        ssize_t& peerIndex) override
+    bool isValidReq(dev::p2p::P2PMessage::Ptr message,
+        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex) override
     {
         /// check message size
         if (message->buffer()->size() <= 0)

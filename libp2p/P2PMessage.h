@@ -21,14 +21,15 @@
 
 #pragma once
 
-#include <libnetwork/Common.h>
-#include <memory>
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
+#include <libnetwork/Common.h>
+#include <memory>
 
-namespace dev {
-namespace p2p {
-
+namespace dev
+{
+namespace p2p
+{
 class P2PMessage : public Message
 {
 public:
@@ -122,7 +123,8 @@ public:
         return message;
     }
 
-    virtual uint32_t newSeq() {
+    virtual uint32_t newSeq()
+    {
         uint32_t seq = ++m_seq;
         return seq;
     }
@@ -130,5 +132,5 @@ public:
     std::atomic<uint32_t> m_seq = {1};
 };
 
-}
-}
+}  // namespace p2p
+}  // namespace dev

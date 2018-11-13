@@ -25,8 +25,8 @@
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/ECDHE.h>
-#include <boost/asio/strand.hpp>
 #include <boost/asio/io_service.hpp>
+#include <boost/asio/strand.hpp>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -46,10 +46,10 @@ namespace dev
 {
 namespace p2p
 {
-class Host: public std::enable_shared_from_this<Host>
+class Host : public std::enable_shared_from_this<Host>
 {
 public:
-    Host() {};
+    Host(){};
     virtual ~Host();
 
     typedef std::shared_ptr<Host> Ptr;
@@ -59,31 +59,54 @@ public:
     virtual void start();
     virtual void stop();
 
-    virtual void asyncConnect(
-        NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback
-    );
+    virtual void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
+        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback);
 
     virtual bool haveNetwork() const { return m_run; }
 
     virtual std::string listenHost() { return m_listenHost; }
     virtual uint16_t listenPort() { return m_listenPort; }
-    virtual void setHostPort(std::string host, uint16_t port) { m_listenHost = host; m_listenPort = port; }
+    virtual void setHostPort(std::string host, uint16_t port)
+    {
+        m_listenHost = host;
+        m_listenPort = port;
+    }
 
-    virtual std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> connectionHandler() { return m_connectionHandler; }
-    virtual void setConnectionHandler(std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> connectionHandler) { m_connectionHandler = connectionHandler; }
+    virtual std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)>
+    connectionHandler()
+    {
+        return m_connectionHandler;
+    }
+    virtual void setConnectionHandler(
+        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)>
+            connectionHandler)
+    {
+        m_connectionHandler = connectionHandler;
+    }
 
     virtual std::shared_ptr<dev::ThreadPool> threadPool() { return m_threadPool; }
-    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool) { m_threadPool = threadPool; }
+    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
+    {
+        m_threadPool = threadPool;
+    }
 
-    virtual std::shared_ptr<ASIOInterface>  asioInterface() { return m_asioInterface; }
-    virtual void setASIOInterface(std::shared_ptr<ASIOInterface> asioInterface) { m_asioInterface = asioInterface; }
+    virtual std::shared_ptr<ASIOInterface> asioInterface() { return m_asioInterface; }
+    virtual void setASIOInterface(std::shared_ptr<ASIOInterface> asioInterface)
+    {
+        m_asioInterface = asioInterface;
+    }
 
     virtual std::shared_ptr<SessionFactory> sessionFactory() { return m_sessionFactory; }
-    virtual void setSessionFactory(std::shared_ptr<SessionFactory> sessionFactory) { m_sessionFactory = sessionFactory; }
+    virtual void setSessionFactory(std::shared_ptr<SessionFactory> sessionFactory)
+    {
+        m_sessionFactory = sessionFactory;
+    }
 
     virtual MessageFactory::Ptr messageFactory() { return m_messageFactory; }
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
+    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    {
+        m_messageFactory = _messageFactory;
+    }
 
 private:
     /// called by 'startedWorking' to accept connections
@@ -99,12 +122,10 @@ private:
     void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
-    void startPeerSession(NodeID nodeID,
-        std::shared_ptr<SocketFace> const& socket,
+    void startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket,
         std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> handler);
 
-    void handshakeClient(const boost::system::error_code& error,
-        std::shared_ptr<SocketFace> socket,
+    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string>& endpointPublicKey,
         std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
         NodeIPEndpoint _nodeIPEndpoint);

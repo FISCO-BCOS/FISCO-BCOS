@@ -20,36 +20,45 @@
  */
 
 #include "P2PSession.h"
+#include "Service.h"
+#include <libdevcore/Common.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
-#include <libdevcore/Common.h>
-#include "Service.h"
 
 using namespace dev;
 using namespace dev::p2p;
 
-void P2PSession::start() {
-    if(!m_run) {
+void P2PSession::start()
+{
+    if (!m_run)
+    {
         m_run = true;
         m_session->start();
         heartBeat();
     }
 }
 
-void P2PSession::stop(DisconnectReason reason) {
-    if(m_run) {
+void P2PSession::stop(DisconnectReason reason)
+{
+    if (m_run)
+    {
         m_run = false;
-        if(m_session->actived()) {
+        if (m_session->actived())
+        {
             m_session->disconnect(reason);
         }
     }
 }
 
-void P2PSession::heartBeat() {
-    LOG(TRACE) << "P2PSession onHeartBeat: " << m_nodeID << "@" << m_session->nodeIPEndpoint().name();
+void P2PSession::heartBeat()
+{
+    LOG(TRACE) << "P2PSession onHeartBeat: " << m_nodeID << "@"
+               << m_session->nodeIPEndpoint().name();
     auto service = m_service.lock();
-    if(service && service->actived()) {
-        if(m_session->isConnected()) {
+    if (service && service->actived())
+    {
+        if (m_session->isConnected())
+        {
 #if 0
             auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
@@ -69,13 +78,15 @@ void P2PSession::heartBeat() {
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
         m_timer = service->host()->asioInterface()->newTimer(HEARTBEAT_INTERVEL);
         m_timer->async_wait([self](boost::system::error_code e) {
-            if(e) {
+            if (e)
+            {
                 LOG(TRACE) << "Timer canceled: " << e;
                 return;
             }
 
             auto s = self.lock();
-            if(s) {
+            if (s)
+            {
                 s->heartBeat();
             }
         });

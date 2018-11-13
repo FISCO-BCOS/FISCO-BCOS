@@ -57,8 +57,9 @@ public:
 
     virtual bool isConnected() const override { return m_socket->isConnected(); }
 
-    virtual void asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback) override;
-    //virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
+    virtual void asyncSendMessage(
+        Message::Ptr message, Options options, CallbackFunc callback) override;
+    // virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
 
@@ -71,13 +72,32 @@ public:
     virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
 
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) { m_messageFactory = _messageFactory; }
+    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    {
+        m_messageFactory = _messageFactory;
+    }
 
-    virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler() { return m_messageHandler; }
-    virtual void setMessageHandler(std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler) override { m_messageHandler = messageHandler; }
+    virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler()
+    {
+        return m_messageHandler;
+    }
+    virtual void setMessageHandler(
+        std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
+        override
+    {
+        m_messageHandler = messageHandler;
+    }
 
-    virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback) { RecursiveGuard l(x_seq2Callback); m_seq2Callback->insert(std::make_pair(seq, callback)); }
-    virtual void removeSeqCallback(uint32_t seq) { RecursiveGuard l(x_seq2Callback); m_seq2Callback->erase(seq); }
+    virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback)
+    {
+        RecursiveGuard l(x_seq2Callback);
+        m_seq2Callback->insert(std::make_pair(seq, callback));
+    }
+    virtual void removeSeqCallback(uint32_t seq)
+    {
+        RecursiveGuard l(x_seq2Callback);
+        m_seq2Callback->erase(seq);
+    }
 
 private:
     void send(std::shared_ptr<bytes> _msg);
@@ -100,9 +120,10 @@ private:
     void write();
 
     /// call by doRead() to deal with mesage
-    void onMessage(NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message);
+    void onMessage(
+        NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message);
 
-    std::weak_ptr<Host> m_server;                        ///< The host that owns us. Never null.
+    std::weak_ptr<Host> m_server;          ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
 
     MessageFactory::Ptr m_messageFactory;
@@ -129,7 +150,7 @@ private:
 
     ///< A call B, the function to call after the response is received by A.
     mutable RecursiveMutex x_seq2Callback;
-    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr> > m_seq2Callback;
+    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
 };
@@ -137,11 +158,10 @@ private:
 class SessionFactory
 {
 public:
-    virtual ~SessionFactory() {};
+    virtual ~SessionFactory(){};
 
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
-        std::shared_ptr<SocketFace> const& _socket,
-        MessageFactory::Ptr _messageFactory)
+        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
         session->setHost(_server);

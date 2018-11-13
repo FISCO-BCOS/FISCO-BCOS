@@ -32,7 +32,6 @@ namespace dev
 {
 namespace p2p
 {
-
 #define CallbackFunc std::function<void(NetworkException, Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
@@ -47,7 +46,7 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 class SessionFace
 {
 public:
-    virtual ~SessionFace() {};
+    virtual ~SessionFace(){};
 
     typedef std::shared_ptr<SessionFace> Ptr;
 
@@ -56,14 +55,17 @@ public:
 
     virtual bool isConnected() const = 0;
 
-    virtual void asyncSendMessage(Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc()) = 0;
-    //virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
+    virtual void asyncSendMessage(Message::Ptr message, Options options = Options(),
+        CallbackFunc callback = CallbackFunc()) = 0;
+    // virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
 
-    virtual void setMessageHandler(std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)> messageHandler) = 0;
+    virtual void setMessageHandler(
+        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
+            messageHandler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
     virtual bool actived() const = 0;
 };
-}
-}
+}  // namespace p2p
+}  // namespace dev

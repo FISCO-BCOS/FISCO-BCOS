@@ -32,11 +32,11 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
-#include <libtxpool/TxPoolInterface.h>
-#include <vector>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libtxpool/TxPoolInterface.h>
+#include <vector>
 
 
 namespace dev

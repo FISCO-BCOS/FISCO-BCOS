@@ -21,15 +21,15 @@
  * @date: 2018-10-24
  */
 
+#include "FakeSyncToolsSet.h"
 #include <libdevcrypto/Common.h>
+#include <libnetwork/Common.h>
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
-#include <libnetwork/Common.h>
-#include "FakeSyncToolsSet.h"
 
 using namespace std;
 using namespace dev;
@@ -46,7 +46,7 @@ class SyncMsgPacketFixture : public TestOutputHelperFixture
 public:
     SyncMsgPacketFixture()
     {
-        //m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
+        // m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
 
         fakeSessionPtr = createFakeSession();
         fakeTransaction = createFakeTransaction(0);
@@ -94,7 +94,7 @@ public:
     Transaction fakeTransaction;
 
 protected:
-    //FakeHost* m_host;
+    // FakeHost* m_host;
     std::string m_clientVersion = "2.0";
     std::string m_listenIp = "127.0.0.1";
     uint16_t m_listenPort = 30304;

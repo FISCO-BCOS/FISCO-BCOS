@@ -23,11 +23,11 @@
 
 #include <libp2p/P2PSession.h>
 
-#include <test/tools/libutils/TestOutputHelper.h>
-#include <boost/test/unit_test.hpp>
 #include <libnetwork/Host.h>
 #include <libnetwork/Session.h>
 #include <libp2p/Service.h>
+#include <test/tools/libutils/TestOutputHelper.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::p2p;
@@ -36,25 +36,22 @@ namespace dev
 {
 namespace test
 {
-
-class MockSession: public Session {
+class MockSession : public Session
+{
 public:
     virtual ~MockSession() {}
 
-    virtual void start() override {
-    }
+    virtual void start() override {}
 
-    virtual void disconnect(DisconnectReason _reason) override {
-    }
+    virtual void disconnect(DisconnectReason _reason) override {}
 
-    virtual bool isConnected() const override {
-        return m_connected;
-    }
+    virtual bool isConnected() const override { return m_connected; }
 
     bool m_connected = false;
 };
 
-class MockService: public Service {
+class MockService : public Service
+{
 public:
     virtual ~MockService() {}
 
@@ -66,12 +63,14 @@ public:
 class P2PSessionFixure
 {
 public:
-    P2PSessionFixure() {
+    P2PSessionFixure()
+    {
         mockSession = std::make_shared<MockSession>();
         mockService = std::make_shared<MockService>();
     }
 
-    P2PSession::Ptr newSession() {
+    P2PSession::Ptr newSession()
+    {
         auto p2pSession = std::make_shared<P2PSession>();
         p2pSession->setSession(mockSession);
         p2pSession->setService(mockService);
@@ -85,34 +84,35 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(SessionTest, P2PSessionFixure)
 
-BOOST_AUTO_TEST_CASE(start) {
+BOOST_AUTO_TEST_CASE(start)
+{
     auto session = newSession();
-    BOOST_CHECK(session->actived() == false );
+    BOOST_CHECK(session->actived() == false);
 
     session->start();
-    BOOST_CHECK(session->actived() == true );
+    BOOST_CHECK(session->actived() == true);
 }
 
-BOOST_AUTO_TEST_CASE(stop) {
+BOOST_AUTO_TEST_CASE(stop)
+{
     auto session = newSession();
     session->start();
-    BOOST_CHECK(session->actived() == true );
+    BOOST_CHECK(session->actived() == true);
 
     session->stop(UserReason);
-    BOOST_CHECK(session->actived() == false );
+    BOOST_CHECK(session->actived() == false);
 }
 
-BOOST_AUTO_TEST_CASE(heartBeat) {
+BOOST_AUTO_TEST_CASE(heartBeat)
+{
     auto session = newSession();
     session->start();
-    BOOST_CHECK(session->actived() == true );
+    BOOST_CHECK(session->actived() == true);
 
     session->heartBeat();
 }
 
-BOOST_AUTO_TEST_CASE(getter) {
-
-}
+BOOST_AUTO_TEST_CASE(getter) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

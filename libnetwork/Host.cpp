@@ -46,11 +46,11 @@
 #include <libethcore/CommonJS.h>
 #include <boost/algorithm/string.hpp>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <set>
 #include <thread>
-#include <functional>
 
 #include "Common.h"
 #include "Session.h"
@@ -88,7 +88,8 @@ void Host::startAccept(boost::system::error_code boost_error)
         auto socket = m_asioInterface->newSocket(NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
         /// define callback after accept connections
-        m_asioInterface->asyncAccept(socket, [=](boost::system::error_code ec) {
+        m_asioInterface->asyncAccept(socket,
+            [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
                 auto remoteEndpoint = socket->remote_endpoint();
                 LOG(INFO) << "P2P Recv Connect: " << remoteEndpoint.address().to_string() << ":"
@@ -216,14 +217,16 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 void Host::handshakeServer(const boost::system::error_code& error,
     std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket)
 {
-    if(error) {
+    if (error)
+    {
         LOG(WARNING) << "Handshake failed: " << error << socket->nodeIPEndpoint().name();
         socket->close();
 
         return;
     }
 
-    if(m_run) {
+    if (m_run)
+    {
         std::string node_id_str(*endpointPublicKey);
         NodeID nodeID = NodeID(node_id_str);
         /// handshake failed
@@ -252,17 +255,21 @@ void Host::handshakeServer(const boost::system::error_code& error,
  *              now include protocolVersion, clientVersion, caps and listenPort
  * @param _s : connected socket(used to init session object)
  */
-void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket, std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> handler)
+void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket,
+    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> handler)
 {
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
-    std::shared_ptr<SessionFace> ps = m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
+    std::shared_ptr<SessionFace> ps =
+        m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
 
     auto connectionHandler = m_connectionHandler;
     m_threadPool->enqueue([ps, connectionHandler, nodeID]() {
-        if(connectionHandler) {
+        if (connectionHandler)
+        {
             connectionHandler(NetworkException(0, ""), nodeID, ps);
         }
-        else {
+        else
+        {
             LOG(WARNING) << "No connectionHandler, new connection may lost";
         }
     });
@@ -284,22 +291,23 @@ void Host::start()
         m_asioInterface->init(m_listenHost, m_listenPort);
 
         auto self = std::weak_ptr<Host>(shared_from_this());
-        m_hostThread = std::make_shared<std::thread>([self]
-        {
+        m_hostThread = std::make_shared<std::thread>([self] {
             auto host = self.lock();
-            while(host && host->haveNetwork())
+            while (host && host->haveNetwork())
             {
                 try
                 {
-                    if(host->asioInterface()->acceptor()) {
+                    if (host->asioInterface()->acceptor())
+                    {
                         host->startAccept();
                     }
 
                     host->asioInterface()->run();
                 }
-                catch (std::exception &e)
+                catch (std::exception& e)
                 {
-                    LOG(WARNING) << "Exception in Network Thread:" << boost::diagnostic_information(e);
+                    LOG(WARNING) << "Exception in Network Thread:"
+                                 << boost::diagnostic_information(e);
                 }
 
                 host->asioInterface()->reset();
@@ -316,17 +324,18 @@ void Host::start()
  * @brief : connect to the server
  * @param _nodeIPEndpoint : the endpoint of the connected server
  */
-void Host::asyncConnect(
-        NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, NodeID nodeID, std::shared_ptr<SessionFace>)> callback)
+void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
+    std::function<void(NetworkException, NodeID nodeID, std::shared_ptr<SessionFace>)> callback)
 {
-    if (!m_run) {
+    if (!m_run)
+    {
         return;
     }
 
     {
         Guard l(x_pendingNodeConns);
-        if (m_pendingPeerConns.count(_nodeIPEndpoint.name())) {
+        if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
+        {
             return;
         }
         m_pendingPeerConns.insert(_nodeIPEndpoint.name());
@@ -339,8 +348,8 @@ void Host::asyncConnect(
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
 
     /// connect to the server
-    m_asioInterface->asyncConnect(socket, _nodeIPEndpoint,
-        [=](boost::system::error_code const& ec) {
+    m_asioInterface->asyncConnect(
+        socket, _nodeIPEndpoint, [=](boost::system::error_code const& ec) {
             if (ec)
             {
                 LOG(ERROR) << "Connection refused to node"
@@ -349,9 +358,10 @@ void Host::asyncConnect(
                 m_pendingPeerConns.erase(_nodeIPEndpoint.name());
                 socket->close();
 
-                m_threadPool->enqueue([callback, _nodeIPEndpoint] () {
+                m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
                     LOG(ERROR) << "Connect to " << _nodeIPEndpoint.name() << " error";
-                    callback(NetworkException(ConnectError, "Connect failed"), NodeID(), std::shared_ptr<SessionFace>());
+                    callback(NetworkException(ConnectError, "Connect failed"), NodeID(),
+                        std::shared_ptr<SessionFace>());
                 });
 
                 return;
@@ -363,8 +373,8 @@ void Host::asyncConnect(
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
                 /// call handshakeClient after handshake succeed
                 m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
-                    boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error, socket,
-                        endpointPublicKey, callback, _nodeIPEndpoint));
+                    boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
+                        socket, endpointPublicKey, callback, _nodeIPEndpoint));
             }
         });
 }
@@ -386,26 +396,28 @@ void Host::handshakeClient(const boost::system::error_code& error,
         m_pendingPeerConns.erase(_nodeIPEndpoint.name());
     }
 
-    if(error) {
+    if (error)
+    {
         LOG(WARNING) << "Handshake failed: " << error << " " << _nodeIPEndpoint.name();
         socket->close();
 
         return;
     }
 
-    if(m_run) {
-       std::string node_id_str(*endpointPublicKey);
-       NodeID nodeID = NodeID(node_id_str);
-       /// handshake failed
-       if (error)
-       {
-           LOG(ERROR) << "Host::async_handshake client err:" << error.message();
-           socket->close();
-           return;
-       }
+    if (m_run)
+    {
+        std::string node_id_str(*endpointPublicKey);
+        NodeID nodeID = NodeID(node_id_str);
+        /// handshake failed
+        if (error)
+        {
+            LOG(ERROR) << "Host::async_handshake client err:" << error.message();
+            socket->close();
+            return;
+        }
 
-       startPeerSession(nodeID, socket, callback);
-   }
+        startPeerSession(nodeID, socket, callback);
+    }
 }
 
 /// stop the network and worker thread

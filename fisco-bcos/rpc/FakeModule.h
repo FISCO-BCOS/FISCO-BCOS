@@ -33,12 +33,11 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libledger/LedgerManager.h>
+#include <libnetwork/Common.h>
 #include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <libnetwork/Common.h>
-#include <libp2p/Service.h>
 
 
 using namespace std;
@@ -59,8 +58,7 @@ namespace demo
 class MockService : public Service
 {
 public:
-    MockService()
-      : Service()
+    MockService() : Service()
     {
         p2p::NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
@@ -78,7 +76,7 @@ public:
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
     virtual void asyncSendMessageByNodeID(p2p::NodeID nodeID, P2PMessage::Ptr message,
-            CallbackFuncWithSession callback, Options options = Options()) override
+        CallbackFuncWithSession callback, Options options = Options()) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;

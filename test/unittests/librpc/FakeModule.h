@@ -33,11 +33,11 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libledger/LedgerManager.h>
+#include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <test/tools/libutils/Common.h>
 #include <test/unittests/libconsensus/FakePBFTEngine.h>
-#include <libp2p/Service.h>
 
 using namespace std;
 using namespace dev;
@@ -73,8 +73,7 @@ public:
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
     void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback,
-        dev::p2p::Options) override
+        CallbackFuncWithSession callback, dev::p2p::Options) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;

@@ -25,13 +25,13 @@
 
 #pragma once
 
+#include "Common.h"
+#include "SocketFace.h"
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
 #include <openssl/ec.h>
 #include <openssl/ssl.h>
 #include <boost/filesystem.hpp>
-#include "Common.h"
-#include "SocketFace.h"
 
 using namespace dev::eth;
 using namespace dev::p2p;
@@ -87,7 +87,10 @@ public:
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
 
     virtual const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
-    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) { m_nodeIPEndpoint = _nodeIPEndpoint; }
+    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint)
+    {
+        m_nodeIPEndpoint = _nodeIPEndpoint;
+    }
     virtual boost::asio::ip::tcp::endpoint remote_endpoint() { return ref().remote_endpoint(); }
 
 protected:

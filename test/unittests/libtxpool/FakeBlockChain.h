@@ -40,16 +40,14 @@ namespace test
 class FakeService : public Service
 {
 public:
-    FakeService() : Service()
-    {}
+    FakeService() : Service() {}
     void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
     void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback,
-        dev::p2p::Options options = dev::p2p::Options()) override
+        CallbackFuncWithSession callback, dev::p2p::Options options = dev::p2p::Options()) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;

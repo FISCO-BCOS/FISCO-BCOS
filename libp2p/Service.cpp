@@ -21,54 +21,63 @@
 
 #include "Service.h"
 
-#include <libdevcore/CommonJS.h>
-#include <libnetwork/Common.h>
 #include <libdevcore/Common.h>
+#include <libdevcore/CommonJS.h>
+#include <libdevcore/easylog.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Host.h>
 #include <libp2p/Service.h>
 #include <boost/random.hpp>
-#include <libdevcore/easylog.h>
-#include <libnetwork/Host.h>
 #include <unordered_map>
 
 namespace dev
 {
 namespace p2p
 {
-
 const uint32_t CHECK_INTERVEL = 5000;
 
-Service::Service() {
-    m_protocolID2Handler = std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
+Service::Service()
+{
+    m_protocolID2Handler =
+        std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
     m_topic2Handler = std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
-    m_topics = std::make_shared<std::vector<std::string> >();
+    m_topics = std::make_shared<std::vector<std::string>>();
 }
 
-void Service::start() {
-    if(!m_run) {
+void Service::start()
+{
+    if (!m_run)
+    {
         m_run = true;
 
         auto self = std::weak_ptr<Service>(shared_from_this());
-        m_host->setConnectionHandler([self] (NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session) {
-            auto service = self.lock();
-            if(service) {
-                service->onConnect(e, nodeID, session);
-            }
-        });
+        m_host->setConnectionHandler(
+            [self](NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session) {
+                auto service = self.lock();
+                if (service)
+                {
+                    service->onConnect(e, nodeID, session);
+                }
+            });
         m_host->start();
 
         heartBeat();
     }
 }
 
-void Service::stop() {
-    if(m_run) {
+void Service::stop()
+{
+    if (m_run)
+    {
         m_run = false;
         m_host->stop();
     }
 }
 
-void Service::heartBeat() {
-    if(!m_run) {
+void Service::heartBeat()
+{
+    if (!m_run)
+    {
         return;
     }
 
@@ -82,22 +91,28 @@ void Service::heartBeat() {
         staticNodes = m_staticNodes;
     }
 
-    //Reconnect all nodes
-    for(auto it: staticNodes) {
-        if(it.second != NodeID()) {
+    // Reconnect all nodes
+    for (auto it : staticNodes)
+    {
+        if (it.second != NodeID())
+        {
             auto its = sessions.find(it.second);
-            if(its != sessions.end() && its->second && its->second->session()->isConnected()) {
+            if (its != sessions.end() && its->second && its->second->session()->isConnected())
+            {
                 continue;
             }
         }
 
-        m_host->asyncConnect(it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        m_host->asyncConnect(
+            it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
+                          std::placeholders::_2, std::placeholders::_3));
     }
 
     auto self = shared_from_this();
     m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
-        if(error) {
+        if (error)
+        {
             LOG(TRACE) << "timer canceled" << error;
             return;
         }
@@ -106,10 +121,12 @@ void Service::heartBeat() {
     });
 }
 
-void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session) {
+void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session)
+{
     LOG(TRACE) << "Service onConnect: " << nodeID;
 
-    if(e.errorCode()) {
+    if (e.errorCode())
+    {
         LOG(ERROR) << "Connect error: " << boost::diagnostic_information(e);
 
         return;
@@ -117,14 +134,16 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
 
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
-    if(it != m_sessions.end() && it->second->actived()) {
+    if (it != m_sessions.end() && it->second->actived())
+    {
         LOG(TRACE) << "Disconnect duplicate peer";
 
         session->disconnect(DuplicatePeer);
         return;
     }
 
-    if(nodeID == id()) {
+    if (nodeID == id())
+    {
         LOG(TRACE) << "Disconnect self";
 
         session->disconnect(DuplicatePeer);
@@ -135,21 +154,25 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     p2pSession->setSession(session);
     p2pSession->setNodeID(nodeID);
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
-    p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
+    p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
     p2pSession->start();
 
     it = m_sessions.find(nodeID);
-    if(it != m_sessions.end()) {
+    if (it != m_sessions.end())
+    {
         it->second = p2pSession;
     }
-    else {
+    else
+    {
         m_sessions.insert(std::make_pair(nodeID, p2pSession));
     }
 
     LOG(INFO) << "Connection established to: " << nodeID << "@" << session->nodeIPEndpoint().name();
 }
 
-void Service::onDisconnect(NetworkException e, NodeID nodeID) {
+void Service::onDisconnect(NetworkException e, NodeID nodeID)
+{
     LOG(TRACE) << "Service onDisconnect: " << nodeID << " remove from m_sessions";
     {
         RecursiveGuard l(x_sessions);
@@ -158,8 +181,10 @@ void Service::onDisconnect(NetworkException e, NodeID nodeID) {
 
     {
         RecursiveGuard l(x_nodes);
-        for(auto it: m_staticNodes) {
-            if(it.second == nodeID) {
+        for (auto it : m_staticNodes)
+        {
+            if (it.second == nodeID)
+            {
                 it.second = NodeID();
                 break;
             }
@@ -167,12 +192,19 @@ void Service::onDisconnect(NetworkException e, NodeID nodeID) {
     }
 }
 
-void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message, P2PSession::Ptr p2pSession) {
-    try {
-        if(e.errorCode()) {
-            LOG(ERROR) << "P2PSession " << p2pSession->nodeID() << "@" << session->nodeIPEndpoint().name() << " error, disconnect: " << e.errorCode() << ", " << e.what();
+void Service::onMessage(
+    NetworkException e, SessionFace::Ptr session, Message::Ptr message, P2PSession::Ptr p2pSession)
+{
+    try
+    {
+        if (e.errorCode())
+        {
+            LOG(ERROR) << "P2PSession " << p2pSession->nodeID() << "@"
+                       << session->nodeIPEndpoint().name()
+                       << " error, disconnect: " << e.errorCode() << ", " << e.what();
 
-            if(e.errorCode() != P2PExceptionType::DuplicateSession) {
+            if (e.errorCode() != P2PExceptionType::DuplicateSession)
+            {
                 p2pSession->stop(UserReason);
                 onDisconnect(e, p2pSession->nodeID());
             }
@@ -183,38 +215,46 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         LOG(TRACE) << "Service onMessage: " << message->seq();
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-        if(p2pMessage->isRequestPacket()) {
-            LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-" << p2pMessage->packetType();
+        if (p2pMessage->isRequestPacket())
+        {
+            LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-"
+                       << p2pMessage->packetType();
             CallbackFuncWithSession callback;
             {
                 RecursiveGuard lock(x_protocolID2Handler);
                 auto it = m_protocolID2Handler->find(p2pMessage->protocolID());
-                if(it != m_protocolID2Handler->end()) {
+                if (it != m_protocolID2Handler->end())
+                {
                     callback = it->second;
                 }
             }
 
-            if(callback) {
+            if (callback)
+            {
                 m_host->threadPool()->enqueue([callback, p2pSession, p2pMessage, e]() {
                     callback(e, p2pSession, p2pMessage);
                 });
             }
-            else {
+            else
+            {
                 LOG(WARNING) << "Request protocolID not found" << message->seq();
             }
         }
-        else {
-            LOG(WARNING) << "Response packet not found seq: " << p2pMessage->seq() << " response, may be timeout";
+        else
+        {
+            LOG(WARNING) << "Response packet not found seq: " << p2pMessage->seq()
+                         << " response, may be timeout";
         }
     }
-    catch(std::exception &e) {
+    catch (std::exception& e)
+    {
         LOG(ERROR) << "onMessage error: " << boost::diagnostic_information(e);
     }
 }
 
 P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message)
 {
-    //P2PMSG_LOG(DEBUG) << "[#sendMessageByNodeID] [nodeID]: " << nodeID;
+    // P2PMSG_LOG(DEBUG) << "[#sendMessageByNodeID] [nodeID]: " << nodeID;
     try
     {
         struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
@@ -224,7 +264,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
 
             SessionCallback() { mutex.lock(); }
 
-            void onResponse(NetworkException _error, std::shared_ptr<P2PSession> session, P2PMessage::Ptr _message)
+            void onResponse(NetworkException _error, std::shared_ptr<P2PSession> session,
+                P2PMessage::Ptr _message)
             {
                 error = _error;
                 response = _message;
@@ -237,8 +278,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
         };
 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
-        CallbackFuncWithSession fp = std::bind(
-            &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+        CallbackFuncWithSession fp = std::bind(&SessionCallback::onResponse, callback,
+            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         asyncSendMessageByNodeID(nodeID, message, fp, Options());
 
         callback->mutex.lock();
@@ -273,23 +314,29 @@ void Service::asyncSendMessageByNodeID(
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(nodeID);
 
-        if(it != m_sessions.end() && it->second->actived()) {
+        if (it != m_sessions.end() && it->second->actived())
+        {
             message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
-            if(message->seq() == 0) {
+            if (message->seq() == 0)
+            {
                 message->setSeq(m_p2pMessageFactory->newSeq());
             }
 
-            P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] seq: " << message->seq() << " nodeID: " << nodeID.hex();
+            P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] seq: " << message->seq()
+                              << " nodeID: " << nodeID.hex();
 
             auto session = it->second;
-            session->session()->asyncSendMessage(message, options, [session, callback](NetworkException e, Message::Ptr message) {
-                P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-                if(callback) {
-                    callback(e, session, p2pMessage);
-                }
-            });
+            session->session()->asyncSendMessage(
+                message, options, [session, callback](NetworkException e, Message::Ptr message) {
+                    P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+                    if (callback)
+                    {
+                        callback(e, session, p2pMessage);
+                    }
+                });
         }
-        else {
+        else
+        {
             LOG(WARNING) << "NodeID: " << nodeID.hex() << " inactived";
 
             BOOST_THROW_EXCEPTION(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]));
@@ -308,9 +355,11 @@ void Service::asyncSendMessageByNodeID(
     {
         LOG(ERROR) << "ERROR:" << boost::diagnostic_information(e);
 
-        if(callback) {
+        if (callback)
+        {
             m_host->threadPool()->enqueue([callback, e] {
-                callback(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]), P2PSession::Ptr(), P2PMessage::Ptr());
+                callback(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]),
+                    P2PSession::Ptr(), P2PMessage::Ptr());
             });
         }
     }
@@ -328,7 +377,8 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
 
             SessionCallback() { mutex.lock(); }
 
-            void onResponse(NetworkException _error, std::shared_ptr<P2PSession> session, P2PMessage::Ptr _message)
+            void onResponse(NetworkException _error, std::shared_ptr<P2PSession> session,
+                P2PMessage::Ptr _message)
             {
                 error = _error;
                 response = _message;
@@ -341,8 +391,8 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
         };
 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
-        CallbackFuncWithSession fp = std::bind(
-            &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+        CallbackFuncWithSession fp = std::bind(&SessionCallback::onResponse, callback,
+            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         asyncSendMessageByTopic(topic, message, fp, Options());
 
         callback->mutex.lock();
@@ -372,7 +422,7 @@ void Service::asyncSendMessageByTopic(
     std::string topic, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
     LOG(INFO) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
-    //assert(options.timeout > 0 && options.subTimeout > 0);
+    // assert(options.timeout > 0 && options.subTimeout > 0);
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     if (nodeIDsToSend.size() == 0)
     {
@@ -380,15 +430,21 @@ void Service::asyncSendMessageByTopic(
         return;
     }
 
-    class TopicStatus: public std::enable_shared_from_this<TopicStatus> {
+    class TopicStatus : public std::enable_shared_from_this<TopicStatus>
+    {
     public:
-        void onResponse(NetworkException e, P2PSession::Ptr session, P2PMessage::Ptr msg) {
-            if(e.errorCode() != 0 || !m_current) {
-                if(e.errorCode() != 0) {
-                    LOG(WARNING) << "Send topics message to " << m_current << "error once: " << e.what();
+        void onResponse(NetworkException e, P2PSession::Ptr session, P2PMessage::Ptr msg)
+        {
+            if (e.errorCode() != 0 || !m_current)
+            {
+                if (e.errorCode() != 0)
+                {
+                    LOG(WARNING) << "Send topics message to " << m_current
+                                 << "error once: " << e.what();
                 }
 
-                if(m_nodeIDs.empty()) {
+                if (m_nodeIDs.empty())
+                {
                     LOG(WARNING) << "Send topics message all failed";
                     m_callback(NetworkException(), session, P2PMessage::Ptr());
 
@@ -404,14 +460,19 @@ void Service::asyncSendMessageByTopic(
                 m_nodeIDs.erase(m_nodeIDs.begin() + ri);
 
                 auto s = m_service.lock();
-                if(s) {
+                if (s)
+                {
                     auto self = shared_from_this();
 
-                    //auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-                    s->asyncSendMessageByNodeID(m_current, msg, std::bind(&TopicStatus::onResponse, shared_from_this(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), m_options);
+                    // auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+                    s->asyncSendMessageByNodeID(m_current, msg,
+                        std::bind(&TopicStatus::onResponse, shared_from_this(),
+                            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
+                        m_options);
                 }
             }
-            else {
+            else
+            {
                 m_callback(e, session, msg);
             }
         }
@@ -454,8 +515,9 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
 void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message)
 {
     LOG(INFO) << "Call Service::asyncMulticastMessageByNodeIDList nodes size=" << nodeIDs.size();
-    try {
-        for (auto nodeID: nodeIDs)
+    try
+    {
+        for (auto nodeID : nodeIDs)
         {
             asyncSendMessageByNodeID(nodeID, message, CallbackFuncWithSession(), Options());
         }
@@ -477,10 +539,10 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
             sessions = m_sessions;
         }
 
-        for (auto s: sessions)
-       {
-           asyncSendMessageByNodeID(s.first, message, CallbackFuncWithSession(), Options());
-       }
+        for (auto s : sessions)
+        {
+            asyncSendMessageByNodeID(s.first, message, CallbackFuncWithSession(), Options());
+        }
     }
     catch (std::exception& e)
     {
@@ -502,10 +564,12 @@ void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWit
 {
     RecursiveGuard l(x_protocolID2Handler);
     auto it = m_protocolID2Handler->find(protocolID);
-    if (it == m_protocolID2Handler->end()) {
+    if (it == m_protocolID2Handler->end())
+    {
         m_protocolID2Handler->insert(std::make_pair(protocolID, handler));
     }
-    else {
+    else
+    {
         it->second = handler;
     }
 }
@@ -533,7 +597,8 @@ SessionInfos Service::sessionInfos()
         auto s = m_sessions;
         for (auto const& i : s)
         {
-            infos.push_back( SessionInfo(i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())) );
+            infos.push_back(
+                SessionInfo(i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
         }
     }
     catch (std::exception& e)
@@ -549,8 +614,10 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     SessionInfos infos;
 
     auto it = m_groupID2NodeList.find(int(ret.first));
-    if(it != m_groupID2NodeList.end()) {
-        try {
+    if (it != m_groupID2NodeList.end())
+    {
+        try
+        {
             RecursiveGuard l(x_sessions);
             auto s = m_sessions;
             for (auto const& i : s)
@@ -558,12 +625,13 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
                 if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
                 {
                     LOG(TRACE) << "Finding nodeID: " << i.first;
-                    infos.push_back(
-                        SessionInfo(i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
+                    infos.push_back(SessionInfo(
+                        i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
                 }
             }
         }
-        catch (std::exception &e) {
+        catch (std::exception& e)
+        {
             LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
         }
     }
@@ -599,15 +667,18 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     return nodeList;
 }
 
-bool Service::isConnected(NodeID nodeID) {
+bool Service::isConnected(NodeID nodeID)
+{
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
 
-    if(it == m_sessions.end()) {
+    if (it == m_sessions.end())
+    {
         return false;
     }
 
-    if(!it->second->actived()) {
+    if (!it->second->actived())
+    {
         return false;
     }
 

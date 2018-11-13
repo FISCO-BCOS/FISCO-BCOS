@@ -107,5 +107,3 @@ ssize_t P2PMessage::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string&
 
     return buffer->size();
 }
-
-

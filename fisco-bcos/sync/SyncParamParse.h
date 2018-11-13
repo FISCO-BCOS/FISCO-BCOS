@@ -28,7 +28,6 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/Service.h>
-#include <libp2p/Service.h>
 #include <boost/program_options.hpp>
 #include <cstdlib>
 #include <memory>
