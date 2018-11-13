@@ -65,7 +65,9 @@ public:
                 std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
             LedgerManager_LOG(INFO)
                 << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId) << std::endl;
-            ledger->initLedger();
+            bool succ = ledger->initLedger();
+            if (!succ)
+                return false;
             m_ledgerMap.insert(std::make_pair(_groupId, ledger));
             {
                 WriteGuard l(x_groupListCache);
