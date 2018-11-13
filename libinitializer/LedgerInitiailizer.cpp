@@ -55,7 +55,11 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
                     INITIALIZER_LOG(ERROR)
                         << "[#LedgerInitiailizer::initConfig] parse groupID failed: [data]: "
                         << it.first.data();
-                    continue;
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "[#LedgerInitiailizer::initConfig] parse groupID failed: [data]: " +
+                            it.first.data()));
+                    exit(1);
                 }
 
                 succ = initSingleGroup(
@@ -65,6 +69,9 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
                     INITIALIZER_LOG(ERROR)
                         << "[#LedgerInitiailizer::initConfig] initSingleGroup for "
                         << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "[#LedgerInitiailizer::initConfig] initSingleGroup for "))
                 }
             }
             catch (std::exception& e)
