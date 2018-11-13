@@ -92,7 +92,7 @@ void checkParam(std::shared_ptr<LedgerParam> param)
 /// test initConfig
 BOOST_AUTO_TEST_CASE(testInitConfig)
 {
-    //TODO: is this path ok?
+    // TODO: is this path ok?
 #if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(testInitConfig)
 /// test initLedgers of LedgerManager
 BOOST_AUTO_TEST_CASE(testInitLedger)
 {
-    //TODO: is this path ok?
+    // TODO: is this path ok?
 #if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();

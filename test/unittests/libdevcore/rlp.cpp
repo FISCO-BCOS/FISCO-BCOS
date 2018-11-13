@@ -34,7 +34,7 @@ void RlpTest::runRlpTest(std::string _name, fs::path const& _path)
     fs::path const testPath = dev::test::getTestPath() / _path;
     try
     {
-        //TODO: ignore not exists file
+        // TODO: ignore not exists file
 #if 0
         LOG(INFO) << "TEST " << _name << ":";
         js::mValue v = js::mValue();

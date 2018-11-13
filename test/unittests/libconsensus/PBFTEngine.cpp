@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
     /// test recv packet from other nodes
     FakePBFTMiner(fake_pbft);  // set this node to be miner
 
-    //TODO: unkown reason of RLP decode fail
+    // TODO: unkown reason of RLP decode fail
 #if 0
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, true);
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, sign_req, SignReqPacket, true);
@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
-    //TODO: broadcast error
+    // TODO: broadcast error
 #if 0
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
@@ -169,7 +169,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.consensus()->appendMiner(peer2_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
-    //TODO: fail test, unknown reason
+    // TODO: fail test, unknown reason
 #if 0
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     filter.insert(peer3_keyPair.pub());
     fake_pbft.consensus()->broadcastMsg(
         PrepareReqPacket, prepare_req.uniqueKey(), ref(data), filter);
-    //TODO: unknown failed reason
+    // TODO: unknown failed reason
 #if 0
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer3_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);

@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(fat_trie)
 
 BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
 {
-    //TODO: not found file
+    // TODO: not found file
 #if 0
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
 
@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
 
 BOOST_AUTO_TEST_CASE(trie_test_anyorder)
 {
-    //TODO: not found file path
+    // TODO: not found file path
 #if 0
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
 
@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
 
 BOOST_AUTO_TEST_CASE(trie_tests_ordered)
 {
-    //TODO: file not exists
+    // TODO: file not exists
 #if 0
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
 
