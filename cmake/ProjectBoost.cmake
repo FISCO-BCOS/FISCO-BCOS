@@ -35,8 +35,10 @@ set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${OPENSSL_INCLUDE_DIRS})
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/deps/src/boost_1_63_0.tar.gz
-    URL_HASH SHA256=eb4c6f7e4e11905e1a98619f8a664dc4dca2d477bc985cfaf94463eef83a1aaa
+    #URL https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/deps/src/boost_1_63_0.tar.gz
+    URL https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz
+    #URL_HASH SHA256=eb4c6f7e4e11905e1a98619f8a664dc4dca2d477bc985cfaf94463eef83a1aaa
+    URL_HASH SHA256=da3411ea45622579d419bfda66f45cd0f8c32a181d84adfa936f5688388995cf
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${BOOST_BOOTSTRAP_COMMAND}
     LOG_CONFIGURE 1
@@ -49,6 +51,8 @@ ExternalProject_Add(boost
         --with-chrono
         --with-date_time
         --with-filesystem
+        --with-system
+        --with-system
         --with-random
         --with-regex
         --with-test

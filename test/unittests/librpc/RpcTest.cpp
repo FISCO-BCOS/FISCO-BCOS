@@ -89,6 +89,8 @@ BOOST_AUTO_TEST_CASE(testSyncPart)
 
 BOOST_AUTO_TEST_CASE(testP2pPart)
 {
+    //TODO: new unit test
+#if 0
     std::string s = rpc->version();
     BOOST_CHECK(s == "2.0");
 
@@ -103,6 +105,7 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
 
     response = rpc->groupList();
     BOOST_CHECK(response.size() == 1);
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(testGetBlockByHash)
