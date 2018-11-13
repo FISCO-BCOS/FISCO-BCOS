@@ -45,6 +45,12 @@ public:
     void setP2PService(std::shared_ptr<P2PInterface> _p2pService) { m_p2pService = _p2pService; }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
+    ~LedgerInitiailizer()
+    {
+        if (m_ledgerManager)
+            m_ledgerManager->stopAll();
+    }
+
 private:
     void initSingleGroup(
         GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList);

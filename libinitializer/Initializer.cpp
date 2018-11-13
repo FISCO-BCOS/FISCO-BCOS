@@ -29,15 +29,11 @@ void Initializer::init(std::string const& _path)
 {
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_path, pt);
-
-    m_commonInitializer = std::make_shared<CommonInitializer>();
-    m_commonInitializer->initConfig(pt);
     /// init log
-    m_logInitializer = std::make_shared<LogInitializer>(m_commonInitializer->logConfig());
-    m_logInitializer->initEasylogging();
+    m_logInitializer = std::make_shared<LogInitializer>();
+    m_logInitializer->initEasylogging(pt);
     /// init certificates
     m_secureInitiailizer = std::make_shared<SecureInitializer>();
-    m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
     m_secureInitiailizer->initConfig(pt);
 
     m_p2pInitializer = std::make_shared<P2PInitializer>();

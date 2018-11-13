@@ -618,7 +618,6 @@ void PBFTEngine::checkAndSave()
                     << "/" << block.blockHeader().number() << "/"
                     << block.blockHeader().hash().abridged() << std::endl;
                 /// note blocksync to sync
-                m_onViewChange();
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
             }
