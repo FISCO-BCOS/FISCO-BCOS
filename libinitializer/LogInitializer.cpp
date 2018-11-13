@@ -72,42 +72,42 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
         pt.get<std::string>("log.GLOBAL-MAX_LOG_FILE_SIZE", "209715200"));
     defaultConf.setGlobally(el::ConfigurationType::LogFlushThreshold,
         pt.get<std::string>("log.GLOBAL-LOG_FLUSH_THRESHOLD", "100"));
-    defaultConf.setGlobally(el::ConfigurationType::Filename, logPath + logPostfix);
+    defaultConf.setGlobally(el::ConfigurationType::Filename, logPath + "/" + logPostfix);
     /// init level log
     defaultConf.set(el::Level::Info, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.INFO-ENABLED", "true"));
     defaultConf.set(
-        el::Level::Info, el::ConfigurationType::Filename, logPath + "info_" + logPostfix);
+        el::Level::Info, el::ConfigurationType::Filename, logPath + "/info_" + logPostfix);
 
     defaultConf.set(el::Level::Warning, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.WARNING-ENABLED", "true"));
     defaultConf.set(
-        el::Level::Warning, el::ConfigurationType::Filename, logPath + "warn_" + logPostfix);
+        el::Level::Warning, el::ConfigurationType::Filename, logPath + "/warn_" + logPostfix);
 
     defaultConf.set(el::Level::Error, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.ERROR-ENABLED", "true"));
     defaultConf.set(
-        el::Level::Error, el::ConfigurationType::Filename, logPath + "error_" + logPostfix);
+        el::Level::Error, el::ConfigurationType::Filename, logPath + "/error_" + logPostfix);
 
     defaultConf.set(el::Level::Debug, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.DEBUG-ENABLED", "false"));
     defaultConf.set(
-        el::Level::Debug, el::ConfigurationType::Filename, logPath + "debug_" + logPostfix);
+        el::Level::Debug, el::ConfigurationType::Filename, logPath + "/debug_" + logPostfix);
 
     defaultConf.set(el::Level::Trace, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.TRACE-ENABLED", "false"));
     defaultConf.set(
-        el::Level::Trace, el::ConfigurationType::Filename, logPath + "trace_" + logPostfix);
+        el::Level::Trace, el::ConfigurationType::Filename, logPath + "/trace_" + logPostfix);
 
     defaultConf.set(el::Level::Fatal, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.FATAL-ENABLED", "false"));
     defaultConf.set(
-        el::Level::Fatal, el::ConfigurationType::Filename, logPath + "fatal_" + logPostfix);
+        el::Level::Fatal, el::ConfigurationType::Filename, logPath + "/fatal_" + logPostfix);
 
     defaultConf.set(el::Level::Verbose, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.VERBOSE-ENABLED", "false"));
     defaultConf.set(
-        el::Level::Verbose, el::ConfigurationType::Filename, logPath + "verbose_" + logPostfix);
+        el::Level::Verbose, el::ConfigurationType::Filename, logPath + "/verbose_" + logPostfix);
     el::Loggers::reconfigureLogger("default", defaultConf);
     el::Loggers::reconfigureLogger(fileLogger, defaultConf);
     el::Helpers::installPreRollOutCallback(rolloutHandler);
