@@ -51,7 +51,7 @@ macro(configure_project)
     #ARCH TYPE
     eth_default_option(ARCH_TYPE OFF)
     # unit tests
-    eth_default_option(TESTS ON)
+    eth_default_option(TESTS OFF)
     if (TESTS)
         add_definitions(-DETH_TESTS)
     endif()
