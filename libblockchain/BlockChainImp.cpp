@@ -96,8 +96,15 @@ int64_t BlockChainImp::totalTransactionCount()
 
 bytes BlockChainImp::getCode(Address _address)
 {
-    auto num = number();
-    auto block = getBlockByNumber(num - 1);
+    bytes ret;
+    int64_t num = number();
+    auto block = getBlockByNumber(num);
+
+    if (!block)
+    {
+        return ret;
+    }
+
     auto stateRoot = block->header().stateRoot();
     auto memoryFactory = getMemoryTableFactory();
 
