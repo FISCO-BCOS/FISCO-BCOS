@@ -1,6 +1,6 @@
 # FISCO BCOS
 
-![](docs/images/FISCO BCOS Logo.svg)
+![](docs/images/FISCO_BCOS_Logo.svg)
 
 **FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Two major camps of blockchain technology - public and consortium chains, to better serve the general public, open consortium chain is the perfect choice for enterprises to unlock the potential of collaborative businesses model. FISCO BCOS is born to support open consortium chain applications, by supporting multiple chains’, and cross-chain communication.
 
@@ -43,11 +43,6 @@ Since its launch, dozens of use cases have been implemented based on the FISCO B
 
 
 ## Contact
-
-[![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos) 
-[![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/dev/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos)
-[![Gitter](https://img.shields.io/gitter/room/fisco-bcos/Lobby.svg)](https://gitter.im/fisco-bcos/Lobby)
-[![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues)
 
 - Gitter: Chat in [lab-bcos](https://gitter.im/fisco-bcos/Lobby) channel on Gitter
 - Issues: Report bugs, issues or feature requests using [Github Issues](https://github.com/FISCO-BCOS/lab-bcos/issues)
