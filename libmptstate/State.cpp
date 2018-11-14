@@ -643,8 +643,18 @@ std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
                 {
                     SecureTrieDB<h256, OverlayDB> memdb(const_cast<OverlayDB*>(&_s.m_db),
                         r[2].toHash<h256>());  // promise we won't alter the overlay! :)
-                    for (auto const& j : memdb)
-                        mem[j.first] = RLP(j.second).toInt<u256>(), back.insert(j.first);
+                    for (auto const& j : memdb) {
+                        auto it = mem.find(j.first);
+                        auto v = RLP(j.second).toInt<u256>();
+                        if(it != mem.end()) {
+                            it->second = v;
+                        }
+                        else {
+                            mem.insert(std::make_pair(j.first, v));
+                        }
+                        //mem[j.first] = RLP(j.second).toInt<u256>();
+                        back.insert(j.first);
+                    }
                 }
                 if (cache)
                     for (auto const& j : cache->storageOverlay())
