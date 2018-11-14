@@ -206,7 +206,15 @@ public:
     /// database.
     void setStorageCache(u256 _p, u256 _v) const
     {
-        const_cast<decltype(m_storageOverlay)&>(m_storageOverlay)[_p] = _v;
+        auto storageOverlay = const_cast<decltype(m_storageOverlay)&>(m_storageOverlay);
+        auto it = storageOverlay.find(_p);
+        if(it != storageOverlay.end()) {
+            it->second = _v;
+        }
+        else {
+            storageOverlay.insert(std::make_pair(_p, _v));
+        }
+        //const_cast<decltype(m_storageOverlay)&>(m_storageOverlay)[_p] = _v;
     }
 
     /// @returns the hash of the account's code.
