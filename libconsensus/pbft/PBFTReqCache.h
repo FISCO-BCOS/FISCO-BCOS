@@ -83,7 +83,7 @@ public:
     {
         auto it = cache.find(key);
         if(it != cache.end()) {
-            return u256(it.second.size());
+            return u256(it->second.size());
         }
 
 #if 0
