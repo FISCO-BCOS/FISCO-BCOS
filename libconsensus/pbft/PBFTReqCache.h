@@ -81,8 +81,16 @@ public:
     template <typename T, typename S>
     inline u256 const getSizeFromCache(T const& key, S& cache)
     {
+        auto it = cache.find(key);
+        if(it != cache.end()) {
+            return u256(it.second.size());
+        }
+
+#if 0
         if (cache.count(key) > 0)
             return u256(cache[key].size());
+#endif
+
         return u256(0);
     }
 
