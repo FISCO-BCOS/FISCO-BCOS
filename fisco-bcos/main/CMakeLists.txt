@@ -23,6 +23,8 @@ aux_source_directory(. SRC_LIST)
 
 file(GLOB HEADERS "*.h")
 
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+
 include(EthDependencies)
 add_executable(fisco-bcos ${SRC_LIST} ${HEADERS})
 target_include_directories(fisco-bcos PRIVATE ..)

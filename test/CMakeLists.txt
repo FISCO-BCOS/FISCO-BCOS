@@ -20,6 +20,8 @@
 #------------------------------------------------------------------------------
 file(GLOB_RECURSE sources "*.cpp" "*.h" "*.sol")
 
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+
 foreach(file ${sources})
     file(STRINGS ${file} test_list_raw REGEX "BOOST_.*TEST_(SUITE|CASE|SUITE_END)")
     set(TestSuite "DEFAULT")
