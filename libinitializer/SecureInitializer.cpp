@@ -35,16 +35,11 @@ using namespace dev::initializer;
 
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
-    std::string key = pt.get<std::string>("secure.key", "${DATAPATH}/node.key");
-    std::string cert = pt.get<std::string>("secure.cert", "${DATAPATH}/node.crt");
-    std::string caCert = pt.get<std::string>("secure.ca_cert", "${DATAPATH}/ca.crt");
-    std::string caPath = pt.get<std::string>("secure.ca_path", "");
-
-    completePath(key);
-    completePath(cert);
-    completePath(caCert);
-    completePath(caPath);
-
+    std::string dataPath = pt.get<std::string>("secure.data_path", "./fisco-bcos-data/");
+    std::string key = dataPath + pt.get<std::string>("secure.key", "node.key");
+    std::string cert = dataPath + pt.get<std::string>("secure.cert", "node.crt");
+    std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "ca.crt");
+    std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
     if (!key.empty())
     {
@@ -167,9 +162,4 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: " << e.what();
         BOOST_THROW_EXCEPTION(e);
     }
-}
-
-void SecureInitializer::completePath(std::string& path)
-{
-    boost::algorithm::replace_first(path, "${DATAPATH}", m_dataPath + "/");
 }
