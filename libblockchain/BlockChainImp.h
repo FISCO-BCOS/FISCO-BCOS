@@ -59,9 +59,12 @@ public:
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
     void setGroupMark(std::string const& groupMark) override;
+    virtual int64_t totalTransactionCount() override;
 
 private:
     void writeNumber(const dev::eth::Block& block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeTotalTransactionCount(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeTxToBlock(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
