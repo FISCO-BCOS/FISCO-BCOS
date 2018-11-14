@@ -34,7 +34,7 @@ namespace test
 class FakeSession : public P2PSession
 {
 public:
-    FakeSession() : P2PSession(){};
+    FakeSession(NodeID _id = NodeID()) : P2PSession(), m_id(_id){};
     virtual ~FakeSession(){};
 
     virtual bool actived() override { return m_run; }
@@ -43,7 +43,11 @@ public:
 
     virtual void stop(DisconnectReason reason) { m_run = false; }
 
+    virtual NodeID nodeID() override { return m_id; }
+
     bool m_run = false;
+
+    NodeID m_id;
 };
 
 class FakeSyncToolsSet
@@ -82,7 +86,7 @@ public:
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
 #endif
-        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>();
+        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>(NodeID());
         session->start();
         return session;
     }
@@ -98,7 +102,7 @@ public:
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
 #endif
-        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>();
+        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>(_peerID);
         session->start();
         return session;
     }
@@ -106,12 +110,18 @@ public:
     TransactionPtr createTransaction(int64_t _currentBlockNumber)
     {
         const bytes c_txBytes = fromHex(
-            "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
-            "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
-            "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
-            "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
-            "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
-            "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
+            "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc"
+            "6c0f5760baca823f2d5582d03f85174876e7ff"
+            "8609184e729fff82020394d6f1a71052366dbae2f7"
+            "ab2d5d5845e77965cf0d80b86448f85bce000000"
+            "000000000000000000000000000000000000000000"
+            "000000000000001bf5bd8a9e7ba8b936ea704292"
+            "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e"
+            "9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
+            "f7395028658d0e01b86a371ca00b2b3fabd8598fef"
+            "dda4efdb54f626367fc68e1735a8047f0f1c4f84"
+            "0255ca1ea0512500bc29f4cfe18ee1c88683006d73"
+            "e56c934100b8abf4d2334560e1d2f75e");
         const u256 c_maxBlockLimit = u256(1000);
         Secret sec = KeyPair::create().secret();
         TransactionPtr txPtr =
