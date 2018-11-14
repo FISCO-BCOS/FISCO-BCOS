@@ -18,6 +18,7 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+if(TESTS)
 
 aux_source_directory(. SRC_LIST)
 
@@ -36,8 +37,4 @@ target_link_libraries(mini-p2p ethcore)
 target_link_libraries(mini-p2p p2p)
 target_link_libraries(mini-p2p initializer)
 
-if (UNIX)
-target_link_libraries(mini-p2p pthread)
 endif()
-
-install(TARGETS mini-p2p DESTINATION bin)
