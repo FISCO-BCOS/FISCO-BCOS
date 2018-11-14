@@ -42,15 +42,15 @@ BOOST_AUTO_TEST_CASE(EmptyArrayList)
         dev::RLP payload(payloadToDecode);
         LOG(INFO) << payload;
 
-        payloadToDecode = dev::fromHex("с0");
+        payloadToDecode = dev::fromHex("褋0");
         dev::RLP payload2(payloadToDecode);
         LOG(INFO) << payload2;
     }
-    catch (dev::Exception const& _e)
+    catch (dev::Exception const &_e)
     {
         BOOST_ERROR("(EmptyArrayList) Failed test with Exception: " << _e.what());
     }
-    catch (std::exception const& _e)
+    catch (std::exception const &_e)
     {
         BOOST_ERROR("(EmptyArrayList) Failed test with Exception: " << _e.what());
     }
