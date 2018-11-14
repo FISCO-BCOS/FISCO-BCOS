@@ -62,7 +62,7 @@ void Transaction::decode(RLP const& rlp, CheckTransaction _checkSig)
 
         m_data = rlp[6].toBytes();
 
-        byte const v = rlp[7].toInt<byte>();
+        int const v = rlp[7].toInt<int>();
         h256 const r = rlp[8].toInt<u256>();
         h256 const s = rlp[9].toInt<u256>();
 

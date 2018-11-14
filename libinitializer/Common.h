@@ -22,9 +22,28 @@
 
 #pragma once
 
+#include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
 #define INITIALIZER_LOG(LEVEL) LOG(LEVEL) << "[#INITIALIZER] "
+
+namespace dev
+{
+DEV_SIMPLE_EXCEPTION(InvalidListenPort);
+DEV_SIMPLE_EXCEPTION(ConfigNotExist);
+DEV_SIMPLE_EXCEPTION(InvalidConfig);
+namespace initializer
+{
+static uint16_t maxPort = 65535;
+
+static inline bool isValidPort(int port)
+{
+    if (port < 0 || port > maxPort)
+        return false;
+    return true;
+}
+}  // namespace initializer
+}  // namespace dev

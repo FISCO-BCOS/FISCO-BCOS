@@ -31,6 +31,7 @@ typedef int8_t GROUP_ID;
 typedef uint8_t MODULE_ID;
 typedef int16_t PROTOCOL_ID;
 typedef uint16_t PACKET_TYPE;
+static const GROUP_ID maxGroupID = 127;
 namespace eth
 {
 enum ProtocolID

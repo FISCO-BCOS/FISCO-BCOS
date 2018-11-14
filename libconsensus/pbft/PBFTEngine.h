@@ -295,9 +295,10 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            PBFTENGINE_LOG(WARNING) << "#[checkReq] Not exist in prepare cache: [prepHash/hash]:"
-                                    << m_reqCache->prepareCache().block_hash.abridged() << "/"
-                                    << req.block_hash << "  [INFO]:  " << oss.str();
+            PBFTENGINE_LOG(WARNING)
+                << "#[checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
+                << m_reqCache->prepareCache().block_hash.abridged() << "/" << req.block_hash
+                << "  [INFO]:  " << oss.str();
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
