@@ -23,8 +23,6 @@ aux_source_directory(. SRC_LIST)
 
 file(GLOB HEADERS "*.h")
 
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-
 include(EthDependencies)
 
 add_executable(mini-sync ${SRC_LIST} ${HEADERS})

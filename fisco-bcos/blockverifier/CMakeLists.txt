@@ -18,14 +18,12 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-aux_source_directory(. SRC_LIST)
-file(GLOB HEADERS "*.h")
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-
-include(EthDependencies)
-add_executable(test_verifier ${SRC_LIST} ${HEADERS})
-target_include_directories(test_verifier PRIVATE ${BOOST_INCLUDE_DIR})
-target_link_libraries(test_verifier devcrypto)
+ aux_source_directory(. SRC_LIST)
+ file(GLOB HEADERS "*.h")
+ include(EthDependencies)
+ add_executable(test_verifier ${SRC_LIST} ${HEADERS})
+ target_include_directories(test_verifier PRIVATE ${BOOST_INCLUDE_DIR})
+ target_link_libraries(test_verifier devcrypto)
 target_link_libraries(test_verifier ethcore)
 target_link_libraries(test_verifier blockverifier)
 target_link_libraries(test_verifier executivecontext)

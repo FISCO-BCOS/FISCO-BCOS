@@ -21,8 +21,6 @@
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-
 aux_source_directory(. SRC_LIST)
 
 file(GLOB HEADERS "*.h")
