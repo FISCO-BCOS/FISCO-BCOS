@@ -102,6 +102,7 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNod
                 {
                     /// update to lower view
                     it->second = viewChangeItem.first;
+                    //idx_view_map[viewChangeEntry.first] = viewChangeItem.first;
 
                     if (minView > viewChangeItem.first)
                         minView = viewChangeItem.first;
@@ -126,15 +127,20 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNod
 void PBFTReqCache::removeInvalidViewChange(
     u256 const& view, dev::eth::BlockHeader const& highestBlock)
 {
-    for (auto pview = m_recvViewChangeReq[view].begin(); pview != m_recvViewChangeReq[view].end();)
+    auto it = m_recvViewChangeReq.find(view);
+    if(it == m_recvViewChangeReq.end()) {
+        return;
+    }
+
+    for (auto pview = it->second.begin(); pview != it->second.end();)
     {
         /// remove old received view-change
         if (pview->second.height < highestBlock.number())
-            pview = m_recvViewChangeReq[view].erase(pview);
+            pview = it->second.erase(pview);
         /// remove invalid view-change request with invalid hash
         else if (pview->second.height == highestBlock.number() &&
                  pview->second.block_hash != highestBlock.hash())
-            pview = m_recvViewChangeReq[view].erase(pview);
+            pview = it->second.erase(pview);
         else
             pview++;
     }
