@@ -71,6 +71,23 @@ int64_t BlockChainImp::number()
     return num;
 }
 
+int64_t BlockChainImp::totalTransactionCount()
+{
+    int64_t count = 0;
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
+    if (tb)
+    {
+        auto entries = tb->select(SYS_KEY_TOTAL_TRANSACTION_COUNT, tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            std::string totalTransactionCount = entry->getField(SYS_VALUE);
+            count = lexical_cast<int64_t>(totalTransactionCount);
+        }
+    }
+    return count;
+}
+
 h256 BlockChainImp::numberHash(int64_t _i)
 {
     /// LOG(TRACE) << "BlockChainImp::numberHash _i=" << _i;
@@ -107,7 +124,6 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
     }
     return nullptr;
 }
-
 
 void BlockChainImp::setGroupMark(std::string const& groupMark)
 {
@@ -266,6 +282,31 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
     }
 }
 
+void BlockChainImp::writeTotalTransactionCount(
+    const Block& block, std::shared_ptr<ExecutiveContext> context)
+{
+    Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
+    if (tb)
+    {
+        auto entries = tb->select(SYS_KEY_TOTAL_TRANSACTION_COUNT, tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+            currentCount += block.transactions().size();
+
+            entry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
+            tb->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry, tb->newCondition());
+        }
+        else
+        {
+            auto entry = tb->newEntry();
+            entry->setField(SYS_VALUE, lexical_cast<std::string>(block.transactions().size()));
+            tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
+        }
+    }
+}
+
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
@@ -332,6 +373,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     if (commitMutex.try_lock())
     {
         writeNumber(block, context);
+        writeTotalTransactionCount(block, context);
         writeTxToBlock(block, context);
         writeBlockInfo(block, context);
         context->dbCommit(block);
