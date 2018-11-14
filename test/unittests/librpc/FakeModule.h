@@ -196,6 +196,7 @@ public:
         m_blockNumber = block.blockHeader().number() + 1;
         m_totalTransactionCount += block.transactions().size();
         m_onReady();
+        return CommitResult::OK;
     }
 
     BlockHeader blockHeader;
