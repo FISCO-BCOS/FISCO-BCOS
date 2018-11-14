@@ -37,12 +37,18 @@ using namespace dev::eth;
 using namespace dev::blockchain;
 using namespace dev::storage;
 using namespace dev::blockverifier;
+using namespace dev::executive;
 using boost::lexical_cast;
 
 
 void BlockChainImp::setStateStorage(Storage::Ptr stateStorage)
 {
     m_stateStorage = stateStorage;
+}
+
+void BlockChainImp::setStateFactory(StateFactoryInterface::Ptr _stateFactory)
+{
+    m_stateFactory = _stateFactory;
 }
 
 shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
@@ -86,6 +92,17 @@ int64_t BlockChainImp::totalTransactionCount()
         }
     }
     return count;
+}
+
+bytes BlockChainImp::getCode(Address _address)
+{
+    auto num = number();
+    auto block = getBlockByNumber(num - 1);
+    auto stateRoot = block->header().stateRoot();
+    auto memoryFactory = getMemoryTableFactory();
+
+    auto state = m_stateFactory->getState(stateRoot, memoryFactory);
+    return state->code(_address);
 }
 
 h256 BlockChainImp::numberHash(int64_t _i)
