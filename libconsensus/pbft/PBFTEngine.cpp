@@ -530,6 +530,9 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
     m_reqCache->addPrepareReq(sign_prepare);
+    PBFTENGINE_LOG(TRACE) << "[#handlePrepareMsg] add prepare cache [hash/number] "
+                          << sign_prepare.block_hash.abridged() << "/" << sign_prepare.height
+                          << std::endl;
     /// broadcast the re-generated signReq(add the signReq to cache)
     if (!broadcastSignReq(sign_prepare))
     {
