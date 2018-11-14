@@ -1391,8 +1391,7 @@ BOOST_AUTO_TEST_CASE(SysLogTestWriteLog)
     std::string expectedEnd =
         BUILD_STR(s_currentHost << " " << kSysLogIdent << ": INFO : this is my syslog\n");
     std::string actual = tail(1, kSysLogFile);
-    // TODO: comment this code for fail unittest
-    // BOOST_CHECK(Str::endsWith(actual, expectedEnd));
+    BOOST_CHECK(Str::endsWith(actual, expectedEnd));
 }
 
 BOOST_AUTO_TEST_CASE(SysLogTestDebugVersionLogs)

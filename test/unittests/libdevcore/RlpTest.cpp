@@ -68,8 +68,6 @@ BOOST_AUTO_TEST_CASE(rlptest)
 
 BOOST_AUTO_TEST_CASE(rlpRandom)
 {
-    // TODO: file not exists
-#if 0
     fs::path testPath = dev::test::getTestPath();
     testPath /= fs::path("RLPTests/RandomRLPTests");
     std::vector<fs::path> testFiles = dev::test::getFiles(testPath, {".json"});
@@ -90,7 +88,6 @@ BOOST_AUTO_TEST_CASE(rlpRandom)
             BOOST_ERROR(path.filename().string() + "Failed test with Exception: " << _e.what());
         }
     }
-#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()
