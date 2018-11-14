@@ -115,6 +115,7 @@ public:
     MockBlockChain()
     {
         m_blockNumber = 1;
+        m_totalTransactionCount = 0;
         blockHash = h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
         blockHeader.setNumber(1);
         blockHeader.setParentHash(h256(0x1));
@@ -142,6 +143,7 @@ public:
     virtual ~MockBlockChain() {}
 
     virtual int64_t number() override { return m_blockNumber - 1; }
+    virtual int64_t totalTransactionCount() override { return m_totalTransactionCount; }
 
     void createTransaction()
     {
@@ -208,6 +210,7 @@ public:
         m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
         m_blockChain.push_back(std::make_shared<Block>(block));
         m_blockNumber = block.blockHeader().number() + 1;
+        m_totalTransactionCount += block.transactions().size();
         m_onReady();
         return CommitResult::OK;
     }
@@ -222,6 +225,7 @@ public:
     std::map<h256, uint64_t> m_blockHash;
     std::vector<std::shared_ptr<Block>> m_blockChain;
     uint64_t m_blockNumber;
+    uint64_t m_totalTransactionCount;
 };
 
 class MockBlockVerifier : public BlockVerifierInterface
