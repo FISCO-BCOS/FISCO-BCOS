@@ -82,7 +82,8 @@ public:
     inline u256 const getSizeFromCache(T const& key, S& cache)
     {
         auto it = cache.find(key);
-        if(it != cache.end()) {
+        if (it != cache.end())
+        {
             return u256(it->second.size());
         }
 
@@ -129,23 +130,27 @@ public:
     inline void addViewChangeReq(ViewChangeReq const& req)
     {
         auto it = m_recvViewChangeReq.find(req.view);
-        if(it != m_recvViewChangeReq.end()) {
+        if (it != m_recvViewChangeReq.end())
+        {
             auto itv = it->second.find(req.idx);
-            if(itv != it->second.end()) {
+            if (itv != it->second.end())
+            {
                 itv->second = req;
             }
-            else {
+            else
+            {
                 it->second.insert(std::make_pair(req.idx, req));
             }
         }
-        else {
+        else
+        {
             std::unordered_map<u256, ViewChangeReq> viewMap;
             viewMap.insert(std::make_pair(req.idx, req));
 
             m_recvViewChangeReq.insert(std::make_pair(req.view, viewMap));
         }
 
-        //m_recvViewChangeReq[req.view][req.idx] = req;
+        // m_recvViewChangeReq[req.view][req.idx] = req;
     }
 
     template <typename T, typename S>

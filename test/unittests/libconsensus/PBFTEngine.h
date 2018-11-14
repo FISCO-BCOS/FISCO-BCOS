@@ -26,7 +26,7 @@
 #include "PBFTReqCache.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libethcore/Protocol.h>
-#include <test/unittests/libp2p/FakeHost.h>
+#include <test/unittests/libsync/FakeSyncToolsSet.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 using namespace dev::eth;
@@ -59,8 +59,7 @@ static void compareAsyncSendTime(
 {
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
-    // TODO: new version of service
-    // BOOST_CHECK(service->getAsyncSendSizeByNodeID(nodeID) == asyncSendTime);
+    BOOST_CHECK(service->getAsyncSendSizeByNodeID(nodeID) == asyncSendTime);
 }
 
 /// Fake sessionInfosByProtocolID
@@ -77,17 +76,9 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
                 (origin_size + 1));
 }
 /// fake session according to node id of the peer
-static std::shared_ptr<P2PSession> FakeSession(Public node_id)
+static std::shared_ptr<FakeSession> FakeSessionFunc(Public node_id)
 {
-    ba::io_service m_ioservice(2);
-    NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-    // std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice,
-    // m_endpoint);
-#if 0
-    std::shared_ptr<Session> session = std::make_shared<Session>(
-        nullptr, fake_socket, std::make_shared<Peer>(node_id, m_endpoint), PeerSessionInfo());
-#endif
-    std::shared_ptr<P2PSession> session = std::make_shared<P2PSession>();
+    std::shared_ptr<FakeSession> session = std::make_shared<FakeSession>(node_id);
     return session;
 }
 
@@ -112,8 +103,7 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft,
     std::pair<bool, PBFTMsgPacket> ret = pbft->mutableMsgQueue().tryPop(unsigned(5));
     if (valid == true)
     {
-        // TODO: unknown fail
-        // BOOST_CHECK(ret.first == true);
+        BOOST_CHECK(ret.first == true);
         BOOST_CHECK(ret.second.packet_id == packetType);
         T decoded_req;
         decoded_req.decode(ref(ret.second.data));
@@ -324,11 +314,8 @@ static void checkBroadcastSpecifiedMsg(
     bytes data;
     req.encode(data);
     fake_pbft.consensus()->broadcastMsg(SignReqPacket, key, ref(data));
-    // TODO: broadcast fail
-#if 0
     BOOST_CHECK(
         fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) == true);
-#endif
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
 }
 

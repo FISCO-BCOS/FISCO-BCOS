@@ -31,10 +31,38 @@ namespace dev
 {
 namespace test
 {
+class FakeBaseSession : public SessionFace
+{
+public:
+    FakeBaseSession()
+    {
+        m_endpoint = NodeIPEndpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+    }
+    NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
+    void start() override {}
+    void disconnect(DisconnectReason _reason) override {}
+
+    bool isConnected() const override { return true; }
+
+    void asyncSendMessage(Message::Ptr message, Options options = Options(),
+        CallbackFunc callback = CallbackFunc()) override
+    {}
+    void setMessageHandler(
+        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
+            messageHandler) override
+    {}
+    bool actived() const override { return true; }
+
+private:
+    NodeIPEndpoint m_endpoint;
+};
 class FakeSession : public P2PSession
 {
 public:
-    FakeSession(NodeID _id = NodeID()) : P2PSession(), m_id(_id){};
+    FakeSession(NodeID _id = NodeID()) : P2PSession(), m_id(_id)
+    {
+        m_session = std::make_shared<FakeBaseSession>();
+    };
     virtual ~FakeSession(){};
 
     virtual bool actived() override { return m_run; }
@@ -47,7 +75,10 @@ public:
 
     bool m_run = false;
 
+    SessionFace::Ptr session() override { return m_session; }
+
     NodeID m_id;
+    SessionFace::Ptr m_session;
 };
 
 class FakeSyncToolsSet

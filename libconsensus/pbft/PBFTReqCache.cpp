@@ -96,13 +96,11 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNod
             for (auto viewChangeEntry : viewChangeItem.second)
             {
                 auto it = idx_view_map.find(viewChangeEntry.first);
-                if ((it == idx_view_map.end() ||
-                        viewChangeItem.first > it->second) &&
+                if ((it == idx_view_map.end() || viewChangeItem.first > it->second) &&
                     viewChangeEntry.second.height >= highestBlock.number())
                 {
                     /// update to lower view
-                    it->second = viewChangeItem.first;
-                    //idx_view_map[viewChangeEntry.first] = viewChangeItem.first;
+                    idx_view_map[viewChangeEntry.first] = viewChangeItem.first;
 
                     if (minView > viewChangeItem.first)
                         minView = viewChangeItem.first;
@@ -128,7 +126,8 @@ void PBFTReqCache::removeInvalidViewChange(
     u256 const& view, dev::eth::BlockHeader const& highestBlock)
 {
     auto it = m_recvViewChangeReq.find(view);
-    if(it == m_recvViewChangeReq.end()) {
+    if (it == m_recvViewChangeReq.end())
+    {
         return;
     }
 
