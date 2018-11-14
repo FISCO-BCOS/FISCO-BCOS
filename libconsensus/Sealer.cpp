@@ -110,7 +110,8 @@ void Sealer::doWork(bool wait)
                 m_signalled.wait_for(l, std::chrono::milliseconds(1));
                 return;
             }
-            handleBlock();
+            if (shouldSeal())
+                handleBlock();
         }
     }
     if (shouldWait(wait))

@@ -27,32 +27,39 @@ using namespace dev::initializer;
 
 void Initializer::init(std::string const& _path)
 {
-    boost::property_tree::ptree pt;
-    boost::property_tree::read_ini(_path, pt);
+    try
+    {
+        boost::property_tree::ptree pt;
+        boost::property_tree::read_ini(_path, pt);
+        /// init log
+        m_logInitializer = std::make_shared<LogInitializer>();
+        m_logInitializer->initEasylogging(pt);
+        /// init certificates
+        m_secureInitiailizer = std::make_shared<SecureInitializer>();
+        m_secureInitiailizer->initConfig(pt);
 
-    m_commonInitializer = std::make_shared<CommonInitializer>();
-    m_commonInitializer->initConfig(pt);
-    /// init log
-    m_logInitializer = std::make_shared<LogInitializer>(m_commonInitializer->logConfig());
-    m_logInitializer->initEasylogging();
-    /// init certificates
-    m_secureInitiailizer = std::make_shared<SecureInitializer>();
-    m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
-    m_secureInitiailizer->initConfig(pt);
+        m_p2pInitializer = std::make_shared<P2PInitializer>();
+        m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
+        m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
+        m_p2pInitializer->initConfig(pt);
 
-    m_p2pInitializer = std::make_shared<P2PInitializer>();
-    m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
-    m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
-    m_p2pInitializer->initConfig(pt);
+        m_ledgerInitiailizer = std::make_shared<LedgerInitiailizer>();
+        m_ledgerInitiailizer->setP2PService(m_p2pInitializer->p2pService());
+        m_ledgerInitiailizer->setKeyPair(m_secureInitiailizer->keyPair());
+        m_ledgerInitiailizer->initConfig(pt);
 
-    m_ledgerInitiailizer = std::make_shared<LedgerInitiailizer>();
-    m_ledgerInitiailizer->setP2PService(m_p2pInitializer->p2pService());
-    m_ledgerInitiailizer->setKeyPair(m_secureInitiailizer->keyPair());
-    m_ledgerInitiailizer->initConfig(pt);
-
-    m_rpcInitiailizer = std::make_shared<RPCInitiailizer>();
-    m_rpcInitiailizer->setP2PService(m_p2pInitializer->p2pService());
-    m_rpcInitiailizer->setSSLContext(m_secureInitiailizer->SSLContext());
-    m_rpcInitiailizer->setLedgerManager(m_ledgerInitiailizer->ledgerManager());
-    m_rpcInitiailizer->initConfig(pt);
+        m_rpcInitiailizer = std::make_shared<RPCInitiailizer>();
+        m_rpcInitiailizer->setP2PService(m_p2pInitializer->p2pService());
+        m_rpcInitiailizer->setSSLContext(m_secureInitiailizer->SSLContext());
+        m_rpcInitiailizer->setLedgerManager(m_ledgerInitiailizer->ledgerManager());
+        m_rpcInitiailizer->initConfig(pt);
+    }
+    catch (std::exception& e)
+    {
+        INITIALIZER_LOG(ERROR) << "[#Initializer::init] load configuration failed! [EINFO]:  "
+                               << boost::diagnostic_information(e);
+        BOOST_THROW_EXCEPTION(ConfigNotExist() << errinfo_comment(
+                                  "load configuration " + _path +
+                                  "failed, [EINFO]: " + boost::diagnostic_information(e)));
+    }
 }

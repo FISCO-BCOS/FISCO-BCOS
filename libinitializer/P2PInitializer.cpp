@@ -49,20 +49,21 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             try
             {
                 boost::split(s, it.second.data(), boost::is_any_of(":"), boost::token_compress_on);
-
                 if (s.size() != 2)
                 {
-                    INITIALIZER_LOG(DEBUG)
+                    INITIALIZER_LOG(ERROR)
                         << "[#P2PInitializer::initConfig] parse address faield: [data]: "
                         << it.second.data();
-                    continue;
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "[#P2PInitializer::initConfig] parse address faield, [data]: " +
+                            it.second.data()));
+                    exit(1);
                 }
-
                 NodeIPEndpoint endpoint;
                 endpoint.address = boost::asio::ip::address::from_string(s[0]);
                 endpoint.tcpPort = boost::lexical_cast<uint16_t>(s[1]);
                 endpoint.host = s[0];
-
                 nodes.insert(std::make_pair(endpoint, NodeID()));
             }
             catch (std::exception& e)
@@ -70,7 +71,11 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 INITIALIZER_LOG(ERROR)
                     << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]: "
                     << it.second.data() << "/" << e.what();
-                continue;
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]:" +
+                        it.second.data() + "/" + boost::diagnostic_information(e)));
+                exit(1);
             }
         }
     }

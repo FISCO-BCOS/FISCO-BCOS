@@ -95,7 +95,7 @@ install_ubuntu_deps() {
     install_ubuntu_package "make" "build-essential"  \
                             "openssl" "libssl-dev" "libkrb5-dev" \
                             "libcurl4-openssl-dev" "libgmp-dev" \
-                            "libleveldb-dev" 
+                            "libleveldb-dev" "libsnappy-dev"
 }
 
 
@@ -104,7 +104,7 @@ install_centos_deps() {
     execute_cmd "sudo yum upgrade"
     install_centos_package "make" "gcc-c++" "leveldb-devel" \
                             "curl-devel" "openssl" "openssl-devel" \
-                            "gmp-devel" 
+                            "gmp-devel" "snappy-devel"
 }
 
 # install oracle package
@@ -132,7 +132,7 @@ install_all_deps()
 build_ubuntu_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake .. -DCOVERAGE=ON"
+    execute_cmd "cmake .. -DTESTS=ON"
     execute_cmd "make -j2"
     #execute_cmd "make install && cd ${current_dir}"
 }
@@ -140,7 +140,7 @@ build_ubuntu_source() {
 build_centos_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake3 .. -DCOVERAGE=ON"
+    execute_cmd "cmake3 .. -DTESTS=ON"
     execute_cmd "make"
     #execute_cmd "make install && cd ${current_dir}"
 }

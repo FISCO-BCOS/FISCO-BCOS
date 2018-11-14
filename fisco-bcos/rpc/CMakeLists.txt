@@ -18,6 +18,7 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+if(TESTS)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
@@ -37,4 +38,4 @@ target_link_libraries(mini-rpc rpc)
 target_link_libraries(mini-rpc ledger)
 target_link_libraries(mini-rpc p2p)
 
-install(TARGETS mini-rpc DESTINATION bin)
+endif()
