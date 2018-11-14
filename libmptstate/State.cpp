@@ -166,9 +166,13 @@ Account* State::account(Address const& _addr)
     clearCacheIfTooLarge();
 
     RLP state(stateBack);
+    auto account = Account(state[0].toInt<u256>(), state[1].toInt<u256>(), state[2].toHash<h256>(), state[3].toHash<h256>(), Account::Unchanged);
+    auto i = m_cache.insert(std::make_pair(_addr, account));
+#if 0
     auto i = m_cache.emplace(std::piecewise_construct, std::forward_as_tuple(_addr),
         std::forward_as_tuple(state[0].toInt<u256>(), state[1].toInt<u256>(),
             state[2].toHash<h256>(), state[3].toHash<h256>(), Account::Unchanged));
+#endif
     m_unchangedCacheEntries.push_back(_addr);
     return &i.first->second;
 }
@@ -646,8 +650,19 @@ std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
                     for (auto const& j : cache->storageOverlay())
                     {
                         if ((!mem.count(j.first) && j.second) ||
-                            (mem.count(j.first) && mem.at(j.first) != j.second))
-                            mem[j.first] = j.second, delta.insert(j.first);
+                            (mem.count(j.first) && mem.at(j.first) != j.second)) {
+
+                            auto it = mem.find(j.first);
+                            if(it != mem.end()) {
+                                it->second = j.second;
+                            }
+                            else {
+                                mem.insert(std::make_pair(j.first, j.second));
+                            }
+
+                            //mem[j.first] = j.second;
+                            delta.insert(j.first);
+                        }
                         else if (j.second)
                             cached.insert(j.first);
                     }
