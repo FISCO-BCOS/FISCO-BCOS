@@ -75,40 +75,33 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
     defaultConf.set(el::Level::Global, el::ConfigurationType::Filename, logPath + "/" + logPostfix);
 
     /// init level log
+    defaultConf.set(el::Level::Info, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Info, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.INFO-ENABLED", "true"));
-    defaultConf.set(
-        el::Level::Info, el::ConfigurationType::Filename, logPath + "/info_" + logPostfix);
 
+    defaultConf.set(el::Level::Warning, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Warning, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.WARNING-ENABLED", "true"));
-    defaultConf.set(
-        el::Level::Warning, el::ConfigurationType::Filename, logPath + "/warn_" + logPostfix);
 
+    defaultConf.set(el::Level::Error, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Error, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.ERROR-ENABLED", "true"));
-    defaultConf.set(
-        el::Level::Error, el::ConfigurationType::Filename, logPath + "/error_" + logPostfix);
 
+    defaultConf.set(el::Level::Debug, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Debug, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.DEBUG-ENABLED", "false"));
-    defaultConf.set(
-        el::Level::Debug, el::ConfigurationType::Filename, logPath + "/debug_" + logPostfix);
 
+    defaultConf.set(el::Level::Trace, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Trace, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.TRACE-ENABLED", "false"));
-    defaultConf.set(
-        el::Level::Trace, el::ConfigurationType::Filename, logPath + "/trace_" + logPostfix);
 
+    defaultConf.set(el::Level::Fatal, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Fatal, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.FATAL-ENABLED", "false"));
-    defaultConf.set(
-        el::Level::Fatal, el::ConfigurationType::Filename, logPath + "/fatal_" + logPostfix);
 
+    defaultConf.set(el::Level::Verbose, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Verbose, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.VERBOSE-ENABLED", "false"));
-    defaultConf.set(
-        el::Level::Verbose, el::ConfigurationType::Filename, logPath + "/verbose_" + logPostfix);
 
     /// set allConf for globalLog
     el::Configurations allConf;

@@ -36,6 +36,7 @@ void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidListenPort() << errinfo_comment(
                                   "[#RPCInitiailizer] initConfig for RPCInitiailizer "
                                   "failed! Invalid ListenPort for RPC, must between [0,65536]"));
+        exit(1);
     }
     /// init channelServer
     ChannelRPCServer::Ptr m_channelRPCServer;
