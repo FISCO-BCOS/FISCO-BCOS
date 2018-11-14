@@ -132,6 +132,8 @@ public:
 
     int64_t number() { return m_blockNumber - 1; }
 
+    int64_t totalTransactionCount() { return m_totalTransactionCount; }
+
     dev::h256 numberHash(int64_t _i) { return m_blockChain[_i]->headerHash(); }
 
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
@@ -165,12 +167,14 @@ public:
         m_blockChain.push_back(p_block);
         m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
         m_blockNumber += 1;
+        m_totalTransactionCount += block.transactions().size();
         return CommitResult::OK;
     }
     void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;
+    int64_t m_totalTransactionCount;
     Secret m_sec;
 };
 class TxPoolFixture
