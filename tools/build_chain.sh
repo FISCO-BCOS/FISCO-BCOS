@@ -13,6 +13,8 @@ port_start=30300
 statedb_type=LevelDB 
 conf_path="conf/"
 eth_path=
+gen_sdk=false
+jks_passwd=123456
 make_tar=
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
@@ -26,6 +28,7 @@ Usage:
     -e <FISCO-BCOS binary path> Default download from GitHub
     -o <Output Dir>             Default ./nodes/
     -p <Start Port>             Default 30300
+    -d <JKS passwd>             Default not generate jks files, if set use param as jks passwd
     -s <StateDB type>           Default LevelDB. if set -s, use AMDB
     -t <Cert config file>       Default auto generate
     -z <Generate tar packet>    Default no
@@ -242,7 +245,7 @@ read_password() {
         echo "Verify password failure!"
         exit $EXIT_CODE
     }
-    mypass=$pass1
+    jks_passwd=$pass1
 }
 
 gen_sdk_cert() {
@@ -261,9 +264,9 @@ gen_sdk_cert() {
     cp $agency/ca-agency.crt $sdkpath/ca.crt
     
     read_password
-    openssl pkcs12 -export -name client -passout "pass:$mypass" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
-    keytool -importkeystore -srckeystore $sdkpath/keystore.p12 -srcstoretype pkcs12 -srcstorepass $mypass\
-        -destkeystore $sdkpath/client.keystore -deststoretype jks -deststorepass $mypass -alias client 2>/dev/null 
+    openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
+    keytool -importkeystore -srckeystore $sdkpath/keystore.p12 -srcstoretype pkcs12 -srcstorepass $jks_passwd\
+        -destkeystore $sdkpath/client.keystore -deststoretype jks -deststorepass $jks_passwd -alias client 2>/dev/null 
 
     echo "build $sdk sdk cert successful!"
 }
@@ -392,7 +395,7 @@ EOF
 
 main()
 {
-while getopts "f:l:o:p:e:t:szh" option;do
+while getopts "f:l:o:p:e:t:dszh" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -403,6 +406,13 @@ while getopts "f:l:o:p:e:t:szh" option;do
     o) output_dir=$OPTARG;;
     p) port_start=$OPTARG;;
     e) eth_path=$OPTARG;;
+    d) gen_sdk="true"
+       [ ! -z $OPTARG ] && jks_passwd=$OPTARG
+       [[ "$jks_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
+        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
+        exit $EXIT_CODE
+    }
+    ;;
     s) statedb_type=AMDB;;
     t) CertConfig=$OPTARG;;
     z) make_tar="yes";;
@@ -429,6 +439,7 @@ if [ -z ${eth_path} ];then
     Download=true
 fi
 
+dir_must_not_exists $output_dir
 [ -d "$output_dir" ] || mkdir -p "$output_dir"
 
 if [ "${Download}" = "true" ];then
@@ -448,6 +459,7 @@ fi
 if [ ! -e "$ca_file" ]; then
     echo "Generating CA key..."
     dir_must_not_exists $output_dir/chain
+    dir_must_not_exists $output_dir/certrm
     gen_chain_cert "" $output_dir/chain >$output_dir/build.log 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
     mv $output_dir/chain $output_dir/cert
     gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/build.log 2>&1
@@ -480,12 +492,18 @@ for line in ${ip_array[*]};do
             if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
                 break;
             fi
+            rm -rf $node_dir
         done
         cat ${output_dir}/cert/agency/agency.crt >> $node_dir/${conf_path}/node.crt
         cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
-        # gen_sdk_cert ${output_dir}/cert/agency $node_dir
-        # mkdir -p $node_dir/sdk/
-        # mv $node_dir/* $node_dir/sdk/
+        if [ "${gen_sdk}" = "true" ];then
+            mkdir -p $node_dir/sdk/
+            # read_password
+            openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
+		    keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
+            # gen_sdk_cert ${output_dir}/cert/agency $node_dir
+            # mv $node_dir/* $node_dir/sdk/
+        fi
         nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
     "
