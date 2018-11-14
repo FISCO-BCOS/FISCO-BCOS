@@ -204,6 +204,7 @@ public:
     {
         m_vrs = sig;
         m_hashWith = h256(0);
+        m_sender = Address();
     }
     /// @returns amount of gas required for the basic payment.
     int64_t baseGasRequired(EVMSchedule const& _es) const
@@ -242,7 +243,11 @@ protected:
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }
 
     /// Clears the signature.
-    void clearSignature() { m_vrs = SignatureStruct(); }
+    void clearSignature()
+    {
+        m_vrs = SignatureStruct();
+        m_sender = Address();
+    }
 
     Type m_type = NullTransaction;  ///< Is this a contract-creation transaction or a message-call
                                     ///< transaction?
