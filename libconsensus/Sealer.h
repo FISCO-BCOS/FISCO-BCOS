@@ -132,7 +132,7 @@ protected:
     bool isBlockSyncing();
     inline void resetSealingBlock()
     {
-        SEAL_LOG(DEBUG) << "[##resetSealingBlock] [number]" << m_blockChain->number() << std::endl;
+        SEAL_LOG(DEBUG) << "[#resetSealingBlock] [number]" << m_blockChain->number() << std::endl;
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         resetSealingBlock(m_sealing);
     }
