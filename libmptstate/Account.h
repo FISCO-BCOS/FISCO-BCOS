@@ -175,7 +175,14 @@ public:
     /// committing to the trie later.
     void setStorage(u256 _p, u256 _v)
     {
-        m_storageOverlay[_p] = _v;
+        auto it = m_storageOverlay.find(_p);
+        if(it != m_storageOverlay.end()) {
+            it->second = _v;
+        }
+        else {
+            m_storageOverlay.insert(std::make_pair(_p, _v));
+        }
+        //m_storageOverlay[_p] = _v;
         changed();
     }
 

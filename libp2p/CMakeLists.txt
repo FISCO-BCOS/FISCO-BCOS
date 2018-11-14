@@ -9,7 +9,6 @@ add_library(p2p ${SRC_LIST} ${HEADERS})
 eth_use(p2p OPTIONAL OpenSSL)
 
 target_link_libraries(p2p devcore devcrypto network)
-target_link_libraries(p2p ${OPENSSL_SSL_LIBRARIE} ${OPENSSL_CRYPTO_LIBRARIE})
 
 add_dependencies(p2p Boost::Thread)
 

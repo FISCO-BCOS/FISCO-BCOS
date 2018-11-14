@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(rlptest)
 
 BOOST_AUTO_TEST_CASE(rlpRandom)
 {
-// TODO: file not exists
+    // TODO: file not exists
 #if 0
     fs::path testPath = dev::test::getTestPath();
     testPath /= fs::path("RLPTests/RandomRLPTests");
