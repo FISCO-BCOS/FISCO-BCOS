@@ -40,7 +40,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
     # for easy log
     add_compile_options(-DELPP_THREAD_SAFE)
-
+    add_compile_options(-DELPP_NO_DEFAULT_LOG_FILE)
     add_compile_options(-Wa,-march=generic64)
 
     if(STATIC_BUILD)

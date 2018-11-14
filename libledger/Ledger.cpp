@@ -100,6 +100,7 @@ void Ledger::initConfig(std::string const& configPath)
         Ledger_LOG(ERROR) << "[#initConfig Failed] [EINFO]:  " << boost::diagnostic_information(e)
                           << std::endl;
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
+        exit(1);
     }
 }
 

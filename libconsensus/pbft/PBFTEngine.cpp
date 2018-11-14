@@ -530,7 +530,13 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
     m_reqCache->addPrepareReq(sign_prepare);
+    PBFTENGINE_LOG(TRACE) << "[#handlePrepareMsg] add prepare cache [hash/number]:  "
+                          << sign_prepare.block_hash.abridged() << "/" << sign_prepare.height
+                          << std::endl;
     /// broadcast the re-generated signReq(add the signReq to cache)
+    PBFTENGINE_LOG(TRACE) << "[#]handlePrepareMsg broadcastSignReq [hash/number]:  "
+                          << sign_prepare.block_hash.abridged() << "/" << sign_prepare.height
+                          << std::endl;
     if (!broadcastSignReq(sign_prepare))
     {
         PBFTENGINE_LOG(WARNING) << "[#broadcastSignReq failed] [INFO]:  " << oss.str();
@@ -561,8 +567,14 @@ void PBFTEngine::checkAndCommit()
             return;
         }
         /// update and backup the commit cache
+        PBFTENGINE_LOG(TRACE) << "[#checkAndCommit] backup/updateCommittedPrepare [hash/number]:  "
+                              << m_reqCache->committedPrepareCache().block_hash << "/"
+                              << m_reqCache->committedPrepareCache().height << std::endl;
         m_reqCache->updateCommittedPrepare();
         backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache());
+        PBFTENGINE_LOG(TRACE) << "[#checkAndCommit] broadcastCommitReq [hash/number]:  "
+                              << m_reqCache->prepareCache().block_hash << "/"
+                              << m_reqCache->prepareCache().height << std::endl;
         if (!broadcastCommitReq(m_reqCache->prepareCache()))
         {
             PBFTENGINE_LOG(WARNING) << "[#checkAndCommit: broadcastCommitReq failed]" << std::endl;
@@ -618,7 +630,6 @@ void PBFTEngine::checkAndSave()
                     << "/" << block.blockHeader().number() << "/"
                     << block.blockHeader().hash().abridged() << std::endl;
                 /// note blocksync to sync
-                m_onViewChange();
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
             }
@@ -908,6 +919,7 @@ void PBFTEngine::checkTimeout()
             m_toView += u256(1);
             m_leaderFailed = true;
             m_timeManager.updateChangeCycle();
+            m_blockSync->noteSealingBlockNumber(m_blockChain->number());
             m_timeManager.m_lastConsensusTime = utcTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
