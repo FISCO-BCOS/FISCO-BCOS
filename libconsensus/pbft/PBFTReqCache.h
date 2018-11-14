@@ -120,7 +120,24 @@ public:
     /// add specified viewchange cache to the viewchange-cache
     inline void addViewChangeReq(ViewChangeReq const& req)
     {
-        m_recvViewChangeReq[req.view][req.idx] = req;
+        auto it = m_recvViewChangeReq.find(req.view);
+        if(it != m_recvViewChangeReq.end()) {
+            auto itv = it->second.find(req.idx);
+            if(itv != it->second.end()) {
+                itv->second = req;
+            }
+            else {
+                it->second.insert(std::make_pair(req.idx, req));
+            }
+        }
+        else {
+            std::unordered_map<u256, ViewChangeReq> viewMap;
+            viewMap.insert(std::make_pair(req.idx, req));
+
+            m_recvViewChangeReq.insert(std::make_pair(req.view, viewMap));
+        }
+
+        //m_recvViewChangeReq[req.view][req.idx] = req;
     }
 
     template <typename T, typename S>
