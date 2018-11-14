@@ -61,7 +61,6 @@ public:
     }
 
 private:
-    std::string m_logPath;
     static const std::chrono::seconds wakeUpDelta;
     static std::chrono::system_clock::time_point nextWakeUp;
 };

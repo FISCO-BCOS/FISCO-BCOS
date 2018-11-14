@@ -15,7 +15,7 @@ conf_path="conf/"
 eth_path=
 make_tar=
 Download=false
-Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/raw/dev-1.5/bin/fisco-bcos
+Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
 help() {
     echo $1

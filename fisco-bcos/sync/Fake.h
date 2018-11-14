@@ -61,13 +61,14 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _sync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         unsigned _idleWaitMs = 30)
-      : Worker("FakeConcensusForSync", _idleWaitMs),
+      : Worker("FakeConcensusForSync", 0),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_sync(_sync),
         m_blockVerifier(_blockVerifier),
         m_totalTxCommit(0),
-        m_protocolId(0)
+        m_protocolId(0),
+        m_blockGenerationInterval(_idleWaitMs)
     {}
 
     virtual ~FakeConcensus(){};
@@ -80,9 +81,20 @@ public:
     virtual void doWork() override
     {
         if (m_sync->status().state != SyncState::Idle)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
             return;
+        }
 
+        // seal
         Transactions const& txs = m_txPool->pendingList();
+
+        if (0 == txs.size())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
+            return;
+        }
+
         int64_t currentNumber = m_blockChain->number();
         h256 const& parentHash = m_blockChain->numberHash(currentNumber);
 
@@ -91,6 +103,11 @@ public:
         BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
         BlockInfo parentBlockInfo;
         ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block, parentBlockInfo);
+
+        // consensus process waiting time simulation
+        std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
+
+        // commit
         m_blockChain->commitBlock(*block, exeCtx);
         m_txPool->dropBlockTrans(*block);
         m_totalTxCommit += txs.size();
@@ -171,6 +188,7 @@ private:
 
     size_t m_totalTxCommit;
     PROTOCOL_ID m_protocolId;
+    unsigned m_blockGenerationInterval;
 };
 
 class FakeInitializer : public InitializerInterface

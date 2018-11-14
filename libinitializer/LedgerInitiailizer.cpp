@@ -36,7 +36,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
     /// TODO: modify FakeLedger to the real Ledger after all modules ready
     m_ledgerManager = std::make_shared<LedgerManager>(m_p2pService, m_keyPair);
     std::map<GROUP_ID, h512s> groudID2NodeList;
-
+    bool succ = true;
     for (auto it : _pt.get_child("group"))
     {
         if (it.first.find("group_config.") == 0)
@@ -52,17 +52,31 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
 
                 if (s.size() != 2)
                 {
-                    INITIALIZER_LOG(TRACE)
+                    INITIALIZER_LOG(ERROR)
                         << "[#LedgerInitiailizer::initConfig] parse groupID failed: [data]: "
                         << it.first.data();
-                    continue;
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "[#LedgerInitiailizer::initConfig] parse groupID failed!"));
+                    exit(1);
                 }
 
-                initSingleGroup(boost::lexical_cast<int>(s[1]), it.second.data(), groudID2NodeList);
+                succ = initSingleGroup(
+                    boost::lexical_cast<int>(s[1]), it.second.data(), groudID2NodeList);
+                if (!succ)
+                {
+                    INITIALIZER_LOG(ERROR)
+                        << "[#LedgerInitiailizer::initConfig] initSingleGroup for "
+                        << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
+                    BOOST_THROW_EXCEPTION(
+                        InvalidConfig() << errinfo_comment(
+                            "[#LedgerInitiailizer::initConfig] initSingleGroup for " + s[1] +
+                            " failed!"));
+                }
             }
             catch (std::exception& e)
             {
-                SESSION_LOG(WARNING)
+                SESSION_LOG(ERROR)
                     << "[#LedgerInitiailizer::initConfig] parse group config faield: [EINFO]: "
                     << e.what();
                 continue;
@@ -73,10 +87,10 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
     m_ledgerManager->startAll();
 }
 
-void LedgerInitiailizer::initSingleGroup(
+bool LedgerInitiailizer::initSingleGroup(
     GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
 {
-    m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
+    bool succ = m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
     _groudID2NodeList[_groupID] =
         m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 
@@ -85,4 +99,5 @@ void LedgerInitiailizer::initSingleGroup(
                            << "/" << m_ledgerManager->consensus(_groupID)->consensusStatus();
     for (auto i : _groudID2NodeList[_groupID])
         INITIALIZER_LOG(TRACE) << "miner:" << toHex(i);
+    return succ;
 }

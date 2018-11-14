@@ -57,22 +57,23 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
     std::string logPostfix = "log_%datetime{%Y%M%d%H}.log";
     /// init the defaultConf
     /// init global configurations
-    defaultConf.setGlobally(
-        el::ConfigurationType::Enabled, pt.get<std::string>("log.GLOBAL-ENABLED", "true"));
-    defaultConf.setGlobally(el::ConfigurationType::ToFile, "true");
-    defaultConf.setGlobally(el::ConfigurationType::ToStandardOutput, "false");
-    defaultConf.setGlobally(el::ConfigurationType::Format,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::Enabled,
+        pt.get<std::string>("log.GLOBAL-ENABLED", "true"));
+    defaultConf.set(el::Level::Global, el::ConfigurationType::ToFile, "true");
+    defaultConf.set(el::Level::Global, el::ConfigurationType::ToStandardOutput, "false");
+    defaultConf.set(el::Level::Global, el::ConfigurationType::Format,
         pt.get<std::string>(
             "log.GLOBAL-FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"));
-    defaultConf.setGlobally(el::ConfigurationType::MillisecondsWidth,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::MillisecondsWidth,
         pt.get<std::string>("log.GLOBAL-MILLISECONDS_WIDTH", "3"));
-    defaultConf.setGlobally(el::ConfigurationType::PerformanceTracking,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::PerformanceTracking,
         pt.get<std::string>("log.GLOBAL-PERFORMANCE_TRACKING", "false"));
-    defaultConf.setGlobally(el::ConfigurationType::MaxLogFileSize,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::MaxLogFileSize,
         pt.get<std::string>("log.GLOBAL-MAX_LOG_FILE_SIZE", "209715200"));
-    defaultConf.setGlobally(el::ConfigurationType::LogFlushThreshold,
+    defaultConf.set(el::Level::Global, el::ConfigurationType::LogFlushThreshold,
         pt.get<std::string>("log.GLOBAL-LOG_FLUSH_THRESHOLD", "100"));
-    defaultConf.setGlobally(el::ConfigurationType::Filename, logPath + "/" + logPostfix);
+    defaultConf.set(el::Level::Global, el::ConfigurationType::Filename, logPath + "/" + logPostfix);
+
     /// init level log
     defaultConf.set(el::Level::Info, el::ConfigurationType::Enabled,
         pt.get<std::string>("log.INFO-ENABLED", "true"));
@@ -108,7 +109,27 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
         pt.get<std::string>("log.VERBOSE-ENABLED", "false"));
     defaultConf.set(
         el::Level::Verbose, el::ConfigurationType::Filename, logPath + "/verbose_" + logPostfix);
-    el::Loggers::reconfigureLogger("default", defaultConf);
+
+    /// set allConf for globalLog
+    el::Configurations allConf;
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::Enabled));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::ToFile));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::ToStandardOutput));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::Format));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::Filename));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::SubsecondPrecision));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::MillisecondsWidth));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::PerformanceTracking));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::MaxLogFileSize));
+    allConf.set(defaultConf.get(el::Level::Global, el::ConfigurationType::LogFlushThreshold));
+    allConf.set(defaultConf.get(el::Level::Trace, el::ConfigurationType::Enabled));
+    allConf.set(defaultConf.get(el::Level::Debug, el::ConfigurationType::Enabled));
+    allConf.set(defaultConf.get(el::Level::Fatal, el::ConfigurationType::Enabled));
+    allConf.set(defaultConf.get(el::Level::Error, el::ConfigurationType::Enabled));
+    allConf.set(defaultConf.get(el::Level::Warning, el::ConfigurationType::Enabled));
+    allConf.set(defaultConf.get(el::Level::Verbose, el::ConfigurationType::Enabled));
+    allConf.set(defaultConf.get(el::Level::Info, el::ConfigurationType::Enabled));
+    el::Loggers::reconfigureLogger("default", allConf);
     el::Loggers::reconfigureLogger(fileLogger, defaultConf);
     el::Helpers::installPreRollOutCallback(rolloutHandler);
 }
