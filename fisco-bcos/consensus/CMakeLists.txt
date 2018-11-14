@@ -18,6 +18,7 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+if(TESTS)
 
 aux_source_directory(. SRC_LIST)
 
@@ -42,8 +43,4 @@ target_link_libraries(mini-consensus consensus)
 target_link_libraries(mini-consensus ledger)
 target_link_libraries(mini-consensus initializer)
 
-if (UNIX)
-target_link_libraries(mini-consensus pthread)
 endif()
-
-install(TARGETS mini-consensus DESTINATION bin)
