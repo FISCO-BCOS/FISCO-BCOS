@@ -27,6 +27,9 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#ifdef __APPLE__
+#include <pthread.h>
+#endif
 #if !defined(ETH_EMSCRIPTEN)
 #include <boost/asio/ip/tcp.hpp>
 #endif

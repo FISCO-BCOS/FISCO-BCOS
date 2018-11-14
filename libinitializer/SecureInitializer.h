@@ -45,14 +45,11 @@ public:
 
     std::shared_ptr<bas::context> SSLContext() { return m_sslContext; }
     const KeyPair& keyPair() { return m_key; }
-    void setDataPath(std::string const& _dataPath) { m_dataPath = _dataPath; }
 
 private:
     void completePath(std::string& _path);
     KeyPair m_key;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
-
-    std::string m_dataPath;
 };
 
 }  // namespace initializer

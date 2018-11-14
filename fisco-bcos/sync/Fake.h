@@ -31,7 +31,6 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libinitializer/Common.h>
-#include <libinitializer/CommonInitializer.h>
 #include <libinitializer/InitializerInterface.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
@@ -202,11 +201,7 @@ public:
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_path, pt);
 
-        m_commonInitializer = std::make_shared<CommonInitializer>();
-        m_commonInitializer->initConfig(pt);
-
         m_secureInitiailizer = std::make_shared<SecureInitializer>();
-        m_secureInitiailizer->setDataPath(m_commonInitializer->dataPath());
         m_secureInitiailizer->initConfig(pt);
 
         m_p2pInitializer = std::make_shared<P2PInitializer>();
@@ -216,12 +211,10 @@ public:
     }
 
 public:
-    CommonInitializer::Ptr commonInitializer() { return m_commonInitializer; }
     SecureInitializer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
 
 private:
-    CommonInitializer::Ptr m_commonInitializer;
     P2PInitializer::Ptr m_p2pInitializer;
     SecureInitializer::Ptr m_secureInitiailizer;
 };

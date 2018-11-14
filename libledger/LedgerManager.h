@@ -59,26 +59,32 @@ public:
     inline bool initSingleLedger(dev::GROUP_ID const& _groupId,
         std::string const& _baseDir = "data", std::string const& configFileName = "")
     {
-        if (m_ledgerMap.count(_groupId) == 0)
+        if ((_groupId <= 0) || (_groupId > maxGroupID))
         {
-            std::shared_ptr<LedgerInterface> ledger =
-                std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
-            LedgerManager_LOG(INFO)
-                << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId) << std::endl;
-            ledger->initLedger();
-            m_ledgerMap.insert(std::make_pair(_groupId, ledger));
-            {
-                WriteGuard l(x_groupListCache);
-                m_groupListCache.insert(_groupId);
-            }
-            return true;
-        }
-        else
-        {
-            LedgerManager_LOG(WARNING) << "[initSingleLedger] Group already inited [GroupId]:  "
-                                       << std::to_string(_groupId) << std::endl;
+            LedgerManager_LOG(ERROR)
+                << "[initSingleLedger] invalid GroupId: " << _groupId << ", must between [1"
+                << ", " << maxGroupID << "]" << std::endl;
             return false;
         }
+        if (m_ledgerMap.count(_groupId) > 0)
+        {
+            LedgerManager_LOG(ERROR) << "[initSingleLedger] Group already inited [GroupId]:  "
+                                     << std::to_string(_groupId) << std::endl;
+            return false;
+        }
+        std::shared_ptr<LedgerInterface> ledger =
+            std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
+        LedgerManager_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId)
+                                << std::endl;
+        bool succ = ledger->initLedger();
+        if (!succ)
+            return false;
+        m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+        {
+            WriteGuard l(x_groupListCache);
+            m_groupListCache.insert(_groupId);
+        }
+        return true;
     }
 
     /**
@@ -113,13 +119,21 @@ public:
     virtual inline void startAll()
     {
         for (auto item : m_ledgerMap)
+        {
+            if (!item.second)
+                continue;
             item.second->startAll();
+        }
     }
     /// stop all the ledgers that have been started
     virtual inline void stopAll()
     {
         for (auto item : m_ledgerMap)
+        {
+            if (!item.second)
+                continue;
             item.second->stopAll();
+        }
     }
     /// get pointer of txPool by group id
     inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::GROUP_ID const& groupId)

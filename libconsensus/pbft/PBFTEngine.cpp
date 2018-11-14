@@ -110,8 +110,11 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast prepare message
-    broadcastMsg(PrepareReqPacket, prepare_req.block_hash.hex(), ref(prepare_data));
+    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
     handlePrepareMsg(prepare_req);
+    /// note blockSync to the latest number, in case of the block number of other nodes is larger
+    /// than this node
+    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
 }
 
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
@@ -218,7 +221,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast the generated preparePacket
-    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.sig.hex(), ref(prepare_data));
+    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
     if (succ)
     {
         if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -245,7 +248,7 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
     SignReq sign_req(req, m_keyPair, m_idx);
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
-    bool succ = broadcastMsg(SignReqPacket, sign_req.sig.hex(), ref(sign_req_data));
+    bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
     if (succ)
         m_reqCache->addSignReq(sign_req);
     return succ;
@@ -284,7 +287,7 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
     CommitReq commit_req(req, m_keyPair, m_idx);
     bytes commit_req_data;
     commit_req.encode(commit_req_data);
-    bool succ = broadcastMsg(CommitReqPacket, commit_req.sig.hex(), ref(commit_req_data));
+    bool succ = broadcastMsg(CommitReqPacket, commit_req.uniqueKey(), ref(commit_req_data));
     if (succ)
         m_reqCache->addCommitReq(commit_req);
     return succ;
@@ -297,7 +300,7 @@ bool PBFTEngine::broadcastViewChangeReq()
                           << "/" << m_highestBlock.number() << std::endl;
     bytes view_change_data;
     req.encode(view_change_data);
-    return broadcastMsg(ViewChangeReqPacket, req.sig.hex() + toJS(req.view), ref(view_change_data));
+    return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
 /**
@@ -527,7 +530,13 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
     m_reqCache->addPrepareReq(sign_prepare);
+    PBFTENGINE_LOG(TRACE) << "[#handlePrepareMsg] add prepare cache [hash/number]:  "
+                          << sign_prepare.block_hash.abridged() << "/" << sign_prepare.height
+                          << std::endl;
     /// broadcast the re-generated signReq(add the signReq to cache)
+    PBFTENGINE_LOG(TRACE) << "[#]handlePrepareMsg broadcastSignReq [hash/number]:  "
+                          << sign_prepare.block_hash.abridged() << "/" << sign_prepare.height
+                          << std::endl;
     if (!broadcastSignReq(sign_prepare))
     {
         PBFTENGINE_LOG(WARNING) << "[#broadcastSignReq failed] [INFO]:  " << oss.str();
@@ -558,8 +567,14 @@ void PBFTEngine::checkAndCommit()
             return;
         }
         /// update and backup the commit cache
+        PBFTENGINE_LOG(TRACE) << "[#checkAndCommit] backup/updateCommittedPrepare [hash/number]:  "
+                              << m_reqCache->committedPrepareCache().block_hash << "/"
+                              << m_reqCache->committedPrepareCache().height << std::endl;
         m_reqCache->updateCommittedPrepare();
         backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache());
+        PBFTENGINE_LOG(TRACE) << "[#checkAndCommit] broadcastCommitReq [hash/number]:  "
+                              << m_reqCache->prepareCache().block_hash << "/"
+                              << m_reqCache->prepareCache().height << std::endl;
         if (!broadcastCommitReq(m_reqCache->prepareCache()))
         {
             PBFTENGINE_LOG(WARNING) << "[#checkAndCommit: broadcastCommitReq failed]" << std::endl;
@@ -604,9 +619,20 @@ void PBFTEngine::checkAndSave()
             PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
             if (ret == CommitResult::OK)
+            {
                 dropHandledTransactions(block);
+                PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
+            }
             else
+            {
+                PBFTENGINE_LOG(ERROR)
+                    << "[#commitBlock Failed] [highNum/SNum/Shash]:  " << m_highestBlock.number()
+                    << "/" << block.blockHeader().number() << "/"
+                    << block.blockHeader().hash().abridged() << std::endl;
+                /// note blocksync to sync
+                m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
+            }
             resetConfig();
         }
         else
@@ -860,6 +886,7 @@ void PBFTEngine::checkAndChangeView()
         m_leaderFailed = false;
         m_view = m_toView;
         m_reqCache->triggerViewChange(m_view);
+        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     }
 }
 
@@ -892,6 +919,7 @@ void PBFTEngine::checkTimeout()
             m_toView += u256(1);
             m_leaderFailed = true;
             m_timeManager.updateChangeCycle();
+            m_blockSync->noteSealingBlockNumber(m_blockChain->number());
             m_timeManager.m_lastConsensusTime = utcTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
@@ -920,7 +948,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         PrepareReq prepare_req;
         handlePrepareMsg(prepare_req, pbftMsg);
-        key = prepare_req.block_hash.hex();
+        key = prepare_req.uniqueKey();
         pbft_msg = prepare_req;
         break;
     }
@@ -928,7 +956,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         SignReq req;
         handleSignMsg(req, pbftMsg);
-        key = req.sig.hex();
+        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
@@ -936,7 +964,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         CommitReq req;
         handleCommitMsg(req, pbftMsg);
-        key = req.sig.hex();
+        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
@@ -944,7 +972,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         ViewChangeReq req;
         handleViewChangeMsg(req, pbftMsg);
-        key = req.sig.hex() + toJS(req.view);
+        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }

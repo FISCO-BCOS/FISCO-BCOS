@@ -110,7 +110,8 @@ void Sealer::doWork(bool wait)
                 m_signalled.wait_for(l, std::chrono::milliseconds(1));
                 return;
             }
-            handleBlock();
+            if (shouldSeal())
+                handleBlock();
         }
     }
     if (shouldWait(wait))
@@ -129,6 +130,10 @@ void Sealer::loadTransactions(uint64_t const& transToFetch)
     /// fetch transactions and update m_transactionSet
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
+    if (m_txPool->status().current > 0)
+        m_syncTxPool = true;
+    else
+        m_syncTxPool = false;
 }
 
 /// check whether the blocksync module is syncing

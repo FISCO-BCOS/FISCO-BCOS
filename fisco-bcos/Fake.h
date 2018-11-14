@@ -53,6 +53,7 @@ public:
     FakeBlockChain()
     {
         m_blockNumber = 1;
+        m_totalTransactionCount = 0;
         bytes m_blockHeaderData = bytes();
         bytes m_blockData = bytes();
         BlockHeader blockHeader;
@@ -73,6 +74,12 @@ public:
     {
         ReadGuard l(x_blockChain);
         return m_blockChain.size() - 1;
+    }
+
+    int64_t totalTransactionCount()
+    {
+        ReadGuard l(x_blockChain);
+        return m_totalTransactionCount;
     }
 
     dev::h256 numberHash(int64_t _i)
@@ -113,6 +120,7 @@ public:
                 m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
                 m_blockChain.push_back(std::make_shared<Block>(block));
                 m_blockNumber = block.blockHeader().number() + 1;
+                m_totalTransactionCount += block.transactions().size();
             }
             m_onReady();
         }
@@ -125,6 +133,7 @@ private:
     std::map<h256, uint64_t> m_blockHash;
     std::vector<std::shared_ptr<Block>> m_blockChain;
     uint64_t m_blockNumber;
+    uint64_t m_totalTransactionCount;
     mutable SharedMutex x_blockChain;
 };
 

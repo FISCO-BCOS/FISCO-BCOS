@@ -295,9 +295,7 @@ bool TxPool::dropBlockTrans(Block const& block)
 {
     /// update the nonce check related to block chain
     m_txNonceCheck->updateCache(false);
-
     bool ret = dropTransactions(block, true);
-
     /// remove the nonce check related to txpool
     m_commonNonceCheck->delCache(block.transactions());
     return ret;
