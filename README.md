@@ -1,29 +1,28 @@
-# FISCO BCOS
-
 ![](docs/images/FISCO_BCOS_Logo.svg)
 
 **FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Two major camps of blockchain technology - public and consortium chains, to better serve the general public, open consortium chain is the perfect choice for enterprises to unlock the potential of collaborative businesses model. FISCO BCOS is born to support open consortium chain applications, by supporting multiple chains’, and cross-chain communication.
 
-## Getting Start
+## Getting Started
 
 
 [![GitHub forks](https://img.shields.io/github/forks/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/network) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/lab-bcos/total.svg)](https://github.com/FISCO-BCOS/lab-bcos) 
 
-Deploying FISCO BCOS
-
-Creating a blockchain
-
-Running a smart contract
+* Install FISCO BCOS
+* Startup a blockchain
+* Deploy a smart contract
 
 ## Developing & Contributing
 
 [![GitHub top language](https://img.shields.io/github/languages/top/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos) [![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)  [![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos) [![Gitter](https://img.shields.io/gitter/room/fisco-bcos/Lobby.svg)](https://gitter.im/fisco-bcos/Lobby) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues)
 
-See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
-
-
+* Star our Github.
+* Chat in [WeChat](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
+* Create pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
+* [Submit bugs](https://github.com/FISCO-BCOS/lab-bcos/issues).
 
 ## Further Reading
+
+See the [FISCO BCOS Doc](https://fisco-bcos-documentation-en.readthedocs.io/en/latest/).
 
 ### Features
 
@@ -40,15 +39,11 @@ Since its launch, dozens of use cases have been implemented based on the FISCO B
 
 ## Community
 
-
-
-## Contact
-
-- Gitter: Chat in [lab-bcos](https://gitter.im/fisco-bcos/Lobby) channel on Gitter
+- Gitter: Chat in [FISCO BCOS](https://gitter.im/fisco-bcos/Lobby) channel on Gitter
 - Issues: Report bugs, issues or feature requests using [Github Issues](https://github.com/FISCO-BCOS/lab-bcos/issues)
 - Twitter: Follow us [@FiscoBcos](https://twitter.com/FiscoBcos)
+- WeChat: Scan [QR code](docs/images/WeChatQR.jpeg) to join our WeChat group
 - email: [service@fisco.com.cn](mailto:service@fisco.com.cn)
-- WeChat: Scan [QR code](docs/WeChatQR.jpeg) to join our WeChat group. 
 
 
 ## License
