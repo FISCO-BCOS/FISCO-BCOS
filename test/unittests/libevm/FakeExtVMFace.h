@@ -160,8 +160,14 @@ public:
     /// Read storage location.
     virtual u256 store(u256 key)
     {
+        auto it = storage_map.find(key);
+        if(it != storage_map.end()) {
+            return it->second;
+        }
+#if 0
         if (storage_map.count(key))
             return storage_map[key];
+#endif
         return u256(0);
     }
     /// Write a value in storage.
