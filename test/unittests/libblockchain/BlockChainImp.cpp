@@ -222,6 +222,9 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_EQUAL(
         sha3(empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix)).rlp()),
         sha3(TransactionReceipt().rlp()));
+    BOOST_CHECK_EQUAL(
+        empty.m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix)).hash(),
+        h256(0));
 }
 
 BOOST_AUTO_TEST_CASE(number2hash)
@@ -261,6 +264,14 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     auto txReceipt = m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix));
 
     BOOST_CHECK_EQUAL(sha3(txReceipt.rlp()), sha3(m_fakeBlock->m_transactionReceipt[0].rlp()));
+}
+
+BOOST_AUTO_TEST_CASE(getLocalisedTxReceiptByHash)
+{
+    auto localisedTxReceipt =
+        m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix));
+
+    BOOST_CHECK_EQUAL(localisedTxReceipt.hash(), h256(c_commonHashPrefix));
 }
 
 BOOST_AUTO_TEST_CASE(commitBlock)
