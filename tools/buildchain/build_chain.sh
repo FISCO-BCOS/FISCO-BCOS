@@ -561,6 +561,7 @@ for line in ${ip_array[*]};do
         generate_node_scripts "$node_dir"
         cp "$eth_path" "$node_dir/fisco-bcos"
         echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/start.sh" >> "$output_dir/start_all.sh"
+        echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/stop.sh" >> "$output_dir/stop_all.sh"
         ((++index))
         [ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
     done
