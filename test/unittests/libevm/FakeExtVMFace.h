@@ -182,7 +182,7 @@ public:
     virtual u256 balance(Address addr)
     {
         auto it = balance_map.find(addr);
-        if(it != storage_map.end()) {
+        if(it != balance_map.end()) {
             return it->second;
         }
         return 0;
