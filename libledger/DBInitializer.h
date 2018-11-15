@@ -53,7 +53,7 @@ public:
     }
 
     dev::storage::Storage::Ptr storage() const { return m_storage; }
-
+    std::shared_ptr<dev::executive::StateFactoryInterface> stateFactory() { return m_stateFactory; }
     std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> executiveContextFactory() const
     {
         return m_executiveContextFac;

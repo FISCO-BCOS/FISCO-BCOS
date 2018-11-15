@@ -226,11 +226,18 @@ bool Ledger::initBlockChain()
     Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain]" << std::endl;
     if (!m_dbInitializer->storage())
     {
-        Ledger_LOG(ERROR) << "[#initLedger] [#initBlockChain Failed]" << std::endl;
+        Ledger_LOG(ERROR) << "[#initLedger] [#initBlockChain Failed for init storage failed]"
+                          << std::endl;
         return false;
+    }
+    if (!m_dbInitializer->stateFactory())
+    {
+        Ledger_LOG(ERROR) << "#[initLedger] [#initBlockChain Failed for init stateFactory failed]"
+                          << std::endl;
     }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
+    blockChain->setStateFactory(m_dbInitializer->stateFactory());
     m_blockChain = blockChain;
     m_blockChain->setGroupMark(m_param->mutableGenesisParam().genesisMark);
     Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain SUCC]";
