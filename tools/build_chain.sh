@@ -315,7 +315,7 @@ generate_config_ini()
     ;the directory of the log
     LOG_PATH=./log
     GLOBAL-ENABLED=true
-    GLOBAL-FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg
+    GLOBAL-FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
     GLOBAL-MILLISECONDS_WIDTH=3
     GLOBAL-PERFORMANCE_TRACKING=false
     GLOBAL-MAX_LOG_FILE_SIZE=209715200
