@@ -52,7 +52,7 @@ install: |
       sudo chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash -x ./tools/ci/check-commit.sh;
     fi
 script:
-    cd tools/ci && bash build.sh && cd ../.. && ./build/test/test-fisco-bcos -- --testpath=test/data/ 
+    cd tools/ci && bash build.sh && ./build/bin/test-fisco-bcos -- --testpath=test/data/ 
 after_success:
     bash <(curl -s https://codecov.io/bash)
 after_failure:

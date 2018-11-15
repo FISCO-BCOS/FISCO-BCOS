@@ -11,8 +11,6 @@
 #!/bin/bash
 
 current_dir=`pwd`"/../.."
-build_source=1
-binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
 clear_cache()
@@ -158,66 +156,13 @@ else
 fi
 }
 
-download_binary()
-{
-execute_cmd "curl -LO ${binary_link}"
-execute_cmd "chmod a+x fisco-bcos"
-execute_cmd "sudo mv fisco-bcos /usr/local/bin/"
-}
-
-
-#### check fisco-bcos
-check_fisco()
-{
-if [ ! -f "/usr/local/bin/fisco-bcos" ]; then
-    LOG_ERROR "fisco-bcos build fail!"
-else
-    LOG_INFO "fisco-bcos build SUCCESS! path: /usr/local/bin/fisco-bcos"
-fi
-}
-
-check()
-{
-check_fisco
-}	
-
-Usage()
-{
-	echo $1
-	cat << EOF
-Usage:
-Optional:
-    -d       Download from git
-    -h       Help
-Example: 
-    bash build.sh 
-    bash build.sh -d
-EOF
-	exit 0
-}
-
-parse_param()
-{
-	while getopts "hd" option;do
-		case $option in
-		d) build_source=0;;
-		h) Usage;;
-		esac
-	done
-}
-
 install_all()
 {
 	install_all_deps
-	if [ ${build_source} -eq 0 ];then
-		download_binary
-	else
-		build_source
-	fi
-	check
+	build_source
 }
 
-parse_param "$@"
 cd ${current_dir}
 execute_cmd "git submodule update --init"
 install_all
+cd ${current_dir}
