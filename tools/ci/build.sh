@@ -130,7 +130,7 @@ build_ubuntu_source()
 # build source
 execute_cmd "mkdir -p build && cd build/"
 execute_cmd "cmake -DTESTS=ON .. "
-execute_cmd "make && sudo make install"
+execute_cmd "make"
 }
 
 build_centos_source()
@@ -138,7 +138,7 @@ build_centos_source()
 # build source
 execute_cmd "mkdir -p build && cd build/"
 execute_cmd "cmake3 -DTESTS=ON .. "
-execute_cmd "make && sudo make install && cd ${current_dir}"
+execute_cmd "make && cd ${current_dir}"
 }
 
 build_source()
@@ -165,4 +165,3 @@ install_all()
 cd ${current_dir}
 execute_cmd "git submodule update --init"
 install_all
-cd ${current_dir}
