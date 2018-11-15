@@ -206,6 +206,8 @@ public:
         return CommitResult::OK;
     }
 
+    dev::bytes getCode(dev::Address _address) override { return bytes(); }
+
     BlockHeader blockHeader;
     Transactions transactions;
     Transaction transaction;

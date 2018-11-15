@@ -58,6 +58,8 @@ public:
     virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
     virtual int64_t totalTransactionCount() = 0;
+    virtual dev::bytes getCode(dev::Address _address) = 0;
+
 
     /// set group mark to genesis block
     virtual void setGroupMark(std::string const& groupMark) = 0;
