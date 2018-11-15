@@ -159,6 +159,13 @@ public:
         return TransactionReceipt();
     }
 
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) override
+    {
+        return LocalisedTransactionReceipt(
+            TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+    }
+
     virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
     {
@@ -171,6 +178,9 @@ public:
         m_totalTransactionCount += block.transactions().size();
         return CommitResult::OK;
     }
+
+    dev::bytes getCode(dev::Address _address) override { return bytes(); }
+
     void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
