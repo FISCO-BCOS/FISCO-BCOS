@@ -59,11 +59,16 @@ bool Ledger::initLedger()
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
     m_dbInitializer->initStateDB(genesisHash);
-    /// init blockChain
-    /// init blockVerifier
-    /// init txPool
-    /// init sync
-    /// /// init consensus
+    if (!m_dbInitializer->stateFactory())
+    {
+        Ledger_LOG(ERROR) << "#[initLedger] [#initBlockChain Failed for init stateFactory failed]"
+                          << std::endl;
+        return false;
+    }
+    std::shared_ptr<BlockChainImp> blockChain =
+        std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
+    blockChain->setStateFactory(m_dbInitializer->stateFactory());
+    /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory());
 }
 
@@ -230,14 +235,8 @@ bool Ledger::initBlockChain()
                           << std::endl;
         return false;
     }
-    if (!m_dbInitializer->stateFactory())
-    {
-        Ledger_LOG(ERROR) << "#[initLedger] [#initBlockChain Failed for init stateFactory failed]"
-                          << std::endl;
-    }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
-    blockChain->setStateFactory(m_dbInitializer->stateFactory());
     m_blockChain = blockChain;
     m_blockChain->setGroupMark(m_param->mutableGenesisParam().genesisMark);
     Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain SUCC]";

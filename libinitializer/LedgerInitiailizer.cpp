@@ -72,6 +72,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
                         InvalidConfig() << errinfo_comment(
                             "[#LedgerInitiailizer::initConfig] initSingleGroup for " + s[1] +
                             " failed!"));
+                    exit(1);
                 }
             }
             catch (std::exception& e)
@@ -79,7 +80,11 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
                 SESSION_LOG(ERROR)
                     << "[#LedgerInitiailizer::initConfig] parse group config faield: [EINFO]: "
                     << e.what();
-                continue;
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment("[#LedgerInitiailizer::initConfig] "
+                                                       "initSingleGroup failed: [EINFO]: " +
+                                                       boost::diagnostic_information(e)));
+                exit(1);
             }
         }
     }
