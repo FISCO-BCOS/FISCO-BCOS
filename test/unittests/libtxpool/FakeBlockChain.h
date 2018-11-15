@@ -179,7 +179,7 @@ public:
     }
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
-    
+
     void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;

@@ -224,7 +224,7 @@ public:
     void setGroupMark(std::string const& groupMark) override {}
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
-    
+
     BlockHeader blockHeader;
     Transactions transactions;
     Transaction transaction;
