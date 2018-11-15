@@ -46,17 +46,17 @@ execute_cmd()
 # get platform: now support debain/ubuntu, fedora/centos, oracle
 get_platform()
 {
-    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
+    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - Require 'uname' to identify the platform."; exit 1; }
     case $(uname -s) in
     Darwin)
-        LOG_ERROR "FISCO-BCOS V2.0 Don't Support MAC OS Yet!"
+        LOG_ERROR "Not Support MAC OS Yet!"
         exit 1;;
     FreeBSD)
-        LOG_ERROR "FISCO-BCOS V2.0 Don't Support FreeBSD Yet!"
+        LOG_ERROR "Not Support FreeBSD Yet!"
         exit 1;;
     Linux)
         if [ -f "/etc/arch-release" ]; then
-            LOG_ERROR "FISCO-BCOS V2.0 Don't Support arch-linux Yet!"
+            LOG_ERROR "Not Support arch-linux Yet!"
         elif [ -f "/etc/os-release" ];then
             DISTRO_NAME=$(. /etc/os-release; echo $NAME)
             case $DISTRO_NAME in
@@ -261,7 +261,7 @@ check_nodejs()
 	echo | awk  '{if(node < "v6") print "WARNING : fisco need nodejs verion newer than v6(refer to: https://gaoliming123.github.io/2017/07/30/node/) , current version is '$node'"}' node="$node"
 	if [ "" = "`openssl ecparam -list_curves | grep secp256k1`" ];
 	then
-    	LOG_ERROR "Current Openssl Don't Support secp256k1 ! Please Upgrade Openssl To  OpenSSL 1.0.2k-fips"
+    	LOG_ERROR "Not Support secp256k1 ! Please Upgrade Openssl To  OpenSSL 1.0.2k-fips"
     	exit;
 	fi
 }
