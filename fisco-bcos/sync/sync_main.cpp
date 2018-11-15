@@ -61,10 +61,10 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
     Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = KeyPair::create().secret();
-    srand(time(NULL));
-    string randPrefix = to_string(time(NULL));
+    string noncePrefix = to_string(time(NULL));
 
     uint16_t sleep_interval = (uint16_t)(1000.0 / _txSpeed);
+    int txSeqNonce = 1000000000;
     while (_totalTransactions > 0)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
@@ -76,7 +76,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         {
             try
             {
-                tx.setNonce(u256(randPrefix + to_string(rand())));
+                tx.setNonce(u256(noncePrefix + to_string(txSeqNonce++)));
                 tx.setBlockLimit(u256(_blockChain->number()) + 50);
                 dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
                 tx.updateSignature(SignatureStruct(sig));
