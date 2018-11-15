@@ -177,14 +177,13 @@ std::string Rpc::version()
 {
     try
     {
-#if 0
-        auto host = service()->host();
-        if (!host)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
-#endif
+        std::string version;
+        for (auto it : implementedModules())
+        {
+            version.append(it.name + ":" + it.version + ";");
+        }
 
-        return "FISCO-BCOS 2.0";
+        return version;
     }
     catch (JsonRpcException& e)
     {
@@ -194,6 +193,8 @@ std::string Rpc::version()
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
     }
+
+    return "";
 }
 
 Json::Value Rpc::peers()
@@ -201,13 +202,6 @@ Json::Value Rpc::peers()
     try
     {
         Json::Value response = Json::Value(Json::arrayValue);
-
-#if 0
-        auto host = service()->host();
-        if (!host)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
-#endif
 
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
@@ -231,6 +225,8 @@ Json::Value Rpc::peers()
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
     }
+
+    return Json::Value();
 }
 
 Json::Value Rpc::groupPeers(int _groupID)
@@ -243,13 +239,6 @@ Json::Value Rpc::groupPeers(int _groupID)
                   << "}";
 
         Json::Value response = Json::Value(Json::arrayValue);
-
-#if 0
-        //auto host = service()->host();
-        if (!host)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
-#endif
 
         auto _nodeList = service()->getNodeListByGroupID(_groupID);
 
@@ -268,6 +257,8 @@ Json::Value Rpc::groupPeers(int _groupID)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
     }
+
+    return Json::Value();
 }
 
 Json::Value Rpc::groupList()

@@ -219,7 +219,6 @@ struct NodeIPEndpoint
     std::string name() const
     {
         std::ostringstream os;
-        // os << address.to_string() << ":" << tcpPort << ":" << udpPort;
         os << address.to_string() << ":" << tcpPort;
         return os.str();
     }
