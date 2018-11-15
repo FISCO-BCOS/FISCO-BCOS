@@ -349,12 +349,16 @@ $nodeid_list
 [sync]
 idleWaitMs=200
 
-[statedb]
-;storage db type
-dbType=${statedb_type}
-;disable(false)/enable(true) mpt
-mpt=true
+[storage]
+;storage db type, now support leveldb 
+type=leveldb
 dbpath=data
+
+[state]
+;state type, now support LevelDB/AMDB
+type=${statedb_type}
+
+
 
 ;genesis configuration
 [genesis]

@@ -86,8 +86,8 @@ void checkParam(std::shared_ptr<LedgerParam> param)
     /// check sync params
     BOOST_CHECK(param->mutableSyncParam().idleWaitMs == 100);
     /// check state DB param
-    BOOST_CHECK(param->dbType() == "AMDB");
-    BOOST_CHECK(param->enableMpt() == true);
+    BOOST_CHECK(param->mutableStorageParam().type == "sql");
+    BOOST_CHECK(param->mutableStateParam().type == "mpt");
 }
 /// test initConfig
 BOOST_AUTO_TEST_CASE(testInitConfig)

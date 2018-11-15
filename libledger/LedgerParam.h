@@ -61,7 +61,15 @@ struct GenesisParam
 {
     std::string genesisMark;
 };
-
+struct StorageParam
+{
+    std::string type;
+    std::string path;
+};
+struct StateParam
+{
+    std::string type;
+};
 class LedgerParam : public LedgerParamInterface
 {
 public:
@@ -70,16 +78,10 @@ public:
     SyncParam& mutableSyncParam() override { return m_syncParam; }
     GenesisParam& mutableGenesisParam() override { return m_genesisParam; }
     AMDBParam& mutableAMDBParam() override { return m_amdbParam; }
-    std::string const& dbType() const override { return m_dbType; }
-    bool enableMpt() const override { return m_enableMpt; }
-    void setMptState(bool mptState) override { m_enableMpt = mptState; }
-    void setDBType(std::string const& dbType) override { m_dbType = dbType; }
-
     std::string const& baseDir() const override { return m_baseDir; }
     void setBaseDir(std::string const& baseDir) override { m_baseDir = baseDir; }
-
-protected:
-    virtual void initLedgerParams(){};
+    StorageParam& mutableStorageParam() override { return m_storageParam; }
+    StateParam& mutableStateParam() override { return m_stateParam; }
 
 private:
     TxPoolParam m_txPoolParam;
@@ -87,9 +89,9 @@ private:
     SyncParam m_syncParam;
     GenesisParam m_genesisParam;
     AMDBParam m_amdbParam;
-    std::string m_dbType;
-    bool m_enableMpt;
     std::string m_baseDir;
+    StorageParam m_storageParam;
+    StateParam m_stateParam;
 };
 }  // namespace ledger
 }  // namespace dev

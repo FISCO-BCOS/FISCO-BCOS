@@ -44,7 +44,7 @@ void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(DEBUG) << "[#initStorageDB]" << std::endl;
     /// TODO: implement AMOP storage
-    if (dev::stringCmpIgnoreCase(m_param->dbType(), "LevelDB") != 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB") != 0)
     {
         DBInitializer_LOG(ERROR) << "Unsupported dbType, current version only supports levelDB"
                                  << std::endl;
@@ -61,7 +61,7 @@ void DBInitializer::initLevelDBStorage()
     leveldb::DB* pleveldb = nullptr;
     try
     {
-        boost::filesystem::create_directories(m_param->baseDir());
+        boost::filesystem::create_directories(m_param->mutableStorageParam().path);
         ldb_option.create_if_missing = true;
         ldb_option.max_open_files = 100;
         DBInitializer_LOG(DEBUG) << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler"
@@ -116,10 +116,18 @@ void DBInitializer::createExecutiveContext()
 void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
 {
     DBInitializer_LOG(DEBUG) << "[#createStateFactory]" << std::endl;
-    if (m_param->enableMpt())
+    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == true)
         createMptState(genesisHash);
-    else  /// default is storage state
+    else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "amdb") ==
+             true)  /// default is storage state
         createStorageState();
+    else
+    {
+        DBInitializer_LOG(WARNING)
+            << "[#createStateFactory] only support AMDB and mpt now, create AMDB by default"
+            << std::endl;
+        createStorageState();
+    }
     DBInitializer_LOG(DEBUG) << "[#createStateFactory SUCC]" << std::endl;
 }
 
