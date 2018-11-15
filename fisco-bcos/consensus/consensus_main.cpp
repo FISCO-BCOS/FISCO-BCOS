@@ -25,7 +25,7 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
-#include <libinitializer/LedgerInitiailizer.h>
+#include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
@@ -374,7 +374,7 @@ static void startConsensus(Params& params)
 
     auto secureInitiailizer = initialize->secureInitiailizer();
     KeyPair key_pair = secureInitiailizer->keyPair();
-    auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
+    auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
     /// create transaction
     createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
 }
