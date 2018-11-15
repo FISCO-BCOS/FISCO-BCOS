@@ -70,6 +70,14 @@ Session::~Session()
 
 			//shutdown may block servals seconds - morebtcg
 			//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			LOG(WARNING) << "Session::~Session Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
+
+			int try_count = 0;
+			while(m_sending && try_count++ < 5) {
+				LOG(WARNING) << "Wait for sending finished before close";
+				this_thread::sleep_for(chrono::seconds(1));
+			}
+
 			socket.close();
 		}
 	}
@@ -332,10 +340,12 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	}
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> data)
+void Session::onWrite(boost::system::error_code ec, std::size_t length)
 {
 	try
 	{
+		m_sending = false;
+
 		if (m_dropped)
 		return;
 
@@ -377,14 +387,12 @@ void Session::write()
 		if (m_dropped)
 			return;
 
-		auto data = std::make_shared<bytes>();
 		bytes const* out = nullptr;
 		uint64_t enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
 			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
 			out = &m_writeQueue[0];
-			data->assign(out->begin(), out->end());
 			enter_time = m_writeTimeQueue[0];
 		}
 		
@@ -399,17 +407,16 @@ void Session::write()
 		}
 
 		auto session = shared_from_this();
-		auto socket = m_socket;
 		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
 		{
 			if( m_socket->isConnected())
 			{
-				
+				m_sending = true;
 				m_server->getIOService()->post(
-					[ socket, session, data  ] {
-						boost::asio::async_write(socket->sslref(),
-						boost::asio::buffer(*data),
-						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
+					[ = ] {
+						boost::asio::async_write(m_socket->sslref(),
+						boost::asio::buffer(*out),
+						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 					});
 			}
 			else
@@ -421,7 +428,8 @@ void Session::write()
 		}
 		else
 		{
-			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
+			m_sending = true;
+			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
 		
 	}
@@ -502,7 +510,13 @@ void Session::drop(DisconnectReason _reason)
 
 		//shutdown may block servals seconds - morebtcg
 		//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-		LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
+		LOG(WARNING) << "Session::Drop Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
+
+		int try_count = 0;
+		while(m_sending && try_count++ < 5) {
+			LOG(WARNING) << "Wait for sending finished before close";
+			this_thread::sleep_for(chrono::seconds(1));
+		}
 		
 		socket.close();
 	}

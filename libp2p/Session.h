@@ -160,7 +160,7 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	bool checkRead(std::size_t _expected, boost::system::error_code _ec, std::size_t _length);
 
 	/// Perform a single round of the write operation. This could end up calling itself asynchronously.
-	void onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> data);
+	void onWrite(boost::system::error_code ec, std::size_t length);
 	void write();
 	void writeFrames();
 
@@ -217,6 +217,8 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	uint64_t m_start_t;
 
 	boost::asio::io_service::strand *m_strand;
+
+	bool m_sending = false;
 };
 
 template <class PeerCap>
