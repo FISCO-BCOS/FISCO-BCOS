@@ -62,8 +62,7 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
     defaultConf.set(el::Level::Global, el::ConfigurationType::ToFile, "true");
     defaultConf.set(el::Level::Global, el::ConfigurationType::ToStandardOutput, "false");
     defaultConf.set(el::Level::Global, el::ConfigurationType::Format,
-        pt.get<std::string>(
-            "log.GLOBAL-FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"));
+        pt.get<std::string>("log.GLOBAL-FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::MillisecondsWidth,
         pt.get<std::string>("log.GLOBAL-MILLISECONDS_WIDTH", "3"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::PerformanceTracking,
