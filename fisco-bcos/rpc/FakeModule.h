@@ -198,6 +198,13 @@ public:
         }
     }
 
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) override
+    {
+        return LocalisedTransactionReceipt(
+            TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+    }
+
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
     {
         return m_blockChain[_i];

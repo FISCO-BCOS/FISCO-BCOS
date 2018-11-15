@@ -30,6 +30,8 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/lexical_cast.hpp>
+#include <string>
+#include <vector>
 
 using namespace dev;
 using namespace std;
@@ -285,6 +287,36 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
         }
     }
     return TransactionReceipt();
+}
+
+LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
+{
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
+    if (tb)
+    {
+        auto entries = tb->select(_txHash.hex(), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            auto blockNum = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+            auto txIndex = lexical_cast<uint>(entry->getField("index"));
+
+            std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(blockNum));
+            const Transactions& txs = pblock->transactions();
+            const TransactionReceipts& receipts = pblock->transactionReceipts();
+            if (receipts.size() > txIndex && txs.size() > txIndex)
+            {
+                auto& tx = txs[txIndex];
+                auto& receipt = receipts[txIndex];
+
+                return LocalisedTransactionReceipt(receipt, _txHash, pblock->headerHash(),
+                    pblock->header().number(), tx.from(), tx.to(), txIndex, receipt.gasUsed(),
+                    receipt.contractAddress());
+            }
+        }
+    }
+    return LocalisedTransactionReceipt(
+        TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
 }
 
 void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveContext> context)
