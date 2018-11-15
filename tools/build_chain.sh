@@ -10,7 +10,7 @@ use_ip_param=
 ip_array=
 output_dir=nodes
 port_start=30300 
-statedb_type=LevelDB 
+statedb_type=mpt 
 conf_path="conf/"
 eth_path=
 gen_sdk=false
@@ -355,7 +355,7 @@ type=leveldb
 dbpath=data
 
 [state]
-;state type, now support LevelDB/AMDB
+;state type, now support mpt/AMDB
 type=${statedb_type}
 
 
