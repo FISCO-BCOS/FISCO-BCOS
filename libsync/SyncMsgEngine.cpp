@@ -206,7 +206,7 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
                    << from << ", " << from + size - 1 << "]" << endl;
 
     // fetch block into downloading blocks container
-    DownloadBlocksContainer blockContainer(m_service, m_protocolId, from);
+    DownloadBlocksContainer blockContainer(m_service, m_protocolId, _packet.nodeId);
     for (int64_t number = from; number < from + size; ++number)
     {
         shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
@@ -225,53 +225,56 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
             break;
         }
 
-        blockContainer.push(block);
+        blockContainer.batchAndSend(block);
     }
-
-    // send it
-    blockContainer.send(_packet.nodeId);
 }
 
-void DownloadBlocksContainer::push(BlockPtr _block)
+void DownloadBlocksContainer::batchAndSend(BlockPtr _block)
 {
+    // TODO: thread safe
     bytes blockRLP = _block->rlp();
-    if ((m_currentShardSize + blockRLP.size()) > c_maxPayload &&
-        0 != m_blockRLPShards.back().size())
-    {
-        m_blockRLPShards.emplace_back(vector<bytes>());
-        m_currentShardSize = 0;
-    }
-    m_blockRLPShards.back().emplace_back(blockRLP);
-    m_currentShardSize += blockRLP.size();
 
-    // Note that: if _block->rlp().size() > c_maxPayload
-    // We also send it as a packet
-}
-
-void DownloadBlocksContainer::send(NodeID _nodeId)
-{
-    if (0 == m_blockRLPShards.size())
+    if (blockRLP.size() > c_maxPayload)
     {
-        SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << _nodeId << " back[null]"
-                       << endl;
+        sendBigBlock(blockRLP);
         return;
     }
 
-    int64_t numberOffset = 0;
-    for (vector<bytes> const& shard : m_blockRLPShards)
-    {
-        if (0 == shard.size())
-            continue;
-        SyncBlocksPacket retPacket;
-        retPacket.encode(shard);
+    // Clear and send batch if full
+    if (m_currentBatchSize + blockRLP.size() > c_maxPayload)
+        clearBatchAndSend();
 
-        auto msg = retPacket.toMessage(m_protocolId);
-        m_service->asyncSendMessageByNodeID(_nodeId, msg);
-        SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << _nodeId << " back["
-                       << m_startBlockNumber + numberOffset << ", "
-                       << m_startBlockNumber + numberOffset + shard.size() - 1 << "/ "
-                       << msg->buffer()->size() << "B]" << endl;
+    // emplace back block in batch
+    m_blockRLPsBatch.emplace_back(blockRLP);
+    m_currentBatchSize += blockRLP.size();
+}
 
-        numberOffset += shard.size();
-    }
+void DownloadBlocksContainer::clearBatchAndSend()
+{
+    // TODO: thread safe
+    if (0 == m_blockRLPsBatch.size())
+        return;
+
+    SyncBlocksPacket retPacket;
+    retPacket.encode(m_blockRLPsBatch);
+
+    auto msg = retPacket.toMessage(m_protocolId);
+    m_service->asyncSendMessageByNodeID(m_nodeId, msg);
+    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << m_nodeId
+                   << " [blocks/bytes]: " << m_blockRLPsBatch.size() << "/ "
+                   << msg->buffer()->size() << "B]" << endl;
+
+    m_blockRLPsBatch.clear();
+    m_currentBatchSize = 0;
+}
+
+void DownloadBlocksContainer::sendBigBlock(bytes const& _blockRLP)
+{
+    SyncBlocksPacket retPacket;
+    retPacket.singleEncode(_blockRLP);
+
+    auto msg = retPacket.toMessage(m_protocolId);
+    m_service->asyncSendMessageByNodeID(m_nodeId, msg);
+    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << m_nodeId
+                   << " [blocks/bytes]: " << 1 << "/ " << msg->buffer()->size() << "B]" << endl;
 }

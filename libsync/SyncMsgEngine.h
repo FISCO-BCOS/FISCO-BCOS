@@ -88,22 +88,24 @@ private:
 class DownloadBlocksContainer
 {
 public:
-    DownloadBlocksContainer(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        PROTOCOL_ID _protocolId, int64_t _startNumber)
-      : m_service(_service),
-        m_protocolId(_protocolId),
-        m_startBlockNumber(_startNumber),
-        m_blockRLPShards(1, std::vector<dev::bytes>())
+    DownloadBlocksContainer(
+        std::shared_ptr<dev::p2p::P2PInterface> _service, PROTOCOL_ID _protocolId, NodeID _nodeId)
+      : m_service(_service), m_protocolId(_protocolId), m_nodeId(_nodeId), m_blockRLPsBatch()
     {}
-    void push(BlockPtr _block);
-    void send(NodeID _nodeId);
+    ~DownloadBlocksContainer() { clearBatchAndSend(); }
+
+    void batchAndSend(BlockPtr _block);
+
+private:
+    void clearBatchAndSend();
+    void sendBigBlock(bytes const& _blockRLP);
 
 private:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     PROTOCOL_ID m_protocolId;
-    int64_t m_startBlockNumber;
-    std::vector<std::vector<dev::bytes>> m_blockRLPShards;
-    size_t m_currentShardSize = 0;
+    NodeID m_nodeId;
+    std::vector<dev::bytes> m_blockRLPsBatch;
+    size_t m_currentBatchSize = 0;
 };
 
 }  // namespace sync
