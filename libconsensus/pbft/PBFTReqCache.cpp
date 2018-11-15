@@ -100,7 +100,7 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNod
                     viewChangeEntry.second.height >= highestBlock.number())
                 {
                     /// update to lower view
-                    if (it->second != idx_view_map.end())
+                    if (it != idx_view_map.end())
                     {
                         it->second = viewChangeItem.first;
                     }
