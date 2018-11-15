@@ -169,6 +169,13 @@ public:
         return LocalisedTransaction(transaction, blockHash, 0, 0);
     }
 
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) override
+    {
+        return LocalisedTransactionReceipt(
+            TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+    }
+
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
 
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(
@@ -198,6 +205,8 @@ public:
         m_onReady();
         return CommitResult::OK;
     }
+
+    dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
     BlockHeader blockHeader;
     Transactions transactions;

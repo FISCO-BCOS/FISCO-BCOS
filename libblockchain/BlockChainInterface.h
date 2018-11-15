@@ -25,6 +25,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
+#include <libethcore/TransactionReceipt.h>
 namespace dev
 {
 namespace blockverifier
@@ -50,11 +51,15 @@ public:
     virtual dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) = 0;
     virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) = 0;
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) = 0;
+    virtual dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
     virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
     virtual int64_t totalTransactionCount() = 0;
+    virtual dev::bytes getCode(dev::Address _address) = 0;
+
 
     /// set group mark to genesis block
     virtual void setGroupMark(std::string const& groupMark) = 0;
