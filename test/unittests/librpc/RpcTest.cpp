@@ -91,7 +91,6 @@ BOOST_AUTO_TEST_CASE(testSyncPart)
 
 BOOST_AUTO_TEST_CASE(testP2pPart)
 {
-    // TODO: new unit test
 #if 0
     std::string s = rpc->version();
     BOOST_CHECK(s == "2.0");
