@@ -544,7 +544,11 @@ for line in ${ip_array[*]};do
 done 
 cd ..
 echo "#!/bin/bash" > "$output_dir/start_all.sh"
+echo "#!/bin/bash" > "$output_dir/stop_all.sh"
+echo "#!/bin/bash" > "$output_dir/replace_all.sh"
 echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/start_all.sh"
+echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/stop_all.sh"
+echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/replace_all.sh"
 echo "Generating node configuration..."
 
 #Generate node config files
@@ -562,10 +566,13 @@ for line in ${ip_array[*]};do
         cp "$eth_path" "$node_dir/fisco-bcos"
         echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/start.sh" >> "$output_dir/start_all.sh"
         echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/stop.sh" >> "$output_dir/stop_all.sh"
+        echo "cp \${1} \${SHELL_FOLDER}/node_${ip}_${index}/" >> "$output_dir/replace_all.sh"
         ((++index))
         [ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
     done
     chmod +x "$output_dir/start_all.sh"
+    chmod +x "$output_dir/stop_all.sh"
+    chmod +x "$output_dir/replace_all.sh"
 done 
 rm $output_dir/build.log cert.cnf
 echo "=========================================="
