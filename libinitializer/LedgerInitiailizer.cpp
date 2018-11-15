@@ -69,9 +69,9 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         << "[#LedgerInitializer::initConfig] initSingleGroup for "
                         << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
                     BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "[#LedgerInitializer::initConfig] initSingleGroup for " + s[1] +
-                            " failed!"));
+                        InvalidConfig()
+                        << errinfo_comment("[#LedgerInitializer::initConfig] initSingleGroup for " +
+                                           s[1] + " failed!"));
                 }
             }
             catch (std::exception& e)
