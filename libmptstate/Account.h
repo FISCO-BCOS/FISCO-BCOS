@@ -176,13 +176,15 @@ public:
     void setStorage(u256 _p, u256 _v)
     {
         auto it = m_storageOverlay.find(_p);
-        if(it != m_storageOverlay.end()) {
+        if (it != m_storageOverlay.end())
+        {
             it->second = _v;
         }
-        else {
+        else
+        {
             m_storageOverlay.insert(std::make_pair(_p, _v));
         }
-        //m_storageOverlay[_p] = _v;
+        // m_storageOverlay[_p] = _v;
         changed();
     }
 
@@ -208,13 +210,15 @@ public:
     {
         auto storageOverlay = const_cast<decltype(m_storageOverlay)&>(m_storageOverlay);
         auto it = storageOverlay.find(_p);
-        if(it != storageOverlay.end()) {
+        if (it != storageOverlay.end())
+        {
             it->second = _v;
         }
-        else {
+        else
+        {
             storageOverlay.insert(std::make_pair(_p, _v));
         }
-        //const_cast<decltype(m_storageOverlay)&>(m_storageOverlay)[_p] = _v;
+        // const_cast<decltype(m_storageOverlay)&>(m_storageOverlay)[_p] = _v;
     }
 
     /// @returns the hash of the account's code.
