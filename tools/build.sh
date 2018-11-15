@@ -1,40 +1,40 @@
- # "Copyright [2018] <fisco-bcos>"
- # @ function : one-click install shell script(appliable for centos and ubuntu)
- # @ Require  : yum or apt, git are ready
- # @ attention: if dependecies are downloaded failed, 
- #              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
- #              and execute this shell script later
- # @ author   : yujiechen  
- # @ file     : build.sh
- # @ date     : 2018
+# author: yujiechen
+# date: 2018/11/14
+# function: compiling scripts for lab-bcos
 
-#!/bin/sh
-
-current_dir=`pwd`"/.."
-
+#!/bin/bash
+current_dir=`pwd`"/../../"
+build_source=1
+binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
-Oracle_Platform=2
+clear_cache()
+{ 
+    cd ${current_dir}
+    execute_cmd "rm -rf deps/src/*stamp"
+}
 
-cd ${current_dir}
-
-LOG_ERROR() {
+LOG_ERROR()
+{
     content=${1}
     echo -e "\033[31m"${content}"\033[0m"
 }
 
-LOG_INFO() {
+LOG_INFO()
+{
     content=${1}
     echo -e "\033[32m"${content}"\033[0m"
 }
 
-execute_cmd() {
+execute_cmd()
+{
     command="${1}"
     #LOG_INFO "RUN: ${command}"
     eval ${command}
     ret=$?
     if [ $ret -ne 0 ];then
         LOG_ERROR "FAILED execution of command: ${command}"
+        clear_cache
         exit 1
     else
         LOG_INFO "SUCCESS execution of command: ${command}"
@@ -42,7 +42,8 @@ execute_cmd() {
 }
 
 # get platform: now support debain/ubuntu, fedora/centos, oracle
-get_platform() {
+get_platform()
+{
     uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
     case $(uname -s) in
     Darwin)
@@ -65,7 +66,7 @@ get_platform() {
                 return ${Centos_Platform};; #centos type
             Oracle*)
                 LOG_INFO "Oracle Platform"
-                return ${Oracle_Platform};; #oracle type
+                return ${Centos_Platform};; #oracle type
             esac
         else
             LOG_ERROR "Unsupported Platform"
@@ -73,90 +74,143 @@ get_platform() {
     esac
 }
 
-install_ubuntu_package() {
-    for i in $@ ;
-    do 
-        LOG_INFO "install ${i}";
-        execute_cmd "sudo apt-get -y install ${i}";
-    done
+
+install_ubuntu_package()
+{
+for i in $@ ;
+do 
+    LOG_INFO "install ${i}";
+    execute_cmd "sudo apt-get -y install ${i}";
+done
 }
 
-install_centos_package() {
-    for i in $@ ;
-    do
-        LOG_INFO "install ${i}";
-        execute_cmd "sudo yum -y install ${i}";
-    done
+install_centos_package()
+{
+for i in $@ ;
+do
+    LOG_INFO "install ${i}";
+    execute_cmd "sudo yum -y install ${i}";
+done
 }
 
 #install ubuntu package
-install_ubuntu_deps() {
-    execute_cmd "sudo apt-get update"
-    install_ubuntu_package "make" "build-essential"  \
-                            "openssl" "libssl-dev" "libkrb5-dev" \
-                            "libcurl4-openssl-dev" "libgmp-dev" \
-                            "libleveldb-dev" "libsnappy-dev"
+install_ubuntu_deps()
+{
+install_ubuntu_package "cmake" "openssl" "libssl-dev" "libcurl4-openssl-dev" "libgmp-dev" "libleveldb-dev"
 }
-
 
 # install centos package
-install_centos_deps() {
-    execute_cmd "sudo yum upgrade"
-    install_centos_package "make" "gcc-c++" "leveldb-devel" \
-                            "curl-devel" "openssl" "openssl-devel" \
-                            "gmp-devel" "snappy-devel"
+install_centos_deps()
+{
+install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel" "curl-devel" "gmp-devel"
 }
 
-# install oracle package
-install_oracle_deps() {
-    install_centos_package "epel-release"
-    install_centos_deps
-}
-               
-#=== install all deps
 install_all_deps()
 {
     get_platform
-    platform=`echo $?`
+        platform=`echo $?`
     if [ ${platform} -eq ${Ubuntu_Platform} ];then
         install_ubuntu_deps
-    elif [ ${platform}  -eq ${Centos_Platform} ];then
+    elif [ ${platform} -eq ${Centos_Platform} ];then
         install_centos_deps
-    elif [ ${platform} -eq ${Oracle_Platform} ];then
-        install_oracle_deps
     else
-        LOG_ERROR "unsupported platform!"
+        LOG_ERROR "Unsupported Platform"
+        exit 1
     fi
 }
 
-build_ubuntu_source() {
-    # build source
-    execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake .. -DTESTS=ON"
-    execute_cmd "make -j2"
-    #execute_cmd "make install && cd ${current_dir}"
+
+build_ubuntu_source()
+{
+# build source
+execute_cmd "mkdir -p build && cd build/"
+execute_cmd "cmake -DTESTS=OFF .. "
+execute_cmd "make && sudo make install"
 }
 
-build_centos_source() {
-    # build source
-    execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake3 .. -DTESTS=ON"
-    execute_cmd "make"
-    #execute_cmd "make install && cd ${current_dir}"
+build_centos_source()
+{
+# build source
+execute_cmd "mkdir -p build && cd build/"
+execute_cmd "cmake3 -DTESTS=OFF .. "
+execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
-build_source() {
-    get_platform
-    platform=`echo $?`
-    execute_cmd "cd ${current_dir}"
-    if [ ${platform} -eq ${Ubuntu_Platform} ];then
-        build_ubuntu_source
-    elif [ ${platform} -eq ${Centos_Platform} ] || [ ${platform} -eq ${Oracle_Platform} ];then
-        build_centos_source
-    else
-        LOG_ERROR "unsupported platform!"
-    fi
+build_source()
+{
+cd ${current_dir}
+get_platform
+platform=`echo $?`
+if [ ${platform} -eq ${Ubuntu_Platform} ];then
+    build_ubuntu_source
+elif [ ${platform} -eq ${Centos_Platform} ];then
+     build_centos_source
+else
+    LOG_ERROR "Unsupported Platform, Exit"
+    exit 1
+fi
 }
 
-install_all_deps
-build_source
+download_binary()
+{
+execute_cmd "curl -LO ${binary_link}"
+execute_cmd "chmod a+x fisco-bcos"
+execute_cmd "sudo mv fisco-bcos /usr/local/bin/"
+}
+
+
+#### check fisco-bcos
+check_fisco()
+{
+if [ ! -f "/usr/local/bin/fisco-bcos" ]; then
+    LOG_ERROR "fisco-bcos build fail!"
+else
+    LOG_INFO "fisco-bcos build SUCCESS! path: /usr/local/bin/fisco-bcos"
+fi
+}
+
+check()
+{
+check_fisco
+}	
+
+Usage()
+{
+	echo $1
+	cat << EOF
+Usage:
+Optional:
+    -d       Download from git
+    -h       Help
+Example: 
+    bash build.sh 
+    bash build.sh -d
+EOF
+	exit 0
+}
+
+parse_param()
+{
+	while getopts "hd" option;do
+		case $option in
+		d) build_source=0;;
+		h) Usage;;
+		esac
+	done
+}
+
+install_all()
+{
+	install_all_deps
+	if [ ${build_source} -eq 0 ];then
+		download_binary
+	else
+		build_source
+	fi
+	check
+}
+
+parse_param "$@"
+cd ${current_dir}
+execute_cmd "git submodule update --init"
+install_all
