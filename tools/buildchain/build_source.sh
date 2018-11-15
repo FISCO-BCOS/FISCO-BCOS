@@ -4,11 +4,15 @@
 
 #!/bin/bash
 current_dir=`pwd`"/../../"
-build_source=0
-version=`cat release_note.txt| sed "s/^[vV]//"`
+build_source=1
 binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
+clear_cache()
+{ 
+    cd ${current_dir}
+    execute_cmd "rm -rf deps/src/*stamp"
+}
 
 LOG_ERROR()
 {
@@ -30,6 +34,7 @@ execute_cmd()
     ret=$?
     if [ $ret -ne 0 ];then
         LOG_ERROR "FAILED execution of command: ${command}"
+        clear_cache
         exit 1
     else
         LOG_INFO "SUCCESS execution of command: ${command}"
@@ -175,20 +180,20 @@ Usage()
 	cat << EOF
 Usage:
 Optional:
-    -b       Compile from source code 
+    -d       Download from git
     -h       Help
 Example: 
     bash build.sh 
-    bash build.sh -b
+    bash build.sh -d
 EOF
 	exit 0
 }
 
 parse_param()
 {
-	while getopts "hb" option;do
+	while getopts "hd" option;do
 		case $option in
-		b) build_source=1;;
+		d) build_source=0;;
 		h) Usage;;
 		esac
 	done
@@ -204,5 +209,8 @@ install_all()
 	fi
 	check
 }
+
 parse_param "$@"
+cd ${current_dir}
+execute_cmd "git submodule update --init"
 install_all
