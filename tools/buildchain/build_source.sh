@@ -8,6 +8,11 @@ build_source=1
 binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
+clear_cache()
+{ 
+    cd ${current_dir}
+    execute_cmd "rm -rf deps/src/*stamp"
+}
 
 LOG_ERROR()
 {
@@ -29,6 +34,7 @@ execute_cmd()
     ret=$?
     if [ $ret -ne 0 ];then
         LOG_ERROR "FAILED execution of command: ${command}"
+        clear_cache
         exit 1
     else
         LOG_INFO "SUCCESS execution of command: ${command}"
@@ -204,13 +210,7 @@ install_all()
 	check
 }
 
-clear_cache()
-{ 
-    cd ${current_dir}
-    execute_cmd "rm -rf deps/src/*stamp"
-}
 parse_param "$@"
-clear_cache
 cd ${current_dir}
 execute_cmd "git submodule update --init"
 install_all
