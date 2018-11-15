@@ -1,9 +1,16 @@
-# author: yujiechen
-# date: 2018/11/14
-# function: compiling scripts for lab-bcos
+# "Copyright [2018] <fisco-bcos>"
+# @ function : one-click install shell script(appliable for centos and ubuntu)
+# @ Require  : yum or apt, git are ready
+# @ attention: if dependecies are downloaded failed, 
+#              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
+#              and execute this shell script later
+# @ author   : yujiechen  
+# @ file     : build.sh
+# @ date     : 2018
 
 #!/bin/bash
-current_dir=`pwd`"/../"
+
+current_dir=`pwd`"/.."
 build_source=1
 binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
