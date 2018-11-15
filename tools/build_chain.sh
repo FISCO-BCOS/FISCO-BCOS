@@ -277,7 +277,7 @@ generate_config_ini()
     cat << EOF > ${output}
 [rpc]
     ;rpc listen ip
-    listen_ip=0.0.0.0
+    listen_ip=127.0.0.1
     ;channelserver listen port
     listen_port=$(( port_start + 1 + index * 4 ))
     ;rpc listen port
