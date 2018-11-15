@@ -276,23 +276,43 @@ generate_config_ini()
     local output=$1
     cat << EOF > ${output}
 [rpc]
-    listen_ip=0.0.0.0  
+    ;rpc listen ip
+    listen_ip=0.0.0.0
+    ;channelserver listen port
     listen_port=$(( port_start + 1 + index * 4 ))
+    ;rpc listen port
     http_listen_port=$(( port_start + 2 + index * 4 ))
     console_port=$(( port_start + 3 + index * 4 ))
 [p2p]
+    ;p2p listen ip
     listen_ip=0.0.0.0
+    ;p2p listen port
     listen_port=$(( port_start + index * 4 ))
+    ;nodes to connect
     $ip_list
+
+;group configurations
+;if need add a new group, eg. group2, can add the following configuration:
+;group_config.2=conf/group.2.ini
+;group.2.ini can be populated from group.1.ini
+;WARNING: group 0 is forbided
 [group]
     group_config.1=conf/group.1.ini
+
+;certificate configuration
 [secure]
-    ;\${DATAPATH} == data_path
+    ;directory the certificates located in
     data_path=conf/
+    ;the node private key file
     key=node.key
+    ;the node certificate file
     cert=node.crt
+    ;the ca certificate file
     ca_cert=ca.crt
+
+;log configurations
 [log]
+    ;the directory of the log
     LOG_PATH=./log
     GLOBAL-ENABLED=true
     GLOBAL-FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg
@@ -300,6 +320,8 @@ generate_config_ini()
     GLOBAL-PERFORMANCE_TRACKING=false
     GLOBAL-MAX_LOG_FILE_SIZE=209715200
     GLOBAL-LOG_FLUSH_THRESHOLD=100
+
+    ;log level configuration, enable(true)/disable(false) corresponding level log
     INFO-ENABLED=true
     WARNING-ENABLED=true
     ERROR-ENABLED=true
@@ -314,22 +336,32 @@ generate_group_ini()
 {
     local output=$1
     cat << EOF > ${output} 
+;consensus configuration
 [consensus]
+;consensus type: only support PBFT now
 consensusType=pbft
+;the max number of transactions of a block
 maxTransNum=1000
+;the node id of leaders
 $nodeid_list
 
+;sync period time
 [sync]
 idleWaitMs=200
 
 [statedb]
+;storage db type
 dbType=${statedb_type}
+;disable(false)/enable(true) mpt
 mpt=true
 dbpath=data
 
+;genesis configuration
 [genesis]
-mark=
+;used to mark the genesis block of this group
+;mark=${group_id}
 
+;txpool limit
 [txPool]
 limit=1000
 EOF
