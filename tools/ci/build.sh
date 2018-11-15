@@ -10,7 +10,7 @@
 
 #!/bin/bash
 
-current_dir=`pwd`"/.."
+current_dir=`pwd`"/../.."
 build_source=1
 binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
