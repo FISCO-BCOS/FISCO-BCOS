@@ -167,7 +167,16 @@ public:
         return u256(0);
     }
     /// Write a value in storage.
-    virtual void setStore(u256 _key, u256 _value) { storage_map[_key] = _value; }
+    virtual void setStore(u256 _key, u256 _value) {
+        auto it = storage_map.find(_key);
+        if(it != storage_map.end()) {
+            it->second = _value;
+        }
+        else {
+            storage_map.insert(std::make_pair(_key, _value));
+        }
+        //storage_map[_key] = _value;
+    }
 
     /// Read address's balance.
     virtual u256 balance(Address addr)
@@ -207,7 +216,14 @@ public:
         account_map.insert(_caller);
         account_map.insert(_origin);
 
-        balance_map[_myAddress] = _value;
+        auto it = balance_map.find(_myAddress);
+        if(it != balance_map.end()) {
+            it->second = _value;
+        }
+        else {
+            balance_map.insert(std::make_pair(_myAddress, _value));
+        }
+        //balance_map[_myAddress] = _value;
     }
 
 private:
