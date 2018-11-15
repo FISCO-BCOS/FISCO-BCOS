@@ -160,8 +160,10 @@ public:
     /// Read storage location.
     virtual u256 store(u256 key)
     {
-        if (storage_map.count(key))
-            return storage_map[key];
+        auto it = storage_map.find(key);
+        if(it != storage_map.end()) {
+            return it->second;
+        }
         return u256(0);
     }
     /// Write a value in storage.
@@ -170,8 +172,10 @@ public:
     /// Read address's balance.
     virtual u256 balance(Address addr)
     {
-        if (balance_map.count(addr))
-            return balance_map[addr];
+        auto it = balance_map.find(addr);
+        if(it != storage_map.end()) {
+            return it->second;
+        }
         return 0;
     }
     /// @returns the size of the code in bytes at the given address.
