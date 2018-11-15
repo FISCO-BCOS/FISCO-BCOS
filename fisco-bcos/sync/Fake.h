@@ -201,20 +201,20 @@ public:
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_path, pt);
 
-        m_secureInitiailizer = std::make_shared<SecureInitializer>();
-        m_secureInitiailizer->initConfig(pt);
+        m_secureInitializer = std::make_shared<SecureInitializer>();
+        m_secureInitializer->initConfig(pt);
 
         m_p2pInitializer = std::make_shared<P2PInitializer>();
-        m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
-        m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
+        m_p2pInitializer->setSSLContext(m_secureInitializer->SSLContext());
+        m_p2pInitializer->setKeyPair(m_secureInitializer->keyPair());
         m_p2pInitializer->initConfig(pt);
     }
 
 public:
-    SecureInitializer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
+    SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
 
 private:
     P2PInitializer::Ptr m_p2pInitializer;
-    SecureInitializer::Ptr m_secureInitiailizer;
+    SecureInitializer::Ptr m_secureInitializer;
 };

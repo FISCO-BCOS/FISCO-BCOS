@@ -442,10 +442,10 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
     std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
     //    setDataDir(dev::demo::getTestPath().string() + "/fisco-bcos-data");
     boost::property_tree::ptree pt;
-    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitializer>();
-    //    secureInitiailizer->setDataPath(dev::demo::getTestPath().string() + "/fisco-bcos-data/");
-    //    secureInitiailizer->initConfig(pt);
-    auto sslContext = secureInitiailizer->SSLContext();
+    auto secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
+    //    secureInitializer->setDataPath(dev::demo::getTestPath().string() + "/fisco-bcos-data/");
+    //    secureInitializer->initConfig(pt);
+    auto sslContext = secureInitializer->SSLContext();
     /// create m_socketFactory
     std::shared_ptr<SocketFactory> m_socketFactory = std::make_shared<FakeSocketFactory>();
     FakeHost* m_host = new FakeHost(client_version, key_pair, network_config, m_asioInterface,

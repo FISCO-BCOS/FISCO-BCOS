@@ -372,8 +372,8 @@ static void startConsensus(Params& params)
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.ini");
 
-    auto secureInitiailizer = initialize->secureInitiailizer();
-    KeyPair key_pair = secureInitiailizer->keyPair();
+    auto secureInitializer = initialize->secureInitializer();
+    KeyPair key_pair = secureInitializer->keyPair();
     auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
     /// create transaction
     createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);

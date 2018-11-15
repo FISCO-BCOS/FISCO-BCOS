@@ -46,10 +46,10 @@ BOOST_AUTO_TEST_CASE(testSocket)
 
     boost::property_tree::ptree pt;
     pt.put("secure.data_path", getTestPath().string() + "/fisco-bcos-data/");
-    auto secureInitiailizer = std::make_shared<dev::initializer::SecureInitializer>();
-    /// secureInitiailizer->setDataPath(getTestPath().string() + "/fisco-bcos-data/");
-    secureInitiailizer->initConfig(pt);
-    auto sslContext = secureInitiailizer->SSLContext();
+    auto secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
+    /// secureInitializer->setDataPath(getTestPath().string() + "/fisco-bcos-data/");
+    secureInitializer->initConfig(pt);
+    auto sslContext = secureInitializer->SSLContext();
 
     Socket m_socket(m_io_service, *sslContext, m_endpoint);
     BOOST_CHECK(m_socket.isConnected() == false);

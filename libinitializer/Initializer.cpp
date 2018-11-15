@@ -35,24 +35,24 @@ void Initializer::init(std::string const& _path)
         m_logInitializer = std::make_shared<LogInitializer>();
         m_logInitializer->initEasylogging(pt);
         /// init certificates
-        m_secureInitiailizer = std::make_shared<SecureInitializer>();
-        m_secureInitiailizer->initConfig(pt);
+        m_secureInitializer = std::make_shared<SecureInitializer>();
+        m_secureInitializer->initConfig(pt);
 
         m_p2pInitializer = std::make_shared<P2PInitializer>();
-        m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
-        m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
+        m_p2pInitializer->setSSLContext(m_secureInitializer->SSLContext());
+        m_p2pInitializer->setKeyPair(m_secureInitializer->keyPair());
         m_p2pInitializer->initConfig(pt);
 
-        m_ledgerInitiailizer = std::make_shared<LedgerInitializer>();
-        m_ledgerInitiailizer->setP2PService(m_p2pInitializer->p2pService());
-        m_ledgerInitiailizer->setKeyPair(m_secureInitiailizer->keyPair());
-        m_ledgerInitiailizer->initConfig(pt);
+        m_ledgerInitializer = std::make_shared<LedgerInitializer>();
+        m_ledgerInitializer->setP2PService(m_p2pInitializer->p2pService());
+        m_ledgerInitializer->setKeyPair(m_secureInitializer->keyPair());
+        m_ledgerInitializer->initConfig(pt);
 
-        m_rpcInitiailizer = std::make_shared<RPCInitiailizer>();
-        m_rpcInitiailizer->setP2PService(m_p2pInitializer->p2pService());
-        m_rpcInitiailizer->setSSLContext(m_secureInitiailizer->SSLContext());
-        m_rpcInitiailizer->setLedgerManager(m_ledgerInitiailizer->ledgerManager());
-        m_rpcInitiailizer->initConfig(pt);
+        m_rpcInitializer = std::make_shared<RPCInitializer>();
+        m_rpcInitializer->setP2PService(m_p2pInitializer->p2pService());
+        m_rpcInitializer->setSSLContext(m_secureInitializer->SSLContext());
+        m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
+        m_rpcInitializer->initConfig(pt);
     }
     catch (std::exception& e)
     {
