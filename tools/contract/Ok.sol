@@ -25,16 +25,18 @@ contract Ok{
         to.balance=0;
 
     }
+    
     function get()constant returns(uint){
         return to.balance;
     }
+    
     function trans(uint num){
+        if (from.balance < num || to.balance + num < to.balance)
+            return; // Deny overflow
+
     	from.balance=from.balance-num;
     	to.balance+=num;
     
     	log.push(Translog("20170413",from.account,to.account,num));
     }
-
-
-
 }
