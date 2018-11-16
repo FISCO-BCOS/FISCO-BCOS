@@ -170,7 +170,7 @@ Address DBFactoryPrecompiled::openTable(PrecompiledContext::Ptr context, const s
     auto it = _name2Table.find(tableName);
     if (it != _name2Table.end())
     {
-        LOG(DEBUG) << "Table:" << context->blockInfo().hash << " already opened:" << it->second;
+        LOG(DEBUG) << "Table:" << tableName << " already open:" << it->second;
         return it->second;
     }
  
