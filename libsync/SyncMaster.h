@@ -32,9 +32,9 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
-#include <libp2p/Common.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
-#include <libp2p/Session.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
 
@@ -83,7 +83,7 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const override;
-    virtual string const syncInfo() const override;
+    virtual std::string const syncInfo() const override;
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // virtual h256 latestBlockSent() override;

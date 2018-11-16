@@ -31,6 +31,7 @@ add_executable(mini-rpc ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-rpc PRIVATE ..)
 target_include_directories(mini-rpc PRIVATE ${BOOST_INCLUDE_DIR})
+target_link_libraries(mini-rpc Boost::System)
 target_link_libraries(mini-rpc Boost::program_options)
 target_link_libraries(mini-rpc Boost::UnitTestFramework)
 target_link_libraries(mini-rpc rpc)

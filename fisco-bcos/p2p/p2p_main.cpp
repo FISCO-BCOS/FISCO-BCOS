@@ -28,6 +28,7 @@
 
 INITIALIZE_EASYLOGGINGPP
 
+using namespace std;
 using namespace dev;
 using namespace dev::initializer;
 

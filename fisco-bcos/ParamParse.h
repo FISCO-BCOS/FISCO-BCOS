@@ -27,9 +27,7 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Protocol.h>
-#include <libp2p/Host.h>
-#include <libp2p/Network.h>
-#include <libp2p/P2pFactory.h>
+#include <libnetwork/Host.h>
 #include <libp2p/Service.h>
 #include <boost/program_options.hpp>
 #include <memory>

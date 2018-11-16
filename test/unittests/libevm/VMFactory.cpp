@@ -49,7 +49,6 @@ BOOST_AUTO_TEST_CASE(testInterpreterEvmC)
         param.valueTransfer, param.gas, param.data, code, sha3(code_str), 0, false, true);
     std::unique_ptr<VMFace> m_face = VMFactory::create(VMKind::Interpreter);
     u256 io_gas = u256(200000);
-    /// TODO: test 'exec' function of EVMC
     BOOST_CHECK_NO_THROW(m_face->exec(io_gas, fake_ext_vm, OnOpFunc{}));
 }
 

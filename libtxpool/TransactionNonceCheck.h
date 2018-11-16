@@ -27,7 +27,6 @@
 #include <boost/timer.hpp>
 #include <thread>
 
-using namespace std;
 using namespace dev::eth;
 using namespace dev::blockchain;
 

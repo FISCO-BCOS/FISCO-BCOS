@@ -22,6 +22,7 @@
  */
 #pragma once
 
+#include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>

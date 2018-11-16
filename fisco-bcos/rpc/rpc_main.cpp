@@ -18,7 +18,6 @@
  * @author: caryliao
  * @date 2018-11-2
  */
-#include "FakeHost.h"
 #include "FakeModule.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
@@ -27,6 +26,7 @@
 
 INITIALIZE_EASYLOGGINGPP
 
+using namespace std;
 using namespace dev;
 using namespace dev::rpc;
 using namespace dev::ledger;
@@ -34,10 +34,7 @@ using namespace dev::demo;
 
 int main(int argc, const char* argv[])
 {
-    FakeHost* hostPtr = createFakeHostWithSession("2.0", "127.0.0.1", 30303);
-    auto m_host = std::shared_ptr<Host>(hostPtr);
-    auto m_p2pHandler = std::make_shared<P2PMsgHandler>();
-    auto m_service = std::make_shared<MockService>(m_host, m_p2pHandler);
+    auto m_service = std::make_shared<MockService>();
     std::string configurationPath = "";
     KeyPair m_keyPair = KeyPair::create();
     auto m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
