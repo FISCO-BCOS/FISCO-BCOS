@@ -205,28 +205,9 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block request from " << _packet.nodeId << " req["
                    << from << ", " << from + size - 1 << "]" << endl;
 
-    // fetch block into downloading blocks container
-    DownloadBlocksContainer blockContainer(m_service, m_protocolId, _packet.nodeId);
-    for (int64_t number = from; number < from + size; ++number)
-    {
-        shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
-        if (!block)
-        {
-            SYNCLOG(TRACE)
-                << "[Rcv] [Send] [Download] Get block for node failed [reason/number/nodeId]: "
-                << "block is null/" << number << "/" << _packet.nodeId << endl;
-            break;
-        }
-        else if (block->header().number() != number)
-        {
-            SYNCLOG(TRACE)
-                << "[Rcv] [Send] [Download] Get block for node failed [reason/number/nodeId]: "
-                << number << "number incorrect /" << _packet.nodeId << endl;
-            break;
-        }
-
-        blockContainer.batchAndSend(block);
-    }
+    auto peerStatus = m_syncStatus->peerStatus(_packet.nodeId);
+    if (peerStatus != nullptr && peerStatus)
+        peerStatus->reqQueue.push(from, (int64_t)size);
 }
 
 void DownloadBlocksContainer::batchAndSend(BlockPtr _block)

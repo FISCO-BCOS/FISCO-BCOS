@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include "RspBlockReq.h"
 #include "SyncMsgPacket.h"
 #include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
