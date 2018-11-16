@@ -25,15 +25,17 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
-#include <libinitializer/LedgerInitiailizer.h>
+#include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
+
 using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
+
 #define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[#CONSENSUS_MAIN] "
 static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
 {
@@ -372,9 +374,9 @@ static void startConsensus(Params& params)
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.ini");
 
-    auto secureInitiailizer = initialize->secureInitiailizer();
-    KeyPair key_pair = secureInitiailizer->keyPair();
-    auto ledgerManager = initialize->ledgerInitiailizer()->ledgerManager();
+    auto secureInitializer = initialize->secureInitializer();
+    KeyPair key_pair = secureInitializer->keyPair();
+    auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
     /// create transaction
     createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
 }

@@ -24,10 +24,10 @@
 
 #include "Common.h"
 #include "InitializerInterface.h"
-#include "LedgerInitiailizer.h"
+#include "LedgerInitializer.h"
 #include "LogInitializer.h"
 #include "P2PInitializer.h"
-#include "RPCInitiailizer.h"
+#include "RPCInitializer.h"
 #include "SecureInitializer.h"
 
 namespace dev
@@ -41,19 +41,19 @@ public:
 
     void init(std::string const& _path);
 
-    SecureInitializer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
+    SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
-    LedgerInitiailizer::Ptr ledgerInitiailizer() { return m_ledgerInitiailizer; }
-    RPCInitiailizer::Ptr rpcInitiailizer() { return m_rpcInitiailizer; }
+    LedgerInitializer::Ptr ledgerInitializer() { return m_ledgerInitializer; }
+    RPCInitializer::Ptr rpcInitializer() { return m_rpcInitializer; }
     LogInitializer::Ptr logInitializer() { return m_logInitializer; }
 
 private:
-    LedgerInitiailizer::Ptr m_ledgerInitiailizer;
+    LedgerInitializer::Ptr m_ledgerInitializer;
     P2PInitializer::Ptr m_p2pInitializer;
-    RPCInitiailizer::Ptr m_rpcInitiailizer;
+    RPCInitializer::Ptr m_rpcInitializer;
 
     LogInitializer::Ptr m_logInitializer;
-    SecureInitializer::Ptr m_secureInitiailizer;
+    SecureInitializer::Ptr m_secureInitializer;
 };
 
 }  // namespace initializer

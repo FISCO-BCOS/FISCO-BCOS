@@ -29,12 +29,12 @@ include(EthDependencies)
 add_executable(mini-p2p ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-p2p PRIVATE ${BOOST_INCLUDE_DIR})
-target_link_libraries(mini-p2p Boost::program_options)
+target_link_libraries(mini-p2p Boost::System Boost::program_options)
 
 target_link_libraries(mini-p2p devcore)
 target_link_libraries(mini-p2p devcrypto)
 target_link_libraries(mini-p2p ethcore)
-target_link_libraries(mini-p2p p2p)
+target_link_libraries(mini-p2p network)
 target_link_libraries(mini-p2p initializer)
 
 endif()

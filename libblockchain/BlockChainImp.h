@@ -56,6 +56,8 @@ public:
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
     dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override;
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
+    virtual dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
     CommitResult commitBlock(dev::eth::Block& block,
@@ -64,8 +66,8 @@ public:
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
     void setGroupMark(std::string const& groupMark) override;
-    virtual int64_t totalTransactionCount() override;
-    dev::bytes getCode(dev::Address _address);
+    virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
+    dev::bytes getCode(dev::Address _address) override;
 
 private:
     void writeNumber(const dev::eth::Block& block,

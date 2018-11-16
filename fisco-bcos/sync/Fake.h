@@ -115,7 +115,7 @@ public:
         SYNCLOG(TRACE) << "[Commit] Conencus block commit "
                           "[blockNumber/txNumber/totalTxCommitThisNode/blockHash/parentHash]: "
                        << currentNumber + 1 << "/" << txs.size() << "/" << m_totalTxCommit << "/"
-                       << block->headerHash() << "/" << parentHash << endl;
+                       << block->headerHash() << "/" << parentHash << std::endl;
     }
 
 private:
@@ -128,7 +128,7 @@ private:
         header->encode(blockHeaderBytes);
 
         // Generate block
-        BlockPtr block = make_shared<Block>();
+        BlockPtr block = std::make_shared<Block>();
         block->setSigList(sigList(_txs.size()));
         block->setTransactions(_txs);
 
@@ -140,7 +140,7 @@ private:
 
     BlockHeaderPtr newBlockHeader(dev::h256 _parentHash, int64_t _currentNumner)
     {
-        BlockHeaderPtr blockHeader = make_shared<BlockHeader>();
+        BlockHeaderPtr blockHeader = std::make_shared<BlockHeader>();
         blockHeader->setParentHash(_parentHash);
         blockHeader->setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
         blockHeader->setLogBloom(LogBloom(0));
@@ -201,20 +201,20 @@ public:
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_path, pt);
 
-        m_secureInitiailizer = std::make_shared<SecureInitializer>();
-        m_secureInitiailizer->initConfig(pt);
+        m_secureInitializer = std::make_shared<SecureInitializer>();
+        m_secureInitializer->initConfig(pt);
 
         m_p2pInitializer = std::make_shared<P2PInitializer>();
-        m_p2pInitializer->setSSLContext(m_secureInitiailizer->SSLContext());
-        m_p2pInitializer->setKeyPair(m_secureInitiailizer->keyPair());
+        m_p2pInitializer->setSSLContext(m_secureInitializer->SSLContext());
+        m_p2pInitializer->setKeyPair(m_secureInitializer->keyPair());
         m_p2pInitializer->initConfig(pt);
     }
 
 public:
-    SecureInitializer::Ptr secureInitiailizer() { return m_secureInitiailizer; }
+    SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
 
 private:
     P2PInitializer::Ptr m_p2pInitializer;
-    SecureInitializer::Ptr m_secureInitiailizer;
+    SecureInitializer::Ptr m_secureInitializer;
 };

@@ -6,7 +6,6 @@ file(GLOB HEADERS "*.h")
 
 add_library(p2p ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(p2p devcore devcrypto)
-add_dependencies(p2p Boost::Thread)
+target_link_libraries(p2p devcore devcrypto network)
 
 install(TARGETS p2p RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)

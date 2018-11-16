@@ -23,6 +23,7 @@
 #include "Common.h"
 #include "JsonHelper.h"
 #include <jsonrpccpp/common/exception.h>
+#include <libconfig/SystemConfigMgr.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
@@ -177,12 +178,13 @@ std::string Rpc::version()
 {
     try
     {
-        auto host = service()->host();
-        if (!host)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
+        std::string version;
+        for (auto it : implementedModules())
+        {
+            version.append(it.name + ":" + it.version + ";");
+        }
 
-        return host->clientVersion();
+        return version;
     }
     catch (JsonRpcException& e)
     {
@@ -192,6 +194,8 @@ std::string Rpc::version()
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
     }
+
+    return "";
 }
 
 Json::Value Rpc::peers()
@@ -200,22 +204,14 @@ Json::Value Rpc::peers()
     {
         Json::Value response = Json::Value(Json::arrayValue);
 
-        auto host = service()->host();
-        if (!host)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
-
-        auto sessions = host->sessions();
+        auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
-            auto session = it->second;
             Json::Value node;
-            if (!session)
-                response.append("This is a not session node.");
-            node["NodeID"] = session->id().hex();
-            node["IP & Port"] = session->peer()->endpoint().name();
+            node["NodeID"] = it->nodeID.hex();
+            node["IP & Port"] = it->nodeIPEndpoint.name();
             node["Topic"] = Json::Value(Json::arrayValue);
-            for (std::string topic : *(session->topics()))
+            for (std::string topic : it->topics)
                 node["Topic"].append(topic);
             response.append(node);
         }
@@ -230,6 +226,8 @@ Json::Value Rpc::peers()
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
     }
+
+    return Json::Value();
 }
 
 Json::Value Rpc::groupPeers(int _groupID)
@@ -243,16 +241,7 @@ Json::Value Rpc::groupPeers(int _groupID)
 
         Json::Value response = Json::Value(Json::arrayValue);
 
-        auto host = service()->host();
-        if (!host)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::Host, RPCMsg[RPCExceptionType::Host]));
-
-        h512s _nodeList;
-        bool flag = host->getNodeListByGroupID(_groupID, _nodeList);
-        if (!flag)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        auto _nodeList = service()->getNodeListByGroupID(_groupID);
 
         for (auto it = _nodeList.begin(); it != _nodeList.end(); ++it)
         {
@@ -269,6 +258,8 @@ Json::Value Rpc::groupPeers(int _groupID)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
     }
+
+    return Json::Value();
 }
 
 Json::Value Rpc::groupList()
@@ -699,9 +690,11 @@ std::string Rpc::call(int _groupID, const Json::Value& request)
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         TransactionSkeleton txSkeleton = toTransactionSkeleton(request);
-        Transaction tx(txSkeleton.value, txSkeleton.gasPrice, txSkeleton.gas, txSkeleton.to,
-            txSkeleton.data, txSkeleton.nonce);
+        Transaction tx(txSkeleton.value, dev::config::SystemConfigMgr::maxTransactionGasLimit,
+            dev::config::SystemConfigMgr::maxTransactionGasLimit, txSkeleton.to, txSkeleton.data,
+            txSkeleton.nonce);
         auto blockHeader = block->header();
+        tx.forceSender(txSkeleton.from);
         auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
 
         return toJS(executionResult.first.output);

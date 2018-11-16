@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file RPCInitiailizer.h
+/** @file RPCInitializer.h
  *  @author chaychen
  *  @modify first draft
  *  @date 20181022
@@ -33,12 +33,12 @@ namespace dev
 {
 namespace initializer
 {
-class RPCInitiailizer : public std::enable_shared_from_this<RPCInitiailizer>
+class RPCInitializer : public std::enable_shared_from_this<RPCInitializer>
 {
 public:
-    typedef std::shared_ptr<RPCInitiailizer> Ptr;
+    typedef std::shared_ptr<RPCInitializer> Ptr;
 
-    virtual ~RPCInitiailizer()
+    virtual ~RPCInitializer()
     {
         if (m_channelRPCHttpServer)
         {

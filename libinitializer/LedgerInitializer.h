@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file LedgerInitiailizer.h
+/** @file LedgerInitializer.h
  *  @author chaychen
  *  @modify first draft
  *  @date 20181022
@@ -25,7 +25,7 @@
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
-#include <libp2p/P2PInterface.h>
+#include <libp2p/Service.h>
 
 using namespace dev::ledger;
 
@@ -33,10 +33,10 @@ namespace dev
 {
 namespace initializer
 {
-class LedgerInitiailizer : public std::enable_shared_from_this<LedgerInitiailizer>
+class LedgerInitializer : public std::enable_shared_from_this<LedgerInitializer>
 {
 public:
-    typedef std::shared_ptr<LedgerInitiailizer> Ptr;
+    typedef std::shared_ptr<LedgerInitializer> Ptr;
 
     void initConfig(boost::property_tree::ptree const& _pt);
 
@@ -45,7 +45,7 @@ public:
     void setP2PService(std::shared_ptr<P2PInterface> _p2pService) { m_p2pService = _p2pService; }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
-    ~LedgerInitiailizer()
+    ~LedgerInitializer()
     {
         if (m_ledgerManager)
             m_ledgerManager->stopAll();

@@ -30,14 +30,14 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 
 void SyncMsgEngine::messageHandler(
-    P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session, Message::Ptr _msg)
+    NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
-    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->id() << endl;
+    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->nodeID() << std::endl;
     if (!checkSession(_session) || !checkMessage(_msg))
     {
         SYNCLOG(WARNING) << "[Rcv] [Packet] Reject packet: [reason]: session or msg illegal"
                          << endl;
-        _session->disconnect(LocalIdentity);
+        _session->stop(LocalIdentity);
         return;
     }
 
@@ -46,9 +46,9 @@ void SyncMsgEngine::messageHandler(
     {
         SYNCLOG(WARNING)
             << "[Rcv] [Packet] Reject packet: [reason/nodeId/size/message]: decode failed/"
-            << _session->id() << "/" << _msg->buffer()->size() << "/" << toHex(*_msg->buffer())
+            << _session->nodeID() << "/" << _msg->buffer()->size() << "/" << toHex(*_msg->buffer())
             << endl;
-        _session->disconnect(BadProtocol);
+        _session->stop(BadProtocol);
         return;
     }
 
@@ -59,15 +59,15 @@ void SyncMsgEngine::messageHandler(
             << int(packet.packetType) << endl;
 }
 
-bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::SessionFace> _session)
+bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
-    if (_session->id() == m_nodeId)
+    if (_session->nodeID() == m_nodeId)
         return false;
     return true;
 }
 
-bool SyncMsgEngine::checkMessage(Message::Ptr _msg)
+bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
 {
     bytesConstRef msgBytes = ref(*_msg->buffer());
     if (msgBytes.size() < 2 || msgBytes[0] > 0x7f)

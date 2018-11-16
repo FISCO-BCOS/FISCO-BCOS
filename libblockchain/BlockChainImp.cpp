@@ -30,6 +30,9 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/lexical_cast.hpp>
+#include <string>
+#include <utility>
+#include <vector>
 
 using namespace dev;
 using namespace std;
@@ -77,9 +80,10 @@ int64_t BlockChainImp::number()
     return num;
 }
 
-int64_t BlockChainImp::totalTransactionCount()
+std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
 {
     int64_t count = 0;
+    int64_t number = 0;
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
     if (tb)
     {
@@ -87,11 +91,13 @@ int64_t BlockChainImp::totalTransactionCount()
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            std::string totalTransactionCount = entry->getField(SYS_VALUE);
-            count = lexical_cast<int64_t>(totalTransactionCount);
+            std::string strCount = entry->getField(SYS_VALUE);
+            count = lexical_cast<int64_t>(strCount);
+            std::string strNumber = entry->getField("_num_");
+            number = lexical_cast<int64_t>(strNumber);
         }
     }
-    return count;
+    return std::make_pair(count, number);
 }
 
 bytes BlockChainImp::getCode(Address _address)
@@ -285,6 +291,36 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
         }
     }
     return TransactionReceipt();
+}
+
+LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
+{
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
+    if (tb)
+    {
+        auto entries = tb->select(_txHash.hex(), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            auto blockNum = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+            auto txIndex = lexical_cast<uint>(entry->getField("index"));
+
+            std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(blockNum));
+            const Transactions& txs = pblock->transactions();
+            const TransactionReceipts& receipts = pblock->transactionReceipts();
+            if (receipts.size() > txIndex && txs.size() > txIndex)
+            {
+                auto& tx = txs[txIndex];
+                auto& receipt = receipts[txIndex];
+
+                return LocalisedTransactionReceipt(receipt, _txHash, pblock->headerHash(),
+                    pblock->header().number(), tx.from(), tx.to(), txIndex, receipt.gasUsed(),
+                    receipt.contractAddress());
+            }
+        }
+    }
+    return LocalisedTransactionReceipt(
+        TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
 }
 
 void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveContext> context)
