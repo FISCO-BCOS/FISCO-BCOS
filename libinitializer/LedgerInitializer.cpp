@@ -14,13 +14,13 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file LedgerInitiailizer.h
+/** @file LedgerInitializer.h
  *  @author chaychen
  *  @modify first draft
  *  @date 20181022
  */
 
-#include "LedgerInitiailizer.h"
+#include "LedgerInitializer.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
@@ -28,9 +28,9 @@
 using namespace dev;
 using namespace dev::initializer;
 
-void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
+void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    INITIALIZER_LOG(DEBUG) << "[#LedgerInitiailizer::initConfig]";
+    INITIALIZER_LOG(DEBUG) << "[#LedgerInitializer::initConfig]";
     m_groupDataDir = _pt.get<std::string>("group.group_data_path", "data/");
     assert(m_p2pService);
     /// TODO: modify FakeLedger to the real Ledger after all modules ready
@@ -42,7 +42,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
         if (it.first.find("group_config.") == 0)
         {
             INITIALIZER_LOG(TRACE)
-                << "[#LedgerInitiailizer::initConfig] load group config: [groupID/config]: "
+                << "[#LedgerInitializer::initConfig] load group config: [groupID/config]: "
                 << it.first << "/" << it.second.data();
 
             std::vector<std::string> s;
@@ -53,11 +53,11 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
                 if (s.size() != 2)
                 {
                     INITIALIZER_LOG(ERROR)
-                        << "[#LedgerInitiailizer::initConfig] parse groupID failed: [data]: "
+                        << "[#LedgerInitializer::initConfig] parse groupID failed: [data]: "
                         << it.first.data();
                     BOOST_THROW_EXCEPTION(
                         InvalidConfig() << errinfo_comment(
-                            "[#LedgerInitiailizer::initConfig] parse groupID failed!"));
+                            "[#LedgerInitializer::initConfig] parse groupID failed!"));
                     exit(1);
                 }
 
@@ -66,19 +66,19 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
                 if (!succ)
                 {
                     INITIALIZER_LOG(ERROR)
-                        << "[#LedgerInitiailizer::initConfig] initSingleGroup for "
+                        << "[#LedgerInitializer::initConfig] initSingleGroup for "
                         << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
                     BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "[#LedgerInitiailizer::initConfig] initSingleGroup for " + s[1] +
-                            " failed!"));
+                        InvalidConfig()
+                        << errinfo_comment("[#LedgerInitializer::initConfig] initSingleGroup for " +
+                                           s[1] + " failed!"));
                     exit(1);
                 }
             }
             catch (std::exception& e)
             {
                 SESSION_LOG(ERROR)
-                    << "[#LedgerInitiailizer::initConfig] parse group config faield: [EINFO]: "
+                    << "[#LedgerInitializer::initConfig] parse group config faield: [EINFO]: "
                     << e.what();
                 BOOST_THROW_EXCEPTION(
                     InvalidConfig() << errinfo_comment("[#LedgerInitiailizer::initConfig] "
@@ -92,7 +92,7 @@ void LedgerInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
     m_ledgerManager->startAll();
 }
 
-bool LedgerInitiailizer::initSingleGroup(
+bool LedgerInitializer::initSingleGroup(
     GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
 {
     bool succ = m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
