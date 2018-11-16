@@ -109,18 +109,18 @@ static void startSync(Params& params)
     GROUP_ID groupId = 1;
     std::map<GROUP_ID, h512s> groudID2NodeList;
     groudID2NodeList[groupId] = {
-        h512("e961da2f050bffc81fdae4bed17adfe53f8b3112cc8d720d9379d8503fe41325e2fce3f93b571d8341a4b"
-             "97b3bc7f3edee123635b56b2ada6ca97a9306835f93"),
-        h512("1ac670bc00b477601b28b2a63e02359b5f6e2b25ce07f98601100cf252d9af484dfec2b65ae46dfa6d3a4"
-             "1f44a8952e3d1ea72a0a718dbeed93aacedd4717726"),
-        h512("051f68a0950bdc86a415f7a15039b9397705e6e8e6b3f37f5bf1460fbec1cad2c16581ccb5e98530c6509"
-             "b7410fa42c38df882a0247515850b3b7286f357f5f8"),
-        h512("2fb8fb18be34bbc0eec1163b30520fbf4d845b7c59b95fd6dc4612c22b4682f0650a2bd754c3dd68b59a5"
-             "9d328c3184948c69e950bb107cca1b8c89f89e7c164")};
+        h512("6a6abf9afddd087e006019c61ef15ccdf6d1df8b51cb77abddadfd442c89283f51203e88f9988a514606e"
+             "f681221ff165c84f29532209ff0a8866548073d04b3"),
+        h512("b996782ddf307feef401d2316a42eebf15c52254113a99bc02adea3fadcc965ba94d472b5863e6a078d85"
+             "9fa14ad129e4a848d0d351cd0228f3077d1bd231684"),
+        h512("55da209c504014f48a77a40fb152b7a0965b4e12662deda1956887200364e1ffd53a7b9b82931232304f8"
+             "037ebf5147e9c29c0ee7244bde733ff5c68ee20648e"),
+        h512("c21606c9ae25e82ba7f60ced0a61914d0a4c2a92eaa52dbc762e844cc73a535afbb5b65cea4134a65e44b"
+             "49cddb3a2da84703123d12be3c00609c1755c6828a3")};
     p2pService->setGroupID2NodeList(groudID2NodeList);
 
     // NodeID nodeId = NodeID(fromHex(asString(contents(getDataDir().string() + "/node.nodeid"))));
-    auto nodeIdstr = asString(contents(getDataDir().string() + "/node.nodeid"));
+    auto nodeIdstr = asString(contents("conf/node.nodeid"));
     NodeID nodeId = NodeID(nodeIdstr.substr(0, 128));
     LOG(INFO) << "Load node id: " << nodeIdstr << "  " << nodeId << endl;
 
