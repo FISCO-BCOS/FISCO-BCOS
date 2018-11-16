@@ -41,12 +41,15 @@ static unsigned const c_maxSendTransactions = 128;
 
 // Every c_downloadingRequestTimeout request:
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
-static int64_t const c_maxRequestBlocks = 128;
+static int64_t const c_maxRequestBlocks = 32;
 static size_t const c_maxRequestShards = 4;
 static uint64_t const c_downloadingRequestTimeout = 500;  // ms
 
 static size_t const c_maxDownloadingBlockQueueSize = 4096;
-static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 2;
+static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 8;
+
+static size_t const c_maxReceivedDownloadRequestPerPeer = 8;
+static uint64_t const c_respondDownloadRequestTimeout = 200;  // ms
 
 static unsigned const c_syncPacketIDBase = 1;
 static size_t const c_maxPayload = dev::p2p::Message::MAX_LENGTH - 2048;
