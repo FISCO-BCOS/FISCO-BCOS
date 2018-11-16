@@ -71,7 +71,7 @@ help() {
     echo "    -a  <agency name>       The agency name that the node belongs to"
     echo "    -d  <agency dir>        The agency cert dir that the node belongs to"
     echo "Optional:"
-    echo "    -s  <god address>       Address of god account(default: 0xf78451eb46e20bc5336e279c52bda3a3e92c09b6)"
+    echo "    -s  <god address>       Address of god account"
     echo "    -m                      Input agency information manually"
     echo "    -g                      Generate guomi genesis node"
     echo "    -h                      This help"

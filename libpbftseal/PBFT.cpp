@@ -269,7 +269,7 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 	LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[" << toString(req.block_hash) << "][" << req.height << "][" <<  utcTime() << "][" << "broadcastPrepareReq" << "]";
 	RLPStream ts;
 	req.streamRLPFields(ts);
-	broadcastMsg(req.block_hash.hex(), PrepareReqPacket, ts.out());
+	broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out());
 
 	handlePrepareMsg(m_node_idx, req, true); // 指明是来自自己的Req
 }
@@ -364,7 +364,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		PrepareReq req;
 		req.populate(_r);
 		handlePrepareMsg(_from, req);
-		key = req.block_hash.hex();
 		pbft_msg = req;
 		break;
 	}
@@ -372,7 +371,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		SignReq req;
 		req.populate(_r);
 		handleSignMsg(_from, req);
-		key = req.sig.hex();
 		pbft_msg = req;
 		break;
 	}
@@ -380,7 +378,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		CommitReq req;
 		req.populate(_r);
 		handleCommitMsg(_from, req);
-		key = req.sig.hex();
 		pbft_msg = req;
 		break;
 	}
@@ -388,7 +385,6 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		ViewChangeReq req;
 		req.populate(_r);
 		handleViewChangeMsg(_from, req);
-		key = req.sig.hex() + toJS(req.view);
 		pbft_msg = req;
 		break;
 	}
@@ -402,14 +398,14 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 	bool height_flag = (pbft_msg.height > m_highest_block.number()) || (m_highest_block.number() - pbft_msg.height < 10);
 	//LOG(TRACE) << "key=" << key << ",time_flag=" << time_flag << ",height_flag=" << height_flag;
 	//if (key.size() > 0 && time_flag && height_flag) {
-	if (key.size() > 0 && height_flag) { // omit the time_flag due to unequal sysmtem timestamp between nodes
+	if (height_flag) { // omit the time_flag due to unequal sysmtem timestamp between nodes
 		std::unordered_set<h512> filter;
 		filter.insert(_node);
 		h512 gen_node_id = h512(0);
 		if (NodeConnManagerSingleton::GetInstance().getPublicKey(pbft_msg.idx, gen_node_id)) {
 			filter.insert(gen_node_id);
 		}
-		broadcastMsg(key, _id, _r.toBytes(), filter);
+		broadcastMsg(pbft_msg.uniqueKey(), _id, _r.toBytes(), filter);
 	}
 }
 
@@ -542,11 +538,12 @@ bool PBFT::broadcastViewChangeReq() {
 
 	if (!m_empty_block_flag) {
 		LOGCOMWARNING << WarningMap.at(ChangeViewWarning) << "|blockNumber:" << req.height << " ChangeView:" << req.view;
-		m_empty_block_flag = false;
 	}
+	m_empty_block_flag = false;
+	
 	RLPStream ts;
 	req.streamRLPFields(ts);
-	bool ret = broadcastMsg(req.sig.hex() + toJS(req.view), ViewChangeReqPacket, ts.out());
+	bool ret = broadcastMsg(req.uniqueKey(), ViewChangeReqPacket, ts.out());
 	return ret;
 }
 
@@ -561,7 +558,7 @@ bool PBFT::broadcastSignReq(PrepareReq const & _req) {
 	sign_req.sig2 = signHash(sign_req.fieldsWithoutBlock());
 	RLPStream ts;
 	sign_req.streamRLPFields(ts);
-	if (broadcastMsg(sign_req.sig.hex(), SignReqPacket, ts.out())) {
+	if (broadcastMsg(sign_req.uniqueKey(), SignReqPacket, ts.out())) {
 		addSignReq(sign_req);
 		return true;
 	}
@@ -580,7 +577,7 @@ bool PBFT::broadcastCommitReq(PrepareReq const & _req) {
 
 	RLPStream ts;
 	commit_req.streamRLPFields(ts);
-	if (broadcastMsg(commit_req.sig.hex(), CommitReqPacket, ts.out())) {
+	if (broadcastMsg(commit_req.uniqueKey(), CommitReqPacket, ts.out())) {
 		addCommitReq(commit_req);
 		return true;
 	}
@@ -600,7 +597,7 @@ bool PBFT::broadcastPrepareReq(BlockHeader const & _bi, bytes const & _block_dat
 
 	RLPStream ts;
 	req.streamRLPFields(ts);
-	if (broadcastMsg(req.block_hash.hex(), PrepareReqPacket, ts.out())) {
+	if (broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out())) {
 		addRawPrepare(req);
 		return true;
 	}
@@ -667,6 +664,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	if (_id == PrepareReqPacket) {
 		DEV_GUARDED(_p->x_knownPrepare)
 		{
+			if (_p->m_knownPrepare.exist(_key)) return;
 			if (_p->m_knownPrepare.size() > kKnownPrepare) {
 				_p->m_knownPrepare.pop();
 			}
@@ -675,6 +673,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	} else if (_id == SignReqPacket) {
 		DEV_GUARDED(_p->x_knownSign)
 		{
+			if (_p->m_knownSign.exist(_key)) return;
 			if (_p->m_knownSign.size() > kKnownSign) {
 				_p->m_knownSign.pop();
 			}
@@ -683,6 +682,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	} else if (_id == ViewChangeReqPacket) {
 		DEV_GUARDED(_p->x_knownViewChange)
 		{
+			if (_p->m_knownViewChange.exist(_key)) return;
 			if (_p->m_knownViewChange.size() > kKnownViewChange) {
 				_p->m_knownViewChange.pop();
 			}
@@ -691,6 +691,7 @@ void PBFT::broadcastMark(std::string const & _key, unsigned _id, shared_ptr<PBFT
 	} else if (_id == CommitReqPacket) {
 		DEV_GUARDED(_p->x_knownCommit)
 		{
+			if (_p->m_knownCommit.exist(_key)) return;
 			if (_p->m_knownCommit.size() > kKnownCommit) {
 				_p->m_knownCommit.pop();
 			}
@@ -982,7 +983,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	// this is for motivating viewchange, for the envs that if one node crash and other node's view has increased to a large number, than the node restart, it should broadcast a viewchange to other node
 	// other node receive the low view viewchange, would trigger follow code to motivate the node. +1 is to prevent the case that the view just change, for the reason
 	// which the new started node' view must fall behind(>2) the excited node
-	if (_req.view + 1 < m_to_view) {
+	if (_req.view + 1 < m_to_view && _req.idx == _from) { // do not motivate by others transfer
 		LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
 		broadcastViewChangeReq();
 	}
@@ -1164,7 +1165,7 @@ void PBFT::checkAndChangeView() {
 		}
 		
 
-		clearMask();
+		// clearMask(); // can not clear mask here, it will lead to rebroadcast for many old message
 		// start new block log
 		PBFTFlowLog(m_highest_block.number() + m_view, "from viewchange", (int)isLeader(), true);
 	}
