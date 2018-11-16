@@ -187,7 +187,7 @@ Usage()
 	cat << EOF
 Usage:
 Optional:
-    -d       Download from github
+    -d       Download from GitHub
     -h       Help
 Example: 
     bash build.sh 
