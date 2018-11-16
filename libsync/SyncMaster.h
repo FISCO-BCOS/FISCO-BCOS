@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include "RspBlockReq.h"
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
@@ -184,6 +185,7 @@ public:
     bool maintainDownloadingQueue();  /// return true if downloading finish
     void maintainDownloadingQueueBuffer();
     void maintainPeersConnection();
+    void maintainBlockRequest();
 
 private:
     bool isNewBlock(BlockPtr _block);
