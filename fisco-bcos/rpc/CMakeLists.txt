@@ -18,6 +18,7 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+if(TESTS)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
@@ -30,10 +31,11 @@ add_executable(mini-rpc ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-rpc PRIVATE ..)
 target_include_directories(mini-rpc PRIVATE ${BOOST_INCLUDE_DIR})
+target_link_libraries(mini-rpc Boost::System)
 target_link_libraries(mini-rpc Boost::program_options)
 target_link_libraries(mini-rpc Boost::UnitTestFramework)
 target_link_libraries(mini-rpc rpc)
 target_link_libraries(mini-rpc ledger)
 target_link_libraries(mini-rpc p2p)
 
-install(TARGETS mini-rpc DESTINATION bin)
+endif()

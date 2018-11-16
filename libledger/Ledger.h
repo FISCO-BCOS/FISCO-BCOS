@@ -30,10 +30,12 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
+#include <boost/property_tree/ptree.hpp>
+
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
-#include <boost/property_tree/ptree.hpp>
 #define Ledger_LOG(LEVEL) LOG(LEVEL) << "[#LEDGER] [GROUPID:" << std::to_string(m_groupId) << "]"
+
 namespace dev
 {
 namespace ledger

@@ -42,6 +42,7 @@ git:
 cache:
   directories:
   - $TRAVIS_BUILD_DIR/deps
+  - $TRAVIS_BUILD_DIR/build/test
 addons:
   apt:
     packages:
@@ -51,11 +52,11 @@ install: |
       sudo chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash -x ./tools/ci/check-commit.sh;
     fi
 script:
-    cd tools && chmod a+x build.sh && ./build.sh && cd .. && ./build/test/test-fisco-bcos -- --testpath=test/data/ 
+    cd tools && bash build.sh && cd .. && ./build/test/test-fisco-bcos -- --testpath=test/data/ 
 after_success:
     bash <(curl -s https://codecov.io/bash)
 after_failure:
-    # cd tools && bash clean_cache.sh 
+    cd tools && bash clean_cache.sh 
 webhooks:
     urls:
       - https://webhooks.gitter.im/e/334c46f8aee9f5fb65dc

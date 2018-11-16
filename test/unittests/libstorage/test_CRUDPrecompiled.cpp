@@ -5,8 +5,8 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libstorage/MemoryTable.h>
 #include <libstorage/CRUDPrecompiled.h>
+#include <libstorage/MemoryTable.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;

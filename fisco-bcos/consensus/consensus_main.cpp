@@ -30,10 +30,12 @@
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
+
 using namespace dev;
 using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
+
 #define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[#CONSENSUS_MAIN] "
 static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
 {
