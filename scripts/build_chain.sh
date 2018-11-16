@@ -16,7 +16,7 @@ statedb_type=leveldb #存储
 eth_path=
 make_tar=
 Download=false
-Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0/fisco-bcos
+Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0-pre-release/fisco-bcos
 
 help() {
 	echo $1
@@ -98,7 +98,16 @@ fi
 if [ ! -e "$ca_file" ]; then
 	echo "Generating CA key..."
 	openssl ecparam -out $output_dir/ca.param -name secp256k1 || fail_message "openssl error!"#准备密钥参数
-	openssl genpkey -paramfile $output_dir/ca.param -out $output_dir/ca.key #生成secp256k1算法的CA密钥
+	while :
+	do
+		openssl genpkey -paramfile $output_dir/ca.param -out $output_dir/ca.key #生成secp256k1算法的CA密钥
+		privateKey=`openssl ec -in "$output_dir/ca.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+		len=${#privateKey}
+		head2=${privateKey:0:2}
+		if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
+			break;
+		fi
+	done
 	openssl req -new -x509 -days 3650 -key $output_dir/ca.key -out $output_dir/ca.crt -batch #生成CA证书, 此处需要输入一些CA信息, 可按需要输入, 或回车跳过
 	ca_file="$output_dir/ca.key"
 else
@@ -154,8 +163,16 @@ for line in ${ip_array[*]};do
 		[ -d "$node_dir" ] && echo "$node_dir exist! Please delete!" && exit 1
 		mkdir -p $node_dir/data/
 		mkdir -p $node_dir/sdk/
-
-		openssl genpkey -paramfile "$output_dir/node.param" -out "$node_dir/data/node.key"
+		while :
+		do
+			openssl genpkey -paramfile "$output_dir/node.param" -out "$node_dir/data/node.key"
+			privateKey=`openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+			len=${#privateKey}
+			head2=${privateKey:0:2}
+			if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
+				break;
+			fi
+		done
 		openssl req -new -key "$node_dir/data/node.key" -config "${CertConfig}" -out "$node_dir/data/node.csr" -batch
 		openssl x509 -req -in "$node_dir/data/node.csr" -CAkey "$ca_file" -CA "$output_dir/ca.crt" -out "$node_dir/data/node.crt" -CAcreateserial -extensions v3_req -extfile "${CertConfig}" &> /dev/null
     	openssl ec -in "$node_dir/data/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"' > "$node_dir/data/node.nodeid"
