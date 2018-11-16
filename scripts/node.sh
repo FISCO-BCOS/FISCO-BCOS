@@ -55,7 +55,16 @@ else
 	keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 EOF
     openssl ecparam -out server.param -name secp256k1 
-    openssl genpkey -paramfile server.param -out node.key 
+	while :
+	do
+		openssl genpkey -paramfile server.param -out node.key 
+		privateKey=`openssl ec -in node.key -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+		len=${#privateKey}
+		head2=${privateKey:0:2}
+		if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
+			break;
+		fi
+	done
     openssl req -new -key node.key -config cert.cnf -out node.csr 
     openssl x509 -req  -in node.csr -CAkey ${SHELL_FOLDER}/ca.key -CA ${SHELL_FOLDER}/ca.crt -out node.crt -CAcreateserial -extensions v3_req -extfile cert.cnf 
     openssl ec -in node.key -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"' > node.nodeid
