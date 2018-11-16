@@ -221,7 +221,7 @@ EOF
 	FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"
 	FILENAME                =   "log/log_%datetime{%Y%M%d%H}.log"
 	MILLISECONDS_WIDTH      =   3
-	PERFORMANCE_TRACKING    =   true
+	PERFORMANCE_TRACKING    =   false
 	MAX_LOG_FILE_SIZE       =   209715200 ## 200MB - Comment starts with two hashes (##)
 	LOG_FLUSH_THRESHOLD     =   100  ## Flush after every 100 logs
 
