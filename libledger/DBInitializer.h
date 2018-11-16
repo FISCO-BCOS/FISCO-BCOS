@@ -70,7 +70,7 @@ private:
     void initAMOPStorage();
     /// TOCHECK: init levelDB storage
     void initLevelDBStorage();
-    /// TOCHECK: create AMDB/mpt stateStorage
+    /// TOCHECK: create storage/mpt state
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
 

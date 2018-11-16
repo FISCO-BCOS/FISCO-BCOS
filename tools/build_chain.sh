@@ -10,7 +10,8 @@ use_ip_param=
 ip_array=
 output_dir=nodes
 port_start=30300 
-statedb_type=mpt 
+state_type=mpt 
+storage_type=LevelDB
 conf_path="conf/"
 eth_path=
 gen_sdk=false
@@ -29,7 +30,7 @@ Usage:
     -o <Output Dir>             Default ./nodes/
     -p <Start Port>             Default 30300
     -d <JKS passwd>             Default not generate jks files, if set use param as jks passwd
-    -s <StateDB type>           Default LevelDB. if set -s, use AMDB
+    -s <State type>             Default mpt. if set -s, use storage 
     -t <Cert config file>       Default auto generate
     -z <Generate tar packet>    Default no
     -h Help
@@ -351,12 +352,12 @@ idleWaitMs=200
 
 [storage]
 ;storage db type, now support leveldb 
-type=leveldb
+type=${storage_type}
 dbpath=data
 
 [state]
-;state type, now support mpt/AMDB
-type=${statedb_type}
+;state type, now support mpt/storage
+type=${state_type}
 
 
 
@@ -458,7 +459,7 @@ while getopts "f:l:o:p:e:t:dszh" option;do
         exit $EXIT_CODE
     }
     ;;
-    s) statedb_type=AMDB;;
+    s) state_type=storage;;
     t) CertConfig=$OPTARG;;
     z) make_tar="yes";;
     h) help;;
@@ -548,7 +549,7 @@ for line in ${ip_array[*]};do
             # mv $node_dir/* $node_dir/sdk/
         fi
         nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
-        nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
+        nodeid_list=$"${nodeid_list}node.${index}=$nodeid
     "
         ip_list=$"${ip_list}node.${index}="${ip}:$(( port_start + index * 4 ))"
     "

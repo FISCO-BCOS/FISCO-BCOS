@@ -131,7 +131,7 @@ build_ubuntu_source()
 {
 # build source
 execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake -DTESTS=OFF .. "
+execute_cmd "cmake .. "
 execute_cmd "make && sudo make install"
 }
 
@@ -139,7 +139,7 @@ build_centos_source()
 {
 # build source
 execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake3 -DTESTS=OFF .. "
+execute_cmd "cmake3 .. "
 execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
@@ -187,7 +187,7 @@ Usage()
 	cat << EOF
 Usage:
 Optional:
-    -d       Download from git
+    -d       Download from github
     -h       Help
 Example: 
     bash build.sh 

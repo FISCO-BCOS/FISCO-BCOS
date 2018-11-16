@@ -118,13 +118,13 @@ void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
     DBInitializer_LOG(DEBUG) << "[#createStateFactory]" << std::endl;
     if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == true)
         createMptState(genesisHash);
-    else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "amdb") ==
+    else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") ==
              true)  /// default is storage state
         createStorageState();
     else
     {
         DBInitializer_LOG(WARNING)
-            << "[#createStateFactory] only support AMDB and mpt now, create AMDB by default"
+            << "[#createStateFactory] only support storage and mpt now, create storage by default"
             << std::endl;
         createStorageState();
     }

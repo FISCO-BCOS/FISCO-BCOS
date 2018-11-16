@@ -139,10 +139,10 @@ void Ledger::initConsensusConfig(ptree const& pt)
     {
         for (auto it : pt.get_child("consensus"))
         {
-            if (it.first.find("miner.") == 0)
+            if (it.first.find("node.") == 0)
             {
-                Ledger_LOG(INFO) << "[#initConsensusConfig] [miner_key]:  " << it.first
-                                 << "  [miner]: " << it.second.data() << std::endl;
+                Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]:  " << it.first
+                                 << "  [node]: " << it.second.data() << std::endl;
                 h512 miner(it.second.data());
                 m_param->mutableConsensusParam().minerList.push_back(miner);
             }
