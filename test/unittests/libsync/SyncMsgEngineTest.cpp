@@ -21,7 +21,6 @@
  * @date: 2018-10-25
  */
 
-#include <libp2p/Common.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -52,25 +51,25 @@ public:
     FakeSyncToolsSet fakeSyncToolsSet;
     shared_ptr<SyncMasterStatus> fakeStatusPtr;
     SyncMsgEngine fakeMsgEngine;
-    P2PException fakeException;
+    NetworkException fakeException;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
 
 BOOST_AUTO_TEST_CASE(InvalidInputTest)
 {
-    auto fakeMsgPtr = make_shared<Message>();
+    auto fakeMsgPtr = make_shared<P2PMessage>();
     // Invalid Session
     auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0xabcd));
-    BOOST_CHECK(fakeSessionPtr->isConnected() == true);
+    BOOST_CHECK(fakeSessionPtr->actived() == true);
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, fakeMsgPtr);
-    BOOST_CHECK(fakeSessionPtr->isConnected() == false);
+    BOOST_CHECK(fakeSessionPtr->actived() == false);
 
     // Invalid Message
     fakeSessionPtr = fakeSyncToolsSet.createSession();
-    BOOST_CHECK(fakeSessionPtr->isConnected() == true);
+    BOOST_CHECK(fakeSessionPtr->actived() == true);
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, fakeMsgPtr);
-    BOOST_CHECK(fakeSessionPtr->isConnected() == false);
+    BOOST_CHECK(fakeSessionPtr->actived() == false);
 }
 
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
@@ -128,7 +127,7 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
     auto servicePtr = static_pointer_cast<FakeService>(fakeSyncToolsSet.getServicePtr());
-    auto sendCount = servicePtr->getAsyncSendSizeByNodeID(fakeSessionPtr->id());
+    auto sendCount = servicePtr->getAsyncSendSizeByNodeID(fakeSessionPtr->nodeID());
     BOOST_CHECK(sendCount == 1);
 }
 

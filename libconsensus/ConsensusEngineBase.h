@@ -30,9 +30,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
-#include <libp2p/Host.h>
+#include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
-#include <libp2p/Session.h>
+#include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 
@@ -154,8 +154,8 @@ protected:
         return h512();
     }
 
-    virtual bool isValidReq(dev::p2p::Message::Ptr message,
-        std::shared_ptr<dev::p2p::Session> session, ssize_t& peerIndex)
+    virtual bool isValidReq(dev::p2p::P2PMessage::Ptr message,
+        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex)
     {
         return false;
     }
@@ -172,7 +172,7 @@ protected:
      */
     template <class T>
     inline bool decodeToRequests(
-        T& req, dev::p2p::Message::Ptr message, std::shared_ptr<dev::p2p::Session> session)
+        T& req, dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::P2PSession> session)
     {
         ssize_t peer_index = 0;
         bool valid = isValidReq(message, session, peer_index);
@@ -180,8 +180,8 @@ protected:
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
-                req.setOtherField(
-                    u256(peer_index), session->id(), session->nodeIPEndpoint().name());
+                req.setOtherField(u256(peer_index), session->nodeID(),
+                    session->session()->nodeIPEndpoint().name());
         }
         return valid;
     }

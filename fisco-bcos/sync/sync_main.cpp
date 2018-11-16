@@ -27,7 +27,7 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
-#include <libinitializer/LedgerInitiailizer.h>
+#include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
@@ -36,7 +36,7 @@
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 
-
+using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::ledger;
@@ -104,7 +104,7 @@ static void startSync(Params& params)
     initialize->init("./config.ini");
 
     auto p2pInitializer = initialize->p2pInitializer();
-    shared_ptr<P2PInterface> p2pService = p2pInitializer->p2pService();
+    std::shared_ptr<P2PInterface> p2pService = p2pInitializer->p2pService();
 
     GROUP_ID groupId = 1;
     std::map<GROUP_ID, h512s> groudID2NodeList;

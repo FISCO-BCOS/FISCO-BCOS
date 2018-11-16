@@ -171,7 +171,6 @@ public:
         bool isStaticCall);
 
     void destroy();
-    // TODO:Support more function
 
     FakeState& getState();
     int64_t depth() { return m_depth; }

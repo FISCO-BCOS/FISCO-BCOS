@@ -14,27 +14,27 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file RPCInitiailizer.h
+/** @file RPCInitializer.h
  *  @author chaychen
  *  @modify first draft
  *  @date 20181022
  */
 
-#include "RPCInitiailizer.h"
+#include "RPCInitializer.h"
 
 using namespace dev;
 using namespace dev::initializer;
 
-void RPCInitiailizer::initConfig(boost::property_tree::ptree const& _pt)
+void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 30301);
     int httpListenPort = _pt.get<int>("rpc.http_listen_port", 0);
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
-        LOG(ERROR) << "[#RPCInitiailizer] initConfig for RPCInitiailizer failed";
+        LOG(ERROR) << "[#RPCInitializer] initConfig for RPCInitializer failed";
         BOOST_THROW_EXCEPTION(InvalidListenPort() << errinfo_comment(
-                                  "[#RPCInitiailizer] initConfig for RPCInitiailizer "
+                                  "[#RPCInitializer] initConfig for RPCInitializer "
                                   "failed! Invalid ListenPort for RPC, must between [0,65536]"));
         exit(1);
     }
