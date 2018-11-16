@@ -20,7 +20,16 @@
  */
 
 #pragma once
-#include "Common.h"
+#include "P2PMessage.h"
+#include "P2PSession.h"
+#include <libdevcore/FixedHash.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/SessionFace.h>
+#include <memory>
+
+#define CallbackFuncWithSession                                                           \
+    std::function<void(dev::p2p::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, \
+        dev::p2p::P2PMessage::Ptr)>
 
 namespace dev
 {
@@ -30,55 +39,42 @@ class Host;
 class P2PInterface
 {
 public:
-    /// < protocolID stored in Message struct
-    virtual Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) = 0;
+    virtual ~P2PInterface(){};
 
-    virtual void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = nullptr, Options const& options = Options()) = 0;
+    virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) = 0;
 
-    virtual Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
+    virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options = Options()) = 0;
 
-    virtual void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
-        CallbackFunc callback, Options const& options) = 0;
+    virtual P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) = 0;
+    virtual void asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options) = 0;
 
-    virtual void asyncMulticastMessageByNodeIDList(
-        NodeIDs const& nodeIDs, Message::Ptr message) = 0;
+    virtual void asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncBroadcastMessage(Message::Ptr message, Options const& options) = 0;
+    virtual void asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message) = 0;
+
+    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, Options options) = 0;
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
 
-    virtual void registerHandlerByTopic(
-        std::string const& topic, CallbackFuncWithSession handler) = 0;
+    virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) = 0;
 
-    virtual void setTopicsByNode(
-        NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) = 0;
+    virtual SessionInfos sessionInfos() = 0;
+    virtual SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) = 0;
 
-    virtual std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) = 0;
+    virtual bool isConnected(NodeID _nodeID) = 0;
 
-    virtual SessionInfos sessionInfos() const = 0;
+    virtual std::shared_ptr<std::vector<std::string>> topics() = 0;
 
-    ///< Get connecting sessions by topicID which is groupID and can be got by protocolID.
-    ///< TODO: Whether the session list needs caching, especially when the consensus module calls.
+    virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
+    virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
 
-    virtual SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const = 0;
-
-    ///< Quickly determine whether to connect to a particular node.
-    virtual bool isConnected(NodeID const& _nodeID) const = 0;
-
-    ///< One-time loading the list of node members for a group.
-    virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) = 0;
-
-    ///< interface to set and get topics
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
-    virtual std::shared_ptr<std::vector<std::string>> topics() const = 0;
 
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory) = 0;
-
-    virtual std::shared_ptr<Host> host() const = 0;
+    virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() = 0;
 };
 
 }  // namespace p2p

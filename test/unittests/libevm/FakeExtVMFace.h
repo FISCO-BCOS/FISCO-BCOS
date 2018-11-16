@@ -160,18 +160,36 @@ public:
     /// Read storage location.
     virtual u256 store(u256 key)
     {
-        if (storage_map.count(key))
-            return storage_map[key];
+        auto it = storage_map.find(key);
+        if (it != storage_map.end())
+        {
+            return it->second;
+        }
         return u256(0);
     }
     /// Write a value in storage.
-    virtual void setStore(u256 _key, u256 _value) { storage_map[_key] = _value; }
+    virtual void setStore(u256 _key, u256 _value)
+    {
+        auto it = storage_map.find(_key);
+        if (it != storage_map.end())
+        {
+            it->second = _value;
+        }
+        else
+        {
+            storage_map.insert(std::make_pair(_key, _value));
+        }
+        // storage_map[_key] = _value;
+    }
 
     /// Read address's balance.
     virtual u256 balance(Address addr)
     {
-        if (balance_map.count(addr))
-            return balance_map[addr];
+        auto it = balance_map.find(addr);
+        if (it != balance_map.end())
+        {
+            return it->second;
+        }
         return 0;
     }
     /// @returns the size of the code in bytes at the given address.
@@ -203,7 +221,16 @@ public:
         account_map.insert(_caller);
         account_map.insert(_origin);
 
-        balance_map[_myAddress] = _value;
+        auto it = balance_map.find(_myAddress);
+        if (it != balance_map.end())
+        {
+            it->second = _value;
+        }
+        else
+        {
+            balance_map.insert(std::make_pair(_myAddress, _value));
+        }
+        // balance_map[_myAddress] = _value;
     }
 
 private:

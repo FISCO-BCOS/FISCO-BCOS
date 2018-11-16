@@ -27,10 +27,14 @@
  * @date: 2018-10-15
  */
 #pragma once
+#include <libnetwork/Common.h>
+#include <libp2p/P2PMessage.h>
+
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
-#include <libp2p/Common.h>
+
+
 #include <set>
 
 namespace dev
@@ -49,7 +53,7 @@ static size_t const c_maxDownloadingBlockQueueSize = 4096;
 static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 2;
 
 static unsigned const c_syncPacketIDBase = 1;
-static size_t const c_maxPayload = dev::p2p::Message::MAX_LENGTH - 2048;
+static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;

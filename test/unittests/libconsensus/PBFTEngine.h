@@ -26,7 +26,7 @@
 #include "PBFTReqCache.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libethcore/Protocol.h>
-#include <test/unittests/libp2p/FakeHost.h>
+#include <test/unittests/libsync/FakeSyncToolsSet.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 using namespace dev::eth;
@@ -68,7 +68,7 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-    SessionInfo info(node_id, m_endpoint, std::vector<std::string>());
+    SessionInfo info(node_id, m_endpoint, std::set<std::string>());
     size_t origin_size =
         service->sessionInfosByProtocolID(fake_pbft.consensus()->protocolId()).size();
     service->appendSessionInfo(info);
@@ -76,19 +76,15 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
                 (origin_size + 1));
 }
 /// fake session according to node id of the peer
-static std::shared_ptr<Session> FakeSession(Public node_id)
+static std::shared_ptr<FakeSession> FakeSessionFunc(Public node_id)
 {
-    ba::io_service m_ioservice(2);
-    NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-    std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice, m_endpoint);
-    std::shared_ptr<Session> session = std::make_shared<Session>(
-        nullptr, fake_socket, std::make_shared<Peer>(node_id, m_endpoint), PeerSessionInfo());
+    std::shared_ptr<FakeSession> session = std::make_shared<FakeSession>(node_id);
     return session;
 }
 
 /// fake message
 template <typename T>
-Message::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& req,
+P2PMessage::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& req,
     PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
 {
     bytes data;
@@ -98,11 +94,12 @@ Message::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& req,
 
 /// check the data received from the network
 template <typename T>
-void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft, std::shared_ptr<Session> session,
-    T const& req, PACKET_TYPE const& packetType, bool const& valid = false)
+void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft,
+    std::shared_ptr<P2PSession> session, T const& req, PACKET_TYPE const& packetType,
+    bool const& valid = false)
 {
-    Message::Ptr message_ptr = FakeReqMessage(pbft, req, packetType, ProtocolID::PBFT);
-    pbft->onRecvPBFTMessage(P2PException(), session, message_ptr);
+    P2PMessage::Ptr message_ptr = FakeReqMessage(pbft, req, packetType, ProtocolID::PBFT);
+    pbft->onRecvPBFTMessage(NetworkException(), session, message_ptr);
     std::pair<bool, PBFTMsgPacket> ret = pbft->mutableMsgQueue().tryPop(unsigned(5));
     if (valid == true)
     {

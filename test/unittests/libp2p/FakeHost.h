@@ -20,15 +20,15 @@
  * @author: yujiechen
  * @date 2018-09-10
  */
+#if 0
 #pragma once
 
 #include <libdevcore/FileSystem.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/SecureInitializer.h>
-#include <libp2p/Host.h>
-#include <libp2p/P2pFactory.h>
-#include <libp2p/Session.h>
-#include <libp2p/SessionFace.h>
+#include <libnetwork/Host.h>
+#include <libnetwork/Session.h>
+#include <libnetwork/SessionFace.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -47,7 +47,7 @@ public:
         std::shared_ptr<SocketFace> const& _socket = nullptr)
       : m_host(_server), m_peer(_n), m_info(_info)
     {
-        m_ping = m_lastReceived = m_connectionTime = chrono::steady_clock::now();
+        m_ping = m_lastReceived = m_connectionTime = std::chrono::steady_clock::now();
         m_disconnect = false;
         std::shared_ptr<dev::ThreadPool> threadPool =
             std::make_shared<ThreadPool>("SessionCallBackThreadPool", 1);
@@ -81,8 +81,8 @@ public:
     ResponseCallback::Ptr getCallbackBySeq(uint32_t seq) { return make_shared<ResponseCallback>(); }
     bool eraseCallbackBySeq(uint32_t seq) { return true; }
     NodeIPEndpoint nodeIPEndpoint() const override { return NodeIPEndpoint(); }
-    MessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
-    void setMessageFactory(MessageFactory::Ptr _messageFactory) override
+    P2PMessageFactory::Ptr messageFactory() const override { return m_messageFactory; }
+    void setMessageFactory(P2PMessageFactory::Ptr _messageFactory) override
     {
         m_messageFactory = _messageFactory;
     }
@@ -96,7 +96,7 @@ public:
     std::chrono::steady_clock::time_point m_connectionTime;
     std::chrono::steady_clock::time_point m_lastReceived;
     std::chrono::steady_clock::time_point m_ping;
-    MessageFactory::Ptr m_messageFactory;
+    P2PMessageFactory::Ptr m_messageFactory;
 };
 
 class FakeSessionForTest : public Session
@@ -116,7 +116,7 @@ public:
     {
         std::string invalid_tx_data = "test invalid tx data";
         setDataContent(invalid_tx_data);
-        Message::Ptr message = std::make_shared<Message>();
+        P2PMessage::Ptr message = std::make_shared<P2PMessage>();
         message->setProtocolID(m_protocolId);  // set protocol id
         std::shared_ptr<bytes> buffer =
             std::make_shared<bytes>(m_dataContent.begin(), m_dataContent.end());
@@ -154,7 +154,7 @@ class FakeSessionFactory : public SessionFactory
 {
     virtual std::shared_ptr<SessionFace> create_session(Host* _server,
         std::shared_ptr<SocketFace> const& _socket, std::shared_ptr<Peer> const& _peer,
-        PeerSessionInfo _info, MessageFactory::Ptr _messageFactory)
+        PeerSessionInfo _info, P2PMessageFactory::Ptr _messageFactory)
     {
         std::shared_ptr<SessionFace> m_session =
             std::make_shared<FakeSessionForHost>(_server, _peer, _info, _socket);
@@ -169,9 +169,8 @@ class FakeHost : public Host
 {
 public:
     FakeHost(std::string const& _clientVersion, KeyPair const& _alias, NetworkConfig const& _n,
-        std::shared_ptr<AsioInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
-        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext,
-        bool forRpc = false)
+        std::shared_ptr<ASIOInterface>& m_asioInterface, shared_ptr<SocketFactory>& _socketFactory,
+        shared_ptr<SessionFactory>& _sessionFactory, shared_ptr<ba::ssl::context> _sslContext)
       : Host(_clientVersion, _alias, _n, m_asioInterface, _socketFactory, _sessionFactory,
             _sslContext)
     {
@@ -207,7 +206,7 @@ public:
     }
 
     void keepAlivePeers() { Host::keepAlivePeers(); }
-    virtual void runAcceptor(boost::system::error_code boost_error = boost::system::error_code())
+    virtual void startAccept(boost::system::error_code boost_error = boost::system::error_code())
     {
         /// to stop runAcceptor
         if (m_loop == 1)
@@ -216,10 +215,10 @@ public:
             return;
         }
         m_loop = 1;
-        Host::runAcceptor(boost_error);
+        Host::startAccept(boost_error);
     }
 
-    void run(boost::system::error_code const& error) { Host::run(error); }
+    void start(boost::system::error_code const& error) { Host::start(error); }
 
     std::shared_ptr<SessionFace> FakeSession(NodeIPEndpoint const& _nodeIPEndpoint)
     {
@@ -238,10 +237,10 @@ public:
     {
         Host::setStaticNodes(staticNodes);
     }
-    void connect(NodeIPEndpoint const& _nodeIPEndpoint,
+    void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         boost::system::error_code ec = boost::system::error_code())
     {
-        Host::connect(_nodeIPEndpoint, ec);
+        Host::asyncConnect(_nodeIPEndpoint, ec);
     }
     bool havePeerSession(NodeID const& _id) { return Host::havePeerSession(_id); }
     void reconnectAllNodes() { return Host::reconnectAllNodes(); }
@@ -357,7 +356,7 @@ public:
     }
 };
 
-class AsioTest : public AsioInterface
+class AsioTest : public ASIOInterface
 {
 public:
     virtual void async_accept(bi::tcp::acceptor& tcp_acceptor, std::shared_ptr<SocketFace>& socket,
@@ -399,7 +398,7 @@ public:
         callback(verify_succ, context);
     }
 
-    virtual void async_wait(boost::asio::deadline_timer* m_timer,
+    virtual void asyncWait(boost::asio::deadline_timer* m_timer,
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code())
     {
@@ -434,16 +433,18 @@ public:
             ec = boost::asio::error::eof;
             handler(ec, transferred_bytes);
         }
-        //        if (count == 1)
-        //        {
-        //            count++;
-        //            std::string s(32, 'a');
-        //            bytes data;
-        //            data.assign(s.begin(), s.end());
-        //            buffers = boost::asio::mutable_buffers_1(ref(data).data(), data.size());
-        //            transferred_bytes = data.size();
-        //            handler(ec, transferred_bytes);
-        //        }
+        if (count == 1)
+        {
+            count++;
+            std::shared_ptr<P2PMessage> message = std::make_shared<P2PMessage>();
+            std::string s(32, 'a');
+            bytes data;
+            data.assign(s.begin(), s.end());
+            message->encode(data);
+            buffers = boost::asio::mutable_buffers_1(message.get(), message->length());
+            transferred_bytes = data.size();
+            handler(ec, transferred_bytes);
+        }
         else
         {
             count++;
@@ -467,7 +468,7 @@ static FakeHost* createHost(std::shared_ptr<SessionFactory> m_sessionFactory,
 {
     KeyPair key_pair = KeyPair::create();
     NetworkConfig network_config(listenIp, listenPort);
-    std::shared_ptr<AsioInterface> m_asioInterface = std::make_shared<AsioTest>();
+    std::shared_ptr<ASIOInterface> m_asioInterface = std::make_shared<AsioTest>();
     setDataDir(dev::test::getTestPath().string() + "/fisco-bcos-data");
     boost::property_tree::ptree pt;
     pt.put("secure.data_path", getTestPath().string() + "/fisco-bcos-data/");
@@ -500,3 +501,4 @@ static FakeHost* createFakeHostWithSession(std::string const& client_version,
 }
 }  // namespace test
 }  // namespace dev
+#endif

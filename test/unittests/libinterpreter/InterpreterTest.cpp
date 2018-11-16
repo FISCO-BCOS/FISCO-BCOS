@@ -737,7 +737,6 @@ BOOST_AUTO_TEST_CASE(balanceTest)
 
 BOOST_AUTO_TEST_CASE(LogTest)
 {
-    // TODO: To call LOG0
     /*
     pragma solidity ^0.4.11;
     contract C {
@@ -787,7 +786,6 @@ BOOST_AUTO_TEST_CASE(LogTest)
     BOOST_CHECK_EQUAL(destination, fakeLogs[2].address);
     BOOST_CHECK_EQUAL(destination, fakeLogs[3].address);
     BOOST_CHECK_EQUAL(destination, fakeLogs[4].address);
-    // TODO: To call LOG0
     BOOST_CHECK_EQUAL(1, fakeLogs[1].topics.size());
     BOOST_CHECK_EQUAL(2, fakeLogs[2].topics.size());
     BOOST_CHECK_EQUAL(3, fakeLogs[3].topics.size());

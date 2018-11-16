@@ -24,9 +24,9 @@
 #pragma once
 #include "LedgerParamInterface.h"
 #include <libdevcore/FixedHash.h>
-#include <libp2p/Network.h>
 #include <memory>
 #include <vector>
+
 namespace dev
 {
 namespace ledger

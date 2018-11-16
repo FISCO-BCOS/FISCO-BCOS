@@ -25,7 +25,7 @@
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
-#include <libp2p/P2PInterface.h>
+#include <libp2p/Service.h>
 
 using namespace dev::ledger;
 
