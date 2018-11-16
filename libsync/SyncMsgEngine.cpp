@@ -240,7 +240,7 @@ void DownloadBlocksContainer::clearBatchAndSend()
     retPacket.encode(m_blockRLPsBatch);
 
     auto msg = retPacket.toMessage(m_protocolId);
-    m_service->asyncSendMessageByNodeID(m_nodeId, msg);
+    m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
     SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << m_nodeId
                    << " [blocks/bytes]: " << m_blockRLPsBatch.size() << "/ "
                    << msg->buffer()->size() << "B]" << endl;
@@ -255,7 +255,7 @@ void DownloadBlocksContainer::sendBigBlock(bytes const& _blockRLP)
     retPacket.singleEncode(_blockRLP);
 
     auto msg = retPacket.toMessage(m_protocolId);
-    m_service->asyncSendMessageByNodeID(m_nodeId, msg);
+    m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
     SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << m_nodeId
                    << " [blocks/bytes]: " << 1 << "/ " << msg->buffer()->size() << "B]" << endl;
 }
