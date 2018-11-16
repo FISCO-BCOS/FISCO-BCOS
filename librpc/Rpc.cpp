@@ -625,19 +625,18 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         h256 hash = jsToFixed<32>(_transactionHash);
-        auto tx = blockchain->getLocalisedTxByHash(hash);
-        auto txReceipt = blockchain->getTransactionReceiptByHash(hash);
-        if (tx.blockNumber() == 0 &&
-            tx.blockHash() ==
+        auto txReceipt = blockchain->getLocalisedTxReceiptByHash(hash);
+        if (txReceipt.blockNumber() == 0 &&
+            txReceipt.blockHash() ==
                 jsToFixed<32>("0x0000000000000000000000000000000000000000000000000000000000000000"))
             return Json::nullValue;
 
         response["transactionHash"] = _transactionHash;
-        response["transactionIndex"] = toJS(tx.transactionIndex());
-        response["blockNumber"] = toJS(tx.blockNumber());
-        response["blockHash"] = toJS(tx.blockHash());
-        response["from"] = toJS(tx.from());
-        response["to"] = toJS(tx.to());
+        response["transactionIndex"] = toJS(txReceipt.transactionIndex());
+        response["blockNumber"] = toJS(txReceipt.blockNumber());
+        response["blockHash"] = toJS(txReceipt.blockHash());
+        response["from"] = toJS(txReceipt.from());
+        response["to"] = toJS(txReceipt.to());
         response["gasUsed"] = toJS(txReceipt.gasUsed());
         response["contractAddress"] = toJS(txReceipt.contractAddress());
         response["logs"] = Json::Value(Json::arrayValue);
