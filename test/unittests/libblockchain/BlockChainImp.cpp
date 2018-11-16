@@ -124,6 +124,8 @@ public:
 
     virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition)
     {
+        entry->setField(
+            "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));
         m_fakeStorage[m_table][key] = entry;
         return 0;
     }
@@ -211,7 +213,8 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     EmptyFixture empty;
 
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->number(), 0);
-    BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount(), 0);
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().first, 0);
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().second, 0);
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0), h256(""));
     BOOST_CHECK_EQUAL(
@@ -290,7 +293,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     commitResult = m_blockChainImp->commitBlock(fakeBlock2->getBlock(), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::OK);
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 1);
-    BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount(), 15);
+    BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().first, 15);
+    BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().second, 1);
 
     auto fakeBlock3 = std::make_shared<FakeBlock>(15);
     fakeBlock3->getBlock().header().setNumber(m_blockChainImp->number() + 1);
@@ -299,7 +303,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     commitResult = m_blockChainImp->commitBlock(fakeBlock3->getBlock(), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::OK);
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 2);
-    BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount(), 30);
+    BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().first, 30);
+    BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().second, 2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

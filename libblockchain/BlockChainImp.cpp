@@ -31,6 +31,7 @@
 #include <libstorage/Table.h>
 #include <boost/lexical_cast.hpp>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace dev;
@@ -79,9 +80,10 @@ int64_t BlockChainImp::number()
     return num;
 }
 
-int64_t BlockChainImp::totalTransactionCount()
+std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
 {
     int64_t count = 0;
+    int64_t number = 0;
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
     if (tb)
     {
@@ -89,11 +91,13 @@ int64_t BlockChainImp::totalTransactionCount()
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            std::string totalTransactionCount = entry->getField(SYS_VALUE);
-            count = lexical_cast<int64_t>(totalTransactionCount);
+            std::string strCount = entry->getField(SYS_VALUE);
+            count = lexical_cast<int64_t>(strCount);
+            std::string strNumber = entry->getField("_num_");
+            number = lexical_cast<int64_t>(strNumber);
         }
     }
-    return count;
+    return std::make_pair(count, number);
 }
 
 bytes BlockChainImp::getCode(Address _address)

@@ -140,7 +140,10 @@ public:
     virtual ~MockBlockChain() {}
 
     virtual int64_t number() override { return m_blockNumber; }
-    virtual int64_t totalTransactionCount() override { return m_totalTransactionCount; }
+    virtual std::pair<int64_t, int64_t> totalTransactionCount() override
+    {
+        return std::make_pair(m_totalTransactionCount, m_blockNumber);
+    }
     void setGroupMark(std::string const& groupMark) override {}
     void createTransaction()
     {

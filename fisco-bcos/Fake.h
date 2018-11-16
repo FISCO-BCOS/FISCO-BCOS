@@ -76,10 +76,10 @@ public:
         return m_blockChain.size() - 1;
     }
 
-    int64_t totalTransactionCount()
+    std::pair<int64_t, int64_t> totalTransactionCount()
     {
         ReadGuard l(x_blockChain);
-        return m_totalTransactionCount;
+        return std::make_pair(m_totalTransactionCount, m_blockChain.size() - 1);
     }
 
     dev::h256 numberHash(int64_t _i)
