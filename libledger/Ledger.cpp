@@ -59,11 +59,16 @@ bool Ledger::initLedger()
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
     m_dbInitializer->initStateDB(genesisHash);
-    /// init blockChain
-    /// init blockVerifier
-    /// init txPool
-    /// init sync
-    /// /// init consensus
+    if (!m_dbInitializer->stateFactory())
+    {
+        Ledger_LOG(ERROR) << "#[initLedger] [#initBlockChain Failed for init stateFactory failed]"
+                          << std::endl;
+        return false;
+    }
+    std::shared_ptr<BlockChainImp> blockChain =
+        std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
+    blockChain->setStateFactory(m_dbInitializer->stateFactory());
+    /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory());
 }
 
@@ -134,10 +139,10 @@ void Ledger::initConsensusConfig(ptree const& pt)
     {
         for (auto it : pt.get_child("consensus"))
         {
-            if (it.first.find("miner.") == 0)
+            if (it.first.find("node.") == 0)
             {
-                Ledger_LOG(INFO) << "[#initConsensusConfig] [miner_key]:  " << it.first
-                                 << "  [miner]: " << it.second.data() << std::endl;
+                Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]:  " << it.first
+                                 << "  [node]: " << it.second.data() << std::endl;
                 h512 miner(it.second.data());
                 m_param->mutableConsensusParam().minerList.push_back(miner);
             }
@@ -166,12 +171,17 @@ void Ledger::initSyncConfig(ptree const& pt)
 void Ledger::initDBConfig(ptree const& pt)
 {
     /// init the basic config
-    m_param->setDBType(pt.get<std::string>("statedb.dbType", "LevelDB"));
-    m_param->setMptState(pt.get<bool>("statedb.mpt", true));
-    std::string baseDir = m_param->baseDir() + "/" + pt.get<std::string>("statedb.dbpath", "data");
+    /// set storage db related param
+    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
+    std::string baseDir = m_param->baseDir() + "/" + pt.get<std::string>("state.dbpath", "data");
     m_param->setBaseDir(baseDir);
-    Ledger_LOG(DEBUG) << "[#initDBConfig] [type/enableMpt/baseDir]: " << m_param->dbType() << "/"
-                      << m_param->enableMpt() << "/" << baseDir << std::endl;
+    m_param->mutableStorageParam().path = baseDir;
+    /// set state db related param
+    m_param->mutableStateParam().type = pt.get<std::string>("state.type", "mpt");
+
+    Ledger_LOG(DEBUG) << "[#initDBConfig] [storageDB/storagePath/stateDB/baseDir]:  "
+                      << m_param->mutableStorageParam().type << "/"
+                      << m_param->mutableStorageParam().path << "/" << baseDir << std::endl;
 }
 
 /// init genesis configuration
@@ -226,7 +236,8 @@ bool Ledger::initBlockChain()
     Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain]" << std::endl;
     if (!m_dbInitializer->storage())
     {
-        Ledger_LOG(ERROR) << "[#initLedger] [#initBlockChain Failed]" << std::endl;
+        Ledger_LOG(ERROR) << "[#initLedger] [#initBlockChain Failed for init storage failed]"
+                          << std::endl;
         return false;
     }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();

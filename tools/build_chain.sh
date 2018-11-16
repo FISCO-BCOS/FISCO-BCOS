@@ -10,7 +10,8 @@ use_ip_param=
 ip_array=
 output_dir=nodes
 port_start=30300 
-statedb_type=LevelDB 
+state_type=mpt 
+storage_type=LevelDB
 conf_path="conf/"
 eth_path=
 gen_sdk=false
@@ -24,12 +25,12 @@ help() {
     cat << EOF
 Usage:
     -l <IP list>                [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -f <IP list file>           split by line, "ip:nodeNum"
+    -f <IP list file>           [Optional] "split by line, "ip:nodeNum"
     -e <FISCO-BCOS binary path> Default download from GitHub
     -o <Output Dir>             Default ./nodes/
     -p <Start Port>             Default 30300
     -d <JKS passwd>             Default not generate jks files, if set use param as jks passwd
-    -s <StateDB type>           Default LevelDB. if set -s, use AMDB
+    -s <State type>             Default mpt. if set -s, use storage 
     -t <Cert config file>       Default auto generate
     -z <Generate tar packet>    Default no
     -h Help
@@ -276,30 +277,52 @@ generate_config_ini()
     local output=$1
     cat << EOF > ${output}
 [rpc]
+    ;rpc listen ip
     listen_ip=127.0.0.1
+    ;channelserver listen port
     listen_port=$(( port_start + 1 + index * 4 ))
+    ;rpc listen port
     http_listen_port=$(( port_start + 2 + index * 4 ))
     console_port=$(( port_start + 3 + index * 4 ))
 [p2p]
+    ;p2p listen ip
     listen_ip=0.0.0.0
+    ;p2p listen port
     listen_port=$(( port_start + index * 4 ))
+    ;nodes to connect
     $ip_list
+
+;group configurations
+;if need add a new group, eg. group2, can add the following configuration:
+;group_config.2=conf/group.2.ini
+;group.2.ini can be populated from group.1.ini
+;WARNING: group 0 is forbided
 [group]
     group_config.1=conf/group.1.ini
+
+;certificate configuration
 [secure]
-    ;\${DATAPATH} == data_path
+    ;directory the certificates located in
     data_path=conf/
+    ;the node private key file
     key=node.key
+    ;the node certificate file
     cert=node.crt
+    ;the ca certificate file
     ca_cert=ca.crt
+
+;log configurations
 [log]
+    ;the directory of the log
     LOG_PATH=./log
     GLOBAL-ENABLED=true
-    GLOBAL-FORMAT="%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"
+    GLOBAL-FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
     GLOBAL-MILLISECONDS_WIDTH=3
     GLOBAL-PERFORMANCE_TRACKING=false
     GLOBAL-MAX_LOG_FILE_SIZE=209715200
     GLOBAL-LOG_FLUSH_THRESHOLD=100
+
+    ;log level configuration, enable(true)/disable(false) corresponding level log
     INFO-ENABLED=true
     WARNING-ENABLED=true
     ERROR-ENABLED=true
@@ -314,24 +337,38 @@ generate_group_ini()
 {
     local output=$1
     cat << EOF > ${output} 
+;consensus configuration
 [consensus]
+;consensus type: only support PBFT now
 consensusType=pbft
+;the max number of transactions of a block
 maxTransNum=1000
+;the node id of leaders
 $nodeid_list
 
+;sync period time
 [sync]
 idleWaitMs=200
 
-[statedb]
-dbType=${statedb_type}
-mpt=true
+[storage]
+;storage db type, now support leveldb 
+type=${storage_type}
 dbpath=data
 
-[genesis]
-mark=
+[state]
+;state type, now support mpt/storage
+type=${state_type}
 
+
+
+;genesis configuration
+[genesis]
+;used to mark the genesis block of this group
+;mark=${group_id}
+
+;txpool limit
 [txPool]
-limit=100
+limit=1000
 EOF
 }
 
@@ -393,6 +430,15 @@ EOF
     chmod +x "$output/stop.sh"
 }
 
+genTransTest()
+{
+    local file=${output_dir}"/transTest.sh"
+    cat << EOF > "${file}"
+#!bin/bash
+curl -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f840255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e"],"id":83}' http://127.0.0.1:$(( port_start + 2))
+EOF
+}
+
 main()
 {
 while getopts "f:l:o:p:e:t:dszh" option;do
@@ -413,7 +459,7 @@ while getopts "f:l:o:p:e:t:dszh" option;do
         exit $EXIT_CODE
     }
     ;;
-    s) statedb_type=AMDB;;
+    s) state_type=storage;;
     t) CertConfig=$OPTARG;;
     z) make_tar="yes";;
     h) help;;
@@ -439,7 +485,6 @@ if [ -z ${eth_path} ];then
     Download=true
 fi
 
-dir_must_not_exists $output_dir
 [ -d "$output_dir" ] || mkdir -p "$output_dir"
 
 if [ "${Download}" = "true" ];then
@@ -459,7 +504,6 @@ fi
 if [ ! -e "$ca_file" ]; then
     echo "Generating CA key..."
     dir_must_not_exists $output_dir/chain
-    dir_must_not_exists $output_dir/certrm
     gen_chain_cert "" $output_dir/chain >$output_dir/build.log 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
     mv $output_dir/chain $output_dir/cert
     gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/build.log 2>&1
@@ -492,7 +536,7 @@ for line in ${ip_array[*]};do
             if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
                 break;
             fi
-            rm -rf $node_dir
+            rm -rf ${node_dir}
         done
         cat ${output_dir}/cert/agency/agency.crt >> $node_dir/${conf_path}/node.crt
         cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
@@ -505,7 +549,7 @@ for line in ${ip_array[*]};do
             # mv $node_dir/* $node_dir/sdk/
         fi
         nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
-        nodeid_list=$"${nodeid_list}miner.${index}=$nodeid
+        nodeid_list=$"${nodeid_list}node.${index}=$nodeid
     "
         ip_list=$"${ip_list}node.${index}="${ip}:$(( port_start + index * 4 ))"
     "
@@ -514,7 +558,11 @@ for line in ${ip_array[*]};do
 done 
 cd ..
 echo "#!/bin/bash" > "$output_dir/start_all.sh"
+echo "#!/bin/bash" > "$output_dir/stop_all.sh"
+echo "#!/bin/bash" > "$output_dir/replace_all.sh"
 echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/start_all.sh"
+echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/stop_all.sh"
+echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/replace_all.sh"
 echo "Generating node configuration..."
 
 #Generate node config files
@@ -531,12 +579,17 @@ for line in ${ip_array[*]};do
         generate_node_scripts "$node_dir"
         cp "$eth_path" "$node_dir/fisco-bcos"
         echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/start.sh" >> "$output_dir/start_all.sh"
+        echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/stop.sh" >> "$output_dir/stop_all.sh"
+        echo "cp \${1} \${SHELL_FOLDER}/node_${ip}_${index}/" >> "$output_dir/replace_all.sh"
         ((++index))
         [ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
     done
     chmod +x "$output_dir/start_all.sh"
+    chmod +x "$output_dir/stop_all.sh"
+    chmod +x "$output_dir/replace_all.sh"
 done 
 rm $output_dir/build.log cert.cnf
+genTransTest
 echo "=========================================="
 echo "FISCO-BCOS Path : $eth_path"
 [ ! -z $ip_file ] && echo "IP List File    : $ip_file"
@@ -546,7 +599,6 @@ echo "Output Dir      : $output_dir"
 echo "CA Key Path     : $ca_file"
 echo "=========================================="
 echo "All completed. Files in $output_dir"
-
 }
 
 main $@
