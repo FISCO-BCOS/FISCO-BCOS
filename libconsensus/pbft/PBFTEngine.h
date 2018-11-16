@@ -30,9 +30,12 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
-#include <libp2p/Session.h>
-#include <libp2p/SessionFace.h>
 #include <sstream>
+
+#include <libp2p/P2PMessage.h>
+#include <libp2p/P2PSession.h>
+#include <libp2p/Service.h>
+
 namespace dev
 {
 namespace consensus
@@ -130,8 +133,8 @@ protected:
     bool shouldBroadcastViewChange();
     bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
-    void onRecvPBFTMessage(dev::p2p::P2PException exception,
-        std::shared_ptr<dev::p2p::Session> session, dev::p2p::Message::Ptr message);
+    void onRecvPBFTMessage(dev::p2p::NetworkException exception,
+        std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
     void handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
     void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
@@ -214,10 +217,10 @@ protected:
     }
 
     /// trans data into message
-    inline dev::p2p::Message::Ptr transDataToMessage(
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
     {
-        dev::p2p::Message::Ptr message = std::make_shared<dev::p2p::Message>();
+        dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
@@ -229,7 +232,7 @@ protected:
         return message;
     }
 
-    inline dev::p2p::Message::Ptr transDataToMessage(
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, PACKET_TYPE const& packetType)
     {
         return transDataToMessage(data, packetType, m_protocolId);
@@ -247,24 +250,24 @@ protected:
      * @return true : the network-received message is valid
      * @return false: the network-received message is invalid
      */
-    bool isValidReq(dev::p2p::Message::Ptr message, std::shared_ptr<dev::p2p::Session> session,
-        ssize_t& peerIndex) override
+    bool isValidReq(dev::p2p::P2PMessage::Ptr message,
+        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex) override
     {
         /// check message size
         if (message->buffer()->size() <= 0)
             return false;
         /// check whether in the miner list
-        peerIndex = getIndexByMiner(session->id());
+        peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
             PBFTENGINE_LOG(WARNING)
-                << "[#isValidReq] Recv PBFT msg from unkown peer:  " << session->id();
+                << "[#isValidReq] Recv PBFT msg from unkown peer:  " << session->nodeID();
             return false;
         }
         /// check whether this node is in the miner list
         h512 node_id;
         bool is_miner = getNodeIDByIndex(node_id, m_idx);
-        if (!is_miner || session->id() == node_id)
+        if (!is_miner || session->nodeID() == node_id)
             return false;
         return true;
     }

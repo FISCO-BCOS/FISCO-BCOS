@@ -148,7 +148,6 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 1);
 
     // Message::Ptr msg = service->getAsyncSendMessageByNodeID(NodeID(101));
-    // TODO
 
     // test transaction has send logic
     txs = fakeTransactions(2, currentBlockNumber);

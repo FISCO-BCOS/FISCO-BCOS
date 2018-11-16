@@ -33,11 +33,14 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libledger/LedgerManager.h>
+#include <libnetwork/Common.h>
 #include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 
+
+using namespace std;
 using namespace dev;
 using namespace dev::p2p;
 using namespace dev::blockchain;
@@ -55,27 +58,25 @@ namespace demo
 class MockService : public Service
 {
 public:
-    MockService(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
-      : Service(_host, _p2pMsgHandler)
+    MockService() : Service()
     {
-        NodeID nodeID = h512(100);
+        p2p::NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
-        SessionInfo info(nodeID, m_endpoint, std::vector<std::string>());
-        std::vector<std::string> topics;
+        SessionInfo info(nodeID, m_endpoint, std::set<std::string>());
+        std::set<std::string> topics;
         std::string topic = "Topic1";
-        topics.push_back(topic);
+        topics.insert(topic);
         m_sessionInfos.push_back(SessionInfo(nodeID, m_endpoint, topics));
     }
 
-    virtual SessionInfos sessionInfos() const override { return m_sessionInfos; }
+    virtual SessionInfos sessionInfos() override { return m_sessionInfos; }
     void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        dev::p2p::Options const& options = dev::p2p::Options()) override
+    virtual void asyncSendMessageByNodeID(p2p::NodeID nodeID, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options = Options()) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
@@ -198,6 +199,13 @@ public:
         }
     }
 
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) override
+    {
+        return LocalisedTransactionReceipt(
+            TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+    }
+
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
     {
         return m_blockChain[_i];
@@ -215,6 +223,9 @@ public:
     }
 
     void setGroupMark(std::string const& groupMark) override {}
+
+    dev::bytes getCode(dev::Address _address) override { return bytes(); }
+
     BlockHeader blockHeader;
     Transactions transactions;
     Transaction transaction;

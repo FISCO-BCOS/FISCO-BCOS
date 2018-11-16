@@ -21,9 +21,8 @@
  */
 
 #include "P2PInitializer.h"
-#include <libp2p/Host.h>
-#include <libp2p/Network.h>
-#include <libp2p/P2pFactory.h>
+#include <libdevcore/easylog.h>
+#include <libnetwork/Host.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
@@ -37,7 +36,6 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     std::string publicID = _pt.get<std::string>("p2p.public_ip", "127.0.0.1");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-    NetworkConfig network_config = NetworkConfig(publicID, listenIP, listenPort);
 
     std::map<NodeIPEndpoint, NodeID> nodes;
     for (auto it : _pt.get_child("p2p"))
@@ -82,14 +80,24 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         }
     }
 
-    auto p2pMsgHandler = std::make_shared<P2PMsgHandler>();
-    auto asioInterface = std::make_shared<AsioInterface>();
-    auto socketFactory = std::make_shared<SocketFactory>();
-    auto sessionFactory = std::make_shared<SessionFactory>();
-    auto host = std::make_shared<Host>("2.0", m_keyPair, network_config, asioInterface,
-        socketFactory, sessionFactory, m_SSLContext);
-    host->setStaticNodes(nodes);
-    m_p2pService = std::make_shared<Service>(host, p2pMsgHandler);
-    m_p2pService->setMessageFactory(std::make_shared<P2PMessageFactory>());
-    host->start();
+    auto asioInterface = std::make_shared<ASIOInterface>();
+    asioInterface->setIOService(std::make_shared<ba::io_service>());
+    asioInterface->setSSLContext(m_SSLContext);
+
+    auto messageFactory = std::make_shared<P2PMessageFactory>();
+
+    auto host = std::make_shared<Host>();
+    host->setASIOInterface(asioInterface);
+    host->setSessionFactory(std::make_shared<SessionFactory>());
+    host->setMessageFactory(messageFactory);
+    host->setHostPort(listenIP, listenPort);
+    host->setThreadPool(std::make_shared<ThreadPool>("P2P", 4));
+
+    m_p2pService = std::make_shared<Service>();
+    m_p2pService->setHost(host);
+    m_p2pService->setStaticNodes(nodes);
+    m_p2pService->setKeyPair(m_keyPair);
+    m_p2pService->setP2PMessageFactory(messageFactory);
+
+    m_p2pService->start();
 }

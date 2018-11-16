@@ -28,6 +28,7 @@
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace dev;
 using namespace dev::txpool;
 using namespace dev::blockchain;
@@ -39,17 +40,17 @@ namespace test
 class FakeService : public Service
 {
 public:
-    FakeService(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
-      : Service(_host, _p2pMsgHandler)
-    {}
+    FakeService() : Service() {}
     void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
+    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override
+    {
+        return m_sessionInfos;
+    }
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        dev::p2p::Options const& options = dev::p2p::Options()) override
+    void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, dev::p2p::Options options = dev::p2p::Options()) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
@@ -64,7 +65,7 @@ public:
         return m_asyncSend[nodeID];
     }
 
-    Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    P2PMessage::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
     {
         auto msg = m_asyncSendMsgs.find(nodeID);
         if (msg == m_asyncSendMsgs.end())
@@ -78,8 +79,8 @@ public:
 private:
     SessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
-    std::map<NodeID, Message::Ptr> m_asyncSendMsgs;
-    bool m_connected;
+    std::map<NodeID, P2PMessage::Ptr> m_asyncSendMsgs;
+    bool m_connected = false;
 };
 class FakeTxPool : public TxPool
 {
@@ -158,6 +159,13 @@ public:
         return TransactionReceipt();
     }
 
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) override
+    {
+        return LocalisedTransactionReceipt(
+            TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+    }
+
     virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
     {
@@ -170,6 +178,9 @@ public:
         m_totalTransactionCount += block.transactions().size();
         return CommitResult::OK;
     }
+
+    dev::bytes getCode(dev::Address _address) override { return bytes(); }
+
     void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
@@ -189,13 +200,8 @@ public:
     {
         /// fake block manager
         m_blockChain = std::make_shared<FakeBlockChain>(_blockNum, transSize, sec);
-        /// fake host of p2p module
-        FakeHost* hostPtr = createFakeHostWithSession(clientVersion, listenIp, listenPort);
-        m_host = std::shared_ptr<Host>(hostPtr);
-        /// create p2pHandler
-        m_p2pHandler = std::make_shared<P2PMsgHandler>();
         /// fake service of p2p module
-        m_topicService = std::make_shared<FakeService>(m_host, m_p2pHandler);
+        m_topicService = std::make_shared<FakeService>();
         std::shared_ptr<BlockChainInterface> blockChain =
             std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
@@ -205,14 +211,14 @@ public:
 
     void setSessionData(std::string const& data_content)
     {
+#if 0
         for (auto session : m_host->sessions())
             dynamic_cast<FakeSessionForTest*>(session.second.get())->setDataContent(data_content);
+#endif
     }
     std::shared_ptr<FakeTxPool> m_txPool;
     std::shared_ptr<FakeService> m_topicService;
-    std::shared_ptr<P2PMsgHandler> m_p2pHandler;
     std::shared_ptr<FakeBlockChain> m_blockChain;
-    std::shared_ptr<Host> m_host;
     Secret sec;
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";

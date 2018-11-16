@@ -56,7 +56,7 @@ script:
 after_success:
     bash <(curl -s https://codecov.io/bash)
 after_failure:
-    # cd tools/ci && bash clean_cache.sh 
+    cd tools/ci && bash clean_cache.sh 
 webhooks:
     urls:
       - https://webhooks.gitter.im/e/334c46f8aee9f5fb65dc

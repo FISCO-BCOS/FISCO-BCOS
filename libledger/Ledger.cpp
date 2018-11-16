@@ -188,7 +188,7 @@ void Ledger::initDBConfig(ptree const& pt)
 void Ledger::initGenesisConfig(ptree const& pt)
 {
     m_param->mutableGenesisParam().genesisMark =
-        pt.get<std::string>("genesis.mark", to_string(m_groupId));
+        pt.get<std::string>("genesis.mark", std::to_string(m_groupId));
     Ledger_LOG(DEBUG) << "[#initGenesisConfig] [genesisMark]:  "
                       << m_param->mutableGenesisParam().genesisMark << std::endl;
 }

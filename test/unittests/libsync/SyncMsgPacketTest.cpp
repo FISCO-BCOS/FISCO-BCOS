@@ -21,8 +21,9 @@
  * @date: 2018-10-24
  */
 
+#include "FakeSyncToolsSet.h"
 #include <libdevcrypto/Common.h>
-#include <libp2p/Common.h>
+#include <libnetwork/Common.h>
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
@@ -45,23 +46,26 @@ class SyncMsgPacketFixture : public TestOutputHelperFixture
 public:
     SyncMsgPacketFixture()
     {
-        m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
+        // m_host = createFakeHost(m_clientVersion, m_listenIp, m_listenPort);
 
         fakeSessionPtr = createFakeSession();
         fakeTransaction = createFakeTransaction(0);
     }
 
-    std::shared_ptr<SessionFace> createFakeSession(std::string ip = "127.0.0.1")
+    std::shared_ptr<P2PSession> createFakeSession(std::string ip = "127.0.0.1")
     {
         unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(ip), m_listenPort, m_listenPort);
         ;
         KeyPair key_pair = KeyPair::create();
+#if 0
         std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), peer_endpoint);
         PeerSessionInfo peer_info({key_pair.pub(), peer_endpoint.address.to_string(),
             chrono::steady_clock::duration(), 0});
         std::shared_ptr<SessionFace> session =
             std::make_shared<FakeSessionForHost>(m_host, peer, peer_info);
+#endif
+        std::shared_ptr<P2PSession> session = std::make_shared<FakeSession>();
         session->start();
         return session;
     }
@@ -86,11 +90,11 @@ public:
         return tx;
     }
 
-    std::shared_ptr<SessionFace> fakeSessionPtr;
+    std::shared_ptr<P2PSession> fakeSessionPtr;
     Transaction fakeTransaction;
 
 protected:
-    FakeHost* m_host;
+    // FakeHost* m_host;
     std::string m_clientVersion = "2.0";
     std::string m_listenIp = "127.0.0.1";
     uint16_t m_listenPort = 30304;
@@ -100,7 +104,7 @@ BOOST_FIXTURE_TEST_SUITE(SyncMsgPacketTest, SyncMsgPacketFixture)
 
 BOOST_AUTO_TEST_CASE(PacketDecodeTest)
 {
-    auto fakeMessagePtr = shared_ptr<Message>(nullptr);
+    auto fakeMessagePtr = shared_ptr<P2PMessage>(nullptr);
     SyncMsgPacket msgPacket;
 
     // message is nullptr
@@ -108,7 +112,7 @@ BOOST_AUTO_TEST_CASE(PacketDecodeTest)
     BOOST_CHECK(isSuccessful == false);
 
     // message contains no data
-    fakeMessagePtr = make_shared<Message>();
+    fakeMessagePtr = make_shared<P2PMessage>();
     isSuccessful = msgPacket.decode(fakeSessionPtr, fakeMessagePtr);
     BOOST_CHECK(isSuccessful == false);
 
