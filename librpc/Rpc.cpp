@@ -416,6 +416,34 @@ Json::Value Rpc::getBlockByNumber(
     }
 }
 
+std::string Rpc::numberHash(int _groupID, const std::string& _blockNumber)
+{
+    try
+    {
+        LOG(INFO) << "numberHash # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_blockNumber\" : " << _blockNumber << "," << std::endl
+                  << "}";
+
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (!blockchain)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+        h256 blockHash = blockchain->numberHash(number);
+        return toJS(blockHash);
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+    }
+}
 
 Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transactionHash)
 {
@@ -435,6 +463,11 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
 
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getLocalisedTxByHash(hash);
+        if (tx.blockNumber() == 0 &&
+            tx.blockHash() ==
+                jsToFixed<32>("0x0000000000000000000000000000000000000000000000000000000000000000"))
+            return Json::nullValue;
+
         response["blockHash"] = toJS(tx.blockHash());
         response["blockNumber"] = toJS(tx.blockNumber());
         response["from"] = toJS(tx.from());
@@ -597,7 +630,8 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         if (tx.blockNumber() == 0 &&
             tx.blockHash() ==
                 jsToFixed<32>("0x0000000000000000000000000000000000000000000000000000000000000000"))
-            return Json::Value(Json::nullValue);
+            return Json::nullValue;
+
         response["transactionHash"] = _transactionHash;
         response["transactionIndex"] = toJS(tx.transactionIndex());
         response["blockNumber"] = toJS(tx.blockNumber());
@@ -677,7 +711,7 @@ Json::Value Rpc::pendingTransactions(int _groupID)
 }
 
 
-std::string Rpc::call(int _groupID, const Json::Value& request)
+Json::Value Rpc::call(int _groupID, const Json::Value& request)
 {
     try
     {
@@ -704,7 +738,10 @@ std::string Rpc::call(int _groupID, const Json::Value& request)
         auto blockHeader = block->header();
         auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
 
-        return toJS(executionResult.first.output);
+        Json::Value response;
+        response["currentBlockNumber"] = toJS(blockNumber);
+        response["output"] = toJS(executionResult.first.output);
+        return response;
     }
     catch (JsonRpcException& e)
     {
@@ -735,6 +772,33 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         std::pair<h256, Address> ret = txPool->submit(tx);
 
         return toJS(ret.first);
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+    }
+}
+
+std::string Rpc::getCode(int _groupID, const std::string& _address)
+{
+    try
+    {
+        LOG(INFO) << "getCode # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_address\" : " << _address << std::endl
+                  << "}";
+
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        if (!blockChain)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+
+        return toJS(blockChain->getCode(jsToAddress(_address)));
     }
     catch (JsonRpcException& e)
     {

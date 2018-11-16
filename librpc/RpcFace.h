@@ -66,6 +66,10 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
             &dev::rpc::RpcFace::getBlockByNumberI);
+        this->bindAndAddMethod(jsonrpc::Procedure("numberHash", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
+                                   jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::numberHashI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionByHash",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
@@ -98,6 +102,10 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
+                                   jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::getCodeI);
     }
 
     inline virtual void blockNumberI(const Json::Value& request, Json::Value& response)
@@ -145,6 +153,11 @@ public:
         response = this->getBlockByNumber(
             request[0u].asInt(), request[1u].asString(), request[2u].asBool());
     }
+    inline virtual void numberHashI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->numberHash(
+            request[0u].asInt(), request[1u].asString());
+    }
 
     inline virtual void getTransactionByHashI(const Json::Value& request, Json::Value& response)
     {
@@ -180,6 +193,11 @@ public:
         response = this->sendRawTransaction(request[0u].asInt(), request[1u].asString());
     }
 
+    inline virtual void getCodeI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getCode(request[0u].asInt(), request[1u].asString());
+    }
+
     // consensus part
     virtual std::string blockNumber(int param1) = 0;
     virtual std::string pbftView(int param1) = 0;
@@ -197,6 +215,7 @@ public:
     // block part
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;
     virtual Json::Value getBlockByNumber(int param1, const std::string& param2, bool param3) = 0;
+    virtual std::string numberHash(int param1, const std::string& param2) = 0;
 
     // transaction part
     /// @return the information about a transaction requested by transaction hash.
@@ -213,9 +232,11 @@ public:
     /// @return information about pendingTransactions.
     virtual Json::Value pendingTransactions(int param1) = 0;
     /// Executes a new message call immediately without creating a transaction on the blockchain.
-    virtual std::string call(int param1, const Json::Value& param2) = 0;
-    // Creates new message call transaction or a contract creation for signed transactions.
+    virtual Json::Value call(int param1, const Json::Value& param2) = 0;
+    /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
+    /// Returns code at a given address.
+    virtual std::string getCode(int param1, const std::string& param2) = 0;
 };
 
 }  // namespace rpc

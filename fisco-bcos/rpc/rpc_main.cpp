@@ -41,7 +41,7 @@ int main(int argc, const char* argv[])
     std::string configurationPath = "";
     KeyPair m_keyPair = KeyPair::create();
     auto m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
-    m_ledgerManager->initSingleLedger<FakeLedger>(0, "", configurationPath);
+    m_ledgerManager->initSingleLedger<FakeLedger>(1, "", configurationPath);
 
     auto rpc = new Rpc(m_ledgerManager, m_service);
 

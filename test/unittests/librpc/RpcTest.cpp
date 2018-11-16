@@ -185,6 +185,15 @@ BOOST_AUTO_TEST_CASE(getBlockByNumber)
     BOOST_CHECK_THROW(rpc->getBlockByNumber(invalidGroup, "0x0", false), JsonRpcException);
 }
 
+BOOST_AUTO_TEST_CASE(testNumberHash)
+{
+    std::string blockNumber = "0x0";
+    std::string response = rpc->numberHash(groupId, blockNumber);
+    BOOST_CHECK(response == "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
+
+    BOOST_CHECK_THROW(rpc->getCode(invalidGroup, blockNumber), JsonRpcException);
+}
+
 BOOST_AUTO_TEST_CASE(testGetTransactionByHash)
 {
     std::string txHash = "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f";
@@ -316,9 +325,10 @@ BOOST_AUTO_TEST_CASE(testCall)
     request["code"] = "0x3";
     request["randomid"] = "0x4";
     request["blockLimit"] = "0x5";
-    std::string response = rpc->call(groupId, request);
+    Json::Value response = rpc->call(groupId, request);
 
-    BOOST_CHECK(response == "0x");
+    BOOST_CHECK(response["currentBlockNumber"].asString() == "0x0");
+    BOOST_CHECK(response["output"].asString() == "0x");
 
     BOOST_CHECK_THROW(rpc->call(invalidGroup, request), JsonRpcException);
 }
@@ -337,6 +347,15 @@ BOOST_AUTO_TEST_CASE(testSendRawTransaction)
     BOOST_CHECK(response == "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
 
     BOOST_CHECK_THROW(rpc->sendRawTransaction(invalidGroup, rlpStr), JsonRpcException);
+}
+
+BOOST_AUTO_TEST_CASE(testGetCode)
+{
+    std::string address = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b";
+    std::string response = rpc->getCode(groupId, address);
+    BOOST_CHECK(response == "0x");
+
+    BOOST_CHECK_THROW(rpc->getCode(invalidGroup, address), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

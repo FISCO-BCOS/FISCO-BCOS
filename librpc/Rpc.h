@@ -69,6 +69,7 @@ public:
         int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
     virtual Json::Value getBlockByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
+    virtual std::string numberHash(int _groupID, const std::string& _blockNumber) override;
 
     // transaction part
     /// @return the information about a transaction requested by transaction hash.
@@ -87,9 +88,11 @@ public:
     /// @return information about pendingTransactions.
     virtual Json::Value pendingTransactions(int _groupID) override;
     /// Executes a new message call immediately without creating a transaction on the blockchain.
-    virtual std::string call(int _groupID, const Json::Value& request) override;
-    // Creates new message call transaction or a contract creation for signed transactions.
+    virtual Json::Value call(int _groupID, const Json::Value& request) override;
+    /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
+    /// Returns code at a given address.
+    virtual std::string getCode(int _groupID, const std::string& address) override;
 
 
 protected:
