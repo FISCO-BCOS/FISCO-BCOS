@@ -260,7 +260,7 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     }
     else if (tableName == SYS_CURRENT_STATE)
     {
-        tableInfo->key = "number";
+        tableInfo->key = "key";
         tableInfo->fields = std::vector<std::string>{"value"};
     }
     else if (tableName == SYS_NUMBER_2_HASH)
