@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(EmptyArrayList)
         dev::RLP payload(payloadToDecode);
         LOG(INFO) << payload;
 
-        payloadToDecode = dev::fromHex("с0");
+        payloadToDecode = dev::fromHex("c0");
         dev::RLP payload2(payloadToDecode);
         LOG(INFO) << payload2;
     }

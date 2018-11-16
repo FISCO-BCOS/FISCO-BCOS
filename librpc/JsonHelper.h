@@ -22,7 +22,6 @@
 
 #include <json/json.h>
 #include <libethcore/Common.h>
-#include <libp2p/Common.h>
 
 namespace dev
 {

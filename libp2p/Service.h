@@ -15,7 +15,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Service.h
- *  @author molan
+ *  @author monan
  *  @modify first draft
  *  @date 20180910
  *  @author chaychen
@@ -24,13 +24,16 @@
  */
 
 #pragma once
-#include "Host.h"
 #include "P2PInterface.h"
-#include "P2PMsgHandler.h"
+#include "P2PMessage.h"
+#include "P2PSession.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <libnetwork/Host.h>
+#include <map>
 #include <memory>
+#include <unordered_map>
 
 namespace dev
 {
@@ -39,87 +42,123 @@ namespace p2p
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    ///< _p2pMsgHandler needs to be initialized before _host
-    Service(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
-      : m_host(_host), m_p2pMsgHandler(_p2pMsgHandler)
-    {
-        m_ioService = _host->ioService();
-        ///< Set m_p2pMsgHandler to host
-        ///< When a new session created, host set handler to the new session.
-        _host->setP2PMsgHandler(m_p2pMsgHandler);
-    }
+    Service();
+    virtual ~Service() {}
 
-    virtual ~Service() { m_ioService = NULL; }
+    typedef std::shared_ptr<Service> Ptr;
 
-    Message::Ptr sendMessageByNodeID(NodeID const& nodeID, Message::Ptr message) override;
+    virtual void start();
+    virtual void stop();
+    virtual void heartBeat();
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = nullptr, Options const& options = Options()) override;
+    virtual bool actived() { return m_run; }
+    virtual NodeID id() const { return m_alias.pub(); }
 
-    Message::Ptr sendMessageByTopic(std::string const& topic, Message::Ptr message) override;
+    virtual void onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session);
+    virtual void onDisconnect(NetworkException e, NodeID nodeID);
+    virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
+        P2PSession::Ptr p2pSession);
 
-    void asyncSendMessageByTopic(std::string const& topic, Message::Ptr message,
-        CallbackFunc callback, Options const& options) override;
+    virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) override;
+    virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options = Options()) override;
 
-    void asyncMulticastMessageByTopic(std::string const& topic, Message::Ptr message) override;
+    virtual P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) override;
+    virtual void asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, Options options) override;
 
-    void asyncMulticastMessageByNodeIDList(NodeIDs const& nodeIDs, Message::Ptr message) override;
+    virtual void asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message) override;
+    virtual void asyncMulticastMessageByNodeIDList(
+        NodeIDs nodeIDs, P2PMessage::Ptr message) override;
+    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, Options options) override;
 
-    void asyncBroadcastMessage(Message::Ptr message, Options const& options) override;
-
-    void registerHandlerByProtoclID(
+    virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
+    virtual void registerHandlerByTopic(
+        std::string topic, CallbackFuncWithSession handler) override;
 
-    void registerHandlerByTopic(std::string const& topic, CallbackFuncWithSession handler) override;
-
-    void setTopicsByNode(
-        NodeID const& _nodeID, std::shared_ptr<std::vector<std::string>> _topics) override;
-
-    std::shared_ptr<std::vector<std::string>> getTopicsByNode(NodeID const& _nodeID) override;
-
-    ///< Only connected node
-    virtual SessionInfos sessionInfos() const override;
-
-    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const override;
-
-    bool isConnected(NodeID const& _nodeID) const override { return m_host->isConnected(_nodeID); }
-
-    std::shared_ptr<Host> host() const override { return m_host; }
-
-    void setGroupID2NodeList(std::map<GROUP_ID, h512s> const& _groupID2NodeList) override
+    virtual std::map<NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
+    virtual void setStaticNodes(std::map<NodeIPEndpoint, NodeID> staticNodes)
     {
-        m_host->setGroupID2NodeList(_groupID2NodeList);
+        m_staticNodes = staticNodes;
     }
 
-    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    virtual SessionInfos sessionInfos() override;  ///< Only connected node
+
+    virtual SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override;
+
+    virtual bool isConnected(NodeID nodeID) override;
+
+    virtual h512s getNodeListByGroupID(GROUP_ID groupID) override
     {
-        m_host->setTopics(_topics);
+        return m_groupID2NodeList[groupID];
+    }
+    virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> _groupID2NodeList) override
+    {
+        m_groupID2NodeList = _groupID2NodeList;
     }
 
-    std::shared_ptr<std::vector<std::string>> topics() const override { return m_host->topics(); }
+    virtual uint32_t topicSeq() { return m_topicSeq; }
+    virtual void increaseTopicSeq() { ++m_topicSeq; }
 
-    void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    virtual std::shared_ptr<std::vector<std::string>> topics() override { return m_topics; }
+    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
     {
-        m_host->setMessageFactory(_messageFactory);
+        RecursiveMutex(x_topics);
+        m_topics = _topics;
+        ++m_topicSeq;
     }
+
+    virtual std::shared_ptr<Host> host() { return m_host; }
+    virtual void setHost(std::shared_ptr<Host> host) { m_host = host; }
+
+    virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override
+    {
+        return m_p2pMessageFactory;
+    }
+    virtual void setP2PMessageFactory(std::shared_ptr<P2PMessageFactory> _p2pMessageFactory)
+    {
+        m_p2pMessageFactory = _p2pMessageFactory;
+    }
+
+    virtual KeyPair keyPair() { return m_alias; }
+    virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
 
 private:
-    void onTimeoutByTopic(const boost::system::error_code& error,
-        std::shared_ptr<SessionFace> oriSession, NodeIDs& nodeIDsToSend, Message::Ptr message,
-        CallbackFunc callback, Options const& options, uint32_t totalTimeout);
-    void onTimeoutByNode(
-        const boost::system::error_code& error, uint32_t seq, std::shared_ptr<SessionFace> p);
-
     NodeIDs getPeersByTopic(std::string const& topic);
 
     bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
 
-    std::shared_ptr<Host> m_host;
-    boost::asio::io_service* m_ioService;
+    std::map<NodeIPEndpoint, NodeID> m_staticNodes;
+    RecursiveMutex x_nodes;
 
-    std::shared_ptr<P2PMsgHandler> m_p2pMsgHandler;
-    std::atomic<uint32_t> m_seq = {0};  ///< The message identify is generated by the service by
-                                        ///< autoincrement.
+    std::shared_ptr<Host> m_host;
+
+    std::unordered_map<NodeID, P2PSession::Ptr> m_sessions;
+    RecursiveMutex x_sessions;
+
+    std::atomic<uint32_t> m_topicSeq = {0};
+    std::shared_ptr<std::vector<std::string>> m_topics;
+    RecursiveMutex x_topics;
+
+    ///< key is the group that the node joins
+    ///< value is the list of node members for the group
+    ///< the data is currently statically loaded and not synchronized between nodes
+    std::map<GROUP_ID, h512s> m_groupID2NodeList;
+
+    std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
+    RecursiveMutex x_protocolID2Handler;
+
+    ///< A call B, the function to call after the request is received by B in topic.
+    std::shared_ptr<std::unordered_map<std::string, CallbackFuncWithSession>> m_topic2Handler;
+    RecursiveMutex x_topic2Handler;
+
+    std::shared_ptr<P2PMessageFactory> m_p2pMessageFactory;
+    KeyPair m_alias;
+
+    std::shared_ptr<boost::asio::deadline_timer> m_timer;
+
+    bool m_run = false;
 };
 
 }  // namespace p2p
