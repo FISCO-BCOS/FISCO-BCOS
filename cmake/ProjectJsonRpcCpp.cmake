@@ -28,8 +28,8 @@ set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
             #    -DCURL_LIBRARY=${CURL_LIBRARY}
                -DMHD_INCLUDE_DIR=${MHD_INCLUDE_DIR}
                -DMHD_LIBRARY=${MHD_LIBRARY}
-               #-DCMAKE_C_FLAGS=-Wa,-march=generic64
-               #-DCMAKE_CXX_FLAGS=-Wa,-march=generic64
+               -DCMAKE_C_FLAGS=-Wa,-march=generic64
+               -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                )
