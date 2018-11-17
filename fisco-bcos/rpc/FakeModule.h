@@ -441,7 +441,7 @@ public:
     };
 
     /// protocol id used when register handler to p2p module
-    virtual PROTOCOL_ID const& protocolId() const { return 0; };
+    virtual PROTOCOL_ID const& protocolId() const { return protocal_id; };
 
     /// get node account type
     virtual NodeAccountType accountType() { return NodeAccountType::MinerAccount; };
@@ -453,6 +453,7 @@ public:
 
 private:
     dev::h512s m_minerList;
+    PROTOCOL_ID protocal_id = 0;
 };
 
 class FakeLedger : public LedgerInterface
