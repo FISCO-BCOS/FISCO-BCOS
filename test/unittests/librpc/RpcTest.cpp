@@ -356,6 +356,15 @@ BOOST_AUTO_TEST_CASE(testGetCode)
     BOOST_CHECK_THROW(rpc->getCode(invalidGroup, address), JsonRpcException);
 }
 
+BOOST_AUTO_TEST_CASE(testTotalTransactionCount)
+{
+    Json::Value response = rpc->totalTransactionCount(groupId);
+    BOOST_CHECK(response["count"].asString() == "0x0");
+    BOOST_CHECK(response["number"].asString() == "0x0");
+
+    BOOST_CHECK_THROW(rpc->totalTransactionCount(invalidGroup), JsonRpcException);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

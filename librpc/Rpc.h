@@ -72,27 +72,19 @@ public:
     virtual std::string numberHash(int _groupID, const std::string& _blockNumber) override;
 
     // transaction part
-    /// @return the information about a transaction requested by transaction hash.
     virtual Json::Value getTransactionByHash(
         int _groupID, const std::string& _transactionHash) override;
-    /// @return information about a transaction by block hash and transaction index position.
     virtual Json::Value getTransactionByBlockHashAndIndex(
         int _groupID, const std::string& _blockHash, const std::string& _transactionIndex) override;
-    /// @return information about a transaction by block number and transaction index position.
     virtual Json::Value getTransactionByBlockNumberAndIndex(int _groupID,
         const std::string& _blockNumber, const std::string& _transactionIndex) override;
-    /// @return the receipt of a transaction by transaction hash.
-    /// @note That the receipt is not available for pending transactions.
     virtual Json::Value getTransactionReceipt(
         int _groupID, const std::string& _transactionHash) override;
-    /// @return information about pendingTransactions.
     virtual Json::Value pendingTransactions(int _groupID) override;
-    /// Executes a new message call immediately without creating a transaction on the blockchain.
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
-    /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
-    /// Returns code at a given address.
     virtual std::string getCode(int _groupID, const std::string& address) override;
+    virtual Json::Value totalTransactionCount(int _groupID) override;
 
 
 protected:

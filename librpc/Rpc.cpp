@@ -414,7 +414,7 @@ std::string Rpc::numberHash(int _groupID, const std::string& _blockNumber)
         LOG(INFO) << "numberHash # request = " << std::endl
                   << "{ " << std::endl
                   << "\"_groupID\" : " << _groupID << "," << std::endl
-                  << "\"_blockNumber\" : " << _blockNumber << "," << std::endl
+                  << "\"_blockNumber\" : " << _blockNumber << std::endl
                   << "}";
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -791,6 +791,36 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         return toJS(blockChain->getCode(jsToAddress(_address)));
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::totalTransactionCount(int _groupID)
+{
+    try
+    {
+        LOG(INFO) << "totalTransactionCount # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
+
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        if (!blockChain)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+
+        Json::Value response;
+        std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
+        response["count"] = toJS(result.first);
+        response["number"] = toJS(result.second);
+        return response;
     }
     catch (JsonRpcException& e)
     {

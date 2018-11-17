@@ -66,9 +66,9 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
             &dev::rpc::RpcFace::getBlockByNumberI);
-        this->bindAndAddMethod(jsonrpc::Procedure("numberHash", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
-                                   jsonrpc::JSON_STRING, NULL),
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("numberHash", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
+                "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::numberHashI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionByHash",
@@ -102,10 +102,14 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
-        this->bindAndAddMethod(jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
-                                   jsonrpc::JSON_STRING, NULL),
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
+                "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getCodeI);
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("totalTransactionCount", jsonrpc::PARAMS_BY_POSITION,
+                jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::totalTransactionCountI);
     }
 
     inline virtual void blockNumberI(const Json::Value& request, Json::Value& response)
@@ -155,8 +159,7 @@ public:
     }
     inline virtual void numberHashI(const Json::Value& request, Json::Value& response)
     {
-        response = this->numberHash(
-            request[0u].asInt(), request[1u].asString());
+        response = this->numberHash(request[0u].asInt(), request[1u].asString());
     }
 
     inline virtual void getTransactionByHashI(const Json::Value& request, Json::Value& response)
@@ -187,15 +190,17 @@ public:
     {
         response = this->call(request[0u].asInt(), request[1u]);
     }
-
     inline virtual void sendRawTransactionI(const Json::Value& request, Json::Value& response)
     {
         response = this->sendRawTransaction(request[0u].asInt(), request[1u].asString());
     }
-
     inline virtual void getCodeI(const Json::Value& request, Json::Value& response)
     {
         response = this->getCode(request[0u].asInt(), request[1u].asString());
+    }
+    inline virtual void totalTransactionCountI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->totalTransactionCount(request[0u].asInt());
     }
 
     // consensus part
@@ -237,6 +242,8 @@ public:
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
     /// Returns code at a given address.
     virtual std::string getCode(int param1, const std::string& param2) = 0;
+    /// Returns the count of transactions and blocknumber.
+    virtual Json::Value totalTransactionCount(int param1) = 0;
 };
 
 }  // namespace rpc
