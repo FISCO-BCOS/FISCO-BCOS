@@ -181,12 +181,13 @@ public:
         {
             auto tx = getLocalisedTxByHash(_txHash);
             auto txReceipt = getTransactionReceiptByHash(_txHash);
-            return LocalisedTransactionReceipt(txReceipt, _txHash, tx.blockHash(),
-                    tx.blockNumber(), tx.from(), tx.to(), tx.transactionIndex(), txReceipt.gasUsed(),
-                    txReceipt.contractAddress());
+            return LocalisedTransactionReceipt(txReceipt, _txHash, tx.blockHash(), tx.blockNumber(),
+                tx.from(), tx.to(), tx.transactionIndex(), txReceipt.gasUsed(),
+                txReceipt.contractAddress());
         }
         else
-            return LocalisedTransactionReceipt(TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+            return LocalisedTransactionReceipt(
+                TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
