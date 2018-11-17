@@ -31,22 +31,18 @@ namespace websocket = boost::beast::websocket;
 
 int main(int argc, const char* argv[])
 {
-	auto const address = boost::asio::ip::make_address("127.0.0.1");
-	auto const port = static_cast<unsigned short>(std::atoi("30302"));
-	auto const threads = 1;
-	// The io_context is required for all I/O
-	boost::asio::io_context ioc{threads};
+    auto const address = boost::asio::ip::make_address("127.0.0.1");
+    auto const port = static_cast<unsigned short>(std::atoi("30302"));
+    auto const threads = 1;
+    // The io_context is required for all I/O
+    boost::asio::io_context ioc{threads};
 
-	// Create and launch a listening port
-	std::make_shared<listener>(ioc, tcp::endpoint{address, port})->run();
+    // Create and launch a listening port
+    std::make_shared<listener>(ioc, tcp::endpoint{address, port})->run();
 
-	std::vector<std::thread> v;
+    std::vector<std::thread> v;
     v.reserve(threads - 1);
-    for(auto i = threads - 1; i > 0; --i)
-        v.emplace_back(
-        [&ioc]
-        {
-            ioc.run();
-        });
-	ioc.run();
+    for (auto i = threads - 1; i > 0; --i)
+        v.emplace_back([&ioc] { ioc.run(); });
+    ioc.run();
 }
