@@ -29,6 +29,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libstorage/MinerPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
@@ -37,7 +38,7 @@
 using namespace jsonrpc;
 using namespace dev::rpc;
 using namespace dev::sync;
-
+using namespace dev::ledger;
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
@@ -735,3 +736,159 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
     }
 }
+
+std::string Rpc::updatePBFTNode(int _groupID, const std::string& _rlp)
+{
+    try
+    {
+        LOG(INFO) << "[#updatePBFTNode] [request]: " << _rlp << std::endl;
+        auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
+        if (!ledgerParam)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        if (stringCmpIgnoreCase(ledgerParam->mutableConsensusParam().consensusType, "pbft") != 0)
+        {
+            LOG(WARNING) << "[Forbid updatePBFTNode] current consensusType: "
+                         << ledgerParam->mutableConsensusParam().consensusType << std::endl;
+            return toJS("[Forbid updatePBFTNode] current consensusType:" +
+                        ledgerParam->mutableConsensusParam().consensusType);
+        }
+        Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        if (isValidNodeId(tx.data(), ledgerParam))
+        {
+            return sendRawTransaction(_groupID, _rlp);
+        }
+        else
+        {
+            LOG(WARNING) << "[InvalidNode ID, Must exist in config.ini first]" << std::endl;
+            return toJS("[InvalidNode ID, Must exist in config.ini first]");
+        }
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+    }
+}
+
+bool Rpc::isValidNodeId(
+    bytes const& precompileData, std::shared_ptr<LedgerParamInterface> ledgerParam)
+{
+    std::string nodeId = dev::blockverifier::MinerPrecompiled::getNodeID(ref(precompileData));
+    /// check the node Id
+    if (nodeId.size() != 128u)
+    {
+        LOG(ERROR) << "[#isValidNodeId] invalid [nodeId]: " << nodeId << std::endl;
+        return false;
+    }
+    /// the nodeId must be defined in the config.ini
+    bool isValid = false;
+    for (auto miner : ledgerParam->mutableConsensusParam().minerList)
+    {
+        if (stringCmpIgnoreCase(toHex(miner), nodeId) == 0)
+            isValid = true;
+    }
+    return isValid;
+}
+
+/*bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+{
+    STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
+
+    uint32_t func = getParamFunc(param);
+    bytesConstRef data = getParamData(param);
+
+    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
+
+    dev::eth::ContractABI abi;
+    bytes out;
+    const std::string key("miner");
+    switch (func)
+    {
+    case 0xb0c8f9dc:
+    {  // add(string)
+        std::string nodeID;
+        abi.abiOut(data, nodeID);
+        if (nodeID.size() != 128u)
+        {
+            STORAGE_LOG(DEBUG) << "NodeID length error. " << nodeID;
+            break;
+        }
+        storage::Table::Ptr table = openTable(context, "_sys_miners_");
+        if (table.get())
+        {
+            auto condition = table->newCondition();
+            condition->EQ(NODE_KEY_NODEID, nodeID);
+            auto entries = table->select(PRI_KEY, condition);
+            auto entry = table->newEntry();
+            entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+            entry->setField("name", PRI_KEY);
+
+            if (entries->size() == 0u)
+            {
+                entry->setField(NODE_KEY_ENABLENUM,
+                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+                entry->setField(NODE_KEY_NODEID, nodeID);
+                table->insert(PRI_KEY, entry);
+                STORAGE_LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
+            }
+            else
+            {
+                table->update(PRI_KEY, entry, condition);
+                STORAGE_LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
+            }
+            break;
+        }
+        STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
+
+        break;
+    }
+    case 0x80599e4b:
+    {  // remove(string)
+        std::string nodeID;
+        abi.abiOut(data, nodeID);
+        if (nodeID.size() != 128u)
+        {
+            STORAGE_LOG(DEBUG) << "NodeID length error. " << nodeID;
+            break;
+        }
+        storage::Table::Ptr table = openTable(context, "_sys_miners_");
+        if (table.get())
+        {
+            auto condition = table->newCondition();
+            condition->EQ(NODE_KEY_NODEID, nodeID);
+            auto entries = table->select(PRI_KEY, condition);
+            auto entry = table->newEntry();
+            entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
+            entry->setField("name", PRI_KEY);
+
+            if (entries->size() == 0u)
+            {
+                STORAGE_LOG(DEBUG)
+                    << "MinerPrecompiled remove node not in _sys_miners_, nodeID : " << nodeID;
+                entry->setField(NODE_KEY_NODEID, nodeID);
+                entry->setField(NODE_KEY_ENABLENUM,
+                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+                table->insert(PRI_KEY, entry);
+            }
+            else
+            {
+                table->update(PRI_KEY, entry, condition);
+                STORAGE_LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
+            }
+            break;
+        }
+        STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
+        break;
+    }
+    default:
+    {
+        break;
+    }
+    }
+
+    return out;
+}*/

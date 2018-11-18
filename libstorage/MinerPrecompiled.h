@@ -52,6 +52,8 @@ public:
     virtual ~MinerPrecompiled(){};
 
     virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+
+    static std::string getNodeID(bytesConstRef data);
 };
 
 }  // namespace blockverifier

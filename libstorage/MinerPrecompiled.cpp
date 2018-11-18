@@ -126,3 +126,21 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 
     return out;
 }
+
+std::string MinerPrecompiled::getNodeID(bytesConstRef param)
+{
+    std::string nodeId = "";
+    try
+    {
+        bytesConstRef data = param.cropped(4);
+        dev::eth::ContractABI abi;
+        abi.abiOut(data, nodeId);
+        return nodeId;
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_LOG(WARNING) << "[#getNodeID] abi parse failed [EINFO]: "
+                             << boost::diagnostic_information(e) << std::endl;
+        return nodeId;
+    }
+}

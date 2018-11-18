@@ -102,6 +102,7 @@ bool PBFTEngine::shouldSeal()
  */
 void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 {
+    Guard l(m_mutex);
     PBFTENGINE_LOG(INFO) << "[#shouldSeal:rehandleCommittedPrepare] Post out "
                             "committed-but-not-saved block: [hash/height]:  "
                          << req.block_hash.abridged() << "/" << req.height << std::endl;

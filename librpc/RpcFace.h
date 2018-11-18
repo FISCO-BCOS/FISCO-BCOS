@@ -98,6 +98,11 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
+
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("updatePBFTNode", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
+                "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::updatePBFTNodeI);
     }
 
     inline virtual void blockNumberI(const Json::Value& request, Json::Value& response)
@@ -180,6 +185,11 @@ public:
         response = this->sendRawTransaction(request[0u].asInt(), request[1u].asString());
     }
 
+    inline virtual void updatePBFTNodeI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->updatePBFTNode(request[0u].asInt(), request[1u].asString());
+    }
+
     // consensus part
     virtual std::string blockNumber(int param1) = 0;
     virtual std::string pbftView(int param1) = 0;
@@ -216,6 +226,8 @@ public:
     virtual std::string call(int param1, const Json::Value& param2) = 0;
     // Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
+    // add or remove the PBFTNode
+    virtual std::string updatePBFTNode(int _groupID, const std::string& _rlp) = 0;
 };
 
 }  // namespace rpc
