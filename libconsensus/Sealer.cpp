@@ -132,7 +132,10 @@ void Sealer::loadTransactions(uint64_t const& transToFetch)
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
     if (m_txPool->status().current > 0)
+    {
         m_syncTxPool = true;
+        m_signalled.notify_all();
+    }
     else
         m_syncTxPool = false;
 }
