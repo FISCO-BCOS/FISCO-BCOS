@@ -146,7 +146,7 @@ static const unsigned c_minCacheSize = 1024 * 1024 * 32;
 
 #endif
 
-BlockChain::BlockChain(std::shared_ptr<Interface> _interface, ChainParams const& _p, std::string const& _dbPath, WithExisting _we, ProgressCallback const& _pc):
+BlockChain::BlockChain(Interface* _interface, ChainParams const& _p, std::string const& _dbPath, WithExisting _we, ProgressCallback const& _pc):
 	m_dbPath(_dbPath),
 	m_pnoncecheck(make_shared<NonceCheck>())
 {

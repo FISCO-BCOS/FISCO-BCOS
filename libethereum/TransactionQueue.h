@@ -53,8 +53,8 @@ public:
 	/// @brief TransactionQueue
 	/// @param _limit Maximum number of pending transactions in the queue.
 	/// @param _futureLimit Maximum number of future nonce transactions.
-	TransactionQueue(std::shared_ptr<Interface> _interface, unsigned _limit = 1024, unsigned _futureLimit = 1024);
-	TransactionQueue(std::shared_ptr<Interface> _interface, Limits const& _l): TransactionQueue(_interface, _l.current, _l.future) {}
+	TransactionQueue(Interface* _interface, unsigned _limit = 1024, unsigned _futureLimit = 1024);
+	TransactionQueue(Interface* _interface, Limits const& _l): TransactionQueue(_interface, _l.current, _l.future) {}
 	~TransactionQueue();
 	/// Add transaction to the queue to be verified and imported.
 	/// @param _data RLP encoded transaction data.
@@ -222,7 +222,7 @@ private:
 	mutable Mutex x_queue;														///< Verification queue mutex
 	std::atomic<bool> m_aborting = {false};										///< Exit condition for verifier.
 
-	std::shared_ptr<Interface> m_interface;//指向client
+	Interface* m_interface;//指向client
 
 };
 
