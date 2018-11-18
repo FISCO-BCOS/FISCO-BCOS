@@ -124,6 +124,14 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
     SyncPeerInfo info{
         _packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(), rlps[2].toHash<h256>()};
 
+    if (info.genesisHash != m_genesisHash)
+    {
+        SYNCLOG(TRACE) << "[Rcv] [Status] Invalid status packet with different genesis hash. "
+                          "[from/genesisHash] "
+                       << _packet.nodeId << "/" << info.genesisHash << endl;
+        return;
+    }
+
     if (status == nullptr)
     {
         SYNCLOG(TRACE) << "[Rcv] [Status] Peer status new " << info.nodeId << endl;
