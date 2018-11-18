@@ -43,7 +43,8 @@ void dev::channel::ChannelServer::run() {
 
 	_serverThread = std::make_shared<std::thread>([=]() {
 			pthread_setThreadName("ChannelServer" );
-			while (true) {
+			while (_acceptor && _acceptor->is_open()) {
+				
 				try {
 					startAccept();
 					_ioService->run();
@@ -53,8 +54,7 @@ void dev::channel::ChannelServer::run() {
 				}
 
 				LOG(ERROR) << "try restart ";
-
-				sleep(1);
+				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 				if(_ioService->stopped()) {
 					_ioService->reset();
 				}

@@ -36,7 +36,7 @@ using namespace dev::eth;
 
 const size_t c_maxVerificationQueueSize = 8192;
 
-TransactionQueue::TransactionQueue(std::shared_ptr<Interface> _interface, unsigned _limit, unsigned _futureLimit):
+TransactionQueue::TransactionQueue(Interface* _interface, unsigned _limit, unsigned _futureLimit):
 	m_current(PriorityCompare { *this }),
 	m_limit(_limit),
 	m_futureLimit(_futureLimit)

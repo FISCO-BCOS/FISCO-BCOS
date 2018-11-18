@@ -195,12 +195,10 @@ Linux)
             $SUDO apt-get -q update
             $SUDO apt-get install -qy --no-install-recommends --allow-unauthenticated \
                 build-essential \
-                libboost-all-dev \
                 libsnappy-dev \
                 libcurl4-openssl-dev \
                 libgmp-dev \
                 libleveldb-dev \
-                libmicrohttpd-dev \
                 $LLVM_PACKAGES
             ;;
 
@@ -211,13 +209,10 @@ Linux)
             $SUDO yum -y -q install \
                 make \
                 gcc-c++ \
-                boost-devel \
                 leveldb-devel \
                 curl-devel \
-                libmicrohttpd-devel \
                 gmp-devel \
-                openssl openssl-devel \
-                libuuid-devel
+                openssl openssl-devel 
             ;;
 	#add Oracle Linux Server dependencies
 	Oracle*)

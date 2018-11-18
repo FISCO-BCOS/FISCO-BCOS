@@ -59,14 +59,11 @@ namespace dev {
             //get session
             SSPtr getSessionInfoByHash(std::string hash);
             
-            //set accountHolder for sign
-            void setAccountHolder(AccountHolder* _ethAccounts) { m_ethAccounts = _ethAccounts;}
         private:
             RPCallback();
             unordered_map<std::string, SSPtr> m_hashSessionMap;
             SharedMutex x_map;
             SharedMutex x_sessionMap;
-            AccountHolder* m_ethAccounts;
         };
         
         class CallbackWorker : public Worker {
