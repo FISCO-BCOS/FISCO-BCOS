@@ -57,8 +57,10 @@ void Sealer::start()
 bool Sealer::shouldSeal()
 {
     bool sealed;
-    DEV_READ_GUARDED(x_sealing)
-    sealed = m_sealing.block.isSealed();
+    {
+        DEV_READ_GUARDED(x_sealing)
+        sealed = m_sealing.block.isSealed();
+    }
     return (!sealed && m_startConsensus &&
             m_consensusEngine->accountType() == NodeAccountType::MinerAccount && !isBlockSyncing());
 }
@@ -110,8 +112,7 @@ void Sealer::doWork(bool wait)
                 m_signalled.wait_for(l, std::chrono::milliseconds(1));
                 return;
             }
-            if (shouldSeal())
-                handleBlock();
+            handleBlock();
         }
     }
     if (shouldWait(wait))
