@@ -23,6 +23,7 @@
 #include "Common.h"
 #include "JsonHelper.h"
 #include <jsonrpccpp/common/exception.h>
+#include <libconfig/SystemConfigMgr.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
@@ -690,9 +691,11 @@ std::string Rpc::call(int _groupID, const Json::Value& request)
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         TransactionSkeleton txSkeleton = toTransactionSkeleton(request);
-        Transaction tx(txSkeleton.value, txSkeleton.gasPrice, txSkeleton.gas, txSkeleton.to,
-            txSkeleton.data, txSkeleton.nonce);
+        Transaction tx(txSkeleton.value, dev::config::SystemConfigMgr::maxTransactionGasLimit,
+            dev::config::SystemConfigMgr::maxTransactionGasLimit, txSkeleton.to, txSkeleton.data,
+            txSkeleton.nonce);
         auto blockHeader = block->header();
+        tx.forceSender(txSkeleton.from);
         auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
 
         return toJS(executionResult.first.output);
