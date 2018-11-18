@@ -1388,8 +1388,8 @@ int main(int argc, char** argv)
 	auto caps = useWhisper ? set<string> {"eth", "shh"} : set<string> {"eth"};
 
 	//启动channelServer
-	ChannelRPCServer::Ptr channelServer = std::make_shared<ChannelRPCServer>();
-
+	ChannelRPCServer::Ptr channelServer;
+	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	//建立web3网络
 	dev::WebThreeDirect web3(
 	    WebThreeDirect::composeClientVersion("eth"),
@@ -1664,13 +1664,11 @@ int main(int argc, char** argv)
 	else
 		cout << "Networking disabled. To start, use netstart or pass --bootstrap or a remote host." << "\n";
 
-	unique_ptr<ModularServer<>> channelModularServer;
-	unique_ptr<ModularServer<>> jsonrpcHttpServer;
-	unique_ptr<ModularServer<>> jsonrpcHttpsServer;
-	unique_ptr<ModularServer<>> jsonrpcIpcServer;
 	unique_ptr<rpc::SessionManager> sessionManager;
 	unique_ptr<SimpleAccountHolder> accountHolder;
-
+	ModularServer<>* channelModularServer;
+	ModularServer<>* jsonrpcHttpServer;
+	ModularServer<>* jsonrpcIpcServer;
 	AddressHash allowedDestinations;
 
 	std::function<bool(TransactionSkeleton const&, bool)> authenticator;
@@ -1721,7 +1719,7 @@ int main(int argc, char** argv)
 		if (jsonRPCURL >= 0)
 		{
 			//no need to maintain admin and leveldb interfaces for rpc
-			jsonrpcHttpServer.reset(new FullServer(
+			jsonrpcHttpServer = new FullServer(
 				ethFace,
 				// new rpc::LevelDB(), new rpc::Whisper(web3, {}),
 				nullptr, nullptr,
@@ -1737,7 +1735,7 @@ int main(int argc, char** argv)
 				//adminEth, adminNet, adminUtils,
 				//new rpc::Debug(*web3.ethereum()),
 				//testEth
-			));
+			);
 			auto httpConnector = new SafeHttpServer("0.0.0.0", jsonRPCURL, "", "", SensibleHttpThreads);
 			httpConnector->setAllowedOrigin(rpcCorsDomain);
 			jsonrpcHttpServer->addConnector(httpConnector);
@@ -1754,7 +1752,7 @@ int main(int argc, char** argv)
 
 		if (ipc)
 		{
-			jsonrpcIpcServer.reset(new FullServer(
+			jsonrpcIpcServer=new FullServer(
 			   ethFace,
 			   //new rpc::LevelDB(),
 			   //new rpc::Whisper(web3, {}),
@@ -1773,7 +1771,7 @@ int main(int argc, char** argv)
 			   nullptr,
 			   nullptr,
 			   nullptr
-			));
+			);
 			auto ipcConnector = new IpcServer("geth");
 			jsonrpcIpcServer->addConnector(ipcConnector);
 			// jsonrpcIpcServer->setStatistics(new InterfaceStatistics(getDataDir() + "IPC", chainParams.statsInterval));
@@ -1782,7 +1780,7 @@ int main(int argc, char** argv)
 
 		//启动ChannelServer
 		if (!chainParams.listenIp.empty() && chainParams.channelPort > 0) {
-			channelModularServer.reset(
+			channelModularServer = 
 			    new FullServer(
 					ethFace,
 					nullptr, //new rpc::LevelDB(),
@@ -1796,7 +1794,7 @@ int main(int argc, char** argv)
 					nullptr, //new rpc::Debug(*web3.ethereum()),
 					nullptr //testEth
 				   )
-			);
+			;
 
 			channelServer->setListenAddr(chainParams.listenIp);
 			channelServer->setListenPort(chainParams.channelPort);
@@ -1805,8 +1803,6 @@ int main(int argc, char** argv)
 			LOG(TRACE) << "channelServer started IP:" << chainParams.listenIp << " Port:" << chainParams.channelPort;
 
 			channelModularServer->StartListening();
-			//设置json rpc的accountholder
-            RPCallback::getInstance().setAccountHolder(accountHolder.get());
 		}
 
 		if (jsonAdmin.empty())
@@ -1873,15 +1869,12 @@ int main(int argc, char** argv)
 	}
 	
 
-	if (jsonrpcHttpServer.get())
+	if (jsonrpcHttpServer)
 		jsonrpcHttpServer->StopListening();
-	if (jsonrpcHttpsServer.get())
-		jsonrpcHttpsServer->StopListening();
-	if (jsonrpcIpcServer.get())
+	if (jsonrpcIpcServer)
 		jsonrpcIpcServer->StopListening();
-	if (channelModularServer.get())
+	if (channelModularServer)
 		channelModularServer->StopListening();
-
 	/*	auto netData = web3.saveNetwork();
 		if (!netData.empty())
 			writeFile(getDataDir() + "/network.rlp", netData);*/

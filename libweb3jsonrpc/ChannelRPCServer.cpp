@@ -75,7 +75,7 @@ bool ChannelRPCServer::StartListening() {
 		LOG(INFO) << "ChannelRPCServer started";
 
 		_running = true;
-		_topicThread = std::make_shared<std::thread>([ = ]() {
+		_topicThread = std::make_shared<std::thread>([&]() {
 			pthread_setThreadName("ChannelHeartBeat" );
 
 			while (_running) {
