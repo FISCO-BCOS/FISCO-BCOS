@@ -80,6 +80,7 @@ class SyncBlocksPacket : public SyncMsgPacket
 public:
     SyncBlocksPacket() { packetType = BlocksPacket; }
     void encode(std::vector<dev::bytes> const& _blockRLPs);
+    void singleEncode(dev::bytes const& _blockRLP);
 };
 
 class SyncReqBlockPacket : public SyncMsgPacket
