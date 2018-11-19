@@ -93,7 +93,10 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 
 
 	ldb::DB* db = nullptr;
-
+	if (_we == WithExisting::Rescue) {
+		ldb::Status stateStatus = leveldb::RepairDB(path + "/state", o);
+		LOG(INFO) << "repair stateDB:" << stateStatus.ToString();
+	}
 #if ETH_ODBC
 	LOG(INFO) << "state ethodbc is defined " << "\n";
 
