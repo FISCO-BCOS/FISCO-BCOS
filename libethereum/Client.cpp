@@ -83,7 +83,7 @@ Client::Client(
 
 	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
 
-	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir());
+	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir(), _forceAction);
 	LOG(INFO) << "UTXOSharedData->initialize() End";
 
 	//创建系统合约api
