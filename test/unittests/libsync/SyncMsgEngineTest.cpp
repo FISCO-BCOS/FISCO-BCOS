@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputTest)
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
     auto statusPacket = SyncStatusPacket();
-    statusPacket.encode(0x00, h256(0xab), h256(0xcd));
+    statusPacket.encode(0x00, h256(0xcdef), h256(0xcd));
     auto msgPtr = statusPacket.toMessage(0x01);
     auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0x1234));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
@@ -124,12 +124,13 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
     reqBlockPacket.encode(int64_t(0x01), 0x02);
     auto msgPtr = reqBlockPacket.toMessage(0x03);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
+
+    fakeStatusPtr->newSyncPeerStatus({h512(0), 0, h256(), h256()});
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
-    auto servicePtr = static_pointer_cast<FakeService>(fakeSyncToolsSet.getServicePtr());
-    auto sendCount = servicePtr->getAsyncSendSizeByNodeID(fakeSessionPtr->nodeID());
-    BOOST_CHECK(sendCount == 1);
-}
+    BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0)));
+    BOOST_CHECK(!fakeStatusPtr->peerStatus(h512(0))->reqQueue.empty());
+}  // namespace test
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
