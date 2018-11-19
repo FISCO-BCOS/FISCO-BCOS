@@ -178,9 +178,9 @@ private:
 	std::function<void()> m_onViewChange;
 
 	std::weak_ptr<PBFTHost> m_host;
-	std::shared_ptr<BlockChain> m_bc;
-	std::shared_ptr<OverlayDB> m_stateDB;
-	std::shared_ptr<BlockQueue> m_bq;
+	BlockChain* m_bc;
+	OverlayDB* m_stateDB;
+	BlockQueue* m_bq;
 
 	u256 m_node_idx = 0;
 	u256 m_view = 0;

@@ -59,9 +59,9 @@ void PBFT::initEnv(std::weak_ptr<PBFTHost> _host, BlockChain* _bc, OverlayDB* _d
 	Guard l(m_mutex);
 
 	m_host = _host;
-	m_bc.reset(_bc);
-	m_stateDB.reset(_db);
-	m_bq.reset(bq);
+	m_bc = _bc;
+	m_stateDB = _db;
+	m_bq = bq;
 
 	m_bc->setSignChecker([this](BlockHeader const & _header, std::vector<std::pair<u256, Signature>> _sign_list) {
 		return checkBlockSign(_header, _sign_list);
