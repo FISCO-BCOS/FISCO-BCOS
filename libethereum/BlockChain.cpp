@@ -264,7 +264,12 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	//add by wheatli, for optimise
 	o.write_buffer_size = 100 * 1024 * 1024;
 	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
-	//
+	if (_we == WithExisting::Rescue) {
+		ldb::Status blocksStatus = leveldb::RepairDB(chainPath + "/blocks", o);
+		LOG(INFO) << "repair blocksDB:" << blocksStatus.ToString();
+		ldb::Status extrasStatus = leveldb::RepairDB(extrasPath + "/extras", o);
+		LOG(INFO) << "repair extrasDB:" << extrasStatus.ToString();
+	}
 #if ETH_ODBC
 
 	LOG(INFO) << "state ethodbc is defined " << "\n";
