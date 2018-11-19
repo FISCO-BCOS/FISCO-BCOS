@@ -123,7 +123,7 @@ void Service::heartBeat()
 
 void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session)
 {
-    LOG(TRACE) << "Service onConnect: " << nodeID;
+    LOG(TRACE) << "Service onConnect: " << nodeID << " at " << session->nodeIPEndpoint().name();
 
     if (e.errorCode())
     {
@@ -176,7 +176,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(p2pSession->nodeID());
     if(it != m_sessions.end() && it->second == p2pSession) {
-        LOG(TRACE) << "Service onDisconnect: " << p2pSession->nodeID() << " remove from m_sessions";
+        LOG(TRACE) << "Service onDisconnect: " << p2pSession->nodeID() << " remove from m_sessions at" << p2pSession->session()->nodeIPEndpoint().name();
 
         m_sessions.erase(it);
 

@@ -120,7 +120,6 @@ public:
                 ba::async_write(socket->sslref(), buffers, handler);
             }
         });
-        //ba::async_write(socket->sslref(), buffers, handler);
     }
 
     virtual void asyncRead(std::shared_ptr<SocketFace> socket,
