@@ -545,6 +545,8 @@ for line in ${ip_array[*]};do
             # read_password
             openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
 		    keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
+            #copy ca.crt
+            cp ${output_dir}/cert/agency/ca.crt $node_dir/sdk/
             # gen_sdk_cert ${output_dir}/cert/agency $node_dir
             # mv $node_dir/* $node_dir/sdk/
         fi

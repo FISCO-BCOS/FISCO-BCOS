@@ -87,4 +87,6 @@ gen_sdk_cert() {
     echo "build $sdk sdk cert successful!"
 }
 gen_sdk_cert "" ${agency} ${sdkpath}
+#copy ca.crt
+cp ${agency}/ca.crt ${sdkpath}/ca.crt
 echo "Build  $sdkpath Crt suc!!!"
