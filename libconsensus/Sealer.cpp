@@ -117,8 +117,8 @@ void Sealer::doWork(bool wait)
     }
     if (shouldWait(wait))
     {
-        std::unique_lock<std::mutex> l(x_signalled);
-        m_signalled.wait_for(l, std::chrono::milliseconds(10));
+        std::unique_lock<std::mutex> l(x_blocksignalled);
+        m_blockSignalled.wait_for(l, std::chrono::milliseconds(10));
     }
 }
 
@@ -135,6 +135,7 @@ void Sealer::loadTransactions(uint64_t const& transToFetch)
     {
         m_syncTxPool = true;
         m_signalled.notify_all();
+        m_blockSignalled.notify_all();
     }
     else
         m_syncTxPool = false;

@@ -78,11 +78,13 @@ public:
     {
         m_syncTxPool = true;
         m_signalled.notify_all();
+        m_blockSignalled.notify_all();
     }
     virtual void onBlockChanged()
     {
         m_syncBlock = true;
         m_signalled.notify_all();
+        m_blockSignalled.notify_all();
     }
 
     /// set the max number of transactions in a block
@@ -167,8 +169,10 @@ protected:
     /// atomic value represents that whether is calling syncTransactionQueue now
     /// signal to notify all thread to work
     std::condition_variable m_signalled;
+    std::condition_variable m_blockSignalled;
     /// mutex to access m_signalled
     Mutex x_signalled;
+    Mutex x_blocksignalled;
     std::atomic<bool> m_syncTxPool = {false};
     /// a new block has been submitted to the blockchain
     std::atomic<bool> m_syncBlock = {false};
