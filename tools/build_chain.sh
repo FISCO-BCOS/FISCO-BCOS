@@ -588,7 +588,7 @@ for line in ${ip_array[*]};do
     chmod +x "$output_dir/stop_all.sh"
     chmod +x "$output_dir/replace_all.sh"
 done 
-rm $output_dir/build.log cert.cnf
+#rm $output_dir/build.log cert.cnf
 genTransTest
 echo "=========================================="
 echo "FISCO-BCOS Path : $eth_path"
