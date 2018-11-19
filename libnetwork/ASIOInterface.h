@@ -115,7 +115,12 @@ public:
     virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
-        ba::async_write(socket->sslref(), buffers, handler);
+        m_ioService->post([socket, buffers, handler]() {
+            if(socket->isConnected()) {
+                ba::async_write(socket->sslref(), buffers, handler);
+            }
+        });
+        //ba::async_write(socket->sslref(), buffers, handler);
     }
 
     virtual void asyncRead(std::shared_ptr<SocketFace> socket,
