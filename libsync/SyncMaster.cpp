@@ -140,11 +140,14 @@ void SyncMaster::doWork()
             m_newTransactions = false;
             maintainTransactions();
         }
+
         if (m_newBlocks)
         {
             m_newBlocks = false;
             maintainBlocks();
         }
+
+        maintainBlockRequest();
     }
 
     // Not Idle do
@@ -390,16 +393,22 @@ bool SyncMaster::maintainDownloadingQueue()
             ExecutiveContext::Ptr exeCtx =
                 m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
             CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
-            if (ret != CommitResult::OK)
+            if (ret == CommitResult::OK)
             {
                 m_txPool->dropBlockTrans(*topBlock);
-                return false;
+                SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
+                               << topBlock->header().number() << "/"
+                               << topBlock->transactions().size() << "/" << topBlock->headerHash()
+                               << endl;
             }
             else
+            {
                 m_txPool->handleBadBlock(*topBlock);
-            SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
-                           << topBlock->header().number() << "/" << topBlock->transactions().size()
-                           << "/" << topBlock->headerHash() << endl;
+                SYNCLOG(TRACE) << "[Rcv] [Download] Block commit failed [number/txs/hash]: "
+                               << topBlock->header().number() << "/"
+                               << topBlock->transactions().size() << "/" << topBlock->headerHash()
+                               << endl;
+            }
         }
 
         bq.pop();
@@ -465,6 +474,62 @@ void SyncMaster::maintainDownloadingQueueBuffer()
     }
     else
         m_syncStatus->bq().clear();
+}
+
+void SyncMaster::maintainBlockRequest()
+{
+    uint64_t timeout = utcTime() + c_respondDownloadRequestTimeout;
+    m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+        DownloadRequestQueue& reqQueue = _p->reqQueue;
+        if (reqQueue.empty())
+            return true;  // no need to respeond
+
+        // Just select one peer per maintain
+        reqQueue.disablePush();  // drop push at this time
+        DownloadBlocksContainer blockContainer(m_service, m_protocolId, _p->nodeId);
+
+        while (!reqQueue.empty() && utcTime() <= timeout)
+        {
+            DownloadRequest req = reqQueue.topAndPop();
+            int64_t number = req.fromNumber;
+            int64_t numberLimit = req.fromNumber + req.size;
+
+            // Send block at sequence
+            for (; number < numberLimit && utcTime() <= timeout; number++)
+            {
+                shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
+                if (!block)
+                {
+                    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Get block for node failed "
+                                      "[reason/number/nodeId]: "
+                                   << "block is null/" << number << "/" << _p->nodeId << endl;
+                    break;
+                }
+                else if (block->header().number() != number)
+                {
+                    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Get block for node failed "
+                                      "[reason/number/nodeId]: "
+                                   << number << "number incorrect /" << _p->nodeId << endl;
+                    break;
+                }
+
+                blockContainer.batchAndSend(block);
+            }
+
+            if (number < numberLimit)  // This respond not reach the end due to timeout
+            {
+                // write back the rest request range
+                reqQueue.enablePush();
+                SYNCLOG(TRACE) << "[Download] Repush request req[" << number << ", "
+                               << numberLimit - 1 << "] of " << _p->nodeId << endl;
+                reqQueue.push(number, numberLimit - number);
+                return false;
+            }
+        }
+
+        reqQueue.enablePush();
+        return false;
+    });
 }
 
 bool SyncMaster::isNewBlock(BlockPtr _block)
