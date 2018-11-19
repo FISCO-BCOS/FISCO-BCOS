@@ -25,6 +25,7 @@
 #include "../libp2p/P2PInterface.h"
 #include "Common.h"
 #include "DownloadingBlockQueue.h"
+#include "RspBlockReq.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -54,13 +55,18 @@ class SyncPeerStatus
 public:
     SyncPeerStatus(
         NodeID const& _nodeId, int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
-      : nodeId(_nodeId), number(_number), genesisHash(_genesisHash), latestHash(_latestHash)
+      : nodeId(_nodeId),
+        number(_number),
+        genesisHash(_genesisHash),
+        latestHash(_latestHash),
+        reqQueue(_nodeId)
     {}
     SyncPeerStatus(const SyncPeerInfo& _info)
       : nodeId(_info.nodeId),
         number(_info.number),
         genesisHash(_info.genesisHash),
-        latestHash(_info.latestHash)
+        latestHash(_info.latestHash),
+        reqQueue(_info.nodeId)
     {}
 
     void update(const SyncPeerInfo& _info)
@@ -76,6 +82,7 @@ public:
     int64_t number;
     h256 genesisHash;
     h256 latestHash;
+    DownloadRequestQueue reqQueue;
 };
 
 class SyncMasterStatus
