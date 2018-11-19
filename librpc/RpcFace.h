@@ -45,8 +45,8 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getSyncStatusI);
 
-        this->bindAndAddMethod(
-            jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, NULL),
+        this->bindAndAddMethod(jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getClientVersionI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL),
@@ -66,9 +66,9 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
             &dev::rpc::RpcFace::getBlockByNumberI);
-        this->bindAndAddMethod(
-            jsonrpc::Procedure("getBlockHashByNumber", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
-                "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
+        this->bindAndAddMethod(jsonrpc::Procedure("getBlockHashByNumber",
+                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
+                                   jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getBlockHashByNumberI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionByHash",

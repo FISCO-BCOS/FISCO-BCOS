@@ -20,10 +20,10 @@
  */
 #include "FakeModule.h"
 
-#include <librpc/Rpc.h>
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
+#include <librpc/Rpc.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -91,7 +91,6 @@ BOOST_AUTO_TEST_CASE(testSyncPart)
 
 BOOST_AUTO_TEST_CASE(testP2pPart)
 {
-
     std::string s = rpc->getClientVersion();
     BOOST_CHECK(s == "FISCO BCOS:2.0");
 
@@ -105,7 +104,6 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
 
     response = rpc->getGroupList();
     BOOST_CHECK(response.size() == 1);
-
 }
 
 BOOST_AUTO_TEST_CASE(testGetBlockByHash)
@@ -297,14 +295,12 @@ BOOST_AUTO_TEST_CASE(testGetpendingTransactions)
 {
     Json::Value response = rpc->getPendingTransactions(groupId);
 
-    BOOST_CHECK(
-        response[0]["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
+    BOOST_CHECK(response[0]["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
     BOOST_CHECK(response[0]["gas"].asString() == "0x9184e729fff");
     BOOST_CHECK(response[0]["gasPrice"].asString() == "0x174876e7ff");
     BOOST_CHECK(response[0]["nonce"].asString() ==
                 "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f");
-    BOOST_CHECK(
-        response[0]["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
+    BOOST_CHECK(response[0]["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
     BOOST_CHECK(response[0]["value"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
