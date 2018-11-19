@@ -59,15 +59,15 @@ public:
     DownloadRequest topAndPop();
     bool empty();
 
-    void enablePush() { m_canPush = true; };
-    void disablePush() { m_canPush = false; };
+    void enablePush() { x_canPush.unlock(); };
+    void disablePush() { x_canPush.lock(); };
 
 private:
     NodeID m_nodeId;
     PROTOCOL_ID m_protocolId = 0;
-    bool m_canPush = true;
     std::priority_queue<DownloadRequest, std::vector<DownloadRequest>, RequestQueueCmp> m_reqQueue;
-    mutable SharedMutex x_reqQueue;
+    mutable std::mutex x_canPush;
+    mutable std::mutex x_push;
 };
 }  // namespace sync
 }  // namespace dev

@@ -523,6 +523,7 @@ void SyncMaster::maintainBlockRequest()
                 SYNCLOG(TRACE) << "[Download] Repush request req[" << number << ", "
                                << numberLimit - 1 << "] of " << _p->nodeId << endl;
                 reqQueue.push(number, numberLimit - number);
+                return false;
             }
         }
 
