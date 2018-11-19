@@ -141,10 +141,11 @@ void SyncMaster::doWork()
             maintainTransactions();
         }
 
-        if (m_newBlocks)
+        if (m_newBlocks || utcTime() > m_maintainBlocksTimeout)
         {
             m_newBlocks = false;
             maintainBlocks();
+            m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
         }
 
         maintainBlockRequest();
