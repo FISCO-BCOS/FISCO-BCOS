@@ -12,6 +12,7 @@
 
 current_dir=`pwd`"/.."
 build_source=1
+test_mode=0
 binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
@@ -22,6 +23,31 @@ clear_cache()
 }
 
 LOG_ERROR()
+{
+    content=${1}
+    echo -e "\033[31m"${content}"\033[0m"
+}
+
+LOG_INFO()
+{
+    content=${1}
+    echo -e "\033[32m"${content}"\033[0m"
+}
+
+execute_cmd()
+{
+    command="${1}"
+    #LOG_INFO "RUN: ${command}"
+    eval ${command}
+    ret=$?
+    if [ $ret -ne 0 ];then
+        LOG_ERROR "FAILED execution of command: ${command}"
+        clear_cache
+        exit 1
+    else
+        LOG_INFO "SUCCESS execution of command: ${command}"
+    fi
+}LOG_ERROR()
 {
     content=${1}
     echo -e "\033[31m"${content}"\033[0m"
@@ -131,15 +157,23 @@ build_ubuntu_source()
 {
 # build source
 execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake .. "
-execute_cmd "make && sudo make install"
+if [ ${test_mode} -eq 1 ];then 
+    execute_cmd "cmake -DTESTS=ON .."
+else
+    execute_cmd "cmake -DTESTS=OFF .."
+fi
+execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
 build_centos_source()
 {
 # build source
 execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake3 .. "
+if [ ${test_mode} -eq 1 ];then
+    execute_cmd "cmake3 -DTESTS=ON .."
+else
+    execute_cmd "cmake3 -DTESTS=OFF .."
+fi
 execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
@@ -188,6 +222,7 @@ Usage()
 Usage:
 Optional:
     -d       Download from GitHub
+    -t       Enable test mode (generate mini-consensus/mini-sync/mini-evm/mini-storage/test_verifier)
     -h       Help
 Example: 
     bash build.sh 
@@ -201,6 +236,7 @@ parse_param()
 	while getopts "hd" option;do
 		case $option in
 		d) build_source=0;;
+        t)test_mode=1;;
 		h) Usage;;
 		esac
 	done
