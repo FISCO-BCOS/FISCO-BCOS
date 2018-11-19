@@ -20,9 +20,6 @@
  * @date: 2018-10-16
  */
 #pragma once
-#include "../libnetwork/Common.h"
-#include "../libnetwork/Session.h"
-#include "../libp2p/P2PInterface.h"
 #include "Common.h"
 #include "DownloadingBlockQueue.h"
 #include "RspBlockReq.h"
@@ -30,6 +27,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Session.h>
+#include <libp2p/P2PInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <map>
 #include <queue>
