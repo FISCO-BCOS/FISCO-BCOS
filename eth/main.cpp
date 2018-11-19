@@ -511,7 +511,6 @@ int main(int argc, char** argv)
 
 	int jsonRPCURL = -1;
 	int jsonRPCSSLURL = -1;
-	bool adminViaHttp = true;
 	bool ipc = true;
 	std::string rpcCorsDomain = "";
 
@@ -895,8 +894,6 @@ int main(int argc, char** argv)
 
 		else if ((arg == "-j" || arg == "--json-rpc"))
 			jsonRPCURL = jsonRPCURL == -1 ? SensibleHttpPort : jsonRPCURL;
-		else if (arg == "--admin-via-http")
-			adminViaHttp = true;
 		else if (arg == "--json-rpc-port" && i + 1 < argc)
 			jsonRPCURL = atoi(argv[++i]);
 		else if (arg == "--rpccorsdomain" && i + 1 < argc)
@@ -1388,8 +1385,8 @@ int main(int argc, char** argv)
 	auto caps = useWhisper ? set<string> {"eth", "shh"} : set<string> {"eth"};
 
 	//启动channelServer
-	ChannelRPCServer::Ptr channelServer = std::make_shared<ChannelRPCServer>();
-
+	ChannelRPCServer::Ptr channelServer;
+	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	//建立web3网络
 	dev::WebThreeDirect web3(
 	    WebThreeDirect::composeClientVersion("eth"),
@@ -1664,13 +1661,11 @@ int main(int argc, char** argv)
 	else
 		cout << "Networking disabled. To start, use netstart or pass --bootstrap or a remote host." << "\n";
 
-	unique_ptr<ModularServer<>> channelModularServer;
-	unique_ptr<ModularServer<>> jsonrpcHttpServer;
-	unique_ptr<ModularServer<>> jsonrpcHttpsServer;
-	unique_ptr<ModularServer<>> jsonrpcIpcServer;
 	unique_ptr<rpc::SessionManager> sessionManager;
 	unique_ptr<SimpleAccountHolder> accountHolder;
-
+	unique_ptr<ModularServer<>> channelModularServer;
+	unique_ptr<ModularServer<>> jsonrpcHttpServer;
+	unique_ptr<ModularServer<>> jsonrpcIpcServer;
 	AddressHash allowedDestinations;
 
 	std::function<bool(TransactionSkeleton const&, bool)> authenticator;
@@ -1711,10 +1706,9 @@ int main(int argc, char** argv)
 
 		sessionManager.reset(new rpc::SessionManager());
 		accountHolder.reset(new SimpleAccountHolder([&]() { return web3.ethereum(); }, getAccountPassword, keyManager, authenticator));
-		auto ethFace = new rpc::Eth(*web3.ethereum(), *accountHolder.get());
-		rpc::TestFace* testEth = nullptr;
-		if (testingMode)
-			testEth = new rpc::Test(*web3.ethereum());
+		// rpc::TestFace* testEth = nullptr;
+		// if (testingMode)
+		// 	testEth = new rpc::Test(*web3.ethereum());
 
 		string limitConfigJSON = contentsString(chainParams.rateLimitConfig);
 
@@ -1722,7 +1716,7 @@ int main(int argc, char** argv)
 		{
 			//no need to maintain admin and leveldb interfaces for rpc
 			jsonrpcHttpServer.reset(new FullServer(
-				ethFace,
+				new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
 				// new rpc::LevelDB(), new rpc::Whisper(web3, {}),
 				nullptr, nullptr,
 				new rpc::Net(web3),
@@ -1755,7 +1749,7 @@ int main(int argc, char** argv)
 		if (ipc)
 		{
 			jsonrpcIpcServer.reset(new FullServer(
-			   ethFace,
+			   new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
 			   //new rpc::LevelDB(),
 			   //new rpc::Whisper(web3, {}),
 			   nullptr,
@@ -1784,7 +1778,7 @@ int main(int argc, char** argv)
 		if (!chainParams.listenIp.empty() && chainParams.channelPort > 0) {
 			channelModularServer.reset(
 			    new FullServer(
-					ethFace,
+					new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
 					nullptr, //new rpc::LevelDB(),
 					nullptr, //new rpc::Whisper(web3, { }),
 					new rpc::Net(web3),
@@ -1795,8 +1789,7 @@ int main(int argc, char** argv)
 					nullptr, //new rpc::AdminUtils(*sessionManager.get()),
 					nullptr, //new rpc::Debug(*web3.ethereum()),
 					nullptr //testEth
-				   )
-			);
+				   ));
 
 			channelServer->setListenAddr(chainParams.listenIp);
 			channelServer->setListenPort(chainParams.channelPort);
@@ -1805,8 +1798,6 @@ int main(int argc, char** argv)
 			LOG(TRACE) << "channelServer started IP:" << chainParams.listenIp << " Port:" << chainParams.channelPort;
 
 			channelModularServer->StartListening();
-			//设置json rpc的accountholder
-            RPCallback::getInstance().setAccountHolder(accountHolder.get());
 		}
 
 		if (jsonAdmin.empty())
@@ -1875,13 +1866,10 @@ int main(int argc, char** argv)
 
 	if (jsonrpcHttpServer.get())
 		jsonrpcHttpServer->StopListening();
-	if (jsonrpcHttpsServer.get())
-		jsonrpcHttpsServer->StopListening();
 	if (jsonrpcIpcServer.get())
 		jsonrpcIpcServer->StopListening();
 	if (channelModularServer.get())
 		channelModularServer->StopListening();
-
 	/*	auto netData = web3.saveNetwork();
 		if (!netData.empty())
 			writeFile(getDataDir() + "/network.rlp", netData);*/

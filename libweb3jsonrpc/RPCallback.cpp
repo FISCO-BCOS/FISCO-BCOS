@@ -87,16 +87,7 @@ bool RPCallback::parseAndSaveSession(const string& jsonReqStr, const string& seq
             
             Json::Value paramsArr = root[i][keyParams];
             h256 hash;
-            if (method == sendTransaction) {
-                Json::Value params = paramsArr[0u];
-                TransactionSkeleton t = toTransactionSkeleton(params);
-                if (!t.from) {
-                    t.from = m_ethAccounts->defaultTransactAccount();
-                }
-                
-                TransactionNotification n = m_ethAccounts->authenticate(t);
-                hash = n.hash;
-            } else if (method == sendRawTransaction) {
+            if (method == sendRawTransaction) {
                 const string params = paramsArr[0u].asString();
                 auto tx_data = jsToBytes(params, OnFailed::Throw);
                 hash = sha3(tx_data);

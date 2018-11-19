@@ -22,24 +22,24 @@
  */
 
 #include <libethereum/Block.h>
-
+#include <boost/filesystem.hpp>
 #include "UTXOSharedData.h"
 
 namespace UTXOModel
 {
-	void UTXOSharedData::initialize(const string& strDBPath)
+	void UTXOSharedData::initialize(const string& strDBPath, WithExisting _we)
 	{
 		LOG(TRACE) << "UTXOMgr::initialize ,path=" << strDBPath;
 		
-		m_vaultdb = openUTXODB(strDBPath + "/UTXO/vault");
-		m_db = openUTXODB(strDBPath + "/UTXO/db");
-		m_extradb = openUTXODB(strDBPath + "/UTXO/extra");
+		m_vaultdb = openUTXODB(strDBPath + "/UTXO/vault", _we);
+		m_db = openUTXODB(strDBPath + "/UTXO/db", _we);
+		m_extradb = openUTXODB(strDBPath + "/UTXO/extra", _we);
 
 		m_pPreBlock = NULL;
 		m_nonce = 0;		
 	}
 
-	leveldb::DB* UTXOSharedData::openUTXODB(string const & _basePath) {
+	leveldb::DB* UTXOSharedData::openUTXODB(string const & _basePath, WithExisting _we) {
 		string path = _basePath;
 		boost::filesystem::create_directories(path);
 		DEV_IGNORE_EXCEPTIONS(boost::filesystem::permissions(path, boost::filesystem::owner_all));
@@ -48,7 +48,10 @@ namespace UTXOModel
 		o.max_open_files    = 256;
 		o.create_if_missing = true;
 		leveldb::DB * db    = nullptr;
-
+		if (_we == WithExisting::Rescue) {
+			ldb::Status status = leveldb::RepairDB(path, o);
+			LOG(INFO)<< "repair UTXO leveldb:" << status.ToString();
+		}
 		leveldb::Status status = ldb::DB::Open(o, path, &db);
 		if (!status.ok() || !db)
 		{
