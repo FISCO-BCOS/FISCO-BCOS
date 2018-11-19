@@ -47,31 +47,6 @@ execute_cmd()
     else
         LOG_INFO "SUCCESS execution of command: ${command}"
     fi
-}LOG_ERROR()
-{
-    content=${1}
-    echo -e "\033[31m"${content}"\033[0m"
-}
-
-LOG_INFO()
-{
-    content=${1}
-    echo -e "\033[32m"${content}"\033[0m"
-}
-
-execute_cmd()
-{
-    command="${1}"
-    #LOG_INFO "RUN: ${command}"
-    eval ${command}
-    ret=$?
-    if [ $ret -ne 0 ];then
-        LOG_ERROR "FAILED execution of command: ${command}"
-        clear_cache
-        exit 1
-    else
-        LOG_INFO "SUCCESS execution of command: ${command}"
-    fi
 }
 
 # get platform: now support debain/ubuntu, fedora/centos, oracle
@@ -141,7 +116,7 @@ install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-dev
 install_all_deps()
 {
     get_platform
-        platform=`echo $?`
+    platform=`echo $?`
     if [ ${platform} -eq ${Ubuntu_Platform} ];then
         install_ubuntu_deps
     elif [ ${platform} -eq ${Centos_Platform} ];then
@@ -233,10 +208,10 @@ EOF
 
 parse_param()
 {
-	while getopts "hd" option;do
+	while getopts "htd" option;do
 		case $option in
 		d) build_source=0;;
-        t)test_mode=1;;
+        t) test_mode=1;;
 		h) Usage;;
 		esac
 	done
