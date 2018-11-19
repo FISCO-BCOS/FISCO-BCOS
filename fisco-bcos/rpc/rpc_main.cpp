@@ -38,7 +38,7 @@ namespace websocket = boost::beast::websocket;
 
 int main(int argc, const char* argv[])
 {
-	/// websocket server
+
 #if 1
 	auto const address = boost::asio::ip::make_address("127.0.0.1");
     auto const port = static_cast<unsigned short>(std::atoi("30302"));
@@ -56,7 +56,6 @@ int main(int argc, const char* argv[])
     ioc.run();
 #endif
 
-	/// httpserver
 #if 0
     auto m_service = std::make_shared<MockService>();
     std::string configurationPath = "";
