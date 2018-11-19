@@ -105,6 +105,9 @@ void SyncMasterStatus::foreachPeerRandom(
     std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const
 {
     ReadGuard l(x_peerStatus);
+    if (m_peersStatus.empty())
+        return;
+
     // Get nodeid list
     NodeIDs nodeIds;
     for (auto& peer : m_peersStatus)
