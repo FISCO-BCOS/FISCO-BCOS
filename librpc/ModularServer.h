@@ -21,11 +21,11 @@
 
 #pragma once
 
+#include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/common/procedure.h>
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <jsonrpccpp/server/iprocedureinvokationhandler.h>
 #include <jsonrpccpp/server/requesthandlerfactory.h>
-#include <jsonrpccpp/common/exception.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
 #include <map>
@@ -191,7 +191,7 @@ public:
             }
             catch (JsonRpcException& e)
             {
-            	BOOST_THROW_EXCEPTION(JsonRpcException(e.GetCode(), e.GetMessage()));
+                BOOST_THROW_EXCEPTION(JsonRpcException(e.GetCode(), e.GetMessage()));
             }
         }
         else
