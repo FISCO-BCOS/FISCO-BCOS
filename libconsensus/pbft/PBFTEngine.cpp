@@ -1098,7 +1098,7 @@ void PBFTEngine::updateMinerList()
                 (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
             {
                 h512 nodeID = h512(node->getField("node_id"));
-                if (find(miner_list.begin(), miner_list.end(), nodeID) != miner_list.end())
+                if (find(miner_list.begin(), miner_list.end(), nodeID) == miner_list.end())
                 {
                     miner_list.push_back(nodeID);
                     PBFTENGINE_LOG(INFO)
