@@ -17,6 +17,7 @@ eth_path=
 gen_sdk=false
 jks_passwd=123456
 make_tar=
+listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
@@ -29,6 +30,7 @@ Usage:
     -e <FISCO-BCOS binary path> Default download from GitHub
     -o <Output Dir>             Default ./nodes/
     -p <Start Port>             Default 30300
+    -i <Rpc Listen IP>          Default 127.0.0.1
     -d <JKS passwd>             Default not generate jks files, if set use param as jks passwd
     -s <State type>             Default mpt. if set -s, use storage 
     -t <Cert config file>       Default auto generate
@@ -278,7 +280,7 @@ generate_config_ini()
     cat << EOF > ${output}
 [rpc]
     ;rpc listen ip
-    listen_ip=127.0.0.1
+    listen_ip=${listen_ip}
     ;channelserver listen port
     listen_port=$(( port_start + 1 + index * 4 ))
     ;rpc listen port
@@ -441,7 +443,7 @@ EOF
 
 main()
 {
-while getopts "f:l:o:p:e:t:dszh" option;do
+while getopts "f:l:o:i:p:e:t:dszh" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -450,6 +452,7 @@ while getopts "f:l:o:p:e:t:dszh" option;do
        use_ip_param="true"
     ;;
     o) output_dir=$OPTARG;;
+    i) listen_ip=$OPTARG;;
     p) port_start=$OPTARG;;
     e) eth_path=$OPTARG;;
     d) gen_sdk="true"
