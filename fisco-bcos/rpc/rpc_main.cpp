@@ -38,9 +38,9 @@ namespace websocket = boost::beast::websocket;
 
 int main(int argc, const char* argv[])
 {
-
 #if 1
-	auto const address = boost::asio::ip::make_address("127.0.0.1");
+
+    auto const address = boost::asio::ip::make_address("127.0.0.1");
     auto const port = static_cast<unsigned short>(std::atoi("30302"));
     auto const threads = 1;
     // The io_context is required for all I/O
@@ -54,9 +54,11 @@ int main(int argc, const char* argv[])
     for (auto i = threads - 1; i > 0; --i)
         v.emplace_back([&ioc] { ioc.run(); });
     ioc.run();
+
 #endif
 
 #if 0
+
     auto m_service = std::make_shared<MockService>();
     std::string configurationPath = "";
     KeyPair m_keyPair = KeyPair::create();
@@ -79,6 +81,6 @@ int main(int argc, const char* argv[])
     jsonrpcHttpServer->StartListening();
     LOG(INFO) << "JsonrpcHttpServer started.";
     sleep(10000);
-#endif
 
+#endif
 }
