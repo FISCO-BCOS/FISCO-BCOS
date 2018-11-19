@@ -56,7 +56,7 @@ class DownloadRequestQueue
 public:
     DownloadRequestQueue(NodeID _nodeId) : m_nodeId(_nodeId) {}
     void push(int64_t _fromNumber, int64_t _size);
-    DownloadRequest topAndPop();
+    DownloadRequest topAndPop();  // Must call use disablePush() before
     bool empty();
 
     void enablePush() { x_canPush.unlock(); };
@@ -66,8 +66,8 @@ private:
     NodeID m_nodeId;
     PROTOCOL_ID m_protocolId = 0;
     std::priority_queue<DownloadRequest, std::vector<DownloadRequest>, RequestQueueCmp> m_reqQueue;
-    mutable std::mutex x_canPush;
-    mutable std::mutex x_push;
+    mutable std::mutex x_canPush;  // pop() wait for push(), push() drop when pop()
+    mutable std::mutex x_push;     // To serialize push()
 };
 }  // namespace sync
 }  // namespace dev

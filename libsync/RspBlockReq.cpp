@@ -32,7 +32,7 @@ void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
     Guard l(x_push);
     if (!x_canPush.try_lock())
     {
-        SYNCLOG(TRACE) << "[Download] Drop request when blocks responding [fromNumber/size/nodeId] "
+        SYNCLOG(TRACE) << "[Download] Drop request when responding blocks [fromNumber/size/nodeId] "
                        << _fromNumber << "/" << _size << "/" << m_nodeId << endl;
         return;
     }
