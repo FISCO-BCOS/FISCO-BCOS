@@ -69,7 +69,8 @@ public:
         int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
     virtual Json::Value getBlockByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
-    virtual std::string getBlockHashByNumber(int _groupID, const std::string& _blockNumber) override;
+    virtual std::string getBlockHashByNumber(
+        int _groupID, const std::string& _blockNumber) override;
 
     // transaction part
     virtual Json::Value getTransactionByHash(
