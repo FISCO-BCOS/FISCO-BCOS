@@ -42,6 +42,7 @@ dir_must_not_exists() {
         exit $EXIT_CODE
     fi
 }
+current_path=`pwd`
 gen_cert_secp256k1() {
     capath="$1"
     certpath="$2"
@@ -75,6 +76,9 @@ gen_sdk_cert() {
 
     mkdir -p $sdkpath
     gen_cert_secp256k1 "$agpath" "$sdkpath" "$sdk" sdk
+    cd ${current_path}
+    cat ${agency}/agency.crt >> ${sdkpath}/sdk.crt
+    cat ${agency}/ca.crt >> ${sdkpath}/sdk.crt
     # create keystore
     openssl pkcs12 -export -name client -in ${sdkpath}/sdk.crt -inkey ${sdkpath}/sdk.key -out ${sdkpath}/keystore.p12
     keytool -importkeystore -destkeystore ${sdkpath}/client.keystore -srckeystore ${sdkpath}/keystore.p12 -srcstoretype pkcs12 -alias client
@@ -82,6 +86,5 @@ gen_sdk_cert() {
     openssl ec -in $sdkpath/sdk.key
     echo "build $sdk sdk cert successful!"
 }
-
 gen_sdk_cert "" ${agency} ${sdkpath}
 echo "Build  $sdkpath Crt suc!!!"

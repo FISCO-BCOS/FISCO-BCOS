@@ -132,19 +132,11 @@ EOF
     echo "build $node node cert successful!"
 }
 
+current_path=`pwd`
 agency=$1
-node=${agency}"/"$2
+nodepath=${agency}"/"$2
+gen_node_cert "" ${agency} ${nodepath}
 
-if [ -z "$agency" ];  then
-    LOG_ERROR "Usage:node.sh   agency_name node_name "
-elif [ -z "$node" ];  then
-    LOG_ERROR "Usage:node.sh   agency_name node_name "
-elif [ ! -d "$agency" ]; then
-    LOG_ERROR "$agency DIR Don't exist! please Check DIR!"
-elif [ ! -f "$agency/agency.key" ]; then
-    LOG_ERROR "$agency/agency.key  Don't exist! please Check DIR!"
-elif [  -d "$agency/$node" ]; then
-    LOG_ERROR "$agency/$node DIR exist! please clean all old DIR!"
-else
-    gen_node_cert "" ${agency} ${node}
-fi
+cd ${current_path}
+cat ${agency}/agency.crt >> ${nodepath}/node.crt
+cat ${agency}/ca.crt >> ${nodepath}/node.crt
