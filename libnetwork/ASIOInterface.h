@@ -116,7 +116,8 @@ public:
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
         m_ioService->post([socket, buffers, handler]() {
-            if(socket->isConnected()) {
+            if (socket->isConnected())
+            {
                 ba::async_write(socket->sslref(), buffers, handler);
             }
         });

@@ -175,8 +175,11 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 {
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(p2pSession->nodeID());
-    if(it != m_sessions.end() && it->second == p2pSession) {
-        LOG(TRACE) << "Service onDisconnect: " << p2pSession->nodeID() << " remove from m_sessions at" << p2pSession->session()->nodeIPEndpoint().name();
+    if (it != m_sessions.end() && it->second == p2pSession)
+    {
+        LOG(TRACE) << "Service onDisconnect: " << p2pSession->nodeID()
+                   << " remove from m_sessions at"
+                   << p2pSession->session()->nodeIPEndpoint().name();
 
         m_sessions.erase(it);
 

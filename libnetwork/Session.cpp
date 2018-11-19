@@ -303,7 +303,8 @@ void Session::drop(DisconnectReason _reason)
 
 void Session::disconnect(DisconnectReason _reason)
 {
-    LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")" << " at " << m_socket->nodeIPEndpoint().name();
+    LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")"
+                 << " at " << m_socket->nodeIPEndpoint().name();
     drop(_reason);
 }
 
