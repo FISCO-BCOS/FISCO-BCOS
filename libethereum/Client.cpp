@@ -67,7 +67,7 @@ Client::Client(
 ):
 	ClientBase(_l),
 	Worker("client", 0),
-	m_bc(std::shared_ptr<Interface>(this), _params, _dbPath, _forceAction, [](unsigned d, unsigned t) { LOG(ERROR) << "REVISING BLOCKCHAIN: Processed " << d << " of " << t << "...\r"; }),
+	m_bc(this, _params, _dbPath, _forceAction, [](unsigned d, unsigned t) { LOG(ERROR) << "REVISING BLOCKCHAIN: Processed " << d << " of " << t << "...\r"; }),
      m_gp(_gpForAdoption ? _gpForAdoption : make_shared<TrivialGasPricer>()),
      m_preSeal(chainParams().accountStartNonce),
      m_postSeal(chainParams().accountStartNonce),
@@ -83,7 +83,7 @@ Client::Client(
 
 	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
 
-	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir());
+	UTXOModel::UTXOSharedData::getInstance()->initialize(getDataDir(), _forceAction);
 	LOG(INFO) << "UTXOSharedData->initialize() End";
 
 	//创建系统合约api

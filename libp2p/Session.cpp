@@ -70,7 +70,7 @@ Session::~Session()
 
 			//shutdown may block servals seconds - morebtcg
 			//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			LOG(WARNING) << "Session::~Session Closing " << socket.remote_endpoint(ec) << ", " < <m_peer->address() << "," << ec.message();
+			LOG(WARNING) << "Session::~Session Closing " << socket.remote_endpoint(ec) << ", " << m_peer->address() << "," << ec.message();
 
 			int try_count = 0;
 			while(m_sending && try_count++ < 5) {
