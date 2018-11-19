@@ -25,6 +25,7 @@
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <jsonrpccpp/server/iprocedureinvokationhandler.h>
 #include <jsonrpccpp/server/requesthandlerfactory.h>
+#include <jsonrpccpp/common/exception.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
 #include <map>
@@ -32,6 +33,8 @@
 #include <string>
 #include <tuple>
 #include <vector>
+
+using namespace jsonrpc;
 
 template <class I>
 using AbstractMethodPointer = void (I::*)(Json::Value const& _parameter, Json::Value& _result);
@@ -186,13 +189,9 @@ public:
             {
                 (m_interface.get()->*(pointer->second))(_input, _output);
             }
-            catch (std::exception& e)
+            catch (JsonRpcException& e)
             {
-                std::string errorMsg =
-                    "callback " + _proc.GetProcedureName() + " exceptioned, error msg:" + e.what();
-                LOG(ERROR) << errorMsg;
-                _output["ret_code"] = -1;
-                _output["detail_info"] = errorMsg;
+            	BOOST_THROW_EXCEPTION(JsonRpcException(e.GetCode(), e.GetMessage()));
             }
         }
         else

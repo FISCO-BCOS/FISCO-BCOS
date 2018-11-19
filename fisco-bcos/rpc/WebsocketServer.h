@@ -61,27 +61,27 @@ class session : public std::enable_shared_from_this<session>
     void setMapRpc()
     {
         m_mapRpc.insert(
-            std::make_pair("blockNumber", std::bind(&RpcFace::blockNumberI, m_rpcFace,
+            std::make_pair("getBlockNumber", std::bind(&RpcFace::getBlockNumberI, m_rpcFace,
                                               std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("pbftView", std::bind(&RpcFace::pbftViewI, m_rpcFace,
+            std::make_pair("getPbftView", std::bind(&RpcFace::getPbftViewI, m_rpcFace,
                                            std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("consensusStatus", std::bind(&RpcFace::consensusStatusI, m_rpcFace,
+            std::make_pair("getConsensusStatus", std::bind(&RpcFace::getConsensusStatusI, m_rpcFace,
                                                   std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("syncStatus", std::bind(&RpcFace::syncStatusI, m_rpcFace,
+            std::make_pair("getSyncStatus", std::bind(&RpcFace::getSyncStatusI, m_rpcFace,
                                              std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("version", std::bind(&RpcFace::versionI, m_rpcFace,
+            std::make_pair("getClientVersion", std::bind(&RpcFace::getClientVersionI, m_rpcFace,
                                           std::placeholders::_1, std::placeholders::_2)));
-        m_mapRpc.insert(std::make_pair("peers",
-            std::bind(&RpcFace::peersI, m_rpcFace, std::placeholders::_1, std::placeholders::_2)));
+        m_mapRpc.insert(std::make_pair("getPeers",
+            std::bind(&RpcFace::getPeersI, m_rpcFace, std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("groupPeers", std::bind(&RpcFace::groupPeersI, m_rpcFace,
+            std::make_pair("getGroupPeers", std::bind(&RpcFace::getGroupPeersI, m_rpcFace,
                                              std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("groupList", std::bind(&RpcFace::groupListI, m_rpcFace,
+            std::make_pair("getGroupList", std::bind(&RpcFace::getGroupListI, m_rpcFace,
                                             std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
             std::make_pair("getBlockByHash", std::bind(&RpcFace::getBlockByHashI, m_rpcFace,
@@ -90,7 +90,7 @@ class session : public std::enable_shared_from_this<session>
             std::make_pair("getBlockByNumber", std::bind(&RpcFace::getBlockByNumberI, m_rpcFace,
                                                    std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("numberHash", std::bind(&RpcFace::numberHashI, m_rpcFace,
+            std::make_pair("getBlockHashByNumber", std::bind(&RpcFace::getBlockHashByNumberI, m_rpcFace,
                                              std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
             "getTransactionByHash", std::bind(&RpcFace::getTransactionByHashI, m_rpcFace,
@@ -105,19 +105,19 @@ class session : public std::enable_shared_from_this<session>
             "getTransactionReceipt", std::bind(&RpcFace::getTransactionReceiptI, m_rpcFace,
                                          std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "pendingTransactions", std::bind(&RpcFace::pendingTransactionsI, m_rpcFace,
+            "getPendingTransactions", std::bind(&RpcFace::getPendingTransactionsI, m_rpcFace,
                                        std::placeholders::_1, std::placeholders::_2)));
+        m_mapRpc.insert(
+            std::make_pair("getCode", std::bind(&RpcFace::getCodeI, m_rpcFace,
+                                          std::placeholders::_1, std::placeholders::_2)));
+        m_mapRpc.insert(std::make_pair(
+            "getTotalTransactionCount", std::bind(&RpcFace::getTotalTransactionCountI, m_rpcFace,
+                                         std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair("call",
             std::bind(&RpcFace::callI, m_rpcFace, std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
             "sendRawTransaction", std::bind(&RpcFace::sendRawTransactionI, m_rpcFace,
                                       std::placeholders::_1, std::placeholders::_2)));
-        m_mapRpc.insert(
-            std::make_pair("getCode", std::bind(&RpcFace::getCodeI, m_rpcFace,
-                                          std::placeholders::_1, std::placeholders::_2)));
-        m_mapRpc.insert(std::make_pair(
-            "totalTransactionCount", std::bind(&RpcFace::totalTransactionCountI, m_rpcFace,
-                                         std::placeholders::_1, std::placeholders::_2)));
     }
 
 public:
@@ -197,7 +197,7 @@ public:
                 BOOST_THROW_EXCEPTION(JsonRpcException(-32601));
 
             Json::Value request;
-            if (requestJson["params"].size() < 1 && method != "peers" && method != "version")
+            if (requestJson["params"].size() < 1 && method != "getPeers" && method != "getGroupList" && method != "getClientVersion")
                 BOOST_THROW_EXCEPTION(JsonRpcException(-32602));
             for (auto param : requestJson["params"])
                 request.append(param);

@@ -51,25 +51,25 @@ public:
     }
 
     // consensus part
-    virtual std::string blockNumber(int _groupID) override;
-    virtual std::string pbftView(int _groupID) override;
-    virtual Json::Value consensusStatus(int _groupID) override;
+    virtual std::string getBlockNumber(int _groupID) override;
+    virtual std::string getPbftView(int _groupID) override;
+    virtual Json::Value getConsensusStatus(int _groupID) override;
 
     // sync part
-    virtual Json::Value syncStatus(int _groupID) override;
+    virtual Json::Value getSyncStatus(int _groupID) override;
 
     // p2p part
-    virtual std::string version() override;
-    virtual Json::Value peers() override;
-    virtual Json::Value groupPeers(int _groupID) override;
-    virtual Json::Value groupList() override;
+    virtual std::string getClientVersion() override;
+    virtual Json::Value getPeers() override;
+    virtual Json::Value getGroupPeers(int _groupID) override;
+    virtual Json::Value getGroupList() override;
 
     // block part
     virtual Json::Value getBlockByHash(
         int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
     virtual Json::Value getBlockByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
-    virtual std::string numberHash(int _groupID, const std::string& _blockNumber) override;
+    virtual std::string getBlockHashByNumber(int _groupID, const std::string& _blockNumber) override;
 
     // transaction part
     virtual Json::Value getTransactionByHash(
@@ -80,11 +80,11 @@ public:
         const std::string& _blockNumber, const std::string& _transactionIndex) override;
     virtual Json::Value getTransactionReceipt(
         int _groupID, const std::string& _transactionHash) override;
-    virtual Json::Value pendingTransactions(int _groupID) override;
+    virtual Json::Value getPendingTransactions(int _groupID) override;
+    virtual std::string getCode(int _groupID, const std::string& address) override;
+    virtual Json::Value getTotalTransactionCount(int _groupID) override;
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
-    virtual std::string getCode(int _groupID, const std::string& address) override;
-    virtual Json::Value totalTransactionCount(int _groupID) override;
 
 
 protected:

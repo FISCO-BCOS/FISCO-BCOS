@@ -52,10 +52,10 @@ namespace dev
 {
 namespace test
 {
-class MockService : public Service
+class FakesService : public Service
 {
 public:
-    MockService() : Service()
+    FakesService() : Service()
     {
         NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);

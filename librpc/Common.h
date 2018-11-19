@@ -23,10 +23,13 @@
 
 #include <string>
 
+#define INVALIDNUMBER -1
+
 namespace dev
 {
 namespace rpc
 {
+
 ///< RPCExceptionCode
 enum RPCExceptionType
 {
@@ -39,9 +42,9 @@ enum RPCExceptionType
     TransactionIndex
 };
 
-const std::string RPCMsg[] = {"Success", "GroupID does not exist.", "Response json parse error.",
-    "Host is null", "BlockHash does not exist.", "BlockNumber does not exist.",
-    "TransactionIndex is out of bounds."};
+const std::string RPCMsg[] = {"Success", "GroupID does not exist", "Response json parse error",
+    "Host is null", "BlockHash does not exist", "BlockNumber does not exist",
+    "TransactionIndex is out of range"};
 
 }  // namespace rpc
 }  // namespace dev
