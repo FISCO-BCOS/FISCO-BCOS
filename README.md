@@ -8,17 +8,17 @@
 [![GitHub forks](https://img.shields.io/github/forks/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/network) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/lab-bcos/total.svg)](https://github.com/FISCO-BCOS/lab-bcos) 
 
 * Install FISCO BCOS
-* Startup a blockchain
+* Build a blockchain
 * Deploy a smart contract
 
 ## Developing & Contributing
 
-[![GitHub top language](https://img.shields.io/github/languages/top/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos) [![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)  [![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos) [![Gitter](https://img.shields.io/gitter/room/fisco-bcos/Lobby.svg)](https://gitter.im/fisco-bcos/Lobby) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues)
+[![GitHub top language](https://img.shields.io/github/languages/top/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos) [![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)  [![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues)
 
-* Star our Github.
-* Chat in [WeChat](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
+* Star our Github. 
 * Create pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
 * [Submit bugs](https://github.com/FISCO-BCOS/lab-bcos/issues).
+* Discuss in [WeChat](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
 ## Further Reading
 
@@ -39,11 +39,13 @@ Since its launch, dozens of use cases have been implemented based on the FISCO B
 
 ## Community
 
-- Gitter: Chat in [FISCO BCOS](https://gitter.im/fisco-bcos/Lobby) channel on Gitter
-- Issues: Report bugs, issues or feature requests using [Github Issues](https://github.com/FISCO-BCOS/lab-bcos/issues)
-- Twitter: Follow us [@FiscoBcos](https://twitter.com/FiscoBcos)
-- WeChat: Scan [QR code](docs/images/WeChatQR.jpeg) to join our WeChat group
-- email: [service@fisco.com.cn](mailto:service@fisco.com.cn)
+- WeChat: [![Scan](https://img.shields.io/badge/style-Scan QR Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](docs/images/WeChatQR.jpeg) 
+- Gitter: [![Gitter](https://img.shields.io/badge/style-on gitter-green.svg?logo=gitter&longCache=false&style=social&label=Chat)](https://gitter.im/fisco-bcos/Lobby) 
+- Twitter: [![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
+- Email: 
+
+
+[![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
 
 
 ## License
