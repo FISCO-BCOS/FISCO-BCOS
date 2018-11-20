@@ -43,7 +43,7 @@ public:
 	RaftClient(
 	    ChainParams const& _params,
 	    int _networkID,
-	    p2p::HostApi* _host,
+	    std::shared_ptr<p2p::HostApi> _host,
 	    std::shared_ptr<GasPricer> _gpForAdoption,
 	    std::string const& _dbPath = std::string(),
 	    WithExisting _forceAction = WithExisting::Trust,
@@ -61,7 +61,7 @@ public:
 	const BlockHeader & lastCommitedBlock() const { Guard l(x_last_block); return m_last_commited_block; }
 
 protected:
-	void init(ChainParams const& _params, p2p::HostApi *_host);
+	void init(ChainParams const& _params, std::shared_ptr<p2p::HostApi> _host);
 	void rejigSealing() override;
 	void syncBlockQueue() override;
 

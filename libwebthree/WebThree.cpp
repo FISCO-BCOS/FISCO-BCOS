@@ -61,11 +61,11 @@ WebThreeDirect::WebThreeDirect(
 {
 	if (dev::getSSL() == SSL_SOCKET_V2)
 	{
-		m_net = new  HostSSL(_clientVersion,CertificateServer::GetInstance().keypair(),_n);
+		m_net.reset(new  HostSSL(_clientVersion,CertificateServer::GetInstance().keypair(),_n));
 	}
 	else
 	{
-		m_net = new Host(_clientVersion,_n,_network,_params.statsInterval);
+		m_net.reset(new Host(_clientVersion,_n,_network,_params.statsInterval));
 	}
 	LOG(INFO) << "My enode:" << enode();
 	//set NodeConnParamsManager's NetworkFace pointer
