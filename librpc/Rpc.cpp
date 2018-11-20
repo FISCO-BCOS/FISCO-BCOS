@@ -45,7 +45,7 @@ Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
-std::string Rpc::blockNumber(int _groupID)
+std::string Rpc::getBlockNumber(int _groupID)
 {
     try
     {
@@ -67,12 +67,13 @@ std::string Rpc::blockNumber(int _groupID)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
 
-std::string Rpc::pbftView(int _groupID)
+std::string Rpc::getPbftView(int _groupID)
 {
     try
     {
@@ -103,11 +104,12 @@ std::string Rpc::pbftView(int _groupID)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
-Json::Value Rpc::consensusStatus(int _groupID)
+Json::Value Rpc::getConsensusStatus(int _groupID)
 {
     try
     {
@@ -136,11 +138,12 @@ Json::Value Rpc::consensusStatus(int _groupID)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
-Json::Value Rpc::syncStatus(int _groupID)
+Json::Value Rpc::getSyncStatus(int _groupID)
 {
     try
     {
@@ -169,19 +172,20 @@ Json::Value Rpc::syncStatus(int _groupID)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
 
-std::string Rpc::version()
+std::string Rpc::getClientVersion()
 {
     try
     {
         std::string version;
         for (auto it : implementedModules())
         {
-            version.append(it.name + ":" + it.version + ";");
+            version.append(it.name + ":" + it.version);
         }
 
         return version;
@@ -192,13 +196,14 @@ std::string Rpc::version()
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 
     return "";
 }
 
-Json::Value Rpc::peers()
+Json::Value Rpc::getPeers()
 {
     try
     {
@@ -224,13 +229,14 @@ Json::Value Rpc::peers()
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 
     return Json::Value();
 }
 
-Json::Value Rpc::groupPeers(int _groupID)
+Json::Value Rpc::getGroupPeers(int _groupID)
 {
     try
     {
@@ -256,13 +262,14 @@ Json::Value Rpc::groupPeers(int _groupID)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 
     return Json::Value();
 }
 
-Json::Value Rpc::groupList()
+Json::Value Rpc::getGroupList()
 {
     try
     {
@@ -276,7 +283,8 @@ Json::Value Rpc::groupList()
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
@@ -340,7 +348,8 @@ Json::Value Rpc::getBlockByHash(
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
@@ -403,10 +412,40 @@ Json::Value Rpc::getBlockByNumber(
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
+std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNumber)
+{
+    try
+    {
+        LOG(INFO) << "numberHash # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_blockNumber\" : " << _blockNumber << std::endl
+                  << "}";
+
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (!blockchain)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+        h256 blockHash = blockchain->numberHash(number);
+        return toJS(blockHash);
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
 
 Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transactionHash)
 {
@@ -426,6 +465,9 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
 
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getLocalisedTxByHash(hash);
+        if (tx.blockNumber() == INVALIDNUMBER)
+            return Json::nullValue;
+
         response["blockHash"] = toJS(tx.blockHash());
         response["blockNumber"] = toJS(tx.blockNumber());
         response["from"] = toJS(tx.from());
@@ -446,7 +488,8 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
@@ -503,7 +546,8 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
@@ -560,7 +604,8 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
@@ -583,18 +628,16 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         h256 hash = jsToFixed<32>(_transactionHash);
-        auto tx = blockchain->getLocalisedTxByHash(hash);
-        auto txReceipt = blockchain->getTransactionReceiptByHash(hash);
-        if (tx.blockNumber() == 0 &&
-            tx.blockHash() ==
-                jsToFixed<32>("0x0000000000000000000000000000000000000000000000000000000000000000"))
-            return Json::Value(Json::nullValue);
+        auto txReceipt = blockchain->getLocalisedTxReceiptByHash(hash);
+        if (txReceipt.blockNumber() == INVALIDNUMBER)
+            return Json::nullValue;
+
         response["transactionHash"] = _transactionHash;
-        response["transactionIndex"] = toJS(tx.transactionIndex());
-        response["blockNumber"] = toJS(tx.blockNumber());
-        response["blockHash"] = toJS(tx.blockHash());
-        response["from"] = toJS(tx.from());
-        response["to"] = toJS(tx.to());
+        response["transactionIndex"] = toJS(txReceipt.transactionIndex());
+        response["blockNumber"] = toJS(txReceipt.blockNumber());
+        response["blockHash"] = toJS(txReceipt.blockHash());
+        response["from"] = toJS(txReceipt.from());
+        response["to"] = toJS(txReceipt.to());
         response["gasUsed"] = toJS(txReceipt.gasUsed());
         response["contractAddress"] = toJS(txReceipt.contractAddress());
         response["logs"] = Json::Value(Json::arrayValue);
@@ -617,12 +660,13 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
 
-Json::Value Rpc::pendingTransactions(int _groupID)
+Json::Value Rpc::getPendingTransactions(int _groupID)
 {
     try
     {
@@ -638,7 +682,7 @@ Json::Value Rpc::pendingTransactions(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
-        response["pending"] = Json::Value(Json::arrayValue);
+        response = Json::Value(Json::arrayValue);
         Transactions transactions = txPool->pendingList();
         for (size_t i = 0; i < transactions.size(); ++i)
         {
@@ -652,7 +696,7 @@ Json::Value Rpc::pendingTransactions(int _groupID)
             txJson["nonce"] = toJS(tx.nonce());
             txJson["to"] = toJS(tx.to());
             txJson["value"] = toJS(tx.value());
-            response["pending"].append(txJson);
+            response.append(txJson);
         }
 
         return response;
@@ -663,12 +707,71 @@ Json::Value Rpc::pendingTransactions(int _groupID)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
+std::string Rpc::getCode(int _groupID, const std::string& _address)
+{
+    try
+    {
+        LOG(INFO) << "getCode # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << "," << std::endl
+                  << "\"_address\" : " << _address << std::endl
+                  << "}";
 
-std::string Rpc::call(int _groupID, const Json::Value& request)
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        if (!blockChain)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+
+        return toJS(blockChain->getCode(jsToAddress(_address)));
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::getTotalTransactionCount(int _groupID)
+{
+    try
+    {
+        LOG(INFO) << "totalTransactionCount # request = " << std::endl
+                  << "{ " << std::endl
+                  << "\"_groupID\" : " << _groupID << std::endl
+                  << "}";
+
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        if (!blockChain)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+
+        Json::Value response;
+        std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
+        response["count"] = toJS(result.first);
+        response["number"] = toJS(result.second);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::call(int _groupID, const Json::Value& request)
 {
     try
     {
@@ -697,7 +800,10 @@ std::string Rpc::call(int _groupID, const Json::Value& request)
         tx.forceSender(txSkeleton.from);
         auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
 
-        return toJS(executionResult.first.output);
+        Json::Value response;
+        response["currentBlockNumber"] = toJS(blockNumber);
+        response["output"] = toJS(executionResult.first.output);
+        return response;
     }
     catch (JsonRpcException& e)
     {
@@ -705,7 +811,8 @@ std::string Rpc::call(int _groupID, const Json::Value& request)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
 
@@ -735,6 +842,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(boost::diagnostic_information(e)));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
