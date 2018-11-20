@@ -62,7 +62,7 @@ public:
 	unsigned getNodeNum() const override;
 
 	void caModifyCallback(const std::string& pub256)override;
-	void SetHost(HostApi *host) override;
+	void SetHost(std::shared_ptr<p2p::HostApi>) override;
 	bool checkCertOut(const std::string& serialNumber)override;
 private:
 	bool checkNodesValid(const std::vector< NodeParams> &vNodes);
@@ -78,7 +78,7 @@ private:
 	static Mutex m_mutexconnect;
 	mutable std::map<std::string, NodeIPEndpoint> m_connectnodes;
 	std::pair<bool, std::map<std::string, NodeParams> > getGodMiner(int  blockNum)const;
-	HostApi* m_host;
+	std::shared_ptr<p2p::HostApi> m_host;
 	bool m_godminer=false;
 };
 }

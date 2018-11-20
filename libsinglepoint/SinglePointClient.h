@@ -43,7 +43,7 @@ public:
 	SinglePointClient(
 	    ChainParams const& _params,
 	    int _networkID,
-	    p2p::HostApi* _host,
+	    std::shared_ptr<p2p::HostApi> _host,
 	    std::shared_ptr<GasPricer> _gpForAdoption,
 	    std::string const& _dbPath = std::string(),
 	    WithExisting _forceAction = WithExisting::Trust,
