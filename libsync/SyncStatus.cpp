@@ -42,20 +42,20 @@ bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)
 {
     if (hasPeer(_info.nodeId))
     {
-        LOG(WARNING) << "Peer " << _info.nodeId << " is exist, no need to create.";
+        SYNCLOG(WARNING) << "Peer " << _info.nodeId << " is exist, no need to create.";
         return false;
     }
 
     try
     {
-        shared_ptr<SyncPeerStatus> peer = make_shared<SyncPeerStatus>(_info);
+        shared_ptr<SyncPeerStatus> peer = make_shared<SyncPeerStatus>(_info, this->m_protocolId);
 
         WriteGuard l(x_peerStatus);
         m_peersStatus.insert(pair<NodeID, shared_ptr<SyncPeerStatus>>(peer->nodeId, peer));
     }
     catch (Exception const& e)
     {
-        LOG(ERROR) << "Create SyncPeer failed!";
+        SYNCLOG(ERROR) << "Create SyncPeer failed!";
         BOOST_THROW_EXCEPTION(InvalidSyncPeerCreation() << errinfo_comment(e.what()));
     }
     return true;
@@ -84,7 +84,7 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
     auto peer = m_peersStatus.find(_id);
     if (peer == m_peersStatus.end())
     {
-        LOG(WARNING) << "Peer data not found at id: " << _id;
+        SYNCLOG(WARNING) << "Peer data not found at id: " << _id;
         return nullptr;
     }
     return peer->second;
