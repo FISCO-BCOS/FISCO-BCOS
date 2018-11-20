@@ -567,11 +567,11 @@ void PBFTEngine::checkAndCommit()
                 << m_reqCache->prepareCache().block_hash.abridged() << std::endl;
             return;
         }
+        m_reqCache->updateCommittedPrepare();
         /// update and backup the commit cache
         PBFTENGINE_LOG(TRACE) << "[#checkAndCommit] backup/updateCommittedPrepare [hash/number]:  "
                               << m_reqCache->committedPrepareCache().block_hash << "/"
                               << m_reqCache->committedPrepareCache().height << std::endl;
-        m_reqCache->updateCommittedPrepare();
         backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache());
         PBFTENGINE_LOG(TRACE) << "[#checkAndCommit] broadcastCommitReq [hash/number]:  "
                               << m_reqCache->prepareCache().block_hash << "/"

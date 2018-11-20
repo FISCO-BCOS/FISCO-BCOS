@@ -106,6 +106,7 @@ public:
     void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
     const std::string consensusStatus() const override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
+    void clearAllCache() { m_reqCache->clearAll(); }
 
 protected:
     void workLoop() override;
