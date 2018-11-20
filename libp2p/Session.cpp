@@ -454,9 +454,8 @@ void Session::writeFrames()
 	}
 
 	m_start_t = utcTime();
-	auto self(shared_from_this());
 
-	auto asyncWrite = [this, self](boost::system::error_code ec, std::size_t length)
+	auto asyncWrite = [&](boost::system::error_code ec, std::size_t length)
 	{
 		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
 		if (elapsed >= 10) {

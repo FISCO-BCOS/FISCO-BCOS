@@ -946,7 +946,7 @@ void NodeConnParamsManager::CAVerifyModifyCallback()
     m_host->recheckAllCA();
 };
 
-void NodeConnParamsManager::SetHost(HostApi *host)
+void NodeConnParamsManager::SetHost(std::shared_ptr<p2p::HostApi> host)
 {
     m_host = host;
 };
