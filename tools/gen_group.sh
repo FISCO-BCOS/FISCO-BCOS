@@ -22,7 +22,7 @@ Usage:
     -i <node ip>                [Optional] default is 127.0.0.1
     -s <use storage state>      [Optional] default is mpt
     -h Help
-e.g: # generate group1 from node0, node1, node2
+e.g: # generate group2 from node0, node1, node2
     bash gen_group.sh -g 2 -d nodes -i 127.0.0.1 -n "0 1 2"
 EOF
 
