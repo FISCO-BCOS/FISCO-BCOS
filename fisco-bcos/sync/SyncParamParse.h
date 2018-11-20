@@ -87,10 +87,8 @@ static Params initCommandLine(int argc, const char* argv[])
     server_options.add_options()("txSpeed,t", boost::program_options::value<float>(),
         "transaction generate speed")("blockSpeed,b", boost::program_options::value<float>(),
         "block generate speed")("syncSpeed,s", boost::program_options::value<float>(),
-        "sync speed")("groupSize,n", boost::program_options::value<int>(), "group size")(
-        "totalTx,m", boost::program_options::value<int>(), "total transaction number")("nodeId,i",
-        boost::program_options::value<h256>(),
-        "node ID")("help,h", "help of p2p module of FISCO-BCOS");
+        "sync speed")("totalTx,m", boost::program_options::value<int>(),
+        "total transaction number")("help,h", "help of p2p module of FISCO-BCOS");
 
     boost::program_options::variables_map vm;
     try

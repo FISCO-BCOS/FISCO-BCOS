@@ -173,6 +173,8 @@ private:
     // sync state
     bool m_newTransactions = false;
     bool m_newBlocks = false;
+    uint64_t m_maintainBlocksTimeout = 0;
+
 
     // settings
     dev::eth::Handler<> m_tqReady;
