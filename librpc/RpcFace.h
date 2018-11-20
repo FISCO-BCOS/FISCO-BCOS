@@ -31,32 +31,32 @@ class RpcFace : public ServerInterface<RpcFace>
 public:
     RpcFace()
     {
-        this->bindAndAddMethod(jsonrpc::Procedure("blockNumber", jsonrpc::PARAMS_BY_POSITION,
+        this->bindAndAddMethod(jsonrpc::Procedure("getBlockNumber", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::blockNumberI);
-        this->bindAndAddMethod(jsonrpc::Procedure("pbftView", jsonrpc::PARAMS_BY_POSITION,
+            &dev::rpc::RpcFace::getBlockNumberI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getPbftView", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::pbftViewI);
-        this->bindAndAddMethod(jsonrpc::Procedure("consensusStatus", jsonrpc::PARAMS_BY_POSITION,
+            &dev::rpc::RpcFace::getPbftViewI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getConsensusStatus", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::consensusStatusI);
+            &dev::rpc::RpcFace::getConsensusStatusI);
 
-        this->bindAndAddMethod(jsonrpc::Procedure("syncStatus", jsonrpc::PARAMS_BY_POSITION,
+        this->bindAndAddMethod(jsonrpc::Procedure("getSyncStatus", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::syncStatusI);
+            &dev::rpc::RpcFace::getSyncStatusI);
 
+        this->bindAndAddMethod(jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::getClientVersionI);
         this->bindAndAddMethod(
-            jsonrpc::Procedure("version", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::versionI);
-        this->bindAndAddMethod(
-            jsonrpc::Procedure("peers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL),
-            &dev::rpc::RpcFace::peersI);
-        this->bindAndAddMethod(jsonrpc::Procedure("groupPeers", jsonrpc::PARAMS_BY_POSITION,
+            jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL),
+            &dev::rpc::RpcFace::getPeersI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getGroupPeers", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::groupPeersI);
-        this->bindAndAddMethod(jsonrpc::Procedure("groupList", jsonrpc::PARAMS_BY_POSITION,
+            &dev::rpc::RpcFace::getGroupPeersI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getGroupList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
-            &dev::rpc::RpcFace::groupListI);
+            &dev::rpc::RpcFace::getGroupListI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
@@ -66,6 +66,10 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
             &dev::rpc::RpcFace::getBlockByNumberI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getBlockHashByNumber",
+                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
+                                   jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::getBlockHashByNumberI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionByHash",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
@@ -86,9 +90,9 @@ public:
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getTransactionReceiptI);
         this->bindAndAddMethod(
-            jsonrpc::Procedure("pendingTransactions", jsonrpc::PARAMS_BY_POSITION,
+            jsonrpc::Procedure("getPendingTransactions", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::pendingTransactionsI);
+            &dev::rpc::RpcFace::getPendingTransactionsI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("call", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                 jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_OBJECT, NULL),
@@ -98,41 +102,49 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
+                "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::getCodeI);
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("getTotalTransactionCount", jsonrpc::PARAMS_BY_POSITION,
+                jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getTotalTransactionCountI);
     }
 
-    inline virtual void blockNumberI(const Json::Value& request, Json::Value& response)
+    inline virtual void getBlockNumberI(const Json::Value& request, Json::Value& response)
     {
-        response = this->blockNumber(request[0u].asInt());
+        response = this->getBlockNumber(request[0u].asInt());
     }
-    inline virtual void pbftViewI(const Json::Value& request, Json::Value& response)
+    inline virtual void getPbftViewI(const Json::Value& request, Json::Value& response)
     {
-        response = this->pbftView(request[0u].asInt());
+        response = this->getPbftView(request[0u].asInt());
     }
-    inline virtual void consensusStatusI(const Json::Value& request, Json::Value& response)
+    inline virtual void getConsensusStatusI(const Json::Value& request, Json::Value& response)
     {
-        response = this->consensusStatus(request[0u].asInt());
-    }
-
-    inline virtual void syncStatusI(const Json::Value& request, Json::Value& response)
-    {
-        response = this->syncStatus(request[0u].asInt());
+        response = this->getConsensusStatus(request[0u].asInt());
     }
 
-    inline virtual void versionI(const Json::Value& request, Json::Value& response)
+    inline virtual void getSyncStatusI(const Json::Value& request, Json::Value& response)
     {
-        response = this->version();
+        response = this->getSyncStatus(request[0u].asInt());
     }
-    inline virtual void peersI(const Json::Value& request, Json::Value& response)
+
+    inline virtual void getClientVersionI(const Json::Value& request, Json::Value& response)
     {
-        response = this->peers();
+        response = this->getClientVersion();
     }
-    inline virtual void groupPeersI(const Json::Value& request, Json::Value& response)
+    inline virtual void getPeersI(const Json::Value& request, Json::Value& response)
     {
-        response = this->groupPeers(request[0u].asInt());
+        response = this->getPeers();
     }
-    inline virtual void groupListI(const Json::Value& request, Json::Value& response)
+    inline virtual void getGroupPeersI(const Json::Value& request, Json::Value& response)
     {
-        response = this->groupList();
+        response = this->getGroupPeers(request[0u].asInt());
+    }
+    inline virtual void getGroupListI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getGroupList();
     }
 
     inline virtual void getBlockByHashI(const Json::Value& request, Json::Value& response)
@@ -144,6 +156,10 @@ public:
     {
         response = this->getBlockByNumber(
             request[0u].asInt(), request[1u].asString(), request[2u].asBool());
+    }
+    inline virtual void getBlockHashByNumberI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getBlockHashByNumber(request[0u].asInt(), request[1u].asString());
     }
 
     inline virtual void getTransactionByHashI(const Json::Value& request, Json::Value& response)
@@ -166,37 +182,45 @@ public:
     {
         response = this->getTransactionReceipt(request[0u].asInt(), request[1u].asString());
     }
-    inline virtual void pendingTransactionsI(const Json::Value& request, Json::Value& response)
+    inline virtual void getPendingTransactionsI(const Json::Value& request, Json::Value& response)
     {
-        response = this->pendingTransactions(request[0u].asInt());
+        response = this->getPendingTransactions(request[0u].asInt());
+    }
+    inline virtual void getCodeI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getCode(request[0u].asInt(), request[1u].asString());
+    }
+    inline virtual void getTotalTransactionCountI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getTotalTransactionCount(request[0u].asInt());
     }
     inline virtual void callI(const Json::Value& request, Json::Value& response)
     {
         response = this->call(request[0u].asInt(), request[1u]);
     }
-
     inline virtual void sendRawTransactionI(const Json::Value& request, Json::Value& response)
     {
         response = this->sendRawTransaction(request[0u].asInt(), request[1u].asString());
     }
 
     // consensus part
-    virtual std::string blockNumber(int param1) = 0;
-    virtual std::string pbftView(int param1) = 0;
-    virtual Json::Value consensusStatus(int param1) = 0;
+    virtual std::string getBlockNumber(int param1) = 0;
+    virtual std::string getPbftView(int param1) = 0;
+    virtual Json::Value getConsensusStatus(int param1) = 0;
 
     // sync part
-    virtual Json::Value syncStatus(int param1) = 0;
+    virtual Json::Value getSyncStatus(int param1) = 0;
 
     // p2p part
-    virtual std::string version() = 0;
-    virtual Json::Value peers() = 0;
-    virtual Json::Value groupPeers(int param1) = 0;
-    virtual Json::Value groupList() = 0;
+    virtual std::string getClientVersion() = 0;
+    virtual Json::Value getPeers() = 0;
+    virtual Json::Value getGroupPeers(int param1) = 0;
+    virtual Json::Value getGroupList() = 0;
 
     // block part
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;
     virtual Json::Value getBlockByNumber(int param1, const std::string& param2, bool param3) = 0;
+    virtual std::string getBlockHashByNumber(int param1, const std::string& param2) = 0;
 
     // transaction part
     /// @return the information about a transaction requested by transaction hash.
@@ -210,11 +234,15 @@ public:
     /// @return the receipt of a transaction by transaction hash.
     /// @note That the receipt is not available for pending transactions.
     virtual Json::Value getTransactionReceipt(int param1, const std::string& param2) = 0;
-    /// @return information about pendingTransactions.
-    virtual Json::Value pendingTransactions(int param1) = 0;
+    /// @return information about getPendingTransactions.
+    virtual Json::Value getPendingTransactions(int param1) = 0;
+    /// Returns code at a given address.
+    virtual std::string getCode(int param1, const std::string& param2) = 0;
+    /// Returns the count of transactions and blocknumber.
+    virtual Json::Value getTotalTransactionCount(int param1) = 0;
     /// Executes a new message call immediately without creating a transaction on the blockchain.
-    virtual std::string call(int param1, const Json::Value& param2) = 0;
-    // Creates new message call transaction or a contract creation for signed transactions.
+    virtual Json::Value call(int param1, const Json::Value& param2) = 0;
+    /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
 };
 
