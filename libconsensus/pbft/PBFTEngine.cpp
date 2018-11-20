@@ -623,6 +623,9 @@ void PBFTEngine::checkAndSave()
             {
                 dropHandledTransactions(block);
                 PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
+                /// clear caches to in case of repeated commit
+                m_reqCache->clearAllExceptCommitCache();
+                m_reqCache->delCache(m_highestBlock.hash());
             }
             else
             {
@@ -668,10 +671,9 @@ void PBFTEngine::reportBlock(Block const& block)
             m_timeManager.m_lastConsensusTime = utcTime();
             m_timeManager.m_changeCycle = 0;
             m_consensusBlockNumber = m_highestBlock.number() + 1;
-            /// delete invalid view change requests from the cache
-            m_reqCache->delInvalidViewChange(m_highestBlock);
         }
-        /// clear caches
+        /// delete invalid view change requests from the cache
+        m_reqCache->delInvalidViewChange(m_highestBlock);
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
         PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "

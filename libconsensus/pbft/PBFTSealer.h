@@ -58,6 +58,7 @@ public:
                     resetSealingBlock();
                 }
                 m_signalled.notify_all();
+                m_blockSignalled.notify_all();
             }
         });
     }
