@@ -214,7 +214,7 @@ Json::Value Rpc::getPeers()
         {
             Json::Value node;
             node["NodeID"] = it->nodeID.hex();
-            node["IP & Port"] = it->nodeIPEndpoint.name();
+            node["IPAndPort"] = it->nodeIPEndpoint.name();
             node["Topic"] = Json::Value(Json::arrayValue);
             for (std::string topic : it->topics)
                 node["Topic"].append(topic);
