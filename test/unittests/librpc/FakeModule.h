@@ -52,10 +52,10 @@ namespace dev
 {
 namespace test
 {
-class MockService : public Service
+class FakesService : public Service
 {
 public:
-    MockService() : Service()
+    FakesService() : Service()
     {
         NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
@@ -176,8 +176,18 @@ public:
     dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override
     {
-        return LocalisedTransactionReceipt(
-            TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+        if (_txHash ==
+            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+        {
+            auto tx = getLocalisedTxByHash(_txHash);
+            auto txReceipt = getTransactionReceiptByHash(_txHash);
+            return LocalisedTransactionReceipt(txReceipt, _txHash, tx.blockHash(), tx.blockNumber(),
+                tx.from(), tx.to(), tx.transactionIndex(), txReceipt.gasUsed(),
+                txReceipt.contractAddress());
+        }
+        else
+            return LocalisedTransactionReceipt(
+                TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }

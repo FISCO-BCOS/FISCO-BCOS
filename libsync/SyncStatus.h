@@ -20,9 +20,6 @@
  * @date: 2018-10-16
  */
 #pragma once
-#include "../libnetwork/Common.h"
-#include "../libnetwork/Session.h"
-#include "../libp2p/P2PInterface.h"
 #include "Common.h"
 #include "DownloadingBlockQueue.h"
 #include "RspBlockReq.h"
@@ -30,6 +27,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Session.h>
+#include <libp2p/P2PInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <map>
 #include <queue>
@@ -53,16 +53,18 @@ struct SyncStatus
 class SyncPeerStatus
 {
 public:
-    SyncPeerStatus(
-        NodeID const& _nodeId, int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
-      : nodeId(_nodeId),
+    SyncPeerStatus(PROTOCOL_ID _protocolId, NodeID const& _nodeId, int64_t _number,
+        h256 const& _genesisHash, h256 const& _latestHash)
+      : m_protocolId(_protocolId),
+        nodeId(_nodeId),
         number(_number),
         genesisHash(_genesisHash),
         latestHash(_latestHash),
         reqQueue(_nodeId)
     {}
-    SyncPeerStatus(const SyncPeerInfo& _info)
-      : nodeId(_info.nodeId),
+    SyncPeerStatus(const SyncPeerInfo& _info, PROTOCOL_ID _protocolId)
+      : m_protocolId(_protocolId),
+        nodeId(_info.nodeId),
         number(_info.number),
         genesisHash(_info.genesisHash),
         latestHash(_info.latestHash),
@@ -77,6 +79,9 @@ public:
         latestHash = _info.latestHash;
     }
 
+private:
+    PROTOCOL_ID m_protocolId;
+
 public:
     NodeID nodeId;
     int64_t number;
@@ -90,18 +95,18 @@ class SyncMasterStatus
 public:
     SyncMasterStatus(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         PROTOCOL_ID const& _protocolId, h256 const& _genesisHash)
-      : protocolId(_protocolId),
-        genesisHash(_genesisHash),
+      : genesisHash(_genesisHash),
         knownHighestNumber(0),
         knownLatestHash(_genesisHash),
+        m_protocolId(_protocolId),
         m_downloadingBlockQueue(_blockChain, _protocolId)
     {}
 
     SyncMasterStatus(h256 const& _genesisHash)
-      : protocolId(0),
-        genesisHash(_genesisHash),
+      : genesisHash(_genesisHash),
         knownHighestNumber(0),
         knownLatestHash(_genesisHash),
+        m_protocolId(0),
         m_downloadingBlockQueue(nullptr, 0)
     {}
 
@@ -130,7 +135,6 @@ public:
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
 public:
-    PROTOCOL_ID protocolId;
     h256 genesisHash;
     mutable SharedMutex x_known;
     int64_t knownHighestNumber;
@@ -138,9 +142,9 @@ public:
     SyncState state = SyncState::Idle;
 
 private:
+    PROTOCOL_ID m_protocolId;
     mutable SharedMutex x_peerStatus;
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
-
     DownloadingBlockQueue m_downloadingBlockQueue;
 };
 
