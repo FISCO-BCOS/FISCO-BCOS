@@ -797,7 +797,7 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
             dev::config::SystemConfigMgr::maxTransactionGasLimit, txSkeleton.to, txSkeleton.data,
             txSkeleton.nonce);
         auto blockHeader = block->header();
-        tx.forceSender(txSkeleton.from);
+        tx.forceSender(txSkeleton.to);
         auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
 
         Json::Value response;
