@@ -266,7 +266,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
             }
         }
     }
-    return LocalisedTransaction(Transaction(), h256(0), -1);
+    return LocalisedTransaction(Transaction(), h256(0), -1, -1);
 }
 
 TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)

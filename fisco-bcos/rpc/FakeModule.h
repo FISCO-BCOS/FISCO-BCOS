@@ -205,8 +205,18 @@ public:
     dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override
     {
-        return LocalisedTransactionReceipt(
-            TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+        if (_txHash ==
+            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+        {
+            auto tx = getLocalisedTxByHash(_txHash);
+            auto txReceipt = getTransactionReceiptByHash(_txHash);
+            return LocalisedTransactionReceipt(txReceipt, _txHash, tx.blockHash(), tx.blockNumber(),
+                tx.from(), tx.to(), tx.transactionIndex(), txReceipt.gasUsed(),
+                txReceipt.contractAddress());
+        }
+        else
+            return LocalisedTransactionReceipt(
+                TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
@@ -431,7 +441,7 @@ public:
     };
 
     /// protocol id used when register handler to p2p module
-    virtual PROTOCOL_ID const& protocolId() const { return 0; };
+    virtual PROTOCOL_ID const& protocolId() const { return protocal_id; };
 
     /// get node account type
     virtual NodeAccountType accountType() { return NodeAccountType::MinerAccount; };
@@ -443,6 +453,7 @@ public:
 
 private:
     dev::h512s m_minerList;
+    PROTOCOL_ID protocal_id = 0;
 };
 
 class FakeLedger : public LedgerInterface
