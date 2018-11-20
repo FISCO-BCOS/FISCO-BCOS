@@ -50,7 +50,7 @@ RaftClient* dev::eth::asRaftClient(Interface* _c)
 RaftClient::RaftClient(
     ChainParams const& _params,
     int _networkID,
-    p2p::HostApi* _host,
+    std::shared_ptr<p2p::HostApi> _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -69,7 +69,7 @@ RaftClient::~RaftClient() {
 	stopWorking();
 }
 
-void RaftClient::init(ChainParams const&, p2p::HostApi *_host) {
+void RaftClient::init(ChainParams const&, std::shared_ptr<p2p::HostApi> _host) {
 	auto raft_host = _host->registerCapability(make_shared<RaftHost>([this](unsigned _id, std::shared_ptr<Capability> _peer, RLP const & _r) {
 		raft()->onRaftMsg(_id, _peer, _r);
 	}));

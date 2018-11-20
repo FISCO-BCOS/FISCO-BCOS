@@ -59,7 +59,7 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, ActivityReport const& _r)
 Client::Client(
     ChainParams const& _params,
     int _networkID,
-    p2p::HostApi* _host,
+    std::shared_ptr<p2p::HostApi> _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -218,7 +218,7 @@ Client::~Client()
 	stopWorking();
 }
 
-void Client::init(p2p::HostApi* _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
+void Client::init(std::shared_ptr<p2p::HostApi>  _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
 {
 	DEV_TIMED_FUNCTION_ABOVE(500);
 
