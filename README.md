@@ -16,9 +16,9 @@
 [![GitHub top language](https://img.shields.io/github/languages/top/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos) [![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)  [![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues)
 
 * Star our Github. 
-* Create pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
-* [Submit bugs](https://github.com/FISCO-BCOS/lab-bcos/issues).
-* Discuss in [WeChat](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
+* Pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
+* [Ask questions](https://github.com/FISCO-BCOS/lab-bcos/issues) and [submit bugs](https://github.com/FISCO-BCOS/lab-bcos/issues).
+* Discuss in [WeChat group](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
 ## Further Reading
 
@@ -39,13 +39,10 @@ Since its launch, dozens of use cases have been implemented based on the FISCO B
 
 ## Community
 
-- WeChat: [![Scan](https://img.shields.io/badge/style-Scan QR Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](docs/images/WeChatQR.jpeg) 
-- Gitter: [![Gitter](https://img.shields.io/badge/style-on gitter-green.svg?logo=gitter&longCache=false&style=social&label=Chat)](https://gitter.im/fisco-bcos/Lobby) 
-- Twitter: [![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
-- Email: 
-
-
-[![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
+- Join our WeChat [![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](docs/images/WeChatQR.jpeg) 
+- Discuss in ![Gitter](https://img.shields.io/badge/style-on_gitter-green.svg?logo=gitter&longCache=false&style=social&label=Chat)](https://gitter.im/fisco-bcos/Lobby) 
+- Read news by [![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
+- Mail us at [![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
 
 
 ## License
