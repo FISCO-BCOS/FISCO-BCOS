@@ -35,7 +35,7 @@ See the [FISCO BCOS Doc](https://fisco-bcos-documentation-en.readthedocs.io/en/l
 
 ### Featured Cases
 
-Since its launch, dozens of use cases have been implemented based on the FISCO BCOS. See [FEATURED CASES](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
+Since launched, dozens of use cases have been implemented based on the FISCO BCOS. See [FEATURED CASES](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
 
 ## Community
 
