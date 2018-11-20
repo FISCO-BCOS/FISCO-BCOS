@@ -49,20 +49,6 @@ void SyncMaster::printSyncInfo()
     for (auto& peer : peers)
         SYNCLOG(TRACE) << "    Peer: " << peer << endl;
     SYNCLOG(TRACE) << "            --------------------------------------------" << endl;
-
-    /*
-        // recent block
-        for (int64_t i = 0; i < 10 && i < m_blockChain->number(); i++)
-        {
-            SYNCLOG(TRACE) << "parent[" << i
-                           << "]:" << m_blockChain->getBlockByNumber(i)->header().parentHash() <<
-       endl; SYNCLOG(TRACE) << "Block[" << i << "]: " <<
-       m_blockChain->getBlockByNumber(i)->headerHash()
-                           << endl;
-        }
-
-        SYNCLOG(TRACE) << syncInfo() << endl;
-        */
 }
 
 SyncStatus SyncMaster::status() const
@@ -83,11 +69,12 @@ string const SyncMaster::syncInfo() const
     syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));
     syncInfo.push_back(json_spirit::Pair("protocolId", m_protocolId));
     syncInfo.push_back(json_spirit::Pair("genesisHash", toHex(m_syncStatus->genesisHash)));
+    syncInfo.push_back(json_spirit::Pair("nodeId", toHex(m_nodeId)));
 
     int64_t currentNumber = m_blockChain->number();
-    syncInfo.push_back(json_spirit::Pair("currentBlockNumber", currentNumber));
+    syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
     syncInfo.push_back(
-        json_spirit::Pair("currentBlockHash", toHex(m_blockChain->numberHash(currentNumber))));
+        json_spirit::Pair("latestHash", toHex(m_blockChain->numberHash(currentNumber))));
     syncInfo.push_back(json_spirit::Pair("knownHighestNumber", m_syncStatus->knownHighestNumber));
     syncInfo.push_back(json_spirit::Pair("knownLatestHash", toHex(m_syncStatus->knownLatestHash)));
     syncInfo.push_back(json_spirit::Pair("txPoolSize", m_txPool->pendingSize()));
@@ -198,7 +185,7 @@ void SyncMaster::maintainTransactions()
             return unsent;
         });
 
-    SYNCLOG(TRACE) << "[Send] [Tx] Transaction " << ts.size() << " of " << m_txPool->pendingSize()
+    SYNCLOG(TRACE) << "[Tx] Transaction " << ts.size() << " of " << m_txPool->pendingSize()
                    << " need to broadcast" << endl;
 
     for (size_t i = 0; i < ts.size(); ++i)
@@ -237,7 +224,7 @@ void SyncMaster::maintainTransactions()
 
         auto msg = packet.toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
-        SYNCLOG(TRACE) << "[Send] [Tx] Transaction send [txNum/toNodeId/messageSize]: "
+        SYNCLOG(DEBUG) << "[Tx] Send transaction to peer [txNum/toNodeId/messageSize]: "
                        << int(txsSize) << "/" << _p->nodeId << "/" << msg->buffer()->size() << "B"
                        << endl;
 
@@ -257,9 +244,10 @@ void SyncMaster::maintainBlocks()
 
         m_service->asyncSendMessageByNodeID(
             _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-        SYNCLOG(TRACE) << "[Send] [Status] Status [number/genesisHash/currentHash] :" << int(number)
-                       << "/" << m_genesisHash << "/" << currentHash << " to " << _p->nodeId
-                       << endl;
+        SYNCLOG(DEBUG) << "[Status] Send current status when maintainBlocks "
+                          "[number/genesisHash/currentHash/peer] :"
+                       << int(number) << "/" << m_genesisHash << "/" << currentHash << "/"
+                       << _p->nodeId << endl;
 
         return true;
     });
@@ -295,7 +283,7 @@ void SyncMaster::maintainPeersStatus()
         {
             // mining : maxPeerNumber - currentNumber == 1
             // no need: maxPeerNumber - currentNumber <= 0
-            SYNCLOG(TRACE) << "[Idle] [Download] No need to download when mining or no need "
+            SYNCLOG(TRACE) << "[Download] No need to download when mining or no need "
                               "[currentNumber/currentSealingNumber/maxPeerNumber]: "
                            << currentNumber << "/" << m_currentSealingNumber << "/" << maxPeerNumber
                            << endl;
@@ -307,7 +295,7 @@ void SyncMaster::maintainPeersStatus()
     uint64_t currentTime = utcTime();
     if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
     {
-        SYNCLOG(TRACE) << "[Idle] [Download] No need to download when not timeout "
+        SYNCLOG(TRACE) << "[Download] No need to download when not timeout "
                           "[currentNumber/maxPeerNumber]: "
                        << currentNumber << "/" << maxPeerNumber << endl;
         return;  // no need to sync
@@ -327,7 +315,7 @@ void SyncMaster::maintainPeersStatus()
     }
     if (currentNumber >= maxRequestNumber)
     {
-        SYNCLOG(TRACE) << "[Idle] [Download] no need to sync with blocks are in queue "
+        SYNCLOG(TRACE) << "[Download] No need to sync when blocks are already in queue "
                           "[currentNumber/maxRequestNumber]: "
                        << currentNumber << "/" << maxRequestNumber << endl;
         return;  // no need to send request block packet
@@ -354,7 +342,7 @@ void SyncMaster::maintainPeersStatus()
             packet.encode(from, size);
             m_service->asyncSendMessageByNodeID(
                 _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-            SYNCLOG(TRACE) << "[Send] [Download] Request blocks [from, to] : [" << from << ", "
+            SYNCLOG(DEBUG) << "[Download] [Request] Request blocks [from, to] : [" << from << ", "
                            << to << "] to " << _p->nodeId << endl;
 
             ++shard;  // shard move
@@ -367,7 +355,7 @@ void SyncMaster::maintainPeersStatus()
             int64_t from = currentNumber + shard * c_maxRequestBlocks;
             int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
 
-            SYNCLOG(ERROR) << "[Send] [Download] Couldn't find any peers to request blocks ["
+            SYNCLOG(ERROR) << "[Download] [Request] Couldn't find any peers to request blocks ["
                            << from << ", " << to << "]" << endl;
             break;
         }
@@ -397,7 +385,7 @@ bool SyncMaster::maintainDownloadingQueue()
             if (ret == CommitResult::OK)
             {
                 m_txPool->dropBlockTrans(*topBlock);
-                SYNCLOG(TRACE) << "[Rcv] [Download] Block commit [number/txs/hash]: "
+                SYNCLOG(DEBUG) << "[Download] [BlockSync] Download block commit [number/txs/hash]: "
                                << topBlock->header().number() << "/"
                                << topBlock->transactions().size() << "/" << topBlock->headerHash()
                                << endl;
@@ -405,12 +393,17 @@ bool SyncMaster::maintainDownloadingQueue()
             else
             {
                 m_txPool->handleBadBlock(*topBlock);
-                SYNCLOG(TRACE) << "[Rcv] [Download] Block commit failed [number/txs/hash]: "
+                SYNCLOG(TRACE) << "[Download] [BlockSync] Block commit failed [number/txs/hash]: "
                                << topBlock->header().number() << "/"
                                << topBlock->transactions().size() << "/" << topBlock->headerHash()
                                << endl;
             }
         }
+        else
+            SYNCLOG(TRACE)
+                << "[Download] [BlockSync] Block in queue is not new block [number/txs/hash]: "
+                << topBlock->header().number() << "/" << topBlock->transactions().size() << "/"
+                << topBlock->headerHash() << endl;
 
         bq.pop();
         topBlock = bq.top();
@@ -422,7 +415,7 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         h256 const& latestHash =
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
-        SYNCLOG(TRACE) << "[Rcv] [Download] Finish. Latest hash: " << latestHash
+        SYNCLOG(TRACE) << "[Download] [BlockSync] Download finish. Latest hash: " << latestHash
                        << " Expected hash: " << m_syncStatus->knownLatestHash;
         assert(m_syncStatus->knownLatestHash == latestHash);
         return true;
@@ -458,10 +451,10 @@ void SyncMaster::maintainPeersConnection()
 
             m_service->asyncSendMessageByNodeID(session.nodeID, packet.toMessage(m_protocolId),
                 CallbackFuncWithSession(), Options());
-            SYNCLOG(TRACE)
-                << "[Send] [Status] Status to new peer [number/genesisHash/currentHash] :"
-                << int(currentNumber) << "/" << m_genesisHash << "/" << currentHash << " to "
-                << session.nodeID << endl;
+            SYNCLOG(DEBUG) << "[Status] Send current status to new peer "
+                              "[number/genesisHash/currentHash/peer] :"
+                           << int(currentNumber) << "/" << m_genesisHash << "/" << currentHash
+                           << "/" << session.nodeID << endl;
         }
     }
 }
@@ -501,14 +494,14 @@ void SyncMaster::maintainBlockRequest()
                 shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
                 if (!block)
                 {
-                    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Get block for node failed "
+                    SYNCLOG(TRACE) << "[Download] [Request] Get block for node failed "
                                       "[reason/number/nodeId]: "
                                    << "block is null/" << number << "/" << _p->nodeId << endl;
                     break;
                 }
                 else if (block->header().number() != number)
                 {
-                    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Get block for node failed "
+                    SYNCLOG(TRACE) << "[Download] [Request] Get block for node failed "
                                       "[reason/number/nodeId]: "
                                    << number << "number incorrect /" << _p->nodeId << endl;
                     break;
@@ -517,12 +510,17 @@ void SyncMaster::maintainBlockRequest()
                 blockContainer.batchAndSend(block);
             }
 
+            if (req.fromNumber < number)
+                SYNCLOG(DEBUG) << "[Download] [Request] [BlockSync] Send blocks [" << req.fromNumber
+                               << ", " << number - 1 << "] to peer " << _p->nodeId << endl;
+
             if (number < numberLimit)  // This respond not reach the end due to timeout
             {
                 // write back the rest request range
                 reqQueue.enablePush();
-                SYNCLOG(TRACE) << "[Download] Repush request req[" << number << ", "
-                               << numberLimit - 1 << "] of " << _p->nodeId << endl;
+                SYNCLOG(DEBUG) << "[Download] [Request] Push unsent requests back to reqQueue ["
+                               << number << ", " << numberLimit - 1 << "] of " << _p->nodeId
+                               << endl;
                 reqQueue.push(number, numberLimit - number);
                 return false;
             }
@@ -541,13 +539,14 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
     int64_t currentNumber = m_blockChain->number();
     if (currentNumber + 1 != _block->header().number())
     {
-        SYNCLOG(WARNING) << "[Rcv] [Download] Ignore illegal block [thisNumber/currentNumber]: "
-                         << _block->header().number() << "/" << currentNumber << endl;
+        SYNCLOG(WARNING)
+            << "[Download] [BlockSync] Ignore illegal block [thisNumber/currentNumber]: "
+            << _block->header().number() << "/" << currentNumber << endl;
         return false;
     }
     if (m_blockChain->numberHash(currentNumber) != _block->header().parentHash())
     {
-        SYNCLOG(WARNING) << "[Rcv] [Download] Ignore illegal block "
+        SYNCLOG(WARNING) << "[Download] [BlockSync] Ignore illegal block "
                             "[thisNumber/currentNumber/thisParentHash/currentHash]: "
                          << _block->header().number() << "/" << currentNumber << "/"
                          << _block->header().parentHash() << "/"
