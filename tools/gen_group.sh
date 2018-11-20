@@ -154,5 +154,6 @@ done
 prefix=${node_dir}"/node_${ip}"
 checkParam
 generateGroupConfig "${group_id}" "${prefix}" "${miner_list}"
+LOG_INFO "generate config for group."${group_id}" succ!"
 }
 main "$@"
