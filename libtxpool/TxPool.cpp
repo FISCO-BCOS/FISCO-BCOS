@@ -324,6 +324,13 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
     uint64_t txCnt = 0;
     for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
+        /// check block limit and nonce again when obtain transactions
+        if (false == isBlockLimitOrNonceOk(*it, false))
+        {
+            drop(it->sha3());
+            m_commonNonceCheck->delCache(*it);
+            continue;
+        }
         if (!_avoid.count(it->sha3()))
         {
             ret.push_back(*it);
