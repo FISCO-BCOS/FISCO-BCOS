@@ -52,7 +52,7 @@ get_platform()
         LOG_ERROR "FISCO-BCOS doesn't Support MAC OS Yet!"
         exit 1;;
     FreeBSD)
-        LOG_ERROR "FISCO-BCOS doesn'tSupport FreeBSD Yet!"
+        LOG_ERROR "FISCO-BCOS doesn't Support FreeBSD Yet!"
         exit 1;;
     Linux)
         if [ -f "/etc/arch-release" ]; then
