@@ -94,6 +94,13 @@ void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
         m_rlpStream.append(bs);
 }
 
+void SyncBlocksPacket::singleEncode(dev::bytes const& _blockRLP)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, BlocksPacket, 1);
+    m_rlpStream.append(_blockRLP);
+}
+
 void SyncReqBlockPacket::encode(int64_t _from, unsigned _size)
 {
     m_rlpStream.clear();
