@@ -406,7 +406,7 @@ void Session::onMessage(
     if (m_actived && server && server->haveNetwork())
     {
         auto it = m_seq2Callback->find(message->seq());
-        if (it != m_seq2Callback->end())
+        if (it != m_seq2Callback->end() && !message->isRequestPacket())
         {
             LOG(TRACE) << "Found callback: " << message->seq();
 
