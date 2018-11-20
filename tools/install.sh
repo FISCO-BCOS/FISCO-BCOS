@@ -5,7 +5,7 @@
 #              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
 #              and execute this shell script later
 # @ author   : yujiechen  
-# @ file     : build.sh
+# @ file     : install.sh
 # @ date     : 2018
 
 #!/bin/bash
@@ -200,8 +200,9 @@ Optional:
     -t       Enable test mode (generate mini-consensus/mini-sync/mini-evm/mini-storage/test_verifier)
     -h       Help
 Example: 
-    bash build.sh 
-    bash build.sh -d
+    bash install.sh 
+    bash install.sh -d
+    bash install.sh -t
 EOF
 	exit 0
 }
