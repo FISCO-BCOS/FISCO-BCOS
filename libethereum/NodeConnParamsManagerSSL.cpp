@@ -529,7 +529,7 @@ void NodeConnParamsManagerSSL::caModifyCallback(const std::string& hash)
     return;
 }
 
-void NodeConnParamsManagerSSL::SetHost(HostApi *host)
+void NodeConnParamsManagerSSL::SetHost(std::shared_ptr<p2p::HostApi> host)
 {
     m_host = host;
 };
