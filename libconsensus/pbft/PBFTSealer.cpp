@@ -47,7 +47,6 @@ void PBFTSealer::handleBlock()
                          << "/" << m_sealing.block.getTransactionSize() << "/"
                          << m_sealing.block.header().hash() << std::endl;
     bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
-    m_pbftEngine->clearAllCache();
     if (!succ)
     {
         resetSealingBlock();
