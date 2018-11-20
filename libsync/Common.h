@@ -58,6 +58,8 @@ static uint64_t const c_respondDownloadRequestTimeout = 200;  // ms
 static unsigned const c_syncPacketIDBase = 1;
 static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 
+static uint64_t const c_maintainBlocksTimeout = 5000;  // ms
+
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;
 using NodeIDs = std::vector<dev::p2p::NodeID>;
