@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     NodeIPEndpoint endpoint;
     /// fake session
-    std::shared_ptr<Session> session = FakeSession(key_pair.pub());
+    std::shared_ptr<FakeSession> session = FakeSessionFunc(key_pair.pub());
     ///------ test invalid case(recv message from own-node)
     /// check onreceive prepare request
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, prepare_req, PrepareReqPacket, false);
@@ -109,13 +109,12 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
         fake_pbft.consensus(), session, viewChange_req, ViewChangeReqPacket, false);
 
     KeyPair key_pair2 = KeyPair::create();
-    std::shared_ptr<Session> session2 = FakeSession(fake_pbft.m_minerList[0]);
+    std::shared_ptr<FakeSession> session2 = FakeSessionFunc(fake_pbft.m_minerList[0]);
     /// test invalid case: this node is not miner
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, false);
     ///----- test valid case
     /// test recv packet from other nodes
     FakePBFTMiner(fake_pbft);  // set this node to be miner
-
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, true);
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, sign_req, SignReqPacket, true);
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, commit_req, CommitReqPacket, true);
@@ -151,6 +150,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
@@ -163,6 +163,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.consensus()->appendMiner(peer2_keyPair.pub());
     FakePBFTMiner(fake_pbft);
     fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
@@ -181,6 +182,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     filter.insert(peer3_keyPair.pub());
     fake_pbft.consensus()->broadcastMsg(
         PrepareReqPacket, prepare_req.uniqueKey(), ref(data), filter);
+
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer3_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
     compareAsyncSendTime(fake_pbft, peer3_keyPair.pub(), 0);

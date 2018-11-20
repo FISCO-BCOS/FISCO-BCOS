@@ -27,10 +27,14 @@
  * @date: 2018-10-15
  */
 #pragma once
+#include <libnetwork/Common.h>
+#include <libp2p/P2PMessage.h>
+
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
-#include <libp2p/Common.h>
+
+
 #include <set>
 
 namespace dev
@@ -41,15 +45,20 @@ static unsigned const c_maxSendTransactions = 128;
 
 // Every c_downloadingRequestTimeout request:
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
-static int64_t const c_maxRequestBlocks = 128;
+static int64_t const c_maxRequestBlocks = 32;
 static size_t const c_maxRequestShards = 4;
 static uint64_t const c_downloadingRequestTimeout = 500;  // ms
 
 static size_t const c_maxDownloadingBlockQueueSize = 4096;
-static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 2;
+static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 8;
+
+static size_t const c_maxReceivedDownloadRequestPerPeer = 8;
+static uint64_t const c_respondDownloadRequestTimeout = 200;  // ms
 
 static unsigned const c_syncPacketIDBase = 1;
-static size_t const c_maxPayload = dev::p2p::Message::MAX_LENGTH - 2048;
+static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
+
+static uint64_t const c_maintainBlocksTimeout = 5000;  // ms
 
 using NodeList = std::set<dev::p2p::NodeID>;
 using NodeID = dev::p2p::NodeID;

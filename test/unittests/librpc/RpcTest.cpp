@@ -19,13 +19,13 @@
  * @date 2018-10-27
  */
 #include "FakeModule.h"
+
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
 #include <librpc/Rpc.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace jsonrpc;
@@ -42,10 +42,7 @@ class RpcTestFixure : public TestOutputHelperFixture
 public:
     RpcTestFixure()
     {
-        FakeHost* hostPtr = createFakeHostWithSession(clientVersion, listenIp, listenPort, 1);
-        m_host = std::shared_ptr<Host>(hostPtr);
-        m_p2pHandler = std::make_shared<P2PMsgHandler>();
-        m_service = std::make_shared<MockService>(m_host, m_p2pHandler);
+        m_service = std::make_shared<FakesService>();
         std::string configurationPath =
             getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
         m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
@@ -57,13 +54,12 @@ public:
 public:
     std::shared_ptr<Rpc> rpc;
     KeyPair m_keyPair = KeyPair::create();
-    std::shared_ptr<MockService> m_service;
+    std::shared_ptr<FakesService> m_service;
     std::shared_ptr<LedgerManager> m_ledgerManager;
 
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
-    std::shared_ptr<P2PMsgHandler> m_p2pHandler;
     std::shared_ptr<Host> m_host;
     dev::GROUP_ID groupId = 1;
     dev::GROUP_ID invalidGroup = 2;
@@ -73,41 +69,40 @@ BOOST_FIXTURE_TEST_SUITE(RpcTest, RpcTestFixure)
 
 BOOST_AUTO_TEST_CASE(testConsensusPart)
 {
-    std::string blockNumber = rpc->blockNumber(groupId);
+    std::string blockNumber = rpc->getBlockNumber(groupId);
     BOOST_CHECK(blockNumber == "0x0");
-    BOOST_CHECK_THROW(rpc->blockNumber(invalidGroup), JsonRpcException);
+    BOOST_CHECK_THROW(rpc->getBlockNumber(invalidGroup), JsonRpcException);
 
-    std::string pbftView = rpc->pbftView(groupId);
+    std::string pbftView = rpc->getPbftView(groupId);
     BOOST_CHECK(pbftView == "0x0");
-    BOOST_CHECK_THROW(rpc->pbftView(invalidGroup), JsonRpcException);
+    BOOST_CHECK_THROW(rpc->getPbftView(invalidGroup), JsonRpcException);
 
-    Json::Value status = rpc->consensusStatus(groupId);
+    Json::Value status = rpc->getConsensusStatus(groupId);
     BOOST_CHECK(status.size() == 8);
-    BOOST_CHECK_THROW(rpc->consensusStatus(invalidGroup), JsonRpcException);
+    BOOST_CHECK_THROW(rpc->getConsensusStatus(invalidGroup), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testSyncPart)
 {
-    Json::Value status = rpc->syncStatus(groupId);
+    Json::Value status = rpc->getSyncStatus(groupId);
     BOOST_CHECK(status.size() == 9);
-    BOOST_CHECK_THROW(rpc->syncStatus(invalidGroup), JsonRpcException);
+    BOOST_CHECK_THROW(rpc->getSyncStatus(invalidGroup), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testP2pPart)
 {
-    std::string s = rpc->version();
-    BOOST_CHECK(s == "2.0");
+    std::string s = rpc->getClientVersion();
+    BOOST_CHECK(s == "FISCO BCOS:2.0");
 
-    Json::Value response = rpc->peers();
+    Json::Value response = rpc->getPeers();
     BOOST_CHECK(response[0]["NodeID"].asString() != "");
-    BOOST_CHECK(response[0]["IP & Port"].asString() == "127.0.0.1:30304:30304");
-    BOOST_CHECK(response[0]["Topic"][0].asString() == "");
+    BOOST_CHECK(response[0]["IP & Port"].asString() == "127.0.0.1:30310");
+    BOOST_CHECK(response[0]["Topic"][0].asString() == "Topic1");
 
-    response = rpc->groupPeers(0);
-    BOOST_CHECK(response.size() == 2);
-    BOOST_CHECK_THROW(rpc->groupPeers(invalidGroup), JsonRpcException);
+    response = rpc->getGroupPeers(groupId);
+    BOOST_CHECK(response.size() == 0);
 
-    response = rpc->groupList();
+    response = rpc->getGroupList();
     BOOST_CHECK(response.size() == 1);
 }
 
@@ -183,6 +178,15 @@ BOOST_AUTO_TEST_CASE(getBlockByNumber)
                 "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
 
     BOOST_CHECK_THROW(rpc->getBlockByNumber(invalidGroup, "0x0", false), JsonRpcException);
+}
+
+BOOST_AUTO_TEST_CASE(testGetBlockHashByNumber)
+{
+    std::string blockNumber = "0x0";
+    std::string response = rpc->getBlockHashByNumber(groupId, blockNumber);
+    BOOST_CHECK(response == "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
+
+    BOOST_CHECK_THROW(rpc->getBlockHashByNumber(invalidGroup, blockNumber), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByHash)
@@ -287,21 +291,37 @@ BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
 
     BOOST_CHECK_THROW(rpc->getTransactionReceipt(invalidGroup, txHash), JsonRpcException);
 }
-BOOST_AUTO_TEST_CASE(testPendingTransactions)
+BOOST_AUTO_TEST_CASE(testGetpendingTransactions)
 {
-    Json::Value response = rpc->pendingTransactions(groupId);
+    Json::Value response = rpc->getPendingTransactions(groupId);
 
-    BOOST_CHECK(
-        response["pending"][0]["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
-    BOOST_CHECK(response["pending"][0]["gas"].asString() == "0x9184e729fff");
-    BOOST_CHECK(response["pending"][0]["gasPrice"].asString() == "0x174876e7ff");
-    BOOST_CHECK(response["pending"][0]["nonce"].asString() ==
+    BOOST_CHECK(response[0]["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
+    BOOST_CHECK(response[0]["gas"].asString() == "0x9184e729fff");
+    BOOST_CHECK(response[0]["gasPrice"].asString() == "0x174876e7ff");
+    BOOST_CHECK(response[0]["nonce"].asString() ==
                 "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f");
-    BOOST_CHECK(
-        response["pending"][0]["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    BOOST_CHECK(response["pending"][0]["value"].asString() == "0x0");
+    BOOST_CHECK(response[0]["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
+    BOOST_CHECK(response[0]["value"].asString() == "0x0");
 
-    BOOST_CHECK_THROW(rpc->pendingTransactions(invalidGroup), JsonRpcException);
+    BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
+}
+
+BOOST_AUTO_TEST_CASE(testGetCode)
+{
+    std::string address = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b";
+    std::string response = rpc->getCode(groupId, address);
+    BOOST_CHECK(response == "0x");
+
+    BOOST_CHECK_THROW(rpc->getCode(invalidGroup, address), JsonRpcException);
+}
+
+BOOST_AUTO_TEST_CASE(testGetTotalTransactionCount)
+{
+    Json::Value response = rpc->getTotalTransactionCount(groupId);
+    BOOST_CHECK(response["count"].asString() == "0x0");
+    BOOST_CHECK(response["number"].asString() == "0x0");
+
+    BOOST_CHECK_THROW(rpc->getTotalTransactionCount(invalidGroup), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testCall)
@@ -316,9 +336,10 @@ BOOST_AUTO_TEST_CASE(testCall)
     request["code"] = "0x3";
     request["randomid"] = "0x4";
     request["blockLimit"] = "0x5";
-    std::string response = rpc->call(groupId, request);
+    Json::Value response = rpc->call(groupId, request);
 
-    BOOST_CHECK(response == "0x");
+    BOOST_CHECK(response["currentBlockNumber"].asString() == "0x0");
+    BOOST_CHECK(response["output"].asString() == "0x");
 
     BOOST_CHECK_THROW(rpc->call(invalidGroup, request), JsonRpcException);
 }

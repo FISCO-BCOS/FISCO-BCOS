@@ -39,6 +39,8 @@ struct P2pParam;
 /// struct GenesisParam;
 struct GenesisParam;
 struct AMDBParam;
+struct StorageParam;
+struct StateParam;
 class LedgerParamInterface
 {
 public:
@@ -49,15 +51,10 @@ public:
     virtual SyncParam& mutableSyncParam() = 0;
     virtual GenesisParam& mutableGenesisParam() = 0;
     virtual AMDBParam& mutableAMDBParam() = 0;
-    virtual std::string const& dbType() const = 0;
-    virtual bool enableMpt() const = 0;
-    virtual void setMptState(bool mptState) = 0;
-    virtual void setDBType(std::string const& dbType) = 0;
     virtual std::string const& baseDir() const = 0;
     virtual void setBaseDir(std::string const& baseDir) = 0;
-
-protected:
-    virtual void initLedgerParams() = 0;
+    virtual StorageParam& mutableStorageParam() = 0;
+    virtual StateParam& mutableStateParam() = 0;
 };
 }  // namespace ledger
 }  // namespace dev

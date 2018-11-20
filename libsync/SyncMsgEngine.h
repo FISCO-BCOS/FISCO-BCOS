@@ -22,17 +22,18 @@
 
 #pragma once
 #include "Common.h"
+#include "RspBlockReq.h"
 #include "SyncMsgPacket.h"
 #include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
-#include <libp2p/Common.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
-#include <libp2p/Session.h>
+#include <libp2p/P2PMessage.h>
 #include <libtxpool/TxPoolInterface.h>
-
 
 namespace dev
 {
@@ -58,12 +59,12 @@ public:
             m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
     }
 
-    void messageHandler(dev::p2p::P2PException _e, std::shared_ptr<dev::p2p::SessionFace> _session,
-        dev::p2p::Message::Ptr _msg);
+    void messageHandler(dev::p2p::NetworkException _e,
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);
 
 private:
-    bool checkSession(std::shared_ptr<dev::p2p::SessionFace> _session);
-    bool checkMessage(dev::p2p::Message::Ptr _msg);
+    bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
+    bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
     bool interpret(SyncMsgPacket const& _packet);
 
 private:
@@ -88,22 +89,24 @@ private:
 class DownloadBlocksContainer
 {
 public:
-    DownloadBlocksContainer(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        PROTOCOL_ID _protocolId, int64_t _startNumber)
-      : m_service(_service),
-        m_protocolId(_protocolId),
-        m_startBlockNumber(_startNumber),
-        m_blockRLPShards(1, std::vector<dev::bytes>())
+    DownloadBlocksContainer(
+        std::shared_ptr<dev::p2p::P2PInterface> _service, PROTOCOL_ID _protocolId, NodeID _nodeId)
+      : m_service(_service), m_protocolId(_protocolId), m_nodeId(_nodeId), m_blockRLPsBatch()
     {}
-    void push(BlockPtr _block);
-    void send(NodeID _nodeId);
+    ~DownloadBlocksContainer() { clearBatchAndSend(); }
+
+    void batchAndSend(BlockPtr _block);
+
+private:
+    void clearBatchAndSend();
+    void sendBigBlock(bytes const& _blockRLP);
 
 private:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     PROTOCOL_ID m_protocolId;
-    int64_t m_startBlockNumber;
-    std::vector<std::vector<dev::bytes>> m_blockRLPShards;
-    size_t m_currentShardSize = 0;
+    NodeID m_nodeId;
+    std::vector<dev::bytes> m_blockRLPsBatch;
+    size_t m_currentBatchSize = 0;
 };
 
 }  // namespace sync

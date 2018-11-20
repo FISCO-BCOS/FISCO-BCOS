@@ -31,9 +31,9 @@
 #include "ChannelServer.h"
 #include "ChannelSession.h"
 #include "libdevcore/ThreadPool.h"
-#include "libp2p/Common.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libdevcore/FixedHash.h>
+#include <libp2p/Service.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -42,6 +42,7 @@
 #include <queue>
 #include <string>
 #include <thread>
+
 namespace dev
 {
 namespace p2p
@@ -119,7 +120,7 @@ public:
     void CloseConnection(int _socket);
 
     void onReceiveChannelMessage(
-        p2p::P2PException, std::shared_ptr<p2p::Session>, p2p::Message::Ptr);
+        p2p::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
 
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
 

@@ -33,46 +33,47 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libledger/LedgerManager.h>
+#include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <test/tools/libutils/Common.h>
 #include <test/unittests/libconsensus/FakePBFTEngine.h>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockchain;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::sync;
 using namespace dev::ledger;
+using namespace dev::p2p;
 
 namespace dev
 {
 namespace test
 {
-class MockService : public Service
+class FakesService : public Service
 {
 public:
-    MockService(std::shared_ptr<Host> _host, std::shared_ptr<P2PMsgHandler> _p2pMsgHandler)
-      : Service(_host, _p2pMsgHandler)
+    FakesService() : Service()
     {
         NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
-        SessionInfo info(nodeID, m_endpoint, std::vector<std::string>());
-        std::vector<std::string> topics;
+        SessionInfo info(nodeID, m_endpoint, std::set<std::string>());
+        std::set<std::string> topics;
         std::string topic = "Topic1";
-        topics.push_back(topic);
+        topics.insert(topic);
         m_sessionInfos.push_back(SessionInfo(nodeID, m_endpoint, topics));
     }
 
-    virtual SessionInfos sessionInfos() const override { return m_sessionInfos; }
+    virtual SessionInfos sessionInfos() override { return m_sessionInfos; }
     void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
     SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
 
-    void asyncSendMessageByNodeID(NodeID const& nodeID, Message::Ptr message,
-        CallbackFunc callback = [](P2PException e, Message::Ptr msg) {},
-        dev::p2p::Options const& options = dev::p2p::Options()) override
+    void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
+        CallbackFuncWithSession callback, dev::p2p::Options) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
@@ -139,7 +140,10 @@ public:
     virtual ~MockBlockChain() {}
 
     virtual int64_t number() override { return m_blockNumber; }
-    virtual int64_t totalTransactionCount() override { return m_totalTransactionCount; }
+    virtual std::pair<int64_t, int64_t> totalTransactionCount() override
+    {
+        return std::make_pair(m_totalTransactionCount, m_blockNumber);
+    }
     void setGroupMark(std::string const& groupMark) override {}
     void createTransaction()
     {
@@ -169,6 +173,23 @@ public:
         return LocalisedTransaction(transaction, blockHash, 0, 0);
     }
 
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+        dev::h256 const& _txHash) override
+    {
+        if (_txHash ==
+            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+        {
+            auto tx = getLocalisedTxByHash(_txHash);
+            auto txReceipt = getTransactionReceiptByHash(_txHash);
+            return LocalisedTransactionReceipt(txReceipt, _txHash, tx.blockHash(), tx.blockNumber(),
+                tx.from(), tx.to(), tx.transactionIndex(), txReceipt.gasUsed(),
+                txReceipt.contractAddress());
+        }
+        else
+            return LocalisedTransactionReceipt(
+                TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+    }
+
     dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
 
     virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(
@@ -196,7 +217,10 @@ public:
         m_blockNumber = block.blockHeader().number() + 1;
         m_totalTransactionCount += block.transactions().size();
         m_onReady();
+        return CommitResult::OK;
     }
+
+    dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
     BlockHeader blockHeader;
     Transactions transactions;

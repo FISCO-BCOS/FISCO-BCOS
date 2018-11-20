@@ -14,12 +14,12 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @file RpcTest.cpp
+ * @file rpc_main.cpp
  * @author: caryliao
  * @date 2018-11-2
  */
-#include "FakeHost.h"
 #include "FakeModule.h"
+#include "WebsocketServer.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
 #include <librpc/Rpc.h>
@@ -32,16 +32,38 @@ using namespace dev::rpc;
 using namespace dev::ledger;
 using namespace dev::demo;
 
+
+using tcp = boost::asio::ip::tcp;
+namespace websocket = boost::beast::websocket;
+
 int main(int argc, const char* argv[])
 {
-    FakeHost* hostPtr = createFakeHostWithSession("2.0", "127.0.0.1", 30303);
-    auto m_host = std::shared_ptr<Host>(hostPtr);
-    auto m_p2pHandler = std::make_shared<P2PMsgHandler>();
-    auto m_service = std::make_shared<MockService>(m_host, m_p2pHandler);
+#if 1
+
+    auto const address = boost::asio::ip::make_address("127.0.0.1");
+    auto const port = static_cast<unsigned short>(std::atoi("30302"));
+    auto const threads = 1;
+    // The io_context is required for all I/O
+    boost::asio::io_context ioc{threads};
+
+    // Create and launch a listening port
+    std::make_shared<listener>(ioc, tcp::endpoint{address, port})->run();
+
+    std::vector<std::thread> v;
+    v.reserve(threads - 1);
+    for (auto i = threads - 1; i > 0; --i)
+        v.emplace_back([&ioc] { ioc.run(); });
+    ioc.run();
+
+#endif
+
+#if 0
+
+    auto m_service = std::make_shared<MockService>();
     std::string configurationPath = "";
     KeyPair m_keyPair = KeyPair::create();
     auto m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
-    m_ledgerManager->initSingleLedger<FakeLedger>(0, "", configurationPath);
+    m_ledgerManager->initSingleLedger<FakeLedger>(1, "", configurationPath);
 
     auto rpc = new Rpc(m_ledgerManager, m_service);
 
@@ -59,4 +81,6 @@ int main(int argc, const char* argv[])
     jsonrpcHttpServer->StartListening();
     LOG(INFO) << "JsonrpcHttpServer started.";
     sleep(10000);
+
+#endif
 }

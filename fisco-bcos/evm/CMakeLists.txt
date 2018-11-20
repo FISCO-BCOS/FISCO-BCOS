@@ -18,6 +18,7 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+if(TESTS)
 
 aux_source_directory(. SRC_LIST)
 
@@ -36,4 +37,4 @@ target_link_libraries(mini-evm evm)
 target_link_libraries(mini-evm executivecontext)
 target_link_libraries(mini-evm mptstate)
 
-install(TARGETS mini-evm DESTINATION bin)
+endif()

@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include "RspBlockReq.h"
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
@@ -32,9 +33,9 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
-#include <libp2p/Common.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
-#include <libp2p/Session.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
 
@@ -83,7 +84,7 @@ public:
     /// get status of block sync
     /// @returns Synchonization status
     virtual SyncStatus status() const override;
-    virtual string const syncInfo() const override;
+    virtual std::string const syncInfo() const override;
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // virtual h256 latestBlockSent() override;
@@ -172,6 +173,8 @@ private:
     // sync state
     bool m_newTransactions = false;
     bool m_newBlocks = false;
+    uint64_t m_maintainBlocksTimeout = 0;
+
 
     // settings
     dev::eth::Handler<> m_tqReady;
@@ -184,6 +187,7 @@ public:
     bool maintainDownloadingQueue();  /// return true if downloading finish
     void maintainDownloadingQueueBuffer();
     void maintainPeersConnection();
+    void maintainBlockRequest();
 
 private:
     bool isNewBlock(BlockPtr _block);

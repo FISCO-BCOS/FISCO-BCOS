@@ -21,7 +21,6 @@
  * @date: 2018-10-25
  */
 
-#include <libp2p/Common.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -52,31 +51,31 @@ public:
     FakeSyncToolsSet fakeSyncToolsSet;
     shared_ptr<SyncMasterStatus> fakeStatusPtr;
     SyncMsgEngine fakeMsgEngine;
-    P2PException fakeException;
+    NetworkException fakeException;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
 
 BOOST_AUTO_TEST_CASE(InvalidInputTest)
 {
-    auto fakeMsgPtr = make_shared<Message>();
+    auto fakeMsgPtr = make_shared<P2PMessage>();
     // Invalid Session
     auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0xabcd));
-    BOOST_CHECK(fakeSessionPtr->isConnected() == true);
+    BOOST_CHECK(fakeSessionPtr->actived() == true);
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, fakeMsgPtr);
-    BOOST_CHECK(fakeSessionPtr->isConnected() == false);
+    BOOST_CHECK(fakeSessionPtr->actived() == false);
 
     // Invalid Message
     fakeSessionPtr = fakeSyncToolsSet.createSession();
-    BOOST_CHECK(fakeSessionPtr->isConnected() == true);
+    BOOST_CHECK(fakeSessionPtr->actived() == true);
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, fakeMsgPtr);
-    BOOST_CHECK(fakeSessionPtr->isConnected() == false);
+    BOOST_CHECK(fakeSessionPtr->actived() == false);
 }
 
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
     auto statusPacket = SyncStatusPacket();
-    statusPacket.encode(0x00, h256(0xab), h256(0xcd));
+    statusPacket.encode(0x00, h256(0xcdef), h256(0xcd));
     auto msgPtr = statusPacket.toMessage(0x01);
     auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0x1234));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
@@ -125,12 +124,13 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
     reqBlockPacket.encode(int64_t(0x01), 0x02);
     auto msgPtr = reqBlockPacket.toMessage(0x03);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
+
+    fakeStatusPtr->newSyncPeerStatus({h512(0), 0, h256(), h256()});
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
-    auto servicePtr = static_pointer_cast<FakeService>(fakeSyncToolsSet.getServicePtr());
-    auto sendCount = servicePtr->getAsyncSendSizeByNodeID(fakeSessionPtr->id());
-    BOOST_CHECK(sendCount == 1);
-}
+    BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0)));
+    BOOST_CHECK(!fakeStatusPtr->peerStatus(h512(0))->reqQueue.empty());
+}  // namespace test
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -35,7 +35,7 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
     WriteGuard l(x_buffer);
     if (m_buffer->size() >= c_maxDownloadingBlockQueueBufferSize)
     {
-        SYNCLOG(WARNING) << "[Rcv] [Download] DownloadingBlockQueueBuffer is full with size "
+        SYNCLOG(WARNING) << "[Download] [BlockSync] DownloadingBlockQueueBuffer is full with size "
                          << m_buffer->size();
         return;
     }
@@ -128,18 +128,18 @@ void DownloadingBlockQueue::flushBufferToQueue()
     // pop buffer into queue
     WriteGuard l(x_blocks);
 
-
     for (ShardPtr blocksShard : *localBuffer)
     {
         if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to control
                                                                 // insert
         {
-            SYNCLOG(TRACE) << "[Rcv] [Download] DownloadingBlockQueueBuffer is full with size "
-                           << m_blocks.size();
+            SYNCLOG(TRACE)
+                << "[Download] [BlockSync] DownloadingBlockQueueBuffer is full with size "
+                << m_blocks.size();
             break;
         }
 
-        SYNCLOG(TRACE) << "[Rcv] [Download] Decoding block buffer [size]: "
+        SYNCLOG(TRACE) << "[Download] [BlockSync] Decoding block buffer [size]: "
                        << blocksShard->blocksBytes.size() << endl;
 
         RLP const& rlps = RLP(ref(blocksShard->blocksBytes));
@@ -158,15 +158,16 @@ void DownloadingBlockQueue::flushBufferToQueue()
             }
             catch (std::exception& e)
             {
-                SYNCLOG(WARNING) << "[Rcv] [Download] Invalid block RLP [reason/RLPDataSize]: "
-                                 << e.what() << "/" << rlps.data().size() << endl;
+                SYNCLOG(WARNING)
+                    << "[Download] [BlockSync] Invalid block RLP [reason/RLPDataSize]: " << e.what()
+                    << "/" << rlps.data().size() << endl;
                 continue;
             }
         }
 
-        SYNCLOG(TRACE)
-            << "[Rcv] [Download] Flush buffer to block queue [import/rcv/downloadBlockQueue]: "
-            << successCnt << "/" << itemCount << "/" << m_blocks.size() << endl;
+        SYNCLOG(TRACE) << "[Download] [BlockSync] Flush buffer to block queue "
+                          "[import/rcv/downloadBlockQueue]: "
+                       << successCnt << "/" << itemCount << "/" << m_blocks.size() << endl;
     }
 }
 

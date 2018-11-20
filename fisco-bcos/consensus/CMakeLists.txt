@@ -18,6 +18,7 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+if(TESTS)
 
 aux_source_directory(. SRC_LIST)
 
@@ -33,7 +34,7 @@ target_link_libraries(mini-consensus Boost::program_options)
 target_link_libraries(mini-consensus devcore)
 target_link_libraries(mini-consensus devcrypto)
 target_link_libraries(mini-consensus ethcore)
-target_link_libraries(mini-consensus p2p)
+target_link_libraries(mini-consensus network)
 target_link_libraries(mini-consensus blockverifier)
 target_link_libraries(mini-consensus sync)
 target_link_libraries(mini-consensus txpool)
@@ -42,8 +43,4 @@ target_link_libraries(mini-consensus consensus)
 target_link_libraries(mini-consensus ledger)
 target_link_libraries(mini-consensus initializer)
 
-if (UNIX)
-target_link_libraries(mini-consensus pthread)
 endif()
-
-install(TARGETS mini-consensus DESTINATION bin)

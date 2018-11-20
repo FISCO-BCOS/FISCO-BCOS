@@ -51,44 +51,40 @@ public:
     }
 
     // consensus part
-    virtual std::string blockNumber(int _groupID) override;
-    virtual std::string pbftView(int _groupID) override;
-    virtual Json::Value consensusStatus(int _groupID) override;
+    virtual std::string getBlockNumber(int _groupID) override;
+    virtual std::string getPbftView(int _groupID) override;
+    virtual Json::Value getConsensusStatus(int _groupID) override;
 
     // sync part
-    virtual Json::Value syncStatus(int _groupID) override;
+    virtual Json::Value getSyncStatus(int _groupID) override;
 
     // p2p part
-    virtual std::string version() override;
-    virtual Json::Value peers() override;
-    virtual Json::Value groupPeers(int _groupID) override;
-    virtual Json::Value groupList() override;
+    virtual std::string getClientVersion() override;
+    virtual Json::Value getPeers() override;
+    virtual Json::Value getGroupPeers(int _groupID) override;
+    virtual Json::Value getGroupList() override;
 
     // block part
     virtual Json::Value getBlockByHash(
         int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
     virtual Json::Value getBlockByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
+    virtual std::string getBlockHashByNumber(
+        int _groupID, const std::string& _blockNumber) override;
 
     // transaction part
-    /// @return the information about a transaction requested by transaction hash.
     virtual Json::Value getTransactionByHash(
         int _groupID, const std::string& _transactionHash) override;
-    /// @return information about a transaction by block hash and transaction index position.
     virtual Json::Value getTransactionByBlockHashAndIndex(
         int _groupID, const std::string& _blockHash, const std::string& _transactionIndex) override;
-    /// @return information about a transaction by block number and transaction index position.
     virtual Json::Value getTransactionByBlockNumberAndIndex(int _groupID,
         const std::string& _blockNumber, const std::string& _transactionIndex) override;
-    /// @return the receipt of a transaction by transaction hash.
-    /// @note That the receipt is not available for pending transactions.
     virtual Json::Value getTransactionReceipt(
         int _groupID, const std::string& _transactionHash) override;
-    /// @return information about pendingTransactions.
-    virtual Json::Value pendingTransactions(int _groupID) override;
-    /// Executes a new message call immediately without creating a transaction on the blockchain.
-    virtual std::string call(int _groupID, const Json::Value& request) override;
-    // Creates new message call transaction or a contract creation for signed transactions.
+    virtual Json::Value getPendingTransactions(int _groupID) override;
+    virtual std::string getCode(int _groupID, const std::string& address) override;
+    virtual Json::Value getTotalTransactionCount(int _groupID) override;
+    virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
 
