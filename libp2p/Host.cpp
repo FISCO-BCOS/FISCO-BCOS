@@ -137,7 +137,6 @@ HostApi::HostApi(string const& _clientVersion, NetworkPreferences const& _n, byt
 HostApi::~HostApi()
 {
 	stop();
-	terminate();
 }
 
 void HostApi::start()
@@ -179,7 +178,9 @@ void HostApi::stop()
 	// stop worker thread
 	if (isWorking())
 		stopWorking();
-	doneWorking();
+	// stop capabilities (eth: stops syncing or block/tx broadcast)
+	for (auto const& h : m_capabilities)
+		h.second->onStopping();
 }
 
 void HostApi::doWork()
