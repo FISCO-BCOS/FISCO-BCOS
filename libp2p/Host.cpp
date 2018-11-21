@@ -606,16 +606,16 @@ void Host::runAcceptor()
 
 void Host::doneWorking()
 {
+	// shutdown acceptor
+	m_tcp4Acceptor.cancel();
+	if (m_tcp4Acceptor.is_open())
+		m_tcp4Acceptor.close();
+		
 	// reset ioservice (cancels all timers and allows manually polling network, below)
 	m_ioService.reset();
 
 	DEV_GUARDED(x_timers)
 	m_timers.clear();
-
-	// shutdown acceptor
-	m_tcp4Acceptor.cancel();
-	if (m_tcp4Acceptor.is_open())
-		m_tcp4Acceptor.close();
 
 	// There maybe an incoming connection which started but hasn't finished.
 	// Wait for acceptor to end itself instead of assuming it's complete.

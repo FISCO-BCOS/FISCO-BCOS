@@ -61,16 +61,15 @@ std::chrono::milliseconds const c_keepAliveTimeOutSSL = std::chrono::millisecond
 
 void HostSSL::doneWorking()
 {
-	// reset ioservice (cancels all timers and allows manually polling network, below)
-	m_ioService.reset();
-
-	DEV_GUARDED(x_timers)
-	m_timers.clear();
-
 	// shutdown acceptor
 	m_tcp4Acceptor.cancel();
 	if (m_tcp4Acceptor.is_open())
 		m_tcp4Acceptor.close();
+
+	// reset ioservice (cancels all timers and allows manually polling network, below)
+	m_ioService.reset();
+	DEV_GUARDED(x_timers)
+	m_timers.clear();
 
 	while (m_accepting)
 		m_ioService.poll();
