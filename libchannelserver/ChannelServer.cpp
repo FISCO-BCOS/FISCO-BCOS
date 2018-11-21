@@ -53,7 +53,7 @@ void dev::channel::ChannelServer::run() {
 					LOG(ERROR) << "IO thread error:" << e.what();
 				}
 
-				LOG(ERROR) << "try restart ";
+				LOG(WARNING) << "try restart ";
 				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 				if(_ioService->stopped()) {
 					_ioService->reset();

@@ -188,10 +188,10 @@ class ModularServer<I, Is...> : public ModularServer<Is...>
 		{
 			try
 			{
-				std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+				// std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 				(m_interface.get()->*(pointer->second))(_input, _output);
-				std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-				std::chrono::milliseconds timeLong = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+				// std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+				// std::chrono::milliseconds timeLong = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 				// if (ModularServer<Is...>::statistics.get() != nullptr)
 				// ModularServer<Is...>::statistics->interfaceCalled(_proc.GetProcedureName(), timeLong.count());
 			}
