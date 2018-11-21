@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
 
     Json::Value response = rpc->getPeers();
     BOOST_CHECK(response[0]["NodeID"].asString() != "");
-    BOOST_CHECK(response[0]["IP & Port"].asString() == "127.0.0.1:30310");
+    BOOST_CHECK(response[0]["IPAndPort"].asString() == "127.0.0.1:30310");
     BOOST_CHECK(response[0]["Topic"][0].asString() == "Topic1");
 
     response = rpc->getGroupPeers(groupId);

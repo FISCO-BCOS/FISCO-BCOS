@@ -37,11 +37,13 @@ enum RPCExceptionType
     JsonParse,
     BlockHash,
     BlockNumberT,
-    TransactionIndex
+    TransactionIndex,
+    CallFrom
 };
 
 const std::string RPCMsg[] = {"Success", "GroupID does not exist", "Response json parse error",
-    "BlockHash does not exist", "BlockNumber does not exist", "TransactionIndex is out of range"};
+    "BlockHash does not exist", "BlockNumber does not exist", "TransactionIndex is out of range",
+    "Call needs a 'from' field"};
 
 }  // namespace rpc
 }  // namespace dev
