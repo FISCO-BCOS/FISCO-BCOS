@@ -669,7 +669,7 @@ void HostSSL::reconnectAllNodes()
 	NodeConnManagerSingleton::GetInstance().getAllConnect(mConnectParams);
 	std::map<std::string, NodeIPEndpoint> mMergeConnectParams;//merge 
 	
-
+	/* /// commented by wheatli, there is a bug in this section, it will not merge the session peers when the config list is empty
 	RecursiveGuard l(x_sessions);
 	for (auto stNode : mConnectParams)
 	{
@@ -703,7 +703,35 @@ void HostSSL::reconnectAllNodes()
 		if( !mMergeConnectParams.count(stNode.second.name()))
 			mMergeConnectParams[stNode.second.name()] = stNode.second;
 		
-	}//for
+	}//for */
+
+	for (auto stNode : mConnectParams) {
+		mMergeConnectParams[stNode.second.name()] = stNode.second;
+	}
+	
+	RecursiveGuard l(x_sessions);
+	std::set<std::string> sessionSet;
+	for (auto const& p : m_peers) {
+		if( !mMergeConnectParams.count(p.second->endpoint.name()))
+			mMergeConnectParams[p.second->endpoint.name()] = p.second->endpoint;
+			
+		if( !p.second->endpoint.host.empty() )
+			mMergeConnectParams[p.second->endpoint.name()].host = p.second->endpoint.host;
+		
+		if (havePeerSession(p.second->id)) {
+			sessionSet.insert(p.second->endpoint.name());
+		}
+	}
+
+	for (auto stNode : mMergeConnectParams) {
+		bool hasPeer = sessionSet.count(stNode.first);
+		if( !hasPeer && ( m_tcpPublic != stNode.second) && (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) != stNode.second) )
+		{
+			LOG(TRACE) << "HostSSL::reconnectAllNodes try to reconnect " << stNode.first;
+			connect(stNode.second);
+		}
+	}
+
 
 	NodeConnManagerSingleton::GetInstance().updateAllConnect(mMergeConnectParams);
 	m_lastReconnect = chrono::steady_clock::now();
