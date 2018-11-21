@@ -34,7 +34,7 @@ rpc_command=
 checkParam()
 {
     #check group_id
-    if [ "${all_groups}" == "false"] -a [ "${group_id}" == "" ];then
+    if [ "${all_groups}" == "false" -a "${group_id}" == "" ];then
         LOG_ERROR "Must set groupId"
         exit 1
     fi
@@ -138,6 +138,7 @@ while getopts "g:i:p:ah" option;do
     h) help;;
     esac
 done
+checkParam
 monitor
 }
 main "$@"
