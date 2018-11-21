@@ -1663,9 +1663,9 @@ int main(int argc, char** argv)
 
 	unique_ptr<rpc::SessionManager> sessionManager;
 	unique_ptr<SimpleAccountHolder> accountHolder;
-	unique_ptr<ModularServer<>> channelModularServer;
-	unique_ptr<ModularServer<>> jsonrpcHttpServer;
-	unique_ptr<ModularServer<>> jsonrpcIpcServer;
+	ModularServer<>* channelModularServer;
+	ModularServer<>* jsonrpcHttpServer;
+	ModularServer<>* jsonrpcIpcServer;
 	AddressHash allowedDestinations;
 
 	std::function<bool(TransactionSkeleton const&, bool)> authenticator;
@@ -1715,7 +1715,7 @@ int main(int argc, char** argv)
 		if (jsonRPCURL >= 0)
 		{
 			//no need to maintain admin and leveldb interfaces for rpc
-			jsonrpcHttpServer.reset(new FullServer(
+			jsonrpcHttpServer = new FullServer(
 				new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
 				// new rpc::LevelDB(), new rpc::Whisper(web3, {}),
 				nullptr, nullptr,
@@ -1731,7 +1731,7 @@ int main(int argc, char** argv)
 				//adminEth, adminNet, adminUtils,
 				//new rpc::Debug(*web3.ethereum()),
 				//testEth
-			));
+			);
 			auto httpConnector = new SafeHttpServer("0.0.0.0", jsonRPCURL, "", "", SensibleHttpThreads);
 			httpConnector->setAllowedOrigin(rpcCorsDomain);
 			jsonrpcHttpServer->addConnector(httpConnector);
@@ -1748,7 +1748,7 @@ int main(int argc, char** argv)
 
 		if (ipc)
 		{
-			jsonrpcIpcServer.reset(new FullServer(
+			jsonrpcIpcServer = new FullServer(
 			   new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
 			   //new rpc::LevelDB(),
 			   //new rpc::Whisper(web3, {}),
@@ -1767,7 +1767,7 @@ int main(int argc, char** argv)
 			   nullptr,
 			   nullptr,
 			   nullptr
-			));
+			);
 			auto ipcConnector = new IpcServer("geth");
 			jsonrpcIpcServer->addConnector(ipcConnector);
 			// jsonrpcIpcServer->setStatistics(new InterfaceStatistics(getDataDir() + "IPC", chainParams.statsInterval));
@@ -1776,7 +1776,7 @@ int main(int argc, char** argv)
 
 		//启动ChannelServer
 		if (!chainParams.listenIp.empty() && chainParams.channelPort > 0) {
-			channelModularServer.reset(
+			channelModularServer = 
 			    new FullServer(
 					new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
 					nullptr, //new rpc::LevelDB(),
@@ -1789,7 +1789,7 @@ int main(int argc, char** argv)
 					nullptr, //new rpc::AdminUtils(*sessionManager.get()),
 					nullptr, //new rpc::Debug(*web3.ethereum()),
 					nullptr //testEth
-				   ));
+				   );
 
 			channelServer->setListenAddr(chainParams.listenIp);
 			channelServer->setListenPort(chainParams.channelPort);
@@ -1864,11 +1864,11 @@ int main(int argc, char** argv)
 	}
 	
 
-	if (jsonrpcHttpServer.get())
+	if (jsonrpcHttpServer)
 		jsonrpcHttpServer->StopListening();
-	if (jsonrpcIpcServer.get())
+	if (jsonrpcIpcServer)
 		jsonrpcIpcServer->StopListening();
-	if (channelModularServer.get())
+	if (channelModularServer)
 		channelModularServer->StopListening();
 	/*	auto netData = web3.saveNetwork();
 		if (!netData.empty())
