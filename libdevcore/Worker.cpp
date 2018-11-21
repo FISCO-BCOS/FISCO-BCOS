@@ -99,18 +99,18 @@ void Worker::stopWorking()
 	DEV_TIMED_ABOVE("Stop worker", 100)
 	while (true) {
 		bool stop = false;
-
+		
 		DEV_RECURSIVE_GUARDED(x_work) {
 			if(m_state == WorkerState::Stopped) {
 				stop = true;
 			}
 		}
-
+		this_thread::sleep_for(chrono::milliseconds(20));
 		if(stop) {
 			break;
 		}
 
-		this_thread::sleep_for(chrono::microseconds(20));
+		
 	}
 }
 

@@ -178,6 +178,7 @@ void HostApi::stop()
 	// stop worker thread
 	if (isWorking())
 		stopWorking();
+	doneWorking();
 }
 
 void HostApi::doWork()
