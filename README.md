@@ -1,15 +1,43 @@
 ![](docs/images/FISCO_BCOS_Logo.svg)
 
-**FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Two major camps of blockchain technology - public and consortium chains, to better serve the general public, open consortium chain is the perfect choice for enterprises to unlock the potential of collaborative businesses model. FISCO BCOS is born to support open consortium chain applications, by supporting multiple chains’, and cross-chain communication.
+**FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Two major camps of blockchain technology - public and consortium chains, to better serve the general public, open consortium chain is the perfect choice for enterprises to unlock the potential of collaborative businesses model. FISCO BCOS is born to support open consortium chain applications, by supporting multiple chains, and cross-chain communication.
 
 ## Getting Started
 
 
 [![GitHub forks](https://img.shields.io/github/forks/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/network) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/lab-bcos/total.svg)](https://github.com/FISCO-BCOS/lab-bcos) 
 
-* Install FISCO BCOS
-* Build a blockchain
-* Deploy a smart contract
+### Install FISCO BCOS
+
+To install the execution and running environent. Clone FISCO BCOS and run `install.sh`. 
+
+``` shell
+git clone --recursive https://github.com/FISCO-BCOS/lab-bcos.git
+cd lab-bcos/tools
+bash install.sh
+```
+
+### Build a blockchain
+
+Run ``` build_chain.sh``` to generate a blockchain with some nodes. For example, we build a blockchain with 4 nodes belongs to 192.168.1.1.
+
+``` shell
+cd lab-bcos/tools
+bash build_chain.sh -l "192.168.1.1:4"
+```
+
+After that, we start up all nodes. And the blockchain is running!
+
+``` shell
+cd ./nodes
+bash start_all.sh
+```
+
+More senarios, read XXX.
+
+### Deploy a smart contract
+
+Read XXX to deploy your smart contracts and use them.
 
 ## Developing & Contributing
 
