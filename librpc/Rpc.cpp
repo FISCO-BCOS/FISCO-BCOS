@@ -214,7 +214,7 @@ Json::Value Rpc::getPeers()
         {
             Json::Value node;
             node["NodeID"] = it->nodeID.hex();
-            node["IP & Port"] = it->nodeIPEndpoint.name();
+            node["IPAndPort"] = it->nodeIPEndpoint.name();
             node["Topic"] = Json::Value(Json::arrayValue);
             for (std::string topic : it->topics)
                 node["Topic"].append(topic);
@@ -779,6 +779,10 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
                   << "{ " << std::endl
                   << "\"_groupID\" : " << _groupID << "," << std::endl
                   << request.toStyledString() << "}";
+
+        if (request["from"].empty() || request["from"].asString().empty())
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::CallFrom, RPCMsg[RPCExceptionType::CallFrom]));
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         auto blockverfier = ledgerManager()->blockVerifier(_groupID);
