@@ -39,9 +39,17 @@ Since launched, dozens of use cases have been implemented based on the FISCO BCO
 
 ## Community
 
+Financial Blockchain Shenzhen Consortium (FISCO) has attracted more than 100 members including financial institutions and financial information service companies so far. The first members include the following organizations: Beyondsoft, Huawei, Shenzheng, Shenzhou Digital, Forms Syntron, Tencent, WeBank, Yuexiu Jinke.
+
 - Join our WeChat [![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](docs/images/WeChatQR.jpeg) 
-- Discuss in ![Gitter](https://img.shields.io/badge/style-on_gitter-green.svg?logo=gitter&longCache=false&style=social&label=Chat)](https://gitter.im/fisco-bcos/Lobby) 
+
+
+- Discuss in [![Gitter](https://img.shields.io/badge/style-on_gitter-green.svg?logo=gitter&longCache=false&style=social&label=Chat)](https://gitter.im/fisco-bcos/Lobby) 
+
+
 - Read news by [![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
+
+
 - Mail us at [![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
 
 
