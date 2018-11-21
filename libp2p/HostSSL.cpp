@@ -63,14 +63,15 @@ void HostSSL::doneWorking()
 {
 	// reset ioservice (cancels all timers and allows manually polling network, below)
 	m_ioService.reset();
-
 	DEV_GUARDED(x_timers)
 	m_timers.clear();
 
 	// shutdown acceptor
-	m_tcp4Acceptor.cancel();
 	if (m_tcp4Acceptor.is_open())
+	{
 		m_tcp4Acceptor.close();
+		m_tcp4Acceptor.cancel();
+	}
 
 	while (m_accepting)
 		m_ioService.poll();
