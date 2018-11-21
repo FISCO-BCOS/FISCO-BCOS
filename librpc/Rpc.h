@@ -87,8 +87,6 @@ public:
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
-    std::string updatePBFTNode(int _groupID, const std::string& _rlp) override;
-
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
