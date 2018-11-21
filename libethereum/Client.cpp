@@ -215,8 +215,6 @@ void Client::updateCache(Address address) {
 
 Client::~Client()
 {
-	if (auto h = m_host.lock())
-		h->onStopping();
 	stopWorking();
 }
 
