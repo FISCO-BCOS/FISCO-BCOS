@@ -112,7 +112,6 @@ public:
                 i++;
             }
         }
-        status_obj.push_back(json_spirit::Pair("minerList", miner_list));
         status_obj.push_back(json_spirit::Pair("allowFutureBlocks", m_allowFutureBlocks));
     }
 
