@@ -207,7 +207,7 @@ public:
         return h256{};
     }
     /// Read address's code.
-    virtual bytes const& codeAt(Address contract_addr) { return code(); }
+    virtual bytes const codeAt(Address contract_addr) { return code(); }
 
     virtual h256 blockHash(int64_t number) { return sha3(toString(number)); }
 
