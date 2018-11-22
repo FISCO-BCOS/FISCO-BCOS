@@ -125,6 +125,10 @@ void StorageState::subBalance(Address const& _address, u256 const& _amount)
             table->update(ACCOUNT_BALANCE, entry, table->newCondition());
         }
     }
+    else
+    {
+        BOOST_THROW_EXCEPTION(NotEnoughCash());
+    }
 }
 
 void StorageState::setBalance(Address const& _address, u256 const& _amount)

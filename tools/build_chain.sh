@@ -298,6 +298,7 @@ generate_config_ini()
 ;group.2.ini can be populated from group.1.ini
 ;WARNING: group 0 is forbided
 [group]
+    group_data_path=data
     group_config.1=conf/group.1.ini
 
 ;certificate configuration
@@ -353,13 +354,10 @@ idleWaitMs=200
 [storage]
 ;storage db type, now support leveldb 
 type=${storage_type}
-dbpath=data
 
 [state]
 ;state type, now support mpt/storage
 type=${state_type}
-
-
 
 ;genesis configuration
 [genesis]
