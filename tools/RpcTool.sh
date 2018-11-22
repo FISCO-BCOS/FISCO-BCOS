@@ -55,23 +55,23 @@ checkParam()
     #check group_id
     if [ "${all_groups}" == "false" -a "${group_id}" == "" ];then
         LOG_ERROR "Must set groupId"
-        exit 1
+        help
     fi
     # check rpcPort
     if [ "${rpc_port}" == "" ];then
         LOG_ERROR "Must set rpcPort"
-        exit 1
+        help
     fi
     # check function name
     if [ "${function_name}" == "" ];then
         LOG_ERROR "Must set function name"
-        exit 1
+        help
     fi
     
     result=`echo ${support_rpc} | grep -w ${function_name}`
     if [ "${result}" == "" ];then
         LOG_ERROR "Not support "${function_name}" yet!"
-        exit 1
+        help
     fi
 }
 

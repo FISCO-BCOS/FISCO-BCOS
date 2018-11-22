@@ -1,6 +1,4 @@
 #!/bin/bash
-agency=$1
-sdkpath=${agency}/$2
 getname() {
     local name="$1"
     if [ -z "$name" ]; then
@@ -86,7 +84,46 @@ gen_sdk_cert() {
     openssl ec -in $sdkpath/sdk.key
     echo "build $sdk sdk cert successful!"
 }
+agency=
+sdkpath="sdk"
+help()
+{
+    echo "${1}"
+    cat << EOF
+Usage:
+    -a <dir of agency cert>     [Required]
+    -s <dir of the sdk cert>   [Optional] default is sdk
+    -h Help
+e.g: 
+    bash sdk.sh -a agencyA -n sdk1
+EOF
+exit 0
+}
+checkParam()
+{
+    if [ "${agency}" == "" ];then
+        echo "Must set agency directory"
+        help
+    fi
+}
+main()
+{
+while getopts "a:s:h" option;do
+    case ${option} in
+    a) agency=${OPTARG};;
+    s) sdkpath=${OPTARG};;
+    h) help;;
+    esac
+done
+checkParam
+sdkpath=${agency}"/"${sdkpath}
 gen_sdk_cert "" ${agency} ${sdkpath}
 #copy ca.crt
 cp ${agency}/ca.crt ${sdkpath}/ca.crt
-echo "Build  $sdkpath Crt suc!!!"
+if [ $? -eq 0 ];then
+    echo "Build  $sdkpath Crt suc!!!"
+else
+    echo "Build  $sdkpath Crt failed!!!"
+fi
+}
+main "$@"

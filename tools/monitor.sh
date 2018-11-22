@@ -36,14 +36,13 @@ checkParam()
     #check group_id
     if [ "${all_groups}" == "false" -a "${group_id}" == "" ];then
         LOG_ERROR "Must set groupId"
-        exit 1
+        help
     fi
     # check rpcPort
     if [ "${rpc_port}" == "" ];then
         LOG_ERROR "Must set rpcPort"
-        exit 1
+        help
     fi
-
 }
 
 help()
