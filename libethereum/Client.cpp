@@ -79,7 +79,7 @@ Client::Client(
 	//cout<<"Client::Client systemproxyaddress:0x"<<toString(_params.sysytemProxyAddress)<<"\n";
 	//cout<<"Client::Client god:0x"<<toString(_params.god)<<"\n";
 
-	libabi::ContractAbiMgr::getInstance()->initialize(getDataDir());
+	libabi::ContractAbiMgr::getInstance()->initialize(getDataDir(), _forceAction);
 
 	LOG(INFO) << "contract abi mgr path=> " << (getDataDir() + "./abi");
 

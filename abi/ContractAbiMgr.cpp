@@ -32,14 +32,14 @@
 
 namespace libabi
 {
-	void ContractAbiMgr::initialize(const std::string &strDBPath)
+	void ContractAbiMgr::initialize(const std::string &strDBPath, WithExisting _we)
 	{
 		if (m_contractAbiDBMgr)
 		{
 			ABI_EXCEPTION_THROW("abi db mgr already init.", libabi::EnumAbiExceptionErrCode::EnumAbiExceptionErrCodeAbiDBMgrAlreadyInit);
 		}
 
-		m_contractAbiDBMgr = std::unique_ptr<ContractAbiDBMgr>(new ContractAbiDBMgr(strDBPath));
+		m_contractAbiDBMgr = std::unique_ptr<ContractAbiDBMgr>(new ContractAbiDBMgr(strDBPath, _we));
 
 		//LOG(INFO) << "[ContractAbiMgr::initialize] init ,path=" << strDBPath;
 	}
