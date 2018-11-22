@@ -96,6 +96,10 @@ void PBFT::initBackupDB() {
 	o.max_open_files = 256;
 	o.create_if_missing = true;
 	std::string path = m_bc->chainParams().dataDir + "/pbftMsgBackup";
+	if (dev::g_withExisting == WithExisting::Rescue) {
+		ldb::Status stateStatus = leveldb::RepairDB(path, o);
+		LOG(INFO) << "repair stateDB:" << stateStatus.ToString();
+    }
 	ldb::Status status = ldb::DB::Open(o, path, &m_backup_db);
 	if (!status.ok() || !m_backup_db)
 	{

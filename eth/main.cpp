@@ -733,7 +733,10 @@ int main(int argc, char** argv)
 		else if (arg == "-R" || arg == "--rebuild")
 			withExisting = WithExisting::Verify;
 		else if (arg == "-R" || arg == "--rescue")
+		{
 			withExisting = WithExisting::Rescue;
+			dev::g_withExisting = WithExisting::Rescue;
+		}
 		else if (arg == "--client-name" && i + 1 < argc)
 			clientName = argv[++i];
 		else if ((arg == "-a" || arg == "--address" || arg == "--author") && i + 1 < argc)
