@@ -179,6 +179,7 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	std::shared_ptr<RLPXSocketApi> m_socket; ///< Socket of peer's connection.
 	Mutex x_framing;						 ///< Mutex for the write queue.
 	std::deque<bytes> m_writeQueue;			 ///< The write queue.
+	std::deque<uint16_t> m_protocloIDQueue;
 	std::deque<uint64_t> m_writeTimeQueue;		 ///< to stat queue time
 	std::vector<byte> m_data;				 ///< Buffer for ingress packet data.
 	bytes m_incoming;						 ///< Read buffer for ingress bytes.
