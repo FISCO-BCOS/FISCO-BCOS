@@ -332,6 +332,7 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 		{
 			m_writeQueue.push_back(std::move(_msg));
 			m_writeTimeQueue.push_back(utcTime());
+			m_protocloIDQueue.push_back(_protocolID);
 			doWrite = (m_writeQueue.size() == 1);
 		}
 
@@ -366,6 +367,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 		DEV_GUARDED(x_framing)
 		{
 			m_writeQueue.pop_front();
+			m_protocloIDQueue.pop_front();
 			m_writeTimeQueue.pop_front();
 			if (m_writeQueue.empty())
 				return;
