@@ -330,9 +330,13 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	{
 		DEV_GUARDED(x_framing)
 		{
+			bytesConstRef frame(_msg.data(), _msg.size());
+			auto packetType = (PacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+			//RLP r(frame.cropped(1));
+
 			m_writeQueue.push_back(std::move(_msg));
 			m_writeTimeQueue.push_back(utcTime());
-			m_protocloIDQueue.push_back(_protocolID);
+			m_protocloIDQueue.push_back(packetType);
 			doWrite = (m_writeQueue.size() == 1);
 		}
 
