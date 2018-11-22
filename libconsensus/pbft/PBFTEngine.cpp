@@ -676,6 +676,7 @@ void PBFTEngine::reportBlock(Block const& block)
         }
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
+        resetConfig();
         PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "
                              << m_highestBlock.number() << ", idx= " << m_highestBlock.sealer()
                              << " , hash= " << m_highestBlock.hash().abridged()
@@ -1085,7 +1086,7 @@ void PBFTEngine::updateMinerList()
     {
         UpgradableGuard l(m_minerListMutex);
         auto miner_list = m_minerList;
-        int64_t curBlockNum = m_highestBlock.number();
+        int64_t curBlockNum = m_highestBlock.number() + 1;
         /// get node from storage DB
         auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
         /// obtain miner list
@@ -1110,7 +1111,7 @@ void PBFTEngine::updateMinerList()
             }
         }
         /// remove observe nodes
-        for (size_t i = 0; i < miner_list.size(); i++)
+        for (size_t i = 0; i < nodes->size(); i++)
         {
             auto node = nodes->get(i);
             if (!node)
@@ -1129,9 +1130,9 @@ void PBFTEngine::updateMinerList()
                 }
             }
         }
-
         UpgradeGuard ul(l);
         m_minerList = miner_list;
+        m_lastObtainMinerNum = m_highestBlock.number();
     }
     catch (std::exception& e)
     {
@@ -1139,6 +1140,5 @@ void PBFTEngine::updateMinerList()
                               << boost::diagnostic_information(e);
     }
 }
-
 }  // namespace consensus
 }  // namespace dev
