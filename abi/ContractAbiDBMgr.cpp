@@ -34,9 +34,9 @@ using namespace dev::eth;
 
 namespace libabi
 {
-	ContractAbiDBMgr::ContractAbiDBMgr(const std::string &strPath, WithExisting _we)
+	ContractAbiDBMgr::ContractAbiDBMgr(const std::string &strPath)
 	{
-		m_db = ContractAbiDBMgr::openDB(strPath, _we);
+		m_db = ContractAbiDBMgr::openDB(strPath);
 		rebuildAllAbis();
 	}
 
@@ -49,7 +49,7 @@ namespace libabi
 		}
 	}
 
-	leveldb::DB* ContractAbiDBMgr::openDB(std::string const & _basePath, WithExisting _we)
+	leveldb::DB* ContractAbiDBMgr::openDB(std::string const & _basePath)
 	{
 		std::string path = _basePath;
 		boost::filesystem::create_directories(path);
@@ -59,7 +59,7 @@ namespace libabi
 		o.max_open_files    = 256;
 		o.create_if_missing = true;
 		leveldb::DB * db    = nullptr;
-		if (_we == WithExisting::Rescue) {
+		if (dev::g_withExisting == WithExisting::Rescue) {
 			ldb::Status status = leveldb::RepairDB(path + "/abiname", o);
 			LOG(INFO)<< "repair CNS leveldb:" << status.ToString();
 		}

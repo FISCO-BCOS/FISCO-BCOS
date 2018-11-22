@@ -75,7 +75,7 @@ class LevelDBPool
         //leveldb::DB * db = nullptr;
         if (dev::g_withExisting == WithExisting::Rescue) {
             ldb::Status stateStatus = leveldb::RepairDB(db_full_name, o);
-            LOG(INFO) << "repair stateDB:" << stateStatus.ToString();
+            LOG(INFO) << "repair LevelDBPool leveldb:" << stateStatus.ToString();
         }
         // state db
         leveldb::Status s = leveldb::DB::Open(o, db_full_name, &db_handler);
