@@ -630,6 +630,7 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 				}
 
 				RLPStream ts;
+				LOG(TRACE) << "PBFT broadcastMsg _id: " << _id << " to: " << nodeid.hex();
 				_p->prep(ts, _id, 1).append(_data);
 				_p->sealAndSend(ts);
 				this->broadcastMark(_key, _id, _p);
@@ -970,7 +971,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	VLOG(10) << oss.str() << ", net-time=" << u256(utcTime()) - _req.timestamp;
 
 	if (isExistViewChange(_req)) {
-		VLOG(10) << oss.str() << "Discard an illegal viewchange, duplicated";
+		LOG(TRACE) << oss.str() << "Discard an illegal viewchange, duplicated";
 		return;
 	}
 
@@ -989,7 +990,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	}
 
 	if (_req.height < m_highest_block.number() || _req.view <= m_view) {
-		VLOG(10) << oss.str() << "Discard an illegal viewchange, m_highest_block=" << m_highest_block.number() << ",m_view=" << m_view;
+		LOG(TRACE) << oss.str() << "Discard an illegal viewchange, m_highest_block=" << m_highest_block.number() << ",m_view=" << m_view;
 		return;
 	}
 
