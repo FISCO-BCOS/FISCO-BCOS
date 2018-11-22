@@ -44,7 +44,7 @@ namespace libabi
 			return &instance;
 		}
 		//初始化工作，最主要是level-db的初始化
-		void initialize(const std::string &strDBPath, WithExisting _we);
+		void initialize(const std::string &strDBPath);
 		//通知系统合约已经初始化完毕
 		void setSystemContract();
 		//合约信息发生改变,更新level-db里面的内容

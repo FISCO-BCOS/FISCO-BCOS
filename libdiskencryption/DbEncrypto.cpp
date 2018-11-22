@@ -89,7 +89,7 @@ ldb::Status DbEncrypto::Open(const ldb::Options& options,const std::string& name
 {
 	if (dev::g_withExisting == WithExisting::Rescue) {
             ldb::Status stateStatus = leveldb::RepairDB(name, options);
-            LOG(INFO) << "repair stateDB:" << stateStatus.ToString();
+            LOG(INFO) << "repair DbEncrypto leveldb:" << stateStatus.ToString();
     }
 	return ldb::DB::Open(options, name, &m_db);
 }
