@@ -43,7 +43,7 @@ po::variables_map initCommandLine(int argc, const char* argv[])
 {
     main_options.add_options()("help,h", "help of mini-storage")("createTable,c",
         po::value<vector<string>>()->multitoken(), "[TableName] [KeyField] [ValueField]")(
-        "path,p", po::value<string>()->default_value("test_storage/"), "[LevelDB path]")(
+        "path,p", po::value<string>()->default_value("data/"), "[LevelDB path]")(
         "select,s", po::value<vector<string>>()->multitoken(), "[TableName] [priKey]")("update,u",
         po::value<vector<string>>()->multitoken(), "[TableName] [priKey] [Key] [NewValue]")(
         "insert,i", po::value<vector<string>>()->multitoken(),
@@ -78,17 +78,21 @@ void help()
 void printEntries(Entries::Ptr entries)
 {
     if (entries->size() == 0)
+    {
+        cout << "--------------Empty!--------------" << endl;
         return;
-    cout << "---------------------------" << endl;
+    }
+    cout << "============================" << endl;
     for (size_t i = 0; i < entries->size(); ++i)
     {
+        cout << "***************" << i << "***************" << endl;
         auto data = entries->get(i)->fields();
         for (auto& it : *data)
         {
             cout << "[ " << it.first << " ]:[ " << it.second << " ]" << endl;
         }
     }
-    cout << "---------------------------" << endl;
+    cout << "============================" << endl;
 }
 
 int main(int argc, const char* argv[])
@@ -130,7 +134,11 @@ int main(int argc, const char* argv[])
         {
             auto table = memoryTableFactory->createTable(p[0], p[1], p[2]);
             if (table)
-                cout << "create Table [" << p[0] << "]success." << endl;
+            {
+                cout << "KeyField:[" << p[1] << "]" << endl;
+                cout << "ValueField:[" << p[2] << "]" << endl;
+                cout << "createTable [" << p[0] << "] success!" << endl;
+            }
             memoryTableFactory->commitDB(h256(0), 1);
             return 0;
         }
@@ -144,7 +152,7 @@ int main(int argc, const char* argv[])
             auto table = memoryTableFactory->openTable(p[0]);
             if (table)
             {
-                cout << "open Table [" << p[0] << "] success." << endl;
+                cout << "open Table [" << p[0] << "] success!" << endl;
                 auto entries = table->select(p[1], table->newCondition());
                 printEntries(entries);
             }
@@ -161,7 +169,7 @@ int main(int argc, const char* argv[])
             auto table = memoryTableFactory->openTable(p[0]);
             if (table)
             {
-                cout << "open Table [" << p[0] << "] success." << endl;
+                cout << "open Table [" << p[0] << "] success!" << endl;
                 auto entry = table->newEntry();
                 entry->setField(p[2], p[3]);
                 table->update(p[1], entry, table->newCondition());
@@ -179,7 +187,7 @@ int main(int argc, const char* argv[])
             auto table = memoryTableFactory->openTable(p[0]);
             if (table)
             {
-                cout << "open Table [" << p[0] << "] success." << endl;
+                cout << "open Table [" << p[0] << "] success!" << endl;
                 auto entry = table->newEntry();
                 vector<string> KVs;
                 boost::split(KVs, p[2], boost::is_any_of(","));
@@ -204,7 +212,7 @@ int main(int argc, const char* argv[])
             auto table = memoryTableFactory->openTable(p[0]);
             if (table)
             {
-                cout << "open Table [" << p[0] << "] success." << endl;
+                cout << "open Table [" << p[0] << "] success!" << endl;
                 table->remove(p[1], table->newCondition());
             }
             memoryTableFactory->commitDB(h256(0), 1);

@@ -173,7 +173,7 @@ void Ledger::initDBConfig(ptree const& pt)
     /// init the basic config
     /// set storage db related param
     m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
-    std::string baseDir = m_param->baseDir() + "/" + pt.get<std::string>("state.dbpath", "data");
+    std::string baseDir = m_param->baseDir() + "/data";
     m_param->setBaseDir(baseDir);
     m_param->mutableStorageParam().path = baseDir;
     /// set state db related param

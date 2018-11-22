@@ -38,8 +38,6 @@ namespace websocket = boost::beast::websocket;
 
 int main(int argc, const char* argv[])
 {
-#if 1
-
     auto const address = boost::asio::ip::make_address("127.0.0.1");
     auto const port = static_cast<unsigned short>(std::atoi("30302"));
     auto const threads = 1;
@@ -55,7 +53,6 @@ int main(int argc, const char* argv[])
         v.emplace_back([&ioc] { ioc.run(); });
     ioc.run();
 
-#endif
 
 #if 0
 
@@ -67,20 +64,15 @@ int main(int argc, const char* argv[])
 
     auto rpc = new Rpc(m_ledgerManager, m_service);
 
-    using FullServer = ModularServer<rpc::Rpc>;
-
-    ModularServer<>* jsonrpcHttpServer = NULL;
-    jsonrpcHttpServer = new FullServer(rpc);
+    ModularServer<>* jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpc);
     std::string listenIP = "127.0.0.1";
     int listenPort = 30301;
     int httpListenPort = 30302;
-    std::shared_ptr<dev::SafeHttpServer> _safeHttpServer;
-    _safeHttpServer.reset(
-        new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
-    jsonrpcHttpServer->addConnector(_safeHttpServer.get());
+    jsonrpcHttpServer->addConnector(new SafeHttpServer(listenIP, httpListenPort));
     jsonrpcHttpServer->StartListening();
     LOG(INFO) << "JsonrpcHttpServer started.";
     sleep(10000);
+    delete jsonrpcHttpServer;
 
 #endif
 }
