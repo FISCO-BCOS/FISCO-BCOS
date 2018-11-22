@@ -671,9 +671,9 @@ void PBFTEngine::reportBlock(Block const& block)
             m_timeManager.m_lastConsensusTime = utcTime();
             m_timeManager.m_changeCycle = 0;
             m_consensusBlockNumber = m_highestBlock.number() + 1;
+            /// delete invalid view change requests from the cache
+            m_reqCache->delInvalidViewChange(m_highestBlock);
         }
-        /// delete invalid view change requests from the cache
-        m_reqCache->delInvalidViewChange(m_highestBlock);
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
         PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "
