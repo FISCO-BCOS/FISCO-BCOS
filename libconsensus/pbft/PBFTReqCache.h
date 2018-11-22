@@ -202,6 +202,7 @@ public:
     inline void clearAllExceptCommitCache()
     {
         m_prepareCache.clear();
+        m_signCache.clear();
         m_recvViewChangeReq.clear();
     }
 

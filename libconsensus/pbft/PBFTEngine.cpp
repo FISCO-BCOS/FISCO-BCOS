@@ -624,8 +624,7 @@ void PBFTEngine::checkAndSave()
                 dropHandledTransactions(block);
                 PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
                 /// clear caches to in case of repeated commit
-                m_reqCache->clearAllExceptCommitCache();
-                m_reqCache->delCache(m_highestBlock.hash());
+                m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
             }
             else
             {
@@ -637,7 +636,6 @@ void PBFTEngine::checkAndSave()
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
             }
-            resetConfig();
         }
         else
         {
@@ -674,9 +672,9 @@ void PBFTEngine::reportBlock(Block const& block)
             /// delete invalid view change requests from the cache
             m_reqCache->delInvalidViewChange(m_highestBlock);
         }
+        resetConfig();
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
-        resetConfig();
         PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "
                              << m_highestBlock.number() << ", idx= " << m_highestBlock.sealer()
                              << " , hash= " << m_highestBlock.hash().abridged()
