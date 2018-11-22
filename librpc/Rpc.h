@@ -27,10 +27,10 @@
 #include <libdevcrypto/Common.h>
 #include <libledger/LedgerInterface.h>
 #include <libledger/LedgerManager.h>
+#include <libledger/LedgerParam.h>
 #include <libp2p/P2PInterface.h>
 #include <iostream>
 #include <memory>
-
 namespace dev
 {
 namespace rpc
@@ -87,12 +87,15 @@ public:
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
-
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
     std::shared_ptr<dev::p2p::P2PInterface> service() { return m_service; }
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+
+private:
+    bool isValidNodeId(dev::bytes const& precompileData,
+        std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
 };
 
 }  // namespace rpc

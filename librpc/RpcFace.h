@@ -102,6 +102,7 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
+
         this->bindAndAddMethod(
             jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
                 "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
@@ -202,7 +203,6 @@ public:
     {
         response = this->sendRawTransaction(request[0u].asInt(), request[1u].asString());
     }
-
     // consensus part
     virtual std::string getBlockNumber(int param1) = 0;
     virtual std::string getPbftView(int param1) = 0;

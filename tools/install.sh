@@ -5,13 +5,14 @@
 #              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
 #              and execute this shell script later
 # @ author   : yujiechen  
-# @ file     : build.sh
+# @ file     : install.sh
 # @ date     : 2018
 
 #!/bin/bash
 
 current_dir=`pwd`"/.."
 build_source=1
+test_mode=0
 binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
@@ -103,19 +104,19 @@ done
 #install ubuntu package
 install_ubuntu_deps()
 {
-install_ubuntu_package "cmake" "openssl" "libssl-dev" "libcurl4-openssl-dev" "libgmp-dev" "libleveldb-dev"
+install_ubuntu_package "cmake" "openssl" "libssl-dev" "libcurl4-openssl-dev" "libgmp-dev" "libleveldb-dev" "jq"
 }
 
 # install centos package
 install_centos_deps()
 {
-install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel" "curl-devel" "gmp-devel"
+install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel" "curl-devel" "gmp-devel" "jq"
 }
 
 install_all_deps()
 {
     get_platform
-        platform=`echo $?`
+    platform=`echo $?`
     if [ ${platform} -eq ${Ubuntu_Platform} ];then
         install_ubuntu_deps
     elif [ ${platform} -eq ${Centos_Platform} ];then
@@ -131,15 +132,23 @@ build_ubuntu_source()
 {
 # build source
 execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake .. "
-execute_cmd "make && sudo make install"
+if [ ${test_mode} -eq 1 ];then 
+    execute_cmd "cmake -DTESTS=ON .."
+else
+    execute_cmd "cmake -DTESTS=OFF .."
+fi
+execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
 build_centos_source()
 {
 # build source
 execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake3 .. "
+if [ ${test_mode} -eq 1 ];then
+    execute_cmd "cmake3 -DTESTS=ON .."
+else
+    execute_cmd "cmake3 -DTESTS=OFF .."
+fi
 execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
@@ -188,19 +197,22 @@ Usage()
 Usage:
 Optional:
     -d       Download from GitHub
+    -t       Enable test mode (generate mini-consensus/mini-sync/mini-evm/mini-storage/test_verifier)
     -h       Help
 Example: 
-    bash build.sh 
-    bash build.sh -d
+    bash install.sh 
+    bash install.sh -d
+    bash install.sh -t
 EOF
 	exit 0
 }
 
 parse_param()
 {
-	while getopts "hd" option;do
+	while getopts "htd" option;do
 		case $option in
 		d) build_source=0;;
+        t) test_mode=1;;
 		h) Usage;;
 		esac
 	done

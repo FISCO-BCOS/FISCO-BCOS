@@ -388,10 +388,12 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Get leader failed: "
-                                       "[cfgErr/idx/req.idx/view/highSealer/highNumber]:  "
-                                    << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/"
-                                    << m_highestBlock.sealer() << "/" << m_highestBlock.number();
+            PBFTENGINE_LOG(WARNING)
+                << "[#InvalidPrepare] Get leader failed: "
+                   "[cfgErr/idx/req.idx/leader/m_leaderFailed/view/highSealer/highNumber]:  "
+                << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/" << leader.second << "/"
+                << m_leaderFailed << "/" << m_highestBlock.sealer() << "/"
+                << m_highestBlock.number();
             return false;
         }
 

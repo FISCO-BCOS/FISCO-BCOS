@@ -37,7 +37,7 @@ class CommonTransactionNonceCheck
 {
 public:
     CommonTransactionNonceCheck(dev::PROTOCOL_ID const& protocolId) : m_protocolId(protocolId) {}
-
+    virtual void delCache(dev::eth::Transaction const& _transcation);
     virtual void delCache(dev::eth::Transactions const& _transcations);
     virtual void insertCache(dev::eth::Transaction const& _transcation);
     virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
