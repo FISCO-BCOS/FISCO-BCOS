@@ -123,6 +123,5 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         break;
     }
     }
-
     return out;
 }

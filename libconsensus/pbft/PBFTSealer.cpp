@@ -52,11 +52,13 @@ void PBFTSealer::handleBlock()
         resetSealingBlock();
         /// notify to re-generate the block
         m_signalled.notify_all();
+        m_blockSignalled.notify_all();
     }
     else if (m_pbftEngine->shouldReset(m_sealing.block))
     {
         resetSealingBlock();
         m_signalled.notify_all();
+        m_blockSignalled.notify_all();
     }
 }
 void PBFTSealer::setBlock()

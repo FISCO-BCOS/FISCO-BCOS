@@ -17,6 +17,7 @@ eth_path=
 gen_sdk=false
 jks_passwd=123456
 make_tar=
+listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
@@ -29,6 +30,7 @@ Usage:
     -e <FISCO-BCOS binary path> Default download from GitHub
     -o <Output Dir>             Default ./nodes/
     -p <Start Port>             Default 30300
+    -i <Rpc Listen IP>          Default 127.0.0.1
     -d <JKS passwd>             Default not generate jks files, if set use param as jks passwd
     -s <State type>             Default mpt. if set -s, use storage 
     -t <Cert config file>       Default auto generate
@@ -278,7 +280,7 @@ generate_config_ini()
     cat << EOF > ${output}
 [rpc]
     ;rpc listen ip
-    listen_ip=127.0.0.1
+    listen_ip=${listen_ip}
     ;channelserver listen port
     listen_port=$(( port_start + 1 + index * 4 ))
     ;rpc listen port
@@ -441,7 +443,7 @@ EOF
 
 main()
 {
-while getopts "f:l:o:p:e:t:dszh" option;do
+while getopts "f:l:o:i:p:e:t:dszh" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -450,6 +452,7 @@ while getopts "f:l:o:p:e:t:dszh" option;do
        use_ip_param="true"
     ;;
     o) output_dir=$OPTARG;;
+    i) listen_ip=$OPTARG;;
     p) port_start=$OPTARG;;
     e) eth_path=$OPTARG;;
     d) gen_sdk="true"
@@ -545,6 +548,8 @@ for line in ${ip_array[*]};do
             # read_password
             openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
 		    keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
+            #copy ca.crt
+            cp ${output_dir}/cert/agency/ca.crt $node_dir/sdk/
             # gen_sdk_cert ${output_dir}/cert/agency $node_dir
             # mv $node_dir/* $node_dir/sdk/
         fi
@@ -588,7 +593,7 @@ for line in ${ip_array[*]};do
     chmod +x "$output_dir/stop_all.sh"
     chmod +x "$output_dir/replace_all.sh"
 done 
-rm $output_dir/build.log cert.cnf
+#rm $output_dir/build.log cert.cnf
 genTransTest
 echo "=========================================="
 echo "FISCO-BCOS Path : $eth_path"

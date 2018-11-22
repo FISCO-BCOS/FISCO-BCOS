@@ -285,10 +285,10 @@ private:
     void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache) const
     {
         json_spirit::Object cacheStatus;
-        cacheStatus.push_back(json_spirit::Pair(key + ".block_hash", toHex(cache.block_hash)));
-        cacheStatus.push_back(json_spirit::Pair(key + ".height", cache.height));
-        cacheStatus.push_back(json_spirit::Pair(key + ".idx", toString(cache.idx)));
-        cacheStatus.push_back(json_spirit::Pair(key + ".view", toString(cache.view)));
+        cacheStatus.push_back(json_spirit::Pair(key + "_blockHash", toHex(cache.block_hash)));
+        cacheStatus.push_back(json_spirit::Pair(key + "_height", cache.height));
+        cacheStatus.push_back(json_spirit::Pair(key + "_idx", toString(cache.idx)));
+        cacheStatus.push_back(json_spirit::Pair(key + "_view", toString(cache.view)));
         jsonArray.push_back(cacheStatus);
     }
 
@@ -297,13 +297,13 @@ private:
         json_spirit::Array& cacheJsonArray, std::string const& key, T const& cache) const
     {
         json_spirit::Object tmp_obj;
-        tmp_obj.push_back(json_spirit::Pair(key + ".cachedBlockSize", toString(cache.size())));
+        tmp_obj.push_back(json_spirit::Pair(key + "_cachedSize", toString(cache.size())));
         cacheJsonArray.push_back(tmp_obj);
         for (auto i : cache)
         {
             json_spirit::Object entry;
-            entry.push_back(json_spirit::Pair(key + ".key", dev::toJS(i.first)));
-            entry.push_back(json_spirit::Pair(key + ".collected_size", i.second.size()));
+            entry.push_back(json_spirit::Pair(key + "_key", dev::toJS(i.first)));
+            entry.push_back(json_spirit::Pair(key + "_collectedSize", i.second.size()));
             cacheJsonArray.push_back(entry);
         }
     }
