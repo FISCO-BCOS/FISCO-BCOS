@@ -33,6 +33,7 @@ char const* Version = ETH_PROJECT_VERSION;
 char const* Copyright="by FISCO, (c)2016-2018.";
 
 const u256 Invalid256 = ~(u256)0;
+WithExisting g_withExisting = WithExisting::Trust;
 
 void InvariantChecker::checkInvariants(HasInvariants const* _this, char const* _fn, char const* _file, int _line, bool _pre)
 {

@@ -45,12 +45,12 @@ namespace libabi
 	class ContractAbiDBMgr
 	{
 	public:
-		ContractAbiDBMgr(const std::string &strPath);
+		ContractAbiDBMgr(const std::string &strPath, dev::WithExisting _we);
 		~ContractAbiDBMgr();
 
 	private:
 		leveldb::DB* m_db{ nullptr };
-		static leveldb::DB* openDB(std::string const& _basePath);
+		static leveldb::DB* openDB(std::string const& _basePath, dev::WithExisting _we);
 
 	public:
 		void rebuildAllAbis();
