@@ -102,12 +102,12 @@ public:
         status_obj.push_back(json_spirit::Pair("highestblockHash", toHex(m_highestBlock.hash())));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
-        std::string miner_list;
+        std::string miner_list = "";
         {
             ReadGuard l(m_minerListMutex);
             for (auto miner : m_minerList)
             {
-                miner_list = toHex(miner) + "#";
+                miner_list += "#" + toHex(miner);
             }
         }
         status_obj.push_back(json_spirit::Pair("minerList", miner_list));
