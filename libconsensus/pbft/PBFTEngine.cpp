@@ -623,10 +623,6 @@ void PBFTEngine::checkAndSave()
             {
                 dropHandledTransactions(block);
                 PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
-                /// clear caches to in case of repeated commit
-                resetConfig();
-                m_reqCache->clearAllExceptCommitCache();
-                m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
             }
             else
             {
@@ -638,6 +634,10 @@ void PBFTEngine::checkAndSave()
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
             }
+            /// clear caches to in case of repeated commit
+            resetConfig();
+            m_reqCache->clearAllExceptCommitCache();
+            m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
         }
         else
         {
