@@ -269,6 +269,8 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 	LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[" << toString(req.block_hash) << "][" << req.height << "][" <<  utcTime() << "][" << "broadcastPrepareReq" << "]";
 	RLPStream ts;
 	req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on reHandlePrepareReq";
 	broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out());
 
 	handlePrepareMsg(m_node_idx, req, true); // 指明是来自自己的Req
@@ -405,7 +407,11 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		if (NodeConnManagerSingleton::GetInstance().getPublicKey(pbft_msg.idx, gen_node_id)) {
 			filter.insert(gen_node_id);
 		}
-		broadcastMsg(pbft_msg.uniqueKey(), _id, _r.toBytes(), filter);
+
+		if(pbft_msg.idx == _from) {
+			LOG(TRACE) << "boradcastMsg on handleMsg";
+			broadcastMsg(pbft_msg.uniqueKey(), _id, _r.toBytes(), filter);
+		}
 	}
 }
 
@@ -543,6 +549,8 @@ bool PBFT::broadcastViewChangeReq() {
 	
 	RLPStream ts;
 	req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastViewChangeReq";
 	bool ret = broadcastMsg(req.uniqueKey(), ViewChangeReqPacket, ts.out());
 	return ret;
 }
@@ -558,6 +566,8 @@ bool PBFT::broadcastSignReq(PrepareReq const & _req) {
 	sign_req.sig2 = signHash(sign_req.fieldsWithoutBlock());
 	RLPStream ts;
 	sign_req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastSignReq";
 	if (broadcastMsg(sign_req.uniqueKey(), SignReqPacket, ts.out())) {
 		addSignReq(sign_req);
 		return true;
@@ -577,6 +587,8 @@ bool PBFT::broadcastCommitReq(PrepareReq const & _req) {
 
 	RLPStream ts;
 	commit_req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastCommitReq";
 	if (broadcastMsg(commit_req.uniqueKey(), CommitReqPacket, ts.out())) {
 		addCommitReq(commit_req);
 		return true;
@@ -597,6 +609,8 @@ bool PBFT::broadcastPrepareReq(BlockHeader const & _bi, bytes const & _block_dat
 
 	RLPStream ts;
 	req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastPrepareReq";
 	if (broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out())) {
 		addRawPrepare(req);
 		return true;
@@ -1244,7 +1258,7 @@ void PBFT::delCache(h256 const& _hash) {
 	if (_hash == m_prepare_cache.block_hash) {
 		m_prepare_cache.clear();
 	}
-	// 删除对应hash的所有cache 
+	// 删除对应hash的所有cache
 	ConsensusControl::instance().clearBlockCache(_hash);
 	auto it = m_commitMap.find(_hash);
 	if (it != m_commitMap.end())
