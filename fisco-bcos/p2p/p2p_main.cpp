@@ -47,8 +47,8 @@ int main(int argc, const char* argv[])
         std::shared_ptr<std::vector<std::string>> topics = p2pService->topics();
         std::string topic = "Topic" + to_string(counter++);
         topics->push_back(topic);
-        P2PMSG_LOG(INFO) << "Add topic periodically, now Topics[" << topics->size() - 1
-                         << "]:" << topic;
+        P2PMSG_LOG(TRACE) << "Add topic periodically, now Topics[" << topics->size() - 1
+                          << "]:" << topic;
         p2pService->setTopics(topics);
         LogInitializer::logRotateByTime();
         this_thread::sleep_for(chrono::milliseconds((rand() % 50) * 100));

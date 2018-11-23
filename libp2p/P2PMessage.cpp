@@ -96,8 +96,8 @@ ssize_t P2PMessage::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string&
     }
 
     uint32_t topicLen = ntohl(*((uint32_t*)m_buffer->data()));
-    P2PMSG_LOG(INFO) << "Message::decodeAMOPBuffer topic len=" << topicLen
-                     << ", buffer size=" << m_buffer->size();
+    P2PMSG_LOG(TRACE) << "Message::decodeAMOPBuffer topic len=" << topicLen
+                      << ", buffer size=" << m_buffer->size();
     if (topicLen + 4 > m_buffer->size())
     {
         return PACKET_ERROR;
