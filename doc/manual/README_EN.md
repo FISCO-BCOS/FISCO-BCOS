@@ -691,12 +691,6 @@ send transaction success: 0x03c86b3dcd3d564a00a709b7cd6f1902cd4111cc30c71c62728d
 ConfigActioncomplie success！
 send transaction success: 0xa49205ff3ad697fda75019cb2bbf541a120c146b973f8c5d50b761fd5024b795
 ConfigActioncontract address 0xb1e6d5f95c9cb39a9e4e3071b3765e08c30ea281
-FileInfoManagercomplie success！
-send transaction success: 0x10f8b3fa9efb129bb321cba26019f363aad1b1a162b9347f6638bf6d94de7c32
-FileInfoManagercontract address 0x0c2422186429e81911b729fd25e3afa76231f9c7
-FileServerManagercomplie success！
-send transaction success: 0xd156ccb19fa9dc5313c124933a458b141a20cc2ce01334ce030940e9f907cb84
-FileServerManagercontract address 0xb33485375d208a23e897144b6244e20d9c1e83d9
 ConsensusControlMgrcomplie success！
 send transaction success: 0xcfe0a0fc77910c127d31470e38707dfe70a7fb699abce3e9261ef55a4e50997c
 ConsensusControlMgrcontract address 0x3414ef5c15848a07538a2fac57c09a549036b5e3
@@ -724,10 +718,6 @@ send transaction success: 0xcb792f508ca890296055a53c360d68c3c46f8bf801ce73818557
 register ContractAbiMgr.....
 send transaction success: 0xfdc0dd551eada0648919a4c9c5ffa182d042099d73fa802cf803bebf5068aec1
 register ConsensusControlMgr.....
-send transaction success: 0x7f6d95e6a49a1c1de257415545afb0ec7fdd5607c427006fe14a7750246b9d75
-register FileInfoManager.....
-send transaction success: 0xc5e16814085000043d28a6d814d6fa351db1cd34f7d950e5e794d28e4ff0da49
-register FileServerManager.....
 send transaction success: 0xbbbf66ab4acd7b5484dce365d927293b43b3904cd14063a7f60839941a0479a0
 SystemProxy address :0x9fe9648f723bff29f940b8c18fedcc9c7ed2b91f
 -----------------SystemProxy route ----------------------
@@ -738,8 +728,6 @@ get 0xb33485375d208a23e897144b6244e20d9c1e83d9
 3 )CAAction=>0x6fbf3bef2f757c01e0c43fc1364207c1e8a19d08,false,253
 4 )ContractAbiMgr=>0xac919b98301804575bd2dc676330aa8f2637f7d5,false,254
 5 )ConsensusControlMgr=>0x3414ef5c15848a07538a2fac57c09a549036b5e3,false,255
-6 )FileInfoManager=>0x0c2422186429e81911b729fd25e3afa76231f9c7,false,256
-7 )FileServerManager=>0xb33485375d208a23e897144b6244e20d9c1e83d9,false,257
 -----------------SystemProxy route ----------------------
 ```
 
@@ -1530,9 +1518,6 @@ Instructions for node configurations fiile *config.json*:
 | eventlog           | Switch for the Eventlog (ON or OFF)      |
 | statlog            | Switch for the Statlog (ON or OFF)       |
 | logconf            | path of the log configuration file(refer to the instructions for *log.conf* ) |
-| dfsNode            | Distributed file service node ID, keep it in accordance with node ID(optional) |
-| dfsGroup           | Distributed file service group ID (10 - 32 characters)(optional) |
-| dfsStorage         | Storage directory for the distributed file system(optional) |
 
 <br>
 
@@ -1614,8 +1599,6 @@ SystemProxy address 0x210a7d467c3c43307f11eda35f387be456334fed
 3 )CAAction=>0x8ab1175c6e7edb40dd0ed2a52ceaa94afb135a64,false,398
 4 )ContractAbiMgr=>0x707024221d2433067b768c4be3a005c5ece8df40,false,399
 5 )ConsensusControlMgr=>0x007f2c2751bbcd6c9a630945a87a3bc2af38788c,false,400
-6 )FileInfoManager=>0xe0caa8103ea05b5ce585c05d8112051a0b213acf,false,401
-7 )FileServerManager=>0xe585cc5b8ca7fb174a0560bf79eea7398efaf014,false,402
 ```
 
 Now you can get all the route info in the system route list.
