@@ -133,13 +133,16 @@ private:
 
 	// 处理响应消息
 	// handle msg
-	void handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r);
+	void handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r, std::shared_ptr<SessionFace> session);
 	void handlePrepareMsg(u256 const& _from, PrepareReq const& _req, bool _self = false);
 	void handleSignMsg(u256 const& _from, SignReq const& _req);
 	void handleCommitMsg(u256 const& _from, CommitReq const& _req);
 	void handleViewChangeMsg(u256 const& _from, ViewChangeReq const& _req);
 
 	void reHandlePrepareReq(PrepareReq const& _req);
+
+	// 发送ACK
+	void sendACK(std::shared_ptr<PBFTPeer> p);
 
 	// cache访问（未加锁，外层要加锁保护）
 	// access cache (no thread safe )
