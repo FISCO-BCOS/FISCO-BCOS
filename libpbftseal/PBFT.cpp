@@ -343,7 +343,7 @@ void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 				return;
 			}
 			//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
-			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data(), session));
+			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data(), std::weak_ptr<SessionFace>(session)));
 		}
 
 	} else {
@@ -372,13 +372,18 @@ void PBFT::workLoop() {
 	}
 }
 
-void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r, std::shared_ptr<SessionFace> session) {
+void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r, std::weak_ptr<SessionFace> session) {
 	Guard l(m_mutex);
 
 	bool broadcast = true;
 	bool sendAck = true;
 
-	auto pbftPeer = capabilityFromSession<PBFTPeer>(*session);
+	auto s = session.lock();
+	if(!s || !s->isConnected()) {
+		LOG(ERROR) << "Session canceled";
+		return;
+	}
+	auto pbftPeer = capabilityFromSession<PBFTPeer>(*s);
 	if(!pbftPeer) {
 		LOG(ERROR) << "Wrong peer capability";
 		return;

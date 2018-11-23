@@ -58,10 +58,10 @@ struct PBFTMsgPacket {
 	unsigned packet_id;
 	bytes data; // rlp data
 	u256 timestamp;
-	std::shared_ptr<SessionFace> peer;
+	std::weak_ptr<SessionFace> peer;
 
 	PBFTMsgPacket(): node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(utcTime()) {}
-	PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data, std::shared_ptr<SessionFace> _peer)
+	PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data, std::weak_ptr<SessionFace> _peer)
 		: node_idx(_idx), node_id(_id), packet_id(_pid), data(_data.toBytes()), timestamp(utcTime()), peer(_peer) {}
 };
 using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
