@@ -139,6 +139,8 @@ public:
     virtual uint32_t length() = 0;
     virtual uint32_t seq() = 0;
 
+    virtual bool isRequestPacket() = 0;
+
     virtual void encode(bytes& buffer) = 0;
     virtual ssize_t decode(const byte* buffer, size_t size) = 0;
 };

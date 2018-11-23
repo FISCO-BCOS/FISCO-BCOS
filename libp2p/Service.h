@@ -55,7 +55,7 @@ public:
     virtual NodeID id() const { return m_alias.pub(); }
 
     virtual void onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session);
-    virtual void onDisconnect(NetworkException e, NodeID nodeID);
+    virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
     virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
         P2PSession::Ptr p2pSession);
 

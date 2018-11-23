@@ -171,19 +171,22 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     LOG(INFO) << "Connection established to: " << nodeID << "@" << session->nodeIPEndpoint().name();
 }
 
-void Service::onDisconnect(NetworkException e, NodeID nodeID)
+void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 {
-    LOG(TRACE) << "Service onDisconnect: " << nodeID << " remove from m_sessions";
+    RecursiveGuard l(x_sessions);
+    auto it = m_sessions.find(p2pSession->nodeID());
+    if (it != m_sessions.end() && it->second == p2pSession)
     {
-        RecursiveGuard l(x_sessions);
-        m_sessions.erase(nodeID);
-    }
+        LOG(TRACE) << "Service onDisconnect: " << p2pSession->nodeID()
+                   << " remove from m_sessions at"
+                   << p2pSession->session()->nodeIPEndpoint().name();
 
-    {
+        m_sessions.erase(it);
+
         RecursiveGuard l(x_nodes);
         for (auto it : m_staticNodes)
         {
-            if (it.second == nodeID)
+            if (it.second == p2pSession->nodeID())
             {
                 it.second = NodeID();
                 break;
@@ -206,7 +209,7 @@ void Service::onMessage(
             if (e.errorCode() != P2PExceptionType::DuplicateSession)
             {
                 p2pSession->stop(UserReason);
-                onDisconnect(e, p2pSession->nodeID());
+                onDisconnect(e, p2pSession);
             }
 
             return;
