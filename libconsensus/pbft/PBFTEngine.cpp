@@ -1086,7 +1086,7 @@ void PBFTEngine::updateMinerList()
     {
         UpgradableGuard l(m_minerListMutex);
         auto miner_list = m_minerList;
-        int64_t curBlockNum = m_highestBlock.number() + 1;
+        int64_t curBlockNum = m_highestBlock.number();
         /// get node from storage DB
         auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
         /// obtain miner list
@@ -1132,6 +1132,8 @@ void PBFTEngine::updateMinerList()
         }
         UpgradeGuard ul(l);
         m_minerList = miner_list;
+        /// to make sure the index of all miners are consistent
+        std::sort(m_minerList.begin(), m_minerList.end());
         m_lastObtainMinerNum = m_highestBlock.number();
     }
     catch (std::exception& e)
