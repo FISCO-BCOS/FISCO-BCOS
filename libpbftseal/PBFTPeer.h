@@ -55,7 +55,11 @@ public:
 
 	virtual bool waitingACK() {
 		Guard l(x_waitingACK);
-		return m_waitingACK || time(NULL) - m_lastACK > 60;
+		if(time(NULL) - m_lastACK > 60) {
+			return false;
+		}
+
+		return m_waitingACK;
 	}
 
 	virtual void setWaitingACK(bool waitingACK) {
