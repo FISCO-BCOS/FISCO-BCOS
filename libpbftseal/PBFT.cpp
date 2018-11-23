@@ -375,7 +375,7 @@ void PBFT::workLoop() {
 void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r, std::shared_ptr<SessionFace> session) {
 	Guard l(m_mutex);
 
-	bool broadcast = false;
+	bool broadcast = true;
 	bool sendAck = true;
 
 	auto pbftPeer = capabilityFromSession<PBFTPeer>(*session);
