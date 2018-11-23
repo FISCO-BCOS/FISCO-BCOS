@@ -664,8 +664,13 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 		{
 			NodeID nodeid;
 			auto session = _p->session();
-			if (session && (nodeid = session->id()) && !_p->waitingACK())
+			if (session && (nodeid = session->id()))
 			{
+				if(_id == ViewChangeReqPacket && _p->waitingACK()) {
+					LOG(TRACE) << "Peer waiting ack";
+					return true;
+				}
+
 				unsigned account_type = 0;
 				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
 					LOG(INFO) << "Cannot get account type for peer" << nodeid;
