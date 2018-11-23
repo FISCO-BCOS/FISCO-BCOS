@@ -2,7 +2,7 @@
 # This script only support for block number smaller than 65535 - 256
 block_limit()
 {
-    blockNumber=`curl -s -X POST --data '{"jsonrpc":"2.0","method":"syncStatus","params":[1],"id":83}' $1 |jq .result.blockNumber`
+    blockNumber=`curl -s -X POST --data '{"jsonrpc":"2.0","method":"getSyncStatus","params":[1],"id":83}' $1 |jq .result.blockNumber`
     printf "%04x" $(($blockNumber+256))
 }
 
