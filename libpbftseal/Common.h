@@ -30,6 +30,7 @@
 #include <libdevcore/SHA3.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
+#include <libp2p/Session.h>
 
 namespace dev
 {
@@ -45,6 +46,7 @@ enum PBFTPacketType : byte
 	SignReqPacket = 0x01,
 	CommitReqPacket = 0x02,
 	ViewChangeReqPacket = 0x03,
+	ACKPacket = 0x04,
 
 	PBFTPacketCount
 };
@@ -56,10 +58,11 @@ struct PBFTMsgPacket {
 	unsigned packet_id;
 	bytes data; // rlp data
 	u256 timestamp;
+	std::shared_ptr<SessionFace> peer;
 
 	PBFTMsgPacket(): node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(utcTime()) {}
-	PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data)
-		: node_idx(_idx), node_id(_id), packet_id(_pid), data(_data.toBytes()), timestamp(utcTime()) {}
+	PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data, std::shared_ptr<SessionFace> _peer)
+		: node_idx(_idx), node_id(_id), packet_id(_pid), data(_data.toBytes()), timestamp(utcTime()), peer(_peer) {}
 };
 using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
 
@@ -136,6 +139,20 @@ struct PrepareReq : public PBFTMsg {
 struct SignReq : public PBFTMsg {};
 struct CommitReq : public PBFTMsg {};
 struct ViewChangeReq : public PBFTMsg {};
+
+struct ACK {
+	virtual void streamRLPFields(RLPStream& _s) const {	_s << u256(0); }
+	virtual ~ACK() {};
+	virtual void populate(RLP const& _rlp) {
+		int field = 0;
+			try	{
+				auto num = _rlp[field = 0].toInt<u256>();
+			} catch (Exception const& _e)	{
+				_e << errinfo_name("invalid msg format") << BadFieldError(field, toHex(_rlp[field].data().toBytes()));
+				throw;
+			}
+	}
+};
 
 }
 }

@@ -276,6 +276,23 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 	handlePrepareMsg(m_node_idx, req, true); // 指明是来自自己的Req
 }
 
+void PBFT::sendACK(std::shared_ptr<PBFTPeer> p) {
+	if (auto h = m_host.lock()) {
+		LOG(TRACE) << "PBFT send ack to: " << p->id().hex();
+
+		if (p && !p->waitingACK())
+		{
+			ACK ack;
+			RLPStream ts;
+			ack.streamRLPFields(ts);
+
+			RLPStream s;
+			p->prep(s, ACKPacket, 1).append(ts.out());
+			p->sealAndSend(s);
+		}
+	}
+}
+
 std::pair<bool, u256> PBFT::getLeader() const {
 	if (m_cfg_err || m_leader_failed || m_highest_block.number() == Invalid256) {
 		return std::make_pair(false, Invalid256);
@@ -326,7 +343,7 @@ void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 				return;
 			}
 			//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
-			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data()));
+			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data(), session));
 		}
 
 	} else {
@@ -340,7 +357,7 @@ void PBFT::workLoop() {
 		{
 			std::pair<bool, PBFTMsgPacket> ret = m_msg_queue.tryPop(5);
 			if (ret.first) {
-				handleMsg(ret.second.packet_id, ret.second.node_idx, ret.second.node_id, RLP(ret.second.data));
+				handleMsg(ret.second.packet_id, ret.second.node_idx, ret.second.node_id, RLP(ret.second.data), ret.second.peer);
 			} else {
 				std::unique_lock<std::mutex> l(x_signalled);
 				m_signalled.wait_for(l, chrono::milliseconds(5));
@@ -355,8 +372,17 @@ void PBFT::workLoop() {
 	}
 }
 
-void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r) {
+void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r, std::shared_ptr<SessionFace> session) {
 	Guard l(m_mutex);
+
+	bool broadcast = false;
+	bool sendAck = true;
+
+	auto pbftPeer = capabilityFromSession<PBFTPeer>(*session);
+	if(!pbftPeer) {
+		LOG(ERROR) << "Wrong peer capability";
+		return;
+	}
 
 	auto now_time = utcTime();
 	std::string key;
@@ -390,10 +416,21 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		pbft_msg = req;
 		break;
 	}
+	case ACKPacket: {
+		//Set waitingACK to false
+		pbftPeer->setWaitingACK(false);
+		sendAck = false;
+
+		break;
+	}
 	default: {
 		LOG(WARNING) << "Recv error msg, id=" << _id;
 		return;
 	}
+	}
+
+	if(sendAck) {
+		sendACK(pbftPeer);
 	}
 
 	//bool time_flag = (pbft_msg.timestamp >= now_time) || (now_time - pbft_msg.timestamp < m_view_timeout);
@@ -408,7 +445,7 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 			filter.insert(gen_node_id);
 		}
 
-		if(pbft_msg.idx == _from) {
+		if(pbft_msg.idx == _from && broadcast) {
 			LOG(TRACE) << "boradcastMsg on handleMsg";
 			broadcastMsg(pbft_msg.uniqueKey(), _id, _r.toBytes(), filter);
 		}
@@ -625,7 +662,7 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 		{
 			NodeID nodeid;
 			auto session = _p->session();
-			if (session && (nodeid = session->id()))
+			if (session && (nodeid = session->id()) && !_p->waitingACK())
 			{
 				unsigned account_type = 0;
 				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
@@ -647,6 +684,8 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 				LOG(TRACE) << "PBFT broadcastMsg _id: " << _id << " to: " << nodeid.hex();
 				_p->prep(ts, _id, 1).append(_data);
 				_p->sealAndSend(ts);
+				_p->setWaitingACK(true);
+
 				this->broadcastMark(_key, _id, _p);
 			}
 			return true;
