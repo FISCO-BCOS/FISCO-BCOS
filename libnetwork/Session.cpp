@@ -147,7 +147,6 @@ void Session::onWrite(
         if (ec)
         {
             LOG(WARNING) << "Error sending: " << ec.message() << " at " << nodeIPEndpoint().name();
-            ;
             drop(TCPError);
             return;
         }
@@ -304,7 +303,8 @@ void Session::drop(DisconnectReason _reason)
 
 void Session::disconnect(DisconnectReason _reason)
 {
-    LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")";
+    LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")"
+                 << " at " << m_socket->nodeIPEndpoint().name();
     drop(_reason);
 }
 
@@ -406,7 +406,7 @@ void Session::onMessage(
     if (m_actived && server && server->haveNetwork())
     {
         auto it = m_seq2Callback->find(message->seq());
-        if (it != m_seq2Callback->end())
+        if (it != m_seq2Callback->end() && !message->isRequestPacket())
         {
             LOG(TRACE) << "Found callback: " << message->seq();
 
