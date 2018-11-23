@@ -72,6 +72,7 @@ if [ -z "$chain" ];  then
 elif [  -d "$name" ]; then
     echo "$name DIR exist! please clean all old DIR!"
 else
-    gen_agency_cert "" ${chain}  ${agency}
+    gen_agency_cert "" ${chain}  ${agency} > build.log 2>&1
     echo "Build ${agency} Agency Crt suc!!!"
+    rm build.log
 fi

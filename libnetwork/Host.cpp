@@ -344,7 +344,6 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
               << "@" << _nodeIPEndpoint.name();
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
     // socket.reset(socket);
-    auto endpoint = socket->remoteEndpoint();
     socket->sslref().set_verify_mode(ba::ssl::verify_peer);
 
     /// connect to the server

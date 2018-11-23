@@ -135,8 +135,11 @@ EOF
 current_path=`pwd`
 agency=$1
 nodepath=${agency}"/"$2
-gen_node_cert "" ${agency} ${nodepath}
+gen_node_cert "" ${agency} ${nodepath} > build.log 2>&1
 
 cd ${current_path}
 cat ${agency}/agency.crt >> ${nodepath}/node.crt
 cat ${agency}/ca.crt >> ${nodepath}/node.crt
+rm build.log
+cd ${nodepath}
+rm node.json node.param node.private node.ca node.pubkey
