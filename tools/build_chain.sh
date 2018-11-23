@@ -229,7 +229,7 @@ EOF
  "serial":"$serial",
  "pubkey":"$nodeid",
  "name":"$node"
-
+}
 EOF
 
     echo "build $node node cert successful!"
@@ -342,33 +342,31 @@ generate_group_ini()
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
-;consensus type: only support PBFT now
-consensusType=pbft
-;the max number of transactions of a block
-maxTransNum=1000
-;the node id of leaders
-$nodeid_list
+    ;only support PBFT now
+    consensusType=pbft
+    ;the max number of transactions of a block
+    maxTransNum=1000
+    ;the node id of leaders
+    $nodeid_list
 
 ;sync period time
 [sync]
-idleWaitMs=200
-
+    idleWaitMs=200
 [storage]
-;storage db type, now support leveldb 
-type=${storage_type}
-
+    ;storage db type, now support leveldb 
+    type=${storage_type}
 [state]
-;state type, now support mpt/storage
-type=${state_type}
+    ;support mpt/storage
+    type=${state_type}
 
 ;genesis configuration
 [genesis]
-;used to mark the genesis block of this group
-;mark=${group_id}
+    ;used to mark the genesis block of this group
+    ;mark=${group_id}
 
 ;txpool limit
 [txPool]
-limit=1000
+    limit=1000
 EOF
 }
 
