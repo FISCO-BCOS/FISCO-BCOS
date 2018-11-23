@@ -280,7 +280,7 @@ void PBFT::sendACK(std::shared_ptr<PBFTPeer> p) {
 	if (auto h = m_host.lock()) {
 		LOG(TRACE) << "PBFT send ack to: " << p->id().hex();
 
-		if (p && !p->waitingACK())
+		if (p)
 		{
 			ACK ack;
 			RLPStream ts;
@@ -418,6 +418,7 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 	}
 	case ACKPacket: {
 		//Set waitingACK to false
+		LOG(TRACE) << "Receive ACK packet from " << _node.hex();
 		pbftPeer->setWaitingACK(false);
 		sendAck = false;
 
