@@ -93,8 +93,7 @@ Darwin)
 
     # And finally install all the external dependencies.
     brew install \
-        leveldb \
-        libmicrohttpd 
+        leveldb 
 
     ;;
 
@@ -136,8 +135,7 @@ Linux)
             gcc \
             libtool \
             boost \
-            leveldb \
-            libmicrohttpd 
+            leveldb 
 
     elif [ -f "/etc/os-release" ]; then
 
@@ -155,7 +153,6 @@ Linux)
                 libcurl4-openssl-dev \
                 libgmp-dev \
                 libleveldb-dev \
-                libmicrohttpd-dev \
                 libsnappy-dev	
             ;;
 
@@ -166,7 +163,6 @@ Linux)
                 boost-devel \
                 leveldb-devel \
                 curl-devel \
-                libmicrohttpd-devel \
                 gmp-devel 
             ;;
 
@@ -204,7 +200,6 @@ Linux)
                 libcurl4-openssl-dev \
                 libgmp-dev \
                 libleveldb-dev \
-                libmicrohttpd-dev \
                 libsnappy-dev \
                 $LLVM_PACKAGES
             ;;
@@ -221,10 +216,8 @@ Linux)
                 cmake3 \
                 make \
                 gcc-c++ \
-                boost-devel \
                 leveldb-devel \
                 curl-devel \
-                libmicrohttpd-devel \
                 gmp-devel \
                 openssl openssl-devel \
                 snappy-devel 
@@ -237,10 +230,8 @@ Linux)
             $SUDO yum -y -q install \
                 make \
                 gcc-c++ \
-                boost-devel \
                 leveldb-devel \
                 curl-devel \
-                libmicrohttpd-devel \
                 gmp-devel \
                 openssl openssl-devel 
             ;;
@@ -259,9 +250,7 @@ Linux)
         $SUDO apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/ \
             g++ \
             make \
-            boost-dev \
             curl-dev \
-            libmicrohttpd-dev \
             leveldb-dev
 
     else

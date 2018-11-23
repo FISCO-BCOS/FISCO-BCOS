@@ -49,12 +49,12 @@ include(EthExecutableHelper)
 include(EthDependencies)
 include(EthUtils)
 
+include(ProjectMHD)
 include(ProjectOpenSSL)
 include(ProjectCryptopp)
 include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
 include(ProjectSecp256k1)
-include(ProjectMHD)
 
 if (GROUPSIG)
     include(ProjectGroupSig)
