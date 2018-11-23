@@ -332,7 +332,7 @@ void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
 }
 
 void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
-	if (_id <= ViewChangeReqPacket) {
+	if (_id < PBFTPacketCount) {
 		NodeID nodeid;
 		auto session = _peer->session();
 		if (session && (nodeid = session->id()))
@@ -421,6 +421,7 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		LOG(TRACE) << "Receive ACK packet from " << _node.hex();
 		pbftPeer->setWaitingACK(false);
 		sendAck = false;
+		return;
 
 		break;
 	}
