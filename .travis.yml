@@ -24,6 +24,7 @@ branches:
   only:
       - dev
       - master
+      - release
 env:
     global:
       - TRAVIS_BUILD_TYPE=RelWithDebInfo
