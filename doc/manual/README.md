@@ -123,11 +123,7 @@ tail -f log/info* |grep ++++  #查看日志输出
 
 ```bash
 # FISCO-BCOS/ 目录下操作
-<<<<<<< HEAD
 curl -LO https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0-pre-release/fisco-bcos
-=======
-curl -O https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0-pre-release/fisco-bcos
->>>>>>> 1f72a0c867d5ababe68378f2e6c86cebb1e917b4
 # 添加可执行权限
 chmod a+x fisco-bcos
 ```
