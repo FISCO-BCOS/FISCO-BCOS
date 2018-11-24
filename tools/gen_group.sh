@@ -21,7 +21,7 @@ Usage:
     -l <node ip:node list>      [Required] eg. 127.0.0.1:0 1; 192.168.1.10:2 3
     -s <use storage state>      [Optional] default is mpt
     -h Help
-e.g: # generate group2 from node0, node1, node2
+e.g: # generate group2 from {127.0.0.1:node0}, {127.0.0.1:node1}, {192.168.1.10:node2}, {192.168.1.10 node3}
     bash gen_group.sh -g 2 -d nodes -l "127.0.0.1:0 1; 192.168.1.10:2 3"
 EOF
 
@@ -98,7 +98,7 @@ function generateNodeIdList()
                     LOG_ERROR "${prefix}_${miner}/config.ini not exists!"
                     continue
                 fi
-                certDir=`cat ${prefix}_${miner}/config.ini | grep data_path | grep -v ";" | cut -d'=' -f2`
+                certDir=`cat ${prefix}_${miner}/config.ini | grep -w data_path | grep -v ";" | grep -v group | cut -d'=' -f2`
                 if [ "${certDir}" == "" ];then
                     certDir="conf/"
                 fi
@@ -152,11 +152,11 @@ function checkParam()
 {
     if [ "${group_id}" == "" ];then
         LOG_ERROR "Must set group id"
-        exit 0
+        help
     fi
     if [ "${ip_miner}" == "" ];then
         LOG_ERROR "Must set Miner list"
-        exit 0
+        help
     fi
 }
 

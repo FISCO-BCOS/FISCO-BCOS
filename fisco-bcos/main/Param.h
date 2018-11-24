@@ -22,6 +22,7 @@
  */
 
 #pragma once
+#include <include/BuildInfo.h>
 #include <libdevcore/Common.h>
 #include <libethcore/Common.h>
 #include <boost/program_options.hpp>

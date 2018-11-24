@@ -57,6 +57,8 @@ namespace bi = boost::asio::ip;
 #define SESSION_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#SESSION] "
 #define P2PMSG_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#P2PMSG] "
 #define NETWORK_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#NETWORK] "
+#define SERVICE_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#SERVICE] "
+
 namespace dev
 {
 namespace p2p
