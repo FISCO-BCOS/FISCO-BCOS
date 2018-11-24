@@ -99,7 +99,7 @@ function generateNodeIdList()
                     LOG_ERROR "${prefix}_${miner}/config.ini not exists!"
                     continue
                 fi
-                certDir=`cat ${prefix}_${miner}/config.ini | grep data_path | grep -v ";" | cut -d'=' -f2`
+                certDir=`cat ${prefix}_${miner}/config.ini | grep -w data_path | grep -v ";" | grep -v group | cut -d'=' -f2`
                 if [ "${certDir}" == "" ];then
                     certDir="conf/"
                 fi
