@@ -42,7 +42,7 @@ public:
         auto L = el::Loggers::getLogger("default");
         if (L == nullptr)
         {
-            LOG(ERROR) << "Oops, it is not called default!";
+            INITIALIZER_LOG(ERROR) << "Oops, it is not called default!";
         }
         else
         {
@@ -52,7 +52,7 @@ public:
         L = el::Loggers::getLogger("fileLogger");
         if (L == nullptr)
         {
-            LOG(ERROR) << "Oops, it is not called fileLogger!";
+            INITIALIZER_LOG(ERROR) << "Oops, it is not called fileLogger!";
         }
         else
         {

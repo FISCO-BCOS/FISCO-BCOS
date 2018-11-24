@@ -52,8 +52,8 @@ void P2PSession::stop(DisconnectReason reason)
 
 void P2PSession::heartBeat()
 {
-    LOG(TRACE) << "P2PSession onHeartBeat: " << m_nodeID << "@"
-               << m_session->nodeIPEndpoint().name();
+    SESSION_LOG(TRACE) << "P2PSession onHeartBeat: " << m_nodeID << "@"
+                       << m_session->nodeIPEndpoint().name();
     auto service = m_service.lock();
     if (service && service->actived())
     {
@@ -80,7 +80,7 @@ void P2PSession::heartBeat()
         m_timer->async_wait([self](boost::system::error_code e) {
             if (e)
             {
-                LOG(TRACE) << "Timer canceled: " << e;
+                SESSION_LOG(TRACE) << "Timer canceled: " << e;
                 return;
             }
 

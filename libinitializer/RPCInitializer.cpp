@@ -32,7 +32,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     int httpListenPort = _pt.get<int>("rpc.http_listen_port", 0);
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
-        LOG(ERROR) << "[#RPCInitializer] initConfig for RPCInitializer failed";
+        INITIALIZER_LOG(ERROR) << "[#RPCInitializer] initConfig for RPCInitializer failed";
         BOOST_THROW_EXCEPTION(InvalidListenPort() << errinfo_comment(
                                   "[#RPCInitializer] initConfig for RPCInitializer "
                                   "failed! Invalid ListenPort for RPC, must between [0,65536]"));
