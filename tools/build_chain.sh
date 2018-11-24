@@ -229,7 +229,7 @@ EOF
  "serial":"$serial",
  "pubkey":"$nodeid",
  "name":"$node"
-
+}
 EOF
 
     echo "build $node node cert successful!"
@@ -342,33 +342,31 @@ generate_group_ini()
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
-;consensus type: only support PBFT now
-consensusType=pbft
-;the max number of transactions of a block
-maxTransNum=1000
-;the node id of leaders
-$nodeid_list
+    ;only support PBFT now
+    consensusType=pbft
+    ;the max number of transactions of a block
+    maxTransNum=1000
+    ;the node id of leaders
+    $nodeid_list
 
 ;sync period time
 [sync]
-idleWaitMs=200
-
+    idleWaitMs=200
 [storage]
-;storage db type, now support leveldb 
-type=${storage_type}
-
+    ;storage db type, now support leveldb 
+    type=${storage_type}
 [state]
-;state type, now support mpt/storage
-type=${state_type}
+    ;support mpt/storage
+    type=${state_type}
 
 ;genesis configuration
 [genesis]
-;used to mark the genesis block of this group
-;mark=${group_id}
+    ;used to mark the genesis block of this group
+    ;mark=${group_id}
 
 ;txpool limit
 [txPool]
-limit=1000
+    limit=1000
 EOF
 }
 
@@ -432,11 +430,42 @@ EOF
 
 genTransTest()
 {
-    local file=${output_dir}"/transTest.sh"
+    local file="${output_dir}/transTest.sh"
     cat << EOF > "${file}"
-#!bin/bash
-curl -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f840255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e"],"id":83}' http://127.0.0.1:$(( port_start + 2))
+#! /bin/sh
+# This script only support for block number smaller than 65535 - 256
+
+ip_port=127.0.0.1:30302
+trans_num=1
+if [ \$# -eq 1 ];then
+    trans_num=\$1
+fi
+block_limit()
+{
+    blockNumber=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"syncStatus","params":[1],"id":83}' \$1 |jq .result.blockNumber\`
+    printf "%04x" \$((\$blockNumber+256))
+}
+
+send_a_tx()
+{
+    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\`date +%s%N\`85174876e7ff8609184e729fff82\`block_limit \$1\`94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
+    #echo \$txBytes
+    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "'\$txBytes'"],"id":83}' \$1 |jq
+}
+
+send_many_tx()
+{
+    for j in \$(seq 1 \$1)
+    do
+        echo 'Send transaction: ' \$j
+        send_a_tx \${ip_port} 
+    done
+}
+
+send_many_tx \${trans_num}
+
 EOF
+    chmod +x ${output_dir}"/transTest.sh"
 }
 
 main()
@@ -547,7 +576,7 @@ for line in ${ip_array[*]};do
             openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
 		    keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
             #copy ca.crt
-            cp ${output_dir}/cert/agency/ca.crt $node_dir/sdk/
+            cp ${output_dir}/cert/ca.crt $node_dir/sdk/
             # gen_sdk_cert ${output_dir}/cert/agency $node_dir
             # mv $node_dir/* $node_dir/sdk/
         fi

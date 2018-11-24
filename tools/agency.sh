@@ -103,7 +103,8 @@ while getopts "c:a:h" option;do
     esac
 done
 checkParam
-gen_agency_cert "" ${chain}  ${agency}
+gen_agency_cert "" ${chain}  ${agency} > build.log 2>&1
+rm build.log
 if [ $? -eq 0 ];then
     echo "Build ${agency} Agency Crt suc!!!"
 else

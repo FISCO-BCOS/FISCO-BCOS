@@ -172,9 +172,12 @@ while getopts "a:n:h" option;do
 done
 checkParam
 nodepath="${agency}/${nodepath}"
-gen_node_cert "" ${agency} ${nodepath}
+gen_node_cert "" ${agency} ${nodepath} > build.log 2>&1
 execute_cmd "cd ${current_path}"
 execute_cmd "cat ${agency}/agency.crt >> ${nodepath}/node.crt"
 execute_cmd "cat ${agency}/ca.crt >> ${nodepath}/node.crt"
+execute_cmd "rm build.log"
+execute_cmd "cd ${nodepath}"
+execute_cmd "rm node.json node.param node.private node.ca node.pubkey"
 }
 main "$@"

@@ -123,7 +123,7 @@ void Service::heartBeat()
 
 void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session)
 {
-    SERVICE_LOG(TRACE) << "Service onConnect: " << nodeID << std::endl;
+    SERVICE_LOG(TRACE) << "Service onConnect: " << nodeID;
 
     if (e.errorCode())
     {
