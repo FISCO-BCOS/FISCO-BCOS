@@ -318,17 +318,19 @@ dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
 
 Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
 {
-    ReadGuard l(m_lock);
-    Transactions ret;
+    UpgradableGuard l(m_lock);
     uint64_t limit = min(m_limit, _limit);
     uint64_t txCnt = 0;
+    Transactions ret;
+    std::set<dev::h256> invalidBlockLimitTxs;
+    std::set<std::string> nonceKeyCache;
     for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
         /// check block limit and nonce again when obtain transactions
         if (false == isBlockLimitOrNonceOk(*it, false))
         {
-            drop(it->sha3());
-            m_commonNonceCheck->delCache(*it);
+            invalidBlockLimitTxs.insert(it->sha3());
+            nonceKeyCache.insert(m_commonNonceCheck->generateKey(*it));
             continue;
         }
         if (!_avoid.count(it->sha3()))
@@ -338,6 +340,21 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
             if (_updateAvoid)
                 _avoid.insert(it->sha3());
         }
+    }
+    if (invalidBlockLimitTxs.size() > 0)
+    {
+        UpgradeGuard ul(l);
+        for (auto txHash : invalidBlockLimitTxs)
+        {
+            removeTrans(txHash);
+            m_dropped.insert(txHash);
+        }
+    }
+    /// delete cached invalid nonce
+    if (nonceKeyCache.size() > 0)
+    {
+        for (auto key : nonceKeyCache)
+            m_commonNonceCheck->delCache(key);
     }
     return ret;
 }
