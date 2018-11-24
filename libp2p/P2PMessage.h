@@ -93,7 +93,7 @@ public:
             strMsg << topic << "," << std::string((const char*)temp->data(), temp->size());
         }
         strMsg << ")";
-        LOG(INFO) << strMsg.str();
+        P2PMSG_LOG(TRACE) << strMsg.str();
     }
 
 private:
