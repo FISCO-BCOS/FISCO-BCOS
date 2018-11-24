@@ -54,10 +54,10 @@ public:
         }
         catch (Exception const& _e)
         {
-            LOG(ERROR) << "ERROR: " << diagnostic_information(_e);
-            LOG(ERROR) << "Ssl Socket Init Fail! Please Check CERTIFICATE!";
+            SESSION_LOG(ERROR) << "ERROR: " << diagnostic_information(_e);
+            SESSION_LOG(ERROR) << "Ssl Socket Init Fail! Please Check CERTIFICATE!";
         }
-        LOG(INFO) << "CERTIFICATE LOAD SUC!";
+        SESSION_LOG(INFO) << "CERTIFICATE LOAD SUC!";
     }
     ~Socket() { close(); }
 
