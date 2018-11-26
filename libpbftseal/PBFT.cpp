@@ -355,6 +355,8 @@ void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 				sendACK(_peer);
 			}
 			else {
+				LOG(TRACE) << "Recv ACK pakcet";
+
 				auto pbftPeer = std::dynamic_pointer_cast<PBFTPeer>(_peer);
 				if(!pbftPeer) {
 					LOG(ERROR) << "Wrong peer capability";
