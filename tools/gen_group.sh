@@ -53,7 +53,6 @@ idleWaitMs=200
 [storage]
 ;storage db type, now support leveldb 
 type=LevelDB
-dbpath=data
 
 [state]
 ;state type, now support mpt/storage

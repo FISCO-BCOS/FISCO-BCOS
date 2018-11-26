@@ -212,7 +212,7 @@ public:
     virtual u256 balance(Address) { return 0; }
 
     /// Read address's code.
-    virtual bytes const& codeAt(Address) { return NullBytes; }
+    virtual bytes const codeAt(Address) { return NullBytes; }
 
     /// @returns the size of the code in bytes at the given address.
     virtual size_t codeSizeAt(Address) { return 0; }
