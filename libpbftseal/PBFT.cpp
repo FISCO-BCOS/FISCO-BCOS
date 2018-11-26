@@ -1047,8 +1047,8 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	// other node receive the low view viewchange, would trigger follow code to motivate the node. +1 is to prevent the case that the view just change, for the reason
 	// which the new started node' view must fall behind(>2) the excited node
 	if (_req.view + 1 < m_to_view && _req.idx == _from) { // do not motivate by others transfer
-		LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
-		broadcastViewChangeReq();
+		//LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
+		//broadcastViewChangeReq();
 	}
 
 	if (_req.height < m_highest_block.number() || _req.view <= m_view) {
