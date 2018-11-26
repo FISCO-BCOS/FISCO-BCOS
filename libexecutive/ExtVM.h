@@ -67,7 +67,7 @@ public:
     void setStore(u256 _n, u256 _v) final;
 
     /// Read address's code.
-    bytes const& codeAt(Address _a) final { return m_s->code(_a); }
+    bytes const codeAt(Address _a) final { return m_s->code(_a); }
 
     /// @returns the size of the code in  bytes at the given address.
     size_t codeSizeAt(Address _a) final;

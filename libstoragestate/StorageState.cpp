@@ -328,7 +328,8 @@ void StorageState::commit()
 
 void StorageState::dbCommit(h256 const& _blockHash, int64_t _blockNumber)
 {
-    m_memoryTableFactory->commitDB(_blockHash, _blockNumber);
+    // ExecutiveContext will commit
+    // m_memoryTableFactory->commitDB(_blockHash, _blockNumber);
 }
 
 void StorageState::setRoot(h256 const& _root) {}

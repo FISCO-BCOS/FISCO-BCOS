@@ -65,13 +65,51 @@ gen_agency_cert() {
     echo "build $name agency cert successful!"
 }
 
-chain=$1
-agency=${2}
-if [ -z "$chain" ];  then
-    echo "Usage:agency.sh  chain_path agency_name"
-elif [  -d "$name" ]; then
-    echo "$name DIR exist! please clean all old DIR!"
-else
-    gen_agency_cert "" ${chain}  ${agency}
-    echo "Build ${agency} Agency Crt suc!!!"
+chain=
+agency=
+
+help()
+{
+    echo "${1}"
+    cat << EOF
+Usage:
+    -c <ca directory>           [Required]
+    -a <agency directory>       [Required]
+    -h Help
+e.g: 
+    bash agency.sh -c nodes/cert -a agencyA
+EOF
+exit 0
+}
+
+checkParam()
+{
+if [ "${chain}" == "" ];  then
+    echo "must set chain certificate directory"
+    help
+elif [  "${agency}" == "" ]; then
+    echo "must set agency directory"
+    help
 fi
+}
+
+main()
+{
+while getopts "c:a:h" option;do
+    case ${option} in
+    c) chain=${OPTARG};;
+    a) agency=${OPTARG};;
+    h) help;;
+    esac
+done
+checkParam
+gen_agency_cert "" ${chain}  ${agency} > build.log 2>&1
+rm build.log
+if [ $? -eq 0 ];then
+    echo "Build ${agency} Agency Crt suc!!!"
+else
+    echo "Build ${agency} Agency Crt failed!!!"
+fi
+}
+
+main "$@"

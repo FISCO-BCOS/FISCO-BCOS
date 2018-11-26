@@ -7,28 +7,18 @@
 
 [![GitHub forks](https://img.shields.io/github/forks/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/network) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/lab-bcos/total.svg)](https://github.com/FISCO-BCOS/lab-bcos) 
 
-### Install FISCO BCOS
-
-To install the execution and running environent. Clone FISCO BCOS and run `install.sh`. 
-
-``` shell
-git clone --recursive https://github.com/FISCO-BCOS/lab-bcos.git
-cd lab-bcos/tools
-bash install.sh
-```
-
 ### Build a blockchain
 
-Run ``` build_chain.sh``` to generate a blockchain with some nodes. For example, we build a blockchain with 4 nodes belongs to 192.168.1.1.
+Run [`build_chain.sh`](tools/build_chain.sh) to generate a blockchain with some nodes. For example, we build a blockchain with 4 nodes belongs to `127.0.0.1`.
 
-``` shell
-cd lab-bcos/tools
-bash build_chain.sh -l "192.168.1.1:4"
+```bash
+curl -LO https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/tools/build_chain.sh
+bash build_chain.sh -l "127.0.0.1:4"
 ```
 
 After that, we start up all nodes. And the blockchain is running!
 
-``` shell
+```bash
 cd ./nodes
 bash start_all.sh
 ```

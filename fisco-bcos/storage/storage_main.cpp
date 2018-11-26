@@ -156,7 +156,7 @@ int main(int argc, const char* argv[])
                 auto entries = table->select(p[1], table->newCondition());
                 printEntries(entries);
             }
-            memoryTableFactory->commitDB(h256(0), 1);
+            // memoryTableFactory->commitDB(h256(0), 1);
             return 0;
         }
     }

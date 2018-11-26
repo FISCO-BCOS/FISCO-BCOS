@@ -133,10 +133,51 @@ EOF
 }
 
 current_path=`pwd`
-agency=$1
-nodepath=${agency}"/"$2
-gen_node_cert "" ${agency} ${nodepath}
+agency=
+nodepath="node"
 
-cd ${current_path}
-cat ${agency}/agency.crt >> ${nodepath}/node.crt
-cat ${agency}/ca.crt >> ${nodepath}/node.crt
+help()
+{
+    echo "${1}"
+    cat << EOF
+Usage:
+    -a <dir of agency cert>     [Required]
+    -n <dir of the node cert>   [Optional] default is node
+    -h Help
+e.g: 
+    bash node.sh -a agencyA -n node1
+EOF
+exit 0
+}
+
+checkParam()
+{
+    if [ "${agency}" == "" ];then
+        LOG_ERROR "Must set path of the agency cert!"
+        help
+    fi
+    if [ "${nodepath}" == "" ];then
+        LOG_ERROR "Must set node dir of the node cert!"
+        help
+    fi
+}
+main()
+{
+while getopts "a:n:h" option;do
+    case ${option} in
+    a) agency=${OPTARG};;
+    n) nodepath=${OPTARG};;
+    h) help;;
+    esac
+done
+checkParam
+nodepath="${agency}/${nodepath}"
+gen_node_cert "" ${agency} ${nodepath} > build.log 2>&1
+execute_cmd "cd ${current_path}"
+execute_cmd "cat ${agency}/agency.crt >> ${nodepath}/node.crt"
+execute_cmd "cat ${agency}/ca.crt >> ${nodepath}/node.crt"
+execute_cmd "rm build.log"
+execute_cmd "cd ${nodepath}"
+execute_cmd "rm node.json node.param node.private node.ca node.pubkey"
+}
+main "$@"

@@ -623,9 +623,6 @@ void PBFTEngine::checkAndSave()
             {
                 dropHandledTransactions(block);
                 PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
-                /// clear caches to in case of repeated commit
-                m_reqCache->clearAllExceptCommitCache();
-                m_reqCache->delCache(m_highestBlock.hash());
             }
             else
             {
@@ -637,7 +634,10 @@ void PBFTEngine::checkAndSave()
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(block);
             }
+            /// clear caches to in case of repeated commit
             resetConfig();
+            m_reqCache->clearAllExceptCommitCache();
+            m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
         }
         else
         {
@@ -671,9 +671,10 @@ void PBFTEngine::reportBlock(Block const& block)
             m_timeManager.m_lastConsensusTime = utcTime();
             m_timeManager.m_changeCycle = 0;
             m_consensusBlockNumber = m_highestBlock.number() + 1;
+            /// delete invalid view change requests from the cache
+            m_reqCache->delInvalidViewChange(m_highestBlock);
         }
-        /// delete invalid view change requests from the cache
-        m_reqCache->delInvalidViewChange(m_highestBlock);
+        resetConfig();
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
         PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "
@@ -1110,7 +1111,7 @@ void PBFTEngine::updateMinerList()
             }
         }
         /// remove observe nodes
-        for (size_t i = 0; i < miner_list.size(); i++)
+        for (size_t i = 0; i < nodes->size(); i++)
         {
             auto node = nodes->get(i);
             if (!node)
@@ -1129,9 +1130,11 @@ void PBFTEngine::updateMinerList()
                 }
             }
         }
-
         UpgradeGuard ul(l);
         m_minerList = miner_list;
+        /// to make sure the index of all miners are consistent
+        std::sort(m_minerList.begin(), m_minerList.end());
+        m_lastObtainMinerNum = m_highestBlock.number();
     }
     catch (std::exception& e)
     {
@@ -1139,6 +1142,5 @@ void PBFTEngine::updateMinerList()
                               << boost::diagnostic_information(e);
     }
 }
-
 }  // namespace consensus
 }  // namespace dev
