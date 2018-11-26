@@ -137,7 +137,7 @@ private:
 	void handlePrepareMsg(u256 const& _from, PrepareReq const& _req, bool _self = false);
 	void handleSignMsg(u256 const& _from, SignReq const& _req);
 	void handleCommitMsg(u256 const& _from, CommitReq const& _req);
-	void handleViewChangeMsg(u256 const& _from, ViewChangeReq const& _req);
+	void handleViewChangeMsg(u256 const& _from, ViewChangeReq const& _req, std::weak_ptr<SessionFace> session);
 
 	void reHandlePrepareReq(PrepareReq const& _req);
 
