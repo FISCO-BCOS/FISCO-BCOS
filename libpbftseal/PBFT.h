@@ -126,7 +126,7 @@ private:
 	bool broadcastSignReq(PrepareReq const& _req);
 	bool broadcastCommitReq(PrepareReq const & _req);
 	bool broadcastViewChangeReq();
-	bool broadcastMsg(std::string const& _key, unsigned _id, bytes const& _data, std::unordered_set<h512> const& _filter = std::unordered_set<h512>());
+	bool broadcastMsg(std::string const& _key, unsigned _id, bytes const& _data, bool fromSelf = true, std::unordered_set<h512> const& _filter = std::unordered_set<h512>());
 	bool broadcastFilter(std::string const& _key, unsigned _id, shared_ptr<PBFTPeer> _p);
 	void broadcastMark(std::string const& _key, unsigned _id, shared_ptr<PBFTPeer> _p);
 	void clearMask();
@@ -142,7 +142,7 @@ private:
 	void reHandlePrepareReq(PrepareReq const& _req);
 
 	// 发送ACK
-	void sendACK(std::shared_ptr<PBFTPeer> p);
+	void sendACK(std::shared_ptr<p2p::Capability> p);
 
 	// cache访问（未加锁，外层要加锁保护）
 	// access cache (no thread safe )
