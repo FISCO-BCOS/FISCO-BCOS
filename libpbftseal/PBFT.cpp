@@ -429,7 +429,7 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 	case ViewChangeReqPacket: {
 		ViewChangeReq req;
 		req.populate(_r);
-		handleViewChangeMsg(_from, req);
+		handleViewChangeMsg(_from, req, session);
 		pbft_msg = req;
 		break;
 	}
@@ -509,7 +509,7 @@ void PBFT::checkTimeout() {
 			{
 				PBFTFlowViewChangeLog(m_highest_block.number() + m_view, " view:" + m_view.convert_to<string>());
 			}
-			else 
+			else
 			{
 				STAT_ERROR_MSG_LOGGUARD(STAT_PBFT_VIEWCHANGE_TAG) << "Timeout and ViewChanged!" 
 					<< " m_view=" << m_view << ", m_to_view=" << m_to_view << ", m_change_cycle=" << m_change_cycle;
@@ -1028,7 +1028,7 @@ void PBFT::handleCommitMsg(u256 const &_from, CommitReq const &_req) {
 	return;
 }
 
-void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
+void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, std::weak_ptr<SessionFace> session) {
 	Timer t;
 	ostringstream oss;
 	oss << "handleViewChangeMsg: idx=" << _req.idx << ",view=" << _req.view  << ",blk=" << _req.height << ",hash=" << _req.block_hash.abridged() << ",from=" << _from;
@@ -1051,6 +1051,45 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	if (_req.view + 1 < m_to_view && _req.idx == _from) { // do not motivate by others transfer
 		//LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
 		//broadcastViewChangeReq();
+		if (m_account_type != EN_ACCOUNT_TYPE_MINER) {
+			LOG(INFO) << "sendViewChangeReq give up for not miner";
+		}
+		else {
+			auto _s = session.lock();
+			if(_s) {
+				auto pbftPeer = p2p::capabilityFromSession<PBFTPeer>(*_s);
+				if(!pbftPeer) {
+					LOG(ERROR) << "Wrong peer capability";
+				}
+				else {
+					ViewChangeReq req;
+					req.height = m_highest_block.number();
+					req.view = m_to_view;
+					req.idx = m_node_idx;
+					req.timestamp = u256(utcTime());
+					req.block_hash = m_highest_block.hash(WithoutSeal);
+					req.sig = signHash(req.block_hash);
+					req.sig2 = signHash(req.fieldsWithoutBlock());
+
+					if (!m_empty_block_flag) {
+						LOGCOMWARNING << WarningMap.at(ChangeViewWarning) << "|blockNumber:" << req.height << " ChangeView:" << req.view;
+					}
+					m_empty_block_flag = false;
+
+					RLPStream ts;
+					req.streamRLPFields(ts);
+
+					LOG(TRACE) << "boradcastMsg on broadcastViewChangeReq";
+					bool ret = broadcastMsg(req.uniqueKey(), ViewChangeReqPacket, ts.out());
+
+					RLPStream s;
+					LOG(TRACE) << "PBFT sendViewChangeMsg _id to: " << _s->id().hex();
+					pbftPeer->prep(s, ViewChangeReqPacket, 1).append(ts.out());
+					pbftPeer->sealAndSend(s);
+					pbftPeer->setWaitingACK(true);
+				}
+			}
+		}
 	}
 
 	if (_req.height < m_highest_block.number() || _req.view <= m_view) {
