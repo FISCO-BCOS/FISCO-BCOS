@@ -17,7 +17,7 @@ eth_path=
 gen_sdk=false
 jks_passwd=123456
 make_tar=
-listen_ip="127.0.0.1"
+enable_public_listen_ip="false"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
@@ -25,16 +25,16 @@ help() {
     echo $1
     cat << EOF
 Usage:
-    -l <IP list>                [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -f <IP list file>           [Optional] "split by line, "ip:nodeNum"
-    -e <FISCO-BCOS binary path> Default download from GitHub
-    -o <Output Dir>             Default ./nodes/
-    -p <Start Port>             Default 30300
-    -i <Rpc Listen IP>          Default 127.0.0.1
-    -d <JKS passwd>             Default not generate jks files, if set use param as jks passwd
-    -s <State type>             Default mpt. if set -s, use storage 
-    -t <Cert config file>       Default auto generate
-    -z <Generate tar packet>    Default no
+    -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
+    -f <IP list file>                   [Optional] "split by line, "ip:nodeNum"
+    -e <FISCO-BCOS binary path>         Default download from GitHub
+    -o <Output Dir>                     Default ./nodes/
+    -p <Start Port>                     Default 30300
+    -i <enable public rpc listen ip>    Default 127.0.0.1
+    -d <JKS passwd>                     Default not generate jks files, if set use param as jks passwd
+    -s <State type>                     Default mpt. if set -s, use storage 
+    -t <Cert config file>               Default auto generate
+    -z <Generate tar packet>            Default no
     -h Help
 e.g 
     build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
@@ -277,6 +277,11 @@ gen_sdk_cert() {
 generate_config_ini()
 {
     local output=$1
+    if [ "${enable_public_listen_ip}" == "true" ];then
+        listen_ip="${2}"
+    else
+        listen_ip="127.0.0.1"
+    fi
     cat << EOF > ${output}
 [rpc]
     ;rpc listen ip
@@ -441,7 +446,7 @@ EOF
 
 main()
 {
-while getopts "f:l:o:i:p:e:t:dszh" option;do
+while getopts "f:l:o:p:e:t:idszh" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -450,7 +455,7 @@ while getopts "f:l:o:i:p:e:t:dszh" option;do
        use_ip_param="true"
     ;;
     o) output_dir=$OPTARG;;
-    i) listen_ip=$OPTARG;;
+    i) enable_public_listen_ip="true";;
     p) port_start=$OPTARG;;
     e) eth_path=$OPTARG;;
     d) gen_sdk="true"
@@ -577,7 +582,7 @@ for line in ${ip_array[*]};do
     for ((i=0;i<num;++i));do
         echo "Generating IP:${ip} ID:${index} files..."
         node_dir="$output_dir/node_${ip}_${index}"
-        generate_config_ini "$node_dir/config.ini"
+        generate_config_ini "$node_dir/config.ini" "${ip}"
         generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         generate_node_scripts "$node_dir"
         cp "$eth_path" "$node_dir/fisco-bcos"
