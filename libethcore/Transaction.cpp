@@ -253,7 +253,7 @@ const CnsParams &TransactionBase::cnsParams() const
 	}
 	catch (const std::exception& e)
 	{
-		LOG(WARNING) << "# cnsParams , what msg=" << e.what();
+		LOG(DEBUG) << "# cnsParams , what msg=" << e.what();
 	}
 
 	return m_cnsParams;
