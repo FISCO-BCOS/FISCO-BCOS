@@ -410,6 +410,16 @@ void Session::write()
 			return;
 		} else if (queue_elapsed >= 1000) {
 			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
+
+			auto packetType = m_protocloIDQueue[0];
+			if(packetType == 41) { // drop viewChangeReq
+				LOG(TRACE) << "Ignore timeout viewChange";
+				m_server->getIOService()->post(
+					[ = ] {
+						onWrite(boost::system::error_code(0), 0);
+					});
+				return;
+			}
 		}
 
 		auto session = shared_from_this();
