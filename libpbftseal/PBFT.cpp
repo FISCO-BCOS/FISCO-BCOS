@@ -277,6 +277,7 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 }
 
 void PBFT::sendACK(std::shared_ptr<p2p::Capability> p) {
+#if 0
 	if (auto h = m_host.lock()) {
 		LOG(TRACE) << "PBFT send ack to: " << p->id().hex();
 
@@ -291,6 +292,7 @@ void PBFT::sendACK(std::shared_ptr<p2p::Capability> p) {
 			p->sealAndSend(s);
 		}
 	}
+#endif
 }
 
 std::pair<bool, u256> PBFT::getLeader() const {
@@ -670,10 +672,12 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 			auto session = _p->session();
 			if (session && (nodeid = session->id()))
 			{
+#if 0
 				if(_id == ViewChangeReqPacket && _p->waitingACK() && !fromSelf) {
 					LOG(TRACE) << "Peer waiting ack";
 					return true;
 				}
+#endif
 
 				unsigned account_type = 0;
 				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
