@@ -147,7 +147,7 @@ Transactions TransactionQueue::topTransactions(unsigned _limit, h256Hash const& 
 			//LOG(TRACE) << "TransactionQueue::topTransactions " << t->transaction.sha3() << ",nonce=" << t->transaction.randomid();
 		}
 
-	LOG(TRACE) << "TransactionQueue::topTransactions " << ret.size();
+	LOG(TRACE) << "TransactionQueue::topTransactions: " << ret.size() << " total: " << m_current.size();
 
 	return ret;
 }
