@@ -502,11 +502,13 @@ void EthereumHost::doWork()
 	if (!isSyncing() && m_chain.isKnown(m_latestBlockSent))
 	{
 		LOG(TRACE) << "EthereumHost isSyncing";
+		maintainTransactions();
+
 		if (m_newTransactions)
 		{
 			LOG(TRACE) << "EthereumHost maintainTransactions";
 			m_newTransactions = false;
-			maintainTransactions();
+			//maintainTransactions();
 		}
 		if (m_newBlocks)
 		{
