@@ -416,7 +416,7 @@ void Session::write()
 				LOG(TRACE) << "Ignore timeout viewChange";
 				m_server->getIOService()->post(
 					[ = ] {
-						onWrite(boost::system::error_code(0), 0);
+						onWrite(boost::system::error_code(), 0);
 					});
 				return;
 			}
