@@ -409,9 +409,9 @@ void Session::write()
 			drop(PingTimeout);
 			return;
 		} else if (queue_elapsed >= 1000) {
-			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
-
 			auto packetType = m_protocloIDQueue[0];
+			LOG(WARNING) << "[NETWORK] msg waiting in queue packetType=" << packetType << " timecost=" << queue_elapsed;
+
 			if(packetType == 41) { // drop viewChangeReq
 				LOG(TRACE) << "Ignore timeout viewChange";
 				m_server->getIOService()->post(
