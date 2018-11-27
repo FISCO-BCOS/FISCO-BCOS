@@ -412,7 +412,7 @@ void Session::write()
 			auto packetType = m_protocloIDQueue[0];
 			LOG(WARNING) << "[NETWORK] msg waiting in queue packetType=" << packetType << " timecost=" << queue_elapsed;
 
-			if(packetType == 41) { // drop viewChangeReq
+			if(packetType == 41 || packetType == 36) { // drop viewChangeReq & topics
 				LOG(TRACE) << "Ignore timeout viewChange";
 				m_server->getIOService()->post(
 					[ = ] {
