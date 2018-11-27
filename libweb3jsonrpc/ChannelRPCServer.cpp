@@ -79,7 +79,7 @@ bool ChannelRPCServer::StartListening() {
 			pthread_setThreadName("ChannelHeartBeat" );
 
 			while (_running) {
-				sleep(1);
+				sleep(10);
 				if(_running) {
 				try {
 						auto host = _host.lock();
