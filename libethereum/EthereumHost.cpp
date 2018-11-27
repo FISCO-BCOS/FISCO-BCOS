@@ -907,7 +907,6 @@ std::vector<p2p::NodeID> EthereumHost::getPeersByTopic(std::string topic) {
 void EthereumHost::sendTopicsMessage(p2p::NodeID nodeID, int type, int seq, std::shared_ptr<std::set<std::string> > topics) {
 	LOG(TRACE) <<" Send topic Req:" << seq << " type:" << type;
 	int peerSended = 0;
-
 	
 	if (nodeID == p2p::NodeID()) {
 		foreachPeer([&](std::shared_ptr<EthereumPeer> peer) {
