@@ -1384,11 +1384,9 @@ int main(int argc, char** argv)
 
 	auto caps = useWhisper ? set<string> {"eth", "shh"} : set<string> {"eth"};
 
-	//启动channelServer
-	ChannelRPCServer::Ptr channelServer;
-	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
+	
 	//建立web3网络
-	dev::WebThreeDirect web3(
+	dev::WebThreeDirect *web3 = new dev::WebThreeDirect(
 	    WebThreeDirect::composeClientVersion("eth"),
 	    getDataDir(),
 	    chainParams,
@@ -1399,17 +1397,20 @@ int main(int argc, char** argv)
 	    testingMode
 	);
 
-	channelServer->setHost(web3.ethereum()->host());
-	web3.ethereum()->host().lock()->setWeb3Observer(channelServer->buildObserver());
+	//启动channelServer
+	ChannelRPCServer::Ptr channelServer;
+	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
+	channelServer->setHost(web3->ethereum()->host());
+	web3->ethereum()->host().lock()->setWeb3Observer(channelServer->buildObserver());
 
 	if (!extraData.empty())
-		web3.ethereum()->setExtraData(extraData);
+		web3->ethereum()->setExtraData(extraData);
 
 	auto toNumber = [&](string const & s) -> unsigned {
 		if (s == "latest")
-			return web3.ethereum()->number();
+			return web3->ethereum()->number();
 		if (s.size() == 64 || (s.size() == 66 && s.substr(0, 2) == "0x"))
-			return web3.ethereum()->blockChain().number(h256(s));
+			return web3->ethereum()->blockChain().number(h256(s));
 		try {
 			return stol(s);
 		}
@@ -1427,11 +1428,11 @@ int main(int argc, char** argv)
 		ofstream fout(filename, std::ofstream::binary);
 		ostream& out = (filename.empty() || filename == "--") ? cout : fout;
 
-		auto state = web3.ethereum()->block(
-		                 web3.ethereum()->blockChain().currentHash()).state();
+		auto state = web3->ethereum()->block(
+		                 web3->ethereum()->blockChain().currentHash()).state();
 
 		if (blockNumber > 0) {
-			state = web3.ethereum()->block(blockNumber).state();
+			state = web3->ethereum()->block(blockNumber).state();
 		}
 
 		std::vector<std::string> splitContract;
@@ -1525,7 +1526,7 @@ int main(int argc, char** argv)
 		unsigned last = toNumber(exportTo);
 		for (unsigned i = toNumber(exportFrom); i <= last; ++i)
 		{
-			bytes block = web3.ethereum()->blockChain().block(web3.ethereum()->blockChain().numberHash(i));
+			bytes block = web3->ethereum()->blockChain().block(web3->ethereum()->blockChain().numberHash(i));
 			switch (exportFormat)
 			{
 			case Format::Binary: out.write((char const*)block.data(), block.size()); break;
@@ -1557,7 +1558,7 @@ int main(int argc, char** argv)
 			block.resize(RLP(block, RLP::LaissezFaire).actualSize());
 			in.read((char*)block.data() + 8, block.size() - 8);
 
-			switch (web3.ethereum()->queueBlock(block, safeImport))
+			switch (web3->ethereum()->queueBlock(block, safeImport))
 			{
 			case ImportResult::Success: good++; break;
 			case ImportResult::AlreadyKnown: alreadyHave++; break;
@@ -1568,7 +1569,7 @@ int main(int argc, char** argv)
 			}
 
 			// sync chain with queue
-			tuple<ImportRoute, bool, unsigned> r = web3.ethereum()->syncQueue(10);
+			tuple<ImportRoute, bool, unsigned> r = web3->ethereum()->syncQueue(10);
 			imported += get<2>(r);
 
 			double e = chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - t).count() / 1000.0;
@@ -1576,20 +1577,20 @@ int main(int argc, char** argv)
 			{
 				auto i = imported - lastImported;
 				auto d = e - last;
-				cout << i << " more imported at " << (round(i * 10 / d) / 10) << " blocks/s. " << imported << " imported in " << e << " seconds at " << (round(imported * 10 / e) / 10) << " blocks/s (#" << web3.ethereum()->number() << ")" << "\n";
+				cout << i << " more imported at " << (round(i * 10 / d) / 10) << " blocks/s. " << imported << " imported in " << e << " seconds at " << (round(imported * 10 / e) / 10) << " blocks/s (#" << web3->ethereum()->number() << ")" << "\n";
 				last = (unsigned)e;
 				lastImported = imported;
-//				cout << web3.ethereum()->blockQueueStatus() << "\n";
+//				cout << web3->ethereum()->blockQueueStatus() << "\n";
 			}
 		}
 
-		while (web3.ethereum()->blockQueue().items().first + web3.ethereum()->blockQueue().items().second > 0)
+		while (web3->ethereum()->blockQueue().items().first + web3->ethereum()->blockQueue().items().second > 0)
 		{
 			this_thread::sleep_for(chrono::seconds(1));
-			web3.ethereum()->syncQueue(100000);
+			web3->ethereum()->syncQueue(100000);
 		}
 		double e = chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - t).count() / 1000.0;
-		cout << imported << " imported in " << e << " seconds at " << (round(imported * 10 / e) / 10) << " blocks/s (#" << web3.ethereum()->number() << ")" << "\n";
+		cout << imported << " imported in " << e << " seconds at " << (round(imported * 10 / e) / 10) << " blocks/s (#" << web3->ethereum()->number() << ")" << "\n";
 		return 0;
 	}
 
@@ -1629,11 +1630,11 @@ int main(int argc, char** argv)
 	}
 
 	cout << ethCredits();
-	web3.setIdealPeerCount(peers);
-	web3.setPeerStretch(peerStretch);
+	web3->setIdealPeerCount(peers);
+	web3->setPeerStretch(peerStretch);
 //	std::shared_ptr<eth::BasicGasPricer> gasPricer = make_shared<eth::BasicGasPricer>(u256(double(ether / 1000) / etherPrice), u256(blockFees * 1000));
 	std::shared_ptr<eth::TrivialGasPricer> gasPricer = make_shared<eth::TrivialGasPricer>(askPrice, bidPrice);
-	eth::Client* c = nodeMode == NodeMode::Full ? web3.ethereum() : nullptr;
+	eth::Client* c = nodeMode == NodeMode::Full ? web3->ethereum() : nullptr;
 	if (c)
 	{
 		c->setGasPricer(gasPricer);
@@ -1655,8 +1656,8 @@ int main(int argc, char** argv)
 	if (bootstrap || !remoteHost.empty() || enableDiscovery || listenSet)
 	{
 		//启动网络
-		web3.startNetwork();
-		cout << "Node ID: " << web3.enode() << "\n";
+		web3->startNetwork();
+		cout << "Node ID: " << web3->enode() << "\n";
 	}
 	else
 		cout << "Networking disabled. To start, use netstart or pass --bootstrap or a remote host." << "\n";
@@ -1680,7 +1681,7 @@ int main(int argc, char** argv)
 		string r = "always";/*getResponse(_t.userReadable(isProxy,
 				[&](TransactionSkeleton const& _t) -> pair<bool, string>
 				{
-					h256 contractCodeHash = web3.ethereum()->postState().codeHash(_t.to);
+					h256 contractCodeHash = web3->ethereum()->postState().codeHash(_t.to);
 					if (contractCodeHash == EmptySHA3)
 						return std::make_pair(false, std::string());
 					// TODO: actually figure out the natspec. we'll need the natspec database here though.
@@ -1705,10 +1706,10 @@ int main(int argc, char** argv)
 		                   >;
 
 		sessionManager.reset(new rpc::SessionManager());
-		accountHolder.reset(new SimpleAccountHolder([&]() { return web3.ethereum(); }, getAccountPassword, keyManager, authenticator));
+		accountHolder.reset(new SimpleAccountHolder([&]() { return web3->ethereum(); }, getAccountPassword, keyManager, authenticator));
 		// rpc::TestFace* testEth = nullptr;
 		// if (testingMode)
-		// 	testEth = new rpc::Test(*web3.ethereum());
+		// 	testEth = new rpc::Test(*web3->ethereum());
 
 		string limitConfigJSON = contentsString(chainParams.rateLimitConfig);
 
@@ -1716,11 +1717,11 @@ int main(int argc, char** argv)
 		{
 			//no need to maintain admin and leveldb interfaces for rpc
 			jsonrpcHttpServer = new FullServer(
-				new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
+				new rpc::Eth(*web3->ethereum(), *accountHolder.get()),
 				// new rpc::LevelDB(), new rpc::Whisper(web3, {}),
 				nullptr, nullptr,
 				new rpc::Net(web3),
-				new rpc::Web3(web3.clientVersion()),
+				new rpc::Web3(web3->clientVersion()),
 				nullptr,
 				nullptr,
 				new rpc::AdminNet(web3, *sessionManager.get()),
@@ -1729,7 +1730,7 @@ int main(int argc, char** argv)
 				nullptr
 				//personal,
 				//adminEth, adminNet, adminUtils,
-				//new rpc::Debug(*web3.ethereum()),
+				//new rpc::Debug(*web3->ethereum()),
 				//testEth
 			);
 			auto httpConnector = new SafeHttpServer("0.0.0.0", jsonRPCURL, "", "", SensibleHttpThreads);
@@ -1749,20 +1750,20 @@ int main(int argc, char** argv)
 		if (ipc)
 		{
 			jsonrpcIpcServer = new FullServer(
-			   new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
+			   new rpc::Eth(*web3->ethereum(), *accountHolder.get()),
 			   //new rpc::LevelDB(),
 			   //new rpc::Whisper(web3, {}),
 			   nullptr,
 			   nullptr,
 			   new rpc::Net(web3),
-			   new rpc::Web3(web3.clientVersion()),
-			   //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
-			   //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
+			   new rpc::Web3(web3->clientVersion()),
+			   //new rpc::Personal(keyManager, *accountHolder, *web3->ethereum()),
+			   //new rpc::AdminEth(*web3->ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
 			   nullptr,
 			   nullptr,
 			   new rpc::AdminNet(web3, *sessionManager.get()),
 			   //new rpc::AdminUtils(*sessionManager.get()),
-			   //new rpc::Debug(*web3.ethereum()),
+			   //new rpc::Debug(*web3->ethereum()),
 			   //testEth
 			   nullptr,
 			   nullptr,
@@ -1778,16 +1779,16 @@ int main(int argc, char** argv)
 		if (!chainParams.listenIp.empty() && chainParams.channelPort > 0) {
 			channelModularServer = 
 			    new FullServer(
-					new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
+					new rpc::Eth(*web3->ethereum(), *accountHolder.get()),
 					nullptr, //new rpc::LevelDB(),
 					nullptr, //new rpc::Whisper(web3, { }),
 					new rpc::Net(web3),
-					new rpc::Web3(web3.clientVersion()),
-					nullptr, //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
-					nullptr, //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
+					new rpc::Web3(web3->clientVersion()),
+					nullptr, //new rpc::Personal(keyManager, *accountHolder, *web3->ethereum()),
+					nullptr, //new rpc::AdminEth(*web3->ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
 					new rpc::AdminNet(web3, *sessionManager.get()),
 					nullptr, //new rpc::AdminUtils(*sessionManager.get()),
-					nullptr, //new rpc::Debug(*web3.ethereum()),
+					nullptr, //new rpc::Debug(*web3->ethereum()),
 					nullptr //testEth
 				   );
 
@@ -1812,20 +1813,20 @@ int main(int argc, char** argv)
 
 	for (auto const& p : preferredNodes)
 		if (p.second.second)
-			web3.requirePeer(p.first, p.second.first);
+			web3->requirePeer(p.first, p.second.first);
 		else
-			web3.addNode(p.first, p.second.first);
+			web3->addNode(p.first, p.second.first);
 
 
 	if (!remoteHost.empty())
-		web3.addNode(p2p::NodeID(), remoteHost + ":" + toString(remotePort));
+		web3->addNode(p2p::NodeID(), remoteHost + ":" + toString(remotePort));
 
 	signal(SIGABRT, &ExitHandler::exitHandler);
 	signal(SIGTERM, &ExitHandler::exitHandler);
 	signal(SIGINT, &ExitHandler::exitHandler);
 
 	unsigned account_type = ~(unsigned)0;
-	if (NodeConnManagerSingleton::GetInstance().getAccountType(web3.id(), account_type)) {
+	if (NodeConnManagerSingleton::GetInstance().getAccountType(web3->id(), account_type)) {
 		mining = ~(unsigned)0; // 有account_type配置，是否挖矿由account_type决定
 	} else {
 		LOG(ERROR) << "getAccountType error......" << "\n";
@@ -1838,12 +1839,12 @@ int main(int argc, char** argv)
 			int try_cnt = 0;
 			unsigned node_num = NodeConnManagerSingleton::GetInstance().getNodeNum();
 			LOG(INFO) << "getNodeNum node_num is " << node_num << "\n";
-			while (try_cnt++ < 5 && node_num > 0 && web3.peerCount() < node_num - 1) {
+			while (try_cnt++ < 5 && node_num > 0 && web3->peerCount() < node_num - 1) {
 				LOG(INFO) << "Wait for connecting to peers........" << "\n";
 				std::this_thread::sleep_for(std::chrono::seconds(1));
 				continue;
 			}
-			LOG(INFO) << "Connected to " << web3.peerCount() << " peers" << "\n";
+			LOG(INFO) << "Connected to " << web3->peerCount() << " peers" << "\n";
 			LOG(INFO) << "startSealing ....." << "\n";
 			c->startSealing();
 		}
@@ -1870,7 +1871,7 @@ int main(int argc, char** argv)
 		jsonrpcIpcServer->StopListening();
 	if (channelModularServer)
 		channelModularServer->StopListening();
-	/*	auto netData = web3.saveNetwork();
+	/*	auto netData = web3->saveNetwork();
 		if (!netData.empty())
 			writeFile(getDataDir() + "/network.rlp", netData);*/
 	return 0;
