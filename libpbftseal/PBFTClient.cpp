@@ -303,9 +303,9 @@ void PBFTClient::rejigSealing() {
 						max_block_txs = m_maxBlockTranscations;
 					}
 				}
-#endif
 
 				VLOG(10) << "last_exec=" << last_exec_finish_time << ",passed_time=" << passed_time << ",left=" << left_time << ",max_block_txs=" << max_block_txs << ",tx_num=" << tx_num;
+#endif
 
 				bool t = true;
 				if (tx_num < max_block_txs && !isSyncing() && !m_remoteWorking && m_syncTransactionQueue.compare_exchange_strong(t, false)) {
