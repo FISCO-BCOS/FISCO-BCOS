@@ -1071,22 +1071,13 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, s
 					req.sig = signHash(req.block_hash);
 					req.sig2 = signHash(req.fieldsWithoutBlock());
 
-					if (!m_empty_block_flag) {
-						LOGCOMWARNING << WarningMap.at(ChangeViewWarning) << "|blockNumber:" << req.height << " ChangeView:" << req.view;
-					}
-					m_empty_block_flag = false;
-
 					RLPStream ts;
 					req.streamRLPFields(ts);
-
-					LOG(TRACE) << "boradcastMsg on broadcastViewChangeReq";
-					bool ret = broadcastMsg(req.uniqueKey(), ViewChangeReqPacket, ts.out());
 
 					RLPStream s;
 					LOG(TRACE) << "PBFT sendViewChangeMsg _id to: " << _s->id().hex();
 					pbftPeer->prep(s, ViewChangeReqPacket, 1).append(ts.out());
 					pbftPeer->sealAndSend(s);
-					pbftPeer->setWaitingACK(true);
 				}
 			}
 		}
