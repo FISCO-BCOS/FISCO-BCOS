@@ -43,7 +43,7 @@ using namespace dev::eth;
 using namespace p2p;
 
 unsigned const EthereumHost::c_oldProtocolVersion = 62; //TODO: remove this once v63+ is common
-static unsigned const c_maxSendTransactions = 10;
+static unsigned const c_maxSendTransactions = 100;
 
 char const* const EthereumHost::s_stateNames[static_cast<int>(SyncState::Size)] = {"NotSynced", "Idle", "Waiting", "Blocks", "State", "NewBlocks" };
 
@@ -498,10 +498,12 @@ void EthereumHost::doWork()
 	bool netChange = ensureInitialised();
 	auto h = m_chain.currentHash();
 	// If we've finished our initial sync (including getting all the blocks into the chain so as to reduce invalid transactions), start trading transactions & blocks
+	LOG(TRACE) << "EthereumHost::doWork";
 	if (!isSyncing() && m_chain.isKnown(m_latestBlockSent))
 	{
 		if (m_newTransactions)
 		{
+			LOG(TRACE) << "EthereumHost maintainTransactions";
 			m_newTransactions = false;
 			maintainTransactions();
 		}

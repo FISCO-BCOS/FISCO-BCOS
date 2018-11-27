@@ -33,7 +33,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcore/LogGuard.h>
 #include <libethereum/StatLog.h>
-#include <libethereum/ConsensusControl.h>
+//#include <libethereum/ConsensusControl.h>
 using namespace std;
 using namespace dev;
 using namespace eth;
@@ -146,7 +146,7 @@ void PBFT::resetConfig() {
 		m_sign_cache.clear();
 		m_recv_view_change_req.clear();
 		
-		ConsensusControl::instance().clearAllCache();
+		//ConsensusControl::instance().clearAllCache();
 		m_commitMap.clear();
 
 		if (!getMinerList(-1, m_miner_list)) {
@@ -163,7 +163,7 @@ void PBFT::resetConfig() {
 		LOG(INFO) << "resetConfig Sucess: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
 	}
 	// consensuscontrol init cache
-	ConsensusControl::instance().resetNodeCache();
+	//ConsensusControl::instance().resetNodeCache();
 	m_cfg_err = false;
 }
 
@@ -1173,7 +1173,7 @@ void PBFT::checkAndSave() {
 	if (have_sign >= quorum() 
 		&& have_commit >= quorum() /* match for the requirement for pbft 满足pbft要求*/
 		&& !committed /* match pbft and trigger once 满足pbft和联盟控制的条件下保证只触发一次*/
-		&& ConsensusControl::instance().callConsensus(m_bc->getClient(), m_prepare_cache.block_hash) /* match consensus contrl 满足联盟控制要求*/
+		/*&& ConsensusControl::instance().callConsensus(m_bc->getClient(), m_prepare_cache.block_hash)*/ /* match consensus contrl 满足联盟控制要求*/
 		) {  // only trigger once 只发一次
 		m_commitMap[m_prepare_cache.block_hash] = true;
 		LOG(INFO) << "######### Reach enough commit for block="  << m_prepare_cache.height << ",hash=" << m_prepare_cache.block_hash.abridged() << ",have_sign=" << have_sign << ",have_commit=" << have_commit << ",quorum=" << quorum();
@@ -1252,7 +1252,7 @@ void PBFT::checkAndChangeView() {
 		m_sign_cache.clear();
 		m_commit_cache.clear();
 
-		ConsensusControl::instance().clearAllCache();
+		//ConsensusControl::instance().clearAllCache();
 		m_commitMap.clear();
 
 		for (auto iter = m_recv_view_change_req.begin(); iter != m_recv_view_change_req.end();) {
@@ -1319,7 +1319,7 @@ void PBFT::addCommitReq(CommitReq const & _req) {
 		LOG(WARNING) << "Can't find node in addPrepareReq(), idx=" << _req.idx;
 		return ;
 	}
-	ConsensusControl::instance().addAgencyCount(_req.block_hash, pub_id);
+	//ConsensusControl::instance().addAgencyCount(_req.block_hash, pub_id);
 }
 
 void PBFT::delCache(h256 const& _hash) {
@@ -1343,7 +1343,7 @@ void PBFT::delCache(h256 const& _hash) {
 		m_prepare_cache.clear();
 	}
 	// 删除对应hash的所有cache
-	ConsensusControl::instance().clearBlockCache(_hash);
+	//ConsensusControl::instance().clearBlockCache(_hash);
 	auto it = m_commitMap.find(_hash);
 	if (it != m_commitMap.end())
 		m_commitMap.erase(it);
@@ -1382,7 +1382,7 @@ void PBFT::collectGarbage() {
 					// must before erase() 必须放在erase之前
 					Public pub_id;
 					if (NodeConnManagerSingleton::GetInstance().getPublicKey(iter2->second.idx, pub_id)) {
-						ConsensusControl::instance().clearBlockCache(iter->first, pub_id);
+						//ConsensusControl::instance().clearBlockCache(iter->first, pub_id);
 					}
 					iter2 = iter->second.erase(iter2);
 				} else {
@@ -1391,7 +1391,7 @@ void PBFT::collectGarbage() {
 			}
 			if (iter->second.size() == 0) {
 				// must before erase() 必须放在erase之前
-				ConsensusControl::instance().clearBlockCache(iter->first);
+				//ConsensusControl::instance().clearBlockCache(iter->first);
 				auto it = m_commitMap.find(iter->first);
 				if (it != m_commitMap.end())
 					m_commitMap.erase(it);
@@ -1501,10 +1501,12 @@ bool PBFT::checkBlockSign(BlockHeader const& _header, std::vector<std::pair<u256
 		publicid_list.push_back(miner_list[static_cast<int>(item.first)]);
 	}
 
+#if 0
 	if (!ConsensusControl::instance().callConsensusInCheck(m_bc->getClient(), publicid_list, static_cast<dev::eth::BlockNumber>(_header.number() - 1))) {
 		LOG(WARNING) << "[ConsensusControl]checkBlockSign failed, not match current consensus control rule! blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal);
 		return false;
 	}
+#endif
 
 	LOG(DEBUG) << "checkBlockSign success, blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal) << ",timecost=" << t.elapsed() / 1000 << "ms";
 
