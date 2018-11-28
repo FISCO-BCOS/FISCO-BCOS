@@ -253,7 +253,7 @@ void ChannelSession::startWrite() {
 			if(s && s->actived()) {
 				boost::asio::async_write(*s->sslSocket(),
 						boost::asio::buffer(buffer->data(), buffer->size()),
-						[=](const boost::system::error_code& error, size_t bytesTransferred) {
+						[session, buffer](const boost::system::error_code& error, size_t bytesTransferred) {
 							auto s = session.lock();
 							if(s) {
 								s->onWrite(error, buffer, bytesTransferred);
