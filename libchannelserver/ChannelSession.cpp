@@ -250,7 +250,7 @@ void ChannelSession::startWrite() {
 		_sslSocket->get_io_service().post(
 		[ session, buffer ] {
 			auto s = session.lock();
-			if(s & s->actived()) {
+			if(s && s->actived()) {
 				boost::asio::async_write(*s->sslSocket(),
 						boost::asio::buffer(buffer->data(), buffer->size()),
 						[=](const boost::system::error_code& error, size_t bytesTransferred) {
