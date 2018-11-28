@@ -1059,6 +1059,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, s
 			LOG(INFO) << "sendViewChangeReq give up for not miner";
 		}
 		else {
+#if 0
 			auto _s = session.lock();
 			if(_s) {
 				auto pbftPeer = p2p::capabilityFromSession<PBFTPeer>(*_s);
@@ -1084,6 +1085,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, s
 					pbftPeer->sealAndSend(s);
 				}
 			}
+#endif
 		}
 	}
 
