@@ -733,11 +733,11 @@ void HostSSL::reconnectAllNodes()
 		}
 	}
 
-
 	NodeConnManagerSingleton::GetInstance().updateAllConnect(mMergeConnectParams);
 	m_lastReconnect = chrono::steady_clock::now();
 	m_reconnectnow = false;
 
+#if 0
 	if ( (chrono::steady_clock::now() - c_AnnouncementConnectNodesIntervalSSL < m_lastAnnouncementConnectNodes)  )
 		return;
 	// broad to other nodes
@@ -750,9 +750,10 @@ void HostSSL::reconnectAllNodes()
 				j->announcement(allPeerHash);
 
 	m_lastAnnouncementConnectNodes = chrono::steady_clock::now();
-
+#endif
 }
 
+#if 0
 void HostSSL::getAnnouncementNodeList(h256& _allNodeHash,std::vector<Node> & _nodes)
 {
 	_nodes.clear();
@@ -800,6 +801,7 @@ void HostSSL::getAnnouncementNodeList(h256& _allNodeHash,std::vector<Node> & _no
 	}
 	LOG(TRACE) << "HostSSL::getAnnouncementNodeList " << toString(_allNodeHash) << ",Peers=" << _nodes.size();
 }
+#endif
 
 void HostSSL::disconnectLatePeers()
 {
