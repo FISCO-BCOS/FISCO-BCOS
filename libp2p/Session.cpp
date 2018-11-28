@@ -535,11 +535,13 @@ void Session::drop(DisconnectReason _reason)
 		//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 		LOG(WARNING) << "Session::Drop Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
 
+#if 0
 		int try_count = 0;
 		while(m_sending && try_count++ < 5) {
 			LOG(WARNING) << "Wait for sending finished before close";
 			this_thread::sleep_for(chrono::seconds(1));
 		}
+#endif
 		
 		socket.close();
 	}
