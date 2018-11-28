@@ -199,6 +199,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		break;
 	case GetAnnouncementHashPacket:
 	{
+#if 0
 		std::vector<Node>	peerNodes;
 		h256 allPeerHash;
 		m_server->getAnnouncementNodeList(allPeerHash,peerNodes);
@@ -220,10 +221,12 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		{
 			LOG(INFO) <<" AnnouncementHash Is Same.Don't Need Send AnnouncementPacket";
 		}
+#endif
 		break;
 	}
 	case AnnouncementPacket:
 	{
+#if 0
 		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id.abridged();
 		size_t count=0;
 		for (auto const& n:_r[0])
@@ -246,6 +249,7 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 			}	
 		}
 		
+#endif
 		break;
 	}
 	case GetPeersPacket:
@@ -265,6 +269,7 @@ void Session::ping()
 }
 void Session::announcement(h256 const& _allPeerHash)
 {
+#if 0
 	LOG(INFO) << "Send Announcement To " << m_info.id.abridged() << ",Our= " << toString(_allPeerHash);
 
 	if (m_socket->isConnected())
@@ -274,6 +279,7 @@ void Session::announcement(h256 const& _allPeerHash)
 		s << _allPeerHash;
 		sealAndSend(s, 0);
 	}
+#endif
 }
 
 RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
