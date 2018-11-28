@@ -498,15 +498,12 @@ void EthereumHost::doWork()
 	bool netChange = ensureInitialised();
 	auto h = m_chain.currentHash();
 	// If we've finished our initial sync (including getting all the blocks into the chain so as to reduce invalid transactions), start trading transactions & blocks
-	LOG(TRACE) << "EthereumHost::doWork";
+	//LOG(TRACE) << "EthereumHost::doWork";
+	maintainTransactions();
 	if (!isSyncing() && m_chain.isKnown(m_latestBlockSent))
 	{
-		LOG(TRACE) << "EthereumHost isSyncing";
-		maintainTransactions();
-
 		if (m_newTransactions)
 		{
-			LOG(TRACE) << "EthereumHost maintainTransactions";
 			m_newTransactions = false;
 			//maintainTransactions();
 		}
