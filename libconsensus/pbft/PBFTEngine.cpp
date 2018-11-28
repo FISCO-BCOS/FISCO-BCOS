@@ -845,8 +845,8 @@ bool PBFTEngine::isValidViewChangeReq(
         PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
         return false;
     }
-    if (req.idx == source)
-        catchupView(req, oss);
+    /*if (req.idx == source)
+        catchupView(req, oss);*/
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
