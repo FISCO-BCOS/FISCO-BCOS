@@ -286,7 +286,7 @@ void NodeConnParamsManagerSSL::updateAllConnect( std::map<std::string, NodeIPEnd
                 if( !stNode.second.host.empty() )
                     m_connectnodes[stNode.second.name()].host = stNode.second.host;
             }
-            updateBootstrapnodes();
+            //updateBootstrapnodes();
         }
     }
    
@@ -294,6 +294,7 @@ void NodeConnParamsManagerSSL::updateAllConnect( std::map<std::string, NodeIPEnd
 
 void NodeConnParamsManagerSSL::updateBootstrapnodes()const
 {
+#if 0
     try
     {
         Json::Value root;
@@ -351,7 +352,7 @@ void NodeConnParamsManagerSSL::updateBootstrapnodes()const
     {
         LOG(WARNING) << "updateBootstrapnodes Fail!" << e.what() << "\n";
     }
-
+#endif
 }
 
 void NodeConnParamsManagerSSL::connNode(const ConnectParams &param)
