@@ -370,7 +370,8 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 
 		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
 		if (elapsed >= 1000) {
-			LOG(WARNING) << "[NETWORK] msg callback timecost=" << elapsed << ",len=" << length << ",id=" << id();
+			auto packetType = m_protocloIDQueue[0];
+			LOG(WARNING) << "[NETWORK] msg callback type=" << packetType << ",timecost=" << elapsed << ",len=" << length << ",id=" << id();
 		}
 		ThreadContext tc(info().id.abridged());
 		ThreadContext tc2(info().clientVersion);
