@@ -438,6 +438,9 @@ void Session::write()
 				m_sending = true;
 				m_server->getIOService()->post(
 					[ = ] {
+						if(m_dropped) {
+							return;
+						}
 						boost::asio::async_write(m_socket->sslref(),
 						boost::asio::buffer(*out),
 						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
