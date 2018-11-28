@@ -499,13 +499,13 @@ void EthereumHost::doWork()
 	auto h = m_chain.currentHash();
 	// If we've finished our initial sync (including getting all the blocks into the chain so as to reduce invalid transactions), start trading transactions & blocks
 	//LOG(TRACE) << "EthereumHost::doWork";
-	maintainTransactions();
+	//maintainTransactions();
 	if (!isSyncing() && m_chain.isKnown(m_latestBlockSent))
 	{
 		if (m_newTransactions)
 		{
 			m_newTransactions = false;
-			//maintainTransactions();
+			maintainTransactions();
 		}
 		if (m_newBlocks)
 		{
