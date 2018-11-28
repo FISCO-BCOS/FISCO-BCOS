@@ -338,8 +338,14 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	{
 		DEV_GUARDED(x_framing)
 		{
-			bytesConstRef frame(_msg.data(), _msg.size());
-			auto packetType = (PacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+			PacketType packetType = HelloPacket;
+			try {
+				bytesConstRef frame(_msg.data(), _msg.size());
+				packetType = (PacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+			}
+			catch(std::exception &e) {
+				LOG(TRACE) << "Unknown packetType: " << e.what();
+			}
 			//RLP r(frame.cropped(1));
 
 			m_writeQueue.push_back(std::move(_msg));
