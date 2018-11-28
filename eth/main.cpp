@@ -1387,9 +1387,6 @@ int main(int argc, char** argv)
 
 	auto caps = useWhisper ? set<string> {"eth", "shh"} : set<string> {"eth"};
 
-	//启动channelServer
-	ChannelRPCServer::Ptr channelServer;
-	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	//建立web3网络
 	dev::WebThreeDirect web3(
 	    WebThreeDirect::composeClientVersion("eth"),
@@ -1402,6 +1399,9 @@ int main(int argc, char** argv)
 	    testingMode
 	);
 
+	//启动channelServer
+	ChannelRPCServer::Ptr channelServer;
+	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	channelServer->setHost(web3.ethereum()->host());
 	web3.ethereum()->host().lock()->setWeb3Observer(channelServer->buildObserver());
 
