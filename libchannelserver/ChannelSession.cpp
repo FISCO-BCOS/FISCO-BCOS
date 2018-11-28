@@ -251,11 +251,13 @@ void ChannelSession::startWrite() {
 		[ session, buffer ] {
 			auto s = session.lock();
 			if(s && s->actived()) {
+				std::lock_guard<std::recursive_mutex> lock(s->_mutex);
 				boost::asio::async_write(*s->sslSocket(),
 						boost::asio::buffer(buffer->data(), buffer->size()),
 						[session, buffer](const boost::system::error_code& error, size_t bytesTransferred) {
 							auto s = session.lock();
-							if(s) {
+							if(s && s->actived()) {
+								std::lock_guard<std::recursive_mutex> lock(s->_mutex);
 								s->onWrite(error, buffer, bytesTransferred);
 							}
 				});
