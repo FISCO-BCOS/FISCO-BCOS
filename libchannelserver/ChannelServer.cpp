@@ -132,6 +132,7 @@ void dev::channel::ChannelServer::stop() {
 		LOG(DEBUG) << "close acceptor";
 
 		_acceptor->close();
+		_acceptor->cancel();
 	}
 	catch (std::exception &e) {
 		LOG(ERROR) << "ERRROR:" << e.what();
