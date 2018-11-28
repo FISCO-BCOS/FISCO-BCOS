@@ -21,7 +21,7 @@
  * @date 2018-10-09
  */
 
-#include <fisco-bcos/ParamParse.h>
+#include "ParamParse.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
@@ -44,8 +44,8 @@ static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPt
                               << receiptPtr->blockHash() << std::endl;
 }
 
-static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID const& groupSize,
-    float txSpeed, KeyPair const& key_pair)
+static void createTx(
+    std::shared_ptr<LedgerManager> ledgerManager, float txSpeed, KeyPair const& key_pair)
 {
     ///< transaction related
     dev::bytes rlpBytes = dev::fromHex(
@@ -341,7 +341,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
     u256 count = u256(0);
     while (true)
     {
-        for (int i = 1; i <= groupSize; i++)
+        for (auto group : ledgerManager->getGrouplList())
         {
             /// set default RPC callback
             if (count % u256(50) == u256(0))
@@ -351,10 +351,10 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, GROUP_ID cons
             try
             {
                 tx.setNonce(tx.nonce() + u256(1));
-                tx.setBlockLimit(u256(ledgerManager->blockChain(i)->number()) + maxBlockLimit);
+                tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
                 dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
                 tx.updateSignature(SignatureStruct(sig));
-                ledgerManager->txPool(i)->submit(tx);
+                ledgerManager->txPool(group)->submit(tx);
             }
             catch (std::exception& e)
             {
@@ -378,7 +378,7 @@ static void startConsensus(Params& params)
     KeyPair key_pair = secureInitializer->keyPair();
     auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
     /// create transaction
-    createTx(ledgerManager, params.groupSize(), params.txSpeed(), key_pair);
+    createTx(ledgerManager, params.txSpeed(), key_pair);
 }
 
 int main(int argc, const char* argv[])
