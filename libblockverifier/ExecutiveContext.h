@@ -59,9 +59,9 @@ public:
 
     virtual Address registerPrecompiled(Precompiled::Ptr p);
 
-    virtual bool isPrecompiled(Address address);
+    virtual bool isPrecompiled(Address address) const;
 
-    Precompiled::Ptr getPrecompiled(Address address);
+    Precompiled::Ptr getPrecompiled(Address address) const;
 
     void setAddress2Precompiled(Address address, Precompiled::Ptr precompiled)
     {
