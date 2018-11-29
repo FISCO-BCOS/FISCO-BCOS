@@ -16,11 +16,6 @@ public:
 		_threadName = threadName;
 
 		for (size_t i = 0; i < size; ++i) {
-#if 0
-			_workers.create_thread(
-					boost::bind(&boost::asio::io_service::run, &_ioService));
-#endif
-
 			_workers.create_thread([&] {
 				pthread_setThreadName(_threadName);
 				_ioService.run();

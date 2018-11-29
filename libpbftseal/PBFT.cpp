@@ -33,7 +33,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcore/LogGuard.h>
 #include <libethereum/StatLog.h>
-#include <libethereum/ConsensusControl.h>
+//#include <libethereum/ConsensusControl.h>
 using namespace std;
 using namespace dev;
 using namespace eth;
@@ -150,7 +150,7 @@ void PBFT::resetConfig() {
 		m_sign_cache.clear();
 		m_recv_view_change_req.clear();
 		
-		ConsensusControl::instance().clearAllCache();
+		//ConsensusControl::instance().clearAllCache();
 		m_commitMap.clear();
 
 		if (!getMinerList(-1, m_miner_list)) {
@@ -167,7 +167,7 @@ void PBFT::resetConfig() {
 		LOG(INFO) << "resetConfig Sucess: m_node_idx=" << m_node_idx << ", m_node_num=" << m_node_num;
 	}
 	// consensuscontrol init cache
-	ConsensusControl::instance().resetNodeCache();
+	//ConsensusControl::instance().resetNodeCache();
 	m_cfg_err = false;
 }
 
@@ -273,6 +273,8 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 	LOG(INFO) << "BLOCK_TIMESTAMP_STAT:[" << toString(req.block_hash) << "][" << req.height << "][" <<  utcTime() << "][" << "broadcastPrepareReq" << "]";
 	RLPStream ts;
 	req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on reHandlePrepareReq";
 	broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out());
 
 	handlePrepareMsg(m_node_idx, req, true); // 指明是来自自己的Req
@@ -317,7 +319,7 @@ void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
 }
 
 void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP const & _r) {
-	if (_id <= ViewChangeReqPacket) {
+	if (_id < PBFTPacketCount) {
 		NodeID nodeid;
 		auto session = _peer->session();
 		if (session && (nodeid = session->id()))
@@ -327,8 +329,8 @@ void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 				LOG(WARNING) << "Recv an pbft msg from unknown peer id=" << _id;
 				return;
 			}
-			//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
-			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data()));
+
+			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data(), std::weak_ptr<SessionFace>(session)));
 		}
 
 	} else {
@@ -342,7 +344,7 @@ void PBFT::workLoop() {
 		{
 			std::pair<bool, PBFTMsgPacket> ret = m_msg_queue.tryPop(5);
 			if (ret.first) {
-				handleMsg(ret.second.packet_id, ret.second.node_idx, ret.second.node_id, RLP(ret.second.data));
+				handleMsg(ret.second.packet_id, ret.second.node_idx, ret.second.node_id, RLP(ret.second.data), ret.second.peer);
 			} else {
 				std::unique_lock<std::mutex> l(x_signalled);
 				m_signalled.wait_for(l, chrono::milliseconds(5));
@@ -357,8 +359,10 @@ void PBFT::workLoop() {
 	}
 }
 
-void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r) {
+void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r, std::weak_ptr<SessionFace> session) {
 	Guard l(m_mutex);
+
+	bool broadcast = true;
 
 	auto now_time = utcTime();
 	std::string key;
@@ -388,7 +392,7 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 	case ViewChangeReqPacket: {
 		ViewChangeReq req;
 		req.populate(_r);
-		handleViewChangeMsg(_from, req);
+		handleViewChangeMsg(_from, req, session);
 		pbft_msg = req;
 		break;
 	}
@@ -409,7 +413,11 @@ void PBFT::handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP con
 		if (NodeConnManagerSingleton::GetInstance().getPublicKey(pbft_msg.idx, gen_node_id)) {
 			filter.insert(gen_node_id);
 		}
-		broadcastMsg(pbft_msg.uniqueKey(), _id, _r.toBytes(), filter);
+
+		if(pbft_msg.idx == _from && broadcast) {
+			LOG(TRACE) << "boradcastMsg on handleMsg";
+			broadcastMsg(pbft_msg.uniqueKey(), _id, _r.toBytes(), false, filter);
+		}
 	}
 }
 
@@ -464,7 +472,7 @@ void PBFT::checkTimeout() {
 			{
 				PBFTFlowViewChangeLog(m_highest_block.number() + m_view, " view:" + m_view.convert_to<string>());
 			}
-			else 
+			else
 			{
 				STAT_ERROR_MSG_LOGGUARD(STAT_PBFT_VIEWCHANGE_TAG) << "Timeout and ViewChanged!" 
 					<< " m_view=" << m_view << ", m_to_view=" << m_to_view << ", m_change_cycle=" << m_change_cycle;
@@ -547,6 +555,8 @@ bool PBFT::broadcastViewChangeReq() {
 	
 	RLPStream ts;
 	req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastViewChangeReq";
 	bool ret = broadcastMsg(req.uniqueKey(), ViewChangeReqPacket, ts.out());
 	return ret;
 }
@@ -562,6 +572,8 @@ bool PBFT::broadcastSignReq(PrepareReq const & _req) {
 	sign_req.sig2 = signHash(sign_req.fieldsWithoutBlock());
 	RLPStream ts;
 	sign_req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastSignReq";
 	if (broadcastMsg(sign_req.uniqueKey(), SignReqPacket, ts.out())) {
 		addSignReq(sign_req);
 		return true;
@@ -581,6 +593,8 @@ bool PBFT::broadcastCommitReq(PrepareReq const & _req) {
 
 	RLPStream ts;
 	commit_req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastCommitReq";
 	if (broadcastMsg(commit_req.uniqueKey(), CommitReqPacket, ts.out())) {
 		addCommitReq(commit_req);
 		return true;
@@ -601,6 +615,8 @@ bool PBFT::broadcastPrepareReq(BlockHeader const & _bi, bytes const & _block_dat
 
 	RLPStream ts;
 	req.streamRLPFields(ts);
+
+	LOG(TRACE) << "boradcastMsg on broadcastPrepareReq";
 	if (broadcastMsg(req.uniqueKey(), PrepareReqPacket, ts.out())) {
 		addRawPrepare(req);
 		return true;
@@ -608,7 +624,7 @@ bool PBFT::broadcastPrepareReq(BlockHeader const & _bi, bytes const & _block_dat
 	return false;
 }
 
-bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _data, std::unordered_set<h512> const & _filter) {
+bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _data, bool fromSelf, std::unordered_set<h512> const & _filter) {
 
 	if (auto h = m_host.lock()) {
 		h->foreachPeer([&](shared_ptr<PBFTPeer> _p)
@@ -634,8 +650,10 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 				}
 
 				RLPStream ts;
+				LOG(TRACE) << "PBFT broadcastMsg _id: " << _id << " to: " << nodeid.hex();
 				_p->prep(ts, _id, 1).append(_data);
 				_p->sealAndSend(ts);
+
 				this->broadcastMark(_key, _id, _p);
 			}
 			return true;
@@ -967,14 +985,14 @@ void PBFT::handleCommitMsg(u256 const &_from, CommitReq const &_req) {
 	return;
 }
 
-void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
+void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, std::weak_ptr<SessionFace> session) {
 	Timer t;
 	ostringstream oss;
 	oss << "handleViewChangeMsg: idx=" << _req.idx << ",view=" << _req.view  << ",blk=" << _req.height << ",hash=" << _req.block_hash.abridged() << ",from=" << _from;
 	VLOG(10) << oss.str() << ", net-time=" << u256(utcTime()) - _req.timestamp;
 
 	if (isExistViewChange(_req)) {
-		VLOG(10) << oss.str() << "Discard an illegal viewchange, duplicated";
+		LOG(TRACE) << oss.str() << "Discard an illegal viewchange, duplicated";
 		return;
 	}
 
@@ -988,12 +1006,42 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req) {
 	// other node receive the low view viewchange, would trigger follow code to motivate the node. +1 is to prevent the case that the view just change, for the reason
 	// which the new started node' view must fall behind(>2) the excited node
 	if (_req.view + 1 < m_to_view && _req.idx == _from) { // do not motivate by others transfer
-		LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
-		broadcastViewChangeReq();
+		//LOG(TRACE) << oss.str() << " send response to node=" << _from << " for motivating viewchange";
+		//broadcastViewChangeReq();
+		if (m_account_type != EN_ACCOUNT_TYPE_MINER) {
+			LOG(INFO) << "sendViewChangeReq give up for not miner";
+		}
+		else {
+			auto _s = session.lock();
+			if(_s) {
+				auto pbftPeer = p2p::capabilityFromSession<PBFTPeer>(*_s);
+				if(!pbftPeer) {
+					LOG(ERROR) << "Wrong peer capability";
+				}
+				else {
+					ViewChangeReq req;
+					req.height = m_highest_block.number();
+					req.view = m_to_view;
+					req.idx = m_node_idx;
+					req.timestamp = u256(utcTime());
+					req.block_hash = m_highest_block.hash(WithoutSeal);
+					req.sig = signHash(req.block_hash);
+					req.sig2 = signHash(req.fieldsWithoutBlock());
+
+					RLPStream ts;
+					req.streamRLPFields(ts);
+
+					RLPStream s;
+					LOG(TRACE) << "PBFT sendViewChangeMsg _id to: " << _s->id().hex();
+					pbftPeer->prep(s, ViewChangeReqPacket, 1).append(ts.out());
+					pbftPeer->sealAndSend(s);
+				}
+			}
+		}
 	}
 
 	if (_req.height < m_highest_block.number() || _req.view <= m_view) {
-		VLOG(10) << oss.str() << "Discard an illegal viewchange, m_highest_block=" << m_highest_block.number() << ",m_view=" << m_view;
+		LOG(TRACE) << oss.str() << "Discard an illegal viewchange, m_highest_block=" << m_highest_block.number() << ",m_view=" << m_view;
 		return;
 	}
 
@@ -1078,7 +1126,7 @@ void PBFT::checkAndSave() {
 	if (have_sign >= quorum() 
 		&& have_commit >= quorum() /* match for the requirement for pbft 满足pbft要求*/
 		&& !committed /* match pbft and trigger once 满足pbft和联盟控制的条件下保证只触发一次*/
-		&& ConsensusControl::instance().callConsensus(m_bc->getClient(), m_prepare_cache.block_hash) /* match consensus contrl 满足联盟控制要求*/
+		/*&& ConsensusControl::instance().callConsensus(m_bc->getClient(), m_prepare_cache.block_hash)*/ /* match consensus contrl 满足联盟控制要求*/
 		) {  // only trigger once 只发一次
 		m_commitMap[m_prepare_cache.block_hash] = true;
 		LOG(INFO) << "######### Reach enough commit for block="  << m_prepare_cache.height << ",hash=" << m_prepare_cache.block_hash.abridged() << ",have_sign=" << have_sign << ",have_commit=" << have_commit << ",quorum=" << quorum();
@@ -1157,7 +1205,7 @@ void PBFT::checkAndChangeView() {
 		m_sign_cache.clear();
 		m_commit_cache.clear();
 
-		ConsensusControl::instance().clearAllCache();
+		//ConsensusControl::instance().clearAllCache();
 		m_commitMap.clear();
 
 		for (auto iter = m_recv_view_change_req.begin(); iter != m_recv_view_change_req.end();) {
@@ -1224,7 +1272,7 @@ void PBFT::addCommitReq(CommitReq const & _req) {
 		LOG(WARNING) << "Can't find node in addPrepareReq(), idx=" << _req.idx;
 		return ;
 	}
-	ConsensusControl::instance().addAgencyCount(_req.block_hash, pub_id);
+	//ConsensusControl::instance().addAgencyCount(_req.block_hash, pub_id);
 }
 
 void PBFT::delCache(h256 const& _hash) {
@@ -1247,8 +1295,8 @@ void PBFT::delCache(h256 const& _hash) {
 	if (_hash == m_prepare_cache.block_hash) {
 		m_prepare_cache.clear();
 	}
-	// 删除对应hash的所有cache 
-	ConsensusControl::instance().clearBlockCache(_hash);
+	// 删除对应hash的所有cache
+	//ConsensusControl::instance().clearBlockCache(_hash);
 	auto it = m_commitMap.find(_hash);
 	if (it != m_commitMap.end())
 		m_commitMap.erase(it);
@@ -1287,7 +1335,7 @@ void PBFT::collectGarbage() {
 					// must before erase() 必须放在erase之前
 					Public pub_id;
 					if (NodeConnManagerSingleton::GetInstance().getPublicKey(iter2->second.idx, pub_id)) {
-						ConsensusControl::instance().clearBlockCache(iter->first, pub_id);
+						//ConsensusControl::instance().clearBlockCache(iter->first, pub_id);
 					}
 					iter2 = iter->second.erase(iter2);
 				} else {
@@ -1296,7 +1344,7 @@ void PBFT::collectGarbage() {
 			}
 			if (iter->second.size() == 0) {
 				// must before erase() 必须放在erase之前
-				ConsensusControl::instance().clearBlockCache(iter->first);
+				//ConsensusControl::instance().clearBlockCache(iter->first);
 				auto it = m_commitMap.find(iter->first);
 				if (it != m_commitMap.end())
 					m_commitMap.erase(it);
@@ -1406,10 +1454,12 @@ bool PBFT::checkBlockSign(BlockHeader const& _header, std::vector<std::pair<u256
 		publicid_list.push_back(miner_list[static_cast<int>(item.first)]);
 	}
 
+#if 0
 	if (!ConsensusControl::instance().callConsensusInCheck(m_bc->getClient(), publicid_list, static_cast<dev::eth::BlockNumber>(_header.number() - 1))) {
 		LOG(WARNING) << "[ConsensusControl]checkBlockSign failed, not match current consensus control rule! blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal);
 		return false;
 	}
+#endif
 
 	LOG(DEBUG) << "checkBlockSign success, blk=" << _header.number() << ",hash=" << _header.hash(WithoutSeal) << ",timecost=" << t.elapsed() / 1000 << "ms";
 
