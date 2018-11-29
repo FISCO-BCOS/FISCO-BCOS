@@ -71,6 +71,17 @@ void Service::stop()
     {
         m_run = false;
         m_host->stop();
+        /// disconnect sessions
+        {
+            DEV_RECURSIVE_GUARDED(x_sessions)
+            for (auto session : m_sessions)
+            {
+                session.second->stop(ClientQuit);
+            }
+        }
+        /// clear sessions
+        RecursiveGuard l(x_sessions);
+        m_sessions.clear();
     }
 }
 

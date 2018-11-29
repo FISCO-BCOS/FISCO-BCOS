@@ -289,7 +289,6 @@ void Host::start()
     {
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
-
         auto self = std::weak_ptr<Host>(shared_from_this());
         m_hostThread = std::make_shared<std::thread>([self] {
             auto host = self.lock();
