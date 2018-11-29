@@ -276,25 +276,6 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 	handlePrepareMsg(m_node_idx, req, true); // 指明是来自自己的Req
 }
 
-void PBFT::sendACK(std::shared_ptr<p2p::Capability> p) {
-#if 0
-	if (auto h = m_host.lock()) {
-		LOG(TRACE) << "PBFT send ack to: " << p->id().hex();
-
-		if (p)
-		{
-			ACK ack;
-			RLPStream ts;
-			ack.streamRLPFields(ts);
-
-			RLPStream s;
-			p->prep(s, ACKPacket, 1).append(ts.out());
-			p->sealAndSend(s);
-		}
-	}
-#endif
-}
-
 std::pair<bool, u256> PBFT::getLeader() const {
 	if (m_cfg_err || m_leader_failed || m_highest_block.number() == Invalid256) {
 		return std::make_pair(false, Invalid256);
@@ -345,30 +326,6 @@ void PBFT::onPBFTMsg(unsigned _id, std::shared_ptr<p2p::Capability> _peer, RLP c
 				return;
 			}
 
-#if 0
-			auto pbftPeer = capabilityFromSession<PBFTPeer>(_peer);
-			if(!pbftPeer) {
-				LOG(ERROR) << "Wrong peer capability";
-				return;
-			}
-#endif
-
-			if(_id != ACKPacket) {
-				sendACK(_peer);
-			}
-			else {
-				LOG(TRACE) << "Recv ACK pakcet";
-
-				auto pbftPeer = std::dynamic_pointer_cast<PBFTPeer>(_peer);
-				if(!pbftPeer) {
-					LOG(ERROR) << "Wrong peer capability";
-					return;
-				}
-				pbftPeer->setWaitingACK(false);
-				return;
-			}
-
-			//handleMsg(_id, idx, _peer->session()->id(), _r[0]);
 			m_msg_queue.push(PBFTMsgPacket(idx, nodeid, _id, _r[0].data(), std::weak_ptr<SessionFace>(session)));
 		}
 
@@ -672,13 +629,6 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 			auto session = _p->session();
 			if (session && (nodeid = session->id()))
 			{
-#if 0
-				if(_id == ViewChangeReqPacket && _p->waitingACK() && !fromSelf) {
-					LOG(TRACE) << "Peer waiting ack";
-					return true;
-				}
-#endif
-
 				unsigned account_type = 0;
 				if ( !NodeConnManagerSingleton::GetInstance().getAccountType(nodeid, account_type)) {
 					LOG(INFO) << "Cannot get account type for peer" << nodeid;

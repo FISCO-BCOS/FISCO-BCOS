@@ -856,42 +856,6 @@ dev::channel::TopicMessage::Ptr ChannelRPCServer::pushChannelMessage(dev::channe
 		}
 
 		return response;
-
-#if 0
-		struct Callback {
-			typedef std::shared_ptr<Callback> Ptr;
-
-			Callback() {
-				_mutex.lock();
-			}
-
-			void onResponse(dev::channel::ChannelException error, dev::channel::Message::Ptr message) {
-				_error = error;
-				_response = message;
-
-				_mutex.unlock();
-			}
-
-			dev::channel::ChannelException _error;
-			dev::channel::Message::Ptr _response;
-			std::mutex _mutex;
-		};
-
-		Callback::Ptr callback = std::make_shared<Callback>();
-
-		std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> fp = std::bind(&Callback::onResponse, callback,
-						std::placeholders::_1, std::placeholders::_2);
-		asyncPushChannelMessage(topic, message, fp);
-
-		callback->_mutex.lock();
-		callback->_mutex.unlock();
-
-		if (callback->_error.errorCode() != 0) {
-			throw callback->_error;
-		}
-
-		return callback->_response;
-#endif
 	} catch (exception &e) {
 		LOG(ERROR)<< "ERROR:" << e.what();
 
