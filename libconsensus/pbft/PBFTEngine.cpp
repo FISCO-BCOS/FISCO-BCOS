@@ -228,6 +228,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
         if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
         {
             m_timeManager.changeView();
+            m_timeManager.m_changeCycle = 0;
             m_leaderFailed = true;
             m_signalled.notify_all();
         }
