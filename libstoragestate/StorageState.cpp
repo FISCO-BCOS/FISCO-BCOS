@@ -371,7 +371,10 @@ void StorageState::rollback(size_t _savepoint)
     m_memoryTableFactory->rollback(_savepoint);
 }
 
-void StorageState::clear() {}
+void StorageState::clear()
+{
+    m_cache.clear();
+}
 
 void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)
 {
