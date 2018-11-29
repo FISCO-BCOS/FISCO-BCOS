@@ -105,7 +105,9 @@ void Service::heartBeat()
     // Reconnect all nodes
     for (auto it : staticNodes)
     {
-        if (it.first.address == boost::asio::ip::address::from_string(m_host->listenHost()))
+        if (it.first.address == boost::asio::ip::address::from_string(m_host->listenHost()) ||
+            (it.first.address == m_host->tcpClient().address &&
+                it.first.tcpPort == m_host->listenPort()))
         {
             SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost()
                                << std::endl;
@@ -128,7 +130,8 @@ void Service::heartBeat()
             SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address" << std::endl;
             continue;
         }
-        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [nodeId]" << it.second << std::endl;
+        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [nodeId/endpoint]" << it.second << "/"
+                           << it.first.name() << std::endl;
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));

@@ -366,6 +366,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             }
             else
             {
+                m_tcpClient = socket->remote_endpoint();
                 /// get the public key of the server during handshake
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
