@@ -69,9 +69,11 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
         tableInfo->key = entry->getField("key_field");
         string valueFields = entry->getField("value_field");
         boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
-        tableInfo->fields.emplace_back(STATUS);
-        tableInfo->fields.emplace_back(tableInfo->key);
     }
+    tableInfo->fields.emplace_back(STATUS);
+    tableInfo->fields.emplace_back(tableInfo->key);
+    tableInfo->fields.emplace_back("_hash_");
+    tableInfo->fields.emplace_back("_num_");
     MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
@@ -279,10 +281,5 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = "key";
         tableInfo->fields = std::vector<std::string>{"value"};
     }
-    tableInfo->fields.emplace_back(tableInfo->key);
-    tableInfo->fields.emplace_back(STATUS);
-    tableInfo->fields.emplace_back("_hash_");
-    tableInfo->fields.emplace_back("_num_");
-
     return tableInfo;
 }
