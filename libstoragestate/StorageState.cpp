@@ -320,7 +320,7 @@ u256 StorageState::getNonce(Address const& _address) const
             return u256(entry->getField(STORAGE_VALUE));
         }
     }
-    return u256();
+    return m_accountStartNonce;
 }
 
 h256 StorageState::rootHash() const
