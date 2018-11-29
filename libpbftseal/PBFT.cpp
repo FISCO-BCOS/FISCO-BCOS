@@ -649,7 +649,6 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 				LOG(TRACE) << "PBFT broadcastMsg _id: " << _id << " to: " << nodeid.hex();
 				_p->prep(ts, _id, 1).append(_data);
 				_p->sealAndSend(ts);
-				_p->setWaitingACK(true);
 
 				this->broadcastMark(_key, _id, _p);
 			}

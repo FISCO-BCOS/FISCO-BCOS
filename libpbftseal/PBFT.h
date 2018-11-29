@@ -141,9 +141,6 @@ private:
 
 	void reHandlePrepareReq(PrepareReq const& _req);
 
-	// 发送ACK
-	void sendACK(std::shared_ptr<p2p::Capability> p);
-
 	// cache访问（未加锁，外层要加锁保护）
 	// access cache (no thread safe )
 	bool addRawPrepare(PrepareReq const& _req);
