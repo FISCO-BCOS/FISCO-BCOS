@@ -114,7 +114,7 @@ public:
         }
         else
         {
-            LOG(ERROR) << "Handler not found! SeqID = " << seq;
+            LOG(TRACE) << "Handler not found! SeqID = " << seq;
             return NULL;
         }
     }
