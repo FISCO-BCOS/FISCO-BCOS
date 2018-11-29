@@ -64,7 +64,7 @@ public:
             messageHandler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
-
+    virtual std::shared_ptr<SocketFace> socket() {}
     virtual bool actived() const = 0;
 };
 }  // namespace p2p

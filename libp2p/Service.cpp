@@ -113,12 +113,11 @@ void Service::heartBeat()
                 continue;
             }
         }
-
+        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [nodeId]" << it.second << std::endl;
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
     }
-
     auto self = shared_from_this();
     m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
@@ -130,6 +129,23 @@ void Service::heartBeat()
 
         self->heartBeat();
     });
+}
+
+/// update the staticNodes
+void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId)
+{
+    /// update the staticNodes
+    NodeIPEndpoint endpoint(
+        _s->remoteEndpoint().address(), _s->remoteEndpoint().port(), _s->remoteEndpoint().port());
+    RecursiveGuard l(x_nodes);
+    auto it = m_staticNodes.find(endpoint);
+    /// modify m_staticNodes(including accept cases, namely the client endpoint)
+    if (it != m_staticNodes.end())
+    {
+        SERVICE_LOG(DEBUG) << "[#startPeerSession-updateStaticNodes] [staticNodes]:  "
+                           << toHex(nodeId) << std::endl;
+        it->second = nodeId;
+    }
 }
 
 void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session)
@@ -148,7 +164,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     if (it != m_sessions.end() && it->second->actived())
     {
         SERVICE_LOG(TRACE) << "Disconnect duplicate peer";
-
+        updateStaticNodes(session->socket(), nodeID);
         session->disconnect(DuplicatePeer);
         return;
     }
@@ -156,7 +172,6 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     if (nodeID == id())
     {
         SERVICE_LOG(TRACE) << "Disconnect self";
-
         session->disconnect(DuplicatePeer);
         return;
     }
@@ -168,7 +183,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
     p2pSession->start();
-
+    updateStaticNodes(session->socket(), nodeID);
     it = m_sessions.find(nodeID);
     if (it != m_sessions.end())
     {
