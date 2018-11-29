@@ -100,6 +100,14 @@ void Sealer::doWork(bool wait)
             uint64_t tx_num = m_sealing.block.getTransactionSize();
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
+            if (m_txPool->status().current > 0)
+            {
+                m_syncTxPool = true;
+                m_signalled.notify_all();
+                m_blockSignalled.notify_all();
+            }
+            else
+                m_syncTxPool = false;
             bool t = true;
             /// load transaction from transaction queue
             if (m_syncTxPool.compare_exchange_strong(t, false) && !reachBlockIntervalTime())
@@ -131,14 +139,6 @@ void Sealer::loadTransactions(uint64_t const& transToFetch)
     /// fetch transactions and update m_transactionSet
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
-    if (m_txPool->status().current > 0)
-    {
-        m_syncTxPool = true;
-        m_signalled.notify_all();
-        m_blockSignalled.notify_all();
-    }
-    else
-        m_syncTxPool = false;
 }
 
 /// check whether the blocksync module is syncing
