@@ -53,21 +53,6 @@ public:
 
 	//p2p::NodeID id() const { return session()->id(); }
 
-	virtual bool waitingACK() {
-		Guard l(x_waitingACK);
-		if(time(NULL) - m_lastACK > 60) {
-			return false;
-		}
-
-		return m_waitingACK;
-	}
-
-	virtual void setWaitingACK(bool waitingACK) {
-		Guard l(x_waitingACK);
-		m_waitingACK = waitingACK;
-		m_lastACK = time(NULL);
-	}
-
 protected:
 	virtual bool interpret(unsigned _id, RLP const& _r);
 
@@ -82,10 +67,6 @@ private:
 	QueueSet<std::string> m_knownCommit;
 	Mutex x_knownViewChange;
 	QueueSet<std::string> m_knownViewChange;
-
-	Mutex x_waitingACK;
-	bool m_waitingACK = false;
-	time_t m_lastACK = 0;
 };
 
 }
