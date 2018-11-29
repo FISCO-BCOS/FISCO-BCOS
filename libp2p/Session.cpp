@@ -68,19 +68,16 @@ Session::~Session()
 		{
 			boost::system::error_code ec;
 
-			//shutdown may block servals seconds - morebtcg
-			//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			LOG(WARNING) << "Session::~Session Closing " << socket.remote_endpoint(ec) << ", " << m_peer->address() << "," << ec.message();
+			LOG(WARNING) << "Session::~Session Closing " << socket.remote_endpoint(ec) << ", " << m_peer->address();
 
-#if 0
-			int try_count = 0;
-			while(m_sending && try_count++ < 5) {
-				LOG(WARNING) << "Wait for sending finished before close";
-				this_thread::sleep_for(chrono::seconds(1));
-			}
-#endif
+			auto sslSocket = m_socket;
+			sslSocket->sslref().async_shutdown([sslSocket](const boost::system::error_code& error) {
+				if(error) {
+					LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
+				}
 
-			socket.close();
+				sslSocket->ref().close();
+			});
 		}
 	}
 	catch (...) {}
@@ -201,57 +198,10 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		break;
 	case GetAnnouncementHashPacket:
 	{
-#if 0
-		std::vector<Node>	peerNodes;
-		h256 allPeerHash;
-		m_server->getAnnouncementNodeList(allPeerHash,peerNodes);
-		auto hash = _r[0].toHash<h256>();
-		LOG(INFO) << "Recv GetAnnouncementHashPacket From " << m_info.id.abridged() << ",hash=" << toString(hash) << ",Our=" << toString(allPeerHash);
-		if( hash != allPeerHash)
-		{
-			RLPStream s;
-			prep(s, AnnouncementPacket, 1) ;
-			s.appendList(peerNodes.size());
-			for( size_t i = 0; i < peerNodes.size(); i++)
-			{
-				LOG(INFO) << "Announcement " << peerNodes[i].endpoint.name() << "," << peerNodes[i].endpoint.host;
-				peerNodes[i].endpoint.streamRLP(s);
-			}
-			sealAndSend(s, 0);
-		}
-		else
-		{
-			LOG(INFO) <<" AnnouncementHash Is Same.Don't Need Send AnnouncementPacket";
-		}
-#endif
 		break;
 	}
 	case AnnouncementPacket:
 	{
-#if 0
-		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id.abridged();
-		size_t count=0;
-		for (auto const& n:_r[0])
-		{
-			if( count >= 20 )
-				break;
-
-			NodeIPEndpoint nodeIPEndpoint(n);
-			LOG(INFO) << "AnnouncementPacket " << nodeIPEndpoint.name() << ":" << nodeIPEndpoint.host;
-			if( m_server->tcpPublic() != nodeIPEndpoint )
-			{
-				if( !nodeIPEndpoint.host.empty() )
-				{
-					bi::address query = HostResolver::query(nodeIPEndpoint.host);
-					if( query.to_string() != "0.0.0.0" )
-						nodeIPEndpoint.address = query;
-				}
-				count ++;
-				m_server->connect(nodeIPEndpoint);
-			}	
-		}
-		
-#endif
 		break;
 	}
 	case GetPeersPacket:
@@ -271,17 +221,6 @@ void Session::ping()
 }
 void Session::announcement(h256 const& _allPeerHash)
 {
-#if 0
-	LOG(INFO) << "Send Announcement To " << m_info.id.abridged() << ",Our= " << toString(_allPeerHash);
-
-	if (m_socket->isConnected())
-	{
-		RLPStream s;
-		prep(s, GetAnnouncementHashPacket, 1) ;
-		s << _allPeerHash;
-		sealAndSend(s, 0);
-	}
-#endif
 }
 
 RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
@@ -426,17 +365,6 @@ void Session::write()
 		} else if (queue_elapsed >= 1000) {
 			auto packetType = m_protocloIDQueue[0];
 			LOG(WARNING) << "[NETWORK] msg waiting in queue packetType=" << packetType << " timecost=" << queue_elapsed;
-
-#if 0
-			if(packetType == 41 || packetType == 36) { // drop viewChangeReq & topics
-				LOG(TRACE) << "Ignore timeout viewChange";
-				m_server->getIOService()->post(
-					[ = ] {
-						onWrite(boost::system::error_code(), 0);
-					});
-				return;
-			}
-#endif
 		}
 
 		auto session = shared_from_this();
@@ -544,19 +472,16 @@ void Session::drop(DisconnectReason _reason)
 	{
 		boost::system::error_code ec;
 
-		//shutdown may block servals seconds - morebtcg
-		//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-		LOG(WARNING) << "Session::Drop Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
+		LOG(WARNING) << "Session::Drop Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address();
 
-#if 0
-		int try_count = 0;
-		while(m_sending && try_count++ < 5) {
-			LOG(WARNING) << "Wait for sending finished before close";
-			this_thread::sleep_for(chrono::seconds(1));
-		}
-#endif
-		
-		socket.close();
+		auto sslSocket = m_socket;
+		sslSocket->sslref().async_shutdown([sslSocket](const boost::system::error_code& error) {
+			if(error) {
+				LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
+			}
+
+			sslSocket->ref().close();
+		});
 	}
 	catch (...) {}
 
@@ -888,15 +813,3 @@ void Session::saveCABaseData(CABaseData* baseData)
 {
 	m_CABaseData = baseData;
 }
-
-#if 0
-bool Session::setStatistics(dev::InterfaceStatistics *stats)
-{
-		if (stats && m_statistics.get() == nullptr)
-		{
-			m_statistics.reset(stats);
-			return true;
-		}
-		return false;
-}
-#endif
