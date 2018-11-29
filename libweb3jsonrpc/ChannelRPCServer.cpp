@@ -172,7 +172,7 @@ bool ChannelRPCServer::StopListening()
 	}
 
 	_running = false;
-
+        _server->stop();
 	return true;
 }
 
