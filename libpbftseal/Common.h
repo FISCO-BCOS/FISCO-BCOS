@@ -46,7 +46,6 @@ enum PBFTPacketType : byte
 	SignReqPacket = 0x01,
 	CommitReqPacket = 0x02,
 	ViewChangeReqPacket = 0x03,
-	ACKPacket = 0x04,
 
 	PBFTPacketCount
 };
@@ -139,20 +138,6 @@ struct PrepareReq : public PBFTMsg {
 struct SignReq : public PBFTMsg {};
 struct CommitReq : public PBFTMsg {};
 struct ViewChangeReq : public PBFTMsg {};
-
-struct ACK {
-	virtual void streamRLPFields(RLPStream& _s) const {	_s << u256(0); }
-	virtual ~ACK() {};
-	virtual void populate(RLP const& _rlp) {
-		int field = 0;
-			try	{
-				auto num = _rlp[field = 0].toInt<u256>();
-			} catch (Exception const& _e)	{
-				_e << errinfo_name("invalid msg format") << BadFieldError(field, toHex(_rlp[field].data().toBytes()));
-				throw;
-			}
-	}
-};
 
 }
 }
