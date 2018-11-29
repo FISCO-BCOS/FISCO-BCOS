@@ -889,6 +889,7 @@ void PBFTEngine::checkAndChangeView()
         PBFTENGINE_LOG(INFO) << "[#checkAndChangeView] [Reach consensus, to_view]:  " << m_toView
                              << std::endl;
         m_leaderFailed = false;
+        m_timeManager.m_lastConsensusTime = utcTime();
         m_view = m_toView;
         m_reqCache->triggerViewChange(m_view);
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
