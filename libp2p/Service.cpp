@@ -105,13 +105,28 @@ void Service::heartBeat()
     // Reconnect all nodes
     for (auto it : staticNodes)
     {
-        if (it.second != NodeID())
+        if (it.first.address == boost::asio::ip::address::from_string(m_host->listenHost()))
         {
-            auto its = sessions.find(it.second);
-            if (its != sessions.end() && its->second && its->second->session()->isConnected())
-            {
-                continue;
-            }
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost()
+                               << std::endl;
+            continue;
+        }
+        /// exclude myself
+        if (it.second == id())
+        {
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [nodeId]: " << it.second << std::endl;
+            continue;
+        }
+        if (it.second != NodeID() && isConnected(it.second))
+        {
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore connected [nodeId]: " << it.second
+                               << std::endl;
+            continue;
+        }
+        if (it.first.address.to_string().empty())
+        {
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address" << std::endl;
+            continue;
         }
         SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [nodeId]" << it.second << std::endl;
         m_host->asyncConnect(
@@ -142,8 +157,8 @@ void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID co
     /// modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
     {
-        SERVICE_LOG(DEBUG) << "[#startPeerSession-updateStaticNodes] [staticNodes]:  "
-                           << toHex(nodeId) << std::endl;
+        SERVICE_LOG(DEBUG) << "[#startPeerSession-updateStaticNodes] [nodeId/endpoint]:  "
+                           << toHex(nodeId) << "/" << endpoint.name() << std::endl;
         it->second = nodeId;
     }
 }
@@ -172,6 +187,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     if (nodeID == id())
     {
         SERVICE_LOG(TRACE) << "Disconnect self";
+        updateStaticNodes(session->socket(), id());
         session->disconnect(DuplicatePeer);
         return;
     }
