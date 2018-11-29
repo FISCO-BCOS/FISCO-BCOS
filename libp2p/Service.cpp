@@ -105,8 +105,7 @@ void Service::heartBeat()
     // Reconnect all nodes
     for (auto it : staticNodes)
     {
-        if (it.first.address == boost::asio::ip::address::from_string(m_host->listenHost()) ||
-            (it.first.address == m_host->tcpClient().address &&
+        if ((it.first.address == m_host->tcpClient().address() &&
                 it.first.tcpPort == m_host->listenPort()))
         {
             SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost()
@@ -153,8 +152,8 @@ void Service::heartBeat()
 void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId)
 {
     /// update the staticNodes
-    NodeIPEndpoint endpoint(
-        _s->remoteEndpoint().address(), _s->remoteEndpoint().port(), _s->remoteEndpoint().port());
+    NodeIPEndpoint endpoint(_s->remoteEndpoint().address().to_string(), _s->remoteEndpoint().port(),
+        _s->remoteEndpoint().port());
     RecursiveGuard l(x_nodes);
     auto it = m_staticNodes.find(endpoint);
     /// modify m_staticNodes(including accept cases, namely the client endpoint)
