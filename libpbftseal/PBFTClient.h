@@ -47,7 +47,7 @@ public:
 	    std::shared_ptr<GasPricer> _gpForAdoption,
 	    std::string const& _dbPath = std::string(),
 	    WithExisting _forceAction = WithExisting::Trust,
-	    TransactionQueue::Limits const& _l = TransactionQueue::Limits {102400, 102400}
+	    TransactionQueue::Limits const& _l = TransactionQueue::Limits {1024, 1024}
 	);
 
 	virtual ~PBFTClient();
