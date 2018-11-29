@@ -100,7 +100,7 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
     return std::make_pair(count, number);
 }
 
-bytes const& BlockChainImp::getCode(Address _address)
+bytes BlockChainImp::getCode(Address _address)
 {
     bytes ret;
     int64_t num = number();

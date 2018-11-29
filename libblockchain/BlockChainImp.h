@@ -67,7 +67,7 @@ public:
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
     void setGroupMark(std::string const& groupMark) override;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
-    dev::bytes const& getCode(dev::Address _address) override;
+    dev::bytes getCode(dev::Address _address) override;
 
 private:
     void writeNumber(const dev::eth::Block& block,
