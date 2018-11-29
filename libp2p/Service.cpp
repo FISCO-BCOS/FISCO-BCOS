@@ -152,7 +152,7 @@ void Service::heartBeat()
 void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId)
 {
     /// update the staticNodes
-    NodeIPEndpoint endpoint(_s->remoteEndpoint().address().to_string(), _s->remoteEndpoint().port(),
+    NodeIPEndpoint endpoint(_s->remoteEndpoint().address().to_v4(), _s->remoteEndpoint().port(),
         _s->remoteEndpoint().port());
     RecursiveGuard l(x_nodes);
     auto it = m_staticNodes.find(endpoint);
