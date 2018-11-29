@@ -23,10 +23,10 @@
 
 #include <iostream>
 #include <sstream>
-#include <boost/asio.hpp>
-#include <boost/thread/thread.hpp>
+#include <boost/asio.hpp>  
+#include <boost/thread/thread.hpp>  
 #include <boost/thread/mutex.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp> 
 #include <atomic>
 #include <sys/time.h>
 #include <time.h>
@@ -35,8 +35,9 @@
 
 #include "StateMonitor.h"
 
-using namespace std;
-using namespace boost;
+using namespace std;    
+using namespace boost; 
+
 
 namespace statemonitor
 {
@@ -45,16 +46,18 @@ static std::map<int, StateMonitorByTime> monitorByTimeTable;
 static std::map<int, StateMonitorByNum> monitorByNumTable;
 
 static std::map<int, boost::mutex> monitorByTimeLockTable, monitorByNumLockTable;
-static boost::mutex monitorByTimeTableLock, monitorByNumTableLock;
+static boost::mutex monitorByTimeTableLock, monitorByNumTableLock; 
 
-#define LOCK_MONITOR(_Type)                                         \
-    monitorBy##_Type##TableLock.lock();                             \
-    boost::mutex &monitor_lock = monitorBy##_Type##LockTable[code]; \
-    monitorBy##_Type##TableLock.unlock();                           \
+#define LOCK_MONITOR(_Type)                                      \
+    monitorBy##_Type##TableLock.lock();                          \
+    boost::mutex &monitor_lock =  monitorBy##_Type##LockTable[code];    \
+    monitorBy##_Type##TableLock.unlock();                        \
     monitor_lock.lock();
+
 
 #define UNLOCK_MONITOR() \
     monitor_lock.unlock();
+
 
 /*
 *   StateContainer
@@ -65,7 +68,7 @@ void StateContainer::recordStart(int child_code)
     setRecordStartTime(child_code);
 
     //如果是第一次进来_last_export_time未初始化，则为其赋当前时间
-    if (NO_INIT == _last_export_time)
+    if (NO_INIT == _last_export_time) 
         _last_export_time = getCurrentTime();
 }
 
@@ -92,10 +95,10 @@ void StateContainer::recordEnd(int is_success, int child_code)
     min_data = min(min_data, value);
 
     data_sum += value;
-    ++record_cnt;
+    ++ record_cnt;
 
-    if (is_success > 0)
-        ++success_cnt;
+    if(is_success > 0)
+        ++ success_cnt;
 }
 
 void StateContainer::recordOnce(int is_success, data_t value)
@@ -103,20 +106,20 @@ void StateContainer::recordOnce(int is_success, data_t value)
     //recordOnce相当于同时进行了一组start end，用户自定义传入差值 value
 
     //如果是第一次进来_last_export_time未初始化，则为其赋当前时间
-    if (NO_INIT == _last_export_time)
+    if (NO_INIT == _last_export_time) 
         _last_export_time = getCurrentTime();
-
+    
     if (is_success < 0)
-        return; //数据不可用，直接退出
-
+        return;   //数据不可用，直接退出
+    
     max_data = max(max_data, value);
     min_data = min(min_data, value);
 
     data_sum += value;
-    ++record_cnt;
+    ++ record_cnt;
 
-    if (is_success > 0)
-        ++success_cnt;
+    if(is_success > 0)
+        ++ success_cnt;
 }
 
 #define stateToString(state) (string(#state) + string(":") + to_string(state) + string(" "))
@@ -141,7 +144,7 @@ bool StateContainer::exportState(string &state)
     uint64_t start_timestamp = ceil(_last_export_time);
     msec_t export_interval_msec = getExportInterval();
     uint64_t end_timestamp = start_timestamp + ceil(export_interval_msec);
-    double export_interval_sec = double(export_interval_msec) / 1000;
+    double export_interval_sec = double(export_interval_msec) / 1000;  
 
     if (0 == record_cnt)
         return false; //如果记录数为0，一次数据都没有，导出失败
@@ -149,22 +152,22 @@ bool StateContainer::exportState(string &state)
     data_t avg_data;
     double input_rate, max_rate, min_rate, success_percent;
 
-    avg_data = data_sum / record_cnt;
+    avg_data = data_sum / record_cnt; 
     input_rate = double(record_cnt) / export_interval_sec;
     success_percent = 100 * double(success_cnt) / double(record_cnt);
 
     std::stringstream ss;
-    ss << " "
-       << "start:" << start_timestamp << " | "
-       << "end:" << end_timestamp << " | "
-       << "in_Rto:" << input_rate << " | "
-       << "max:" << max_data << " | "
-       << "min:" << min_data << " | "
-       << "avg:" << avg_data << " | "
-       << "interval:" << export_interval_msec << " | "
-       << "cnt:" << record_cnt << " | "
-       << "suc_cnt:" << success_cnt << " | "
-       << "suc_per:" << success_percent;
+    ss << " " 
+        << "start:" << start_timestamp << " | "
+        << "end:" << end_timestamp << " | "
+        << "in_Rto:" << input_rate << " | "
+        << "max:" << max_data << " | "
+        << "min:" << min_data << " | "
+        << "avg:" << avg_data << " | "
+        << "interval:" << export_interval_msec << " | "
+        << "cnt:" << record_cnt << " | "
+        << "suc_cnt:" << success_cnt << " | "
+        << "suc_per:" << success_percent;
     state = ss.str();
     // state = string();
     // state += stateToString(start_timestamp);
@@ -203,17 +206,14 @@ StateContainer::msec_t StateContainer::getRecordInterval(int child_code)
 {
     // msec_t record_start_time = _mp_record_start_time.at(child_code);
     auto it = _mp_record_start_time.find(child_code); //recordStart和recordEnd必须在保证在同一个child_code才能被记录下来
-    if (it != _mp_record_start_time.end())
-    {
+    if (it != _mp_record_start_time.end()){
         msec_t record_start_time = it->second;
-        _mp_record_start_time.erase(it); //此child_code的记录完成使命，删掉节省空间
+        _mp_record_start_time.erase(it); //此child_code的记录完成使命，删掉节省空间  
         return getCurrentTime() - record_start_time;
-    }
-    else
-    {
+    } else {
         // todo 报警一下，可能出现了函数嵌套多次调用
         return -1;
-    }
+    } 
 }
 
 StateContainer::msec_t StateContainer::getCurrentTime()
@@ -241,7 +241,7 @@ void StateContainer::resetState()
 /*
 *   StateMonitor
 */
-void StateMonitor::report(int code, string &name, string &info)
+void StateMonitor::report(int code, string& name, string& info)
 {
     string state_str;
 
@@ -251,7 +251,7 @@ void StateMonitor::report(int code, string &name, string &info)
         return; //导出失败，直接返回，不发送错误数据
     }
 
-    //report的格式：[code][name][info] state_str
+    //report的格式：[code][name][info] state_str    
     stringstream ss;
     ss << "[" << code << "][" << name << "][" << info << "] " << state_str;
 
@@ -271,7 +271,7 @@ void StateMonitorByTime::recordStart(int code, uint64_t interval, int child_code
     state.recordStart(child_code);
 }
 
-void StateMonitorByTime::recordEnd(int code, string &name, string &info, int is_success, int child_code)
+void StateMonitorByTime::recordEnd(int code, string& name, string& info, int is_success, int child_code)
 {
     if (is_success >= 0) //只要不是不可用的，都会被记录
     {
@@ -282,7 +282,7 @@ void StateMonitorByTime::recordEnd(int code, string &name, string &info, int is_
     state.recordEnd(is_success, child_code);
 }
 
-void StateMonitorByTime::recordOnce(int code, uint64_t interval, data_t value, std::string &name, std::string &info, int is_success)
+void StateMonitorByTime::recordOnce(int code, uint64_t interval, data_t value, std::string& name, std::string& info, int is_success)
 {
     if (interval != _interval || !_is_timer_on)
     {
@@ -301,7 +301,7 @@ void StateMonitorByTime::recordOnce(int code, uint64_t interval, data_t value, s
 }
 
 //按周期（_interval）进行上报
-void StateMonitorByTime::timerToReport(sec_t sec_time)
+void StateMonitorByTime::timerToReport(sec_t sec_time) 
 {
     //std::cout << "sec_time: " << sec_time << " interval: " << _interval << " code: " << code << " state_name: " << state_name << std::endl;
     if (_is_timer_on && sec_time % _interval == 0)
@@ -328,7 +328,7 @@ void StateMonitorByTime::startTimer(sec_t interval)
 void globalTimerLoop()
 {
     StateMonitorByTime::sec_t sec_time = 0, gap = 1;
-    while (true)
+    while(true)
     {
         sec_time += gap; //溢出没关系
         sleep(gap);
@@ -394,7 +394,7 @@ void StateMonitorByNum::recordEnd(int code, string &name, string &info, int is_s
     _cnt = 0;
 }
 
-void StateMonitorByNum::recordOnce(int code, uint64_t report_per_num, data_t value, std::string &name, std::string &info, int is_success)
+void StateMonitorByNum::recordOnce(int code, uint64_t report_per_num, data_t value, std::string& name, std::string& info, int is_success)
 {
     if (_report_per_num != report_per_num)
     {
@@ -433,7 +433,7 @@ void recordStateByTimeEnd(int code, string &&name, string &&info, int is_success
 
     // monitorByTimeTable[code].recordEnd(code, name, info, is_success, child_code);
     auto it = monitorByTimeTable.find(code);
-    if (it != monitorByTimeTable.end())
+    if (it != monitorByTimeTable.end()) 
         it->second.recordEnd(code, name, info, is_success, child_code);
 
     UNLOCK_MONITOR()
@@ -444,10 +444,10 @@ void recordStateByTimeOnce(int code, uint64_t interval,
                            int is_success)
 {
     LOCK_MONITOR(Time)
-
+    
     monitorByTimeTable[code].recordOnce(code, interval, value, name, info, is_success);
-
-    UNLOCK_MONITOR()
+    
+    UNLOCK_MONITOR()    
 }
 
 void recordStateByNumStart(int code, uint64_t report_per_num, int child_code)
@@ -463,7 +463,7 @@ void recordStateByNumEnd(int code, string &&name, string &&info, int is_success,
 {
     LOCK_MONITOR(Num)
     auto it = monitorByNumTable.find(code);
-    if (it != monitorByNumTable.end())
+    if (it != monitorByNumTable.end()) 
         it->second.recordEnd(code, name, info, is_success, child_code);
 
     UNLOCK_MONITOR()
@@ -476,8 +476,11 @@ void recordStateByNumOnce(int code, uint64_t report_per_num,
     LOCK_MONITOR(Num)
 
     monitorByNumTable[code].recordOnce(code, report_per_num, value, name, info, is_success);
-
-    UNLOCK_MONITOR()
+    
+    UNLOCK_MONITOR()    
 }
 
-} // namespace statemonitor
+}
+
+
+
