@@ -100,7 +100,7 @@ namespace dev
 
 			virtual void disconnectByNodeId(const std::string &sNodeId)override;
 
-			virtual void getAnnouncementNodeList(h256& _allPeerHash,std::vector<Node> & _nodes)override;
+			//virtual void getAnnouncementNodeList(h256& _allPeerHash,std::vector<Node> & _nodes)override;
 
 			virtual void onNodeTableEvent(NodeID const& _n, NodeTableEventType const& _e)override;
 			virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint)override;	

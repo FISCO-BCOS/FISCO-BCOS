@@ -40,66 +40,6 @@ using namespace dev::p2p;
 
 UPnP::UPnP()
 {
-#if 0
-#if ETH_MINIUPNPC
-	m_urls = make_shared<UPNPUrls>();
-	m_data = make_shared<IGDdatas>();
-
-	m_ok = false;
-
-	struct UPNPDev* devlist;
-	struct UPNPDev* dev;
-	char* descXML;
-	int descXMLsize = 0;
-	int upnperror = 0;
-	memset(m_urls.get(), 0, sizeof(struct UPNPUrls));
-	memset(m_data.get(), 0, sizeof(struct IGDdatas));
-#if MINIUPNPC_API_VERSION >= 14
-	devlist = upnpDiscover(2000, NULL/*multicast interface*/, NULL/*minissdpd socket path*/, 0/*sameport*/, 0/*ipv6*/, 2/*ttl*/, &upnperror);
-#else
-	devlist = upnpDiscover(2000, NULL/*multicast interface*/, NULL/*minissdpd socket path*/, 0/*sameport*/, 0/*ipv6*/, &upnperror);
-#endif
-	if (devlist)
-	{
-		dev = devlist;
-		while (dev)
-		{
-			if (strstr (dev->st, "InternetGatewayDevice"))
-				break;
-			dev = dev->pNext;
-		}
-		if (!dev)
-			dev = devlist; /* defaulting to first device */
-
-		LOG(INFO) << "UPnP device:" << dev->descURL << "[st:" << dev->st << "]";
-#if MINIUPNPC_API_VERSION >= 16
-		int responsecode = 200;
-		descXML = (char*)miniwget(dev->descURL, &descXMLsize, 0, &responsecode);
-#elif MINIUPNPC_API_VERSION >= 9
-		descXML = (char*)miniwget(dev->descURL, &descXMLsize, 0);
-#else
-		descXML = (char*)miniwget(dev->descURL, &descXMLsize);
-#endif
-		if (descXML)
-		{
-			parserootdesc (descXML, descXMLsize, m_data.get());
-			free (descXML); descXML = 0;
-#if MINIUPNPC_API_VERSION >= 9
-			GetUPNPUrls (m_urls.get(), m_data.get(), dev->descURL, 0);
-#else
-			GetUPNPUrls (m_urls.get(), m_data.get(), dev->descURL);
-#endif
-			m_ok = true;
-		}
-		freeUPNPDevlist(devlist);
-	}
-	else
-#endif
-	{
-		LOG(INFO) << "UPnP device not found.";
-		BOOST_THROW_EXCEPTION(NoUPnPDevice());
-	}
-#endif
 }
 
 UPnP::~UPnP()

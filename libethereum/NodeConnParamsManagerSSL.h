@@ -48,7 +48,6 @@ public:
 
 	virtual void getAllNode(int, std::map<std::string, NodeParams> & mNodeParams) const override;
 	virtual void getAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams) const override ;
-	virtual void updateAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams)  override ;
 	virtual void connNode(const ConnectParams &param) override;
 	virtual void disconnNode(const std::string & sNodeId) override;
 	virtual void setSysContractApi(std::shared_ptr<SystemContractApi> sysContractApi) override;
