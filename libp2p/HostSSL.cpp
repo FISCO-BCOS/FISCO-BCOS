@@ -733,75 +733,9 @@ void HostSSL::reconnectAllNodes()
 		}
 	}
 
-	NodeConnManagerSingleton::GetInstance().updateAllConnect(mMergeConnectParams);
 	m_lastReconnect = chrono::steady_clock::now();
 	m_reconnectnow = false;
-
-#if 0
-	if ( (chrono::steady_clock::now() - c_AnnouncementConnectNodesIntervalSSL < m_lastAnnouncementConnectNodes)  )
-		return;
-	// broad to other nodes
-	std::vector<Node>	peerNodes;
-	h256 allPeerHash;
-	getAnnouncementNodeList(allPeerHash,peerNodes);
-	for (auto& i : m_sessions)
-		if (auto j = i.second.lock())
-			if (j->isConnected())
-				j->announcement(allPeerHash);
-
-	m_lastAnnouncementConnectNodes = chrono::steady_clock::now();
-#endif
 }
-
-#if 0
-void HostSSL::getAnnouncementNodeList(h256& _allNodeHash,std::vector<Node> & _nodes)
-{
-	_nodes.clear();
-	std::vector<Node>	peerNodes;
-
-	RecursiveGuard l(x_sessions);
-	for (auto const& p : m_peers)
-	{
-		peerNodes.push_back( Node(p.second->address(),p.second->endpoint) );
-	}
-	
-	std::string allPeer;
-	std::vector<Node> allNode;
-	allNode=peerNodes;
-	allNode.push_back( Node(id(),NodeIPEndpoint(m_tcpPublic.address(),m_listenPort,m_listenPort)) );
-	std::sort(allNode.begin(), allNode.end(), [&](const Node & a, const Node &  b) {
-		return a.endpoint.name() < b.endpoint.name();
-	});
-	for (auto const& n : allNode)
-	{
-		allPeer += n.endpoint.name();
-	}
-
-	_allNodeHash = sha3(allPeer);
-
-	if( peerNodes.size() < c_maxAnnouncementSize )
-	{
-		_nodes = peerNodes;
-	}
-	else
-	{
-		for( size_t i=0;i<peerNodes.size();i++)
-		{
-			Node t = peerNodes[i];
-			int r = rand()%peerNodes.size();
-			peerNodes[i]  =peerNodes[r];
-			peerNodes[r] = t;
-		}
-		for( size_t i = 0;i < c_maxAnnouncementSize; i++)
-		{
-			LOG(TRACE) << "HostSSL::getAnnouncementNodeList sendNode name=" << peerNodes[i].endpoint.name();
-			_nodes.push_back(peerNodes[i]);
-
-		}
-	}
-	LOG(TRACE) << "HostSSL::getAnnouncementNodeList " << toString(_allNodeHash) << ",Peers=" << _nodes.size();
-}
-#endif
 
 void HostSSL::disconnectLatePeers()
 {
