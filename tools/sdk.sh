@@ -75,8 +75,8 @@ gen_sdk_cert() {
     mkdir -p $sdkpath
     gen_cert_secp256k1 "$agpath" "$sdkpath" "$sdk" sdk
     cd ${current_path}
-    cat ${agency}/agency.crt >> ${sdkpath}/sdk.crt
-    cat ${agency}/ca.crt >> ${sdkpath}/sdk.crt
+    cat ${agpath}/agency.crt >> ${sdkpath}/sdk.crt
+    cat ${agpath}/ca.crt >> ${sdkpath}/sdk.crt
     # create keystore
     openssl pkcs12 -export -name client -in ${sdkpath}/sdk.crt -inkey ${sdkpath}/sdk.key -out ${sdkpath}/keystore.p12
     keytool -importkeystore -destkeystore ${sdkpath}/client.keystore -srckeystore ${sdkpath}/keystore.p12 -srcstoretype pkcs12 -alias client
@@ -84,7 +84,7 @@ gen_sdk_cert() {
     openssl ec -in $sdkpath/sdk.key
     echo "build $sdk sdk cert successful!"
 }
-agency=
+agencypath=
 sdkpath="sdk"
 help()
 {
@@ -95,13 +95,13 @@ Usage:
     -s <dir of the sdk cert>   [Optional] default is sdk
     -h Help
 e.g: 
-    bash sdk.sh -a agencyA -n sdk1
+    bash sdk.sh -a agencyA -s sdk1
 EOF
 exit 0
 }
 checkParam()
 {
-    if [ "${agency}" == "" ];then
+    if [ "${agencypath}" == "" ];then
         echo "Must set agency directory"
         help
     fi
@@ -110,16 +110,16 @@ main()
 {
 while getopts "a:s:h" option;do
     case ${option} in
-    a) agency=${OPTARG};;
+    a) agencypath=${OPTARG};;
     s) sdkpath=${OPTARG};;
     h) help;;
     esac
 done
 checkParam
-sdkpath=${agency}"/"${sdkpath}
-gen_sdk_cert "" ${agency} ${sdkpath}
+sdkpath=${agencypath}"/"${sdkpath}
+gen_sdk_cert "" ${agencypath} ${sdkpath}
 #copy ca.crt
-cp ${agency}/ca.crt ${sdkpath}/ca.crt
+cp ${agencypath}/ca.crt ${sdkpath}/ca.crt
 if [ $? -eq 0 ];then
     echo "Build  $sdkpath Crt suc!!!"
 else

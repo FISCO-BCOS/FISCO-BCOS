@@ -87,8 +87,24 @@ public:
 
     virtual void stop()
     {
-        m_acceptor->close();
+        // reset ioservice (cancels all timers and allows manually polling network, below)
+        m_ioService->reset();
+
+        // shutdown acceptor
+        m_acceptor->cancel();
+        if (m_acceptor->is_open())
+            m_acceptor->close();
+
+        // There maybe an incoming connection which started but hasn't finished.
+        // Wait for acceptor to end itself instead of assuming it's complete.
+        // This helps ensure a peer isn't stopped at the same time it's starting
+        // and that socket for pending connection is closed.
+        while (m_accepting)
+            m_ioService->poll();
+        // stop network (again; helpful to call before subsequent reset())
         m_ioService->stop();
+        // reset network (allows reusing ioservice in future)
+        m_ioService->reset();
     }
 
     virtual void reset()
@@ -102,6 +118,7 @@ public:
     virtual void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
         boost::system::error_code ec = boost::system::error_code())
     {
+        m_accepting = true;
         m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
     }
 
@@ -162,6 +179,7 @@ private:
     std::shared_ptr<ba::io_service::strand> m_strand;
     std::shared_ptr<bi::tcp::acceptor> m_acceptor;
     std::shared_ptr<ba::ssl::context> m_sslContext;
+    bool m_accepting = false;
 };
 }  // namespace p2p
 }  // namespace dev

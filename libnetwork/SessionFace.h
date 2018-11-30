@@ -33,7 +33,7 @@ namespace dev
 namespace p2p
 {
 #define CallbackFunc std::function<void(NetworkException, Message::Ptr)>
-
+class SocketFace;
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
     typedef std::shared_ptr<ResponseCallback> Ptr;
@@ -64,7 +64,7 @@ public:
             messageHandler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
-
+    virtual std::shared_ptr<SocketFace> socket() { return nullptr; }
     virtual bool actived() const = 0;
 };
 }  // namespace p2p

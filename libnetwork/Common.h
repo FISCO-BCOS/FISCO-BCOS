@@ -208,17 +208,36 @@ struct NodeIPEndpoint
     }
     bool operator==(NodeIPEndpoint const& _cmp) const
     {
-        return address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort;
+        if (address == _cmp.address && tcpPort == _cmp.tcpPort)
+            return true;
+        if (udpPort == _cmp.udpPort)
+            return true;
+        if (host == _cmp.host)
+            return true;
+        return false;
     }
     bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
     bool operator<(const dev::p2p::NodeIPEndpoint& rhs) const
     {
-        if (address < rhs.address)
+        if (address < rhs.address && tcpPort < rhs.tcpPort)
         {
             return true;
         }
-
-        return tcpPort < rhs.tcpPort;
+        if (udpPort < rhs.udpPort)
+            return true;
+        if (host < rhs.host)
+            return true;
+        return false;
+    }
+    bool operator>(const dev::p2p::NodeIPEndpoint& rhs) const
+    {
+        if (address > rhs.address && tcpPort > rhs.tcpPort)
+            return true;
+        if (udpPort > rhs.udpPort)
+            return true;
+        if (host > rhs.host)
+            return true;
+        return false;
     }
     std::string name() const
     {

@@ -98,6 +98,26 @@ public:
         RecursiveGuard l(x_seq2Callback);
         m_seq2Callback->erase(seq);
     }
+    virtual void clearSeqCallback()
+    {
+        RecursiveGuard l(x_seq2Callback);
+        m_seq2Callback->clear();
+    }
+
+    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq)
+    {
+        RecursiveGuard l(x_seq2Callback);
+        auto it = m_seq2Callback->find(seq);
+        if (it != m_seq2Callback->end())
+        {
+            return it->second;
+        }
+        else
+        {
+            LOG(TRACE) << "Handler not found! SeqID = " << seq;
+            return NULL;
+        }
+    }
 
 private:
     void send(std::shared_ptr<bytes> _msg);
