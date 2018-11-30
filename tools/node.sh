@@ -133,7 +133,7 @@ EOF
 }
 
 current_path=`pwd`
-agency=
+agencypath=
 nodepath="node"
 
 help()
@@ -152,7 +152,7 @@ exit 0
 
 checkParam()
 {
-    if [ "${agency}" == "" ];then
+    if [ "${agencypath}" == "" ];then
         LOG_ERROR "Must set path of the agency cert!"
         help
     fi
@@ -165,17 +165,17 @@ main()
 {
 while getopts "a:n:h" option;do
     case ${option} in
-    a) agency=${OPTARG};;
+    a) agencypath=${OPTARG};;
     n) nodepath=${OPTARG};;
     h) help;;
     esac
 done
 checkParam
-nodepath="${agency}/${nodepath}"
-gen_node_cert "" ${agency} ${nodepath} > build.log 2>&1
+nodepath="${agencypath}/${nodepath}"
+gen_node_cert "" ${agencypath} ${nodepath} > build.log 2>&1
 execute_cmd "cd ${current_path}"
-execute_cmd "cat ${agency}/agency.crt >> ${nodepath}/node.crt"
-execute_cmd "cat ${agency}/ca.crt >> ${nodepath}/node.crt"
+execute_cmd "cat ${agencypath}/agency.crt >> ${nodepath}/node.crt"
+execute_cmd "cat ${agencypath}/ca.crt >> ${nodepath}/node.crt"
 execute_cmd "rm build.log"
 execute_cmd "cd ${nodepath}"
 execute_cmd "rm node.json node.param node.private node.ca node.pubkey"
