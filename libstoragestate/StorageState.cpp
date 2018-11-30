@@ -188,10 +188,21 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
     auto table = getTable(_address);
     if (table)
     {
-        auto entry = table->newEntry();
-        entry->setField(STORAGE_KEY, _location.str());
-        entry->setField(STORAGE_VALUE, _value.str());
-        table->insert(_location.str(), entry);
+        auto entries = table->select(_location.str(), table->newCondition());
+        if (entries->size() == 0u)
+        {
+            auto entry = table->newEntry();
+            entry->setField(STORAGE_KEY, _location.str());
+            entry->setField(STORAGE_VALUE, _value.str());
+            table->insert(_location.str(), entry);
+        }
+        else
+        {
+            auto entry = table->newEntry();
+            entry->setField(STORAGE_KEY, _location.str());
+            entry->setField(STORAGE_VALUE, _value.str());
+            table->update(_location.str(), entry, table->newCondition());
+        }
     }
 }
 
@@ -220,12 +231,16 @@ void StorageState::kill(Address _address)
         auto entry = table->newEntry();
         entry->setField(STORAGE_VALUE, m_accountStartNonce.str());
         table->update(ACCOUNT_NONCE, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, u256(0).str());
         table->update(ACCOUNT_BALANCE, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, "");
         table->update(ACCOUNT_CODE, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, "false");
         table->update(ACCOUNT_ALIVE, entry, table->newCondition());
     }
@@ -287,6 +302,7 @@ void StorageState::incNonce(Address const& _address)
             auto entry = entries->get(0);
             auto nonce = u256(entry->getField(STORAGE_VALUE));
             ++nonce;
+            entry = table->newEntry();
             entry->setField(STORAGE_VALUE, nonce.str());
             table->update(ACCOUNT_NONCE, entry, table->newCondition());
         }
