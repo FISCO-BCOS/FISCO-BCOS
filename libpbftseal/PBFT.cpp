@@ -424,6 +424,7 @@ h512s PBFT::getMinerNodeList() {
 				}
 			}
 		}
+		std::sort(minerList.begin(), minerList.end());
 		_current_miner_list = minerList;
 		_current_miner_num = m_highest_block.number();
 	}

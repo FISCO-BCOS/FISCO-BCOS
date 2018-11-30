@@ -44,8 +44,6 @@ libraftseal.bak
 libraftseal.bak/**
 tool/java/web3j-v2.1.0_src/bin
 tool/java/web3j-v2.1.0_src/bin/**
-tool/java/JuDfsSDK/bin
-tool/java/JuDfsSDK/bin/**
 node_modules/
 output/
 

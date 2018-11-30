@@ -86,7 +86,7 @@ curl -LO https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0-pre-r
 bash build_chain.sh -l "127.0.0.1:4"
 ```
 > 脚本必须有-l或-f选项来指定ip。生成节点后，拷贝IP对应的节点文件夹到部署服务器启动节点。
-> -f指定文件，按行分割，每行格式为IP:NUM，表示一个部署服务器IP和该服务器部署节点数，不同节点实例端口会自动分配。`-l`选项和`-f`类似，以`,`分割，例如`"IP1:num1,IP2:NUM2"`
+> -f指定文件，按行分割，每行格式为IP:NUM，表示一个部署服务器IP和该服务器部署节点数，不同节点实例端口会自动分配。`-l`选项和`-f`类似，以`,`分割，例如`"IP1:NUM1,IP2:NUM2"`
 > 脚本执行报错参考[build_chain.sh执行报错](#762-build_chainsh执行报错)
 
 2. 启动节点
@@ -123,7 +123,7 @@ tail -f log/info* |grep ++++  #查看日志输出
 
 ```bash
 # FISCO-BCOS/ 目录下操作
-curl -O https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0-pre-release/fisco-bcos
+curl -LO https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v1.5.0-pre-release/fisco-bcos
 # 添加可执行权限
 chmod a+x fisco-bcos
 ```
