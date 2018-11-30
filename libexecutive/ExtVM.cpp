@@ -24,6 +24,7 @@
  */
 
 #include "ExtVM.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <boost/thread.hpp>
@@ -197,6 +198,11 @@ evmc_result ExtVM::call(CallParameters& _p)
 
 size_t ExtVM::codeSizeAt(dev::Address _a)
 {
+    if (m_envInfo.precompiledEngine()->isPrecompiled(_a))
+    {
+        LOG(TRACE) << _a << "Precompiled codeSizeAt return 1";
+        return 1;
+    }
     return m_s->codeSize(_a);
 }
 

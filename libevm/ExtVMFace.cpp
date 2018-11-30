@@ -231,7 +231,7 @@ ExtVMFace::ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _calle
     m_isCreate(_isCreate),
     m_staticCall(_staticCall)
 {}
-std::shared_ptr<dev::blockverifier::ExecutiveContext> EnvInfo::precompiledEngine()
+std::shared_ptr<dev::blockverifier::ExecutiveContext> EnvInfo::precompiledEngine() const
 {
     return m_executiveEngine;
 }

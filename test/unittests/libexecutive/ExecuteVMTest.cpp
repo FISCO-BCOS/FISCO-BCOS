@@ -21,6 +21,7 @@
  * @date 2018-09-21
  */
 
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
@@ -63,9 +64,18 @@ public:
       : TestOutputHelperFixture(),
         m_mptStates(std::make_shared<MPTState>(
             u256(0), MPTState::openDB("./", h256("0x2234")), BaseState::Empty)),
-
-        m_e(m_mptStates, EnvInfo(fakeBlockHeader(), fakeCallBack, 0))
+        m_e(m_mptStates, initEnvInfo())
     {}
+
+    EnvInfo initEnvInfo()
+    {
+        EnvInfo envInfo{fakeBlockHeader(), fakeCallBack, 0};
+        blockverifier::ExecutiveContext::Ptr executiveContext =
+            make_shared<blockverifier::ExecutiveContext>();
+        executiveContext->setMemoryTableFactory(make_shared<storage::MemoryTableFactory>());
+        envInfo.setPrecompiledEngine(executiveContext);
+        return envInfo;
+    }
 
     void executeTransaction(Transaction const& _transaction)
     {
