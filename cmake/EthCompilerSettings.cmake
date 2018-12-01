@@ -118,7 +118,7 @@ if (TESTS)
     set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
     set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
     find_program(LCOV_TOOL lcov)
-    message(STATUS "lcov tool: ${LCOV_TOOL}")
+    # message(STATUS "lcov tool: ${LCOV_TOOL}")
     if (LCOV_TOOL)
         add_custom_target(coverage.info
             COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -c -d ${CMAKE_BINARY_DIR}

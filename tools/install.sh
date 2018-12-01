@@ -104,7 +104,7 @@ done
 #install ubuntu package
 install_ubuntu_deps()
 {
-install_ubuntu_package "cmake" "openssl" "libssl-dev" "libcurl4-openssl-dev" "libgmp-dev" "libleveldb-dev" "jq"
+install_ubuntu_package "cmake" "libssl-dev" "libleveldb-dev" "jq"
 }
 
 # install centos package
