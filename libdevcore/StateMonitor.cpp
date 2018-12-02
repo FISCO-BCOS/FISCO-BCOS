@@ -42,6 +42,9 @@ using namespace boost;
 namespace statemonitor
 {
 
+bool shouldExit = false;
+bool isRunning = false; 
+
 static std::map<int, StateMonitorByTime> monitorByTimeTable;
 static std::map<int, StateMonitorByNum> monitorByNumTable;
 
@@ -328,7 +331,7 @@ void StateMonitorByTime::startTimer(sec_t interval)
 void globalTimerLoop()
 {
     StateMonitorByTime::sec_t sec_time = 0, gap = 1;
-    while(true)
+    while(!shouldExit)
     {
         sec_time += gap; //溢出没关系
         sleep(gap);
@@ -336,6 +339,7 @@ void globalTimerLoop()
         {
             try
             {
+                if(shouldExit) break;
                 //std::cout << "Report: " << state.first << std::endl;
                 state.second.timerToReport(sec_time);
             }
@@ -345,17 +349,16 @@ void globalTimerLoop()
             }
         }
     }
+    isRunning = false;
 }
 
 void enableTimerLoop()
 {
-    static bool enabled;
-
     static std::mutex enable_lock;
     enable_lock.lock();
-    if (!enabled)
+    if (!isRunning)
     {
-        enabled = true;
+        isRunning = true;
         enable_lock.unlock();
         boost::thread timer_thread(&globalTimerLoop);
     }
