@@ -54,16 +54,17 @@ void PBFTReqCache::delCache(h256 const& hash)
  * @param block: block need to append sig-list
  * @param minSigSize: minimum size of the sig list
  */
-bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize)
+bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& minSigSize)
 {
     std::vector<std::pair<u256, Signature>> sig_list;
     if (m_commitCache.count(m_prepareCache.block_hash) > 0)
     {
         for (auto item : m_commitCache[m_prepareCache.block_hash])
         {
-            sig_list.push_back(std::make_pair(item.second.idx, Signature(item.first.c_str())));
+            sig_list.push_back(
+                std::make_pair(u256(item.second.idx), Signature(item.first.c_str())));
         }
-        assert(u256(sig_list.size()) >= minSigSize);
+        assert(sig_list.size() >= minSigSize);
         /// set siglist for prepare cache
         block.setSigList(sig_list);
         return true;
@@ -82,12 +83,12 @@ bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, u256 const& min
  * @return true: should trigger viewchange
  * @return false: can't trigger viewchange
  */
-bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNodeNum,
-    u256 const& toView, dev::eth::BlockHeader const& highestBlock,
+bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInvalidNodeNum,
+    VIEWTYPE const& toView, dev::eth::BlockHeader const& highestBlock,
     int64_t const& consensusBlockNumber)
 {
-    std::map<u256, u256> idx_view_map;
-    minView = Invalid256;
+    std::map<IDXTYPE, VIEWTYPE> idx_view_map;
+    minView = MAXVIEW;
     int64_t min_height = INT64_MAX;
     for (auto viewChangeItem : m_recvViewChangeReq)
     {
@@ -121,7 +122,7 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNod
             }
         }
     }
-    u256 count = u256(idx_view_map.size());
+    IDXTYPE count = idx_view_map.size();
     bool flag =
         (min_height == consensusBlockNumber) && (min_height == m_committedPrepareCache.height);
     return (count > maxInvalidNodeNum) && !flag;
@@ -133,7 +134,7 @@ bool PBFTReqCache::canTriggerViewChange(u256& minView, u256 const& maxInvalidNod
  * @param highestBlock: the current block header
  */
 void PBFTReqCache::removeInvalidViewChange(
-    u256 const& view, dev::eth::BlockHeader const& highestBlock)
+    VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock)
 {
     auto it = m_recvViewChangeReq.find(view);
     if (it == m_recvViewChangeReq.end())
@@ -156,7 +157,7 @@ void PBFTReqCache::removeInvalidViewChange(
 }
 
 /// remove sign cache according to block hash and view
-void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, u256 const& view)
+void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const& view)
 {
     auto it = m_signCache.find(blockHash);
     if (it == m_signCache.end())
@@ -171,7 +172,7 @@ void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, u256 const& vie
     }
 }
 /// remove commit cache according to block hash and view
-void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, u256 const& view)
+void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE const& view)
 {
     auto it = m_commitCache.find(blockHash);
     if (it == m_commitCache.end())

@@ -44,16 +44,16 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
 
     /// test addSignReq
     SignReq sign_req(prepare_req, key_pair, prepare_req.idx);
-    sign_req.view = prepare_req.view + u256(1);
+    sign_req.view = prepare_req.view + 1;
     req_cache.addSignReq(sign_req);
     BOOST_CHECK(req_cache.isExistSign(sign_req));
-    BOOST_CHECK(req_cache.getSigCacheSize(sign_req.block_hash) == u256(1));
+    BOOST_CHECK(req_cache.getSigCacheSize(sign_req.block_hash) == 1);
     /// test addCommitReq
     CommitReq commit_req(prepare_req, key_pair, prepare_req.idx);
-    commit_req.view = prepare_req.view + u256(1);
+    commit_req.view = prepare_req.view + 1;
     req_cache.addCommitReq(commit_req);
     BOOST_CHECK(req_cache.isExistCommit(commit_req));
-    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req.block_hash) == u256(1));
+    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req.block_hash) == 1);
     /// test addPrepareReq
     req_cache.addPrepareReq(prepare_req);
     /// test invalid signReq and commitReq removement
@@ -61,8 +61,8 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
         prepare_req.idx, req_cache.prepareCache().timestamp, prepare_req.block_hash);
     BOOST_CHECK(!req_cache.isExistSign(sign_req));
     BOOST_CHECK(!req_cache.isExistCommit(commit_req));
-    BOOST_CHECK(req_cache.getSigCacheSize(sign_req.block_hash) == u256(0));
-    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req.block_hash) == u256(0));
+    BOOST_CHECK(req_cache.getSigCacheSize(sign_req.block_hash) == 0);
+    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req.block_hash) == 0);
 
     /// test addFuturePrepareCache
     req_cache.addFuturePrepareCache(prepare_req);
@@ -87,14 +87,14 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
         req_cache.addCommitReq(commit_req);
         BOOST_CHECK(req_cache.isExistCommit(commit_req));
     }
-    BOOST_CHECK(req_cache.getCommitCacheSize(prepare_req.block_hash) == u256(node_num));
+    BOOST_CHECK(req_cache.getCommitCacheSize(prepare_req.block_hash) == node_num);
     /// generateAndSetSigList
     Block block;
-    bool ret = req_cache.generateAndSetSigList(block, u256(node_num));
+    bool ret = req_cache.generateAndSetSigList(block, node_num);
     BOOST_CHECK(ret == false);
     /// add prepare
     req_cache.addPrepareReq(prepare_req);
-    ret = req_cache.generateAndSetSigList(block, u256(node_num));
+    ret = req_cache.generateAndSetSigList(block, node_num);
     BOOST_CHECK(ret);
     BOOST_CHECK(block.sigList().size() == node_num);
     std::vector<std::pair<u256, Signature>> sig_list = block.sigList();
@@ -123,15 +123,15 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     FakeInvalidReq<CommitReq>(req, req_cache, req_cache.mutableCommitCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     req_cache.collectGarbage(highest);
-    BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == u256(validNum));
-    BOOST_CHECK(req_cache.getSigCacheSize(invalid_hash) == u256(0));
+    BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == validNum);
+    BOOST_CHECK(req_cache.getSigCacheSize(invalid_hash) == 0);
 
-    BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == u256(validNum));
-    BOOST_CHECK(req_cache.getCommitCacheSize(invalid_hash) == u256(0));
+    BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == validNum);
+    BOOST_CHECK(req_cache.getCommitCacheSize(invalid_hash) == 0);
     /// test delCache
     req_cache.delCache(req.block_hash);
-    BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == u256(0));
-    BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == u256(0));
+    BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == 0);
+    BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == 0);
 }
 /// test canTriggerViewChange
 BOOST_AUTO_TEST_CASE(testCanTriggerViewChange)
@@ -146,18 +146,18 @@ BOOST_AUTO_TEST_CASE(testCanTriggerViewChange)
 
     BlockHeader header;
     header.setNumber(prepare_req.height - 1);
-    u256 maxInvalidNodeNum = u256(1);
-    u256 toView = prepare_req.view;
+    IDXTYPE maxInvalidNodeNum = 1;
+    VIEWTYPE toView = prepare_req.view;
     int64_t consensusBlockNumber = prepare_req.height - 1;
     /// fake viewchange
     ViewChangeReq viewChange_req(
         key_pair, prepare_req.height, prepare_req.view, prepare_req.idx, prepare_req.block_hash);
     ViewChangeReq viewChange_req2(viewChange_req);
-    viewChange_req2.idx += u256(1);
-    viewChange_req2.view += u256(1);
+    viewChange_req2.idx += 1;
+    viewChange_req2.view += 1;
     ViewChangeReq viewChange_req3(viewChange_req);
-    viewChange_req3.view += u256(2);
-    viewChange_req3.idx += u256(2);
+    viewChange_req3.view += 2;
+    viewChange_req3.idx += 2;
 
     req_cache.addViewChangeReq(viewChange_req);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req));
@@ -165,11 +165,11 @@ BOOST_AUTO_TEST_CASE(testCanTriggerViewChange)
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req2));
     req_cache.addViewChangeReq(viewChange_req3);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req3));
-    u256 minView;
+    VIEWTYPE minView;
     BOOST_CHECK(req_cache.canTriggerViewChange(
         minView, maxInvalidNodeNum, toView, header, consensusBlockNumber));
-    BOOST_CHECK(minView == u256(viewChange_req2.view));
-    maxInvalidNodeNum = u256(3);
+    BOOST_CHECK(minView == viewChange_req2.view);
+    maxInvalidNodeNum = 3;
     BOOST_CHECK(req_cache.canTriggerViewChange(
                     minView, maxInvalidNodeNum, toView, header, consensusBlockNumber) == false);
 }
@@ -178,40 +178,40 @@ BOOST_AUTO_TEST_CASE(testCanTriggerViewChange)
 BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
 {
     KeyPair key_pair = KeyPair::create();
-    ViewChangeReq viewChange_req(key_pair, 100, u256(1), u256(1), sha3("test_view"));
+    ViewChangeReq viewChange_req(key_pair, 100, 1, 1, sha3("test_view"));
     PBFTReqCache req_cache(2);
     /// test exists of viewchange
     req_cache.addViewChangeReq(viewChange_req);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req));
-    BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(1));
+    BOOST_CHECK(req_cache.getViewChangeSize(1) == 1);
     /// generate and add a new viewchange request with the same blockhash, but different views
-    ViewChangeReq viewChange_req2(key_pair, 101, u256(1), u256(2), sha3("test_view"));
+    ViewChangeReq viewChange_req2(key_pair, 101, 1, 2, sha3("test_view"));
     req_cache.addViewChangeReq(viewChange_req2);
-    BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(2));
+    BOOST_CHECK(req_cache.getViewChangeSize(1) == 2);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req2));
     ViewChangeReq viewChange_req3(viewChange_req2);
     viewChange_req3.height = 102;
-    viewChange_req3.idx = u256(3);
+    viewChange_req3.idx = 3;
     /// generate faked block header
     BlockHeader header;
     header.setNumber(101);
     viewChange_req3.block_hash = header.hash();
     req_cache.addViewChangeReq(viewChange_req3);
-    BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(3));
+    BOOST_CHECK(req_cache.getViewChangeSize(1) == 3);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req3));
     //// test removeInvalidViewChange
-    req_cache.removeInvalidViewChange(u256(1), header);
-    BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(1));
+    req_cache.removeInvalidViewChange(1, header);
+    BOOST_CHECK(req_cache.getViewChangeSize(1) == 1);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req3));
     /// test delInvalidViewChange
     viewChange_req3.height = header.number() - 1;
     req_cache.addViewChangeReq(viewChange_req3);
     req_cache.delInvalidViewChange(header);
-    BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(0));
+    BOOST_CHECK(req_cache.getViewChangeSize(1) == 0);
     viewChange_req3.height += 1;
     viewChange_req3.block_hash = header.hash();
     req_cache.addViewChangeReq(viewChange_req3);
-    BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(1));
+    BOOST_CHECK(req_cache.getViewChangeSize(1) == 1);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req3));
 
     /// test tiggerViewChange
@@ -228,7 +228,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     FakeInvalidReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     /// trigger viewChange
-    req_cache.triggerViewChange(u256(0));
+    req_cache.triggerViewChange(0);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req3));
     BOOST_CHECK(req_cache.mutableSignCache().size() == 0);
     BOOST_CHECK(req_cache.mutableCommitCache().size() == 0);
@@ -237,7 +237,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
 
     /// test clearAll
     req_cache.clearAllExceptCommitCache();
-    BOOST_CHECK(req_cache.getViewChangeSize(u256(1)) == u256(0));
+    BOOST_CHECK(req_cache.getViewChangeSize(1) == 0);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

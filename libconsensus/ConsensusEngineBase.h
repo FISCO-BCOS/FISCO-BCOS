@@ -95,8 +95,8 @@ public:
     /// get status of consensus
     void getBasicConsensusStatus(json_spirit::Object& status_obj) const
     {
-        status_obj.push_back(json_spirit::Pair("nodeNum", m_nodeNum.convert_to<size_t>()));
-        status_obj.push_back(json_spirit::Pair("f", m_f.convert_to<size_t>()));
+        status_obj.push_back(json_spirit::Pair("nodeNum", m_nodeNum));
+        status_obj.push_back(json_spirit::Pair("f", m_f));
         status_obj.push_back(json_spirit::Pair("consensusedBlockNumber", m_consensusBlockNumber));
         status_obj.push_back(json_spirit::Pair("highestblockNumber", m_highestBlock.number()));
         status_obj.push_back(json_spirit::Pair("highestblockHash", toHex(m_highestBlock.hash())));
@@ -127,7 +127,7 @@ public:
         m_accountType = _accountType;
     }
     /// get the node index if the node is a miner
-    u256 nodeIdx() const override { return m_idx; }
+    IDXTYPE nodeIdx() const override { return m_idx; }
 
     bool const& allowFutureBlocks() const { return m_allowFutureBlocks; }
     void setAllowFutureBlocks(bool isAllowFutureBlocks)
@@ -135,12 +135,12 @@ public:
         m_allowFutureBlocks = isAllowFutureBlocks;
     }
 
-    u256 minValidNodes() const { return m_nodeNum - m_f; }
+    IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const& block) {}
 
 protected:
-    virtual void resetConfig() { m_nodeNum = u256(m_minerList.size()); }
+    virtual void resetConfig() { m_nodeNum = m_minerList.size(); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
     /// get the node id of specified miner according to its index
     /// @param index: the index of the node
@@ -179,8 +179,8 @@ protected:
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
-                req.setOtherField(u256(peer_index), session->nodeID(),
-                    session->session()->nodeIPEndpoint().name());
+                req.setOtherField(
+                    peer_index, session->nodeID(), session->session()->nodeIPEndpoint().name());
         }
         return valid;
     }
@@ -236,15 +236,15 @@ protected:
     /// the latest block header
     dev::eth::BlockHeader m_highestBlock;
     /// total number of nodes
-    u256 m_nodeNum = u256(0);
+    IDXTYPE m_nodeNum = 0;
     /// at-least number of valid nodes
-    u256 m_f = u256(0);
+    IDXTYPE m_f = 0;
 
     PROTOCOL_ID m_protocolId;
     /// type of this node (MinerAccount or ObserveAccount)
     NodeAccountType m_accountType;
     /// index of this node
-    u256 m_idx = u256(0);
+    IDXTYPE m_idx = 0;
     /// miner list
     mutable SharedMutex m_minerListMutex;
     dev::h512s m_minerList;
