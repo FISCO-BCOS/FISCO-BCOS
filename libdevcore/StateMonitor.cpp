@@ -334,8 +334,15 @@ void globalTimerLoop()
         sleep(gap);
         for (auto &state : monitorByTimeTable)
         {
-            //std::cout << "Report: " << state.first << std::endl;
-            state.second.timerToReport(sec_time);
+            try
+            {
+                //std::cout << "Report: " << state.first << std::endl;
+                state.second.timerToReport(sec_time);
+            }
+            catch (std::exception &e)
+            {
+                LOG(ERROR) << "Report failed for: " << e.what();
+            }
         }
     }
 }
