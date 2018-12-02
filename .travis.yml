@@ -54,9 +54,9 @@ install: |
       chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash -x ./tools/ci/check-commit.sh;
     fi
 script:
-    mkdir -p build && cd build && cmake -DTESTS=ON .. && make -j$(nproc) && CTEST_OUTPUT_ON_FAILURE=TRUE make test
+    mkdir -p build && cd build && cmake -DTESTS=ON .. && make -j$(nproc) && CTEST_OUTPUT_ON_FAILURE=TRUE make test && ../tools/build_chain.sh -l "127.0.0.1:1" -e bin/fisco-bcos && cd nodes && bash start_all.sh && $($(bash transTest.sh | grep "result" | wc -l) > 0)
 after_success:
-    bash tools/build_chain.sh -l "127.0.0.1:1" -e build/bin/fisco-bcos && cd nodes && bash start_all.sh && $($(bash transTest.sh | grep "result" | wc -l) > 0) && cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)
+    cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)
 after_failure:
     # rm -rf $TRAVIS_BUILD_DIR/build $TRAVIS_BUILD_DIR/deps
 webhooks:
