@@ -37,6 +37,7 @@
 
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
+#include <libdevcore/StateMonitor.h>
 
 #include <libevm/VM.h>
 #include <libevm/VMFactory.h>
@@ -329,8 +330,8 @@ class ExitHandler: public SystemManager
 {
 public:
 	void exit() { exitHandler(0); }
-	static void exitHandler(int) { s_shouldExit = true; }
-	bool shouldExit() const { return s_shouldExit; }
+	static void exitHandler(int) { s_shouldExit = true; statemonitor::shouldExit = true; }
+	bool shouldExit() const { return s_shouldExit && !statemonitor::isRunning; }
 
 private:
 	static bool s_shouldExit;
@@ -1387,9 +1388,6 @@ int main(int argc, char** argv)
 
 	auto caps = useWhisper ? set<string> {"eth", "shh"} : set<string> {"eth"};
 
-	//启动channelServer
-	ChannelRPCServer::Ptr channelServer;
-	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	//建立web3网络
 	dev::WebThreeDirect web3(
 	    WebThreeDirect::composeClientVersion("eth"),
@@ -1402,6 +1400,9 @@ int main(int argc, char** argv)
 	    testingMode
 	);
 
+	//启动channelServer
+	ChannelRPCServer::Ptr channelServer;
+	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	channelServer->setHost(web3.ethereum()->host());
 	web3.ethereum()->host().lock()->setWeb3Observer(channelServer->buildObserver());
 
