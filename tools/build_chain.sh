@@ -53,7 +53,7 @@ EXIT_CODE=-1
 
 check_env() {
     version=`openssl version 2>&1 | grep 1.0.2`
-    [ -z "$version" ] && {
+    [ ! -z "$version" ] || [ ! -z "`openssl version 2>&1 | grep 1.1.0`" ] || {
         echo "please install openssl 1.0.2k-fips!"
         #echo "please install openssl 1.0.2 series!"
         #echo "download openssl from https://www.openssl.org."
@@ -61,7 +61,6 @@ check_env() {
         exit $EXIT_CODE
     }
 }
-# check_env
 
 check_java() {
     ver=`java -version 2>&1 | grep version | grep 1.8`
@@ -639,4 +638,5 @@ echo "=========================================="
 echo "All completed. Files in $output_dir"
 }
 
+check_env
 main $@
