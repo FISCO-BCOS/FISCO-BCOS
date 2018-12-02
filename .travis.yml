@@ -48,6 +48,7 @@ addons:
     - cmake
     - libssl-dev
     - libleveldb-dev
+    - openssl
     - jq
 install: |
     if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
