@@ -37,6 +37,7 @@
 
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
+#include <libdevcore/StateMonitor.h>
 
 #include <libevm/VM.h>
 #include <libevm/VMFactory.h>
@@ -329,8 +330,8 @@ class ExitHandler: public SystemManager
 {
 public:
 	void exit() { exitHandler(0); }
-	static void exitHandler(int) { s_shouldExit = true; }
-	bool shouldExit() const { return s_shouldExit; }
+	static void exitHandler(int) { s_shouldExit = true; statemonitor::shouldExit = true; }
+	bool shouldExit() const { return s_shouldExit && !statemonitor::isRunning; }
 
 private:
 	static bool s_shouldExit;
