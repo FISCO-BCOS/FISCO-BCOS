@@ -307,7 +307,7 @@ void StateMonitorByTime::recordOnce(int code, uint64_t interval, data_t value, s
 void StateMonitorByTime::timerToReport(sec_t sec_time) 
 {
     //std::cout << "sec_time: " << sec_time << " interval: " << _interval << " code: " << code << " state_name: " << state_name << std::endl;
-    if (_is_timer_on && sec_time % _interval == 0)
+    if (_is_timer_on && _interval != 0 && sec_time % _interval == 0)
     {
         //sleep(_interval); //若在sleep时修改了interval，也要等本次跑完，下次新的interval才生效
         LOCK_MONITOR(Time); //此处是在线程中跑，共享name和info变量，所以需要加与入口一样的锁
