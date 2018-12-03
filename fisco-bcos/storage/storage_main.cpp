@@ -21,6 +21,7 @@
 #include "libinitializer/LogInitializer.h"
 #include "libstorage/MemoryTableFactory.h"
 #include <leveldb/db.h>
+#include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libstorage/LevelDBStorage.h>
@@ -109,15 +110,15 @@ int main(int argc, const char* argv[])
     leveldb::Options option;
     option.create_if_missing = true;
     option.max_open_files = 100;
-    leveldb::DB* dbPtr = NULL;
-    leveldb::Status s = leveldb::DB::Open(option, storagePath, &dbPtr);
+    dev::db::BasicLevelDB* dbPtr = NULL;
+    leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
     if (!s.ok())
     {
         cerr << "Open storage leveldb error: " << s.ToString() << endl;
         return -1;
     }
 
-    auto storageDB = std::shared_ptr<leveldb::DB>(dbPtr);
+    auto storageDB = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
     auto storage = std::make_shared<dev::storage::LevelDBStorage>();
     storage->setDB(storageDB);
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
