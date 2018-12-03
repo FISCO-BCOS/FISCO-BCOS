@@ -36,6 +36,11 @@ namespace dev
 {
 namespace consensus
 {
+typedef uint16_t IDXTYPE;
+typedef int64_t VIEWTYPE;
+static const IDXTYPE MAXIDX = UINT16_MAX;
+static const VIEWTYPE MAXVIEW = INT64_MAX;
+
 DEV_SIMPLE_EXCEPTION(DisabledFutureTime);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
 DEV_SIMPLE_EXCEPTION(ExistedBlock);

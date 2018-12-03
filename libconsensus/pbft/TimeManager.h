@@ -84,11 +84,11 @@ struct TimeManager
         }
     }
 
-    inline uint64_t calculateMaxPackTxNum(uint64_t defaultMaxTxNum, u256 const& view)
+    inline uint64_t calculateMaxPackTxNum(uint64_t defaultMaxTxNum, VIEWTYPE& view)
     {
         auto last_exec_finish_time = m_lastExecFinishTime;
         unsigned passed_time = 0;
-        if (view != u256(0))
+        if (view != 0)
             passed_time = utcTime() - m_lastConsensusTime;
         else
         {

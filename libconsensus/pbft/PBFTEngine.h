@@ -112,7 +112,7 @@ protected:
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
-    bool getNodeIDByIndex(h512& nodeId, const u256& idx) const;
+    bool getNodeIDByIndex(h512& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block)
     {
         ConsensusEngineBase::checkBlockValid(block);
@@ -337,7 +337,7 @@ protected:
     bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
     bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
     bool isValidViewChangeReq(
-        ViewChangeReq const& req, u256 const& source, std::ostringstream& oss);
+        ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss);
 
     template <class T>
     inline bool hasConsensused(T const& req) const
@@ -400,13 +400,13 @@ protected:
         return true;
     }
 
-    inline std::pair<bool, u256> getLeader() const
+    inline std::pair<bool, IDXTYPE> getLeader() const
     {
         if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
         {
-            return std::make_pair(false, Invalid256);
+            return std::make_pair(false, MAXIDX);
         }
-        return std::make_pair(true, (m_view + u256(m_highestBlock.number())) % u256(m_nodeNum));
+        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
     void checkMinerList(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
@@ -419,9 +419,9 @@ protected:
     void updateMinerList();
 
 protected:
-    u256 m_view = u256(0);
-    u256 m_toView = u256(0);
-    u256 m_connectedNode;
+    VIEWTYPE m_view = 0;
+    VIEWTYPE m_toView = 0;
+    IDXTYPE m_connectedNode;
     KeyPair m_keyPair;
     std::string m_baseDir;
     bool m_cfgErr = false;

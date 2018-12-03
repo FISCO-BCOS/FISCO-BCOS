@@ -53,7 +53,7 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     Guard l(m_mutex);
     resetConfig();
     m_consensusBlockNumber = 0;
-    m_view = m_toView = u256(0);
+    m_view = m_toView = 0;
     m_leaderFailed = false;
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
@@ -66,7 +66,7 @@ bool PBFTEngine::shouldSeal()
     if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
         return false;
     /// check leader
-    std::pair<bool, u256> ret = getLeader();
+    std::pair<bool, IDXTYPE> ret = getLeader();
     if (!ret.first)
         return false;
     /// fast view change
@@ -74,7 +74,7 @@ bool PBFTEngine::shouldSeal()
     {
         /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
         /// is not connect to leader.
-        h512 node_id = getMinerByIndex(ret.second.convert_to<size_t>());
+        h512 node_id = getMinerByIndex(ret.second);
         if (node_id != h512() && !m_service->isConnected(node_id))
         {
             /// PBFTENGINE_LOG(DEBUG) << "[shouldSeal:Leader Unconnected] trigger fastview change"
@@ -121,7 +121,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
 void PBFTEngine::resetConfig()
 {
-    m_idx = u256(-1);
+    m_idx = MAXIDX;
     updateMinerList();
     {
         ReadGuard l(m_minerListMutex);
@@ -130,14 +130,14 @@ void PBFTEngine::resetConfig()
             if (m_minerList[i] == m_keyPair.pub())
             {
                 m_accountType = NodeAccountType::MinerAccount;
-                m_idx = u256(i);
+                m_idx = i;
                 break;
             }
         }
-        m_nodeNum = u256(m_minerList.size());
+        m_nodeNum = m_minerList.size();
     }
-    m_f = (m_nodeNum - u256(1)) / u256(3);
-    m_cfgErr = (m_idx == u256(-1));
+    m_f = (m_nodeNum - 1) / 3;
+    m_cfgErr = (m_idx == MAXIDX);
 }
 
 /// init pbftMsgBackup
@@ -256,9 +256,9 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
     return succ;
 }
 
-bool PBFTEngine::getNodeIDByIndex(h512& nodeID, const u256& idx) const
+bool PBFTEngine::getNodeIDByIndex(h512& nodeID, const IDXTYPE& idx) const
 {
-    nodeID = getMinerByIndex(idx.convert_to<size_t>());
+    nodeID = getMinerByIndex(idx);
     if (nodeID == h512())
     {
         PBFTENGINE_LOG(ERROR) << "[#getNodeIDByIndex] Not miner [idx]:  " << idx << std::endl;
@@ -320,7 +320,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     bytesConstRef data, std::unordered_set<h512> const& filter)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    m_connectedNode = u256(sessions.size());
+    m_connectedNode = sessions.size();
     for (auto session : sessions)
     {
         /// get node index of the miner from m_minerList failed ?
@@ -551,7 +551,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
 
 void PBFTEngine::checkAndCommit()
 {
-    u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
+    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
     /// must be equal to minValidNodes:in case of callback checkAndCommit repeatly in a round of
     /// PBFT consensus
     if (sign_size == minValidNodes())
@@ -590,8 +590,8 @@ void PBFTEngine::checkAndCommit()
 /// check whether view and height is valid, if valid, then commit the block and clear the context
 void PBFTEngine::checkAndSave()
 {
-    u256 sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
-    u256 commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
+    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
+    size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
     if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
     {
         PBFTENGINE_LOG(TRACE) << "[#checkAndSave: CommitReq enough] [number/commitSize/hash]:  "
@@ -667,7 +667,7 @@ void PBFTEngine::reportBlock(Block const& block)
         m_highestBlock = block.blockHeader();
         if (m_highestBlock.number() >= m_consensusBlockNumber)
         {
-            m_view = m_toView = u256(0);
+            m_view = m_toView = 0;
             m_leaderFailed = false;
             m_timeManager.m_lastConsensusTime = utcTime();
             m_timeManager.m_changeCycle = 0;
@@ -818,13 +818,13 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         checkAndChangeView();
     else
     {
-        u256 min_view = u256(0);
+        VIEWTYPE min_view = 0;
         bool should_trigger = m_reqCache->canTriggerViewChange(
             min_view, m_f, m_toView, m_highestBlock, m_consensusBlockNumber);
         if (should_trigger)
         {
             m_timeManager.changeView();
-            m_toView = min_view - u256(1);
+            m_toView = min_view - 1;
             PBFTENGINE_LOG(INFO)
                 << "[#handleViewChangeMsg] Tigger fast-viewchange: [view/Toview/minView]:  "
                 << m_view << "/" << m_toView << "/" << min_view << "  [INFO]:  " << oss.str();
@@ -834,7 +834,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
 }
 
 bool PBFTEngine::isValidViewChangeReq(
-    ViewChangeReq const& req, u256 const& source, std::ostringstream& oss)
+    ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss)
 {
     if (m_reqCache->isExistViewChange(req))
     {
@@ -873,7 +873,7 @@ bool PBFTEngine::isValidViewChangeReq(
 
 void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
 {
-    if (req.view + u256(1) < m_toView)
+    if (req.view + 1 < m_toView)
     {
         PBFTENGINE_LOG(INFO) << "[#catchupView] [toView]: " << m_toView
                              << " [INFO]:  " << oss.str();
@@ -883,8 +883,8 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
 
 void PBFTEngine::checkAndChangeView()
 {
-    u256 count = m_reqCache->getViewChangeSize(m_toView);
-    if (count >= minValidNodes() - u256(1))
+    IDXTYPE count = m_reqCache->getViewChangeSize(m_toView);
+    if (count >= minValidNodes() - 1)
     {
         PBFTENGINE_LOG(INFO) << "[#checkAndChangeView] [Reach consensus, to_view]:  " << m_toView
                              << std::endl;
@@ -922,7 +922,7 @@ void PBFTEngine::checkTimeout()
         if (m_timeManager.isTimeout())
         {
             Timer t;
-            m_toView += u256(1);
+            m_toView += 1;
             m_leaderFailed = true;
             m_timeManager.updateChangeCycle();
             m_blockSync->noteSealingBlockNumber(m_blockChain->number());
@@ -996,7 +996,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);
         /// get the origin gen node id of the request
-        h512 gen_node_id = getMinerByIndex(pbft_msg.idx.convert_to<size_t>());
+        h512 gen_node_id = getMinerByIndex(pbft_msg.idx);
         if (gen_node_id != h512())
             filter.insert(gen_node_id);
         broadcastMsg(pbftMsg.packet_id, key, ref(pbftMsg.data), filter);
@@ -1060,12 +1060,11 @@ const std::string PBFTEngine::consensusStatus() const
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
     /// get connected node
-    statusObj.push_back(
-        json_spirit::Pair("connectedNodes", m_connectedNode.convert_to<uint64_t>()));
+    statusObj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
     /// get the current view
-    statusObj.push_back(json_spirit::Pair("currentView", m_view.convert_to<uint64_t>()));
+    statusObj.push_back(json_spirit::Pair("currentView", m_view));
     /// get toView
-    statusObj.push_back(json_spirit::Pair("toView", m_toView.convert_to<uint64_t>()));
+    statusObj.push_back(json_spirit::Pair("toView", m_toView));
     /// get leader failed or not
     statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
     statusObj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
