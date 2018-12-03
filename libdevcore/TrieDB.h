@@ -22,9 +22,9 @@
 #pragma once
 
 #include "Exceptions.h"
-#include <libdevcrypto/Hash.h>
 #include "TrieCommon.h"
 #include "easylog.h"
+#include <libdevcrypto/Hash.h>
 #include <memory>
 
 namespace dev

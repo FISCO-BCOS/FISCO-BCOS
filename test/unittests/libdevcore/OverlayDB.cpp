@@ -21,9 +21,9 @@
  * @date 2018-08-24
  */
 
+#include "libdevcrypto/Hash.h"
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/OverlayDB.h>
-#include <libdevcrypto/Hash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

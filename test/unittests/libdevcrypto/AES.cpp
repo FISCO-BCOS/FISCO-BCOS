@@ -15,8 +15,8 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "libdevcrypto/Hash.h"
 #include <libdevcore/Common.h>
-#include <libdevcrypto/Hash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 #include <libdevcrypto/Common.h>

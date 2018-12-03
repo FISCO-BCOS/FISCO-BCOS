@@ -23,7 +23,7 @@
 
 #include "libstoragestate/StorageState.h"
 #include "../libstorage/MemoryStorage.h"
-#include <libdevcrypto/Hash.h>
+#include "libdevcrypto/Hash.h"
 #include "libstorage/MemoryTableFactory.h"
 #include <boost/test/unit_test.hpp>
 

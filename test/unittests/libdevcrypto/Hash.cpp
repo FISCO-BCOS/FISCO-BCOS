@@ -20,9 +20,9 @@
  * @date 2018
  */
 
+#include "libdevcrypto/Hash.h"
 #include <libdevcore/Assertions.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcrypto/Hash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -33,7 +33,7 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
-//test sha3
+// test sha3
 BOOST_AUTO_TEST_CASE(testEmptySHA3)
 {
     std::string ts = EmptySHA3.hex();
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(testSha3CommonFunc)
                 "75759ba49fdef48a80840b669"
                 "9c4cc25ecb5e60f5dd0bf889381084ca6fc4199");
 }
- // test sha2
+// test sha2
 BOOST_AUTO_TEST_CASE(testSha256)
 {
     const std::string plainText = "123456ABC+";

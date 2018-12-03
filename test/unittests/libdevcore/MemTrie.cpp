@@ -17,7 +17,7 @@
 
 #include "MemTrie.h"
 
-#include <libdevcrypto/Hash.h>
+#include "libdevcrypto/Hash.h"
 #include <libdevcore/TrieCommon.h>
 
 namespace dev
