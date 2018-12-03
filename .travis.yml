@@ -41,7 +41,9 @@ git:
 cache:
   directories:
   - $TRAVIS_BUILD_DIR/deps
-  - $TRAVIS_BUILD_DIR/build/test
+  - $TRAVIS_BUILD_DIR/build
+before_cache:
+      - rm -rf $TRAVIS_BUILD_DIR/build/nodes
 addons:
   apt:
     packages:
