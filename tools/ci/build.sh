@@ -130,7 +130,7 @@ build_ubuntu_source()
 # build source
 execute_cmd "mkdir -p build && cd build/"
 execute_cmd "cmake -DTESTS=ON .. "
-execute_cmd "make"
+execute_cmd "make -j2"
 }
 
 build_centos_source()
