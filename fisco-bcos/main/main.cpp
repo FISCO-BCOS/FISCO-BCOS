@@ -46,6 +46,10 @@ int main(int argc, const char* argv[])
     /// callback initializer to init all ledgers
     auto initialize = std::make_shared<Initializer>();
     initialize->init(param.configPath());
+    /// input the success info
+    std::cout << "start FISCO BCOS SUCCESS" << std::endl;
+    std::cout << "FISCO BCOS Version Info:" << std::endl;
+    version(false);
     ExitHandler exitHandler;
     signal(SIGABRT, &ExitHandler::exitHandler);
     signal(SIGTERM, &ExitHandler::exitHandler);

@@ -39,6 +39,7 @@ function(create_build_info)
 
     set(ETH_BUILD_PLATFORM "${ETH_BUILD_OS}/${ETH_BUILD_COMPILER}")
 
+
     if (CMAKE_BUILD_TYPE)
         set(_cmake_build_type ${CMAKE_BUILD_TYPE})
     else()
