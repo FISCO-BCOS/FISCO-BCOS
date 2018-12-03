@@ -52,8 +52,7 @@ fail_message()
 EXIT_CODE=-1
 
 check_env() {
-    version=`openssl version 2>&1 | grep 1.0.2`
-    [ -z "$version" ] && {
+    [ ! -z "`openssl version 2>&1 | grep 1.0.2`" ] || [ ! -z "`openssl version 2>&1 | grep 1.1.0`" ] || {
         echo "please install openssl 1.0.2k-fips!"
         #echo "please install openssl 1.0.2 series!"
         #echo "download openssl from https://www.openssl.org."
@@ -61,7 +60,6 @@ check_env() {
         exit $EXIT_CODE
     }
 }
-# check_env
 
 check_java() {
     ver=`java -version 2>&1 | grep version | grep 1.8`
@@ -440,22 +438,29 @@ genTransTest()
 #! /bin/sh
 # This script only support for block number smaller than 65535 - 256
 
-ip_port=127.0.0.1:30302
+ip_port=http://127.0.0.1:30302
 trans_num=1
 if [ \$# -eq 1 ];then
     trans_num=\$1
 fi
+
 block_limit()
 {
-    blockNumber=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"syncStatus","params":[1],"id":83}' \$1 |jq .result.blockNumber\`
-    printf "%04x" \$((\$blockNumber+256))
+    result=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":[1],"id":83}' \$1\`
+    if [ \`echo \${result} | grep -i failed | wc -l\` -gt 0 ] || [ -z \${result} ];then
+        echo "getBlockNumber error!"
+        exit 1
+    fi
+    blockNumber=\`echo \${result}| cut -d \" -f 10\`
+    printf "%04x" \$((\$blockNumber+0x100))
 }
 
 send_a_tx()
 {
-    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\`date +%s%N\`85174876e7ff8609184e729fff82\`block_limit \$1\`94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
+    limit=\`block_limit \$1\`
+    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\`date +%s%N\`85174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
     #echo \$txBytes
-    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "'\$txBytes'"],"id":83}' \$1 |jq
+    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "'\$txBytes'"],"id":83}' \$1
 }
 
 send_many_tx()
@@ -548,11 +553,12 @@ fi
 echo "Generating node key ..."
 nodeid_list=""
 ip_list=""
-index=0
+count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
+    index=0
     for ((i=0;i<num;++i));do
         # echo "Generating IP:${ip} ID:${index} key files..."
         node_dir="$output_dir/node_${ip}_${index}"
@@ -580,17 +586,17 @@ for line in ${ip_array[*]};do
             # read_password
             openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
 		    keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
-            #copy ca.crt
             cp ${output_dir}/cert/ca.crt $node_dir/sdk/
             # gen_sdk_cert ${output_dir}/cert/agency $node_dir
             # mv $node_dir/* $node_dir/sdk/
         fi
         nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
-        nodeid_list=$"${nodeid_list}node.${index}=$nodeid
+        nodeid_list=$"${nodeid_list}node.${count}=$nodeid
     "
-        ip_list=$"${ip_list}node.${index}="${ip}:$(( port_start + index * 4 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + index * 4 ))"
     "
         ((++index))
+        ((++count))
     done
 done 
 cd ..
@@ -603,10 +609,10 @@ echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/replace_a
 echo "Generating node configuration..."
 
 #Generate node config files
-index=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
+    index=0
     [ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
     for ((i=0;i<num;++i));do
         echo "Generating IP:${ip} ID:${index} files..."
@@ -638,4 +644,5 @@ echo "=========================================="
 echo "All completed. Files in $output_dir"
 }
 
+check_env
 main $@

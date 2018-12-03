@@ -104,13 +104,13 @@ done
 #install ubuntu package
 install_ubuntu_deps()
 {
-install_ubuntu_package "cmake" "openssl" "libssl-dev" "libcurl4-openssl-dev" "libgmp-dev" "libleveldb-dev" "jq"
+install_ubuntu_package "cmake" "libssl-dev" "libleveldb-dev" "openssl"
 }
 
 # install centos package
 install_centos_deps()
 {
-install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel" "curl-devel" "gmp-devel" "jq"
+install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel"
 }
 
 install_all_deps()
