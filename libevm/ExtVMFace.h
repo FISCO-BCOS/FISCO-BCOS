@@ -24,7 +24,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMSchedule.h>
@@ -144,7 +144,7 @@ public:
 
     dev::h256 numberHash(int64_t x) const { return m_numberHash(x); }
 
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine();
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine() const;
 
     void setPrecompiledEngine(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine);
@@ -278,7 +278,7 @@ public:
     void setCreate(bool _isCreate) { m_isCreate = _isCreate; }
     void setStaticCall(bool _staticCall) { m_staticCall = _staticCall; }
 
-private:
+protected:
     EnvInfo const& m_envInfo;
 
 private:

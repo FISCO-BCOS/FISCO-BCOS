@@ -25,13 +25,13 @@
 #include "CryptoPP.h"
 #include "ECDHE.h"
 #include "Exceptions.h"
+#include "Hash.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/SHA3.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>

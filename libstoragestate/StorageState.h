@@ -118,7 +118,7 @@ public:
     /// @returns bytes() if no account exists at that address.
     /// @warning The reference to the code is only valid until the access to
     ///          other account. Do not keep it.
-    virtual bytes const code(Address const& _address) const override;
+    virtual bytes const& code(Address const& _address) const override;
 
     /// Get the code hash of an account.
     /// @returns EmptySHA3 if no account exists at that address or if there is no code associated
@@ -174,6 +174,7 @@ public:
     }
 
 private:
+    mutable std::unordered_map<Address, bytes> m_cache;
     void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256());
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
     u256 m_accountStartNonce;

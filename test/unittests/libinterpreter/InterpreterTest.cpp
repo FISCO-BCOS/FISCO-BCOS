@@ -21,9 +21,9 @@
  * @date 2018-09-04
  */
 
+#include "libdevcrypto/Hash.h"
 #include <evmc/evmc.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/SHA3.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libinterpreter/interpreter.h>

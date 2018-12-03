@@ -20,9 +20,9 @@
 #include "TransactionReceipt.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/SHA3.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/Common.h>
 #include <boost/optional.hpp>
 

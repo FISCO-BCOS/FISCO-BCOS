@@ -20,12 +20,13 @@
  */
 
 #include "CryptoPP.h"
+#include "Hash.h"
 #include <cryptopp/eccrypto.h>
 #include <cryptopp/oids.h>
 #include <cryptopp/osrng.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/Guards.h>
-#include <libdevcore/SHA3.h>
+
 
 // static_assert(CRYPTOPP_VERSION == 565, "Wrong Crypto++ version");
 
