@@ -134,6 +134,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s->savepoint();
+    m_memoryTableFactorySavePoint =
+        m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
     if (m_envInfo.precompiledEngine() &&
         m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
@@ -205,6 +207,8 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     m_s->incNonce(_sender);
 
     m_savepoint = m_s->savepoint();
+    m_memoryTableFactorySavePoint =
+        m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
 
     m_isCreation = true;
 
@@ -380,4 +384,6 @@ void Executive::revert()
     // Set result address to the null one.
     m_newAddress = {};
     m_s->rollback(m_savepoint);
+    auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
+    memoryTableFactory->rollback(m_savepoint);
 }

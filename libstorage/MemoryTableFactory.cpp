@@ -46,7 +46,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
-        STORAGE_LOG(DEBUG) << "Table:" << tableName << " already open:" << it->second;
+        STORAGE_LOG(TRACE) << "Table:" << tableName << " already open:" << it->second;
         return it->second;
     }
     auto tableInfo = make_shared<storage::TableInfo>();
@@ -61,7 +61,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
-            STORAGE_LOG(DEBUG) << tableName << " not exist in _sys_tables_.";
+            STORAGE_LOG(DEBUG) << tableName << " doesn't exist in _sys_tables_.";
             return nullptr;
         }
         auto entry = tableEntries->get(0);
@@ -69,9 +69,11 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
         tableInfo->key = entry->getField("key_field");
         string valueFields = entry->getField("value_field");
         boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
-        tableInfo->fields.emplace_back(STATUS);
-        tableInfo->fields.emplace_back(tableInfo->key);
     }
+    tableInfo->fields.emplace_back(STATUS);
+    tableInfo->fields.emplace_back(tableInfo->key);
+    tableInfo->fields.emplace_back("_hash_");
+    tableInfo->fields.emplace_back("_num_");
     MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
@@ -84,14 +86,15 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
 
     memoryTable->init(tableName);
     m_name2Table.insert({tableName, memoryTable});
+    STORAGE_LOG(TRACE) << "open " << tableName << " successfully.";
     return memoryTable;
 }
 
 Table::Ptr MemoryTableFactory::createTable(
     const string& tableName, const string& keyField, const std::string& valueField)
 {
-    /// STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum << " table:"
-    /// << tableName;
+    STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum
+                       << " table:" << tableName;
 
     auto sysTable = openTable(SYS_TABLES);
 
@@ -278,8 +281,5 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = "key";
         tableInfo->fields = std::vector<std::string>{"value"};
     }
-    tableInfo->fields.emplace_back(tableInfo->key);
-    tableInfo->fields.emplace_back(STATUS);
-
     return tableInfo;
 }

@@ -70,7 +70,7 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 }
 
 
-bool ExecutiveContext::isPrecompiled(Address address)
+bool ExecutiveContext::isPrecompiled(Address address) const
 {
     LOG(TRACE) << "PrecompiledEngine isPrecompiled:" << m_blockInfo.hash << " " << address;
 
@@ -84,7 +84,7 @@ bool ExecutiveContext::isPrecompiled(Address address)
     return p.get() != NULL;
 }
 
-Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address)
+Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
 {
     LOG(TRACE) << "PrecompiledEngine getPrecompiled:" << m_blockInfo.hash << " " << address;
 
