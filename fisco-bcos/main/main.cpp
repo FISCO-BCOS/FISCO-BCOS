@@ -48,7 +48,6 @@ int main(int argc, const char* argv[])
     initialize->init(param.configPath());
     /// input the success info
     std::cout << "start FISCO BCOS SUCCESS" << std::endl;
-    std::cout << "FISCO BCOS Version Info:" << std::endl;
     version(false);
     ExitHandler exitHandler;
     signal(SIGABRT, &ExitHandler::exitHandler);
