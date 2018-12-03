@@ -22,6 +22,7 @@
 language: cpp
 branches:
   only:
+      - feature-gm
       - dev
       - master
       - release
