@@ -50,6 +50,7 @@ using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
 class PBFTEngine : public ConsensusEngineBase
 {
 public:
+    virtual ~PBFTEngine() { stop(); }
     PBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
