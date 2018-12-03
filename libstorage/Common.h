@@ -31,12 +31,14 @@ namespace storage
 const char* const STATUS = "_status_";
 const char* const SYS_TABLES = "_sys_tables_";
 const char* const SYS_MINERS = "_sys_miners_";
-const std::string SYS_CURRENT_STATE = "_sys_current_state_";
-const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
-const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_current_transaction_count";
-const std::string SYS_VALUE = "value";
-const std::string SYS_TX_HASH_2_BLOCK = "_sys_tx_hash_2_block_";
-const std::string SYS_NUMBER_2_HASH = "_sys_number_2_hash_";
-const std::string SYS_HASH_2_BLOCK = "_sys_hash_2_block_";
+const char* const SYS_ACCESS_TABLE = "_sys_table_access_";
+const char* const SYS_CURRENT_STATE = "_sys_current_state_";
+const char* const SYS_KEY_CURRENT_NUMBER = "current_number";
+const char* const SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_current_transaction_count";
+const char* const SYS_VALUE = "value";
+const char* const SYS_TX_HASH_2_BLOCK = "_sys_tx_hash_2_block_";
+const char* const SYS_NUMBER_2_HASH = "_sys_number_2_hash_";
+const char* const SYS_HASH_2_BLOCK = "_sys_hash_2_block_";
+const char* const USER_TABLE_PREFIX = "_user_";
 }  // namespace storage
 }  // namespace dev

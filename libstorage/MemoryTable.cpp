@@ -80,10 +80,16 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
 }
 
 size_t dev::storage::MemoryTable::update(
-    const std::string& key, Entry::Ptr entry, Condition::Ptr condition)
+    const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     try
     {
+        if (!checkAuthority(options->caller))
+        {
+            STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->caller
+                                 << " failed! key:" << key;
+            return 0;
+        }
         STORAGE_LOG(DEBUG) << "Update MemoryTable: " << key;
 
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -138,10 +144,17 @@ size_t dev::storage::MemoryTable::update(
     return 0;
 }
 
-size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entry)
+size_t dev::storage::MemoryTable::insert(
+    const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options)
 {
     try
     {
+        if (!checkAuthority(options->caller))
+        {
+            STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->caller
+                                 << " failed! key:" << key;
+            return 0;
+        }
         STORAGE_LOG(DEBUG) << "Insert MemoryTable: " << key;
 
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -187,8 +200,15 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
     return 1;
 }
 
-size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr condition)
+size_t dev::storage::MemoryTable::remove(
+    const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
+    if (!checkAuthority(options->caller))
+    {
+        STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->caller
+                             << " failed! key:" << key;
+        return 0;
+    }
     STORAGE_LOG(DEBUG) << "Remove MemoryTable data" << key;
 
     Entries::Ptr entries = std::make_shared<Entries>();
@@ -425,7 +445,7 @@ void MemoryTable::setTableInfo(TableInfo::Ptr _tableInfo)
     m_tableInfo = _tableInfo;
 }
 
-void MemoryTable::checkFiled(Entry::Ptr entry)
+inline void MemoryTable::checkFiled(Entry::Ptr entry)
 {
     for (auto& it : *(entry->fields()))
     {
@@ -437,4 +457,13 @@ void MemoryTable::checkFiled(Entry::Ptr entry)
             throw std::invalid_argument("Invalid key.");
         }
     }
+}
+
+inline bool MemoryTable::checkAuthority(Address _caller)
+{
+    if (m_tableInfo->authorizedAddress.empty())
+        return true;
+    auto it = find(
+        m_tableInfo->authorizedAddress.cbegin(), m_tableInfo->authorizedAddress.cend(), _caller);
+    return it != m_tableInfo->authorizedAddress.cend();
 }

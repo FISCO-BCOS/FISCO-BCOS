@@ -59,6 +59,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         abi.abiOut(data, tableName);
 
         STORAGE_LOG(DEBUG) << "DBFactory open table:" << tableName;
+        tableName = storage::USER_TABLE_PREFIX + tableName;
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
         if (table)
@@ -87,6 +88,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         for (auto& str : fieldNameList)
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
+        tableName = storage::USER_TABLE_PREFIX + tableName;
         auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled);
         // tableName already exist
         unsigned errorCode = 0;

@@ -2,6 +2,7 @@
 
 #include "Common.h"
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/Address.h>
 #include <map>
 #include <memory>
 #include <vector>
@@ -17,6 +18,14 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::string name;
     std::string key;
     std::vector<std::string> fields;
+    std::vector<Address> authorizedAddress;
+};
+
+struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
+{
+    typedef std::shared_ptr<AccessOptions> Ptr;
+    AccessOptions() = default;
+    Address caller;
 };
 
 class Entry : public std::enable_shared_from_this<Entry>
@@ -148,9 +157,9 @@ public:
     virtual ~Table() {}
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
-    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition) = 0;
-    virtual size_t insert(const std::string& key, Entry::Ptr entry) = 0;
-    virtual size_t remove(const std::string& key, Condition::Ptr condition) = 0;
+    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual size_t insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual size_t remove(const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
 
     virtual Entry::Ptr newEntry();
     virtual Condition::Ptr newCondition();

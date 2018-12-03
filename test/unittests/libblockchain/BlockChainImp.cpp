@@ -116,13 +116,13 @@ public:
         return entries;
     }
 
-    virtual size_t insert(const std::string& key, Entry::Ptr entry) override
+    virtual size_t insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr) override
     {
         m_fakeStorage[m_table].insert(std::make_pair(key, entry));
         return 0;
     }
 
-    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition)
+    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr)
     {
         entry->setField(
             "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));
