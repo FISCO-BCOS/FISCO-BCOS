@@ -20,7 +20,7 @@
  *
  * The FixedHash fixed-size "hash" container type.
  */
-
+#if 0
 #pragma once
 
 #include "FixedHash.h"
@@ -34,6 +34,12 @@ namespace dev
 /// Calculate SHA3-256 hash of the given input and load it into the given output.
 /// @returns false if o_output.size() != 32.
 bool sha3(bytesConstRef _input, bytesRef o_output);
+
+// sha2 - sha256 replace Hash.h begin
+h256 sha256(bytesConstRef _input) noexcept;
+// sha2 - sha256 replace Hash.h end
+
+h160 ripemd160(bytesConstRef _input);
 
 /// Calculate SHA3-256 hash of the given input, returning as a 256-bit hash.
 inline h256 sha3(bytesConstRef _input)
@@ -120,3 +126,4 @@ extern h256 EmptySHA3;
 extern h256 EmptyListSHA3;
 
 }  // namespace dev
+#endif

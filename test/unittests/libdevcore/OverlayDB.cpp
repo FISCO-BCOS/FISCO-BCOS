@@ -23,7 +23,7 @@
 
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/OverlayDB.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

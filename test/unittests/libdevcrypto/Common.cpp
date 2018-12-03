@@ -22,7 +22,7 @@
  * @author yujiechen
  * @date 2018-08-28
  */
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <libdevcrypto/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>

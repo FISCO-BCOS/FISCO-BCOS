@@ -23,7 +23,7 @@
 #include "VM.h"
 #include "interpreter.h"
 
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 
 #include <include/BuildInfo.h>
 

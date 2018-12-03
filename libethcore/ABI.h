@@ -24,7 +24,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 
 #include <libdevcore/easylog.h>
 

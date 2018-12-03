@@ -23,7 +23,7 @@
 #pragma once
 #include <libconsensus/Common.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>

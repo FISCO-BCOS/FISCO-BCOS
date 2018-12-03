@@ -23,7 +23,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <libdevcore/TrieDB.h>
 #include <libethcore/Common.h>
 

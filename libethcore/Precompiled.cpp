@@ -20,7 +20,6 @@
  */
 
 #include "Precompiled.h"
-#include <libdevcore/SHA3.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>

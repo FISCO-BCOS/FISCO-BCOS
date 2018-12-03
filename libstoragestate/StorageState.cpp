@@ -24,7 +24,7 @@
  */
 
 #include "StorageState.h"
-#include "libdevcore/SHA3.h"
+#include <libdevcrypto/Hash.h>
 #include "libethcore/Exceptions.h"
 #include "libstorage/MemoryTableFactory.h"
 

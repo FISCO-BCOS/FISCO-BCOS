@@ -23,7 +23,7 @@
 
 #include <evmc/evmc.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libinterpreter/interpreter.h>

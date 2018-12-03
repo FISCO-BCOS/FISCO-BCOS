@@ -16,7 +16,7 @@
 */
 
 #include <libdevcore/Common.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 #include <libdevcrypto/Common.h>

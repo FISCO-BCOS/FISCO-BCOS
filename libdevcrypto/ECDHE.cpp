@@ -21,7 +21,7 @@
 
 #include "ECDHE.h"
 #include "CryptoPP.h"
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 
 using namespace std;
 using namespace dev;

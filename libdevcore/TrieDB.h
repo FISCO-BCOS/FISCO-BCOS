@@ -22,7 +22,7 @@
 #pragma once
 
 #include "Exceptions.h"
-#include "SHA3.h"
+#include <libdevcrypto/Hash.h>
 #include "TrieCommon.h"
 #include "easylog.h"
 #include <memory>
