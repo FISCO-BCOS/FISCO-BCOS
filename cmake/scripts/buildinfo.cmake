@@ -49,7 +49,7 @@ execute_process(
 )
 
 execute_process(
-    COMMAND date "+%Y_%m_%d %H:%M:%S" 
+    COMMAND date "+%Y%m%d %H:%M:%S" 
     OUTPUT_VARIABLE FISCO_BCOS_BUILD_TIME OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
     )
 
