@@ -107,6 +107,7 @@ public:
     {
         m_messageFactory = _messageFactory;
     }
+    bi::tcp::endpoint tcpClient() const { return m_tcpClient; }
 
 private:
     /// called by 'startedWorking' to accept connections
@@ -140,6 +141,9 @@ private:
 
     std::string m_listenHost = "";
     uint16_t m_listenPort = 0;
+
+    // ip and port information of the connected peer
+    bi::tcp::endpoint m_tcpClient;
 
     std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> m_connectionHandler;
 

@@ -228,6 +228,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
         if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
         {
             m_timeManager.changeView();
+            m_timeManager.m_changeCycle = 0;
             m_leaderFailed = true;
             m_signalled.notify_all();
         }
@@ -845,8 +846,8 @@ bool PBFTEngine::isValidViewChangeReq(
         PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
         return false;
     }
-    if (req.idx == source)
-        catchupView(req, oss);
+    /*if (req.idx == source)
+        catchupView(req, oss);*/
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
@@ -888,6 +889,7 @@ void PBFTEngine::checkAndChangeView()
         PBFTENGINE_LOG(INFO) << "[#checkAndChangeView] [Reach consensus, to_view]:  " << m_toView
                              << std::endl;
         m_leaderFailed = false;
+        m_timeManager.m_lastConsensusTime = utcTime();
         m_view = m_toView;
         m_reqCache->triggerViewChange(m_view);
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());

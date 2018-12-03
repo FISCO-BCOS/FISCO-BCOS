@@ -40,11 +40,11 @@ namespace js = json_spirit;
 class Params
 {
 public:
-    Params() : m_txSpeed(10), m_groupSize(1) {}
+    Params() : m_txSpeed(10) {}
 
     Params(boost::program_options::variables_map const& vm,
         boost::program_options::options_description const& option)
-      : m_txSpeed(10), m_groupSize(1)
+      : m_txSpeed(10)
     {
         initParams(vm, option);
     }
@@ -54,24 +54,19 @@ public:
     {
         if (vm.count("txSpeed") || vm.count("t"))
             m_txSpeed = vm["txSpeed"].as<float>();
-        if (vm.count("groupSize") || vm.count("n"))
-            m_groupSize = vm["groupSize"].as<int>();
     }
 
-    int groupSize() const { return m_groupSize; }
     float txSpeed() { return m_txSpeed; }
 
 private:
     float m_txSpeed;
-    dev::GROUP_ID m_groupSize;
 };
 
 static Params initCommandLine(int argc, const char* argv[])
 {
     boost::program_options::options_description server_options("p2p module of FISCO-BCOS");
     server_options.add_options()("txSpeed,t", boost::program_options::value<float>(),
-        "transaction generate speed")("groupSize,n", boost::program_options::value<int>(),
-        "group size")("help,h", "help of p2p module of FISCO-BCOS");
+        "transaction generate speed")("help,h", "help of p2p module of FISCO-BCOS");
 
     boost::program_options::variables_map vm;
     try

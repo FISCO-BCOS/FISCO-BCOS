@@ -289,7 +289,6 @@ void Host::start()
     {
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
-
         auto self = std::weak_ptr<Host>(shared_from_this());
         m_hostThread = std::make_shared<std::thread>([self] {
             auto host = self.lock();
@@ -367,6 +366,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             }
             else
             {
+                m_tcpClient = socket->remote_endpoint();
                 /// get the public key of the server during handshake
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));

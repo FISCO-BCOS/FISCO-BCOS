@@ -123,6 +123,7 @@ public:
 
     virtual KeyPair keyPair() { return m_alias; }
     virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
+    void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId);
 
 private:
     NodeIDs getPeersByTopic(std::string const& topic);

@@ -98,7 +98,6 @@ void Session::asyncSendMessage(
     }
 
     addSeqCallback(message->seq(), handler);
-    // m_seq2Callback->insert(std::make_pair(message->seq(), handler));
 
     auto buffer = std::make_shared<bytes>();
     message->encode(*buffer);
@@ -272,7 +271,7 @@ void Session::drop(DisconnectReason _reason)
             }
         }
     }
-    m_seq2Callback->clear();
+    clearSeqCallback();
 
     if (server && m_messageHandler)
     {
@@ -407,19 +406,19 @@ void Session::onMessage(
     auto server = m_server.lock();
     if (m_actived && server && server->haveNetwork())
     {
-        auto it = m_seq2Callback->find(message->seq());
-        if (it != m_seq2Callback->end() && !message->isRequestPacket())
+        ResponseCallback::Ptr callbackPtr = getCallbackBySeq(message->seq());
+        if (callbackPtr && !message->isRequestPacket())
         {
-            SESSION_LOG(TRACE) << "Found callback: " << message->seq();
+            SESSION_LOG(TRACE) << "Found callbackPtr: " << message->seq();
 
-            if (it->second->timeoutHandler)
+            if (callbackPtr->timeoutHandler)
             {
-                it->second->timeoutHandler->cancel();
+                callbackPtr->timeoutHandler->cancel();
             }
 
-            if (it->second->callbackFunc)
+            if (callbackPtr->callbackFunc)
             {
-                auto callback = it->second->callbackFunc;
+                auto callback = callbackPtr->callbackFunc;
                 if (callback)
                 {
                     auto self = std::weak_ptr<Session>(shared_from_this());
@@ -464,19 +463,15 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     }
 
     auto server = m_server.lock();
-
-    auto it = m_seq2Callback->find(seq);
-    if (it != m_seq2Callback->end())
-    {
-        if (server)
-        {
-            server->threadPool()->enqueue([=]() {
-                NetworkException e(P2PExceptionType::NetworkTimeout,
-                    g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
-                it->second->callbackFunc(e, Message::Ptr());
-
-                m_seq2Callback->erase(it);
-            });
-        }
-    }
+    if (!server)
+        return;
+    ResponseCallback::Ptr callbackPtr = getCallbackBySeq(seq);
+    if (!callbackPtr)
+        return;
+    server->threadPool()->enqueue([=]() {
+        NetworkException e(
+            P2PExceptionType::NetworkTimeout, g_P2PExceptionMsg[P2PExceptionType::NetworkTimeout]);
+        callbackPtr->callbackFunc(e, Message::Ptr());
+        removeSeqCallback(seq);
+    });
 }
