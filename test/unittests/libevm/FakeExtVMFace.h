@@ -1,8 +1,8 @@
 #pragma once
 #include <evmc/helpers.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcrypto/Hash.h>
 #include <libdevcrypto/Common.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/ExtVMFace.h>

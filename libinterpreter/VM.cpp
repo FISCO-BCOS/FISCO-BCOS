@@ -23,7 +23,7 @@
 #include "VM.h"
 #include "interpreter.h"
 
-#include <libdevcrypto/Hash.h>
+#include "libdevcrypto/Hash.h"
 
 #include <include/BuildInfo.h>
 

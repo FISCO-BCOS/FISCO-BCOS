@@ -25,7 +25,6 @@
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Hash.h>
-
 #include <libdevcore/easylog.h>
 
 namespace dev

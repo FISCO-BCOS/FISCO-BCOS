@@ -24,8 +24,8 @@
 #include "Exceptions.h"
 #include <libdevcore/Base64.h>
 #include <libdevcore/CommonIO.h>
-#include <libdevcrypto/Hash.h>
 #include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
 
 using namespace std;
 using namespace dev;
