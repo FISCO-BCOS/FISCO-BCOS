@@ -417,7 +417,11 @@ bool SyncMaster::maintainDownloadingQueue()
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
         SYNCLOG(TRACE) << "[Download] [BlockSync] Download finish. Latest hash: " << latestHash
                        << " Expected hash: " << m_syncStatus->knownLatestHash;
-        assert(m_syncStatus->knownLatestHash == latestHash);
+
+        if (m_syncStatus->knownLatestHash != latestHash)
+            SYNCLOG(FATAL) << "[Download] State error: This node's version is not compatable with "
+                              "others! All data should be cleared of this node before restart."
+                           << endl;
         return true;
     }
     return false;
