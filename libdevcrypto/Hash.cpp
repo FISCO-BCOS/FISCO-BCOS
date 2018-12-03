@@ -21,13 +21,13 @@
 
 #include "Hash.h"
 
+#include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
+#include <secp256k1_sha256.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <secp256k1_sha256.h>
-#include <libdevcore/RLP.h>
 //#if ETH_ENCRYPTTYPE
 //#include <libdevcrypto/sm3/sm3.h>
 //#endif
@@ -195,7 +195,7 @@ bool sha3(bytesConstRef _input, bytesRef o_output)
     return true;
 }
 
-  //add sha2 -- sha256 to this file begin
+// add sha2 -- sha256 to this file begin
 h256 sha256(bytesConstRef _input) noexcept
 {
     secp256k1_sha256_t ctx;
@@ -205,8 +205,8 @@ h256 sha256(bytesConstRef _input) noexcept
     secp256k1_sha256_finalize(&ctx, hash.data());
     return hash;
 }
-  //add sha2 -- sha256 to this file end
-  // add RIPEMD-160
+// add sha2 -- sha256 to this file end
+// add RIPEMD-160
 namespace rmd160
 {
 /********************************************************************\
