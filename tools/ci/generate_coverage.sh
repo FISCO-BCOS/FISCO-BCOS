@@ -11,7 +11,7 @@
 #!/bin/sh
 
 
-current_dir=`pwd`"/.."
+current_dir=`pwd`"/../.."
 prev_dir=`pwd`
 logical_core_num=`cat /proc/cpuinfo | grep "processor" | sort -u |  uniq | wc -l`
 
@@ -132,7 +132,7 @@ check_deps()
 build_ubuntu_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake .. -DCOVERAGE=ON"
+    execute_cmd "cmake .. -DCOVERAGE=ON -DTESTS=ON"
     execute_cmd "make -j${logical_core_num}"
     #execute_cmd "make install && cd ${current_dir}"
 }
@@ -140,7 +140,7 @@ build_ubuntu_source() {
 build_centos_source() {
     # build source
     execute_cmd "mkdir -p build && cd build/"
-    execute_cmd "cmake3 .. -DCOVERAGE=ON"
+    execute_cmd "cmake3 .. -DCOVERAGE=ON -DTESTS=ON"
     execute_cmd "make -j${logical_core_num}"
     #execute_cmd "make install && cd ${current_dir}"
 }
@@ -160,7 +160,7 @@ build_source() {
 }
 
 run_unitest() {
-    execute_cmd "cd  $prev_dir/ci"
+    execute_cmd "cd  $prev_dir/"
     sh test.sh #continue when unitest does't pass
     execute_cmd "cd $prev_dir"
 }
