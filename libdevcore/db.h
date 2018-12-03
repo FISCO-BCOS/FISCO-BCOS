@@ -87,4 +87,7 @@ using errinfo_dbStatusCode = boost::error_info<struct tag_dbStatusCode, Database
 using errinfo_dbStatusString = boost::error_info<struct tag_dbStatusString, std::string>;
 
 }  // namespace db
+
+static const std::string c_cypherDataKeyName = "cypherDataKey";
+
 }  // namespace dev
