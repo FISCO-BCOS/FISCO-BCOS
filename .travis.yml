@@ -22,6 +22,7 @@
 language: cpp
 branches:
   only:
+      - feature-diskencryption
       - dev
       - master
       - release
