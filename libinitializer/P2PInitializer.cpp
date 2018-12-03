@@ -57,10 +57,9 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         INITIALIZER_LOG(ERROR)
                             << "[#P2PInitializer::initConfig] parse address faield: [data]: "
                             << it.second.data();
-                        BOOST_THROW_EXCEPTION(
-                            InvalidConfig() << errinfo_comment(
-                                "[#P2PInitializer::initConfig] parse address faield, [data]: " +
-                                it.second.data()));
+                        ERROR_OUTPUT
+                            << "[#P2PInitializer::initConfig] parse address faield, [data]: "
+                            << it.second.data() << std::endl;
                         exit(1);
                     }
                     NodeIPEndpoint endpoint;
@@ -74,10 +73,9 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     INITIALIZER_LOG(ERROR)
                         << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]: "
                         << it.second.data() << "/" << e.what();
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]:" +
-                            it.second.data() + "/" + boost::diagnostic_information(e)));
+                    ERROR_OUTPUT
+                        << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]:"
+                        << it.second.data() << "/" << boost::diagnostic_information(e) << std::endl;
                     exit(1);
                 }
             }
@@ -108,8 +106,8 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     {
         INITIALIZER_LOG(ERROR) << "[#P2PInitializer] initConfig for P2PInitializer failed [EINFO]: "
                                << boost::diagnostic_information(e);
-        BOOST_THROW_EXCEPTION(InitFailed() << errinfo_comment(
-                                  "Init p2p failed, EINFO:" + boost::diagnostic_information(e)));
+        ERROR_OUTPUT << "[#P2PInitializer] P2PInitializer failed, EINFO:"
+                     << boost::diagnostic_information(e) << std::endl;
         exit(1);
     }
 }

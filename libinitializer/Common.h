@@ -29,6 +29,7 @@
 #include <boost/property_tree/ptree.hpp>
 
 #define INITIALIZER_LOG(LEVEL) LOG(LEVEL) << "[#INITIALIZER] "
+#define ERROR_OUTPUT std::cout << "[#INITIALIZER] "
 
 namespace dev
 {

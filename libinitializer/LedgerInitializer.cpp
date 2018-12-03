@@ -54,9 +54,8 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 INITIALIZER_LOG(ERROR)
                     << "[#LedgerInitializer::initConfig] parse groupID failed: [data]: "
                     << it.first.data();
-                BOOST_THROW_EXCEPTION(
-                    InvalidConfig()
-                    << errinfo_comment("[#LedgerInitializer::initConfig] parse groupID failed!"));
+                ERROR_OUTPUT << "[#LedgerInitializer::initConfig] parse groupID failed!"
+                             << std::endl;
                 exit(1);
             }
 
@@ -66,9 +65,8 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
             {
                 INITIALIZER_LOG(ERROR) << "[#LedgerInitializer::initConfig] initSingleGroup for "
                                        << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
-                BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                          "[#LedgerInitializer::initConfig] initSingleGroup for " +
-                                          s[1] + " failed!"));
+                ERROR_OUTPUT << "[#LedgerInitializer::initConfig] initSingleGroup for " << s[1]
+                             << " failed!" << std::endl;
                 exit(1);
             }
         }
@@ -79,9 +77,8 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     {
         SESSION_LOG(ERROR)
             << "[#LedgerInitializer::initConfig] parse group config faield: [EINFO]: " << e.what();
-        BOOST_THROW_EXCEPTION(InitFailed() << errinfo_comment("[#LedgerInitiailizer::initConfig] "
-                                                              "initSingleGroup failed: [EINFO]: " +
-                                                              boost::diagnostic_information(e)));
+        ERROR_OUTPUT << "[#LedgerInitiailizer::initConfig] initSingleGroup failed: [EINFO]: "
+                     << boost::diagnostic_information(e) << std::endl;
         exit(1);
     }
 }

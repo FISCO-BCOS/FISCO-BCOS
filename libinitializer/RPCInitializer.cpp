@@ -33,9 +33,9 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
         INITIALIZER_LOG(ERROR) << "[#RPCInitializer] initConfig for RPCInitializer failed";
-        BOOST_THROW_EXCEPTION(InvalidListenPort() << errinfo_comment(
-                                  "[#RPCInitializer] initConfig for RPCInitializer "
-                                  "failed! Invalid ListenPort for RPC, must between [0,65536]"));
+        ERROR_OUTPUT << "[#RPCInitializer] initConfig for RPCInitializer failed! Invalid "
+                        "ListenPort for RPC, must between [0,65536]"
+                     << std::endl;
         exit(1);
     }
     /// init channelServer
@@ -80,9 +80,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     {
         INITIALIZER_LOG(ERROR) << "[#RPCInitializer] init RPC/channelserver failed, [EINFO]: "
                                << boost::diagnostic_information(e);
-        BOOST_THROW_EXCEPTION(
-            InitFailed() << errinfo_comment(
-                "Init rpc/channelserver failed, EINFO:" + boost::diagnostic_information(e)));
+        ERROR_OUTPUT << "Init rpc/channelserver failed, EINFO: " << boost::diagnostic_information(e)
+                     << std::endl;
         exit(1);
     }
 }
