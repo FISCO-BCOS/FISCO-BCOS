@@ -107,7 +107,7 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	void ping() override;
 	void announcement(h256 const &_allPeerHash) override;
 
-	bool isConnected() const override { return m_socket->isConnected(); }
+	bool isConnected() const override { return !m_dropped && m_socket->isConnected(); }
 
 	NodeID id() const override;
 
