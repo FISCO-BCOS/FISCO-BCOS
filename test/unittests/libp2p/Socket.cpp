@@ -20,11 +20,11 @@
  * @author: yujiechen
  * @date 2018-09-19
  */
-#if 0
-#include "../../../libnetwork/Socket.h"
+
+#include "libnetwork/Socket.h"
 
 #include <libdevcore/FileSystem.h>
-#include <libinitializer/SecureInitiailizer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <openssl/ssl.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(testSocket)
     ba::io_service m_io_service;
     std::string address = "127.0.0.1";
     int port = 30303;
-    NodeIPEndpoint m_endpoint(address, port, port);
+    NodeIPEndpoint m_endpoint(bi::address::from_string(address), port, port);
     setDataDir(getTestPath().string() + "/fisco-bcos-data");
 
     boost::property_tree::ptree pt;
@@ -63,4 +63,3 @@ BOOST_AUTO_TEST_CASE(testSocket)
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
-#endif

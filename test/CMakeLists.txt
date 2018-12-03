@@ -19,7 +19,7 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 file(GLOB_RECURSE sources "*.cpp" "*.h" "*.sol")
-
+set(TESTETH_ARGS "--testpath=${CMAKE_SOURCE_DIR}/test/data")
 foreach(file ${sources})
     file(STRINGS ${file} test_list_raw REGEX "BOOST_.*TEST_(SUITE|CASE|SUITE_END)")
     set(TestSuite "DEFAULT")
@@ -46,7 +46,7 @@ foreach(file ${sources})
                     list(APPEND allSuites ${TestSuite})
                     separate_arguments(TESTETH_ARGS)
                     set(TestEthArgs -t ${TestSuitePathFixed} -- ${TESTETH_ARGS})
-                    add_test(NAME ${TestSuitePathFixed} WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/test COMMAND test-fisco-bcos ${TestEthArgs})
+                    add_test(NAME ${TestSuitePathFixed} WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND ./bin/test-fisco-bcos ${TestEthArgs})
                 endif()
             endif()
         elseif(test MATCHES "^CASE .*")
@@ -56,7 +56,7 @@ foreach(file ${sources})
                     string(SUBSTRING ${TestSuitePath} 1 -1 TestSuitePathFixed)
                     separate_arguments(TESTETH_ARGS)
                     set(TestEthArgs -t ${TestSuitePathFixed}/${TestCase} -- ${TESTETH_ARGS})
-                    add_test(NAME ${TestSuitePathFixed}/${TestCase} WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/test COMMAND testeth ${TestEthArgs})
+                    add_test(NAME ${TestSuitePathFixed}/${TestCase} WORKING_DIRECTORY ${CMAKE_BINARY_DIR} COMMAND ./bin/test-fisco-bcos ${TestEthArgs})
                 endif()
             endif()
         elseif (";${test_raw};" MATCHES "BOOST_AUTO_TEST_SUITE_END()")
@@ -98,9 +98,5 @@ target_link_libraries(test-fisco-bcos rpc)
 
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
-
-if (UNIX AND NOT APPLE)
-	target_link_libraries(test-fisco-bcos pthread)
-endif()
 
 install(TARGETS test-fisco-bcos DESTINATION bin)
