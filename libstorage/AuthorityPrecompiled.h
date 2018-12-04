@@ -15,41 +15,39 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file MinerPrecompiled.h
- *  @author ancelmo
- *  @date 20180921
+ *  @author caryliao
+ *  @date 20181204
  */
 #pragma once
 #include "libblockverifier/ExecutiveContext.h"
-#include "libstorage/CRUDPrecompiled.h"
+
 namespace dev
 {
 namespace blockverifier
 {
 #if 0
-contract Miner {
-    function add(string) public constant returns();
-    function remove(string) public returns();
+contract Authority {
+    function insert(string table_name, string addr) public returns(uint);
+    function remove(string table_name, string addr) public returns(uint);
 }
 {
-    "b0c8f9dc": "add(string)",
-    "80599e4b": "remove(string)"
+    "06e63ff8": "insert(string,string)",
+    "44590a7e": "remove(string,string)"
 }
 #endif
 
-/// \brief Sign of the miner is valid or not
-const char* const NODE_TYPE = "type";
-const char* const NODE_TYPE_MINER = "miner";
-const char* const NODE_TYPE_OBSERVER = "observer";
-const char* const NODE_KEY_NODEID = "node_id";
-const char* const NODE_KEY_ENABLENUM = "enable_num";
-const char* const PRI_KEY = "node";
+/// _sys_table_access_ table fields
+const char* const SYS_AC_FIELD_TABLE_NAME = "table_name";
+const char* const SYS_AC_FIELD_ADDRESS = "address";
+const char* const SYS_AC_FIELD_RESERVE_FIELD = "reserve_field";
+const char* const SYS_AC_FIELD_ENABLENUM = "enable_num";
 
-class MinerPrecompiled : public CRUDPrecompiled
+class AuthorityPrecompiled : public Precompiled
 {
 public:
-    typedef std::shared_ptr<MinerPrecompiled> Ptr;
+    typedef std::shared_ptr<AuthorityPrecompiled> Ptr;
 
-    virtual ~MinerPrecompiled(){};
+    virtual ~AuthorityPrecompiled(){};
 
     virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
 };

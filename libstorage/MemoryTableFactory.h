@@ -56,7 +56,7 @@ public:
 
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
-    void getAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
+    void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
