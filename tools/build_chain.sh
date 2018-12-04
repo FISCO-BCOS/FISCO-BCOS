@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 ca_file= #CA key
 node_num=1 
@@ -306,7 +307,7 @@ generate_config_ini()
 ;WARNING: group 0 is forbided
 [group]
     group_data_path=data
-    ;group_config.1=conf/group.1.ini
+    group_config.1=conf/group.1.ini
 
 ;certificate configuration
 [secure]
@@ -347,8 +348,8 @@ generate_group_ini()
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
-    ;only support PBFT now
-    consensusType=pbft
+    ;consensus algorithm type, now support PBFT(consensusType=pbft) and Raft(consensusType=raft)
+    consensusType=raft
     ;the max number of transactions of a block
     maxTransNum=1000
     ;the node id of leaders
