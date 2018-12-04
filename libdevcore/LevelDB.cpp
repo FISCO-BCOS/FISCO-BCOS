@@ -86,8 +86,8 @@ LevelDB::LevelDB(boost::filesystem::path const& _path, leveldb::ReadOptions _rea
 
 
     if (g_BCOSConfig.diskEncryption.enable)
-        status = EncryptedLevelDB::Open(_dbOptions, _path.string(), &db,
-            g_BCOSConfig.diskEncryption.keyCenterUrl, g_BCOSConfig.diskEncryption.cypherDataKey);
+        status = EncryptedLevelDB::Open(
+            _dbOptions, _path.string(), &db, g_BCOSConfig.diskEncryption.cypherDataKey);
     else
         status = BasicLevelDB::Open(_dbOptions, _path.string(), &db);
     checkStatus(status, _path);

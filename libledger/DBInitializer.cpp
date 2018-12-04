@@ -75,8 +75,7 @@ void DBInitializer::initLevelDBStorage()
             DBInitializer_LOG(DEBUG)
                 << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler" << std::endl;
             status = EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path,
-                &(pleveldb), g_BCOSConfig.diskEncryption.keyCenterUrl,
-                g_BCOSConfig.diskEncryption.cypherDataKey);
+                &(pleveldb), g_BCOSConfig.diskEncryption.cypherDataKey);
         }
         else
         {

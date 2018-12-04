@@ -25,6 +25,7 @@
 #include "Common.h"
 #include "GlobalConfigureInitializer.h"
 #include "InitializerInterface.h"
+#include "KeyCenterInitializer.h"
 #include "LedgerInitializer.h"
 #include "LogInitializer.h"
 #include "P2PInitializer.h"
