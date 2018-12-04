@@ -21,6 +21,7 @@
  */
 
 #include "EncryptedLevelDB.h"
+#include <libdevcore/easylog.h>
 
 using namespace std;
 using namespace dev;
@@ -93,13 +94,13 @@ void EncryptedLevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice
     m_writeBatch.Put(_key, leveldb::Slice(enData));
 }
 
-EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::string& _name,
-    const std::string& _keyCenterUrl, const std::string& _cypherDataKey)
-  : BasicLevelDB(), m_keyCenter(_keyCenterUrl), m_cypherDataKey(_cypherDataKey)
+EncryptedLevelDB::EncryptedLevelDB(
+    const leveldb::Options& _options, const std::string& _name, const std::string& _cypherDataKey)
+  : BasicLevelDB(), m_cypherDataKey(_cypherDataKey)
 {
     // Encrypted leveldb initralization
 
-    //Open db
+    // Open db
     auto db = static_cast<leveldb::DB*>(nullptr);
     m_openStatus = leveldb::DB::Open(_options, _name, &db);
 
@@ -117,14 +118,14 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     {
     case OpenDBStatus::FirstCreation:
         if (m_cypherDataKey.empty())
-            m_cypherDataKey = m_keyCenter.generateCypherDataKey();
+            m_cypherDataKey = g_keyCenter.generateCypherDataKey();
         setCypherDataKey(m_cypherDataKey);
         ENCDBLOG(DEBUG) << "[Open] First creation encrypted DB" << endl;
         // No need break here, break with Encrypted type
     case OpenDBStatus::Encrypted:
         ENCDBLOG(DEBUG)
             << "[open] Encrypted leveldb open success [name/db/keyCenterUrl/cypherDataKey]: "
-            << _name << "/" << m_db << "/" << _keyCenterUrl << "/" << m_cypherDataKey << endl;
+            << _name << "/" << m_db << "/" << g_keyCenter.url() << "/" << m_cypherDataKey << endl;
         break;
 
     case OpenDBStatus::NoEncrypted:
@@ -143,7 +144,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     }
 
     // Decrypt cypher key from keycenter
-    m_dataKey = m_keyCenter.getDataKey(m_cypherDataKey);
+    m_dataKey = g_keyCenter.getDataKey(m_cypherDataKey);
     if (m_dataKey == "")
     {
         m_openStatus = leveldb::Status::IOError(leveldb::Slice("Get dataKey failed"));
@@ -152,9 +153,9 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
 }
 
 leveldb::Status EncryptedLevelDB::Open(const leveldb::Options& _options, const std::string& _name,
-    BasicLevelDB** _dbptr, const std::string& _keyCenterUrl, const std::string& _cypherDataKey)
+    BasicLevelDB** _dbptr, const std::string& _cypherDataKey)
 {
-    *_dbptr = new EncryptedLevelDB(_options, _name, _keyCenterUrl, _cypherDataKey);
+    *_dbptr = new EncryptedLevelDB(_options, _name, _cypherDataKey);
     leveldb::Status status = (*_dbptr)->OpenStatus();
 
     if (!status.ok())

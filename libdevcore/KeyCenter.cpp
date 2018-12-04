@@ -28,11 +28,6 @@
 using namespace std;
 using namespace dev;
 
-KeyCenter::KeyCenter(const std::string& _url) : m_url(_url)
-{
-    LOG(DEBUG) << "[KeyCenter] Instance url: " << m_url << endl;
-};
-
 const std::string KeyCenter::getDataKey(const std::string& _cypherDataKey)
 {
     // Fake it
@@ -45,9 +40,14 @@ const std::string KeyCenter::generateCypherDataKey()
     return std::string("0123456701234567012345670123456") + std::to_string(utcTime() % 10);
 }
 
-void KeyCenter::instanceKeyCenter(const std::string& _url)
+void KeyCenter::setUrl(const std::string& _url)
 {
-    if (g_keyCenter)
-        BOOST_THROW_EXCEPTION(KeyCenterAlreadyInit());
-    g_keyCenter = std::make_shared<KeyCenter>(_url);
+    LOG(DEBUG) << "[KeyCenter] Instance url: " << m_url << endl;
+    m_url = _url;
+}
+
+KeyCenter& KeyCenter::instance()
+{
+    static KeyCenter ins;
+    return ins;
 }

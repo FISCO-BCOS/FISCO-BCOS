@@ -25,6 +25,7 @@
 #include <leveldb/db.h>
 #include <leveldb/slice.h>
 #include <libdevcore/BasicLevelDB.h>
+#include <libdevcore/KeyCenter.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 #include <string>
@@ -34,26 +35,6 @@ namespace dev
 namespace db
 {
 #define ENCDBLOG(_OBV) LOG(_OBV) << " [ENCDB] "
-
-class KeyCenter
-{
-public:
-    KeyCenter(const std::string _url) : m_url(_url){};
-    const std::string getDataKey(const std::string& _cypherDataKey)
-    {
-        // Fake it
-        return "01234567012345670123456701234567";
-    };
-
-    const std::string generateCypherDataKey()
-    {
-        // Fake it
-        return std::string("0123456701234567012345670123456") + std::to_string(utcTime() % 10);
-    }
-
-private:
-    std::string m_url;
-};
 
 class EncryptedLevelDBWriteBatch : public LevelDBWriteBatch
 {
@@ -69,11 +50,11 @@ class EncryptedLevelDB : public BasicLevelDB
 {
 public:
     EncryptedLevelDB(const leveldb::Options& _options, const std::string& _name,
-        const std::string& _keyCenterUrl = "", const std::string& _cypherDataKey = "");
+        const std::string& _cypherDataKey);
     ~EncryptedLevelDB(){};
 
     static leveldb::Status Open(const leveldb::Options& _options, const std::string& _name,
-        BasicLevelDB** _dbptr, const std::string& _keyCenterUrl = "",
+        BasicLevelDB** _dbptr,
         const std::string& _cypherDataKey = "");  // DB
                                                   // open
     leveldb::Status Get(const leveldb::ReadOptions& _options, const leveldb::Slice& _key,
@@ -92,7 +73,6 @@ public:
     };
 
 private:
-    KeyCenter m_keyCenter;
     std::string m_cypherDataKey;
     std::string m_dataKey;
 

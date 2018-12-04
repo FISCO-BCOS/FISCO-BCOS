@@ -30,18 +30,19 @@ class KeyCenter
 public:
     using Ptr = std::shared_ptr<KeyCenter>;
 
-    KeyCenter(const std::string& _url = "");
+    KeyCenter(){};
 
     const std::string getDataKey(const std::string& _cypherDataKey);
     const std::string generateCypherDataKey();
+    void setUrl(const std::string& _url = "");
     const std::string url() { return m_url; }
 
-    static void instanceKeyCenter(const std::string& _url);
+    static KeyCenter& instance();
 
 private:
     std::string m_url;
 };
 
-static KeyCenter::Ptr g_keyCenter;  // Only one keycenter in a node
+#define g_keyCenter KeyCenter::instance()  // Only one keycenter in a node
 
 }  // namespace dev
