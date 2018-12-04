@@ -122,7 +122,8 @@ public:
         return 0;
     }
 
-    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr)
+    virtual size_t update(
+        const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr)
     {
         entry->setField(
             "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));

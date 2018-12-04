@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Common.h"
-#include <libdevcore/FixedHash.h>
 #include <libdevcore/Address.h>
+#include <libdevcore/FixedHash.h>
 #include <map>
 #include <memory>
 #include <vector>
@@ -157,9 +157,12 @@ public:
     virtual ~Table() {}
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
-    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
-    virtual size_t insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
-    virtual size_t remove(const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual size_t insert(const std::string& key, Entry::Ptr entry,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual size_t remove(const std::string& key, Condition::Ptr condition,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
 
     virtual Entry::Ptr newEntry();
     virtual Condition::Ptr newCondition();

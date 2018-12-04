@@ -42,8 +42,7 @@ public:
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) { return ""; }
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param) = 0;
-    // virtual std::shared_ptr<storage::Table> openTable(
-    //     std::shared_ptr<ExecutiveContext> context, const std::string& tableName) = 0;
+
     virtual uint32_t getParamFunc(bytesConstRef param)
     {
         auto funcBytes = param.cropped(0, 4);
