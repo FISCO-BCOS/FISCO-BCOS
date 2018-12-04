@@ -40,7 +40,8 @@ enum ProtocolID
     Topic = 2,
     PBFT = 8,
     BlockSync = 9,
-    TxPool = 10
+    TxPool = 10,
+    Raft = 11,
 };
 
 enum ExtraIndex
