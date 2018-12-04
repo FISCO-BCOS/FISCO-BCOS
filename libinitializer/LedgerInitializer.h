@@ -45,7 +45,15 @@ public:
     void setP2PService(std::shared_ptr<P2PInterface> _p2pService) { m_p2pService = _p2pService; }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
-    ~LedgerInitializer()
+    ~LedgerInitializer() { stopAll(); }
+
+    void startAll()
+    {
+        if (m_ledgerManager)
+            m_ledgerManager->startAll();
+    }
+
+    void stopAll()
     {
         if (m_ledgerManager)
             m_ledgerManager->stopAll();

@@ -53,6 +53,7 @@ void Initializer::init(std::string const& _path)
         m_rpcInitializer->setSSLContext(m_secureInitializer->SSLContext());
         m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
         m_rpcInitializer->initConfig(pt);
+        m_ledgerInitializer->startAll();
     }
     catch (std::exception& e)
     {

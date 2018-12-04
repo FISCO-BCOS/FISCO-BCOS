@@ -54,7 +54,8 @@ void ConsensusEngineBase::stop()
     ENGINE_LOG(INFO) << "[#Stop ConsensusEngineBase]";
     m_startConsensusEngine = false;
     doneWorking();
-    stopWorking();
+    if (isWorking())
+        stopWorking();
 }
 
 /// update m_sealing and receiptRoot
