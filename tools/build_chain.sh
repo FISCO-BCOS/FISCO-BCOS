@@ -61,22 +61,6 @@ check_env() {
     }
 }
 
-check_java() {
-    ver=`java -version 2>&1 | grep version | grep 1.8`
-    tm=`java -version 2>&1 | grep "Java(TM)"`
-    [ -z "$ver" -o -z "$tm" ] && {
-        echo "please install java Java(TM) 1.8 series!"
-        echo "use \"java -version\" command to check."
-        exit $EXIT_CODE
-    }
-
-    which keytool >/dev/null 2>&1
-    [ $? != 0 ] && {
-        echo "keytool command not exists!"
-        exit $EXIT_CODE
-    }
-}
-
 usage() {
 printf "%s\n" \
 "usage command gen_chain_cert chaindir|
@@ -250,7 +234,6 @@ read_password() {
 }
 
 gen_sdk_cert() {
-    check_java
 
     agency="$2"
     sdkpath="$3"
@@ -266,8 +249,8 @@ gen_sdk_cert() {
     
     read_password
     openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
-    keytool -importkeystore -srckeystore $sdkpath/keystore.p12 -srcstoretype pkcs12 -srcstorepass $jks_passwd\
-        -destkeystore $sdkpath/client.keystore -deststoretype jks -deststorepass $jks_passwd -alias client 2>/dev/null 
+    # keytool -importkeystore -srckeystore $sdkpath/keystore.p12 -srcstoretype pkcs12 -srcstorepass $jks_passwd\
+    #     -destkeystore $sdkpath/client.keystore -deststoretype jks -deststorepass $jks_passwd -alias client 2>/dev/null 
 
     echo "build $sdk sdk cert successful!"
 }
@@ -409,26 +392,32 @@ basicConstraints = CA:TRUE
 EOF
 }
 
+generate_script_template()
+{
+    local filepath=$1
+    cat << EOF > "${filepath}"
+#!/bin/bash
+SHELL_FOLDER=\$(cd \$(dirname \$0);pwd)
+
+EOF
+    chmod +x ${filepath}
+}
+
 generate_node_scripts()
 {
     local output=$1
-    cat << EOF > "$output/start.sh"
-#!/bin/bash
-SHELL_FOLDER=\$(cd "\$(dirname "\$0")";pwd)
+    generate_script_template "$output/start.sh"
+    cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/fisco-bcos
 cd \${SHELL_FOLDER}
 nohup setsid \${fisco_bcos} -c config.ini&
 EOF
-
-    cat << EOF > "$output/stop.sh"
-#!/bin/bash
-SHELL_FOLDER=\$(cd "\$(dirname "\$0")";pwd)
+    generate_script_template "$output/stop.sh"
+    cat << EOF >> "$output/stop.sh"
 fisco_bcos=\${SHELL_FOLDER}/fisco-bcos
 weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 kill \${weth_pid}
 EOF
-    chmod +x "$output/start.sh"
-    chmod +x "$output/stop.sh"
 }
 
 genTransTest()
@@ -525,7 +514,8 @@ if [ -z ${eth_path} ];then
     Download=true
 fi
 
-[ -d "$output_dir" ] || mkdir -p "$output_dir"
+dir_must_not_exists $output_dir
+mkdir -p "$output_dir"
 
 if [ "${Download}" = "true" ];then
     echo "Downloading fisco-bcos binary..." 
@@ -560,7 +550,6 @@ for line in ${ip_array[*]};do
     [ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
     index=0
     for ((i=0;i<num;++i));do
-        # echo "Generating IP:${ip} ID:${index} key files..."
         node_dir="$output_dir/node_${ip}_${index}"
         [ -d "$node_dir" ] && echo "$node_dir exist! Please delete!" && exit 1
         
@@ -585,7 +574,7 @@ for line in ${ip_array[*]};do
             mkdir -p $node_dir/sdk/
             # read_password
             openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
-		    keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
+		    # keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
             cp ${output_dir}/cert/ca.crt $node_dir/sdk/
             # gen_sdk_cert ${output_dir}/cert/agency $node_dir
             # mv $node_dir/* $node_dir/sdk/
@@ -600,12 +589,12 @@ for line in ${ip_array[*]};do
     done
 done 
 cd ..
-echo "#!/bin/bash" > "$output_dir/start_all.sh"
-echo "#!/bin/bash" > "$output_dir/stop_all.sh"
-echo "#!/bin/bash" > "$output_dir/replace_all.sh"
-echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/start_all.sh"
-echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/stop_all.sh"
-echo "SHELL_FOLDER=\$(cd \"\$(dirname \"\$0\")\";pwd)" >> "$output_dir/replace_all.sh"
+
+generate_script_template "$output_dir/start_all.sh"
+generate_script_template "$output_dir/stop_all.sh"
+generate_script_template "$output_dir/replace_all.sh"
+echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output_dir/start_all.sh"
+echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output_dir/stop_all.sh"
 echo "Generating node configuration..."
 
 #Generate node config files
@@ -621,18 +610,15 @@ for line in ${ip_array[*]};do
         generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         generate_node_scripts "$node_dir"
         cp "$eth_path" "$node_dir/fisco-bcos"
-        echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/start.sh" >> "$output_dir/start_all.sh"
-        echo "bash \${SHELL_FOLDER}/node_${ip}_${index}/stop.sh" >> "$output_dir/stop_all.sh"
+        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${index}\" && bash \${SHELL_FOLDER}/node_${ip}_${index}/start.sh; fi" >> "$output_dir/start_all.sh"
+        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"stop node_${ip}_${index}\" && bash \${SHELL_FOLDER}/node_${ip}_${index}/stop.sh; fi" >> "$output_dir/stop_all.sh"
         echo "cp \${1} \${SHELL_FOLDER}/node_${ip}_${index}/" >> "$output_dir/replace_all.sh"
         ((++index))
         [ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
     done
-    chmod +x "$output_dir/start_all.sh"
-    chmod +x "$output_dir/stop_all.sh"
-    chmod +x "$output_dir/replace_all.sh"
 done 
-#rm $output_dir/build.log cert.cnf
 genTransTest
+rm $output_dir/build.log #cert.cnf
 echo "=========================================="
 echo "FISCO-BCOS Path : $eth_path"
 [ ! -z $ip_file ] && echo "IP List File    : $ip_file"
