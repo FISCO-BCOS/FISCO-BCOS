@@ -28,7 +28,10 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/RLP.h>
 #include <mutex>
+
+static const unsigned VBase = 27;
 
 namespace dev
 {
@@ -40,23 +43,32 @@ using Public = h512;
 
 /// A signature: 65 bytes: r: [0, 32), s: [32, 64), v: 64.
 /// @NOTE This is not endian-specific; it's just a bunch of bytes.
+#if FISCO_GM
+using Signature = h1024;
+using VType = h512;
+#else
 using Signature = h520;
-
+using VType = byte;
+#endif
 struct SignatureStruct
 {
     SignatureStruct() = default;
-    SignatureStruct(Signature const& _s) { *(h520*)this = _s; }
-    SignatureStruct(h256 const& _r, h256 const& _s, byte _v) : r(_r), s(_s), v(_v) {}
-
-    operator Signature() const { return *(h520 const*)this; }
+    SignatureStruct(Signature const& _s);
+    SignatureStruct(h256 const& _r, h256 const& _s, VType _v);
+    SignatureStruct(RLP const& rlp);
+    void encode(RLPStream& _s) const noexcept;
+    void check() const noexcept;
+    operator Signature() const { return *(Signature const*)this; }
 
     /// @returns true if r,s,v values are valid, otherwise false
     bool isValid() const noexcept;
 
     h256 r;
     h256 s;
-    byte v = 0;
+    VType v;
 };
+
+// m_vrs.rlp()
 
 /// A vector of secrets.
 using Secrets = std::vector<Secret>;

@@ -21,12 +21,14 @@
 
 #include "Transaction.h"
 #include "EVMSchedule.h"
+#include "Exceptions.h"
 #include <libdevcore/vector_ref.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/Exceptions.h>
+#include <libdevcrypto/Exceptions.h>
 
 using namespace std;
 using namespace dev;
+// using namespace dev::crypto;
 using namespace dev::eth;
 Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 {
@@ -62,14 +64,7 @@ void Transaction::decode(RLP const& rlp, CheckTransaction _checkSig)
 
         m_data = rlp[6].toBytes();
 
-        int const v = rlp[7].toInt<int>();
-        h256 const r = rlp[8].toInt<u256>();
-        h256 const s = rlp[9].toInt<u256>();
-
-        if ((v != VBase) && (v != VBase + 1))
-            BOOST_THROW_EXCEPTION(InvalidSignature());
-
-        m_vrs = SignatureStruct{r, s, static_cast<byte>(v - VBase)};
+        m_vrs = SignatureStruct(rlp);
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
@@ -139,8 +134,10 @@ void Transaction::encode(bytes& _trans, IncludeSignature _sig) const
         if (!m_vrs)
             BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
-        _s << (int)(m_vrs->v + VBase) << (u256)m_vrs->r << (u256)m_vrs->s;
+        // _s << (int)(m_vrs->v + VBase) << (u256)m_vrs->r << (u256)m_vrs->s;
+        m_vrs->encode(_s);
     }
+
     _s.swapOut(_trans);
 }
 
@@ -151,9 +148,7 @@ void Transaction::checkLowS() const
 {
     if (!m_vrs)
         BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
-
-    if (m_vrs->s > c_secp256k1n / 2)
-        BOOST_THROW_EXCEPTION(InvalidSignature());
+    m_vrs->check();
 }
 
 int64_t Transaction::baseGasRequired(

@@ -56,6 +56,12 @@ macro(configure_project)
         add_definitions(-DETH_TESTS)
     endif()
 
+    # guomi
+    eth_default_option(BUILD_GM OFF)
+    if (BUILD_GM)
+        add_definitions(-DFISCO_GM)
+    endif()
+
     #debug
     eth_default_option(DEBUG OFF)
     if (DEBUG)

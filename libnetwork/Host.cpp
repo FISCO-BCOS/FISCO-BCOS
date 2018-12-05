@@ -42,7 +42,6 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/easylog.h>
-#include <libdevcrypto/Rsa.h>
 #include <libethcore/CommonJS.h>
 #include <boost/algorithm/string.hpp>
 #include <chrono>

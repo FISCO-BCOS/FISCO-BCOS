@@ -19,13 +19,16 @@
  * @date 2014
  */
 
-#include "AES.h"
+#include "../AES.h"
+
+#include "sm4/sm4.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
 #include <libdevcore/easylog.h>
+#include <openssl/sm4.h>
 #include <string.h>
 
 using namespace dev;
@@ -80,6 +83,8 @@ char* ascii2hex(const char* chs, int len)
     }
     return ascii;
 }
+
+
 bytes dev::origAesCBCEncrypt(
     bytesConstRef plainData, string const& keyData, int keyLen, bytesConstRef ivData)
 {
@@ -112,11 +117,32 @@ bytes dev::origAesCBCDecrypt(
 bytes dev::aesCBCEncrypt(
     bytesConstRef plainData, string const& keyData, int keyLen, bytesConstRef ivData)
 {
-    return origAesCBCEncrypt(plainData, keyData, keyLen, ivData);
+    // LOG(DEBUG)<<"GUOMI SM4 EN TYPE......................";
+    int padding = plainData.size() % 16;
+    int nSize = 16 - padding;
+    int inDataVLen = plainData.size() + nSize;
+    bytes inDataV(inDataVLen);
+    memcpy(inDataV.data(), (unsigned char*)plainData.data(), plainData.size());
+    memset(inDataV.data() + plainData.size(), nSize, nSize);
+
+    bytes enData(inDataVLen);
+    SM4::getInstance().setKey((unsigned char*)keyData.data(), keyData.size());
+    SM4::getInstance().cbcEncrypt(
+        inDataV.data(), enData.data(), inDataVLen, (unsigned char*)ivData.data(), 1);
+    // LOG(DEBUG)<<"ivData:"<<ascii2hex((const char*)ivData.data(),ivData.size());
+    return enData;
 }
 
 bytes dev::aesCBCDecrypt(
     bytesConstRef cipherData, string const& keyData, int keyLen, bytesConstRef ivData)
 {
-    return origAesCBCDecrypt(cipherData, keyData, keyLen, ivData);
+    // LOG(DEBUG)<<"GM SM4 DE TYPE....................";
+    bytes deData(cipherData.size());
+    SM4::getInstance().setKey((unsigned char*)keyData.data(), keyData.size());
+    SM4::getInstance().cbcEncrypt((unsigned char*)cipherData.data(), deData.data(),
+        cipherData.size(), (unsigned char*)ivData.data(), 0);
+    int padding = deData.data()[cipherData.size() - 1];
+    int deLen = cipherData.size() - padding;
+    deData.resize(deLen);
+    return deData;
 }

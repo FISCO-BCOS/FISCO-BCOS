@@ -20,16 +20,16 @@
  * @date 2014
  */
 
-#include "Common.h"
-#include "AES.h"
-#include "CryptoPP.h"
-#include "ECDHE.h"
-#include "Exceptions.h"
-#include "Hash.h"
-#include <cryptopp/aes.h>
+
+#include "libdevcrypto/AES.h"
+#include "libdevcrypto/Common.h"
+#include "libdevcrypto/CryptoPP.h"
+#include "libdevcrypto/ECDHE.h"
+#include "libdevcrypto/Exceptions.h"
+#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/gm/sm2/sm2.h"
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
-#include <cryptopp/sha.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
@@ -40,8 +40,6 @@ using namespace std;
 using namespace dev;
 using namespace dev::crypto;
 
-static const u256 c_secp256k1n(
-    "115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
 SignatureStruct::SignatureStruct(Signature const& _s)
 {
@@ -50,31 +48,25 @@ SignatureStruct::SignatureStruct(Signature const& _s)
 
 SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
 
+void SignatureStruct::encode(RLPStream& _s) const noexcept
+{
+    _s << (VType)(v) << (u256)r << (u256)s;
+}
 SignatureStruct::SignatureStruct(RLP const& rlp)
 {
-    v = rlp[7].toInt<byte>();  // 7
+    v = rlp[7].toInt<u512>();  // 7
     r = rlp[8].toInt<u256>();  // 8
     s = rlp[9].toInt<u256>();  // 9
 
-    if ((int(v) != VBase) && (int(v) != VBase + 1))
+    if (!v)
         BOOST_THROW_EXCEPTION(eth::InvalidSignature());
-
-    v = static_cast<byte>(v - VBase);
 }
-
-
-void SignatureStruct::encode(RLPStream& _s) const noexcept
-{
-    _s << (VType)(v + VBase) << (u256)r << (u256)s;
-}
-
 
 void SignatureStruct::check() const noexcept
 {
-    if (s > c_secp256k1n / 2)
+    if (!v)
         BOOST_THROW_EXCEPTION(eth::InvalidSignature());
 }
-
 
 namespace
 {
@@ -90,7 +82,6 @@ secp256k1_context const* getCtx()
     return s_ctx.get();
 }
 
-
 }  // namespace
 
 bool dev::SignatureStruct::isValid() const noexcept
@@ -98,7 +89,7 @@ bool dev::SignatureStruct::isValid() const noexcept
     static const h256 s_max{"0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"};
     static const h256 s_zero;
 
-    return (v <= 1 && r > s_zero && s > s_zero && r < s_max && s < s_max);
+    return (v >= h512(1) && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
 
 /**
@@ -108,20 +99,9 @@ bool dev::SignatureStruct::isValid() const noexcept
  */
 Public dev::toPublic(Secret const& _secret)
 {
-    auto* ctx = getCtx();
-    secp256k1_pubkey rawPubkey;
-    // Creation will fail if the secret key is invalid.
-    if (!secp256k1_ec_pubkey_create(ctx, &rawPubkey, _secret.data()))
-        return {};
-    std::array<byte, 65> serializedPubkey;
-    size_t serializedPubkeySize = serializedPubkey.size();
-    secp256k1_ec_pubkey_serialize(
-        ctx, serializedPubkey.data(), &serializedPubkeySize, &rawPubkey, SECP256K1_EC_UNCOMPRESSED);
-    assert(serializedPubkeySize == serializedPubkey.size());
-    // Expect single byte header of value 0x04 -- uncompressed public key.
-    assert(serializedPubkey[0] == 0x04);
-    // Create the Public skipping the header.
-    return Public{&serializedPubkey[1], Public::ConstructFromPointer};
+    string pri = toHex(bytesConstRef{_secret.data(), 32});
+    string pub = SM2::getInstance().priToPub(pri);
+    return Public(fromHex(pub));
 }
 
 /**
@@ -233,99 +213,60 @@ std::pair<bytes, h128> dev::encryptSymNoAuth(SecureFixedHash<16> const& _k, byte
 
 bytes dev::encryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _plain)
 {
-    if (_k.size() != 16 && _k.size() != 24 && _k.size() != 32)
-        return bytes();
-    CryptoPP::SecByteBlock key(_k.data(), _k.size());
-    try
-    {
-        CryptoPP::CTR_Mode<CryptoPP::AES>::Encryption e;
-        e.SetKeyWithIV(key, key.size(), _iv.data());
-        bytes ret(_plain.size());
-        e.ProcessData(ret.data(), _plain.data(), _plain.size());
-        return ret;
-    }
-    catch (CryptoPP::Exception& _e)
-    {
-        cerr << _e.what() << endl;
-        return bytes();
-    }
+    return bytes();
 }
 
 bytesSec dev::decryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _cipher)
 {
-    if (_k.size() != 16 && _k.size() != 24 && _k.size() != 32)
-        return bytesSec();
-    CryptoPP::SecByteBlock key(_k.data(), _k.size());
-    try
-    {
-        CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption d;
-        d.SetKeyWithIV(key, key.size(), _iv.data());
-        bytesSec ret(_cipher.size());
-        d.ProcessData(ret.writable().data(), _cipher.data(), _cipher.size());
-        return ret;
-    }
-    catch (CryptoPP::Exception& _e)
-    {
-        cerr << _e.what() << endl;
-        return bytesSec();
-    }
+    return bytesSec();
 }
 
 Public dev::recover(Signature const& _sig, h256 const& _message)
 {
-    int v = _sig[64];
-    if (v > 3)
-        return {};
-
-    auto* ctx = getCtx();
-    secp256k1_ecdsa_recoverable_signature rawSig;
-    if (!secp256k1_ecdsa_recoverable_signature_parse_compact(ctx, &rawSig, _sig.data(), v))
-        return {};
-
-    secp256k1_pubkey rawPubkey;
-    if (!secp256k1_ecdsa_recover(ctx, &rawPubkey, &rawSig, _message.data()))
-        return {};
-
-    std::array<byte, 65> serializedPubkey;
-    size_t serializedPubkeySize = serializedPubkey.size();
-    secp256k1_ec_pubkey_serialize(
-        ctx, serializedPubkey.data(), &serializedPubkeySize, &rawPubkey, SECP256K1_EC_UNCOMPRESSED);
-    assert(serializedPubkeySize == serializedPubkey.size());
-    // Expect single byte header of value 0x04 -- uncompressed public key.
-    assert(serializedPubkey[0] == 0x04);
-    // Create the Public skipping the header.
-    return Public{&serializedPubkey[1], Public::ConstructFromPointer};
+    SignatureStruct sign(_sig);
+    if (!sign.isValid())
+    {
+        return Public{};
+    }
+    if (verify(sign.v, _sig, _message))
+    {
+        return sign.v;
+    }
+    return Public{};
+    // return sign.pub;
 }
 
+static const u256 c_secp256k1n(
+    "115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
 Signature dev::sign(Secret const& _k, h256 const& _hash)
 {
-    auto* ctx = getCtx();
-    secp256k1_ecdsa_recoverable_signature rawSig;
-    if (!secp256k1_ecdsa_sign_recoverable(ctx, &rawSig, _hash.data(), _k.data(), nullptr, nullptr))
-        return {};
-
-    Signature s;
-    int v = 0;
-    secp256k1_ecdsa_recoverable_signature_serialize_compact(ctx, s.data(), &v, &rawSig);
-
-    SignatureStruct& ss = *reinterpret_cast<SignatureStruct*>(&s);
-    ss.v = static_cast<byte>(v);
-    if (ss.s > c_secp256k1n / 2)
+    string pri = toHex(bytesConstRef{_k.data(), 32});
+    string r = "", s = "";
+    if (!SM2::getInstance().sign((const char*)_hash.data(), h256::size, pri, r, s))
     {
-        ss.v = static_cast<byte>(ss.v ^ 1);
-        ss.s = h256(c_secp256k1n - u256(ss.s));
+        return Signature{};
     }
-    assert(ss.s <= c_secp256k1n / 2);
-    return s;
+    string pub = SM2::getInstance().priToPub(pri);
+    // LOG(DEBUG) <<"_hash:"<<toHex(_hash.asBytes())<<"gmSign:"<< r + s + pub;
+    bytes byteSign = fromHex(r + s + pub);
+    // LOG(DEBUG)<<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
+    return Signature{byteSign};
 }
 
 bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
 {
-    // TODO: Verify w/o recovery (if faster).
-    if (!_p)
-        return false;
-    return _p == recover(_s, _hash);
+    string signData = toHex(_s.asBytes());
+    // LOG(DEBUG)<<"verify signData:"<<signData;
+    // LOG(DEBUG)<<"_hash:"<<toHex(_hash.asBytes());
+    string pub = toHex(_p.asBytes());
+    pub = "04" + pub;
+    // LOG(DEBUG)<<"verify pub:"<<pub;
+    bool lresult = SM2::getInstance().verify(
+        signData, signData.length(), (const char*)_hash.data(), h256::size, pub);
+    // LOG(DEBUG)<<"verify lresult:"<<lresult;
+    // assert(lresult);
+    return lresult;
 }
 
 

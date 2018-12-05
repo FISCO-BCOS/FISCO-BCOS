@@ -19,9 +19,11 @@
  * @date 2018
  */
 
-#include "Hash.h"
+#include "../Hash.h"
+#include "libdevcrypto/gm/sm3/sm3.h"
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
+#include <libethcore/Exceptions.h>
 #include <secp256k1_sha256.h>
 #include <cstdint>
 #include <cstdio>
@@ -182,19 +184,22 @@ bool sha3(bytesConstRef _input, bytesRef o_output)
     // FIXME: What with unaligned memory?
     if (o_output.size() != 32)
         return false;
-    keccak::sha3_256(o_output.data(), 32, _input.data(), _input.size());
+
+    SM3Hash::getInstance().sm3(
+        (const unsigned char*)_input.data(), _input.size(), (unsigned char*)o_output.data());
+    //#endif
     return true;
 }
 
 // add sha2 -- sha256 to this file begin
 h256 sha256(bytesConstRef _input) noexcept
 {
-    secp256k1_sha256_t ctx;
-    secp256k1_sha256_initialize(&ctx);
-    secp256k1_sha256_write(&ctx, _input.data(), _input.size());
-    h256 hash;
-    secp256k1_sha256_finalize(&ctx, hash.data());
-    return hash;
+    bytesRef o_output;
+    SM3Hash::getInstance().sm3(
+        (const unsigned char*)_input.data(), _input.size(), (unsigned char*)o_output.data());
+    //#endif
+    auto output = h256(toHex(o_output));
+    return output;
 }
 // add sha2 -- sha256 to this file end
 // add RIPEMD-160

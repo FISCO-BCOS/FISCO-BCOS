@@ -29,9 +29,13 @@ if (${BUILD_SHARED_LIBS})
     set(BOOST_CXXFLAGS "cxxflags=-fPIC")
 endif()
 
-set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
+set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
+if (BUILD_GM)
+set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${TASSL_INCLUDE_DIRS})
+else()
 set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${OPENSSL_INCLUDE_DIRS})
+endif()
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
