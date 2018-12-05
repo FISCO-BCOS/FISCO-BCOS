@@ -42,6 +42,9 @@ e.g
     build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
 EOF
 
+#     cat << EOF > ip_conf
+# 127.0.0.1:4 agency1 1,2
+# EOF
 exit 0
 }
 
@@ -326,13 +329,13 @@ generate_config_ini()
 ;group.2.ini can be populated from group.1.ini
 ;WARNING: group 0 is forbided
 [group]
-    group_data_path=data
+    group_data_path=data/
     ${group_conf_list}
 
 ;certificate configuration
 [secure]
     ;directory the certificates located in
-    data_path=${conf_path}
+    data_path=${conf_path}/
     ;the node private key file
     key=node.key
     ;the node certificate file
@@ -562,7 +565,7 @@ else
 fi
 
 if [ "${use_ip_param}" = "true" ];then
-    for i in {0..${#ip_array[*]}};do
+    for i in `seq 0 ${#ip_array[*]}`;do
         agency_array[i]="agency"
     done
 fi

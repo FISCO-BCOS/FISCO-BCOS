@@ -36,10 +36,10 @@ using namespace dev::initializer;
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
     std::string dataPath = pt.get<std::string>("secure.data_path", "./fisco-bcos-data/");
-    std::string key = dataPath + pt.get<std::string>("secure.key", "node.key");
-    std::string cert = dataPath + pt.get<std::string>("secure.cert", "node.crt");
-    std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "ca.crt");
-    std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
+    std::string key = dataPath + "/" + pt.get<std::string>("secure.key", "node.key");
+    std::string cert = dataPath + "/" + pt.get<std::string>("secure.cert", "node.crt");
+    std::string caCert = dataPath + "/" + pt.get<std::string>("secure.ca_cert", "ca.crt");
+    std::string caPath = dataPath + "/" + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
     if (!key.empty())
     {
