@@ -132,8 +132,7 @@ struct RaftMsgPacket
         }
     }
 
-    void setOtherField(
-        u256 const& _nodeIdx, Public const& _nodeId, std::string const& _endpoint)
+    void setOtherField(u256 const& _nodeIdx, Public const& _nodeId, std::string const& _endpoint)
     {
         nodeIdx = static_cast<raft::NodeIndex>(_nodeIdx);
         nodeId = _nodeId;
