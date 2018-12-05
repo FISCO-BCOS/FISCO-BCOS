@@ -18,6 +18,7 @@ conf_path="conf"
 eth_path=
 jks_passwd=123456
 make_tar=
+debug_log="false"
 logfile=build.log
 enable_public_listen_ip="false"
 Download=false
@@ -50,7 +51,7 @@ exit 0
 
 parse_params()
 {
-while getopts "f:l:o:p:e:P:t:iszh" option;do
+while getopts "f:l:o:p:e:P:t:iszhT" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -70,6 +71,7 @@ while getopts "f:l:o:p:e:P:t:iszh" option;do
     ;;
     s) state_type=storage;;
     t) CertConfig=$OPTARG;;
+    T) debug_log="true";;
     z) make_tar="yes";;
     h) help;;
     esac
@@ -206,7 +208,7 @@ gen_cert_secp256k1() {
 }
 
 gen_node_cert() {
-    if [ "" = "`openssl ecparam -list_curves 2>&1 | grep secp256k1`" ]; then
+    if [ "" == "`openssl ecparam -list_curves 2>&1 | grep secp256k1`" ]; then
         echo "openssl don't support secp256k1, please upgrade openssl!"
         exit $EXIT_CODE
     fi
@@ -293,7 +295,7 @@ generate_config_ini()
     local index=${2}
     local node_groups=(${3//,/ })
     local group_conf_list=
-    if [ "${use_ip_param}" = "false" ];then
+    if [ "${use_ip_param}" == "false" ];then
         for j in ${node_groups[@]};do
         group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.ini
     "
@@ -358,7 +360,7 @@ generate_config_ini()
     INFO-ENABLED=true
     WARNING-ENABLED=true
     ERROR-ENABLED=true
-    DEBUG-ENABLED=false
+    DEBUG-ENABLED=${debug_log}
     TRACE-ENABLED=false
     FATAL-ENABLED=false
     VERBOSE-ENABLED=false
@@ -531,9 +533,9 @@ main()
 
 output_dir="`pwd`/${output_dir}"
 [ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
-if [ "${use_ip_param}" = "true" ];then
+if [ "${use_ip_param}" == "true" ];then
     ip_array=(${ip_param//,/ })
-elif [ "${use_ip_param}" = "false" ];then
+elif [ "${use_ip_param}" == "false" ];then
     parse_ip_config $ip_file
     if [ $? -ne 0 ];then 
         echo "Parse $ip_file error!"
@@ -551,7 +553,7 @@ fi
 dir_must_not_exists $output_dir
 mkdir -p "$output_dir"
 
-if [ "${Download}" = "true" ];then
+if [ "${Download}" == "true" ];then
     echo "Downloading fisco-bcos binary..." 
     curl -Lo ${eth_path} ${Download_Link}
     chmod a+x ${eth_path}
@@ -564,7 +566,7 @@ else
    cp ${CertConfig} .
 fi
 
-if [ "${use_ip_param}" = "true" ];then
+if [ "${use_ip_param}" == "true" ];then
     for i in `seq 0 ${#ip_array[*]}`;do
         agency_array[i]="agency"
     done
@@ -574,9 +576,9 @@ fi
 if [ ! -e "$ca_file" ]; then
     echo "Generating CA key..."
     dir_must_not_exists $output_dir/chain
-    gen_chain_cert "" $output_dir/chain >$output_dir/${logfile} 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
+    gen_chain_cert "" $output_dir/chain >$output_dir/${logfile} 2>&1 || fail_message "openssl error!"
     mv $output_dir/chain $output_dir/cert
-    if [ "${use_ip_param}" = "false" ];then
+    if [ "${use_ip_param}" == "false" ];then
         for agency_name in ${agency_array[*]};do
             gen_agency_cert "" $output_dir/cert $output_dir/cert/${agency_name} >$output_dir/${logfile} 2>&1
         done
@@ -597,7 +599,7 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    [ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
+    [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
@@ -631,7 +633,7 @@ for line in ${ip_array[*]};do
         # mv $node_dir/* $node_dir/sdk/
 
         nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
-        if [ "${use_ip_param}" = "false" ];then
+        if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })
             for j in ${node_groups[@]};do
                 if [ -z "${groups_count[${j}]}" ];then groups_count[${j}]=0;fi
@@ -664,13 +666,13 @@ server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    [ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
+    [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
         node_dir="$output_dir/node_${ip}_${i}"
         generate_config_ini "$node_dir/config.ini" ${i} "${group_array[server_count]}"
-        if [ "${use_ip_param}" = "false" ];then
+        if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
                 generate_group_ini "$node_dir/${conf_path}/group.${j}.ini" "${groups[${j}]}"
@@ -689,7 +691,7 @@ for line in ${ip_array[*]};do
 done 
 genTransTest
 rm $output_dir/${logfile} #cert.cnf
-if [ "${use_ip_param}" = "false" ];then
+if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
     for l in `seq 0 ${#groups_count[@]}`;do
         if [ ! -z "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
