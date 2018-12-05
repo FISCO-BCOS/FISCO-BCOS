@@ -5,6 +5,8 @@ set -e
 ca_file= #CA key
 node_num=1 
 ip_file=
+agency_array=
+group_array=
 ip_param=
 use_ip_param=
 ip_array=
@@ -12,11 +14,11 @@ output_dir=nodes
 port_start=30300 
 state_type=mpt 
 storage_type=LevelDB
-conf_path="conf/"
+conf_path="conf"
 eth_path=
-gen_sdk=false
 jks_passwd=123456
 make_tar=
+logfile=build.log
 enable_public_listen_ip="false"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
@@ -31,7 +33,7 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
     -i <enable public rpc listen ip>    Default 127.0.0.1
-    -d <JKS passwd>                     Default not generate jks files, if set use param as jks passwd
+    -P <JKS passwd>                     Default generate jks files whit passwd:123456, use -P to set custom passwd
     -s <State type>                     Default mpt. if set -s, use storage 
     -t <Cert config file>               Default auto generate
     -z <Generate tar packet>            Default no
@@ -41,6 +43,34 @@ e.g
 EOF
 
 exit 0
+}
+
+parse_params()
+{
+while getopts "f:l:o:p:e:P:t:iszh" option;do
+    case $option in
+    f) ip_file=$OPTARG
+       use_ip_param="false"
+    ;;
+    l) ip_param=$OPTARG
+       use_ip_param="true"
+    ;;
+    o) output_dir=$OPTARG;;
+    i) enable_public_listen_ip="true";;
+    p) port_start=$OPTARG;;
+    e) eth_path=$OPTARG;;
+    P) [ ! -z $OPTARG ] && jks_passwd=$OPTARG
+       [[ "$jks_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
+        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
+        exit $EXIT_CODE
+    }
+    ;;
+    s) state_type=storage;;
+    t) CertConfig=$OPTARG;;
+    z) make_tar="yes";;
+    h) help;;
+    esac
+done
 }
 
 fail_message()
@@ -234,7 +264,6 @@ read_password() {
 }
 
 gen_sdk_cert() {
-
     agency="$2"
     sdkpath="$3"
     sdk=`getname "$sdkpath"`
@@ -257,9 +286,20 @@ gen_sdk_cert() {
 
 generate_config_ini()
 {
-    local output=$1
+    local output=${1}
+    local index=${2}
+    local node_groups=(${3//,/ })
+    local group_conf_list=
+    if [ "${use_ip_param}" = "false" ];then
+        for j in ${node_groups[@]};do
+        group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.ini
+    "
+        done
+    else
+        group_conf_list="group_config.1=${conf_path}/group.1.ini"
+    fi
     if [ "${enable_public_listen_ip}" == "true" ];then
-        listen_ip="${2}"
+        listen_ip="0.0.0.0"
     else
         listen_ip="127.0.0.1"
     fi
@@ -287,12 +327,12 @@ generate_config_ini()
 ;WARNING: group 0 is forbided
 [group]
     group_data_path=data
-    ;group_config.1=conf/group.1.ini
+    ${group_conf_list}
 
 ;certificate configuration
 [secure]
     ;directory the certificates located in
-    data_path=conf/
+    data_path=${conf_path}
     ;the node private key file
     key=node.key
     ;the node certificate file
@@ -325,6 +365,7 @@ EOF
 generate_group_ini()
 {
     local output=$1
+    local node_list=$2
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
@@ -333,7 +374,7 @@ generate_group_ini()
     ;the max number of transactions of a block
     maxTransNum=1000
     ;the node id of leaders
-    $nodeid_list
+    $node_list
 
 ;sync period time
 [sync]
@@ -427,7 +468,7 @@ genTransTest()
 #! /bin/sh
 # This script only support for block number smaller than 65535 - 256
 
-ip_port=http://127.0.0.1:30302
+ip_port=http://127.0.0.1:$(( port_start + 2 ))
 trans_num=1
 if [ \$# -eq 1 ];then
     trans_num=\$1
@@ -467,44 +508,34 @@ EOF
     chmod +x ${output_dir}"/transTest.sh"
 }
 
+parse_ip_config()
+{
+    local config=$1
+    n=0
+    while read line;do
+        ip_array[n]=`echo ${line} | cut -d ' ' -f 1`
+        agency_array[n]=`echo ${line} | cut -d ' ' -f 2`
+        group_array[n]=`echo ${line} | cut -d ' ' -f 3`
+        if [ -z ${ip_array[n]} -o -z ${agency_array[n]} -o -z ${group_array[n]} ];then
+            return -1
+        fi
+        ((++n))
+    done < ${config}
+}
+
 main()
 {
-while getopts "f:l:o:p:e:t:idszh" option;do
-    case $option in
-    f) ip_file=$OPTARG
-       use_ip_param="false"
-    ;;
-    l) ip_param=$OPTARG
-       use_ip_param="true"
-    ;;
-    o) output_dir=$OPTARG;;
-    i) enable_public_listen_ip="true";;
-    p) port_start=$OPTARG;;
-    e) eth_path=$OPTARG;;
-    d) gen_sdk="true"
-       [ ! -z $OPTARG ] && jks_passwd=$OPTARG
-       [[ "$jks_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
-        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
-        exit $EXIT_CODE
-    }
-    ;;
-    s) state_type=storage;;
-    t) CertConfig=$OPTARG;;
-    z) make_tar="yes";;
-    h) help;;
-    esac
-done
 
 output_dir="`pwd`/${output_dir}"
 [ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
 if [ "${use_ip_param}" = "true" ];then
     ip_array=(${ip_param//,/ })
 elif [ "${use_ip_param}" = "false" ];then
-    n=0
-    while read line;do
-        ip_array[n]=$line
-        ((++n))
-    done < $ip_file
+    parse_ip_config $ip_file
+    if [ $? -ne 0 ];then 
+        echo "Parse $ip_file error!"
+        exit 1
+    fi
 else 
     help 
 fi
@@ -530,32 +561,49 @@ else
    cp ${CertConfig} .
 fi
 
+if [ "${use_ip_param}" = "true" ];then
+    for i in {0..${#ip_array[*]}};do
+        agency_array[i]="agency"
+    done
+fi
+
 # prepare CA
 if [ ! -e "$ca_file" ]; then
     echo "Generating CA key..."
     dir_must_not_exists $output_dir/chain
-    gen_chain_cert "" $output_dir/chain >$output_dir/build.log 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
+    gen_chain_cert "" $output_dir/chain >$output_dir/${logfile} 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
     mv $output_dir/chain $output_dir/cert
-    gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/build.log 2>&1
+    if [ "${use_ip_param}" = "false" ];then
+        for agency_name in ${agency_array[*]};do
+            gen_agency_cert "" $output_dir/cert $output_dir/cert/${agency_name} >$output_dir/${logfile} 2>&1
+        done
+    else
+        gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/${logfile} 2>&1
+    fi
     ca_file="$output_dir/cert/ca.key"
 fi
 
-echo "Generating node key ..."
+echo "=============================================================="
+echo "Generating node's key ..."
 nodeid_list=""
 ip_list=""
 count=0
+server_count=0
+groups=
+groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
-    index=0
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
-        node_dir="$output_dir/node_${ip}_${index}"
+        echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
+        node_dir="$output_dir/node_${ip}_${i}"
         [ -d "$node_dir" ] && echo "$node_dir exist! Please delete!" && exit 1
         
         while :
         do
-            gen_node_cert "" ${output_dir}/cert/agency $node_dir >$output_dir/build.log 2>&1
+            gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} $node_dir >$output_dir/${logfile} 2>&1
             mkdir -p ${conf_path}/
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
@@ -568,67 +616,95 @@ for line in ${ip_array[*]};do
             fi
             rm -rf ${node_dir}
         done
-        cat ${output_dir}/cert/agency/agency.crt >> $node_dir/${conf_path}/node.crt
+        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> $node_dir/${conf_path}/node.crt
         cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
-        if [ "${gen_sdk}" = "true" ];then
-            mkdir -p $node_dir/sdk/
-            # read_password
-            openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
-		    # keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
-            cp ${output_dir}/cert/ca.crt $node_dir/sdk/
-            # gen_sdk_cert ${output_dir}/cert/agency $node_dir
-            # mv $node_dir/* $node_dir/sdk/
-        fi
+        # gen sdk
+        mkdir -p $node_dir/sdk/
+        # read_password
+        openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
+        # keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
+        cp ${output_dir}/cert/ca.crt $node_dir/sdk/
+        # gen_sdk_cert ${output_dir}/cert/agency $node_dir
+        # mv $node_dir/* $node_dir/sdk/
+
         nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+        if [ "${use_ip_param}" = "false" ];then
+            node_groups=(${group_array[server_count]//,/ })
+            for j in ${node_groups[@]};do
+                if [ -z "${groups_count[${j}]}" ];then groups_count[${j}]=0;fi
+                echo "groups_count[${j}]=${groups_count[${j}]}"  >> $output_dir/${logfile}
+        groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=$nodeid
+    "
+                ((++groups_count[${j}]))
+            done
+        else
         nodeid_list=$"${nodeid_list}node.${count}=$nodeid
     "
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + index * 4 ))"
+        fi
+        
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 4 ))"
     "
-        ((++index))
         ((++count))
     done
+    ((++server_count))
 done 
 cd ..
 
+echo "=============================================================="
+echo "Generating node's configurations..."
 generate_script_template "$output_dir/start_all.sh"
 generate_script_template "$output_dir/stop_all.sh"
 generate_script_template "$output_dir/replace_all.sh"
 echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output_dir/start_all.sh"
 echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output_dir/stop_all.sh"
-echo "Generating node configuration..."
-
-#Generate node config files
+server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    index=0
     [ "$num" = "$ip" -o -z "${num}" ] && num=${node_num}
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
-        echo "Generating IP:${ip} ID:${index} files..."
-        node_dir="$output_dir/node_${ip}_${index}"
-        generate_config_ini "$node_dir/config.ini" "${ip}"
-        generate_group_ini "$node_dir/${conf_path}/group.1.ini"
+        echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
+        node_dir="$output_dir/node_${ip}_${i}"
+        generate_config_ini "$node_dir/config.ini" ${i} "${group_array[server_count]}"
+        if [ "${use_ip_param}" = "false" ];then
+            node_groups=(${group_array[${server_count}]//,/ })
+            for j in ${node_groups[@]};do
+                generate_group_ini "$node_dir/${conf_path}/group.${j}.ini" "${groups[${j}]}"
+            done
+        else
+            generate_group_ini "$node_dir/${conf_path}/group.1.ini" "${nodeid_list}"
+        fi
         generate_node_scripts "$node_dir"
         cp "$eth_path" "$node_dir/fisco-bcos"
-        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${index}\" && bash \${SHELL_FOLDER}/node_${ip}_${index}/start.sh; fi" >> "$output_dir/start_all.sh"
-        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"stop node_${ip}_${index}\" && bash \${SHELL_FOLDER}/node_${ip}_${index}/stop.sh; fi" >> "$output_dir/stop_all.sh"
-        echo "cp \${1} \${SHELL_FOLDER}/node_${ip}_${index}/" >> "$output_dir/replace_all.sh"
-        ((++index))
+        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "$output_dir/start_all.sh"
+        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"stop node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/stop.sh; fi" >> "$output_dir/stop_all.sh"
+        echo "cp \${1} \${SHELL_FOLDER}/node_${ip}_${i}/" >> "$output_dir/replace_all.sh"
         [ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
     done
+    ((++server_count))
 done 
 genTransTest
-rm $output_dir/build.log #cert.cnf
-echo "=========================================="
+rm $output_dir/${logfile} #cert.cnf
+if [ "${use_ip_param}" = "false" ];then
+echo "=============================================================="
+    for l in `seq 0 ${#groups_count[@]}`;do
+        if [ ! -z "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
+    done
+fi
+echo "=============================================================="
 echo "FISCO-BCOS Path : $eth_path"
 [ ! -z $ip_file ] && echo "IP List File    : $ip_file"
+# [ ! -z $ip_file ] && echo "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 [ ! -z $ip_param ] && echo "IP List Param   : $ip_param"
 echo "Start Port      : $port_start"
+echo "Servers         : ${ip_array[@]}"
 echo "Output Dir      : $output_dir"
 echo "CA Key Path     : $ca_file"
-echo "=========================================="
+echo "=============================================================="
 echo "All completed. Files in $output_dir"
 }
 
 check_env
-main $@
+parse_params $@
+main
