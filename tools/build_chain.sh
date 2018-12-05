@@ -16,7 +16,7 @@ state_type=mpt
 storage_type=LevelDB
 conf_path="conf"
 eth_path=
-jks_passwd=123456
+pkcs12_passwd=123456
 make_tar=
 debug_log="false"
 logfile=build.log
@@ -34,7 +34,7 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
     -i <enable public rpc listen ip>    Default 127.0.0.1
-    -P <JKS passwd>                     Default generate jks files whit passwd:123456, use -P to set custom passwd
+    -P <PKCS12 passwd>                  Default generate PKCS12 file with passwd:123456, use -P to set custom passwd
     -s <State type>                     Default mpt. if set -s, use storage 
     -t <Cert config file>               Default auto generate
     -z <Generate tar packet>            Default no
@@ -63,8 +63,8 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
     i) enable_public_listen_ip="true";;
     p) port_start=$OPTARG;;
     e) eth_path=$OPTARG;;
-    P) [ ! -z $OPTARG ] && jks_passwd=$OPTARG
-       [[ "$jks_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
+    P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
+       [[ "$pkcs12_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
         echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
         exit $EXIT_CODE
     }
@@ -379,7 +379,7 @@ generate_group_ini()
     ;the max number of transactions of a block
     maxTransNum=1000
     ;the node id of leaders
-    $node_list
+    ${node_list}
 
 ;sync period time
 [sync]
@@ -623,11 +623,11 @@ for line in ${ip_array[*]};do
         done
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> $node_dir/${conf_path}/node.crt
         cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
-        # gen sdk
+        # gen sdk files
         mkdir -p $node_dir/sdk/
         # read_password
-        openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
-        # keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $jks_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $jks_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
+        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
+        # keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $pkcs12_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $pkcs12_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
         cp ${output_dir}/cert/ca.crt $node_dir/sdk/
         # gen_sdk_cert ${output_dir}/cert/agency $node_dir
         # mv $node_dir/* $node_dir/sdk/
@@ -638,12 +638,12 @@ for line in ${ip_array[*]};do
             for j in ${node_groups[@]};do
                 if [ -z "${groups_count[${j}]}" ];then groups_count[${j}]=0;fi
                 echo "groups_count[${j}]=${groups_count[${j}]}"  >> $output_dir/${logfile}
-        groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=$nodeid
+        groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=${nodeid}
     "
                 ((++groups_count[${j}]))
             done
         else
-        nodeid_list=$"${nodeid_list}node.${count}=$nodeid
+        nodeid_list=$"${nodeid_list}node.${count}=${nodeid}
     "
         fi
         
