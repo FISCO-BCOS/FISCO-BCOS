@@ -304,7 +304,7 @@ generate_config_ini()
 ;WARNING: group 0 is forbided
 [group]
     group_data_path=data
-    ;group_config.1=conf/group.1.ini
+    group_config.1=conf/group.1.ini
 
 ;certificate configuration
 [secure]

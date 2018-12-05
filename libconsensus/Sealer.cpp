@@ -182,7 +182,8 @@ void Sealer::stop()
     SEAL_LOG(INFO) << "[#Stop sealer module...]" << std::endl;
     m_startConsensus = false;
     doneWorking();
-    stopWorking();
+    if (isWorking())
+        stopWorking();
 }
 }  // namespace consensus
 }  // namespace dev
