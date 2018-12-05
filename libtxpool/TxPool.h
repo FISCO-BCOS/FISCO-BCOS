@@ -35,7 +35,8 @@
 using namespace dev::eth;
 using namespace dev::p2p;
 
-#define TXPOOL_LOG(LEVEL) LOG(LEVEL) << "[#LIBTXPOOL] [#TXPOOL] [PROTOCOL: " << m_protocolId << "] "
+#define TXPOOL_LOG(LEVEL) \
+    LOG(LEVEL) << "[#LIBTXPOOL] [#TXPOOL] [PROTOCOL: " << std::dec << m_protocolId << "] "
 
 namespace dev
 {

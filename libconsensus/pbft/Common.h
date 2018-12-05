@@ -28,11 +28,12 @@
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
 #define PBFTENGINE_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS][#PBFTENGINE] [PROTOCOL: " << m_protocolId << "] "
-#define PBFTSEALER_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTSEALER] [PROTOCOL: " << m_pbftEngine->protocolId() << "] "
+    LOG(LEVEL) << "[#LIBCONSENSUS][#PBFTENGINE] [PROTOCOL: " << std::dec << m_protocolId << "] "
+#define PBFTSEALER_LOG(LEVEL)                                             \
+    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTSEALER] [PROTOCOL: " << std::dec \
+               << m_pbftEngine->protocolId() << "] "
 #define PBFTReqCache_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << m_protocolId << "] "
+    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << std::dec << m_protocolId << "] "
 namespace dev
 {
 namespace consensus

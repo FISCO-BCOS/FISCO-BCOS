@@ -71,6 +71,17 @@ void Service::stop()
     {
         m_run = false;
         m_host->stop();
+        /// disconnect sessions
+        {
+            DEV_RECURSIVE_GUARDED(x_sessions)
+            for (auto session : m_sessions)
+            {
+                session.second->stop(ClientQuit);
+            }
+        }
+        /// clear sessions
+        RecursiveGuard l(x_sessions);
+        m_sessions.clear();
     }
 }
 
@@ -94,20 +105,36 @@ void Service::heartBeat()
     // Reconnect all nodes
     for (auto it : staticNodes)
     {
-        if (it.second != NodeID())
+        if ((it.first.address == m_host->tcpClient().address() &&
+                it.first.tcpPort == m_host->listenPort()))
         {
-            auto its = sessions.find(it.second);
-            if (its != sessions.end() && its->second && its->second->session()->isConnected())
-            {
-                continue;
-            }
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost()
+                               << std::endl;
+            continue;
         }
-
+        /// exclude myself
+        if (it.second == id())
+        {
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [nodeId]: " << it.second << std::endl;
+            continue;
+        }
+        if (it.second != NodeID() && isConnected(it.second))
+        {
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore connected [nodeId]: " << it.second
+                               << std::endl;
+            continue;
+        }
+        if (it.first.address.to_string().empty())
+        {
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address" << std::endl;
+            continue;
+        }
+        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [nodeId/endpoint]" << it.second << "/"
+                           << it.first.name() << std::endl;
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
     }
-
     auto self = shared_from_this();
     m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
@@ -119,6 +146,23 @@ void Service::heartBeat()
 
         self->heartBeat();
     });
+}
+
+/// update the staticNodes
+void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID const& nodeId)
+{
+    /// update the staticNodes
+    NodeIPEndpoint endpoint(_s->remoteEndpoint().address().to_v4(), _s->remoteEndpoint().port(),
+        _s->remoteEndpoint().port());
+    RecursiveGuard l(x_nodes);
+    auto it = m_staticNodes.find(endpoint);
+    /// modify m_staticNodes(including accept cases, namely the client endpoint)
+    if (it != m_staticNodes.end())
+    {
+        SERVICE_LOG(DEBUG) << "[#startPeerSession-updateStaticNodes] [nodeId/endpoint]:  "
+                           << toHex(nodeId) << "/" << endpoint.name() << std::endl;
+        it->second = nodeId;
+    }
 }
 
 void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session)
@@ -137,7 +181,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     if (it != m_sessions.end() && it->second->actived())
     {
         SERVICE_LOG(TRACE) << "Disconnect duplicate peer";
-
+        updateStaticNodes(session->socket(), nodeID);
         session->disconnect(DuplicatePeer);
         return;
     }
@@ -145,7 +189,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     if (nodeID == id())
     {
         SERVICE_LOG(TRACE) << "Disconnect self";
-
+        updateStaticNodes(session->socket(), id());
         session->disconnect(DuplicatePeer);
         return;
     }
@@ -157,7 +201,7 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
     p2pSession->start();
-
+    updateStaticNodes(session->socket(), nodeID);
     it = m_sessions.find(nodeID);
     if (it != m_sessions.end())
     {
