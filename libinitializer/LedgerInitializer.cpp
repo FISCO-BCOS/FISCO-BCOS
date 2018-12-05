@@ -71,7 +71,6 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
             }
         }
         m_p2pService->setGroupID2NodeList(groudID2NodeList);
-        m_ledgerManager->startAll();
     }
     catch (std::exception& e)
     {
