@@ -50,12 +50,12 @@ class EncryptedLevelDB : public BasicLevelDB
 {
 public:
     EncryptedLevelDB(const leveldb::Options& _options, const std::string& _name,
-        const std::string& _cypherDataKey);
+        const std::string& _cipherDataKey);
     ~EncryptedLevelDB(){};
 
     static leveldb::Status Open(const leveldb::Options& _options, const std::string& _name,
         BasicLevelDB** _dbptr,
-        const std::string& _cypherDataKey = "");  // DB
+        const std::string& _cipherDataKey = "");  // DB
                                                   // open
     leveldb::Status Get(const leveldb::ReadOptions& _options, const leveldb::Slice& _key,
         std::string* _value) override;
@@ -68,17 +68,17 @@ public:
     {
         FirstCreation = 0,
         NoEncrypted,
-        CypherKeyError,
+        CipherKeyError,
         Encrypted
     };
 
 private:
-    std::string m_cypherDataKey;
+    std::string m_cipherDataKey;
     std::string m_dataKey;
 
 private:
     std::string getKeyOfDatabase();
-    void setCypherDataKey(std::string _cypherDataKey);
+    void setCipherDataKey(std::string _cipherDataKey);
     EncryptedLevelDB::OpenDBStatus checkOpenDBStatus();
 };
 }  // namespace db

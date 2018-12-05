@@ -39,7 +39,7 @@ public:
     {
         bool enable = false;
         std::string keyCenterUrl;
-        std::string cypherDataKey;
+        std::string cipherDataKey;
     } diskEncryption;
 };
 

@@ -82,12 +82,12 @@ LevelDB::LevelDB(boost::filesystem::path const& _path, leveldb::ReadOptions _rea
 
     LOG(DEBUG) << "[ENCDB] [enable/url/key]:  " << g_BCOSConfig.diskEncryption.enable << "/"
                << g_BCOSConfig.diskEncryption.keyCenterUrl << "/"
-               << g_BCOSConfig.diskEncryption.cypherDataKey << "/" << std::endl;
+               << g_BCOSConfig.diskEncryption.cipherDataKey << "/" << std::endl;
 
 
     if (g_BCOSConfig.diskEncryption.enable)
         status = EncryptedLevelDB::Open(
-            _dbOptions, _path.string(), &db, g_BCOSConfig.diskEncryption.cypherDataKey);
+            _dbOptions, _path.string(), &db, g_BCOSConfig.diskEncryption.cipherDataKey);
     else
         status = BasicLevelDB::Open(_dbOptions, _path.string(), &db);
     checkStatus(status, _path);

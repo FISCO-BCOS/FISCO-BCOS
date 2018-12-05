@@ -95,8 +95,8 @@ void EncryptedLevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice
 }
 
 EncryptedLevelDB::EncryptedLevelDB(
-    const leveldb::Options& _options, const std::string& _name, const std::string& _cypherDataKey)
-  : BasicLevelDB(), m_cypherDataKey(_cypherDataKey)
+    const leveldb::Options& _options, const std::string& _name, const std::string& _cipherDataKey)
+  : BasicLevelDB(), m_cipherDataKey(_cipherDataKey)
 {
     // Encrypted leveldb initralization
 
@@ -117,34 +117,34 @@ EncryptedLevelDB::EncryptedLevelDB(
     switch (type)
     {
     case OpenDBStatus::FirstCreation:
-        if (m_cypherDataKey.empty())
-            m_cypherDataKey = g_keyCenter.generateCypherDataKey();
-        setCypherDataKey(m_cypherDataKey);
+        if (m_cipherDataKey.empty())
+            m_cipherDataKey = g_keyCenter.generateCipherDataKey();
+        setCipherDataKey(m_cipherDataKey);
         ENCDBLOG(DEBUG) << "[Open] First creation encrypted DB" << endl;
         // No need break here, break with Encrypted type
     case OpenDBStatus::Encrypted:
         ENCDBLOG(DEBUG)
-            << "[open] Encrypted leveldb open success [name/db/keyCenterUrl/cypherDataKey]: "
-            << _name << "/" << m_db << "/" << g_keyCenter.url() << "/" << m_cypherDataKey << endl;
+            << "[open] Encrypted leveldb open success [name/db/keyCenterUrl/cipherDataKey]: "
+            << _name << "/" << m_db << "/" << g_keyCenter.url() << "/" << m_cipherDataKey << endl;
         break;
 
     case OpenDBStatus::NoEncrypted:
         ENCDBLOG(FATAL) << "[Open] Database type ERROR! This DB is not EncryptedLevelDB" << endl;
         break;
 
-    case OpenDBStatus::CypherKeyError:
+    case OpenDBStatus::CipherKeyError:
         ENCDBLOG(FATAL)
-            << "[Open] Configure CypherDataKey ERROR! Configure CypherDataKey is not the "
+            << "[Open] Configure CipherDataKey ERROR! Configure CipherDataKey is not the "
                "key of the database [database/configure]: "
-            << getKeyOfDatabase() << "/" << _cypherDataKey << endl;  // log and exit
+            << getKeyOfDatabase() << "/" << _cipherDataKey << endl;  // log and exit
         break;
 
     default:
         ENCDBLOG(FATAL) << "[Open] Unknown Open encrypted DB TYPE" << endl;
     }
 
-    // Decrypt cypher key from keycenter
-    m_dataKey = g_keyCenter.getDataKey(m_cypherDataKey);
+    // Decrypt cipher key from keycenter
+    m_dataKey = g_keyCenter.getDataKey(m_cipherDataKey);
     if (m_dataKey == "")
     {
         m_openStatus = leveldb::Status::IOError(leveldb::Slice("Get dataKey failed"));
@@ -153,9 +153,9 @@ EncryptedLevelDB::EncryptedLevelDB(
 }
 
 leveldb::Status EncryptedLevelDB::Open(const leveldb::Options& _options, const std::string& _name,
-    BasicLevelDB** _dbptr, const std::string& _cypherDataKey)
+    BasicLevelDB** _dbptr, const std::string& _cipherDataKey)
 {
-    *_dbptr = new EncryptedLevelDB(_options, _name, _cypherDataKey);
+    *_dbptr = new EncryptedLevelDB(_options, _name, _cipherDataKey);
     leveldb::Status status = (*_dbptr)->OpenStatus();
 
     if (!status.ok())
@@ -235,13 +235,13 @@ string EncryptedLevelDB::getKeyOfDatabase()
 
     std::string key;
     leveldb::Status status =
-        m_db->Get(leveldb::ReadOptions(), leveldb::Slice(c_cypherDataKeyName), &key);
+        m_db->Get(leveldb::ReadOptions(), leveldb::Slice(c_cipherDataKeyName), &key);
     if (!status.ok())
         return string("");
     return key;
 }
 
-void EncryptedLevelDB::setCypherDataKey(string _cypherDataKey)
+void EncryptedLevelDB::setCipherDataKey(string _cipherDataKey)
 {
     if (!m_db)
     {
@@ -249,20 +249,20 @@ void EncryptedLevelDB::setCypherDataKey(string _cypherDataKey)
         return;
     }
     string oldKey = getKeyOfDatabase();
-    if (!oldKey.empty() && oldKey != _cypherDataKey)
+    if (!oldKey.empty() && oldKey != _cipherDataKey)
         ENCDBLOG(FATAL)
-            << "[key] Configure CypherDataKey ERROR! Configure CypherDataKey is not the "
+            << "[key] Configure CipherDataKey ERROR! Configure CipherDataKey is not the "
                "key of the database [database/configure]: "
-            << oldKey << "/" << _cypherDataKey << endl;  // log and exit
+            << oldKey << "/" << _cipherDataKey << endl;  // log and exit
 
-    auto status = m_db->Put(leveldb::WriteOptions(), leveldb::Slice(c_cypherDataKeyName),
-        leveldb::Slice(_cypherDataKey));
+    auto status = m_db->Put(leveldb::WriteOptions(), leveldb::Slice(c_cipherDataKeyName),
+        leveldb::Slice(_cipherDataKey));
 
     if (!status.ok())
-        ENCDBLOG(FATAL) << "[Key] Configure CypherDataKey ERROR! Write key failed."
+        ENCDBLOG(FATAL) << "[Key] Configure CipherDataKey ERROR! Write key failed."
                         << endl;  // log and exit
     else
-        ENCDBLOG(DEBUG) << "[key] Configure CypherDataKey: " << _cypherDataKey << endl;
+        ENCDBLOG(DEBUG) << "[key] Configure CipherDataKey: " << _cipherDataKey << endl;
 }
 
 EncryptedLevelDB::OpenDBStatus EncryptedLevelDB::checkOpenDBStatus()
@@ -274,8 +274,8 @@ EncryptedLevelDB::OpenDBStatus EncryptedLevelDB::checkOpenDBStatus()
     if (keyOfDatabase.empty())
         return OpenDBStatus::NoEncrypted;
 
-    if (keyOfDatabase != m_cypherDataKey)
-        return OpenDBStatus::CypherKeyError;
+    if (keyOfDatabase != m_cipherDataKey)
+        return OpenDBStatus::CipherKeyError;
 
     return OpenDBStatus::Encrypted;
 }

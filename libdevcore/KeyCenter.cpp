@@ -28,13 +28,13 @@
 using namespace std;
 using namespace dev;
 
-const std::string KeyCenter::getDataKey(const std::string& _cypherDataKey)
+const std::string KeyCenter::getDataKey(const std::string& _cipherDataKey)
 {
     // Fake it
     return "01234567012345670123456701234567";
 };
 
-const std::string KeyCenter::generateCypherDataKey()
+const std::string KeyCenter::generateCipherDataKey()
 {
     // Fake it
     return std::string("0123456701234567012345670123456") + std::to_string(utcTime() % 10);

@@ -22,6 +22,7 @@
 
 
 #include "BasicLevelDB.h"
+#include <libdevcore/easylog.h>
 
 using namespace dev;
 using namespace dev::db;
@@ -53,9 +54,11 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
     auto db = static_cast<leveldb::DB*>(nullptr);
     m_openStatus = leveldb::DB::Open(_options, _name, &db);
 
-    if (!m_openStatus.ok())
+    if (!m_openStatus.ok() || !db)
+    {
         LOG(ERROR) << "Database open error" << endl;
-    assert(db);
+        raise(SIGTERM);
+    }
     m_db.reset(db);
 
     if (!empty())
@@ -63,9 +66,12 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
         // If the DB is encrypted. Exist
         std::string key;
         leveldb::Status status =
-            m_db->Get(leveldb::ReadOptions(), leveldb::Slice(c_cypherDataKeyName), &key);
+            m_db->Get(leveldb::ReadOptions(), leveldb::Slice(c_cipherDataKeyName), &key);
         if (!key.empty())
-            LOG(FATAL) << "Database is encrypted" << endl;
+        {
+            LOG(ERROR) << "[ENCDB] Database is encrypted" << endl;
+            raise(SIGTERM);
+        }
     }
 }
 
