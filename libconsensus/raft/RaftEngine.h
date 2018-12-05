@@ -1,25 +1,25 @@
 /*
-    This file is part of cpp-ethereum.
-
-    cpp-ethereum is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    cpp-ethereum is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/**
- * @file: Raft.h
- * @author: fisco-dev
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * @date: 2017
- * A proof of work algorithm.
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
+
+/**
+ * @brief : header file of Raft consensus engine
+ * @file: RaftEngine.h
+ * @author: catli
+ * @date: 2018-12-05
  */
 #pragma once
 
@@ -113,7 +113,7 @@ protected:
     void resetElectTimeout();
 
     void switchToCandidate();
-    void switchToFollower(u256 const& _leader);
+    void switchToFollower(raft::NodeIndex const& _leader);
     void switchToLeader();
 
     bool wonElection(u256 const& _votes) { return _votes >= m_nodeNum - m_f; }
@@ -126,7 +126,7 @@ protected:
     void broadcastHeartbeat();
     void broadcastMsg(dev::p2p::P2PMessage::Ptr _data);
 
-    // handle response 处理响应消息
+    // handle response
     bool handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _req);
     HandleVoteResult handleVoteResponse(
         u256 const& _from, h512 const& _node, RaftVoteResp const& _req, VoteState& vote);
@@ -148,19 +148,19 @@ protected:
     dev::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, RaftPacketType const& packetType, PROTOCOL_ID const& protocolId);
 
-    unsigned getState()
+    RaftRole getState()
     {
         RecursiveGuard l(m_mutex);
         return m_state;
     }
 
-    void setLeader(u256 const& _leader)
+    void setLeader(raft::NodeIndex const& _leader)
     {
         RecursiveGuard l(m_mutex);
         m_leader = _leader;
     }
 
-    void setVote(u256 const& _candidate)
+    void setVote(raft::NodeIndex const& _candidate)
     {
         RecursiveGuard l(m_mutex);
         m_vote = _candidate;
@@ -203,13 +203,13 @@ protected:
     // role of node
     RaftRole m_state = EN_STATE_FOLLOWER;
 
-    u256 m_firstVote = Invalid256;
-    u256 m_term = u256(0);
-    u256 m_lastLeaderTerm = u256(0);
+    raft::NodeIndex m_firstVote = raft::InvalidIndex;
+    size_t m_term = 0;
+    size_t m_lastLeaderTerm = 0;
 
-    u256 m_leader;
-    u256 m_vote;
-    u256 m_nodeIdx;
+    raft::NodeIndex m_leader;
+    raft::NodeIndex m_vote;
+    raft::NodeIndex m_nodeIdx;
 
     struct BlockRef
     {

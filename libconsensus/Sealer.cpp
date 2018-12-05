@@ -137,6 +137,7 @@ void Sealer::doWork(bool wait)
 void Sealer::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
+    SEAL_LOG(DEBUG) << "[#loadTransactions] [transToFetch]: " << transToFetch;
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }

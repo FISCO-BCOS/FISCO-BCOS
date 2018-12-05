@@ -1,25 +1,25 @@
 /*
-    This file is part of cpp-ethereum.
-
-    cpp-ethereum is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    cpp-ethereum is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/**
- * @file: Common.h
- * @author: fisco-dev
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * @date: 2017
- * A proof of work algorithm.
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
+
+/**
+ * @brief : common functions and types of Raft consenus module
+ * @file: Common.h
+ * @author: catli
+ * @date: 2018-12-05
  */
 
 #pragma once
@@ -40,6 +40,12 @@ namespace dev
 {
 namespace consensus
 {
+namespace raft
+{
+using NodeIndex = std::ptrdiff_t;
+NodeIndex constexpr InvalidIndex = NodeIndex(-1);
+}  // namespace raft
+
 enum RaftPacketType : byte
 {
     RaftVoteReqPacket = 0x00,
@@ -49,14 +55,14 @@ enum RaftPacketType : byte
     RaftPacketCount
 };
 
-enum RaftRole
+enum RaftRole : byte
 {
     EN_STATE_LEADER = 1,
     EN_STATE_FOLLOWER = 2,
     EN_STATE_CANDIDATE = 3
 };
 
-enum VoteRespFlag
+enum VoteRespFlag : byte
 {
     VOTE_RESP_REJECT = 0,
     VOTE_RESP_LEADER_REJECT = 1,
@@ -66,7 +72,7 @@ enum VoteRespFlag
     VOTE_RESP_GRANTED = 5
 };
 
-enum HandleVoteResult
+enum HandleVoteResult : byte
 {
     TO_LEADER,
     TO_FOLLOWER,
@@ -76,23 +82,23 @@ enum HandleVoteResult
 struct RaftMsgPacket
 {
     /// the index of the node that send this raft message
-    u256 nodeIdx;
+    raft::NodeIndex nodeIdx;
     /// the node id of the node that sends this raft message
-    h512 nodeId;
+    Public nodeId;
     /// type of the packet
     RaftPacketType packetType;
     /// the data of concrete request
     bytes data;
     /// timestamp of receive this raft message
-    u256 timestamp;
+    uint64_t timestamp;
     /// endpoint
     std::string endpoint;
 
     RaftMsgPacket()
-      : nodeIdx(h256(0)),
-        nodeId(h512(0)),
+      : nodeIdx(0),
+        nodeId(Public(0)),
         packetType(RaftPacketType::RaftVoteReqPacket),
-        timestamp(u256(utcTime()))
+        timestamp(utcTime())
     {}
 
     virtual void encode(bytes& _encodeBytes) const
@@ -126,12 +132,13 @@ struct RaftMsgPacket
         }
     }
 
-    void setOtherField(u256 const& _nodeIdx, h512 const& _nodeId, std::string const& _endpoint)
+    void setOtherField(
+        u256 const& _nodeIdx, Public const& _nodeId, std::string const& _endpoint)
     {
-        nodeIdx = _nodeIdx;
+        nodeIdx = static_cast<raft::NodeIndex>(_nodeIdx);
         nodeId = _nodeId;
         endpoint = _endpoint;
-        timestamp = u256(utcTime());
+        timestamp = utcTime();
     }
 };
 
@@ -139,9 +146,9 @@ using RaftMsgQueue = dev::concurrent_queue<RaftMsgPacket>;
 
 struct RaftMsg
 {
-    u256 idx;
-    u256 term;
-    u256 height;
+    raft::NodeIndex idx;
+    size_t term;
+    int64_t height;
     h256 blockHash;
 
     virtual void streamRLPFields(RLPStream& _s) const { _s << idx << term << height << blockHash; }
@@ -150,9 +157,9 @@ struct RaftMsg
         int field = 0;
         try
         {
-            idx = _rlp[field = 0].toInt<u256>();
-            term = _rlp[field = 1].toInt<u256>();
-            height = _rlp[field = 2].toInt<u256>();
+            idx = _rlp[field = 0].toInt<raft::NodeIndex>();
+            term = _rlp[field = 1].toInt<size_t>();
+            height = _rlp[field = 2].toInt<int64_t>();
             blockHash = _rlp[field = 3].toHash<h256>(RLP::VeryStrict);
         }
         catch (Exception const& _e)
@@ -168,8 +175,8 @@ struct RaftMsg
 
 struct RaftVoteReq : public RaftMsg
 {
-    u256 candidate;
-    u256 lastLeaderTerm;
+    raft::NodeIndex candidate;
+    size_t lastLeaderTerm;
 
     virtual void streamRLPFields(RLPStream& _s) const
     {
@@ -183,8 +190,8 @@ struct RaftVoteReq : public RaftMsg
         int field = 0;
         try
         {
-            candidate = _rlp[field = 4].toInt<u256>();
-            lastLeaderTerm = _rlp[field = 5].toInt<u256>();
+            candidate = _rlp[field = 4].toInt<raft::NodeIndex>();
+            lastLeaderTerm = _rlp[field = 5].toInt<size_t>();
         }
         catch (Exception const& _e)
         {
@@ -199,19 +206,19 @@ struct RaftVoteReq : public RaftMsg
 
 struct VoteState
 {
-    u256 vote = 0;
-    u256 unVote = 0;
-    u256 lastTermErr = 0;
-    u256 firstVote = 0;
-    u256 discardedVote = 0;
+    size_t vote = 0;
+    size_t unVote = 0;
+    size_t lastTermErr = 0;
+    size_t firstVote = 0;
+    size_t discardedVote = 0;
 
-    u256 totalVoteCount() { return vote + unVote + lastTermErr + firstVote + discardedVote; }
+    u64 totalVoteCount() { return vote + unVote + lastTermErr + firstVote + discardedVote; }
 };
 
 struct RaftVoteResp : public RaftMsg
 {
-    u256 voteFlag;
-    u256 lastLeaderTerm;
+    VoteRespFlag voteFlag;
+    size_t lastLeaderTerm;
 
     virtual void streamRLPFields(RLPStream& _s) const
     {
@@ -225,8 +232,8 @@ struct RaftVoteResp : public RaftMsg
         int field = 0;
         try
         {
-            voteFlag = _rlp[field = 4].toInt<u256>();
-            lastLeaderTerm = _rlp[field = 5].toInt<u256>();
+            voteFlag = static_cast<VoteRespFlag>(_rlp[field = 4].toInt<byte>());
+            lastLeaderTerm = _rlp[field = 5].toInt<size_t>();
         }
         catch (Exception const& _e)
         {
@@ -241,7 +248,7 @@ struct RaftVoteResp : public RaftMsg
 
 struct RaftHeartBeat : public RaftMsg
 {
-    u256 leader;
+    raft::NodeIndex leader;
 
     virtual void streamRLPFields(RLPStream& _s) const
     {
@@ -255,7 +262,7 @@ struct RaftHeartBeat : public RaftMsg
         int field = 0;
         try
         {
-            leader = _rlp[field = 4].toInt<u256>();
+            leader = _rlp[field = 4].toInt<raft::NodeIndex>();
         }
         catch (Exception const& _e)
         {
