@@ -39,11 +39,11 @@ namespace db
 class EncryptedLevelDBWriteBatch : public LevelDBWriteBatch
 {
 public:
-    EncryptedLevelDBWriteBatch(const std::string& _dataKey) : m_dataKey(_dataKey) {}
+    EncryptedLevelDBWriteBatch(const dev::bytes& _dataKey) : m_dataKey(_dataKey) {}
     void insertSlice(leveldb::Slice _key, leveldb::Slice _value) override;
 
 private:
-    std::string m_dataKey;
+    dev::bytes m_dataKey;
 };
 
 class EncryptedLevelDB : public BasicLevelDB
@@ -74,7 +74,7 @@ public:
 
 private:
     std::string m_cipherDataKey;
-    std::string m_dataKey;
+    dev::bytes m_dataKey;
 
 private:
     std::string getKeyOfDatabase();

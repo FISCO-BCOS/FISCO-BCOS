@@ -24,14 +24,15 @@
 #include "Common.h"
 #include "Exceptions.h"
 #include "easylog.h"
+#include <libdevcrypto/AES.h>
 
 using namespace std;
 using namespace dev;
 
-const std::string KeyCenter::getDataKey(const std::string& _cipherDataKey)
+const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
 {
     // Fake it
-    return "01234567012345670123456701234567";
+    return readableKeyBytes("01234567012345670123456701234567");
 };
 
 const std::string KeyCenter::generateCipherDataKey()

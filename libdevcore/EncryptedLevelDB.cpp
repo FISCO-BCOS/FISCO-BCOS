@@ -55,23 +55,22 @@ char* ascii2hex(const string& _str)
     return ascii2hex(chs, len);
 }
 
-std::string encryptValue(const std::string& _dataKey, leveldb::Slice _value)
+std::string encryptValue(const bytes& _dataKey, leveldb::Slice _value)
 {
-    string ivData = _dataKey.substr(0, 16);
     bytesConstRef valueRef = bytesConstRef((const unsigned char*)_value.data(), _value.size());
-    bytes enData = aesCBCEncrypt(valueRef, _dataKey, _dataKey.length(),
-        bytesConstRef{(const unsigned char*)ivData.c_str(), ivData.length()});
+    bytes enData = aesCBCEncrypt(valueRef, ref(_dataKey));
     return asString(enData);
 }
 
-std::string decryptValue(const std::string& _dataKey, const std::string& _value)
+std::string decryptValue(const bytes& _dataKey, const std::string& _value)
 {
-    string ivData = _dataKey.substr(0, 16);
     bytes deData = aesCBCDecrypt(
-        bytesConstRef{(const unsigned char*)_value.c_str(), _value.length()}, _dataKey,
-        _dataKey.length(), bytesConstRef{(const unsigned char*)ivData.c_str(), ivData.length()});
+        bytesConstRef{(const unsigned char*)_value.c_str(), _value.length()}, ref(_dataKey));
     return asString(deData);
 }
+
+}  // namespace db
+}  // namespace dev
 
 void EncryptedLevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice _value)
 {
@@ -145,7 +144,7 @@ EncryptedLevelDB::EncryptedLevelDB(
 
     // Decrypt cipher key from keycenter
     m_dataKey = g_keyCenter.getDataKey(m_cipherDataKey);
-    if (m_dataKey == "")
+    if (m_dataKey.empty())
     {
         m_openStatus = leveldb::Status::IOError(leveldb::Slice("Get dataKey failed"));
         return;
@@ -279,6 +278,3 @@ EncryptedLevelDB::OpenDBStatus EncryptedLevelDB::checkOpenDBStatus()
 
     return OpenDBStatus::Encrypted;
 }
-
-}  // namespace db
-}  // namespace dev

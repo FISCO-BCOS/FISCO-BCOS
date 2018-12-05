@@ -28,23 +28,10 @@
 
 namespace dev
 {
+DEV_SIMPLE_EXCEPTION(AESKeyLengthError);
 bytes aesDecrypt(bytesConstRef _cipher, std::string const& _password, unsigned _rounds = 2000,
     bytesConstRef _salt = bytesConstRef());
-
-bytes aesCBCEncrypt(bytesConstRef plainData, std::string const& keyData, int keyLen,
-    bytesConstRef ivData);  ////AES encrypt
-bytes aesCBCDecrypt(bytesConstRef cipherData, std::string const& keyData, int keyLen,
-    bytesConstRef ivData);  // AES decrypt
-
-#if ETH_ENCRYPTTYPE
-bytes gmCBCEncrypt(
-    bytesConstRef plainData, std::string const& keyData, int keyLen, bytesConstRef ivData);
-bytes gmCBCDecrypt(
-    bytesConstRef cipherData, std::string const& keyData, int keyLen, bytesConstRef ivData);
-#endif
-
-bytes origAesCBCEncrypt(
-    bytesConstRef plainData, std::string const& keyData, int keyLen, bytesConstRef ivData);
-bytes origAesCBCDecrypt(
-    bytesConstRef cipherData, std::string const& keyData, int keyLen, bytesConstRef ivData);
+bytes aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key);
+bytes aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key);
+bytes readableKeyBytes(const std::string& _readableKey);
 }  // namespace dev

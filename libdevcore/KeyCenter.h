@@ -20,6 +20,7 @@
  * @date: 2018-12-03
  */
 #pragma once
+#include "Common.h"
 #include <memory>
 #include <string>
 
@@ -32,7 +33,7 @@ public:
 
     KeyCenter(){};
 
-    const std::string getDataKey(const std::string& _cipherDataKey);
+    const dev::bytes getDataKey(const std::string& _cipherDataKey);
     const std::string generateCipherDataKey();
     void setUrl(const std::string& _url = "");
     const std::string url() { return m_url; }
