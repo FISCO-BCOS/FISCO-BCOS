@@ -1,22 +1,22 @@
 /*
-    This file is part of cpp-ethereum.
+    This file is part of FISCO-BCOS.
 
-    cpp-ethereum is free software: you can redistribute it and/or modify
+    FISCO-BCOS is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    cpp-ethereum is distributed in the hope that it will be useful,
+    FISCO-BCOS is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Transaction.cpp
- * @author Gav Wood <i@gavwood.com>, chaychen
- * @date 2014
+ * @author Gav Wood <i@gavwood.com>, chaychen, asherli
+ * @date 2018
  */
 
 #include "Transaction.h"
@@ -64,7 +64,11 @@ void Transaction::decode(RLP const& rlp, CheckTransaction _checkSig)
 
         m_data = rlp[6].toBytes();
 
-        m_vrs = SignatureStruct(rlp);
+        VType const v = rlp[7].toInt<TYPE_V>();  // 7
+        h256 const r = rlp[8].toInt<u256>();     // 8
+        h256 const s = rlp[9].toInt<u256>();     // 9
+
+        m_vrs = SignatureStruct(v, r, s);
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());

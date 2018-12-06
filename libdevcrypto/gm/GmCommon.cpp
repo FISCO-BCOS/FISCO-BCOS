@@ -1,23 +1,23 @@
 /*
-    This file is part of cpp-ethereum.
+    This file is part of FISCO-BCOS.
 
-    cpp-ethereum is free software: you can redistribute it and/or modify
+    FISCO-BCOS is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    cpp-ethereum is distributed in the hope that it will be useful,
+    FISCO-BCOS is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Common.cpp
  * @author Alex Leverington <nessence@gmail.com>
- * @author Gav Wood <i@gavwood.com>
- * @date 2014
+ * @author Asherli
+ * @date 2018
  */
 
 
@@ -46,21 +46,15 @@ SignatureStruct::SignatureStruct(Signature const& _s)
     *(Signature*)this = _s;
 }
 
+SignatureStruct::SignatureStruct(VType _v, h256 const& _r, h256 const& _s) : r(_r), s(_s), v(_v) {}
+
 SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
 
 void SignatureStruct::encode(RLPStream& _s) const noexcept
 {
     _s << (VType)(v) << (u256)r << (u256)s;
 }
-SignatureStruct::SignatureStruct(RLP const& rlp)
-{
-    v = rlp[7].toInt<u512>();  // 7
-    r = rlp[8].toInt<u256>();  // 8
-    s = rlp[9].toInt<u256>();  // 9
 
-    if (!v)
-        BOOST_THROW_EXCEPTION(eth::InvalidSignature());
-}
 
 void SignatureStruct::check() const noexcept
 {
