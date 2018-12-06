@@ -70,7 +70,7 @@
 #include <libweb3jsonrpc/Debug.h>
 #include <libweb3jsonrpc/Test.h>
 #include "Farm.h"
-
+#include <BuildInfo.h>
 //#include <ethminer/MinerAux.h>
 #include "AccountManager.h"
 
