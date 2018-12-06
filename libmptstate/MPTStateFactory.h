@@ -44,7 +44,7 @@ public:
         m_genesisHash(_genesisHash),
         m_we(_we)
     {
-        m_db = MPTState::openDB(m_basePath, m_genesisHash);
+        m_db = MPTState::openDB(m_basePath, m_genesisHash, _we);
     };
     virtual ~MPTStateFactory(){};
     virtual std::shared_ptr<dev::executive::StateFace> getState(

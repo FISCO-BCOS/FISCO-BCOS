@@ -24,9 +24,11 @@
 #include "DBInitializer.h"
 #include "LedgerParam.h"
 #include <libdevcore/Common.h>
+#include <libdevcore/EncryptedLevelDB.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::blockverifier;
@@ -58,15 +60,33 @@ void DBInitializer::initLevelDBStorage()
     DBInitializer_LOG(INFO) << "[#initStorageDB] [#initLevelDBStorage] ..." << std::endl;
     /// open and init the levelDB
     leveldb::Options ldb_option;
-    leveldb::DB* pleveldb = nullptr;
+    dev::db::BasicLevelDB* pleveldb = nullptr;
     try
     {
         boost::filesystem::create_directories(m_param->mutableStorageParam().path);
         ldb_option.create_if_missing = true;
         ldb_option.max_open_files = 100;
-        DBInitializer_LOG(DEBUG) << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler"
-                                 << std::endl;
-        leveldb::Status status = leveldb::DB::Open(ldb_option, m_param->baseDir(), &(pleveldb));
+
+        leveldb::Status status;
+
+        if (g_BCOSConfig.diskEncryption.enable)
+        {
+            // Use disk encryption
+            DBInitializer_LOG(DEBUG)
+                << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler" << std::endl;
+            status = EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path,
+                &(pleveldb), g_BCOSConfig.diskEncryption.cipherDataKey);
+        }
+        else
+        {
+            // Not to use disk encryption
+            DBInitializer_LOG(DEBUG)
+                << "[#initStorageDB] [#initLevelDBStorage]: open encrypted leveldb handler"
+                << std::endl;
+            status =
+                BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
+        }
+
         if (!status.ok())
         {
             DBInitializer_LOG(ERROR) << "[#initStorageDB] [openLevelDBStorage failed]" << std::endl;
@@ -76,7 +96,8 @@ void DBInitializer::initLevelDBStorage()
                                  << status.ok() << std::endl;
         std::shared_ptr<LevelDBStorage> leveldb_storage = std::make_shared<LevelDBStorage>();
         assert(leveldb_storage);
-        std::shared_ptr<leveldb::DB> leveldb_handler = std::shared_ptr<leveldb::DB>(pleveldb);
+        std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
+            std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
         leveldb_storage->setDB(leveldb_handler);
         m_storage = leveldb_storage;
     }
@@ -143,6 +164,7 @@ void DBInitializer::createStorageState()
 void DBInitializer::createMptState(dev::h256 const& genesisHash)
 {
     DBInitializer_LOG(DEBUG) << "[#createStateFactory] [#createMptState]" << std::endl;
+
     m_stateFactory = std::make_shared<MPTStateFactory>(
         u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
     DBInitializer_LOG(DEBUG) << "[#createStateFactory] [#createMptState SUCC]" << std::endl;

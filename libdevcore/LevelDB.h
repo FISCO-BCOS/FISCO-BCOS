@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include "BasicLevelDB.h"
 #include "db.h"
 
 #include <leveldb/db.h>
@@ -50,7 +51,7 @@ public:
     void forEach(std::function<bool(Slice, Slice)> f) const override;
 
 private:
-    std::unique_ptr<leveldb::DB> m_db;
+    std::unique_ptr<BasicLevelDB> m_db;
     leveldb::ReadOptions const m_readOptions;
     leveldb::WriteOptions const m_writeOptions;
 };
