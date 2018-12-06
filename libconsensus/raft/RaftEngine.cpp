@@ -193,18 +193,20 @@ void RaftEngine::reportBlock(dev::eth::Block const& _block)
 
     if (m_blockChain->number() == 0 || m_highestBlock.number() < _block.blockHeader().number())
     {
-        m_lastBlockTime = u256(utcTime());
+        m_lastBlockTime = utcTime();
         m_highestBlockHeader = _block.blockHeader();
         if (m_highestBlock.number() >= m_consensusBlockNumber)
         {
             m_consensusBlockNumber = m_highestBlock.number() + 1;
         }
         resetConfig();
-        RAFTENGINE_LOG(INFO) << "[#reportBlock] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: [number]: "
-                             << m_highestBlock.number() << ", [idx]: " << m_highestBlock.sealer()
+        RAFTENGINE_LOG(INFO) << "[#reportBlock] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report:"
+                             << " [number]: " << m_highestBlock.number()
+                             << ", [idx]: " << m_highestBlock.sealer()
                              << ", [hash]: " << m_highestBlock.hash().abridged()
                              << ", [next]: " << m_consensusBlockNumber
-                             << ", [txNum]: " << _block.getTransactionSize() << std::endl;
+                             << ", [txNum]: " << _block.getTransactionSize()
+                             << ", [blockTime]: " << m_lastBlockTime;
     }
 }
 
@@ -1217,8 +1219,8 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
 
 bool RaftEngine::reachBlockIntervalTime()
 {
-    u256 nowTime = u256(utcTime());
-    u256 parentTime = m_lastBlockTime;
+    auto nowTime = utcTime();
+    auto parentTime = m_lastBlockTime;
 
-    return nowTime - parentTime < dev::config::SystemConfigMgr::c_intervalBlockTime;
+    return nowTime - parentTime >= dev::config::SystemConfigMgr::c_intervalBlockTime;
 }

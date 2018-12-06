@@ -226,7 +226,7 @@ protected:
     // the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
 
-    u256 m_lastBlockTime;
+    uint64_t m_lastBlockTime;
 };
 }  // namespace consensus
 }  // namespace dev
