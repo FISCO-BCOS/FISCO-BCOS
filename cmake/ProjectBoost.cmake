@@ -23,6 +23,7 @@ include(GNUInstallDirs)
 
 set(BOOST_CXXFLAGS "")
 set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh)
+set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
 set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
 if (${BUILD_SHARED_LIBS})
@@ -42,8 +43,8 @@ ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
     #URL https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/deps/src/boost_1_63_0.tar.gz
-    URL http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz
     #URL_HASH SHA256=eb4c6f7e4e11905e1a98619f8a664dc4dca2d477bc985cfaf94463eef83a1aaa
+    URL http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz
     URL_HASH SHA256=da3411ea45622579d419bfda66f45cd0f8c32a181d84adfa936f5688388995cf
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${BOOST_BOOTSTRAP_COMMAND}
@@ -65,14 +66,15 @@ ExternalProject_Add(boost
         --with-serialization
         --with-program_options
     LOG_BUILD 1
+    LOG_INSTALL 1
     INSTALL_COMMAND ""
+    # INSTALL_COMMAND ${BOOST_INSTALL_COMMAND}
     BUILD_BYPRODUCTS ${BOOST_BUILD_FILES}
 )
 
 ExternalProject_Get_Property(boost SOURCE_DIR)
 set(BOOST_INCLUDE_DIR ${SOURCE_DIR})
 set(BOOST_LIB_DIR ${SOURCE_DIR}/stage/lib)
-unset(BUILD_DIR)
 
 add_library(Boost::Chrono STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Chrono PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_chrono${BOOST_LIBRARY_SUFFIX})
@@ -116,3 +118,5 @@ add_library(Boost::program_options STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::program_options PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_program_options${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::program_options PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 add_dependencies(Boost::program_options boost)
+
+unset(SOURCE_DIR)

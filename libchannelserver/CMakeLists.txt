@@ -8,8 +8,6 @@ add_library(channelserver ${SRC_LIST} ${HEADERS})
 
 target_include_directories(channelserver PRIVATE ..)
 target_include_directories(channelserver PUBLIC ${BOOST_INCLUDE_DIR})
-target_link_libraries(channelserver PUBLIC JsonRpcCpp::Server)
-# add_dependencies(channelserver Boost::Thread)
-add_dependencies(channelserver boost)
+target_link_libraries(channelserver PUBLIC JsonRpcCpp::Server Boost::Thread)
 
 install(TARGETS channelserver RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
