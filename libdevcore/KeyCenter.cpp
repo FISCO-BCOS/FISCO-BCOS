@@ -24,15 +24,38 @@
 #include "Common.h"
 #include "Exceptions.h"
 #include "easylog.h"
+#include <jsonrpccpp/client.h>
+#include <jsonrpccpp/client/connectors/httpclient.h>
 #include <libdevcrypto/AES.h>
 
 using namespace std;
 using namespace dev;
+using namespace jsonrpc;
 
 const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
 {
-    // Fake it
-    return readableKeyBytes("01234567012345670123456701234567");
+    HttpClient client(m_url);
+    Client node(client);
+
+    string dataKeyBytesStr;
+    try
+    {
+        Json::Value params(Json::arrayValue);
+        params.append(_cipherDataKey);
+        Json::Value rsp = node.CallMethod("decDataKey", params);
+
+        int error = rsp["error"].asInt();
+        dataKeyBytesStr = rsp["dataKey"].asString();
+        string info = rsp["info"].asString();
+        if (error)
+            BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(info));
+    }
+    catch (exception& e)
+    {
+        BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
+    }
+
+    return fromHex(dataKeyBytesStr);
 };
 
 const std::string KeyCenter::generateCipherDataKey()
@@ -43,8 +66,8 @@ const std::string KeyCenter::generateCipherDataKey()
 
 void KeyCenter::setUrl(const std::string& _url)
 {
-    LOG(DEBUG) << "[KeyCenter] Instance url: " << m_url << endl;
     m_url = _url;
+    LOG(DEBUG) << "[KeyCenter] Instance url: " << m_url << endl;
 }
 
 KeyCenter& KeyCenter::instance()

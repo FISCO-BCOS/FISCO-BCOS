@@ -33,8 +33,8 @@ public:
 
     KeyCenter(){};
 
-    const dev::bytes getDataKey(const std::string& _cipherDataKey);
-    const std::string generateCipherDataKey();
+    virtual const dev::bytes getDataKey(const std::string& _cipherDataKey);
+    virtual const std::string generateCipherDataKey();
     void setUrl(const std::string& _url = "");
     const std::string url() { return m_url; }
 
