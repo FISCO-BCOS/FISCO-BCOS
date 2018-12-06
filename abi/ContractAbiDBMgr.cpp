@@ -59,6 +59,10 @@ namespace libabi
 		o.max_open_files    = 256;
 		o.create_if_missing = true;
 		leveldb::DB * db    = nullptr;
+		if (dev::g_withExisting == WithExisting::Rescue) {
+			ldb::Status status = leveldb::RepairDB(path + "/abiname", o);
+			LOG(INFO)<< "repair CNS leveldb:" << status.ToString();
+		}
 
 		//打开 state db
 		leveldb::Status status = ldb::DB::Open(o, path + "/abiname", &db);

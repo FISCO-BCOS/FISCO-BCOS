@@ -116,7 +116,7 @@ class BlockChain
 public:
 	/// Doesn't open the database - if you want it open it's up to you to subclass this and open it
 	/// in the constructor there.
-	BlockChain(std::shared_ptr<Interface> _interface, ChainParams const& _p, std::string const& _path, WithExisting _we = WithExisting::Trust, ProgressCallback const& _pc = ProgressCallback());
+	BlockChain(Interface* _interface, ChainParams const& _p, std::string const& _path, WithExisting _we = WithExisting::Trust, ProgressCallback const& _pc = ProgressCallback());
 	~BlockChain();
 
 	/// Reopen everything.
@@ -343,7 +343,7 @@ public:
 	bytes encryptodata(bytesConstRef const& v);
 	bytes encryptodata(bytes const& v);
 	bytes decryptodata(std::string const& v) const;
-	std::shared_ptr<Interface> getClient() const { return m_interface; }
+	std::shared_ptr<Interface> getClient() const { return m_interface->shared_from_this(); }
 private:
 	enum CRYPTOTYPE
 	{
@@ -462,7 +462,7 @@ private:
 	std::string m_dbPath;
 
 	std::shared_ptr<NonceCheck> m_pnoncecheck; 
-	std::shared_ptr<Interface> m_interface;
+	Interface* m_interface;
 
 	mutable SharedMutex  x_blockcache;
 	mutable std::map<h256, std::pair<Block, u256> > m_blockCache;

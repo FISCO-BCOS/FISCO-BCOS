@@ -126,18 +126,18 @@ private:
 	bool broadcastSignReq(PrepareReq const& _req);
 	bool broadcastCommitReq(PrepareReq const & _req);
 	bool broadcastViewChangeReq();
-	bool broadcastMsg(std::string const& _key, unsigned _id, bytes const& _data, std::unordered_set<h512> const& _filter = std::unordered_set<h512>());
+	bool broadcastMsg(std::string const& _key, unsigned _id, bytes const& _data, bool fromSelf = true, std::unordered_set<h512> const& _filter = std::unordered_set<h512>());
 	bool broadcastFilter(std::string const& _key, unsigned _id, shared_ptr<PBFTPeer> _p);
 	void broadcastMark(std::string const& _key, unsigned _id, shared_ptr<PBFTPeer> _p);
 	void clearMask();
 
 	// 处理响应消息
 	// handle msg
-	void handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r);
+	void handleMsg(unsigned _id, u256 const& _from, h512 const& _node, RLP const& _r, std::weak_ptr<SessionFace> session);
 	void handlePrepareMsg(u256 const& _from, PrepareReq const& _req, bool _self = false);
 	void handleSignMsg(u256 const& _from, SignReq const& _req);
 	void handleCommitMsg(u256 const& _from, CommitReq const& _req);
-	void handleViewChangeMsg(u256 const& _from, ViewChangeReq const& _req);
+	void handleViewChangeMsg(u256 const& _from, ViewChangeReq const& _req, std::weak_ptr<SessionFace> session);
 
 	void reHandlePrepareReq(PrepareReq const& _req);
 
@@ -178,9 +178,9 @@ private:
 	std::function<void()> m_onViewChange;
 
 	std::weak_ptr<PBFTHost> m_host;
-	std::shared_ptr<BlockChain> m_bc;
-	std::shared_ptr<OverlayDB> m_stateDB;
-	std::shared_ptr<BlockQueue> m_bq;
+	BlockChain* m_bc;
+	OverlayDB* m_stateDB;
+	BlockQueue* m_bq;
 
 	u256 m_node_idx = 0;
 	u256 m_view = 0;

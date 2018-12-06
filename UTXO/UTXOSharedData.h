@@ -56,7 +56,7 @@ namespace UTXOModel
 		}
 
 		// Database initialization
-		void initialize(const string& strDBPath);
+		void initialize(const string& strDBPath, WithExisting _we);
 		leveldb::DB* getVaultDB() { return m_vaultdb; }
 		leveldb::DB* getDB() { return m_db; }
 		leveldb::DB* getExtraDB() { return m_extradb; }
@@ -92,7 +92,7 @@ namespace UTXOModel
 		leveldb::DB* m_vaultdb{ nullptr };					// Database for inconsistent vault data
 		leveldb::DB* m_db{ nullptr };						// Database for consistent data
 		leveldb::DB* m_extradb{ nullptr };					// Database for other consistent data
-		leveldb::DB* openUTXODB(string const& _basePath);
+		leveldb::DB* openUTXODB(string const& _basePath, WithExisting _we);
 
 		// The parameters of block that execute the transaction
 		std::shared_ptr<Block> m_pPreBlock;

@@ -46,17 +46,17 @@ execute_cmd()
 # get platform: now support debain/ubuntu, fedora/centos, oracle
 get_platform()
 {
-    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - Require 'uname' to identify the platform."; exit 1; }
+    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
     case $(uname -s) in
     Darwin)
-        LOG_ERROR "Not Support MAC OS Yet!"
+        LOG_ERROR "FISCO-BCOS doesn't Support MAC OS Yet!"
         exit 1;;
     FreeBSD)
-        LOG_ERROR "Not Support FreeBSD Yet!"
+        LOG_ERROR "FISCO-BCOS doesn't Support FreeBSD Yet!"
         exit 1;;
     Linux)
         if [ -f "/etc/arch-release" ]; then
-            LOG_ERROR "Not Support arch-linux Yet!"
+            LOG_ERROR "FISCO-BCOS doesn't Support arch-linux Yet!"
         elif [ -f "/etc/os-release" ];then
             DISTRO_NAME=$(. /etc/os-release; echo $NAME)
             case $DISTRO_NAME in
@@ -193,9 +193,9 @@ build_ubuntu_source()
 	# build source
 	execute_cmd "mkdir -p build && cd build/"
 	if [ ${enable_guomi} -eq 0 ];then
-		execute_cmd "cmake -DEVMJIT=OFF -DTESTS=OFF .. "
+		execute_cmd "cmake .. "
 	else
-		execute_cmd "cmake -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF .. "
+		execute_cmd "cmake -DENCRYPTTYPE=ON .. "
 	fi
 	execute_cmd "make && sudo make install"
 }
@@ -205,9 +205,9 @@ build_centos_source()
 	# build source
 	execute_cmd "mkdir -p build && cd build/"
 	if [ ${enable_guomi} -eq 0 ];then
-		execute_cmd "cmake3 -DEVMJIT=OFF -DTESTS=OFF .. "
+		execute_cmd "cmake3 .. "
 	else
-		execute_cmd "cmake3 -DENCRYPTTYPE=ON -DEVMJIT=OFF -DTESTS=OFF .. "
+		execute_cmd "cmake3 -DENCRYPTTYPE=ON .. "
 	fi
 	execute_cmd "make && sudo make install && cd ${current_dir}"
 }
@@ -229,11 +229,16 @@ build_source()
 
 download_binary()
 {
-	execute_cmd "curl -LO ${binary_link}"
+	if [ ${enable_guomi} -eq 0 ];then
+		execute_cmd "curl -Lo fisco-bcos ${binary_link}"
+	else
+		build_source
+		# execute_cmd "curl -Lo fisco-bcos ${binary_link}-gm"
+		return 0
+	fi
 	execute_cmd "chmod a+x fisco-bcos"
 	execute_cmd "sudo mv fisco-bcos /usr/local/bin/"
 }
-
 nodejs_init()
 {
 	cd ${current_dir}
@@ -261,7 +266,7 @@ check_nodejs()
 	echo | awk  '{if(node < "v6") print "WARNING : fisco need nodejs verion newer than v6(refer to: https://gaoliming123.github.io/2017/07/30/node/) , current version is '$node'"}' node="$node"
 	if [ "" = "`openssl ecparam -list_curves | grep secp256k1`" ];
 	then
-    	LOG_ERROR "Not Support secp256k1 ! Please Upgrade Openssl To  OpenSSL 1.0.2k-fips"
+    	LOG_ERROR "Current Openssl doesn't Support secp256k1 ! Please Upgrade Openssl To  OpenSSL 1.0.2k-fips"
     	exit;
 	fi
 }

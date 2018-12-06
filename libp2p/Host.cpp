@@ -178,6 +178,9 @@ void HostApi::stop()
 	// stop worker thread
 	if (isWorking())
 		stopWorking();
+	// stop capabilities (eth: stops syncing or block/tx broadcast)
+	for (auto const& h : m_capabilities)
+		h.second->onStopping();
 }
 
 void HostApi::doWork()
@@ -612,9 +615,11 @@ void Host::doneWorking()
 	m_timers.clear();
 
 	// shutdown acceptor
-	m_tcp4Acceptor.cancel();
 	if (m_tcp4Acceptor.is_open())
+	{
 		m_tcp4Acceptor.close();
+		m_tcp4Acceptor.cancel();
+	}
 
 	// There maybe an incoming connection which started but hasn't finished.
 	// Wait for acceptor to end itself instead of assuming it's complete.
