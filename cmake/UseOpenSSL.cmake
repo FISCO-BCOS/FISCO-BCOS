@@ -1,5 +1,6 @@
 function(eth_apply TARGET REQUIRED)
 	if (BUILD_GM)
+		set(OPENSSL_INCLUDE_DIRS ${TASSL_INCLUDE_DIRS})
 		target_include_directories(${TARGET} SYSTEM PUBLIC ${TASSL_INCLUDE_DIRS})
 		target_link_libraries(${TARGET} ${TASSL_LIBRARIES})
 	else()

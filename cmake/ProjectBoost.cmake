@@ -31,11 +31,6 @@ endif()
 
 
 set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
-if (BUILD_GM)
-set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${TASSL_INCLUDE_DIRS})
-else()
-set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${OPENSSL_INCLUDE_DIRS})
-endif()
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
@@ -65,6 +60,9 @@ ExternalProject_Add(boost
     LOG_BUILD 1
     INSTALL_COMMAND ""
 )
+if (BUILD_GM)
+    add_dependencies(boost tassl)
+endif()
 
 ExternalProject_Get_Property(boost SOURCE_DIR)
 set(BOOST_INCLUDE_DIR ${SOURCE_DIR})

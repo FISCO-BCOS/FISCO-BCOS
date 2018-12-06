@@ -6,9 +6,10 @@ file(GLOB HEADERS "*.h")
 
 add_library(channelserver ${SRC_LIST} ${HEADERS})
 
+eth_use(channelserver OPTIONAL OpenSSL)
 target_include_directories(channelserver PRIVATE ..)
 target_include_directories(channelserver PUBLIC ${BOOST_INCLUDE_DIR})
-target_link_libraries(channelserver PUBLIC JsonRpcCpp::Server)
+target_link_libraries(channelserver JsonRpcCpp::Server)
 add_dependencies(channelserver Boost::Thread)
 
 install(TARGETS channelserver RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
