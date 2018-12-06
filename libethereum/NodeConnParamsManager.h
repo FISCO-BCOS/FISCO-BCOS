@@ -77,7 +77,7 @@ public:
 	void SaveCADataInSession(const std::string nodeId, CABaseData &caBaseData) override ;
 	void CAInfoModifyCallback(const std::string& pub256);
 	void CAVerifyModifyCallback();
-	void SetHost(HostApi *host)override;
+	void SetHost(std::shared_ptr<p2p::HostApi> host)override;
 	bool CheckConnectCert(const std::string& serialNumber,const std::string& ip)override;
 
 private:
@@ -98,7 +98,7 @@ private:
 	mutable std::map<std::string, NodeConnParams>	_mNodeConnParams;
 	mutable Mutex _xConfigNodeConnParam;
 	mutable std::map<std::string, NodeConnParams> _mConfNodeConnParams;
-	HostApi* m_host;
+	std::shared_ptr<p2p::HostApi> m_host;
 	bool m_godminer=false;
 };
 

@@ -48,7 +48,6 @@ public:
 
 	virtual void getAllNode(int, std::map<std::string, NodeParams> & mNodeParams) const override;
 	virtual void getAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams) const override ;
-	virtual void updateAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams)  override ;
 	virtual void connNode(const ConnectParams &param) override;
 	virtual void disconnNode(const std::string & sNodeId) override;
 	virtual void setSysContractApi(std::shared_ptr<SystemContractApi> sysContractApi) override;
@@ -62,7 +61,7 @@ public:
 	unsigned getNodeNum() const override;
 
 	void caModifyCallback(const std::string& pub256)override;
-	void SetHost(HostApi *host) override;
+	void SetHost(std::shared_ptr<p2p::HostApi>) override;
 	bool checkCertOut(const std::string& serialNumber)override;
 private:
 	bool checkNodesValid(const std::vector< NodeParams> &vNodes);
@@ -78,7 +77,7 @@ private:
 	static Mutex m_mutexconnect;
 	mutable std::map<std::string, NodeIPEndpoint> m_connectnodes;
 	std::pair<bool, std::map<std::string, NodeParams> > getGodMiner(int  blockNum)const;
-	HostApi* m_host;
+	std::shared_ptr<p2p::HostApi> m_host;
 	bool m_godminer=false;
 };
 }

@@ -24,7 +24,7 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 
 * 1.3
 
-	- [FISCO-BCOS-1.3.4-Release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.4) 源码([v1.3.4.tar.gz](https://github.com/FISCO-BCOS/FISCO-BCOS/archive/v1.3.4.tar.gz)) [使用文档](https://fisco-bcos-documentation.readthedocs.io) 2018-09-14
+	- [FISCO-BCOS-1.3.5-Release](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/tag/v1.3.5) 源码([v1.3.5.tar.gz](https://github.com/FISCO-BCOS/FISCO-BCOS/archive/v1.3.5.tar.gz)) [使用文档](https://fisco-bcos-documentation.readthedocs.io) 2018-12-06
 
 ### 体验版本
 
@@ -47,7 +47,3 @@ FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FI
 ![](./doc/FISCO-BCOS.jpeg)
 
 诚邀广大安全专家共同关注区块链安全。如果有安全风险，欢迎各位踊跃提交漏洞至[微众SRC](https://security.webank.com)。
-
-## 其它
-
-[老版本README](./doc/OLD_README.md)

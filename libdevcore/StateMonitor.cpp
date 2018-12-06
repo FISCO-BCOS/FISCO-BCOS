@@ -42,6 +42,9 @@ using namespace boost;
 namespace statemonitor
 {
 
+bool shouldExit = false;
+bool isRunning = false; 
+
 static std::map<int, StateMonitorByTime> monitorByTimeTable;
 static std::map<int, StateMonitorByNum> monitorByNumTable;
 
@@ -304,7 +307,7 @@ void StateMonitorByTime::recordOnce(int code, uint64_t interval, data_t value, s
 void StateMonitorByTime::timerToReport(sec_t sec_time) 
 {
     //std::cout << "sec_time: " << sec_time << " interval: " << _interval << " code: " << code << " state_name: " << state_name << std::endl;
-    if (_is_timer_on && sec_time % _interval == 0)
+    if (_is_timer_on && _interval != 0 && sec_time % _interval == 0)
     {
         //sleep(_interval); //若在sleep时修改了interval，也要等本次跑完，下次新的interval才生效
         LOCK_MONITOR(Time); //此处是在线程中跑，共享name和info变量，所以需要加与入口一样的锁
@@ -328,27 +331,34 @@ void StateMonitorByTime::startTimer(sec_t interval)
 void globalTimerLoop()
 {
     StateMonitorByTime::sec_t sec_time = 0, gap = 1;
-    while(true)
+    while(!shouldExit)
     {
         sec_time += gap; //溢出没关系
         sleep(gap);
         for (auto &state : monitorByTimeTable)
         {
-            //std::cout << "Report: " << state.first << std::endl;
-            state.second.timerToReport(sec_time);
+            try
+            {
+                if(shouldExit) break;
+                //std::cout << "Report: " << state.first << std::endl;
+                state.second.timerToReport(sec_time);
+            }
+            catch (std::exception &e)
+            {
+                LOG(ERROR) << "Report failed for: " << e.what();
+            }
         }
     }
+    isRunning = false;
 }
 
 void enableTimerLoop()
 {
-    static bool enabled;
-
     static std::mutex enable_lock;
     enable_lock.lock();
-    if (!enabled)
+    if (!isRunning)
     {
-        enabled = true;
+        isRunning = true;
         enable_lock.unlock();
         boost::thread timer_thread(&globalTimerLoop);
     }
