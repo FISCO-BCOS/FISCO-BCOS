@@ -87,7 +87,11 @@ DbEncrypto::~DbEncrypto(void)
 
 ldb::Status DbEncrypto::Open(const ldb::Options& options,const std::string& name)
 {
-	return ldb::DB::Open(options,name,&m_db);
+	if (dev::g_withExisting == WithExisting::Rescue) {
+            ldb::Status stateStatus = leveldb::RepairDB(name, options);
+            LOG(INFO) << "repair DbEncrypto leveldb:" << stateStatus.ToString();
+    }
+	return ldb::DB::Open(options, name, &m_db);
 }
 
 ldb::Status DbEncrypto::Put(const ldb::WriteOptions& options, const ldb::Slice& key, const ldb::Slice& value)

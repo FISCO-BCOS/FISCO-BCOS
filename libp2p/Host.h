@@ -125,7 +125,7 @@ namespace dev
 
 		enum PeerSlotType { Egress, Ingress };
 
-		class HostApi: public Worker
+		class HostApi: public Worker, public std::enable_shared_from_this<HostApi>
 		{
 			
 
@@ -159,7 +159,7 @@ namespace dev
 			template <class T> 
 			std::shared_ptr<T> registerCapability(std::shared_ptr<T> const& _t)
 			{
-				_t->m_host = this;
+				_t->m_host = shared_from_this();
 				m_capabilities[std::make_pair(T::staticName(), T::staticVersion())] = _t;
 				return _t;
 			}

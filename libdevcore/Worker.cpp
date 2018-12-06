@@ -31,7 +31,7 @@ using namespace dev;
 void Worker::startWorking()
 {
 //	LOG(INFO) << "startWorking for thread" << m_name;
-	Guard l(x_work);
+	DEV_RECURSIVE_GUARDED(x_work);
 	if (m_work)
 	{
 		WorkerState ex = WorkerState::Stopped;
@@ -41,7 +41,6 @@ void Worker::startWorking()
 	else
 	{
 		m_state = WorkerState::Starting;
-		//新起线程异步执行
 		m_work.reset(new thread([&]()
 		{
 			pthread_setThreadName(m_name.c_str());
@@ -49,22 +48,20 @@ void Worker::startWorking()
 			while (m_state != WorkerState::Killing)
 			{
 				WorkerState ex = WorkerState::Starting;
-				//不确定这段代码执行有什么用， 为了下面的日志？  还有一个强制转换也不确定
 				bool ok = m_state.compare_exchange_strong(ex, WorkerState::Started);
 //				LOG(INFO) << "Trying to set Started: Thread was" << (unsigned)ex << "; " << ok;
 				(void)ok;
 
 				try
 				{
-					//host继承worker  这里调用host里面的继承方法
-					//client继承worker
 					startedWorking();
 					workLoop();
 					doneWorking();
 				}
 				catch (std::exception const& _e)
 				{
-					LOG(ERROR) << "Exception thrown in Worker thread[" << m_name << "]: " << _e.what();
+					LOG(ERROR) << "Exception thrown in Worker thread[" << m_name << "]: " << _e.what()
+							<< " " << boost::diagnostic_information(_e);
 				}
 
 //				ex = WorkerState::Stopping;
@@ -90,22 +87,37 @@ void Worker::startWorking()
 
 void Worker::stopWorking()
 {
-	DEV_GUARDED(x_work)
-		if (m_work)
-		{
-			WorkerState ex = WorkerState::Started;
-			m_state.compare_exchange_strong(ex, WorkerState::Stopping);
+	DEV_RECURSIVE_GUARDED(x_work)
+	if (m_work) {
+		WorkerState ex = WorkerState::Started;
+		m_state.compare_exchange_strong(ex, WorkerState::Stopping);
+	}
+	else {
+		return;
+	}
 
-			DEV_TIMED_ABOVE("Stop worker", 100)
-				while (m_state != WorkerState::Stopped)
-					this_thread::sleep_for(chrono::microseconds(20));
+	DEV_TIMED_ABOVE("Stop worker", 100)
+	while (true) {
+		bool stop = false;
+		
+		DEV_RECURSIVE_GUARDED(x_work) {
+			if(m_state == WorkerState::Stopped) {
+				stop = true;
+			}
 		}
+		this_thread::sleep_for(chrono::milliseconds(20));
+		if(stop) {
+			break;
+		}
+
+		
+	}
 }
 
 void Worker::terminate()
 {
 //	LOG(INFO) << "stopWorking for thread" << m_name;
-	DEV_GUARDED(x_work)
+	DEV_RECURSIVE_GUARDED(x_work)
 		if (m_work)
 		{
 			m_state.exchange(WorkerState::Killing);

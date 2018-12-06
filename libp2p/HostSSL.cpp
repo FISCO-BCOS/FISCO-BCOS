@@ -63,14 +63,15 @@ void HostSSL::doneWorking()
 {
 	// reset ioservice (cancels all timers and allows manually polling network, below)
 	m_ioService.reset();
-
 	DEV_GUARDED(x_timers)
 	m_timers.clear();
 
 	// shutdown acceptor
-	m_tcp4Acceptor.cancel();
 	if (m_tcp4Acceptor.is_open())
+	{
 		m_tcp4Acceptor.close();
+		m_tcp4Acceptor.cancel();
+	}
 
 	while (m_accepting)
 		m_ioService.poll();
@@ -669,7 +670,7 @@ void HostSSL::reconnectAllNodes()
 	NodeConnManagerSingleton::GetInstance().getAllConnect(mConnectParams);
 	std::map<std::string, NodeIPEndpoint> mMergeConnectParams;//merge 
 	
-
+	/* /// commented by wheatli, there is a bug in this section, it will not merge the session peers when the config list is empty
 	RecursiveGuard l(x_sessions);
 	for (auto stNode : mConnectParams)
 	{
@@ -703,73 +704,37 @@ void HostSSL::reconnectAllNodes()
 		if( !mMergeConnectParams.count(stNode.second.name()))
 			mMergeConnectParams[stNode.second.name()] = stNode.second;
 		
-	}//for
+	}//for */
 
-	NodeConnManagerSingleton::GetInstance().updateAllConnect(mMergeConnectParams);
-	m_lastReconnect = chrono::steady_clock::now();
-	m_reconnectnow = false;
-
-	if ( (chrono::steady_clock::now() - c_AnnouncementConnectNodesIntervalSSL < m_lastAnnouncementConnectNodes)  )
-		return;
-	// broad to other nodes
-	std::vector<Node>	peerNodes;
-	h256 allPeerHash;
-	getAnnouncementNodeList(allPeerHash,peerNodes);
-	for (auto& i : m_sessions)
-		if (auto j = i.second.lock())
-			if (j->isConnected())
-				j->announcement(allPeerHash);
-
-	m_lastAnnouncementConnectNodes = chrono::steady_clock::now();
-
-}
-
-void HostSSL::getAnnouncementNodeList(h256& _allNodeHash,std::vector<Node> & _nodes)
-{
-	_nodes.clear();
-	std::vector<Node>	peerNodes;
-
-	RecursiveGuard l(x_sessions);
-	for (auto const& p : m_peers)
-	{
-		peerNodes.push_back( Node(p.second->address(),p.second->endpoint) );
+	for (auto stNode : mConnectParams) {
+		mMergeConnectParams[stNode.second.name()] = stNode.second;
 	}
 	
-	std::string allPeer;
-	std::vector<Node> allNode;
-	allNode=peerNodes;
-	allNode.push_back( Node(id(),NodeIPEndpoint(m_tcpPublic.address(),m_listenPort,m_listenPort)) );
-	std::sort(allNode.begin(), allNode.end(), [&](const Node & a, const Node &  b) {
-		return a.endpoint.name() < b.endpoint.name();
-	});
-	for (auto const& n : allNode)
-	{
-		allPeer += n.endpoint.name();
-	}
-
-	_allNodeHash = sha3(allPeer);
-
-	if( peerNodes.size() < c_maxAnnouncementSize )
-	{
-		_nodes = peerNodes;
-	}
-	else
-	{
-		for( size_t i=0;i<peerNodes.size();i++)
-		{
-			Node t = peerNodes[i];
-			int r = rand()%peerNodes.size();
-			peerNodes[i]  =peerNodes[r];
-			peerNodes[r] = t;
-		}
-		for( size_t i = 0;i < c_maxAnnouncementSize; i++)
-		{
-			LOG(TRACE) << "HostSSL::getAnnouncementNodeList sendNode name=" << peerNodes[i].endpoint.name();
-			_nodes.push_back(peerNodes[i]);
-
+	RecursiveGuard l(x_sessions);
+	std::set<std::string> sessionSet;
+	for (auto const& p : m_peers) {
+		if( !mMergeConnectParams.count(p.second->endpoint.name()))
+			mMergeConnectParams[p.second->endpoint.name()] = p.second->endpoint;
+			
+		if( !p.second->endpoint.host.empty() )
+			mMergeConnectParams[p.second->endpoint.name()].host = p.second->endpoint.host;
+		
+		if (havePeerSession(p.second->id)) {
+			sessionSet.insert(p.second->endpoint.name());
 		}
 	}
-	LOG(TRACE) << "HostSSL::getAnnouncementNodeList " << toString(_allNodeHash) << ",Peers=" << _nodes.size();
+
+	for (auto stNode : mMergeConnectParams) {
+		bool hasPeer = sessionSet.count(stNode.first);
+		if( !hasPeer && ( m_tcpPublic != stNode.second) && (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) != stNode.second) )
+		{
+			LOG(TRACE) << "HostSSL::reconnectAllNodes try to reconnect " << stNode.first;
+			connect(stNode.second);
+		}
+	}
+
+	m_lastReconnect = chrono::steady_clock::now();
+	m_reconnectnow = false;
 }
 
 void HostSSL::disconnectLatePeers()

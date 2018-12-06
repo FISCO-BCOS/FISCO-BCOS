@@ -43,11 +43,11 @@ public:
 	PBFTClient(
 	    ChainParams const& _params,
 	    int _networkID,
-	    p2p::HostApi* _host,
+	    std::shared_ptr<p2p::HostApi> _host,
 	    std::shared_ptr<GasPricer> _gpForAdoption,
 	    std::string const& _dbPath = std::string(),
 	    WithExisting _forceAction = WithExisting::Trust,
-	    TransactionQueue::Limits const& _l = TransactionQueue::Limits {102400, 102400}
+	    TransactionQueue::Limits const& _l = TransactionQueue::Limits {1024, 1024}
 	);
 
 	virtual ~PBFTClient();
@@ -59,7 +59,7 @@ public:
 	PBFT* pbft() const;
 
 protected:
-	void init(ChainParams const& _params, p2p::HostApi *_host);
+	void init(ChainParams const& _params, std::shared_ptr<p2p::HostApi> _host);
 	void doWork(bool _doWait) override;
 	void rejigSealing() override;
 	void syncBlockQueue() override;

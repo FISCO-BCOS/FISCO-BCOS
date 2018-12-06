@@ -52,7 +52,7 @@ PBFTClient* dev::eth::asPBFTClient(Interface* _c)
 PBFTClient::PBFTClient(
     ChainParams const& _params,
     int _networkID,
-    p2p::HostApi* _host,
+    std::shared_ptr<p2p::HostApi> _host,
     std::shared_ptr<GasPricer> _gpForAdoption,
     std::string const& _dbPath,
     WithExisting _forceAction,
@@ -75,7 +75,7 @@ PBFTClient::~PBFTClient() {
 	stopWorking();
 }
 
-void PBFTClient::init(ChainParams const& _params, p2p::HostApi *_host) {
+void PBFTClient::init(ChainParams const& _params, std::shared_ptr<p2p::HostApi> _host) {
 	m_params = _params;
 	m_working.setEvmCoverLog(m_params.evmCoverLog);
 	m_working.setEvmEventLog(m_params.evmEventLog);
@@ -175,7 +175,7 @@ void PBFTClient::syncTransactionQueue(u256 const& _max_block_txs)
 	if (!newPendingReceipts.empty())
 	{
 		DEV_WRITE_GUARDED(x_postSeal)
-		m_postSeal = m_working; //add this to let RPC interface "eth_pendingTransactions" to get value 加上这一步是为了RPC接口eth_pendingTransactions能更加容易读到值	
+		m_postSeal = m_working; //add this to let RPC interface "eth_pendingTransactions" to get value 加上这一步是为了RPC接口eth_pendingTransactions能更加容易读到值
 	}
 }
 
@@ -274,6 +274,7 @@ void PBFTClient::rejigSealing() {
 				if (passed_time < sealEngine()->getIntervalBlockTime()) {
 					left_time = static_cast<uint64_t>(sealEngine()->getIntervalBlockTime()) - passed_time;
 				}*/
+#if 0
 				auto last_exec_finish_time = m_last_exec_finish_time < pbft()->lastExecFinishTime() ? pbft()->lastExecFinishTime() : m_last_exec_finish_time;
 				//auto passed_time = pbft()->view() == 0 ? (utcTime() - last_exec_finish_time) : (utcTime() - pbft()->lastConsensusTime());
 				auto passed_time = 0;
@@ -304,6 +305,7 @@ void PBFTClient::rejigSealing() {
 				}
 
 				VLOG(10) << "last_exec=" << last_exec_finish_time << ",passed_time=" << passed_time << ",left=" << left_time << ",max_block_txs=" << max_block_txs << ",tx_num=" << tx_num;
+#endif
 
 				bool t = true;
 				if (tx_num < max_block_txs && !isSyncing() && !m_remoteWorking && m_syncTransactionQueue.compare_exchange_strong(t, false)) {

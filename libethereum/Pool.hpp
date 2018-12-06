@@ -73,7 +73,10 @@ class LevelDBPool
         o.max_open_files = 256;
         o.create_if_missing = true;
         //leveldb::DB * db = nullptr;
-
+        if (dev::g_withExisting == WithExisting::Rescue) {
+            ldb::Status stateStatus = leveldb::RepairDB(db_full_name, o);
+            LOG(INFO) << "repair LevelDBPool leveldb:" << stateStatus.ToString();
+        }
         // state db
         leveldb::Status s = leveldb::DB::Open(o, db_full_name, &db_handler);
         if (!s.ok() || !db_handler)

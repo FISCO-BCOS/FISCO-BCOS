@@ -66,8 +66,8 @@ State::State(State const& _s):
 	m_unchangedCacheEntries(_s.m_unchangedCacheEntries),
 	m_nonExistingAccountsCache(_s.m_nonExistingAccountsCache),
 	m_touched(_s.m_touched),
-	m_changeLog(_s.m_changeLog),
-	m_accountStartNonce(_s.m_accountStartNonce)
+	m_accountStartNonce(_s.m_accountStartNonce),
+	m_changeLog(_s.m_changeLog)
 {}
 
 OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, WithExisting _we)
@@ -93,7 +93,10 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 
 
 	ldb::DB* db = nullptr;
-
+	if (_we == WithExisting::Rescue) {
+		ldb::Status stateStatus = leveldb::RepairDB(path + "/state", o);
+		LOG(INFO) << "repair stateDB:" << stateStatus.ToString();
+	}
 #if ETH_ODBC
 	LOG(INFO) << "state ethodbc is defined " << "\n";
 
