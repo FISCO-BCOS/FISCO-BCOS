@@ -24,7 +24,7 @@
 #include "DBInitializer.h"
 #include "LedgerParam.h"
 #include <libdevcore/Common.h>
-#include <libdevcore/EncryptedLevelDB.h>
+#include <libdiskencryption/EncryptedLevelDB.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>

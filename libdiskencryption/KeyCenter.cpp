@@ -21,11 +21,11 @@
  */
 
 #include "KeyCenter.h"
-#include "Common.h"
-#include "Exceptions.h"
-#include "easylog.h"
 #include <jsonrpccpp/client.h>
 #include <jsonrpccpp/client/connectors/httpclient.h>
+#include <libdevcore/Common.h>
+#include <libdevcore/Exceptions.h>
+#include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 
 using namespace std;

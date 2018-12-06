@@ -22,10 +22,10 @@
 
 #pragma once
 
+#include "KeyCenter.h"
 #include <leveldb/db.h>
 #include <leveldb/slice.h>
 #include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/KeyCenter.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 #include <string>
@@ -54,9 +54,9 @@ public:
     ~EncryptedLevelDB(){};
 
     static leveldb::Status Open(const leveldb::Options& _options, const std::string& _name,
-        BasicLevelDB** _dbptr,
-        const std::string& _cipherDataKey = "", std::shared_ptr<dev::KeyCenter> _keyCenter = nullptr);  // DB
-                                                  // open
+        BasicLevelDB** _dbptr, const std::string& _cipherDataKey = "",
+        std::shared_ptr<dev::KeyCenter> _keyCenter = nullptr);  // DB
+                                                                // open
     leveldb::Status Get(const leveldb::ReadOptions& _options, const leveldb::Slice& _key,
         std::string* _value) override;
     leveldb::Status Put(const leveldb::WriteOptions& _options, const leveldb::Slice& _key,
