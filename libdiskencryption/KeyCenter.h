@@ -42,6 +42,10 @@ public:
 
 private:
     std::string m_url;
+
+    // Query cache
+    std::string m_lastQueryCipherDataKey;
+    dev::bytes m_lastRcvDataKey;
 };
 
 #define g_keyCenter KeyCenter::instance()  // Only one keycenter in a node

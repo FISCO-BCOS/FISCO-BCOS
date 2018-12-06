@@ -34,6 +34,12 @@ using namespace jsonrpc;
 
 const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
 {
+    if (_cipherDataKey.empty())
+        return bytes();
+
+    if (m_lastQueryCipherDataKey == _cipherDataKey)
+        return m_lastRcvDataKey;
+
     HttpClient client(m_url);
     Client node(client);
 
@@ -59,7 +65,11 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
-    return fromHex(dataKeyBytesStr);
+    // update query cache
+    m_lastQueryCipherDataKey = _cipherDataKey;
+    m_lastRcvDataKey = fromHex(dataKeyBytesStr);
+
+    return m_lastRcvDataKey;
 };
 
 const std::string KeyCenter::generateCipherDataKey()
