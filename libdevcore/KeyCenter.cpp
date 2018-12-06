@@ -48,10 +48,14 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         dataKeyBytesStr = rsp["dataKey"].asString();
         string info = rsp["info"].asString();
         if (error)
+        {
+            LOG(DEBUG) << "[KeyCenter] Get datakey exception. keycentr info: " << info << endl;
             BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(info));
+        }
     }
     catch (exception& e)
     {
+        LOG(DEBUG) << "[KeyCenter] Get datakey exception for: " << e.what() << endl;
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
