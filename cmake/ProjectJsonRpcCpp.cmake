@@ -65,6 +65,7 @@ ExternalProject_Add(jsonrpccpp
     LOG_CONFIGURE 1
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
+    LOG_BUILD 1
     LOG_INSTALL 1
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libjsonrpccpp-server.a ${CMAKE_SOURCE_DIR}/deps/lib/libjsonrpccpp-common.a
 )

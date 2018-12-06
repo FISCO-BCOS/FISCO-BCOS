@@ -46,6 +46,7 @@ ExternalProject_Add(jsoncpp
                	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
         		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     LOG_CONFIGURE 1
+    LOG_BUILD 1
     BUILD_COMMAND ""
     ${_overwrite_install_command}
     LOG_INSTALL 1

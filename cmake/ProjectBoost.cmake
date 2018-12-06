@@ -21,6 +21,12 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+include(ProcessorCount)
+ProcessorCount(CORES)
+if(CORES EQUAL 0)
+  set(CORES 1)
+endif()
+
 set(BOOST_CXXFLAGS "")
 set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh)
 set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
@@ -65,6 +71,7 @@ ExternalProject_Add(boost
         --with-thread
         --with-serialization
         --with-program_options
+        -j${CORES}
     LOG_BUILD 1
     LOG_INSTALL 1
     INSTALL_COMMAND ""

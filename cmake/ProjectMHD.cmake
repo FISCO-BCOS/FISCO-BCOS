@@ -13,6 +13,7 @@ ExternalProject_Add(mhd
     CONFIGURE_COMMAND ${MHD_CONFIG}
     LOG_CONFIGURE 1
     LOG_BUILD 1
+    LOG_INSTALL 1
     BUILD_COMMAND make
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/src/mhd/src/microhttpd/.libs/libmicrohttpd.a
