@@ -93,10 +93,13 @@ void EncryptedLevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice
     m_writeBatch.Put(_key, leveldb::Slice(enData));
 }
 
-EncryptedLevelDB::EncryptedLevelDB(
-    const leveldb::Options& _options, const std::string& _name, const std::string& _cipherDataKey)
-  : BasicLevelDB(), m_cipherDataKey(_cipherDataKey)
+EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::string& _name,
+    const std::string& _cipherDataKey, std::shared_ptr<dev::KeyCenter> _keyCenter)
+  : BasicLevelDB(), m_cipherDataKey(_cipherDataKey), m_keyCenter(_keyCenter)
 {
+    if (!m_keyCenter)
+        m_keyCenter.reset(&(g_keyCenter));
+
     // Encrypted leveldb initralization
 
     // Open db
@@ -117,14 +120,14 @@ EncryptedLevelDB::EncryptedLevelDB(
     {
     case OpenDBStatus::FirstCreation:
         if (m_cipherDataKey.empty())
-            m_cipherDataKey = g_keyCenter.generateCipherDataKey();
+            m_cipherDataKey = m_keyCenter->generateCipherDataKey();
         setCipherDataKey(m_cipherDataKey);
         ENCDBLOG(DEBUG) << "[Open] First creation encrypted DB" << endl;
         // No need break here, break with Encrypted type
     case OpenDBStatus::Encrypted:
         ENCDBLOG(DEBUG)
             << "[open] Encrypted leveldb open success [name/db/keyCenterUrl/cipherDataKey]: "
-            << _name << "/" << m_db << "/" << g_keyCenter.url() << "/" << m_cipherDataKey << endl;
+            << _name << "/" << m_db << "/" << m_keyCenter->url() << "/" << m_cipherDataKey << endl;
         break;
 
     case OpenDBStatus::NoEncrypted:
@@ -143,7 +146,7 @@ EncryptedLevelDB::EncryptedLevelDB(
     }
 
     // Decrypt cipher key from keycenter
-    m_dataKey = g_keyCenter.getDataKey(m_cipherDataKey);
+    m_dataKey = m_keyCenter->getDataKey(m_cipherDataKey);
     if (m_dataKey.empty())
     {
         m_openStatus = leveldb::Status::IOError(leveldb::Slice("Get dataKey failed"));
@@ -152,9 +155,9 @@ EncryptedLevelDB::EncryptedLevelDB(
 }
 
 leveldb::Status EncryptedLevelDB::Open(const leveldb::Options& _options, const std::string& _name,
-    BasicLevelDB** _dbptr, const std::string& _cipherDataKey)
+    BasicLevelDB** _dbptr, const std::string& _cipherDataKey, std::shared_ptr<dev::KeyCenter> _keyCenter)
 {
-    *_dbptr = new EncryptedLevelDB(_options, _name, _cipherDataKey);
+    *_dbptr = new EncryptedLevelDB(_options, _name, _cipherDataKey, _keyCenter);
     leveldb::Status status = (*_dbptr)->OpenStatus();
 
     if (!status.ok())

@@ -50,12 +50,12 @@ class EncryptedLevelDB : public BasicLevelDB
 {
 public:
     EncryptedLevelDB(const leveldb::Options& _options, const std::string& _name,
-        const std::string& _cipherDataKey);
+        const std::string& _cipherDataKey, std::shared_ptr<dev::KeyCenter> _keyCenter = nullptr);
     ~EncryptedLevelDB(){};
 
     static leveldb::Status Open(const leveldb::Options& _options, const std::string& _name,
         BasicLevelDB** _dbptr,
-        const std::string& _cipherDataKey = "");  // DB
+        const std::string& _cipherDataKey = "", std::shared_ptr<dev::KeyCenter> _keyCenter = nullptr);  // DB
                                                   // open
     leveldb::Status Get(const leveldb::ReadOptions& _options, const leveldb::Slice& _key,
         std::string* _value) override;
@@ -75,6 +75,7 @@ public:
 private:
     std::string m_cipherDataKey;
     dev::bytes m_dataKey;
+    std::shared_ptr<dev::KeyCenter> m_keyCenter;
 
 private:
     std::string getKeyOfDatabase();
