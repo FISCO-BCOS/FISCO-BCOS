@@ -148,6 +148,7 @@ ExternalProject_Add(cryptopp
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
     LOG_INSTALL 1
+    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libcryptopp.a
 )
 
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)

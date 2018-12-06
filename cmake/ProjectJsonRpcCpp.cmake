@@ -66,6 +66,7 @@ ExternalProject_Add(jsonrpccpp
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
     LOG_INSTALL 1
+    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libjsonrpccpp-server.a ${CMAKE_SOURCE_DIR}/deps/lib/libjsonrpccpp-common.a
 )
 
 add_dependencies(jsonrpccpp jsoncpp)
@@ -81,11 +82,11 @@ set_property(TARGET JsonRpcCpp::Common PROPERTY INTERFACE_LINK_LIBRARIES JsonCpp
 set_property(TARGET JsonRpcCpp::Common PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${JSONRPCCPP_INCLUDE_DIR} ${JSONCPP_INCLUDE_DIR})
 add_dependencies(JsonRpcCpp::Common jsonrpccpp)
 
-add_library(JsonRpcCpp::Client STATIC IMPORTED)
-set_property(TARGET JsonRpcCpp::Client PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsonrpccpp-client${CMAKE_STATIC_LIBRARY_SUFFIX})
-set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common ${CURL_LIBRARY})
-set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIR})
-add_dependencies(JsonRpcCpp::Client jsonrpccpp)
+# add_library(JsonRpcCpp::Client STATIC IMPORTED)
+# set_property(TARGET JsonRpcCpp::Client PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsonrpccpp-client${CMAKE_STATIC_LIBRARY_SUFFIX})
+# set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_LINK_LIBRARIES JsonRpcCpp::Common ${CURL_LIBRARY})
+# set_property(TARGET JsonRpcCpp::Client PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CURL_INCLUDE_DIR})
+# add_dependencies(JsonRpcCpp::Client jsonrpccpp)
 
 add_library(JsonRpcCpp::Server STATIC IMPORTED)
 set_property(TARGET JsonRpcCpp::Server PROPERTY IMPORTED_LOCATION ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsonrpccpp-server${CMAKE_STATIC_LIBRARY_SUFFIX})
