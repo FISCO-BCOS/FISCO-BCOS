@@ -8,5 +8,5 @@ add_dependencies(devcore BuildInfo.h)
 
 find_package(LevelDB)
 target_include_directories(devcore SYSTEM PUBLIC ${LEVELDB_INCLUDE_DIRS})
-target_link_libraries(devcore PRIVATE devcrypto Boost::Filesystem Boost::Thread ${LEVELDB_LIBRARIES})
+target_link_libraries(devcore PRIVATE devcrypto Boost::Filesystem Boost::Thread ${LEVELDB_LIBRARIES} JsonRpcCpp::Client)
 add_dependencies(devcore Boost::Thread)
