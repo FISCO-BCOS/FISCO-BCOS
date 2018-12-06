@@ -73,7 +73,7 @@ protected:
 	void stopWorking();
 
 	/// Returns if worker thread is present.
-	bool isWorking() const { Guard l(x_work); return m_state == WorkerState::Started; }
+	bool isWorking() const { DEV_RECURSIVE_GUARDED(x_work); return m_state == WorkerState::Started; }
 	
 	/// Called after thread is started from startWorking().
 	virtual void startedWorking() {}
@@ -99,7 +99,7 @@ private:
 
 	unsigned m_idleWaitMs = 0;
 	
-	mutable Mutex x_work;						///< Lock for the network existance.
+	mutable RecursiveMutex x_work;						///< Lock for the network existance.
 	std::unique_ptr<std::thread> m_work;		///< The network thread.
 	std::atomic<WorkerState> m_state = {WorkerState::Starting};
 };

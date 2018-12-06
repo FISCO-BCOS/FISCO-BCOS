@@ -270,90 +270,6 @@ void NodeConnParamsManagerSSL::getAllConnect( std::map<std::string, NodeIPEndpoi
 	
 }
 
-void NodeConnParamsManagerSSL::updateAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams)  
-{
-    LOG(TRACE)<<"NodeConnParamsManagerSSL::updateAllConnect size="<<mConnectParams.size();
-
-	Guard l(m_mutexconnect);
-    {
-        if( mConnectParams.size() )
-        {
-            for (auto stNode : mConnectParams)
-            {
-                LOG(INFO)<<"NodeConnParamsManagerSSL::updateAllConnect name=" << stNode.second.name();
-                if( m_connectnodes.end() == m_connectnodes.find(stNode.second.name()) )
-                    m_connectnodes[stNode.second.name()] = stNode.second;
-                if( !stNode.second.host.empty() )
-                    m_connectnodes[stNode.second.name()].host = stNode.second.host;
-            }
-            updateBootstrapnodes();
-        }
-    }
-   
-}
-
-void NodeConnParamsManagerSSL::updateBootstrapnodes()const
-{
-    try
-    {
-        Json::Value root;
-        Json::Value nodes;
-        Json::FastWriter w;
-
-        LOG(TRACE)<<"NodeConnParamsManagerSSL::updateBootstrapnodes size="<<m_connectnodes.size();
-
-        if( m_connectnodes.size() )
-        {
-            for (auto stNode : m_connectnodes)
-            {
-                Json::Value object;
-                if( !stNode.second.host.empty() && (stNode.second.host != "0.0.0.0") )
-                    object["host"] = stNode.second.host;
-                else
-                     object["host"] = stNode.second.address.to_string();
-                object["p2pport"] = toString(stNode.second.tcpPort);
-                if(  !object["host"].empty() &&  !object["p2pport"].empty() )
-                    nodes.append(object);
-            } 
-            root["nodes"] = nodes;
-        }
-        else {
-            root["nodes"].resize(0);
-        }
-        
-		try {
-			string content = w.write(root);
-
-			if(content.empty()) {
-				LOG(ERROR) << "Empty bootstrapnodes content";
-				return;
-			}
-
-			writeFile(getDataDir() + "/bootstrapnodes.json.new",content,true);
-			if(contentsString(getDataDir() + "/bootstrapnodes.json.new") == content) {
-				boost::filesystem::path oldPath(getDataDir() + "/bootstrapnodes.json.new");
-				boost::filesystem::path newPath(getDataDir() + "/bootstrapnodes.json");
-
-				boost::filesystem::remove(newPath);
-				boost::filesystem::rename(oldPath, newPath);
-			}
-			else {
-				LOG(ERROR) << "Write bootstrapnodes fail!";
-			}
-
-			LOG(INFO) << "updateBootstrapnodes:  " << content ;
-		}
-		catch(std::exception &e) {
-			LOG(ERROR) << "Write bootstrapnodes fail: " << e.what();
-		}
-    }
-    catch (std::exception &e)
-    {
-        LOG(WARNING) << "updateBootstrapnodes Fail!" << e.what() << "\n";
-    }
-
-}
-
 void NodeConnParamsManagerSSL::connNode(const ConnectParams &param)
 {
 }
@@ -529,7 +445,7 @@ void NodeConnParamsManagerSSL::caModifyCallback(const std::string& hash)
     return;
 }
 
-void NodeConnParamsManagerSSL::SetHost(HostApi *host)
+void NodeConnParamsManagerSSL::SetHost(std::shared_ptr<p2p::HostApi> host)
 {
     m_host = host;
 };

@@ -68,9 +68,16 @@ Session::~Session()
 		{
 			boost::system::error_code ec;
 
-			//shutdown may block servals seconds - morebtcg
-			//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			socket.close();
+			LOG(WARNING) << "Session::~Session Closing " << socket.remote_endpoint(ec) << ", " << m_peer->address();
+
+			auto sslSocket = m_socket;
+			sslSocket->sslref().async_shutdown([sslSocket](const boost::system::error_code& error) {
+				if(error) {
+					LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
+				}
+
+				sslSocket->ref().close();
+			});
 		}
 	}
 	catch (...) {}
@@ -191,53 +198,10 @@ bool Session::interpret(PacketType _t, RLP const& _r)
 		break;
 	case GetAnnouncementHashPacket:
 	{
-		std::vector<Node>	peerNodes;
-		h256 allPeerHash;
-		m_server->getAnnouncementNodeList(allPeerHash,peerNodes);
-		auto hash = _r[0].toHash<h256>();
-		LOG(INFO) << "Recv GetAnnouncementHashPacket From " << m_info.id.abridged() << ",hash=" << toString(hash) << ",Our=" << toString(allPeerHash);
-		if( hash != allPeerHash)
-		{
-			RLPStream s;
-			prep(s, AnnouncementPacket, 1) ;
-			s.appendList(peerNodes.size());
-			for( size_t i = 0; i < peerNodes.size(); i++)
-			{
-				LOG(INFO) << "Announcement " << peerNodes[i].endpoint.name() << "," << peerNodes[i].endpoint.host;
-				peerNodes[i].endpoint.streamRLP(s);
-			}
-			sealAndSend(s, 0);
-		}
-		else
-		{
-			LOG(INFO) <<" AnnouncementHash Is Same.Don't Need Send AnnouncementPacket";
-		}
 		break;
 	}
 	case AnnouncementPacket:
 	{
-		LOG(INFO) << "Recv AnnouncementPacket From " << m_info.id.abridged();
-		size_t count=0;
-		for (auto const& n:_r[0])
-		{
-			if( count >= 20 )
-				break;
-
-			NodeIPEndpoint nodeIPEndpoint(n);
-			LOG(INFO) << "AnnouncementPacket " << nodeIPEndpoint.name() << ":" << nodeIPEndpoint.host;
-			if( m_server->tcpPublic() != nodeIPEndpoint )
-			{
-				if( !nodeIPEndpoint.host.empty() )
-				{
-					bi::address query = HostResolver::query(nodeIPEndpoint.host);
-					if( query.to_string() != "0.0.0.0" )
-						nodeIPEndpoint.address = query;
-				}
-				count ++;
-				m_server->connect(nodeIPEndpoint);
-			}	
-		}
-		
 		break;
 	}
 	case GetPeersPacket:
@@ -257,15 +221,6 @@ void Session::ping()
 }
 void Session::announcement(h256 const& _allPeerHash)
 {
-	LOG(INFO) << "Send Announcement To " << m_info.id.abridged() << ",Our= " << toString(_allPeerHash);
-
-	if (m_socket->isConnected())
-	{
-		RLPStream s;
-		prep(s, GetAnnouncementHashPacket, 1) ;
-		s << _allPeerHash;
-		sealAndSend(s, 0);
-	}
 }
 
 RLPStream& Session::prep(RLPStream& _s, PacketType _id, unsigned _args)
@@ -322,8 +277,19 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	{
 		DEV_GUARDED(x_framing)
 		{
+			PacketType packetType = HelloPacket;
+			try {
+				bytesConstRef frame(_msg.data(), _msg.size());
+				packetType = (PacketType)RLP(frame.cropped(0, 1)).toInt<unsigned>();
+			}
+			catch(std::exception &e) {
+				LOG(TRACE) << "Unknown packetType: " << e.what();
+			}
+			//RLP r(frame.cropped(1));
+
 			m_writeQueue.push_back(std::move(_msg));
 			m_writeTimeQueue.push_back(utcTime());
+			m_protocloIDQueue.push_back(packetType);
 			doWrite = (m_writeQueue.size() == 1);
 		}
 
@@ -332,16 +298,19 @@ void Session::send(bytes&& _msg, uint16_t _protocolID)
 	}
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> data)
+void Session::onWrite(boost::system::error_code ec, std::size_t length)
 {
 	try
 	{
+		m_sending = false;
+
 		if (m_dropped)
 		return;
 
 		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
 		if (elapsed >= 1000) {
-			LOG(WARNING) << "[NETWORK] msg callback timecost=" << elapsed << ",len=" << length << ",id=" << id();
+			auto packetType = m_protocloIDQueue[0];
+			LOG(WARNING) << "[NETWORK] msg callback type=" << packetType << ",timecost=" << elapsed << ",len=" << length << ",id=" << id();
 		}
 		ThreadContext tc(info().id.abridged());
 		ThreadContext tc2(info().clientVersion);
@@ -356,6 +325,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length, std::sha
 		DEV_GUARDED(x_framing)
 		{
 			m_writeQueue.pop_front();
+			m_protocloIDQueue.pop_front();
 			m_writeTimeQueue.pop_front();
 			if (m_writeQueue.empty())
 				return;
@@ -377,14 +347,12 @@ void Session::write()
 		if (m_dropped)
 			return;
 
-		auto data = std::make_shared<bytes>();
 		bytes const* out = nullptr;
 		uint64_t enter_time = 0;
 		DEV_GUARDED(x_framing)
 		{
 			m_io->writeSingleFramePacket(&m_writeQueue[0], m_writeQueue[0]);
 			out = &m_writeQueue[0];
-			data->assign(out->begin(), out->end());
 			enter_time = m_writeTimeQueue[0];
 		}
 		
@@ -395,21 +363,25 @@ void Session::write()
 			drop(PingTimeout);
 			return;
 		} else if (queue_elapsed >= 1000) {
-			LOG(WARNING) << "[NETWORK] msg waiting in queue timecost=" << queue_elapsed;
+			auto packetType = m_protocloIDQueue[0];
+			LOG(WARNING) << "[NETWORK] msg waiting in queue packetType=" << packetType << " timecost=" << queue_elapsed;
 		}
 
 		auto session = shared_from_this();
-		auto socket = m_socket;
 		if ((m_socket->getSocketType() == SSL_SOCKET_V1) || (m_socket->getSocketType() == SSL_SOCKET_V2))
 		{
 			if( m_socket->isConnected())
 			{
-				
+				m_sending = true;
 				m_server->getIOService()->post(
-					[ socket, session, data  ] {
-						boost::asio::async_write(socket->sslref(),
-						boost::asio::buffer(*data),
-						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
+					[ = ] {
+						if(m_dropped) {
+							return;
+						}
+
+						boost::asio::async_write(m_socket->sslref(),
+						boost::asio::buffer(*out),
+						boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 					});
 			}
 			else
@@ -421,7 +393,8 @@ void Session::write()
 		}
 		else
 		{
-			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, data));
+			m_sending = true;
+			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
 		
 	}
@@ -446,9 +419,8 @@ void Session::writeFrames()
 	}
 
 	m_start_t = utcTime();
-	auto self(shared_from_this());
 
-	auto asyncWrite = [this, self](boost::system::error_code ec, std::size_t length)
+	auto asyncWrite = [&](boost::system::error_code ec, std::size_t length)
 	{
 		unsigned elapsed = (unsigned)(utcTime() - m_start_t);
 		if (elapsed >= 10) {
@@ -500,11 +472,16 @@ void Session::drop(DisconnectReason _reason)
 	{
 		boost::system::error_code ec;
 
-		//shutdown may block servals seconds - morebtcg
-		//socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-		LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address() << "," << ec.message();
-		
-		socket.close();
+		LOG(WARNING) << "Session::Drop Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address();
+
+		auto sslSocket = m_socket;
+		sslSocket->sslref().async_shutdown([sslSocket](const boost::system::error_code& error) {
+			if(error) {
+				LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
+			}
+
+			sslSocket->ref().close();
+		});
 	}
 	catch (...) {}
 
@@ -836,15 +813,3 @@ void Session::saveCABaseData(CABaseData* baseData)
 {
 	m_CABaseData = baseData;
 }
-
-#if 0
-bool Session::setStatistics(dev::InterfaceStatistics *stats)
-{
-		if (stats && m_statistics.get() == nullptr)
-		{
-			m_statistics.reset(stats);
-			return true;
-		}
-		return false;
-}
-#endif

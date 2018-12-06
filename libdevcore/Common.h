@@ -311,6 +311,7 @@ enum class WithExisting : int
 	Kill
 };
 
+extern WithExisting g_withExisting;
 /// Get the current time in seconds since the epoch in UTC
 uint64_t utcTime();
 

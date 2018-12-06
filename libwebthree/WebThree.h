@@ -230,8 +230,8 @@ private:
 	std::string m_clientVersion;					///< Our end-application client's name/version.
 
 	//p2p::HostApi m_net;								///< Should run in background and send us events when blocks found and allow us to send blocks as required.
-	HostApi*	m_net;
-	std::unique_ptr<eth::Client> m_ethereum;		///< Client for Ethereum ("eth") protocol.
+	std::shared_ptr<HostApi>	m_net;
+	std::shared_ptr<eth::Client> m_ethereum;		///< Client for Ethereum ("eth") protocol.
 	std::weak_ptr<shh::WhisperHost> m_whisper;		///< Client for Whisper ("shh") protocol.
 	std::shared_ptr<bzz::Client> m_swarm;			///< Client for Swarm ("bzz") protocol.
 

@@ -30,6 +30,7 @@
 #include <libdevcore/SHA3.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
+#include <libp2p/Session.h>
 
 namespace dev
 {
@@ -56,10 +57,11 @@ struct PBFTMsgPacket {
 	unsigned packet_id;
 	bytes data; // rlp data
 	u256 timestamp;
+	std::weak_ptr<SessionFace> peer;
 
 	PBFTMsgPacket(): node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(utcTime()) {}
-	PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data)
-		: node_idx(_idx), node_id(_id), packet_id(_pid), data(_data.toBytes()), timestamp(utcTime()) {}
+	PBFTMsgPacket(u256 _idx, h512 _id, unsigned _pid, bytesConstRef _data, std::weak_ptr<SessionFace> _peer)
+		: node_idx(_idx), node_id(_id), packet_id(_pid), data(_data.toBytes()), timestamp(utcTime()), peer(_peer) {}
 };
 using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
 
@@ -112,6 +114,10 @@ struct PBFTMsg {
 		RLPStream ts;
 		ts << height << view << idx << timestamp;
 		return dev::sha3(ts.out());
+	}
+
+	std::string uniqueKey() const {
+		return sig.hex() + sig2.hex();
 	}
 };
 

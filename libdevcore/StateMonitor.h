@@ -190,4 +190,6 @@ void recordStateByNumOnce(int code, uint64_t report_per_num,
                           data_t value, std::string &&name, std::string &&info,
                           int is_success = 1);  //含义与recordStateByTimeOnce相同
 
+extern bool shouldExit;
+extern bool isRunning; 
 }

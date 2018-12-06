@@ -76,10 +76,12 @@ switch (filename){
         var instance=getAction("ConfigAction");
         var value=instance.get(key,  initializer);
 
-        if (key == "CAVerify")
-          console.log("config :"+key+","+value);
+        if (value[0].length == 0)
+          console.log(key+"=Default");
+        else if (key == "CAVerify")
+          console.log("config :"+key+"="+value[0]);
         else
-          console.log(key+"="+parseInt(value[0], 16)+","+value[1].toString());
+          console.log(key+"="+parseInt(value[0], 16));
         break;
       }
       case "set":

@@ -69,7 +69,7 @@ extern const u256 c_maxGasEstimate;
 /**
  * @brief Main API hub for interfacing with Ethereum.
  */
-class Interface
+class Interface : public std::enable_shared_from_this<Interface>
 {
 public:
 	/// Constructor.
