@@ -37,6 +37,12 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getPbftView", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getPbftViewI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getMinerList", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getMinerListI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getObserverList", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getObserverListI);
         this->bindAndAddMethod(jsonrpc::Procedure("getConsensusStatus", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getConsensusStatusI);
@@ -120,6 +126,14 @@ public:
     inline virtual void getPbftViewI(const Json::Value& request, Json::Value& response)
     {
         response = this->getPbftView(request[0u].asInt());
+    }
+    inline virtual void getMinerListI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getMinerList(request[0u].asInt());
+    }
+    inline virtual void getObserverListI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getObserverList(request[0u].asInt());
     }
     inline virtual void getConsensusStatusI(const Json::Value& request, Json::Value& response)
     {
@@ -206,6 +220,8 @@ public:
     // consensus part
     virtual std::string getBlockNumber(int param1) = 0;
     virtual std::string getPbftView(int param1) = 0;
+    virtual Json::Value getMinerList(int param1) = 0;
+    virtual Json::Value getObserverList(int param1) = 0;
     virtual Json::Value getConsensusStatus(int param1) = 0;
 
     // sync part
