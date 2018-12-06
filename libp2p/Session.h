@@ -107,7 +107,7 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	void ping() override;
 	void announcement(h256 const &_allPeerHash) override;
 
-	bool isConnected() const override { return m_socket->isConnected(); }
+	bool isConnected() const override { return !m_dropped && m_socket->isConnected(); }
 
 	NodeID id() const override;
 
@@ -160,7 +160,7 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	bool checkRead(std::size_t _expected, boost::system::error_code _ec, std::size_t _length);
 
 	/// Perform a single round of the write operation. This could end up calling itself asynchronously.
-	void onWrite(boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> data);
+	void onWrite(boost::system::error_code ec, std::size_t length);
 	void write();
 	void writeFrames();
 
@@ -179,6 +179,7 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	std::shared_ptr<RLPXSocketApi> m_socket; ///< Socket of peer's connection.
 	Mutex x_framing;						 ///< Mutex for the write queue.
 	std::deque<bytes> m_writeQueue;			 ///< The write queue.
+	std::deque<uint16_t> m_protocloIDQueue;
 	std::deque<uint64_t> m_writeTimeQueue;		 ///< to stat queue time
 	std::vector<byte> m_data;				 ///< Buffer for ingress packet data.
 	bytes m_incoming;						 ///< Read buffer for ingress bytes.
@@ -217,6 +218,8 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	uint64_t m_start_t;
 
 	boost::asio::io_service::strand *m_strand;
+
+	bool m_sending = false;
 };
 
 template <class PeerCap>

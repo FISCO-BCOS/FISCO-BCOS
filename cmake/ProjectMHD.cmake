@@ -3,7 +3,7 @@ include(ExternalProject)
 set(MHD_CONFIG ./configure --enable-spdy=no --disable-curl --disable-messages --disable-postprocessor --enable-https=no)
 set(MHD_BUILD make)
 
-ExternalProject_Add(MHD
+ExternalProject_Add(mhd
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME libmicrohttpd-0.9.44.tar.gz
     DOWNLOAD_NO_PROGRESS 1
@@ -17,7 +17,12 @@ ExternalProject_Add(MHD
     INSTALL_COMMAND ""
 )
 
-ExternalProject_Get_Property(MHD SOURCE_DIR)
-add_library(Mhd STATIC IMPORTED)
+ExternalProject_Get_Property(mhd SOURCE_DIR)
+add_library(MHD STATIC IMPORTED)
 set(MHD_INCLUDE_DIR ${SOURCE_DIR}/src/include/)
 set(MHD_LIBRARY ${SOURCE_DIR}/src/microhttpd/.libs/libmicrohttpd.a)
+file(MAKE_DIRECTORY ${MHD_INCLUDE_DIR})  # Must exist.
+
+set_property(TARGET MHD PROPERTY IMPORTED_LOCATION ${MHD_LIBRARY})
+set_property(TARGET MHD PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
+add_dependencies(MHD mhd)

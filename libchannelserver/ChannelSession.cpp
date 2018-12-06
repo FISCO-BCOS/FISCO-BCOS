@@ -245,17 +245,19 @@ void ChannelSession::startWrite() {
 		auto buffer = _sendBufferList.front();
 		_sendBufferList.pop();
 
-		auto session = std::weak_ptr<ChannelSession>(shared_from_this());
+		auto session = shared_from_this();
 
 		_sslSocket->get_io_service().post(
 		[ session, buffer ] {
-			auto s = session.lock();
-			if(s) {
+			auto s = session;
+			if(s && s->actived()) {
+				std::lock_guard<std::recursive_mutex> lock(s->_mutex);
 				boost::asio::async_write(*s->sslSocket(),
 						boost::asio::buffer(buffer->data(), buffer->size()),
-						[=](const boost::system::error_code& error, size_t bytesTransferred) {
-							auto s = session.lock();
-							if(s) {
+						[session, buffer](const boost::system::error_code& error, size_t bytesTransferred) {
+							auto s = session;
+							if(s && s->actived()) {
+								std::lock_guard<std::recursive_mutex> lock(s->_mutex);
 								s->onWrite(error, buffer, bytesTransferred);
 							}
 				});
@@ -466,7 +468,16 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 			}
 
 			_actived = false;
-			_sslSocket->lowest_layer().close();
+
+			auto sslSocket = _sslSocket;
+			_sslSocket->async_shutdown([sslSocket](const boost::system::error_code& error) {
+				if(error) {
+					LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
+				}
+
+				sslSocket->next_layer().close();
+			});
+			//_sslSocket->lowest_layer().close();
 
 			LOG(DEBUG) << "Disconnected";
 		}

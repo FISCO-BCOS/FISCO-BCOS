@@ -1,6 +1,6 @@
 ### V1.3.5
 
-(2018-10-25)
+(2018-12-06)
 
 * Update
 
@@ -17,9 +17,15 @@
 * Fix
 
 1. 修复readthedocs文档问题
-2. 修复Session::write可能造成coredump的问题
+2. p2p修复Session::write可能造成coredump的问题
 3. 修复PBFT转发包时，时间戳较大无法转发的问题
-4. 修复Ok.sol合约中的溢出问题
+4. PBFT转发包时，只转发直接广播的包
+5. motivate viewchange的处理逻辑从广播改为给单节点回包
+6. 移除p2p自动更新bootstrapnodes.json的逻辑
+7. p2p节点间不再互通节点列表
+8. 修复ChannelServer断连时可能coredump的问题
+9. 移除PBFT自动调整区块大小的逻辑
+10. 修复Ok.sol合约中的溢出问题
 
 * Delete
 

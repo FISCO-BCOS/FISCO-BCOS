@@ -43,7 +43,7 @@ using namespace dev::eth;
 using namespace p2p;
 
 unsigned const EthereumHost::c_oldProtocolVersion = 62; //TODO: remove this once v63+ is common
-static unsigned const c_maxSendTransactions = 10;
+static unsigned const c_maxSendTransactions = 100;
 
 char const* const EthereumHost::s_stateNames[static_cast<int>(SyncState::Size)] = {"NotSynced", "Idle", "Waiting", "Blocks", "State", "NewBlocks" };
 
@@ -498,6 +498,8 @@ void EthereumHost::doWork()
 	bool netChange = ensureInitialised();
 	auto h = m_chain.currentHash();
 	// If we've finished our initial sync (including getting all the blocks into the chain so as to reduce invalid transactions), start trading transactions & blocks
+	//LOG(TRACE) << "EthereumHost::doWork";
+	//maintainTransactions();
 	if (!isSyncing() && m_chain.isKnown(m_latestBlockSent))
 	{
 		if (m_newTransactions)
@@ -907,7 +909,6 @@ std::vector<p2p::NodeID> EthereumHost::getPeersByTopic(std::string topic) {
 void EthereumHost::sendTopicsMessage(p2p::NodeID nodeID, int type, int seq, std::shared_ptr<std::set<std::string> > topics) {
 	LOG(TRACE) <<" Send topic Req:" << seq << " type:" << type;
 	int peerSended = 0;
-
 	
 	if (nodeID == p2p::NodeID()) {
 		foreachPeer([&](std::shared_ptr<EthereumPeer> peer) {

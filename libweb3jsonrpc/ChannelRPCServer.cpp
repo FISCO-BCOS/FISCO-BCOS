@@ -75,11 +75,11 @@ bool ChannelRPCServer::StartListening() {
 		LOG(INFO) << "ChannelRPCServer started";
 
 		_running = true;
-		_topicThread = std::make_shared<std::thread>([ = ]() {
+		_topicThread = std::make_shared<std::thread>([&]() {
 			pthread_setThreadName("ChannelHeartBeat" );
 
 			while (_running) {
-				sleep(1);
+				sleep(10);
 				if(_running) {
 				try {
 						auto host = _host.lock();
@@ -172,7 +172,7 @@ bool ChannelRPCServer::StopListening()
 	}
 
 	_running = false;
-
+	_server->stop();
 	return true;
 }
 
@@ -185,7 +185,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 	delete (std::string*)_addInfo;
 
 	if (it != _seq2session.end()) {
-		LOG(INFO) << "send ethereum resp seq：" << it->first << " response:" << _response;
+		LOG(TRACE) << "send ethereum resp seq：" << it->first << " response:" << _response;
 
 		std::shared_ptr<bytes> resp(new bytes());
 
@@ -277,7 +277,7 @@ void ChannelRPCServer::onDisconnect(dev::channel::ChannelException e, dev::chann
 
 void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr session, dev::channel::ChannelException e, dev::channel::Message::Ptr message) {
 	if (e.errorCode() == 0) {
-		LOG(INFO) << "receive sdk message length:" << message->length() << " type:" << message->type() << " sessionID:" << message->seq();
+		LOG(TRACE) << "receive sdk message length:" << message->length() << " type:" << message->type() << " sessionID:" << message->seq();
 
 		switch (message->type()) {
 		case 0x20:
@@ -320,14 +320,14 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 }
 
 void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
-	LOG(DEBUG) << "receive sdk channel message";
+	LOG(TRACE) << "receive sdk channel message";
 
 	if (message->dataSize() < 128) {
 		LOG(ERROR) << "invaild channel message，too short:" << message->dataSize();
 		return;
 	}
 
-	LOG(DEBUG) << "target node:" << std::string((char*)message->data(), 128);
+	LOG(TRACE) << "target node:" << std::string((char*)message->data(), 128);
 
 	h512 nodeID(std::string((char*)message->data(), 128), dev::h512::FromHex);
 
@@ -343,7 +343,7 @@ void dev::ChannelRPCServer::onClientMessage(dev::channel::ChannelSession::Ptr se
 		auto buffer = std::make_shared<bytes>();
 		message->encode(*buffer);
 
-		LOG(DEBUG) << "send to node:" << buffer->size();
+		LOG(TRACE) << "send to node:" << buffer->size();
 
 		_host.lock()->sendCustomMessage(nodeID, buffer);
 	}
@@ -364,7 +364,7 @@ void dev::ChannelRPCServer::onClientEthereumRequest(dev::channel::ChannelSession
 
 	std::string body(message->data(), message->data() + message->dataSize());
 
-	LOG(DEBUG) << "client ethereum request seq:" << message->seq() << "  ethereum request:" << std::string((char*)message->data(), message->dataSize());
+	LOG(TRACE) << "client ethereum request seq:" << message->seq() << "  ethereum request:" << std::string((char*)message->data(), message->dataSize());
 
 	{
 		std::lock_guard<std::mutex> lock(_seqMutex);
@@ -382,7 +382,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(dev::channel::ChannelSession::P
 
 	std::string body(message->data(), message->data() + message->dataSize());
 
-	LOG(DEBUG) << "SDK topic message seq:" << message->seq() << "  topic message:" << body;
+	LOG(TRACE) << "SDK topic message seq:" << message->seq() << "  topic message:" << body;
 
 	try {
 		std::stringstream ss;
@@ -856,42 +856,6 @@ dev::channel::TopicMessage::Ptr ChannelRPCServer::pushChannelMessage(dev::channe
 		}
 
 		return response;
-
-#if 0
-		struct Callback {
-			typedef std::shared_ptr<Callback> Ptr;
-
-			Callback() {
-				_mutex.lock();
-			}
-
-			void onResponse(dev::channel::ChannelException error, dev::channel::Message::Ptr message) {
-				_error = error;
-				_response = message;
-
-				_mutex.unlock();
-			}
-
-			dev::channel::ChannelException _error;
-			dev::channel::Message::Ptr _response;
-			std::mutex _mutex;
-		};
-
-		Callback::Ptr callback = std::make_shared<Callback>();
-
-		std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> fp = std::bind(&Callback::onResponse, callback,
-						std::placeholders::_1, std::placeholders::_2);
-		asyncPushChannelMessage(topic, message, fp);
-
-		callback->_mutex.lock();
-		callback->_mutex.unlock();
-
-		if (callback->_error.errorCode() != 0) {
-			throw callback->_error;
-		}
-
-		return callback->_response;
-#endif
 	} catch (exception &e) {
 		LOG(ERROR)<< "ERROR:" << e.what();
 

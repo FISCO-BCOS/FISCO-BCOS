@@ -122,7 +122,7 @@ namespace dev
 			virtual void getAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams) const { };
 			virtual void updateAllConnect( std::map<std::string, NodeIPEndpoint> & mConnectParams)  { };
 			virtual void caModifyCallback(const std::string& pub256) { };
-			virtual void SetHost(HostApi *host) { };
+			virtual void SetHost(std::shared_ptr<p2p::HostApi>) { };
 			virtual bool checkCertOut(const std::string& serialNumber) { return false;};
 			virtual void connNode(const ConnectParams &param) { };
 
