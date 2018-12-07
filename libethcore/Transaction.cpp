@@ -64,11 +64,11 @@ void Transaction::decode(RLP const& rlp, CheckTransaction _checkSig)
 
         m_data = rlp[6].toBytes();
 
-        VType const v = rlp[7].toInt<TYPE_V>();  // 7
+        VType const v = rlp[7].toInt<TYPE_V>() - VBase;  // 7
         h256 const r = rlp[8].toInt<u256>();     // 8
         h256 const s = rlp[9].toInt<u256>();     // 9
 
-        m_vrs = SignatureStruct(v, r, s);
+        m_vrs = SignatureStruct(r, s, v);
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());

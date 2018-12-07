@@ -35,8 +35,8 @@ bytes aesCBCEncrypt(bytesConstRef plainData, std::string const& keyData, int key
 bytes aesCBCDecrypt(bytesConstRef cipherData, std::string const& keyData, int keyLen,
     bytesConstRef ivData);  // AES decrypt
 
-bytes origAesCBCEncrypt(
-    bytesConstRef plainData, std::string const& keyData, int keyLen, bytesConstRef ivData);
-bytes origAesCBCDecrypt(
-    bytesConstRef cipherData, std::string const& keyData, int keyLen, bytesConstRef ivData);
+// bytes origAesCBCEncrypt(
+//     bytesConstRef plainData, std::string const& keyData, int keyLen, bytesConstRef ivData);
+// bytes origAesCBCDecrypt(
+//     bytesConstRef cipherData, std::string const& keyData, int keyLen, bytesConstRef ivData);
 }  // namespace dev

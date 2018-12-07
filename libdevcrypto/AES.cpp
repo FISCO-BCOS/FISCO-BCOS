@@ -80,7 +80,7 @@ char* ascii2hex(const char* chs, int len)
     }
     return ascii;
 }
-bytes dev::origAesCBCEncrypt(
+bytes dev::aesCBCEncrypt(
     bytesConstRef plainData, string const& keyData, int keyLen, bytesConstRef ivData)
 {
     // LOG(DEBUG)<<"AES EN TYPE......................";
@@ -94,7 +94,7 @@ bytes dev::origAesCBCEncrypt(
     return asBytes(cipherData);
 }
 
-bytes dev::origAesCBCDecrypt(
+bytes dev::aesCBCDecrypt(
     bytesConstRef cipherData, string const& keyData, int keyLen, bytesConstRef ivData)
 {
     // LOG(DEBUG)<<"AES DE TYPE....................";
@@ -109,14 +109,14 @@ bytes dev::origAesCBCDecrypt(
     return asBytes(decryptedData);
 }
 
-bytes dev::aesCBCEncrypt(
-    bytesConstRef plainData, string const& keyData, int keyLen, bytesConstRef ivData)
-{
-    return origAesCBCEncrypt(plainData, keyData, keyLen, ivData);
-}
+// bytes dev::aesCBCEncrypt(
+//     bytesConstRef plainData, string const& keyData, int keyLen, bytesConstRef ivData)
+// {
+//     return origAesCBCEncrypt(plainData, keyData, keyLen, ivData);
+// }
 
-bytes dev::aesCBCDecrypt(
-    bytesConstRef cipherData, string const& keyData, int keyLen, bytesConstRef ivData)
-{
-    return origAesCBCDecrypt(cipherData, keyData, keyLen, ivData);
-}
+// bytes dev::aesCBCDecrypt(
+//     bytesConstRef cipherData, string const& keyData, int keyLen, bytesConstRef ivData)
+// {
+//     return origAesCBCDecrypt(cipherData, keyData, keyLen, ivData);
+// }

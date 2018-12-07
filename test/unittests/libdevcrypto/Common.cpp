@@ -275,7 +275,7 @@ BOOST_AUTO_TEST_CASE(testSigAndVerify)
     h256 r(sha3("+++"));
     h256 s(sha3("24324"));
     byte v = 4;
-    SignatureStruct constructed_sig(r, s, v);
+    SignatureStruct constructed_sig(r, s, v - 27);
     BOOST_CHECK(constructed_sig.isValid() == false);
 }
 

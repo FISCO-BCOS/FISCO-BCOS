@@ -46,17 +46,20 @@ using Public = h512;
 using Signature = h1024;
 using VType = h512;
 using TYPE_V = u512;
+static const u512 VBase = 0;
 #else
 using Signature = h520;
 using VType = byte;
 using TYPE_V = byte;
+static const unsigned VBase = 27;
 #endif
 struct SignatureStruct
 {
     SignatureStruct() = default;
     SignatureStruct(Signature const& _s);
     SignatureStruct(h256 const& _r, h256 const& _s, VType _v);
-    SignatureStruct(VType _v, h256 const& _r, h256 const& _s);
+    static std::pair<bool, bytes> ecRecover(bytesConstRef _in);
+    // SignatureStruct(VType _v, h256 const& _r, h256 const& _s);
     void encode(RLPStream& _s) const noexcept;
     void check() const noexcept;
     operator Signature() const { return *(Signature const*)this; }

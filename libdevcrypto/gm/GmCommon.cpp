@@ -46,9 +46,41 @@ SignatureStruct::SignatureStruct(Signature const& _s)
     *(Signature*)this = _s;
 }
 
-SignatureStruct::SignatureStruct(VType _v, h256 const& _r, h256 const& _s) : r(_r), s(_s), v(_v) {}
+// SignatureStruct::SignatureStruct(VType _v, h256 const& _r, h256 const& _s) : r(_r), s(_s), v(_v) {}
 
 SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
+
+
+pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
+{  struct
+    {
+        h256 hash;
+        h512 v;
+        h256 r;
+        h256 s;
+    } in;
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+
+    SignatureStruct sig(in.r, in.s, in.v);
+    if (sig.isValid())
+    {
+        try
+        {
+            if (Public rec = recover(sig, in.hash))
+            {
+                h256 ret = dev::sha3(rec);
+                memset(ret.data(), 0, 12);
+                return {true, ret.asBytes()};
+            }
+        }
+        catch (...)
+        {
+            
+        }
+    }
+    return {true, {}};
+}
+
 
 void SignatureStruct::encode(RLPStream& _s) const noexcept
 {

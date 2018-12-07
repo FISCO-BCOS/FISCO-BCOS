@@ -39,7 +39,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::crypto;
 
-static const unsigned VBase = 27;
+
 
 static const u256 c_secp256k1n(
     "115792089237316195423570985008687907852837564279074904382605163141518161494337");
@@ -50,16 +50,45 @@ SignatureStruct::SignatureStruct(Signature const& _s)
 }
 
 
-SignatureStruct::SignatureStruct(VType _v, h256 const& _r, h256 const& _s)
-{
-    if ((int(_v) != VBase) && (int(_v) != VBase + 1))
-        BOOST_THROW_EXCEPTION(eth::InvalidSignature());
-    r = _r;
-    s = _s;
-    v = static_cast<byte>(_v - VBase);
-}
+
 SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
 
+
+pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
+{
+    struct
+    {
+        h256 hash;
+        h256 v;
+        h256 r;
+        h256 s;
+    } in;
+
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+
+    h256 ret;
+    u256 v = (u256)in.v;
+    if (v >= 27 && v <= 28)
+    {
+        SignatureStruct sig(in.r, in.s, (byte)((int)v - 27));
+        if (sig.isValid())
+        {
+            try
+            {
+                if (Public rec = recover(sig, in.hash))
+                {
+                    ret = dev::sha3(rec);
+                    memset(ret.data(), 0, 12);
+                    return {true, ret.asBytes()};
+                }
+            }
+            catch (...)
+            {
+            }
+        }
+    }
+    return {true, {}};
+}
 
 void SignatureStruct::encode(RLPStream& _s) const noexcept
 {
