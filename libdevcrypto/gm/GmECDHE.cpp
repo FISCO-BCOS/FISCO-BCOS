@@ -15,8 +15,8 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 /** @file ECDHE.cpp
- * @author Alex Leverington <nessence@gmail.com>
- * @date 2014
+ * @author Asherli
+ * @date 2018
  */
 
 #include "libdevcrypto/CryptoPP.h"

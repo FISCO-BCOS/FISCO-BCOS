@@ -15,7 +15,6 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 /** @file Common.cpp
- * @author Alex Leverington <nessence@gmail.com>
  * @author Asherli
  * @date 2018
  */

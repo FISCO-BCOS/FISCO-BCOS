@@ -20,7 +20,6 @@
  */
 
 #include "libdevcrypto/AES.h"
-
 #include "sm4/sm4.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/filters.h>
