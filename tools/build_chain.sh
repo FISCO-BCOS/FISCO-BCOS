@@ -20,7 +20,7 @@ pkcs12_passwd=123456
 make_tar=
 debug_log="false"
 logfile=build.log
-enable_public_listen_ip="false"
+listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
@@ -49,6 +49,18 @@ EOF
 exit 0
 }
 
+LOG_WARN()
+{
+    local content=${1}
+    echo -e "\033[31m[WARN] ${content}\033[0m"
+}
+
+LOG_INFO()
+{
+    local content=${1}
+    echo -e "\033[32m[INFO] ${content}\033[0m"
+}
+
 parse_params()
 {
 while getopts "f:l:o:p:e:P:t:iszhT" option;do
@@ -60,7 +72,7 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
        use_ip_param="true"
     ;;
     o) output_dir=$OPTARG;;
-    i) enable_public_listen_ip="true";;
+    i) listen_ip="0.0.0.0";;
     p) port_start=$OPTARG;;
     e) eth_path=$OPTARG;;
     P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
@@ -76,6 +88,24 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
     h) help;;
     esac
 done
+}
+
+print_result()
+{
+echo "=============================================================="
+LOG_INFO "FISCO-BCOS Path : $eth_path"
+[ ! -z $ip_file ] && LOG_INFO -e "IP List File    : $ip_file"
+# [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
+[ ! -z $ip_param ] && LOG_INFO -e "IP List Param   : $ip_param"
+LOG_INFO "Start Port        : $port_start"
+LOG_INFO "Server IP         : ${ip_array[@]}"
+LOG_INFO "State Type        : ${state_type}"
+LOG_INFO "RPC listen IP     : ${listen_ip}"
+LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
+LOG_INFO "Output Dir        : $output_dir"
+LOG_INFO "CA Key Path       : $ca_file"
+echo "=============================================================="
+LOG_INFO "All completed. Files in $output_dir"
 }
 
 fail_message()
@@ -94,15 +124,6 @@ check_env() {
         echo "use \"openssl version\" command to check."
         exit $EXIT_CODE
     }
-}
-
-usage() {
-printf "%s\n" \
-"usage command gen_chain_cert chaindir|
-              gen_agency_cert chaindir agencydir|
-              gen_node_cert agencydir nodedir|
-              gen_sdk_cert agencydir sdkdir|
-              help"
 }
 
 getname() {
@@ -302,11 +323,6 @@ generate_config_ini()
         done
     else
         group_conf_list="group_config.1=${conf_path}/group.1.ini"
-    fi
-    if [ "${enable_public_listen_ip}" == "true" ];then
-        listen_ip="0.0.0.0"
-    else
-        listen_ip="127.0.0.1"
     fi
     cat << EOF > ${output}
 [rpc]
@@ -599,6 +615,9 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
+    if [ -z $(echo $IP|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$">/dev/null) ];then
+        LOG_WARN "Please check IP address: ${ip}"
+    fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
@@ -697,19 +716,10 @@ echo "=============================================================="
         if [ ! -z "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
     done
 fi
-echo "=============================================================="
-echo "FISCO-BCOS Path : $eth_path"
-[ ! -z $ip_file ] && echo "IP List File    : $ip_file"
-# [ ! -z $ip_file ] && echo "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-[ ! -z $ip_param ] && echo "IP List Param   : $ip_param"
-echo "Start Port      : $port_start"
-echo "Servers         : ${ip_array[@]}"
-echo "Output Dir      : $output_dir"
-echo "CA Key Path     : $ca_file"
-echo "=============================================================="
-echo "All completed. Files in $output_dir"
+
 }
 
 check_env
 parse_params $@
 main
+print_result
