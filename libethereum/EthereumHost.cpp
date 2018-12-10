@@ -555,28 +555,50 @@ void EthereumHost::maintainTransactions()
 		Guard l(x_transactions);
 		for (size_t i = 0; i < ts.size(); ++i) {
 			auto const& t = ts[i];
-			bool unsent = !m_transactionsSent.count(t.sha3());
+            if (m_transactionsSent.count(t.sha3())) {
+               continue;
+            }
 			vector<shared_ptr<EthereumPeer>> peers;
 			if (t.importType() == 0) {
 				peers = get<1>(randomSelection(0, [&](EthereumPeer * p) {
 					DEV_GUARDED(p->x_knownTransactions)
-					return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
-					return false;
+                    {//return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
+                        if (p->m_knownTransactions.count(t.sha3())) {
+                            return false;
+                        }
+                    }
+                    unsigned account_type = 0;
+                    if (!NodeConnManagerSingleton::GetInstance().getAccountType(p->id(), account_type)) {
+                        return false;
+                    }
+                    if (account_type != EN_ACCOUNT_TYPE_MINER) {
+                        return false;
+                    }
+                    return true;
 				}));
 			} else {
 				peers = get<0>(randomSelection(25, [&](EthereumPeer * p) {
 					DEV_GUARDED(p->x_knownTransactions)
-					return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
-					return false;
+                    {//return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
+                        if (p->m_knownTransactions.count(t.sha3())) {
+                            return false;
+                        }
+                    }
+                    unsigned account_type = 0;
+                    if (!NodeConnManagerSingleton::GetInstance().getAccountType(p->id(), account_type)) {
+                        return false;
+                    }
+                    if (account_type != EN_ACCOUNT_TYPE_MINER) {
+                        return false;
+                    }
+                    return true;
 				}));
 			}
 			for (auto const& p : peers) {
 				peerTransactions[p].push_back(i);
 			}
 
-			if (unsent) {
-				m_transactionsSent.insert(t.sha3());
-			}
+            m_transactionsSent.insert(t.sha3());
 		}
 	}
 
@@ -599,7 +621,8 @@ void EthereumHost::maintainTransactions()
 
 		//_p->clearKnownTransactions();
 
-		if (n || _p->m_requireTransactions)
+		//if (n || _p->m_requireTransactions)
+        if (n > 0) // Don't care the requireTransactions flag
 		{
 			RLPStream ts;
 			_p->prep(ts, TransactionsPacket, n).appendRaw(b, n);

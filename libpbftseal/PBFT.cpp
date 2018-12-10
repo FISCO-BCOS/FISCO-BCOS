@@ -638,7 +638,8 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 					LOG(INFO) << "Cannot get account type for peer" << nodeid;
 					return true;
 				}
-				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
+				// if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
+				if (account_type != EN_ACCOUNT_TYPE_MINER) { // No need to broadcast consensus message to observer nodes
 					return true;
 				}
 				if (_filter.count(nodeid)) {  // forward the broadcast to other node (转发广播)
