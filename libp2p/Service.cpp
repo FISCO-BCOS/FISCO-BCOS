@@ -387,7 +387,7 @@ void Service::asyncSendMessageByNodeID(
         {
             SERVICE_LOG(WARNING) << "NodeID: " << nodeID.hex() << " inactived";
 
-            BOOST_THROW_EXCEPTION(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]));
+            BOOST_THROW_EXCEPTION(NetworkException(Disconnect, "Disconnect"));
         }
     }
 #if 0
@@ -406,8 +406,8 @@ void Service::asyncSendMessageByNodeID(
         if (callback)
         {
             m_host->threadPool()->enqueue([callback, e] {
-                callback(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]),
-                    P2PSession::Ptr(), P2PMessage::Ptr());
+                callback(NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(),
+                    P2PMessage::Ptr());
             });
         }
     }
