@@ -163,7 +163,7 @@ void PBFTClient::syncTransactionQueue(u256 const& _max_block_txs)
 			LOG(TRACE) << "Skipping txq sync for a sealed block.";
 			return;
 		}
-		if ( m_working.pending().size() >= m_maxBlockTranscations )
+		if ( m_working.pending().size() >= m_maxBlockTransactions )
 		{
 			LOG(TRACE) << "Skipping txq sync for Full block .";
 			return;
@@ -253,7 +253,7 @@ void PBFTClient::rejigSealing() {
 		{
 			uint64_t tx_num = 0;
 			bytes block_data;
-			u256 max_block_txs = m_maxBlockTranscations;
+			u256 max_block_txs = m_maxBlockTransactions;
 			DEV_WRITE_GUARDED(x_working)
 			{
 				if (m_working.isSealed()) {
@@ -299,8 +299,8 @@ void PBFTClient::rejigSealing() {
 					if (left_time > 0 && left_time < m_exec_time_per_tx) {
 						max_block_txs = 1; // try pack one tx at least 只要还有时间，至少尝试再打一条
 					}
-					if (max_block_txs > m_maxBlockTranscations) {
-						max_block_txs = m_maxBlockTranscations;
+					if (max_block_txs > m_maxBlockTransactions) {
+						max_block_txs = m_maxBlockTransactions;
 					}
 				}
 
