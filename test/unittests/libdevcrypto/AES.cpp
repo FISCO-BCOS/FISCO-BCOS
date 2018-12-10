@@ -35,11 +35,11 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "gm aesCBCEncrypt";
 // //     bytesConstRef plainData = "test";
-    
-// //     bytesConstRef ivData; 
+
+// //     bytesConstRef ivData;
 // //     string const& keyData = fromHex(
-// //         "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     int keyLen = length(keyData);
 // //     bytes enData = aesCBCEncrypt(plainData, keyData, keyLen, ivData);
@@ -53,11 +53,11 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "gm aesCBCDecrypt";
 // //     bytesConstRef plainData = "test";
-    
-// //     bytesConstRef ivData; 
+
+// //     bytesConstRef ivData;
 // //     string const& keyData = fromHex(
-// //         "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     int keyLen = length(keyData);
 // //     bytes dnData = aesCBCDecrypt(enData, keyData, keyLen, ivData);
@@ -69,11 +69,11 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "gm aesCBCDecrypt";
 // //     bytesConstRef plainData = "test";
-    
-// //     bytesConstRef ivData; 
+
+// //     bytesConstRef ivData;
 // //     string const& keyData = fromHex(
-// //         "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     int keyLen = length(keyData);
 // //     bytes dnData = aesCBCDecrypt(enData, keyData, keyLen, ivData);
@@ -86,11 +86,11 @@ using namespace dev::test;
 // //     LOG(DEBUG) << "gm aesCBCEncrypt";
 // //     bytesConstRef plainData = ;
 // //     int keyLen;
-// //     bytesConstRef ivData; 
+// //     bytesConstRef ivData;
 // //     std::string const& keyData;
 // //     bytes seed = fromHex(
-// //         "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     KeyPair kp(sha3Secure(aesCBCDecrypt(&seed, "test")));
 // //     BOOST_CHECK(Address("07746f871de684297923f933279555dda418f8a2") != kp.address());
@@ -100,8 +100,8 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "gm AesDecryptWrongSeed";
 // //     bytes seed = fromHex(
-// //         "badaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "badaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     KeyPair kp(sha3Secure(aesCBCDecrypt(&seed, "test")));
 // //     BOOST_CHECK(Address("07746f871de684297923f933279555dda418f8a2") != kp.address());
@@ -111,8 +111,8 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "aesCBCDecrypt";
 // //     bytes seed = fromHex(
-// //         "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     KeyPair kp(sha3Secure(aesCBCDecrypt(&seed, "test")));
 // //     BOOST_CHECK(Address("07746f871de684297923f933279555dda418f8a2") == kp.address());
@@ -122,8 +122,8 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "AesDecryptWrongSeed";
 // //     bytes seed = fromHex(
-// //         "badaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "badaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     KeyPair kp(sha3Secure(aesCBCDecrypt(&seed, "test")));
 // //     BOOST_CHECK(Address("07746f871de684297923f933279555dda418f8a2") != kp.address());
@@ -133,8 +133,8 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "AesDecryptWrongPassword";
 // //     bytes seed = fromHex(
-// //         "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "2dbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     KeyPair kp(sha3Secure(aesCBCDecrypt(&seed, "badtest")));
 // //     BOOST_CHECK(Address("07746f871de684297923f933279555dda418f8a2") != kp.address());
@@ -144,8 +144,8 @@ using namespace dev::test;
 // // {
 // //     LOG(DEBUG) << "AesDecryptFailInvalidSeed";
 // //     bytes seed = fromHex(
-// //         "xdbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
-// //         "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
+// // "xdbaead416c20cfd00c2fc9f1788ff9f965a2000799c96a624767cb0e1e90d2d7191efdd92349226742fdc73d1"
+// // "d87e2d597536c4641098b9a89836c94f58a2ab4c525c27c4cb848b3e22ea245b2bc5c8c7beaa900b0c479253fc"
 // //         "96fce7ffc621");
 // //     BOOST_CHECK(bytes() == aesCBCDecrypt(&seed, "test"));
 // // }
