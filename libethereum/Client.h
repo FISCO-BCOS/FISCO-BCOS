@@ -357,7 +357,7 @@ protected:
 
 	bytes m_extraData;
 
-	u256 m_maxBlockTranscations = 1000; 
+	u256 m_maxBlockTransactions = 1000; 
 	std::shared_ptr<SystemContractApi> m_systemcontractapi;
 
 	bool m_omit_empty_block = true;
