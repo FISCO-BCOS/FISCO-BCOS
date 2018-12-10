@@ -30,6 +30,7 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("eth_getTransactionCount", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_STRING, "param2", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getTransactionCountI);
         //this->bindAndAddMethod(jsonrpc::Procedure("eth_pendingTransactions", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_pendingTransactionsI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_pendingTransactions", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,  NULL), &dev::rpc::EthFace::eth_pendingTransactionsI);
+        this->bindAndAddMethod(jsonrpc::Procedure("eth_pendingTransactionsNum", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_STRING,  NULL), &dev::rpc::EthFace::eth_pendingTransactionsNumI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_getBlockTransactionCountByHash", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getBlockTransactionCountByHashI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_getBlockTransactionCountByNumber", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getBlockTransactionCountByNumberI);
         this->bindAndAddMethod(jsonrpc::Procedure("eth_getUncleCountByBlockHash", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_STRING, NULL), &dev::rpc::EthFace::eth_getUncleCountByBlockHashI);
@@ -159,6 +160,11 @@ public:
     {
         (void)request;
         response = this->eth_pendingTransactions();
+    }
+    inline virtual void eth_pendingTransactionsNumI(const Json::Value &request, Json::Value &response)
+    {
+        (void)request;
+        response = this->eth_pendingTransactionsNum();
     }
     inline virtual void eth_getBlockTransactionCountByHashI(const Json::Value &request, Json::Value &response)
     {
@@ -388,6 +394,7 @@ public:
     virtual std::string eth_getStorageRoot(const std::string& param1, const std::string& param2) = 0;
     virtual std::string eth_getTransactionCount(const std::string& param1, const std::string& param2) = 0;
     //virtual std::string eth_pendingTransactions() = 0;
+    virtual std::string eth_pendingTransactionsNum() = 0;
     virtual Json::Value eth_pendingTransactions() = 0;
     virtual Json::Value eth_getBlockTransactionCountByHash(const std::string& param1) = 0;
     virtual Json::Value eth_getBlockTransactionCountByNumber(const std::string& param1) = 0;
