@@ -227,7 +227,8 @@ void version()
 #endif
 	cout << "FISCO-BCOS network protocol version: " << dev::eth::c_protocolVersion << "\n";
 	cout << "Client database version: " << dev::eth::c_databaseVersion << "\n";
-	cout << "Build: " << DEV_QUOTED(ETH_BUILD_PLATFORM) << "/" << DEV_QUOTED(ETH_BUILD_TYPE) << "\n";
+	cout << "Build: [platform]:" << DEV_QUOTED(ETH_BUILD_PLATFORM) << "\n[type]:" << DEV_QUOTED(ETH_BUILD_TYPE) 
+        << "\n[time]:" << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << "\n[commit]:" << DEV_QUOTED(ETH_COMMIT_HASH) << "\n";
 	exit(0);
 }
 
