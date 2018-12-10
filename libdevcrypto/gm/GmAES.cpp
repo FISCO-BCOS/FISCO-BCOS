@@ -30,7 +30,6 @@ using namespace dev::crypto;
 using namespace std;
 
 
-
 char* ascii2hex(const char* chs, int len)
 {
     char hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
