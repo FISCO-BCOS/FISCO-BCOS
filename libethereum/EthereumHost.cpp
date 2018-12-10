@@ -725,7 +725,7 @@ void EthereumHost::maintainBlocks(h256 const & _currentHash)
 				p->sealAndSend(ts);
 				//p->m_knownBlocks.clear();
 			}
-			
+		    /*// No need to broadcast Block because those peers will download from me if they need
 			std::this_thread::sleep_for(chrono::milliseconds(100));
 			
 			auto s2 = randomSelection(25, [&](EthereumPeer * p) {
@@ -754,7 +754,8 @@ void EthereumHost::maintainBlocks(h256 const & _currentHash)
 						}
 					}
 				}
-		}
+            */
+		} 
 		m_latestBlockSent = _currentHash;
 	}
 }
