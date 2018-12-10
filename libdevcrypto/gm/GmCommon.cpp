@@ -257,17 +257,12 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
     SignatureStruct sign(_sig);
     if (!sign.isValid())
     {
-        cout << "invalid signature" << endl;
         return Public{};
     }
     if (verify(sign.v, _sig, _message))
     {
         return sign.v;
     }
-    cout<< "v->" << sign.v <<endl;
-    cout<< "r->" << sign.r <<endl;
-    cout<< "s->" << sign.s <<endl;
-    cout << "verfy failed signature" << endl;
     return Public{};
     // return sign.pub;
 }
