@@ -84,7 +84,7 @@ public:
 
     /// Set the value of a storage position of an account.
     virtual void setStorage(
-        Address const& _contract, u256 const& _location, u256 const& _value) = 0;
+         Address const& _contract, u256 const& _location, u256 const& _value) = 0;
 
     /// Clear the storage root hash of an account to the hash of the empty trie.
     virtual void clearStorage(Address const& _contract) = 0;
@@ -157,6 +157,10 @@ public:
 
     /// Clear state's cache
     virtual void clear() = 0;
+
+    /// Check authority
+    virtual bool checkAuthority(Address _origin, Address __contract) const = 0;
+
 };
 
 }  // namespace executive

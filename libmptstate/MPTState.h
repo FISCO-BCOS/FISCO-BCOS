@@ -82,7 +82,7 @@ public:
 
     virtual u256 storage(Address const& _contract, u256 const& _memory) const override;
 
-    virtual void setStorage(
+    virtual void setStorage(Address const& _caller,
         Address const& _contract, u256 const& _location, u256 const& _value) override;
 
     virtual void clearStorage(Address const& _contract) override;
@@ -127,6 +127,8 @@ public:
     virtual void rollback(size_t _savepoint) override;
 
     virtual void clear() override;
+
+    virtual bool checkAuthority(Address _origin, Address __contract) const override;
 
     State& getState();
 

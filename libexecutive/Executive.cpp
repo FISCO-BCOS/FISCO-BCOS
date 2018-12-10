@@ -314,6 +314,11 @@ bool Executive::go(OnOpFunc const& _onOp)
             revert();
             throw;
         }
+        catch (NotAuthority const& _e)
+        {
+        	revert();
+        	throw;
+        }
         catch (Exception const& _e)
         {
             // TODO: AUDIT: check that this can never reasonably happen. Consider what to do if it

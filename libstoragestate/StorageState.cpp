@@ -183,7 +183,7 @@ u256 StorageState::storage(Address const& _address, u256 const& _key) const
     return u256();
 }
 
-void StorageState::setStorage(Address const& _address, u256 const& _location, u256 const& _value)
+void StorageState::setStorage(Address const& _caller, Address const& _address, u256 const& _location, u256 const& _value)
 {
     auto table = getTable(_address);
     if (table)
@@ -390,6 +390,15 @@ void StorageState::rollback(size_t _savepoint)
 void StorageState::clear()
 {
     m_cache.clear();
+}
+
+bool StorageState::checkAuthority(Address _origin, Address __contract) const
+{
+	auto table = getTable(__contract);
+	if(table)
+		return table->checkAuthority(_origin);
+	else
+		return true;
 }
 
 void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)

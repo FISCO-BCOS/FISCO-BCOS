@@ -213,6 +213,9 @@ h256 ExtVM::codeHashAt(Address _a)
 
 void ExtVM::setStore(u256 _n, u256 _v)
 {
+	if(!m_s->checkAuthority(origin(), myAddress()))
+		BOOST_THROW_EXCEPTION(NotAuthority());
+
     m_s->setStorage(myAddress(), _n, _v);
 }
 

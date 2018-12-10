@@ -93,7 +93,7 @@ public:
 
     /// Set the value of a storage position of an account.
     virtual void setStorage(
-        Address const& _contract, u256 const& _location, u256 const& _value) override;
+    		Address const& _caller, Address const& _contract, u256 const& _location, u256 const& _value) override;
 
     /// Clear the storage root hash of an account to the hash of the empty trie.
     virtual void clearStorage(Address const& _contract) override;
@@ -167,6 +167,9 @@ public:
 
     /// Clear state's cache
     virtual void clear() override;
+
+    virtual bool checkAuthority(Address _origin, Address __contract) const override;
+
     void setMemoryTableFactory(
         std::shared_ptr<dev::storage::MemoryTableFactory> _memoryTableFactory)
     {
@@ -177,6 +180,7 @@ private:
     mutable std::unordered_map<Address, bytes> m_cache;
     void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256());
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
+    /// check authority by caller
     u256 m_accountStartNonce;
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
 };

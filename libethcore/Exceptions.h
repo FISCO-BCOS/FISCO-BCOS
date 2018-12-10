@@ -57,6 +57,7 @@ DEV_SIMPLE_EXCEPTION(NotEnoughAvailableSpace);
 DEV_SIMPLE_EXCEPTION(ExtraDataTooBig);
 DEV_SIMPLE_EXCEPTION(ExtraDataIncorrect);
 DEV_SIMPLE_EXCEPTION(DatabaseAlreadyOpen);
+DEV_SIMPLE_EXCEPTION(NotAuthority);
 
 /// transaction releated exceptions
 DEV_SIMPLE_EXCEPTION(InvalidTransactionFormat);
