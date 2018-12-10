@@ -34,6 +34,9 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(CryptoPPTest, TestOutputHelperFixture)
 // test common encryption and decryption
+#if FISCO_GM
+    
+#else
 BOOST_AUTO_TEST_CASE(testCommonEncAndDec)
 {
     // check single pattern
@@ -160,7 +163,7 @@ BOOST_AUTO_TEST_CASE(testAgree)
     dev::crypto::Secp256k1PP::get()->agree(bob_key.secret(), bob_key.pub(), bob_ciper);
     BOOST_CHECK(alice_ciper != bob_ciper);
 }
-
+#endif
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test

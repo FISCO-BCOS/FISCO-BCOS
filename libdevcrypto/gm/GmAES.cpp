@@ -21,11 +21,6 @@
 
 #include "libdevcrypto/AES.h"
 #include "sm4/sm4.h"
-#include <cryptopp/aes.h>
-#include <cryptopp/filters.h>
-#include <cryptopp/modes.h>
-#include <cryptopp/pwdbased.h>
-#include <cryptopp/sha.h>
 #include <libdevcore/easylog.h>
 #include <openssl/sm4.h>
 #include <string.h>
@@ -34,12 +29,6 @@ using namespace dev;
 using namespace dev::crypto;
 using namespace std;
 
-
-bytes dev::aesDecrypt(
-    bytesConstRef _ivCipher, std::string const& _password, unsigned _rounds, bytesConstRef _salt)
-{
-    return bytes();
-}
 
 
 char* ascii2hex(const char* chs, int len)

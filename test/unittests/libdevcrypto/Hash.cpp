@@ -34,6 +34,9 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
 // test sha3
+#if FISCO_GM
+    
+#else
 BOOST_AUTO_TEST_CASE(testEmptySHA3)
 {
     std::string ts = EmptySHA3.hex();
@@ -112,7 +115,7 @@ BOOST_AUTO_TEST_CASE(testRipemd160)
     bytesConstRef bsConst(&bs);
     BOOST_CHECK(toJS(ripemd160(bsConst)) == cipherText);
 }
-
+#endif
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

@@ -33,6 +33,9 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(DevcryptoCommonTest, TestOutputHelperFixture)
 /// test toPublic && toAddress
+#if FISCO_GM
+    
+#else
 BOOST_AUTO_TEST_CASE(testCommonTrans)
 {
     BOOST_CHECK(Secret::size == 32);
@@ -278,7 +281,7 @@ BOOST_AUTO_TEST_CASE(testSigAndVerify)
     SignatureStruct constructed_sig(r, s, v - 27);
     BOOST_CHECK(constructed_sig.isValid() == false);
 }
-
+#endif
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test

@@ -45,12 +45,12 @@ using Public = h512;
 #if FISCO_GM
 using Signature = h1024;
 using VType = h512;
-using TYPE_V = u512;
+using NumberVType = u512;
 static const u512 VBase = 0;
 #else
 using Signature = h520;
 using VType = byte;
-using TYPE_V = byte;
+using NumberVType = byte;
 static const unsigned VBase = 27;
 #endif
 struct SignatureStruct
@@ -58,6 +58,7 @@ struct SignatureStruct
     SignatureStruct() = default;
     SignatureStruct(Signature const& _s);
     SignatureStruct(h256 const& _r, h256 const& _s, VType _v);
+    SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v);
     static std::pair<bool, bytes> ecRecover(bytesConstRef _in);
     // SignatureStruct(VType _v, h256 const& _r, h256 const& _s);
     void encode(RLPStream& _s) const noexcept;

@@ -49,7 +49,12 @@ SignatureStruct::SignatureStruct(Signature const& _s)
 // {}
 
 SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
-
+SignatureStruct::SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v)
+{
+    r = _r;
+    s = _s;
+    v = _v;
+}
 
 pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
 {
@@ -252,12 +257,17 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
     SignatureStruct sign(_sig);
     if (!sign.isValid())
     {
+        cout << "invalid signature" << endl;
         return Public{};
     }
     if (verify(sign.v, _sig, _message))
     {
         return sign.v;
     }
+    cout<< "v->" << sign.v <<endl;
+    cout<< "r->" << sign.r <<endl;
+    cout<< "s->" << sign.s <<endl;
+    cout << "verfy failed signature" << endl;
     return Public{};
     // return sign.pub;
 }

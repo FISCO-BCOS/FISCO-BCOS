@@ -36,6 +36,9 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(CryptoExceptionsTests, TestOutputHelperFixture)
 /// test exceptions
+#if FISCO_GM
+    
+#else
 BOOST_AUTO_TEST_CASE(testExceptions)
 {
     BOOST_CHECK_THROW(assertThrow(false, dev::crypto::CryptoException, "Throw crypto Exception"),
@@ -43,7 +46,7 @@ BOOST_AUTO_TEST_CASE(testExceptions)
     BOOST_REQUIRE_NO_THROW(
         assertThrow(true, dev::crypto::CryptoException, "Throw crypto Exception"));
 }
-
+#endif
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

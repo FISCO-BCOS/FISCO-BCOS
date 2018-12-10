@@ -130,8 +130,15 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
             BOOST_REQUIRE(!o["root"].is_null());
+#if FISCO_GM
+            BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
+                toHexPrefixed(ht.root().asArray()));
+            BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
+                toHexPrefixed(ft.root().asArray()));
+#else
             BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(ht.root().asArray()));
             BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(ft.root().asArray()));
+#endif
         }
     }
 }
