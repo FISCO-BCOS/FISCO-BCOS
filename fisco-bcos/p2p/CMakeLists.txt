@@ -24,12 +24,9 @@ aux_source_directory(. SRC_LIST)
 
 file(GLOB HEADERS "*.h")
 
-include(EthDependencies)
-
 add_executable(mini-p2p ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-p2p PRIVATE ${BOOST_INCLUDE_DIR})
-target_link_libraries(mini-p2p Boost::System Boost::program_options)
 
 target_link_libraries(mini-p2p devcore)
 target_link_libraries(mini-p2p devcrypto)

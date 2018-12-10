@@ -40,7 +40,9 @@ ExternalProject_Add(secp256k1
                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     LOG_CONFIGURE 1
     BUILD_COMMAND ""
+    LOG_BUILD 1
     LOG_INSTALL 1
+    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libsecp256k1.a
 )
 
 # Create imported library

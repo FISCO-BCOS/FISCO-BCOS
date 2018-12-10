@@ -13,8 +13,10 @@ ExternalProject_Add(mhd
     CONFIGURE_COMMAND ${MHD_CONFIG}
     LOG_CONFIGURE 1
     LOG_BUILD 1
+    LOG_INSTALL 1
     BUILD_COMMAND make
     INSTALL_COMMAND ""
+    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/src/mhd/src/microhttpd/.libs/libmicrohttpd.a
 )
 
 ExternalProject_Get_Property(mhd SOURCE_DIR)
@@ -26,3 +28,4 @@ file(MAKE_DIRECTORY ${MHD_INCLUDE_DIR})  # Must exist.
 set_property(TARGET MHD PROPERTY IMPORTED_LOCATION ${MHD_LIBRARY})
 set_property(TARGET MHD PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${MHD_INCLUDE_DIR})
 add_dependencies(MHD mhd)
+unset(SOURCE_DIR)
