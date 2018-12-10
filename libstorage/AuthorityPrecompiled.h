@@ -39,7 +39,6 @@ contract Authority {
 /// _sys_table_access_ table fields
 const char* const SYS_AC_FIELD_TABLE_NAME = "table_name";
 const char* const SYS_AC_FIELD_ADDRESS = "address";
-const char* const SYS_AC_FIELD_RESERVE_FIELD = "reserve_field";
 const char* const SYS_AC_FIELD_ENABLENUM = "enable_num";
 
 class AuthorityPrecompiled : public Precompiled
@@ -49,7 +48,13 @@ public:
 
     virtual ~AuthorityPrecompiled(){};
 
+    virtual std::string toString(ExecutiveContext::Ptr);
+
     virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+
+protected:
+    std::shared_ptr<storage::Table> openTable(
+        ExecutiveContext::Ptr context, const std::string& tableName);
 };
 
 }  // namespace blockverifier

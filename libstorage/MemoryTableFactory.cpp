@@ -75,7 +75,9 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     tableInfo->fields.emplace_back(tableInfo->key);
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
+
     setAuthorizedAddress(tableInfo);
+
     MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
@@ -266,7 +268,7 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     else if (tableName == SYS_ACCESS_TABLE)
     {
         tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"address", "enable_num", "reserve_field"};
+        tableInfo->fields = vector<string>{"address", "enable_num"};
     }
     else if (tableName == SYS_CURRENT_STATE)
     {
@@ -288,6 +290,7 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = "key";
         tableInfo->fields = std::vector<std::string>{"value"};
     }
+
     return tableInfo;
 }
 
