@@ -29,23 +29,21 @@ help() {
     cat << EOF
 Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -f <IP list file>                   [Optional] "split by line, "ip:nodeNum"
+    -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
     -e <FISCO-BCOS binary path>         Default download from GitHub
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
-    -i <enable public rpc listen ip>    Default 127.0.0.1
+    -i <rpc listen public ip>           Default 127.0.0.1. If set -i, listen 0.0.0.0
     -P <PKCS12 passwd>                  Default generate PKCS12 file with passwd:123456, use -P to set custom passwd
     -s <State type>                     Default mpt. if set -s, use storage 
     -t <Cert config file>               Default auto generate
+    -T <Enable debug log>               Default off. If set -T, enable debug log
     -z <Generate tar packet>            Default no
     -h Help
 e.g 
     build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
 EOF
 
-#     cat << EOF > ip_conf
-# 127.0.0.1:4 agency1 1,2
-# EOF
 exit 0
 }
 
@@ -94,9 +92,9 @@ print_result()
 {
 echo "=============================================================="
 LOG_INFO "FISCO-BCOS Path : $eth_path"
-[ ! -z $ip_file ] && LOG_INFO -e "IP List File    : $ip_file"
+[ ! -z $ip_file ] && LOG_INFO "IP List File    : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-[ ! -z $ip_param ] && LOG_INFO -e "IP List Param   : $ip_param"
+[ ! -z $ip_param ] && LOG_INFO "IP List Param   : $ip_param"
 LOG_INFO "Start Port        : $port_start"
 LOG_INFO "Server IP         : ${ip_array[@]}"
 LOG_INFO "State Type        : ${state_type}"
@@ -329,15 +327,14 @@ generate_config_ini()
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    listen_port=$(( port_start + 1 + index * 4 ))
+    listen_port=$(( port_start + 1 + index * 3 ))
     ;rpc listen port
-    http_listen_port=$(( port_start + 2 + index * 4 ))
-    console_port=$(( port_start + 3 + index * 4 ))
+    http_listen_port=$(( port_start + 2 + index * 3 ))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( port_start + index * 4 ))
+    listen_port=$(( port_start + index * 3 ))
     ;nodes to connect
     $ip_list
 
@@ -615,7 +612,7 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    if [ -z $(echo $IP|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$">/dev/null) ];then
+    if [ -z "$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")" ];then
         LOG_WARN "Please check IP address: ${ip}"
     fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
@@ -666,7 +663,7 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 4 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 3 ))"
     "
         ((++count))
     done
