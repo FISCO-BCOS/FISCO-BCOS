@@ -35,7 +35,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(CryptoPPTest, TestOutputHelperFixture)
 // test common encryption and decryption
 #if FISCO_GM
-    
+
 #else
 BOOST_AUTO_TEST_CASE(testCommonEncAndDec)
 {

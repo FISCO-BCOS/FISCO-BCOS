@@ -35,7 +35,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
 // test sha3
 #if FISCO_GM
-    
+
 #else
 BOOST_AUTO_TEST_CASE(testEmptySHA3)
 {

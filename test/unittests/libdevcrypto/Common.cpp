@@ -34,7 +34,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(DevcryptoCommonTest, TestOutputHelperFixture)
 /// test toPublic && toAddress
 #if FISCO_GM
-    
+
 #else
 BOOST_AUTO_TEST_CASE(testCommonTrans)
 {
