@@ -91,10 +91,10 @@ done
 print_result()
 {
 echo "=============================================================="
-LOG_INFO "FISCO-BCOS Path : $eth_path"
-[ ! -z $ip_file ] && LOG_INFO "IP List File    : $ip_file"
+LOG_INFO "FISCO-BCOS Path   : $eth_path"
+[ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-[ ! -z $ip_param ] && LOG_INFO "IP List Param   : $ip_param"
+[ ! -z $ip_param ] && LOG_INFO "IP List Param     : $ip_param"
 LOG_INFO "Start Port        : $port_start"
 LOG_INFO "Server IP         : ${ip_array[@]}"
 LOG_INFO "State Type        : ${state_type}"
@@ -602,7 +602,7 @@ if [ ! -e "$ca_file" ]; then
 fi
 
 echo "=============================================================="
-echo "Generating node's key ..."
+echo "Generating keys ..."
 nodeid_list=""
 ip_list=""
 count=0
@@ -672,7 +672,7 @@ done
 cd ..
 
 echo "=============================================================="
-echo "Generating node's configurations..."
+echo "Generating configurations..."
 generate_script_template "$output_dir/start_all.sh"
 generate_script_template "$output_dir/stop_all.sh"
 generate_script_template "$output_dir/replace_all.sh"
