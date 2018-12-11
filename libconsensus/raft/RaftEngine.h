@@ -67,31 +67,31 @@ public:
 
     dev::u256 getNodeIdx() const
     {
-        RecursiveGuard recursiveGuard(m_mutex);
+        Guard Guard(m_mutex);
         return m_nodeIdx;
     }
 
     dev::u256 getTerm() const
     {
-        RecursiveGuard recursiveGuard(m_mutex);
+        Guard Guard(m_mutex);
         return m_term;
     }
 
     dev::eth::BlockHeader getHighestBlockHeader() const
     {
-        RecursiveGuard recursiveGuard(m_mutex);
+        Guard Guard(m_mutex);
         return m_highestBlockHeader;
     }
 
     dev::u256 getLastLeaderTerm() const
     {
-        RecursiveGuard recursiveGuard(m_mutex);
+        Guard Guard(m_mutex);
         return m_lastLeaderTerm;
     }
 
     void setStorage(dev::storage::Storage::Ptr storage)
     {
-        RecursiveGuard recursiveGuard(m_mutex);
+        Guard Guard(m_mutex);
         m_storage = storage;
     }
 
@@ -130,7 +130,7 @@ protected:
     bool handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _req);
     HandleVoteResult handleVoteResponse(
         u256 const& _from, h512 const& _node, RaftVoteResp const& _req, VoteState& vote);
-    bool handleHeartBeat(u256 const& _from, h512 const& _node, RaftHeartBeat const& _hb);
+    bool handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeartBeat const& _hb);
     bool sendResponse(
         u256 const& _to, h512 const& _node, RaftPacketType _packetType, RaftMsg const& _resp);
 
@@ -142,7 +142,7 @@ protected:
     void runAsFollower();
     void runAsCandidate();
 
-    bool checkHeartBeatTimeout();
+    bool checkHeartbeatTimeout();
     ssize_t getIndexByMiner(dev::h512 const& _nodeId);
     bool getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const;
     dev::p2p::P2PMessage::Ptr transDataToMessage(
@@ -150,19 +150,19 @@ protected:
 
     RaftRole getState()
     {
-        RecursiveGuard l(m_mutex);
+        Guard l(m_mutex);
         return m_state;
     }
 
     void setLeader(raft::NodeIndex const& _leader)
     {
-        RecursiveGuard l(m_mutex);
+        Guard l(m_mutex);
         m_leader = _leader;
     }
 
     void setVote(raft::NodeIndex const& _candidate)
     {
-        RecursiveGuard l(m_mutex);
+        Guard l(m_mutex);
         m_vote = _candidate;
     }
 
@@ -175,7 +175,7 @@ protected:
     void checkMinerList(dev::eth::Block const& _block);
     void checkAndSave(Sealing& _sealing);
 
-    mutable RecursiveMutex m_mutex;
+    mutable Mutex m_mutex;
     dev::KeyPair m_keyPair;
 
     unsigned m_electTimeout;

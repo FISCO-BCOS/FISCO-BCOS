@@ -41,6 +41,8 @@ using namespace dev::blockchain;
 
 void RaftEngine::resetElectTimeout()
 {
+    Guard l(m_mutex);
+
     m_electTimeout =
         m_minElectTimeout + std::rand() % 100 * (m_maxElectTimeout - m_minElectTimeout) / 100;
     m_lastElectTime = std::chrono::system_clock::now();
@@ -50,21 +52,20 @@ void RaftEngine::resetElectTimeout()
 
 void RaftEngine::initRaftEnv()
 {
-    RecursiveGuard recursiveGuard(m_mutex);
-
     resetConfig();
 
-    m_minElectTimeoutInit = m_minElectTimeout;
-    m_maxElectTimeoutInit = m_maxElectTimeout;
-    m_minElectTimeoutBoundary = m_minElectTimeout;
-    m_maxElectTimeoutBoundary = m_maxElectTimeout + (m_maxElectTimeout - m_minElectTimeout) / 2;
-    m_lastElectTime = std::chrono::system_clock::now();
-
-    m_lastHeartbeatTime = m_lastElectTime;
-    m_heartbeatTimeout = m_minElectTimeout;
-    m_heartbeatInterval = m_heartbeatTimeout / RaftEngine::s_heartBeatIntervalRatio;
-
-    m_increaseTime = (m_maxElectTimeout - m_minElectTimeout) / 4;
+    {
+        Guard l(m_mutex);
+        m_minElectTimeoutInit = m_minElectTimeout;
+        m_maxElectTimeoutInit = m_maxElectTimeout;
+        m_minElectTimeoutBoundary = m_minElectTimeout;
+        m_maxElectTimeoutBoundary = m_maxElectTimeout + (m_maxElectTimeout - m_minElectTimeout) / 2;
+        m_lastElectTime = std::chrono::system_clock::now();
+        m_lastHeartbeatTime = m_lastElectTime;
+        m_heartbeatTimeout = m_minElectTimeout;
+        m_heartbeatInterval = m_heartbeatTimeout / RaftEngine::s_heartBeatIntervalRatio;
+        m_increaseTime = (m_maxElectTimeout - m_minElectTimeout) / 4;
+    }
 
     resetElectTimeout();
     std::srand(static_cast<unsigned>(utcTime()));
@@ -76,38 +77,48 @@ void RaftEngine::resetConfig()
 {
     updateMinerList();
 
-    auto nodeNum = m_minerList.size();
-    if (nodeNum == 0)
+    auto needReset = false;
+    size_t nodeNum;
+    raft::NodeIndex nodeIdx;
     {
-        RAFTENGINE_LOG(WARNING) << "[#resetConfig] Reset config error: no miner. Stop sealing";
-        m_cfgErr = true;
-        return;
+        Guard l(m_mutex);
+        nodeNum = m_minerList.size();
+        if (nodeNum == 0)
+        {
+            RAFTENGINE_LOG(WARNING) << "[#resetConfig] Reset config error: no miner. Stop sealing";
+            m_cfgErr = true;
+            return;
+        }
+
+        auto iter = std::find(m_minerList.begin(), m_minerList.end(), m_keyPair.pub());
+        if (iter == m_minerList.end())
+        {
+            RAFTENGINE_LOG(WARNING) << "[#resetConfig] Reset config error: can't find myself in "
+                                       "miner list. Stop sealing";
+            m_cfgErr = true;
+            return;
+        }
+
+        m_accountType = NodeAccountType::MinerAccount;
+        nodeIdx = iter - m_minerList.begin();
+        needReset = (nodeNum != m_nodeNum || nodeIdx != m_nodeIdx);
     }
 
-    auto iter = std::find(m_minerList.begin(), m_minerList.end(), m_keyPair.pub());
-    if (iter == m_minerList.end())
+    if (needReset)
     {
-        RAFTENGINE_LOG(WARNING)
-            << "[#resetConfig] Reset config error: can't find myself in miner list. Stop sealing";
-        m_cfgErr = true;
-        return;
-    }
-
-    m_accountType = NodeAccountType::MinerAccount;
-
-    auto nodeIdx = iter - m_minerList.begin();
-    if (nodeNum != m_nodeNum || nodeIdx != m_nodeIdx)
-    {
-        m_nodeNum = nodeNum;
-        m_nodeIdx = nodeIdx;
-        m_f = (m_nodeNum - 1) / 2;
+        {
+            Guard l(m_mutex);
+            m_nodeNum = nodeNum;
+            m_nodeIdx = nodeIdx;
+            m_f = (m_nodeNum - 1) / 2;
+        }
         RAFTENGINE_LOG(DEBUG) << "[#resetConfig] [m_nodeNum]: " << m_nodeNum
                               << ", [m_nodeIdx]: " << m_nodeIdx << ", [m_f]: " << m_f;
-
         switchToFollower(raft::InvalidIndex);
         resetElectTimeout();
     }
 
+    Guard l(m_mutex);
     m_cfgErr = false;
 }
 
@@ -189,15 +200,23 @@ void RaftEngine::start()
 
 void RaftEngine::reportBlock(dev::eth::Block const& _block)
 {
-    RecursiveGuard recursiveGuard(m_mutex);
-
-    if (m_blockChain->number() == 0 || m_highestBlock.number() < _block.blockHeader().number())
+    auto canReport = false;
     {
-        m_lastBlockTime = utcTime();
-        m_highestBlockHeader = _block.blockHeader();
-        if (m_highestBlock.number() >= m_consensusBlockNumber)
+        Guard Guard(m_mutex);
+        canReport =
+            m_blockChain->number() == 0 || m_highestBlock.number() < _block.blockHeader().number();
+    }
+
+    if (canReport)
+    {
         {
-            m_consensusBlockNumber = m_highestBlock.number() + 1;
+            Guard Guard(m_mutex);
+            m_lastBlockTime = utcTime();
+            m_highestBlockHeader = _block.blockHeader();
+            if (m_highestBlock.number() >= m_consensusBlockNumber)
+            {
+                m_consensusBlockNumber = m_highestBlock.number() + 1;
+            }
         }
         resetConfig();
         RAFTENGINE_LOG(INFO) << "[#reportBlock] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report:"
@@ -341,7 +360,7 @@ void RaftEngine::runAsLeader()
         }
 
         // heartbeat timeout, change role to candidate
-        if (m_nodeNum > 1 && checkHeartBeatTimeout())
+        if (m_nodeNum > 1 && checkHeartbeatTimeout())
         {
             RAFTENGINE_LOG(INFO) << "[#runAsLeader] Heartbeat Timeout [currentNodeNum]: "
                                  << m_nodeNum;
@@ -393,7 +412,7 @@ void RaftEngine::runAsLeader()
 
                 RaftHeartBeat hb;
                 hb.populate(RLP(ref(ret.second.data).cropped(1)));
-                if (handleHeartBeat(ret.second.nodeIdx, ret.second.nodeId, hb))
+                if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
                 {
                     switchToFollower(hb.leader);
                     return;
@@ -410,7 +429,7 @@ void RaftEngine::runAsLeader()
                     << ", [node]: " << ret.second.nodeId.hex().substr(0, 5);
                 resp.populate(RLP(ref(ret.second.data).cropped(1)));
                 {
-                    RecursiveGuard recursiveGuard(m_mutex);
+                    Guard Guard(m_mutex);
                     m_memberBlock[ret.second.nodeId] = BlockRef(resp.height, resp.blockHash);
                 }
 
@@ -562,7 +581,7 @@ void RaftEngine::runAsCandidate()
 
                 RaftHeartBeat hb;
                 hb.populate(RLP(ref(ret.second.data).cropped(1)));
-                if (handleHeartBeat(ret.second.nodeIdx, ret.second.nodeId, hb))
+                if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
                 {
                     switchToFollower(hb.leader);
                     return;
@@ -636,7 +655,7 @@ void RaftEngine::runAsFollower()
                 {
                     setLeader(hb.leader);
                 }
-                if (handleHeartBeat(ret.second.nodeIdx, ret.second.nodeId, hb))
+                if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
                 {
                     setLeader(hb.leader);
                 }
@@ -651,12 +670,12 @@ void RaftEngine::runAsFollower()
     }
 }
 
-bool RaftEngine::checkHeartBeatTimeout()
+bool RaftEngine::checkHeartbeatTimeout()
 {
     std::chrono::system_clock::time_point nowTime = std::chrono::system_clock::now();
     auto interval = nowTime - m_lastHeartbeatReset;
 
-    RAFTENGINE_LOG(DEBUG) << "[#checkHeartBeatTimeout] [interval]: " << interval.count()
+    RAFTENGINE_LOG(DEBUG) << "[#checkHeartbeatTimeout] [interval]: " << interval.count()
                           << ", [heartbeatTimeout]: " << m_heartbeatTimeout;
 
     return interval >= std::chrono::milliseconds(m_heartbeatTimeout);
@@ -880,9 +899,9 @@ bool RaftEngine::checkElectTimeout()
     return nowTime - m_lastElectTime >= std::chrono::milliseconds(m_electTimeout);
 }
 
-bool RaftEngine::handleHeartBeat(u256 const& _from, h512 const& _node, RaftHeartBeat const& _hb)
+bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeartBeat const& _hb)
 {
-    RAFTENGINE_LOG(INFO) << "[#handleHeartBeat] [from]: " << _from
+    RAFTENGINE_LOG(INFO) << "[#handleHeartbeat] [from]: " << _from
                          << ", [node]: " << _node.hex().substr(0, 5) << ", [term]: " << _hb.term
                          << ", [leader]: " << _hb.leader;
 
@@ -895,7 +914,7 @@ bool RaftEngine::handleHeartBeat(u256 const& _from, h512 const& _node, RaftHeart
 
     if (_hb.term < m_term && _hb.term <= m_lastLeaderTerm)
     {
-        RAFTENGINE_LOG(INFO) << "[#handleHeartBeat] Discard hb for smaller term"
+        RAFTENGINE_LOG(INFO) << "[#handleHeartbeat] Discard hb for smaller term"
                              << "[term]: " << m_term << ", [receiveTerm]: " << _hb.term
                              << ", [lastLeaderTerm]: " << m_lastLeaderTerm
                              << ", [receivelastLeaderTerm]: " << _hb.term;
@@ -909,7 +928,7 @@ bool RaftEngine::handleHeartBeat(u256 const& _from, h512 const& _node, RaftHeart
     if (_hb.term > m_lastLeaderTerm)
     {
         RAFTENGINE_LOG(INFO)
-            << "[#handleHeartBeat] Prepare to switch follower due to last leader term error "
+            << "[#handleHeartbeat] Prepare to switch follower due to last leader term error "
             << "[lastLeaderTerm]: " << m_lastLeaderTerm << ", [hbLastLeader]: " << _hb.term;
         m_term = _hb.term;
         m_vote = raft::InvalidIndex;
@@ -919,7 +938,7 @@ bool RaftEngine::handleHeartBeat(u256 const& _from, h512 const& _node, RaftHeart
     if (_hb.term > m_term)
     {
         RAFTENGINE_LOG(INFO)
-            << "[#handleHeartBeat] Prepare to switch follower due to receive higher term"
+            << "[#handleHeartbeat] Prepare to switch follower due to receive higher term"
             << " [term]: " << m_term << ", [hbTerm]: " << _hb.term;
         m_term = _hb.term;
         m_vote = raft::InvalidIndex;
@@ -928,7 +947,7 @@ bool RaftEngine::handleHeartBeat(u256 const& _from, h512 const& _node, RaftHeart
 
     if (m_state == EN_STATE_CANDIDATE && _hb.term >= m_term)
     {
-        RAFTENGINE_LOG(INFO) << "[#handleHeartBeat] Prepare to switch follower due to receive "
+        RAFTENGINE_LOG(INFO) << "[#handleHeartbeat] Prepare to switch follower due to receive "
                                 "higher or equal term in candidate"
                              << " [term]: " << m_term << ", [hbTerm]: " << _hb.term;
         m_term = _hb.term;
@@ -956,29 +975,35 @@ void RaftEngine::recoverElectTime()
 
 void RaftEngine::switchToLeader()
 {
-    RecursiveGuard recursiveGuard(m_mutex);
-    m_leader = m_nodeIdx;
-    m_state = EN_STATE_LEADER;
+    {
+        Guard Guard(m_mutex);
+        m_leader = m_nodeIdx;
+        m_state = EN_STATE_LEADER;
+    }
     recoverElectTime();
     RAFTENGINE_LOG(INFO) << "[#switchToLeader] [currentTerm]: " << m_term;
 }
 
 void RaftEngine::switchToFollower(raft::NodeIndex const& _leader)
 {
-    RecursiveGuard recursiveGuard(m_mutex);
-    m_leader = _leader;
-    m_state = EN_STATE_FOLLOWER;
-    m_heartbeatCount = 0;
+    {
+        Guard Guard(m_mutex);
+        m_leader = _leader;
+        m_state = EN_STATE_FOLLOWER;
+        m_heartbeatCount = 0;
+    }
     resetElectTimeout();
     RAFTENGINE_LOG(INFO) << "[#switchToFollower] [currentTerm]: " << m_term;
 }
 
 void RaftEngine::switchToCandidate()
 {
-    RecursiveGuard recursiveGuard(m_mutex);
-    m_term++;
-    m_leader = raft::InvalidIndex;
-    m_state = RaftRole::EN_STATE_CANDIDATE;
+    {
+        Guard Guard(m_mutex);
+        m_term++;
+        m_leader = raft::InvalidIndex;
+        m_state = RaftRole::EN_STATE_CANDIDATE;
+    }
     resetElectTimeout();
     RAFTENGINE_LOG(INFO) << "[#switchToCandidate] [newTerm]: " << m_term;
 }
@@ -1100,7 +1125,7 @@ void RaftEngine::increaseElectTime()
 
 bool RaftEngine::shouldSeal()
 {
-    RecursiveGuard recursiveGuard(m_mutex);
+    Guard Guard(m_mutex);
     if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount || m_state != EN_STATE_LEADER)
     {
         return false;
@@ -1163,7 +1188,7 @@ void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
                          << "/" << working_block.header().hash().abridged();
 
     checkBlockValid(working_block);
-    m_blockSync->noteSealingBlockNumber(working_block.header().number());
+    // m_blockSync->noteSealingBlockNumber(working_block.header().number());
     _sealing.p_execContext = executeBlock(working_block);
     _sealing.block = working_block;
 }
@@ -1210,7 +1235,7 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
                               << _sealing.block.blockHeader().number() << "/"
                               << _sealing.block.blockHeader().hash().abridged() << std::endl;
         /// note blocksync to sync
-        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+        // m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         m_txPool->handleBadBlock(_sealing.block);
     }
 
