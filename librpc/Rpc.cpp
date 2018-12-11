@@ -717,7 +717,9 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         {
             Json::Value log;
             log["address"] = toJS(txReceipt.log()[i].address);
-            log["topics"] = toJS(txReceipt.log()[i].topics);
+            log["topics"] = Json::Value(Json::arrayValue);
+            for (unsigned int j = 0; j < txReceipt.log()[i].topics.size(); ++j)
+                log["topics"].append(toJS(txReceipt.log()[i].topics[j]));
             log["data"] = toJS(txReceipt.log()[i].data);
             response["logs"].append(log);
         }
