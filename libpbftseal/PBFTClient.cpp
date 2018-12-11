@@ -247,7 +247,8 @@ void PBFTClient::doWork(bool _doWait)
 void PBFTClient::rejigSealing() {
 	bool would_seal = m_wouldSeal && (pbft()->accountType() == EN_ACCOUNT_TYPE_MINER);
 	bool is_major_syncing = isMajorSyncing();
-	if (would_seal && !is_major_syncing)
+	//if (would_seal && !is_major_syncing)
+	if (would_seal)
 	{
 		if (pbft()->shouldSeal(this)) // am i leader? 自己是不是leader？
 		{

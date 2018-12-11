@@ -135,7 +135,8 @@ enum class ImportResult
 	UTXOTokenKeyRepeat,
 	UTXOLowEthVersion,
 	UTXOTxError,
-	UTXODBError
+	UTXODBError,
+	Limited
 };
 
 struct ImportRequirements
