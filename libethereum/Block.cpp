@@ -521,7 +521,7 @@ TransactionReceipts Block::exec(BlockChain const& _bc, TransactionQueue& _tq)
     }
 
     unsigned i = 0;
-    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()), 500)
+    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()) + ",timecost=", 500)
     for (Transaction const& tr : m_transactions)
     {
         try
@@ -582,7 +582,7 @@ TransactionReceipts Block::execUTXOInBlock(BlockChain const& _bc, TransactionQue
     m_utxoMgr.setCurBlockInfo(this, lh);
     m_state.setParallelUTXOTx(parallelUTXOTx);
     LOG(TRACE) << "Block::exec parallelUTXOTxCnt:" << parallelUTXOTxCnt;
-    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()) + " ", 1)
+    DEV_TIMED_ABOVE("Block::exec txExec,blk=" + toString(info().number()) + ",txs=" + toString(m_transactions.size()) + ",timecost=", 1)
     for (Transaction const& tr : m_transactions)
     {
         try
@@ -920,7 +920,7 @@ u256 Block::enact(VerifiedBlockRef const& _block, BlockChain const& _bc, bool _f
         }
     }
 
-    DEV_TIMED_ABOVE("commit", 500)
+    DEV_TIMED_ABOVE("enact:state commit timecost=", 500)
     m_state.commit( State::CommitBehaviour::KeepEmptyAccounts);
 
     // Hash the state trie and check against the state_root hash in m_currentBlock.
@@ -1107,7 +1107,7 @@ void Block::commitToSeal(BlockChain const& _bc, bytes const& _extraData)
     RLPStream(unclesCount).appendRaw(unclesData.out(), unclesCount).swapOut(m_currentUncles);
 
 
-    DEV_TIMED_ABOVE("commit", 500)
+    DEV_TIMED_ABOVE("commitToSeal:state commit timecost=", 500)
     m_state.commit(State::CommitBehaviour::KeepEmptyAccounts);// 不要RemoveEmptyAccounts了
 
     m_currentBlock.setLogBloom(logBloom());
@@ -1149,7 +1149,7 @@ void Block::commitToSealAfterExecTx(BlockChain const&) {
     }
 
     //bool removeEmptyAccounts = m_currentBlock.number() >= _bc.chainParams().u256Param("EIP158ForkBlock");
-    DEV_TIMED_ABOVE("commit", 500)
+    DEV_TIMED_ABOVE("commitToSealAfterExecTx:state commit timecost=", 500)
     m_state.commit(State::CommitBehaviour::KeepEmptyAccounts);
 
     //LOG(INFO) << "Post-reward stateRoot:" << m_state.rootHash();
