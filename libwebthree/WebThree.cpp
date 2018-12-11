@@ -79,15 +79,19 @@ WebThreeDirect::WebThreeDirect(
 		NoProof::init();
 		SinglePoint::init();
 
+		TransactionQueue::Limits limit;
+		limit.current = _params.transactionQueueLimit;
+		limit.future = _params.transactionQueueLimit;
+
 		if (_params.sealEngineName == "SinglePoint")
 		{
-			m_ethereum.reset(new eth::SinglePointClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+			m_ethereum.reset(new eth::SinglePointClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we, limit));
 		}
 		else if (_params.sealEngineName == "PBFT") {
-			m_ethereum.reset(new eth::PBFTClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+			m_ethereum.reset(new eth::PBFTClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we, limit));
 		}
 		else if (_params.sealEngineName == "Raft") {
-			m_ethereum.reset(new eth::RaftClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we));
+			m_ethereum.reset(new eth::RaftClient(_params, (int)_params.u256Param("networkID"), m_net, shared_ptr<GasPricer>(), _dbPath, _we, limit));
 		}
 		// else if (_params.sealEngineName == "NoProof" && _testing)
 		// {

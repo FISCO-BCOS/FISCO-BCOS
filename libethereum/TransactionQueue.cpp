@@ -173,6 +173,11 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 
 	try
 	{
+		if(m_current.size() >= m_limit) {
+			LOG(WARNING) << "Dropping out of bounds transaction" << _h;
+			return ImportResult::Limited;
+		}
+
 		auto _h0 = _transaction.sha3();
 		if (_h != _h0)
 		{
@@ -323,6 +328,7 @@ ImportResult TransactionQueue::manageImport_WITH_LOCK(h256 const& _h, Transactio
 				}
 			}
 		}
+
 		// If valid, append to transactions.
 		insertCurrent_WITH_LOCK(make_pair(_h, _transaction));
 		LOG(TRACE) << "Queued vaguely legit-looking transaction" << _h;
@@ -548,9 +554,10 @@ void TransactionQueue::enqueue(RLP const& _data, h512 const& _nodeId)
 		unsigned itemCount = _data.itemCount();
 		for (unsigned i = 0; i < itemCount; ++i)
 		{
-			if (m_unverified.size() >= c_maxVerificationQueueSize)
+			//if (m_unverified.size() >= c_maxVerificationQueueSize)
+			if (m_unverified.size() >= m_limit * 2)
 			{
-				LOG(WARNING) << "Transaction verification queue is full. Dropping" << itemCount - i << "transactions";
+				LOG(WARNING) << "Transaction verification queue is full. Dropping " << itemCount - i << " transactions";
 				break;
 			}
 			m_unverified.emplace_back(UnverifiedTransaction(_data[i].data(), _nodeId));
