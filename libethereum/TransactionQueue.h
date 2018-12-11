@@ -86,6 +86,7 @@ public:
 	/// @param _avoid Transactions to avoid returning.
 	/// @returns up to _limit transactions ordered by nonce and gas price.
 	Transactions topTransactions(unsigned _limit, h256Hash const& _avoid = h256Hash()) const;
+	Transactions topTransactions(unsigned _limit, QueueSet<h256> const& _avoid) const;
 
 	Transactions allTransactions() const;
 	size_t currentTxNum() const {ReadGuard l(m_lock); return m_current.size();}
