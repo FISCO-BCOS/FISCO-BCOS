@@ -638,7 +638,8 @@ bool PBFT::broadcastMsg(std::string const & _key, unsigned _id, bytes const & _d
 					LOG(INFO) << "Cannot get account type for peer" << nodeid;
 					return true;
 				}
-				if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
+				// if ( _id != ViewChangeReqPacket && account_type != EN_ACCOUNT_TYPE_MINER && !m_bc->chainParams().broadcastToNormalNode) {
+				if (account_type != EN_ACCOUNT_TYPE_MINER) { // No need to broadcast consensus message to observer nodes
 					return true;
 				}
 				if (_filter.count(nodeid)) {  // forward the broadcast to other node (转发广播)
@@ -1107,6 +1108,8 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, s
 			m_last_consensus_time = 0;
 			m_last_sign_time = 0;
 			m_to_view = min_view - 1; // it will be setted equal to min_view when viewchange happened.
+            // make the cycle to adpater the view asap
+			m_change_cycle = std::min((unsigned)m_to_view, (unsigned)kMaxChangeCycle); // prevent overflow (防止溢出)
 			m_signalled.notify_all();
 		}
 	}
