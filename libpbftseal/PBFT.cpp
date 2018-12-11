@@ -1108,6 +1108,8 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, s
 			m_last_consensus_time = 0;
 			m_last_sign_time = 0;
 			m_to_view = min_view - 1; // it will be setted equal to min_view when viewchange happened.
+            // make the cycle to adpater the view asap
+			m_change_cycle = std::min((unsigned)m_to_view, (unsigned)kMaxChangeCycle); // prevent overflow (防止溢出)
 			m_signalled.notify_all();
 		}
 	}
