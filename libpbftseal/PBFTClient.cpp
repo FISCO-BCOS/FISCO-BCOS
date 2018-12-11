@@ -342,7 +342,7 @@ void PBFTClient::rejigSealing() {
 				PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), ss.str(), tx_num == 0);
 			}
 			// broadcast which not contains execution result 广播（不含交易执行结果的块）
-			LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on #" << m_sealingInfo.hash(WithoutSeal).abridged() << "#" << m_sealingInfo.number() << "tx:" << tx_num << ",maxtx:" << max_block_txs << ",tq.num=" << m_tq.currentTxNum() << "time:" << utcTime();
+			LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number() << "tx:" << tx_num << ",maxtx:" << max_block_txs << ",tq.num=" << m_tq.currentTxNum() << "time:" << utcTime();
 
 			u256 view = 0;
 			bool generate_ret = pbft()->generateSeal(m_sealingInfo, block_data, view);
@@ -429,7 +429,7 @@ void PBFTClient::rejigSealing() {
 				ss << "hash:" << m_sealingInfo.hash(WithoutSeal) << " height:" << m_sealingInfo.number();
 				PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), ss.str());
 
-				LOG(INFO) << "************************** Generating sign on #" << m_sealingInfo.hash(WithoutSeal).abridged() << "#" << m_sealingInfo.number() << "tx:" << tx_num << "time:" << utcTime();
+				LOG(INFO) << "************************** Generating sign on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number() << "tx:" << tx_num << "time:" << utcTime();
 
 				if (!pbft()->generateCommit(m_sealingInfo, m_working.blockData(), view)) {
 					//do nothing, wait timeout & viewchange
