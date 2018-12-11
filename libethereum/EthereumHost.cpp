@@ -477,11 +477,7 @@ bool EthereumHost::ensureInitialised()
 		LOG(TRACE) << "Initialising: latest=" << m_latestBlockSent;
 
 		Guard l(x_transactions);
-		//m_transactionsSent = m_tq.knownTransactions();
-        auto txs = m_tq.knownTransactions();
-        for (auto t : txs) {
-            m_transactionsSent.insert(t);
-        }
+		m_transactionsSent = m_tq.knownTransactions();
 		return true;
 	}
 	return false;
@@ -602,9 +598,6 @@ void EthereumHost::maintainTransactions()
 				peerTransactions[p].push_back(i);
 			}
 
-            if (m_transactionsSent.size() > kTransactionsSentSize) {
-                m_transactionsSent.pop();
-            }
             m_transactionsSent.insert(t.sha3());
 		}
 	}
@@ -800,12 +793,7 @@ void EthereumHost::onTransactionImported(ImportResult _ir, h256 const & _h, h512
 	case ImportResult::AlreadyKnown:
 		// if we already had the transaction, then don't bother sending it on.
 		DEV_GUARDED(x_transactions)
-        {
-            if (m_transactionsSent.size() > kTransactionsSentSize) {
-                m_transactionsSent.pop();
-            }
-	        m_transactionsSent.insert(_h);
-        }
+		m_transactionsSent.insert(_h);
 		peer->addRating(0);
 		break;
 	case ImportResult::Success:
