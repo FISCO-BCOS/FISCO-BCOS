@@ -159,9 +159,7 @@ private:
 	u256 m_networkId;
 
 	h256 m_latestBlockSent;
-	//h256Hash m_transactionsSent;
-    QueueSet<h256> m_transactionsSent;
-    static const size_t kTransactionsSentSize = 1024*10;
+	h256Hash m_transactionsSent;
 
 	std::unordered_set<p2p::NodeID> m_banned;
 
