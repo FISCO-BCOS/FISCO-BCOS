@@ -131,6 +131,8 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 				cp.otherParams[i.first] = i.second.get_str();
 	}
 	
+	cp.transactionQueueLimit = obj.count("transactionQueueLimit") ? obj["transactionQueueLimit"].get_int() : 1024;
+
 	/*
 	// genesis
 	string genesisStr = json_spirit::write_string(obj["genesis"], false);
