@@ -317,7 +317,7 @@ h256 stringMapHash256(StringMap const& _s)
 {
     BytesMap bytesMap;
     for (auto const& _v : _s)
-        bytesMap.insert(std::make_pair( 
+        bytesMap.insert(std::make_pair(
             bytes(_v.first.begin(), _v.first.end()), bytes(_v.second.begin(), _v.second.end())));
     return hash256(bytesMap);
 }

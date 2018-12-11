@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(GMtestCommonTrans)
 {
     BOOST_CHECK(Secret::size == 32);
     BOOST_CHECK(Public::size == 64);
-    BOOST_CHECK(Signature::size == 65);
+    BOOST_CHECK(Signature::size == 128);
     // check secret->public
     Secret sec1(
         "bcec428d5205abe0f0cc8a7340839"
@@ -89,8 +89,13 @@ BOOST_AUTO_TEST_CASE(GMtestEncryptDecrypt)
     bool result = decrypt(key_pair.secret(), ref(ciper_ret), ciper_ret);
     BOOST_CHECK(result == true && asString(ref(ciper_ret)) == plain);
     // decrypt ecies
+    // std::cout<< "line 92 result =====>" << result << std::endl;
+    // std::cout<< "asString(ref(ciper_ret))  =====>" << asString(ref(ciper_ret)) << std::endl;
     result = decryptECIES(key_pair.secret(), ref(ret_ciper_ecies), ret_ciper_ecies);
     BOOST_CHECK(result == true && asString(ref(ret_ciper_ecies)) == plain);
+    // std::cout<< "line 96 result =====>" << result << std::endl;
+    // std::cout<< "asString(ref(ret_ciper_ecies)) =====>" << asString(ref(ret_ciper_ecies)) <<
+    // std::endl;
 
     // test decryption: invalid ciper
     std::string invalid_ciper = "23k4jlkfjlskdjfsd";
@@ -123,6 +128,8 @@ BOOST_AUTO_TEST_CASE(GMtestSymEncAndDec)
     bytes backup_ciper(ret_ciper.begin(), ret_ciper.end());
     bool result = decryptSym(sec, ref(ret_ciper), ret_ciper);
     BOOST_CHECK(result == true && asString(ref(ret_ciper)) == plain);
+    // std::cout<< "line 130 result =====>" << result << std::endl;
+    // std::cout<< "asString(ref(ret_ciper)) =====>" << asString(ref(ret_ciper)) << std::endl;
     // decrypt: invalid key
     Secret invalid_sec = Secret::random();
     while (invalid_sec == sec)
@@ -156,6 +163,8 @@ BOOST_AUTO_TEST_CASE(GMtestEncAndDecECIESWithMac)
     bool result = decryptECIES(key_pair.secret(), ref(mac), ref(ret_ciper), ret_ciper);
     BOOST_CHECK(result == true && asString(ref(ret_ciper)) == plain_text);
     // exception test
+    // std::cout<< "line 165 result =====>" << result << std::endl;
+    // std::cout<< "asString(ref(ret_ciper)) =====>" << asString(ref(ret_ciper)) << std::endl;
     std::string invalid_mac_str =
         "27d5df7d4cd9579f7f321c870a44970cce"
         "ecced0ffd16c58fdb88e303c139a19";
@@ -177,6 +186,8 @@ BOOST_AUTO_TEST_CASE(GMecies_aes128_ctr)
 
     bytes plaintext = decryptSymNoAuth(k, iv, &ciphertext).makeInsecure();
     BOOST_REQUIRE_EQUAL(asString(plaintext), m);
+    // std::cout<< "line 188 asString(plaintext) =====>" << asString(plaintext) << std::endl;
+    // std::cout<< "m =====>" << m << std::endl;
 }
 
 /// test ECIES AES128 CTR
@@ -199,6 +210,8 @@ BOOST_AUTO_TEST_CASE(GMtestEciesAes128CtrUnaligned)
     plaintext.resize(magic.size());
     BOOST_REQUIRE(plaintext.size() > 0);
     BOOST_REQUIRE(magic == plaintext);
+    // std::cout<< "line 212 magic =====>" << magic << std::endl;
+    // std::cout<< "plaintext =====>" << plaintext << std::endl;
 }
 
 /// test key pair
@@ -235,6 +248,9 @@ BOOST_AUTO_TEST_CASE(GMtestEcdh)
     BOOST_CHECK(sharedSec);
     auto expectedSharedSec = "8ac7e464348b85d9fdfc0a81f2fdc0bbbb8ee5fb3840de6ed60ad9372e718977";
     BOOST_CHECK_EQUAL(sharedSec.makeInsecure().hex(), expectedSharedSec);
+    // std::cout<< "line 250 asString(sharedSec) =====>" << asString(sharedSec) << std::endl;
+    // std::cout<< "asString(pub) =====>" << asString(pub) << std::endl;
+    // std::cout<< "asString(sec) =====>" << asString(sec) << std::endl;
 }
 
 BOOST_AUTO_TEST_CASE(GMtestSigAndVerify)
@@ -275,8 +291,8 @@ BOOST_AUTO_TEST_CASE(GMtestSigAndVerify)
     // construct invalid r, v,s and check isValid() function
     h256 r(sha3("+++"));
     h256 s(sha3("24324"));
-    byte v = 4;
-    SignatureStruct constructed_sig(r, s, v - 27);
+    h256 v(sha3("123456"));
+    SignatureStruct constructed_sig(r, s, v);
     BOOST_CHECK(constructed_sig.isValid() == false);
 }
 /// test ecRocer
@@ -348,7 +364,7 @@ BOOST_AUTO_TEST_CASE(testEncryptDecrypt)
     dev::encrypt(key_pair.pub(), dev::ref(ciper_ret), ciper_ret);
     // encrypt ecies
     encryptECIES(key_pair.pub(), ref(ret_ciper_ecies), ret_ciper_ecies);
-    // std::cout<<"Encryption result:"<<toHex(ciper_ret)<<std::endl;
+    // //std::cout<<"Encryption result:"<<toHex(ciper_ret)<<std::endl;
     // test decryption: normal path
     bool result = decrypt(key_pair.secret(), ref(ciper_ret), ciper_ret);
     BOOST_CHECK(result == true && asString(ref(ciper_ret)) == plain);
