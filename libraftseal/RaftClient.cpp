@@ -132,7 +132,7 @@ void RaftClient::rejigSealing()
 				u256 now_time = u256(utcTime());
 				u256 parent_time = m_last_block_time; //bc().info().timestamp();
 				size_t tx_num = m_working.pending().size();
-				if (tx_num < m_maxBlockTranscations &&  now_time - parent_time < sealEngine()->getIntervalBlockTime()) {
+				if (tx_num < m_maxBlockTransactions &&  now_time - parent_time < sealEngine()->getIntervalBlockTime()) {
 					VLOG(10) << "Wait for next interval, tx:" << tx_num << ", parent_time:" << parent_time << ",now:" << now_time << ", interval=" << now_time - parent_time << "ms";
 					return;
 				}
