@@ -31,7 +31,7 @@ using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev;
 
-bytes ExecutiveContext::call(Address address, bytesConstRef param)
+bytes ExecutiveContext::call(Address origin, Address address, bytesConstRef param)
 {
     try
     {
@@ -42,7 +42,7 @@ bytes ExecutiveContext::call(Address address, bytesConstRef param)
 
         if (p)
         {
-            bytes out = p->call(shared_from_this(), param);
+            bytes out = p->call(shared_from_this(), param, origin);
             return out;
         }
         else

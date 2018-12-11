@@ -25,7 +25,7 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 {
     typedef std::shared_ptr<AccessOptions> Ptr;
     AccessOptions() = default;
-    Address caller;
+    Address origin;
 };
 
 class Entry : public std::enable_shared_from_this<Entry>

@@ -85,7 +85,7 @@ u256 MPTState::storage(Address const& _contract, u256 const& _memory) const
     return m_state.storage(_contract, _memory);
 }
 
-void MPTState::setStorage(Address const& _caller, Address const& _contract, u256 const& _location, u256 const& _value)
+void MPTState::setStorage(Address const& _contract, u256 const& _location, u256 const& _value)
 {
     m_state.setStorage(_contract, _location, _value);
 }

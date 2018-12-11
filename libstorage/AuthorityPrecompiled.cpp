@@ -44,7 +44,7 @@ storage::Table::Ptr AuthorityPrecompiled::openTable(
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call Authority:" << toHex(param);
 
@@ -102,7 +102,8 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
 	    entry->setField(SYS_AC_FIELD_TABLE_NAME, tableName);
 	    entry->setField(SYS_AC_FIELD_ADDRESS, addr);
 	    entry->setField(SYS_AC_FIELD_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-	    size_t count = table->insert(SYS_AC_FIELD_TABLE_NAME, entry);
+
+	    size_t count = table->insert(SYS_AC_FIELD_TABLE_NAME, entry, getOptions(origin));
 	    out = abi.abiIn("", u256(count));
 
         break;
@@ -133,7 +134,7 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         }
         else
         {
-			size_t count = table->remove(tableName, condition);
+			size_t count = table->remove(tableName, condition, getOptions(origin));
             out = abi.abiIn("", count);
         }
 

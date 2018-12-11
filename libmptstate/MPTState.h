@@ -82,7 +82,7 @@ public:
 
     virtual u256 storage(Address const& _contract, u256 const& _memory) const override;
 
-    virtual void setStorage(Address const& _caller,
+    virtual void setStorage(
         Address const& _contract, u256 const& _location, u256 const& _value) override;
 
     virtual void clearStorage(Address const& _contract) override;

@@ -84,9 +84,9 @@ size_t dev::storage::MemoryTable::update(
 {
     try
     {
-        if (!checkAuthority(options->caller))
+        if (!checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->caller
+            STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->origin
                                  << " failed! key:" << key;
             return 0;
         }
@@ -149,9 +149,9 @@ size_t dev::storage::MemoryTable::insert(
 {
     try
     {
-        if (!checkAuthority(options->caller))
+        if (!checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->caller
+            STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->origin
                                  << " failed! key:" << key;
             return 0;
         }
@@ -203,9 +203,9 @@ size_t dev::storage::MemoryTable::insert(
 size_t dev::storage::MemoryTable::remove(
     const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
-    if (!checkAuthority(options->caller))
+    if (!checkAuthority(options->origin))
     {
-        STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->caller
+        STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->origin
                              << " failed! key:" << key;
         return 0;
     }
@@ -459,11 +459,11 @@ inline void MemoryTable::checkFiled(Entry::Ptr entry)
     }
 }
 
-inline bool MemoryTable::checkAuthority(Address _caller)
+inline bool MemoryTable::checkAuthority(Address _origin)
 {
     if (m_tableInfo->authorizedAddress.empty())
         return true;
     auto it = find(
-        m_tableInfo->authorizedAddress.cbegin(), m_tableInfo->authorizedAddress.cend(), _caller);
+        m_tableInfo->authorizedAddress.cbegin(), m_tableInfo->authorizedAddress.cend(), _origin);
     return it != m_tableInfo->authorizedAddress.cend();
 }

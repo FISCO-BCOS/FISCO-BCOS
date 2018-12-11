@@ -51,7 +51,8 @@ public:
 
     virtual ~MinerPrecompiled(){};
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address origin = Address());
 };
 
 }  // namespace blockverifier

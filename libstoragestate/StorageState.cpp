@@ -183,7 +183,7 @@ u256 StorageState::storage(Address const& _address, u256 const& _key) const
     return u256();
 }
 
-void StorageState::setStorage(Address const& _caller, Address const& _address, u256 const& _location, u256 const& _value)
+void StorageState::setStorage(Address const& _address, u256 const& _location, u256 const& _value)
 {
     auto table = getTable(_address);
     if (table)

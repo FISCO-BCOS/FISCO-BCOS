@@ -52,7 +52,8 @@ public:
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param);
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address origin = Address());
 
     void setMemoryTableFactory(dev::storage::MemoryTableFactory::Ptr memoryTableFactory)
     {

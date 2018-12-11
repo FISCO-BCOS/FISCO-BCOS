@@ -19,15 +19,15 @@
  *  @date 20180921
  */
 #include "MinerPrecompiled.h"
-#include "libstorage/EntriesPrecompiled.h"
-#include "libstorage/TableFactoryPrecompiled.h"
+#include <libstorage/EntriesPrecompiled.h>
 #include <libdevcore/easylog.h>
+#include <libstorage/TableFactoryPrecompiled.h>
 #include <libethcore/ABI.h>
 #include <boost/lexical_cast.hpp>
 using namespace dev;
 using namespace dev::blockverifier;
 
-bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
 
@@ -66,12 +66,12 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
                 entry->setField(NODE_KEY_ENABLENUM,
                     boost::lexical_cast<std::string>(context->blockInfo().number + 1));
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                table->insert(PRI_KEY, entry);
+                table->insert(PRI_KEY, entry, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
             }
             else
             {
-                table->update(PRI_KEY, entry, condition);
+                table->update(PRI_KEY, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
             }
             break;
@@ -106,11 +106,11 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 entry->setField(NODE_KEY_ENABLENUM,
                     boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-                table->insert(PRI_KEY, entry);
+                table->insert(PRI_KEY, entry, getOptions(origin));
             }
             else
             {
-                table->update(PRI_KEY, entry, condition);
+                table->update(PRI_KEY, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
             }
             break;
