@@ -328,8 +328,6 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			}
 		}
 
-		++(*_queueSize);
-
 		if((*_queueSize) >= _maxQueueSize) {
 			// reach max queue size, ignore
 			LOG(WARNING) << "Reach channel queue limit, drop request seq: " << message->seq();
@@ -344,6 +342,8 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			}
 
 			if (callback->callback) {
+
+				++(*_queueSize);
 				_threadPool->enqueue([=]() {
 					--(*_queueSize);
 					callback->callback(e, message);
@@ -369,6 +369,8 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			if (_messageHandler) {
 				auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
 				auto queueSize = _queueSize;
+
+				++(*_queueSize);
 				_threadPool->enqueue([session, message, queueSize]() {
 					--(*queueSize);
 					auto s = session.lock();
