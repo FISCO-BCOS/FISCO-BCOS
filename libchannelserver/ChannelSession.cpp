@@ -35,6 +35,7 @@ using namespace dev::channel;
 
 ChannelSession::ChannelSession() {
 	_topics = std::make_shared<std::set<std::string> >();
+	_queueSize = std::make_shared<std::atomic_int>(1024);
 }
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout) throw(dev::channel::ChannelException) {
@@ -327,8 +328,9 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			}
 		}
 
-		++_queueSize;
-		if(_queueSize >= MAX_QUEUE) {
+		++(*_queueSize);
+
+		if((*_queueSize) >= _maxQueueSize) {
 			// reach max queue size, ignore
 			LOG(WARNING) << "Reach channel queue limit, drop request seq: " << message->seq();
 
@@ -343,7 +345,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 
 			if (callback->callback) {
 				_threadPool->enqueue([=]() {
-					--_queueSize;
+					--(*_queueSize);
 					callback->callback(e, message);
 
 					std::lock_guard<std::recursive_mutex> lock(_mutex);
@@ -366,8 +368,9 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 		else {
 			if (_messageHandler) {
 				auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
-				_threadPool->enqueue([session, message]() {
-					--_queueSize;
+				auto queueSize = _queueSize;
+				_threadPool->enqueue([session, message, queueSize]() {
+					--(*queueSize);
 					auto s = session.lock();
 					if(s && s->_messageHandler) {
 						s->_messageHandler(s, ChannelException(0, ""), message);
