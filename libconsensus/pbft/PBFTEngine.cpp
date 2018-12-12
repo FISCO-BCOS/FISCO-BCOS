@@ -295,6 +295,20 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
     return succ;
 }
 
+
+/// send view change message to the given node
+void PBFTEngine::sendViewChangeMsg(NodeID const& nodeId)
+{
+    ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
+    PBFTENGINE_LOG(DEBUG)
+        << "[#sendViewChangeMsg] send viewchange to started node [nodeID/hash/higNumber]" << nodeId
+        << "/" << req.block_hash << "/" << m_highestBlock.number();
+
+    bytes view_change_data;
+    req.encode(view_change_data);
+    sendMsg(nodeId, ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
+}
+
 bool PBFTEngine::broadcastViewChangeReq()
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
@@ -313,6 +327,33 @@ bool PBFTEngine::broadcastViewChangeReq()
     bytes view_change_data;
     req.encode(view_change_data);
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
+}
+
+bool PBFTEngine::sendMsg(
+    NodeID const& nodeId, unsigned const& packetType, std::string const& key, bytesConstRef data)
+{
+    /// is miner?
+    if (getIndexByMiner(nodeId) < 0)
+        return true;
+    /// packet has been broadcasted?
+    if (broadcastFilter(nodeId, packetType, key))
+        return true;
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    if (sessions.size() == 0)
+        return false;
+    for (auto session : sessions)
+    {
+        if (session.nodeID == nodeId)
+        {
+            m_service->asyncSendMessageByNodeID(
+                session.nodeID, transDataToMessage(data, packetType), nullptr);
+            PBFTENGINE_LOG(DEBUG) << "[#sendMsg] [nodeId/packetType/remote_endpoint]: " << nodeId
+                                  << "/" << packetType << "/" << session.nodeIPEndpoint.name();
+            broadcastMark(session.nodeID, packetType, key);
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -858,8 +899,8 @@ bool PBFTEngine::isValidViewChangeReq(
         PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
         return false;
     }
-    /*if (req.idx == source)
-        catchupView(req, oss);*/
+    if (req.view + 1 < m_toView && req.idx == source)
+        catchupView(req, oss);
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {

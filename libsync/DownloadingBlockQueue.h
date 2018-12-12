@@ -67,7 +67,9 @@ public:
         m_protocolId(_protocolId),
         m_blocks(),
         m_buffer(std::make_shared<ShardPtrVec>())
-    {}
+    {
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+    }
 
     DownloadingBlockQueue()
       : m_blockChain(nullptr),
@@ -106,6 +108,7 @@ public:
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
 
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //
     std::shared_ptr<ShardPtrVec> m_buffer;  // use buffer for faster push return

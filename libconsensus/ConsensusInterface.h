@@ -49,7 +49,7 @@ public:
 
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const = 0;
-
+    virtual GROUP_ID const& groupId() const = 0;
     /// get node account type
     virtual NodeAccountType accountType() = 0;
     /// set the node account type

@@ -62,6 +62,7 @@ public:
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
     void start() override;
@@ -117,6 +118,7 @@ public:
 
     /// protocol id used when register handler to p2p module
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; }
+    GROUP_ID const& groupId() const override { return m_groupId; }
     /// get account type
     ///@return NodeAccountType::MinerAccount: the node can generate and execute block
     ///@return NodeAccountType::ObserveAccout: the node can only sync block from other nodes
@@ -241,6 +243,7 @@ protected:
     IDXTYPE m_f = 0;
 
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
     /// type of this node (MinerAccount or ObserveAccount)
     NodeAccountType m_accountType;
     /// index of this node

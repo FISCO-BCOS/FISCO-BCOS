@@ -26,12 +26,13 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
-#define SEAL_LOG(LEVEL)                                             \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#Seal] [PROTOCOL: " << std::dec \
-               << m_consensusEngine->protocolId() << "] "
-#define ENGINE_LOG(LEVEL)                                                                      \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#ConsensusEngine] [PROTOCOL: " << std::dec << m_protocolId \
-               << "] "
+#define SEAL_LOG(LEVEL)                                          \
+    LOG(LEVEL) << "[#CONSENSUS] [#Seal] [PROTOCOL: " << std::dec \
+               << m_consensusEngine->protocolId()                \
+               << "] [GROUP:" << std::to_string(m_consensusEngine->groupId()) << "]"
+#define ENGINE_LOG(LEVEL)                                                                   \
+    LOG(LEVEL) << "[#CONSENSUS] [#ConsensusEngine] [PROTOCOL: " << std::dec << m_protocolId \
+               << "] [GROUP:" << std::to_string(m_groupId) << "]"
 namespace dev
 {
 namespace consensus

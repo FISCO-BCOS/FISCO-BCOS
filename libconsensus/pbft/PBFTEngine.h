@@ -124,6 +124,10 @@ protected:
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>());
+
+    void sendViewChangeMsg(NodeID const& nodeId);
+    bool sendMsg(NodeID const& nodeId, unsigned const& packetType, std::string const& key,
+        bytesConstRef data);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);

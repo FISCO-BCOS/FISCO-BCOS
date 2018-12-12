@@ -35,7 +35,10 @@ namespace consensus
 class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
-    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol) {}
+    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol)
+    {
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+    }
     /// specified prepareRequest exists in raw-prepare-cache or not?
     /// @return true : the prepare request exists in the  raw-prepare-cache
     /// @return false : the prepare request doesn't exist in the  raw-prepare-cache
@@ -306,6 +309,7 @@ private:
 
 private:
     dev::PROTOCOL_ID m_protocolId;
+    dev::GROUP_ID m_groupId;
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request

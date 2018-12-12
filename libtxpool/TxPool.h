@@ -35,8 +35,9 @@
 using namespace dev::eth;
 using namespace dev::p2p;
 
-#define TXPOOL_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBTXPOOL] [#TXPOOL] [PROTOCOL: " << std::dec << m_protocolId << "] "
+#define TXPOOL_LOG(LEVEL)                                             \
+    LOG(LEVEL) << "[#TXPOOL] [PROTOCOL: " << std::dec << m_protocolId \
+               << "] [ GROUP:" << std::to_string(m_groupId) << "]"
 
 namespace dev
 {
@@ -78,6 +79,8 @@ public:
         /// register enqueue interface to p2p by protocalID
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
+
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain, m_protocolId);
         m_commonNonceCheck = std::make_shared<CommonTransactionNonceCheck>(m_protocolId);
     }
@@ -189,6 +192,7 @@ private:
     mutable SharedMutex m_lock;
     /// protocolId
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
     /// transaction queue
     using TransactionQueue = std::set<dev::eth::Transaction, transactionCompare>;
     TransactionQueue m_txsQueue;
