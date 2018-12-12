@@ -370,12 +370,12 @@ generate_config_ini()
     GLOBAL-LOG_FLUSH_THRESHOLD=100
 
     ;log level configuration, enable(true)/disable(false) corresponding level log
-    INFO-ENABLED=true
-    WARNING-ENABLED=true
+    FATAL-ENABLED=true
     ERROR-ENABLED=true
+    WARNING-ENABLED=true
+    INFO-ENABLED=true
     DEBUG-ENABLED=${debug_log}
     TRACE-ENABLED=false
-    FATAL-ENABLED=false
     VERBOSE-ENABLED=false
 EOF
 }
@@ -616,7 +616,12 @@ for line in ${ip_array[*]};do
         LOG_WARN "Please check IP address: ${ip}"
     fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
-    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    if [ "${use_ip_param}" == "true" ];then
+        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
+    else
+        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    fi
+    
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
         node_dir="$output_dir/node_${ip}_${i}"
@@ -683,7 +688,11 @@ for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
-    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    if [ "${use_ip_param}" == "true" ];then
+        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
+    else
+        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    fi
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
         node_dir="$output_dir/node_${ip}_${i}"

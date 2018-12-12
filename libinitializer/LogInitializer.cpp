@@ -96,7 +96,7 @@ void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
 
     defaultConf.set(el::Level::Fatal, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Fatal, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.FATAL-ENABLED", "false"));
+        pt.get<std::string>("log.FATAL-ENABLED", "true"));
 
     defaultConf.set(el::Level::Verbose, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Verbose, el::ConfigurationType::Enabled,

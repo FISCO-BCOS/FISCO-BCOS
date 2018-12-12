@@ -119,7 +119,7 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-                // STORAGE_LOG(TRACE) << "leveldb commit key:" << entryKey << " data:" << entry;
+                STORAGE_LOG(TRACE) << "leveldb commit key:" << entryKey << " data size:" << ssOut.tellp();
             }
         }
 

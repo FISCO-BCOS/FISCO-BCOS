@@ -4,7 +4,7 @@
 
 [![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)  [![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos) [![](https://img.shields.io/github/issues-pr/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/pulls) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/lab-bcos/total.svg)](https://github.com/FISCO-BCOS/lab-bcos) 
 
-## Getting Started
+## Quick Start
 
 ### Build a blockchain
 
@@ -27,6 +27,32 @@ More senarios, read XXX.
 ### Deploy a smart contract
 
 Read XXX to deploy your smart contracts and use them.
+
+## Building from source
+
+- Get source code
+
+```bash
+git clone https://github.com/FISCO-BCOS/lab-bcos.git
+```
+
+- Install dependencies
+
+```bash
+# Ubuntu
+sudo apt install cmake libssl-dev libleveldb-dev openssl
+# CentOS
+sudo yum install cmake3 gcc-c++ openssl-devel leveldb-devel openssl
+```
+
+- Build
+
+```bash
+cd lab-bcos
+$ mkdir build && cd build
+$ cmake -DTESTS=ON  ..
+$ make -j$(nproc)
+```
 
 ## Developing & Contributing
 
