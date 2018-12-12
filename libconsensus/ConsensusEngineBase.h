@@ -97,6 +97,7 @@ public:
     void getBasicConsensusStatus(json_spirit::Object& status_obj) const
     {
         status_obj.push_back(json_spirit::Pair("nodeNum", m_nodeNum));
+        status_obj.push_back(json_spirit::Pair("node index", m_idx));
         status_obj.push_back(json_spirit::Pair("f", m_f));
         status_obj.push_back(json_spirit::Pair("consensusedBlockNumber", m_consensusBlockNumber));
         status_obj.push_back(json_spirit::Pair("highestblockNumber", m_highestBlock.number()));
@@ -118,7 +119,7 @@ public:
 
     /// protocol id used when register handler to p2p module
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; }
-    GROUP_ID const& groupId() const override { return m_groupId; }
+    GROUP_ID groupId() const override { return m_groupId; }
     /// get account type
     ///@return NodeAccountType::MinerAccount: the node can generate and execute block
     ///@return NodeAccountType::ObserveAccout: the node can only sync block from other nodes
