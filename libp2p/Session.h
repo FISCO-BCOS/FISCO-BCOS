@@ -218,8 +218,6 @@ class Session : public SessionFace, public std::enable_shared_from_this<Session>
 	uint64_t m_start_t;
 
 	boost::asio::io_service::strand *m_strand;
-
-	bool m_sending = false;
 };
 
 template <class PeerCap>
