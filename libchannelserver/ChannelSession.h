@@ -82,6 +82,8 @@ public:
 	std::shared_ptr<std::set<std::string> > topics() { return _topics; };
 	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
 	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
+
+	void setQueueSize(int queueSize) { _queueSize = queueSize; }
 private:
 	void onHandshake(const boost::system::error_code& error);
 

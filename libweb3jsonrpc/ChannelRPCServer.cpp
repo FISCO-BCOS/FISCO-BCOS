@@ -157,6 +157,7 @@ void ChannelRPCServer::initSSLContext()
 	_server = make_shared<dev::channel::ChannelServer>();
 	_server->setIOService(_ioService);
 	_server->setSSLContext(_sslContext);
+	_server->setQueueSize(CertificateServer::GetInstance().queueSize);
 
 	_server->setEnableSSL(true);
 	_server->setBind(_listenAddr, _listenPort);
