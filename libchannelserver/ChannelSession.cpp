@@ -246,6 +246,13 @@ void ChannelSession::startWrite() {
 		auto buffer = _sendBufferList.front();
 		_sendBufferList.pop();
 
+		auto cost = dev::utcTime() - _sendTimeList.front();
+		_sendTimeList.pop();
+
+		if(cost > 2000) {
+			LOG(WARNING) << "Channel write queue-time=" << cost;
+		}
+
 		auto session = shared_from_this();
 
 		_sslSocket->get_io_service().post(
@@ -275,6 +282,7 @@ void ChannelSession::writeBuffer(std::shared_ptr<bytes> buffer) {
 		std::lock_guard<std::recursive_mutex> lock(_mutex);
 
 		_sendBufferList.push(buffer);
+		_sendTimeList.push(dev::utcTime());
 
 		startWrite();
 	}

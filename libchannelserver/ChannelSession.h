@@ -112,6 +112,7 @@ private:
 	bytes _recvProtocolBuffer;
 
 	std::queue<std::shared_ptr<bytes> > _sendBufferList;
+	std::queue<uint64_t > _sendTimeList;
 	bool _writing = false;
 
 	std::shared_ptr<boost::asio::deadline_timer> _idleTimer;
