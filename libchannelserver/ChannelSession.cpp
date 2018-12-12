@@ -325,7 +325,16 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 		if (it != _responseCallbacks.end()) {
 				callback = it->second;
 			}
-			}
+		}
+
+		++_queueSize;
+		if(_queueSize >= MAX_QUEUE) {
+			// reach max queue size, ignore
+			LOG(WARNING) << "Reach channel queue limit, drop request seq: " << message->seq();
+
+			return;
+		}
+
 
 		if (callback) {
 			if(callback->timeoutHandler.get() != NULL) {
@@ -334,6 +343,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 
 			if (callback->callback) {
 				_threadPool->enqueue([=]() {
+					--_queueSize;
 					callback->callback(e, message);
 
 					std::lock_guard<std::recursive_mutex> lock(_mutex);
@@ -357,6 +367,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			if (_messageHandler) {
 				auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
 				_threadPool->enqueue([session, message]() {
+					--_queueSize;
 					auto s = session.lock();
 					if(s && s->_messageHandler) {
 						s->_messageHandler(s, ChannelException(0, ""), message);
@@ -486,10 +497,11 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 						}
 					});
 
-			_sslSocket->async_shutdown([sslSocket](const boost::system::error_code& error) {
+			_sslSocket->async_shutdown([sslSocket, shutdownTimer](const boost::system::error_code& error) {
 				if(error) {
 					LOG(WARNING) << "Error while shutdown the channel ssl socket: " << error.message();
 				}
+				shutdownTimer->cancel();
 
 				if(sslSocket->next_layer().is_open()) {
 					sslSocket->next_layer().close();
