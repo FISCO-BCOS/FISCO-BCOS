@@ -30,14 +30,14 @@ ip="127.0.0.1"
 rpc_port=
 rpc_command=
 function_name=
-support_rpc="getBlockNumber getPbftView getConsensusStatus getSyncStatus getClientVersion getPeers getGroupPeers getGroupList getPendingTransactions getTotalTransactionCount"
+support_rpc="getBlockNumber getPbftView getConsensusStatus getSyncStatus getClientVersion getPeers getGroupPeers getGroupList getPendingTransactions getTotalTransactionCount getMinerList"
 execRpcCommand() 
 {
     local functionName="${1}"
     if [ "${all_groups}" == true ];then
-        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[],\"id\":83}' http://${ip}:${rpc_port} | jq"
+        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[],\"id\":83}' http://${ip}:${rpc_port} "
     else
-        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[${group_id}],\"id\":83}' http://${ip}:${rpc_port} | jq"
+        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[${group_id}],\"id\":83}' http://${ip}:${rpc_port}"
     fi
     execute_cmd "${rpc_command}"
 }
@@ -68,11 +68,11 @@ checkParam()
         help
     fi
     
-    result=`echo ${support_rpc} | grep -w ${function_name}`
-    if [ "${result}" == "" ];then
-        LOG_ERROR "Not support "${function_name}" yet!"
-        help
-    fi
+    #result=`echo ${support_rpc} | grep -w ${function_name}`
+    #if [ "${result}" == "" ];then
+    #    LOG_ERROR "Not support "${function_name}" yet!"
+    #    help
+    #fi
 }
 
 help()

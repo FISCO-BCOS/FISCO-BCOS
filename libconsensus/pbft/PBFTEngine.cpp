@@ -45,7 +45,6 @@ void PBFTEngine::start()
     initPBFTEnv(3 * getIntervalBlockTime());
     ConsensusEngineBase::start();
     PBFTENGINE_LOG(INFO) << "[#Start PBFTEngine...]" << std::endl;
-    PBFTENGINE_LOG(INFO) << "[#ConsensusStatus]:  " << consensusStatus() << std::endl;
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
@@ -229,6 +228,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
         {
             m_timeManager.changeView();
             m_timeManager.m_changeCycle = 0;
+            m_emptyBlockViewChange = true;
             m_leaderFailed = true;
             m_signalled.notify_all();
         }
@@ -300,6 +300,16 @@ bool PBFTEngine::broadcastViewChangeReq()
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
     PBFTENGINE_LOG(DEBUG) << "[#broadcastViewChangeReq] [hash/higNumber]:  " << req.block_hash
                           << "/" << m_highestBlock.number() << std::endl;
+    /// view change not caused by omit empty block
+    if (!m_emptyBlockViewChange)
+    {
+        PBFTENGINE_LOG(WARNING)
+            << "[#ViewChangeWarning]: not caused by omit empty block [hash/higNumber]: "
+            << req.block_hash << "/" << m_highestBlock.number();
+    }
+    /// reset the flag
+    m_emptyBlockViewChange = false;
+
     bytes view_change_data;
     req.encode(view_change_data);
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
@@ -364,12 +374,12 @@ bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) 
 {
     if (m_reqCache->isExistPrepare(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
         return false;
     }
     if (hasConsensused(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Consensused Prep: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Consensused Prep: [INFO]:  " << oss.str();
         return false;
     }
 
@@ -385,13 +395,12 @@ bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) 
     }
     if (!isHashSavedAfterCommit(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Not saved after commit: [INFO]:  "
-                                << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Not saved after commit: [INFO]:  " << oss.str();
         return false;
     }
     if (!checkSign(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidPrepare] Invalid sig: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Invalid sig: [INFO]:  " << oss.str();
         return false;
     }
     return true;
@@ -469,8 +478,9 @@ void PBFTEngine::onRecvPBFTMessage(
     }
     else
     {
-        PBFTENGINE_LOG(WARNING) << "[#onRecvPBFTMessage] Illegal msg: [idx/fromIp]:  "
-                                << pbft_msg.packet_id << "/" << pbft_msg.endpoint << std::endl;
+        PBFTENGINE_LOG(DEBUG) << "[#onRecvPBFTMessage] Illegal msg: [idx/fromIp]:  "
+                              << std::to_string(pbft_msg.packet_id) << "/" << pbft_msg.endpoint
+                              << std::endl;
     }
 }
 
@@ -524,6 +534,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     {
         m_timeManager.changeView();
         m_timeManager.m_changeCycle = 0;
+        m_emptyBlockViewChange = true;
         m_signalled.notify_all();
         return;
     }
@@ -561,7 +572,7 @@ void PBFTEngine::checkAndCommit()
                               << m_reqCache->prepareCache().block_hash.abridged() << std::endl;
         if (m_reqCache->prepareCache().view != m_view)
         {
-            PBFTENGINE_LOG(WARNING)
+            PBFTENGINE_LOG(DEBUG)
                 << "[#checkAndCommit: InvalidView] [prepView/view/prepHeight/hash]:  "
                 << m_reqCache->prepareCache().view << "/" << m_view << "/"
                 << m_reqCache->prepareCache().height << "/"
@@ -599,7 +610,7 @@ void PBFTEngine::checkAndSave()
                               << m_reqCache->prepareCache().block_hash.abridged() << std::endl;
         if (m_reqCache->prepareCache().view != m_view)
         {
-            PBFTENGINE_LOG(WARNING)
+            PBFTENGINE_LOG(DEBUG)
                 << "[#checkAndSave: InvalidView] [prepView/view/prepHeight/hash]:  "
                 << m_reqCache->prepareCache().view << "/" << m_view << "/"
                 << m_reqCache->prepareCache().height << "/"
@@ -728,7 +739,7 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
 {
     if (m_reqCache->isExistSign(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InValidSignReq] Duplicated sign: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InValidSignReq] Duplicated sign: [INFO]:  " << oss.str();
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -784,7 +795,7 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistCommit(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidCommitReq] Duplicated: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidCommitReq] Duplicated: [INFO]:  " << oss.str();
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -831,6 +842,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
             m_signalled.notify_all();
         }
     }
+    PBFTENGINE_LOG(DEBUG) << "[#handleViewChangeMsg Succ]: " << oss.str();
 }
 
 bool PBFTEngine::isValidViewChangeReq(
@@ -838,12 +850,12 @@ bool PBFTEngine::isValidViewChangeReq(
 {
     if (m_reqCache->isExistViewChange(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Duplicated: [INFO]  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Duplicated: [INFO]  " << oss.str();
         return false;
     }
     if (req.idx == m_idx)
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
         return false;
     }
     /*if (req.idx == source)
@@ -851,21 +863,21 @@ bool PBFTEngine::isValidViewChangeReq(
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Invalid view or height: [INFO]:  "
-                                << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Invalid view or height: [INFO]:  "
+                              << oss.str();
         return false;
     }
     /// check block hash
     if ((req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash()) ||
         (m_blockChain->getBlockByHash(req.block_hash) == nullptr))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Invalid hash [highHash]:  "
-                                << m_highestBlock.hash().abridged() << " [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Invalid hash [highHash]:  "
+                              << m_highestBlock.hash().abridged() << " [INFO]:  " << oss.str();
         return false;
     }
     if (!checkSign(req))
     {
-        PBFTENGINE_LOG(WARNING) << "[#InvalidViewChangeReq] Invalid Sign [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Invalid Sign [INFO]:  " << oss.str();
         return false;
     }
     return true;
@@ -984,8 +996,8 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     }
     default:
     {
-        PBFTENGINE_LOG(WARNING) << "[#handleMsg] Err pbft message: [from]:  " << pbftMsg.node_idx
-                                << std::endl;
+        PBFTENGINE_LOG(DEBUG) << "[#handleMsg] Err pbft message: [from]:  " << pbftMsg.node_idx
+                              << std::endl;
         return;
     }
     }
@@ -1013,9 +1025,9 @@ void PBFTEngine::workLoop()
             std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
             if (ret.first)
             {
-                PBFTENGINE_LOG(TRACE)
-                    << "[#workLoop: handleMsg] [type/idx]:  " << ret.second.packet_id << "/"
-                    << ret.second.node_idx << std::endl;
+                PBFTENGINE_LOG(TRACE) << "[#workLoop: handleMsg] [type/idx]:  "
+                                      << std::to_string(ret.second.packet_id) << "/"
+                                      << ret.second.node_idx << std::endl;
                 handleMsg(ret.second);
             }
             else
