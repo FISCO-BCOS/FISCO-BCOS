@@ -264,8 +264,9 @@ void ChannelSession::startWrite() {
 		auto session = shared_from_this();
 
 		++(*_sendQueueSize);
+		auto sendQueueSize = _sendQueueSize;
 		_sslSocket->get_io_service().post(
-		[ session, buffer ] {
+		[ session, buffer, sendQueueSize ] {
 			auto s = session;
 			if(s && s->actived()) {
 				std::lock_guard<std::recursive_mutex> lock(s->_mutex);
@@ -274,7 +275,7 @@ void ChannelSession::startWrite() {
 						[session, buffer](const boost::system::error_code& error, size_t bytesTransferred) {
 							auto s = session;
 
-							--(*_sendQueueSize);
+							--(*sendQueueSize);
 							if(s && s->actived()) {
 								std::lock_guard<std::recursive_mutex> lock(s->_mutex);
 								s->onWrite(error, buffer, bytesTransferred);
