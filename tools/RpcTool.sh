@@ -30,7 +30,7 @@ ip="127.0.0.1"
 rpc_port=
 rpc_command=
 function_name=
-support_rpc="getBlockNumber getPbftView getConsensusStatus getSyncStatus getClientVersion getPeers getGroupPeers getGroupList getPendingTransactions getTotalTransactionCount"
+support_rpc="getBlockNumber getPbftView getConsensusStatus getSyncStatus getClientVersion getPeers getGroupPeers getGroupList getPendingTransactions getTotalTransactionCount getMinerList"
 execRpcCommand() 
 {
     local functionName="${1}"
@@ -68,11 +68,11 @@ checkParam()
         help
     fi
     
-    result=`echo ${support_rpc} | grep -w ${function_name}`
-    if [ "${result}" == "" ];then
-        LOG_ERROR "Not support "${function_name}" yet!"
-        help
-    fi
+    #result=`echo ${support_rpc} | grep -w ${function_name}`
+    #if [ "${result}" == "" ];then
+    #    LOG_ERROR "Not support "${function_name}" yet!"
+    #    help
+    #fi
 }
 
 help()
