@@ -28,8 +28,12 @@
 
 namespace dev
 {
-bytes aesCBCEncrypt(bytesConstRef plainData, std::string const& keyData, int keyLen,
-    bytesConstRef ivData);  ////AES encrypt
-bytes aesCBCDecrypt(bytesConstRef cipherData, std::string const& keyData, int keyLen,
-    bytesConstRef ivData);  // AES decrypt
+DEV_SIMPLE_EXCEPTION(AESKeyLengthError);
+// bytes aesCBCEncrypt(bytesConstRef plainData, std::string const& keyData, int keyLen,
+    // bytesConstRef ivData);  ////AES encrypt
+// bytes aesCBCDecrypt(bytesConstRef cipherData, std::string const& keyData, int keyLen,
+//     bytesConstRef ivData);  // AES decrypt
+bytes aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key);
+bytes aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key);
+bytes readableKeyBytes(const std::string& _readableKey);
 }  // namespace dev

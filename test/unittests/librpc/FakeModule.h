@@ -147,6 +147,13 @@ public:
     void setGroupMark(std::string const& groupMark) override {}
     void createTransaction()
     {
+#if FISCO_GM
+        bytes rlpBytes = fromHex(
+            "f89c8201f4010a8201f580887fffffffffffffff850000000000b840506bc1dc099358e5137292f4efdd57"
+            "e400f29ba5132aa5d12b18dac1c1f6aaba645c0b7b58158babbfa6c6cd5a48aa7340a8749176b120e85162"
+            "16787a13dc76a03898a68ada5f2da9a495870bdc59595bbe05ad262f04d53329779bf5dabff043a0638c2f"
+            "61fb7013c8956645315c4e66328772ebf7c888e84a26da9e8262075053");
+#else
         bytes rlpBytes = fromHex(
             "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
             "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
@@ -154,7 +161,7 @@ public:
             "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
             "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
             "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
-
+#endif
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
@@ -267,6 +274,13 @@ class MockTxPool : public TxPoolInterface
 public:
     MockTxPool()
     {
+#if FISCO_GM
+        bytes rlpBytes = fromHex(
+            "f89c8201f4010a8201f580887fffffffffffffff850000000000b840506bc1dc099358e5137292f4efdd57"
+            "e400f29ba5132aa5d12b18dac1c1f6aaba645c0b7b58158babbfa6c6cd5a48aa7340a8749176b120e85162"
+            "16787a13dc76a03898a68ada5f2da9a495870bdc59595bbe05ad262f04d53329779bf5dabff043a0638c2f"
+            "61fb7013c8956645315c4e66328772ebf7c888e84a26da9e8262075053");
+#else
         bytes rlpBytes = fromHex(
             "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
             "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
@@ -274,7 +288,7 @@ public:
             "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
             "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
             "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
-
+#endif
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
