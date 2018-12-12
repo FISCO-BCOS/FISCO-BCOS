@@ -35,8 +35,8 @@ using namespace dev::channel;
 
 ChannelSession::ChannelSession() {
 	_topics = std::make_shared<std::set<std::string> >();
-	_recvQueueSize = std::make_shared<std::atomic_int>(1024);
-	_sendQueueSize = std::make_shared<std::atomic_int>(1024);
+	_recvQueueSize = std::make_shared<std::atomic_int>(0);
+	_sendQueueSize = std::make_shared<std::atomic_int>(0);
 }
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout) throw(dev::channel::ChannelException) {
