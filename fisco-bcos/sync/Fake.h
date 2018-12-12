@@ -70,7 +70,7 @@ public:
         m_protocolId(0),
         m_blockGenerationInterval(_idleWaitMs)
     {
-        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId);
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
     virtual ~FakeConcensus(){};
