@@ -35,7 +35,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
 // test sha3
 #if FISCO_GM
-BOOST_AUTO_TEST_CASE(gmtestEmptySHA3)
+BOOST_AUTO_TEST_CASE(GM_testEmptySHA3)
 {
     std::string ts = EmptySHA3.hex();
     BOOST_CHECK_EQUAL(
@@ -56,7 +56,7 @@ BOOST_AUTO_TEST_CASE(gmtestEmptySHA3)
     BOOST_REQUIRE_EQUAL(emptyListSHA3, EmptyListSHA3);
 }
 
-BOOST_AUTO_TEST_CASE(gmtestSha3General)
+BOOST_AUTO_TEST_CASE(GM_testSha3General)
 {
     BOOST_REQUIRE_EQUAL(
         sha3(""), h256("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(gmtestSha3General)
 }
 
 /// test sha3Secure and
-BOOST_AUTO_TEST_CASE(gmtestSha3CommonFunc)
+BOOST_AUTO_TEST_CASE(GM_testSha3CommonFunc)
 {
     std::string content = "abcd";
     bytes content_bytes(content.begin(), content.end());
@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(gmtestSha3CommonFunc)
         toHex(egressMac) == "c58b0b390d16cdfc1b81cbf01614aa3d8ec3f47c81cd0e29cd0a61718a38ec83");
 }
 // test sha2
-BOOST_AUTO_TEST_CASE(gmtestSha256)
+BOOST_AUTO_TEST_CASE(GM_testSha256)
 {
     const std::string plainText = "123456ABC+";
     const std::string cipherText =
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(gmtestSha256)
     BOOST_CHECK(toJS(sha256(bsConst)) == cipherText);
 }
 
-BOOST_AUTO_TEST_CASE(gmtestRipemd160)
+BOOST_AUTO_TEST_CASE(GM_testRipemd160)
 {
     const std::string plainText = "123456ABC+";
     const std::string cipherText = "0x74204bedd818292adc1127f9bb24bafd75468b62";

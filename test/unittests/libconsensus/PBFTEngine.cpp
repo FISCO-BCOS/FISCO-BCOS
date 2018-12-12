@@ -195,11 +195,12 @@ BOOST_AUTO_TEST_CASE(testBroadcastSignAndCommitReq)
     /// check broadcastSignReq
     SignReq sign_req;
     checkBroadcastSpecifiedMsg(fake_pbft, sign_req, SignReqPacket);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(sign_req));
+    // BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(sign_req)); // ALREADY CHECKTED
     /// check broadcastCommitReq
     CommitReq commit_req;
     checkBroadcastSpecifiedMsg(fake_pbft, commit_req, CommitReqPacket);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commit_req));
+    // BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commit_req)); // ALREADY
+    // CHECKTED
 }
 
 /// test broadcastViewChangeReq

@@ -105,7 +105,6 @@ Address const& Transaction::sender() const
             BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
         auto p = recover(*m_vrs, sha3(WithoutSignature));
-        std::cout << "======p->===== " << p << std::endl;
         if (!p)
             BOOST_THROW_EXCEPTION(InvalidSignature());
         m_sender = right160(dev::sha3(bytesConstRef(p.data(), sizeof(p))));

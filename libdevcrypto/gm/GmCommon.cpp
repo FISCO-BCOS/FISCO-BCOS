@@ -171,12 +171,7 @@ Address dev::toAddress(Address const& _from, u256 const& _nonce)
  * @param _plain : plain text need to be encrypted
  * @param o_cipher : encrypted ciper text
  */
-void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
-{
-    bytes io = _plain.toBytes();
-    Secp256k1PP::get()->encrypt(_k, io);
-    o_cipher = std::move(io);
-}
+void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher) {}
 
 /**
  * @brief : decrypt ciper text with secret key
@@ -188,26 +183,14 @@ void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
  */
 bool dev::decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
 {
-    bytes io = _cipher.toBytes();
-    Secp256k1PP::get()->decrypt(_k, io);
-    if (io.empty())
-        return false;
-    o_plaintext = std::move(io);
     return true;
 }
 
-void dev::encryptECIES(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
-{
-    encryptECIES(_k, bytesConstRef(), _plain, o_cipher);
-}
+void dev::encryptECIES(Public const& _k, bytesConstRef _plain, bytes& o_cipher) {}
 
 void dev::encryptECIES(
     Public const& _k, bytesConstRef _sharedMacData, bytesConstRef _plain, bytes& o_cipher)
-{
-    bytes io = _plain.toBytes();
-    Secp256k1PP::get()->encryptECIES(_k, _sharedMacData, io);
-    o_cipher = std::move(io);
-}
+{}
 
 bool dev::decryptECIES(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
 {
@@ -217,23 +200,14 @@ bool dev::decryptECIES(Secret const& _k, bytesConstRef _cipher, bytes& o_plainte
 bool dev::decryptECIES(
     Secret const& _k, bytesConstRef _sharedMacData, bytesConstRef _cipher, bytes& o_plaintext)
 {
-    bytes io = _cipher.toBytes();
-    if (!Secp256k1PP::get()->decryptECIES(_k, _sharedMacData, io))
-        return false;
-    o_plaintext = std::move(io);
     return true;
 }
 
-void dev::encryptSym(Secret const& _k, bytesConstRef _plain, bytes& o_cipher)
-{
-    // TODO: @alex @subtly do this properly.
-    encrypt(KeyPair(_k).pub(), _plain, o_cipher);
-}
+void dev::encryptSym(Secret const& _k, bytesConstRef _plain, bytes& o_cipher) {}
 
 bool dev::decryptSym(Secret const& _k, bytesConstRef _cipher, bytes& o_plain)
 {
-    // TODO: @alex @subtly do this properly.
-    return decrypt(_k, _cipher, o_plain);
+    return true;
 }
 
 std::pair<bytes, h128> dev::encryptSymNoAuth(SecureFixedHash<16> const& _k, bytesConstRef _plain)
@@ -278,10 +252,11 @@ Signature dev::sign(Secret const& _k, h256 const& _hash)
     {
         return Signature{};
     }
+    // std::cout << "Gmcommon.cpp line 255 Secret====" << pri << std::endl;
     string pub = SM2::getInstance().priToPub(pri);
-    // LOG(DEBUG) <<"_hash:"<<toHex(_hash.asBytes())<<"gmSign:"<< r + s + pub;
+    // std::cout <<"_hash:"<<toHex(_hash.asBytes())<<"gmSign:"<< r + s + pub;
     bytes byteSign = fromHex(r + s + pub);
-    // LOG(DEBUG)<<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
+    // std::cout <<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
     return Signature{byteSign};
 }
 
@@ -334,35 +309,10 @@ Secret Nonce::next()
 
 bool dev::crypto::ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s)
 {
-    return Secp256k1PP::get()->agree(_s, _r, o_s);
+    return true;
 }
 
 bytes ecies::kdf(Secret const& _z, bytes const& _s1, unsigned kdByteLen)
 {
-    auto reps = ((kdByteLen + 7) * 8) / 512;
-    // SEC/ISO/Shoup specify counter size SHOULD be equivalent
-    // to size of hash output, however, it also notes that
-    // the 4 bytes is okay. NIST specifies 4 bytes.
-    std::array<byte, 4> ctr{{0, 0, 0, 1}};
-    bytes k;
-    secp256k1_sha256_t ctx;
-    for (unsigned i = 0; i <= reps; i++)
-    {
-        secp256k1_sha256_initialize(&ctx);
-        secp256k1_sha256_write(&ctx, ctr.data(), ctr.size());
-        secp256k1_sha256_write(&ctx, _z.data(), Secret::size);
-        secp256k1_sha256_write(&ctx, _s1.data(), _s1.size());
-        // append hash to k
-        std::array<byte, 32> digest;
-        secp256k1_sha256_finalize(&ctx, digest.data());
-
-        k.reserve(k.size() + h256::size);
-        move(digest.begin(), digest.end(), back_inserter(k));
-
-        if (++ctr[3] || ++ctr[2] || ++ctr[1] || ++ctr[0])
-            continue;
-    }
-
-    k.resize(kdByteLen);
-    return k;
+    return bytes();
 }

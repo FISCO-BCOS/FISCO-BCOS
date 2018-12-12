@@ -157,9 +157,12 @@ inline bytesSec decryptSymNoAuth(
 Public recover(Signature const& _sig, h256 const& _hash);
 
 /// Returns siganture of message hash.
+// SM2 is a non-deterministic signature algorithm. Even with the same hash and private key, will
+// obtained different [r] and [s] values.
 Signature sign(Secret const& _k, h256 const& _hash);
 
 /// Verify signature.
+
 bool verify(Public const& _k, Signature const& _s, h256 const& _hash);
 
 /// Simple class that represents a "key pair".
