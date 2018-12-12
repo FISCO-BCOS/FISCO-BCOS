@@ -70,11 +70,11 @@ BOOST_AUTO_TEST_CASE(fat_trie)
 
 BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
 {
-// #if FISCO_GM
-//     fs::path const testPath = test::getTestPath() / fs::path("GMTrieTests");
-// #else
+    // #if FISCO_GM
+    //     fs::path const testPath = test::getTestPath() / fs::path("GMTrieTests");
+    // #else
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
-// #endif
+    // #endif
     LOG(INFO) << "Testing Secure Trie...";
     js::mValue v;
 #if FISCO_GM
@@ -136,15 +136,15 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
             BOOST_REQUIRE(!o["root"].is_null());
-// #if FISCO_GM
-//             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
-//                 toHexPrefixed(ht.root().asArray()));
-//             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
-//                 toHexPrefixed(ft.root().asArray()));
-// #else
+            // #if FISCO_GM
+            //             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
+            //                 toHexPrefixed(ht.root().asArray()));
+            //             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
+            //                 toHexPrefixed(ft.root().asArray()));
+            // #else
             BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(ht.root().asArray()));
             BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(ft.root().asArray()));
-// #endif
+            // #endif
         }
     }
 }
@@ -215,15 +215,15 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
             BOOST_REQUIRE(!o["root"].is_null());
-// #if FISCO_GM
-//             BOOST_CHECK_EQUAL("0xac0c2b00e9f978a86713cc6dddea3972925f0d29243a2b51a3b597afaf1c7451",
-//                 toHexPrefixed(t.root().asArray()));
-//             BOOST_CHECK_EQUAL(ht.root(), ft.root());
+            // #if FISCO_GM
+            //             BOOST_CHECK_EQUAL("0xac0c2b00e9f978a86713cc6dddea3972925f0d29243a2b51a3b597afaf1c7451",
+            //                 toHexPrefixed(t.root().asArray()));
+            //             BOOST_CHECK_EQUAL(ht.root(), ft.root());
 
-// #else
+            // #else
             BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
             BOOST_CHECK_EQUAL(ht.root(), ft.root());
-// #endif
+            // #endif
         }
     }
 }
@@ -317,11 +317,11 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
         }
 
         BOOST_REQUIRE(!o["root"].is_null());
-// #if FISCO_GM
+        // #if FISCO_GM
         // BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
-// #else
+        // #else
         BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
-// #endif
+        // #endif
     }
 }
 
