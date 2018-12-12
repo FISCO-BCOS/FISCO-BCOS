@@ -1405,6 +1405,7 @@ int main(int argc, char** argv)
 	ChannelRPCServer::Ptr channelServer;
 	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	channelServer->setHost(web3.ethereum()->host());
+	channelServer->setQueueSize(chainParams.channelQueueSize);
 	web3.ethereum()->host().lock()->setWeb3Observer(channelServer->buildObserver());
 
 	if (!extraData.empty())
