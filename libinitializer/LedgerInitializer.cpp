@@ -89,9 +89,7 @@ bool LedgerInitializer::initSingleGroup(
     _groudID2NodeList[_groupID] =
         m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 
-    INITIALIZER_LOG(DEBUG) << "[#initSingleGroup] [groupID/count/status]: "
-                           << std::to_string(_groupID) << "/" << _groudID2NodeList[_groupID].size()
-                           << "/" << m_ledgerManager->consensus(_groupID)->consensusStatus();
+    INITIALIZER_LOG(DEBUG) << "[#initSingleGroup] [groupID/]: " << std::to_string(_groupID);
     for (auto i : _groudID2NodeList[_groupID])
         INITIALIZER_LOG(TRACE) << "miner:" << toHex(i);
     return succ;

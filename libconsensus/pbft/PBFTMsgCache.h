@@ -64,7 +64,7 @@ public:
             insertMessage(x_knownViewChange, m_knownViewChange, c_knownViewChange, key);
             return true;
         default:
-            LOG(WARNING) << "Invalid packet type:" << type;
+            LOG(DEBUG) << "Invalid packet type:" << type;
             return false;
         }
     }
@@ -90,7 +90,7 @@ public:
         case ViewChangeReqPacket:
             return exists(x_knownViewChange, m_knownViewChange, key);
         default:
-            LOG(WARNING) << "Invalid packet type:" << type;
+            LOG(DEBUG) << "Invalid packet type:" << type;
             return false;
         }
     }
