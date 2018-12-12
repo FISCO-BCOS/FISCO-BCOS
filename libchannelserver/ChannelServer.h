@@ -65,6 +65,8 @@ public:
 
 	void stop();
 
+	void setQueueSize(int queueSize) { _queueSize = queueSize; }
+
 private:
 	void onHandshake(const boost::system::error_code& error, ChannelSession::Ptr session);
 
@@ -81,6 +83,8 @@ private:
 	std::string _listenHost = "";
 	int _listenPort = 0;
 	bool _enableSSL = false;
+
+	int _queueSize = 1024;
 };
 
 }

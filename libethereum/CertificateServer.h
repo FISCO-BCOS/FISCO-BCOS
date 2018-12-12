@@ -47,6 +47,8 @@ namespace dev
 		static CertificateServer& GetInstance();
 
 		EncryptFile getEncryptFile();
+
+		int queueSize = 1024;
 	private:
 		string m_ca;
 		Public m_caPub;
