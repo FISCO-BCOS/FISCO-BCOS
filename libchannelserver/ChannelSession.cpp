@@ -425,6 +425,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 		std::lock_guard<std::recursive_mutex> lock(_mutex);
 		if (_actived) {
 			_idleTimer->cancel();
+			_actived = false;
 
 			if (!_responseCallbacks.empty()) {
 				for (auto it : _responseCallbacks) {
@@ -467,15 +468,32 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 				//_messageHandler = std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
 			}
 
-			_actived = false;
 
 			auto sslSocket = _sslSocket;
+			//force close socket after 30 seconds
+			auto shutdownTimer = std::make_shared<boost::asio::deadline_timer>(*_ioService, boost::posix_time::milliseconds(30000));
+			shutdownTimer->async_wait(
+					[sslSocket](const boost::system::error_code& error) {
+						if (error && error != boost::asio::error::operation_aborted)
+						{
+							LOG(WARNING) << "channel shutdown timer error: " << error.message();
+							return;
+						}
+
+						if(sslSocket->next_layer().is_open()) {
+							LOG(WARNING) << "channel shutdown timeout, force close";
+							sslSocket->next_layer().close();
+						}
+					});
+
 			_sslSocket->async_shutdown([sslSocket](const boost::system::error_code& error) {
 				if(error) {
-					LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
+					LOG(WARNING) << "Error while shutdown the channel ssl socket: " << error.message();
 				}
 
-				sslSocket->next_layer().close();
+				if(sslSocket->next_layer().is_open()) {
+					sslSocket->next_layer().close();
+				}
 			});
 			//_sslSocket->lowest_layer().close();
 
