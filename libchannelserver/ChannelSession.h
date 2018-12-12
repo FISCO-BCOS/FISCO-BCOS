@@ -44,6 +44,8 @@ namespace channel {
 
 class ChannelSession: public std::enable_shared_from_this<ChannelSession> {
 public:
+	const int MAX_QUEUE = 1024;
+
 	ChannelSession();
 	virtual ~ChannelSession() {
 		LOG(DEBUG) << "session exit";
@@ -131,6 +133,8 @@ private:
 
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
+
+	std::atomic_int _queueSize;
 };
 
 }
