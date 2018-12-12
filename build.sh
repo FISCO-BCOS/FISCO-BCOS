@@ -6,14 +6,13 @@
 #
 
 #!/bin/bash
-
+SHELL_FOLDER=$(cd $(dirname $0);pwd)
 current_dir=`pwd`
 
 enable_guomi=0
 build_source=0
-version=`cat release_note.txt| sed "s/^[vV]//"`
-# binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/fisco-bcos
-binary_link=https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/release-1.3.5/bin/fisco-bcos
+version=`cat ${SHELL_FOLDER}/release_note.txt| sed "s/^[vV]//"`
+binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -307,13 +306,13 @@ parse_param()
 
 install_all()
 {
-	install_all_deps
+	# install_all_deps
 	if [ ${build_source} -eq 0 ];then
 		download_binary
 	else
 		build_source
 	fi
-	nodejs_init
+	# nodejs_init
 	check
 }
 parse_param "$@"
