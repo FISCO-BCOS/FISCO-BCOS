@@ -135,7 +135,8 @@ private:
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
 
-	std::shared_ptr<std::atomic_int> _queueSize;
+	std::shared_ptr<std::atomic_int> _recvQueueSize;
+	std::shared_ptr<std::atomic_int> _sendQueueSize;
 	int _maxQueueSize = 1024;
 };
 

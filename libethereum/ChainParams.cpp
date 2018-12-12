@@ -133,7 +133,7 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	}
 	
 	cp.transactionQueueLimit = obj.count("transactionQueueLimit") ? obj["transactionQueueLimit"].get_int() : 1024;
-	CertificateServer::GetInstance().queueSize = obj.count("channelQueueSize") ? obj["channelQueueSize"].get_int() : 1024;
+	cp.channelQueueSize = obj.count("channelQueueSize") ? obj["channelQueueSize"].get_int() : 1024;
 
 	/*
 	// genesis

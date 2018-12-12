@@ -116,6 +116,7 @@ struct ChainOperationParams
 
 	bool broadcastToNormalNode = false; 
 	int transactionQueueLimit = 1024;
+	int channelQueueSize = 1024;
 
 	u256 godMinerStart = 0;
 	u256 godMinerEnd = 0;

@@ -131,6 +131,7 @@ void ChannelRPCServer::initContext()
 
 	_server->setEnableSSL(true);
 	_server->setBind(_listenAddr, _listenPort);
+	_server->setQueueSize(_queueSize);
 
 	std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp = std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1, std::placeholders::_2);
 	_server->setConnectionHandler(fp);
@@ -157,7 +158,7 @@ void ChannelRPCServer::initSSLContext()
 	_server = make_shared<dev::channel::ChannelServer>();
 	_server->setIOService(_ioService);
 	_server->setSSLContext(_sslContext);
-	_server->setQueueSize(CertificateServer::GetInstance().queueSize);
+	_server->setQueueSize(_queueSize);
 
 	_server->setEnableSSL(true);
 	_server->setBind(_listenAddr, _listenPort);

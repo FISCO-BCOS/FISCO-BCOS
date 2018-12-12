@@ -121,6 +121,8 @@ public:
 
 	virtual std::string newSeq();
 
+	virtual void setQueueSize(int queueSize) { _queueSize = queueSize; }
+
 private:
 	void initContext();
 	void initSSLContext();
@@ -153,6 +155,7 @@ private:
 	std::mutex _seqMessageMutex;
 
 	int _sessionCount = 1;
+	int _queueSize = 1024;
 
 	std::weak_ptr<dev::eth::EthereumHost> _host;
 };
