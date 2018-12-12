@@ -28,12 +28,14 @@
 
 #pragma once
 #include <memory>
+#include "SocketFace.h"
+
 namespace dev
 {
-namespace p2p
+namespace network
 {
 #define CallbackFunc std::function<void(NetworkException, Message::Ptr)>
-class SocketFace;
+
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
     typedef std::shared_ptr<ResponseCallback> Ptr;
@@ -59,12 +61,14 @@ public:
         CallbackFunc callback = CallbackFunc()) = 0;
     // virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
 
+    virtual std::shared_ptr<SocketFace> socket() = 0;
+
     virtual void setMessageHandler(
         std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
             messageHandler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
-    virtual std::shared_ptr<SocketFace> socket() { return nullptr; }
+
     virtual bool actived() const = 0;
 };
 }  // namespace p2p

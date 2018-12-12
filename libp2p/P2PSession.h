@@ -41,12 +41,12 @@ public:
     virtual ~P2PSession(){};
 
     virtual void start();
-    virtual void stop(DisconnectReason reason);
+    virtual void stop(dev::network::DisconnectReason reason);
     virtual bool actived() { return m_run; }
     virtual void heartBeat();
 
-    virtual SessionFace::Ptr session() { return m_session; }
-    virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
+    virtual dev::network::SessionFace::Ptr session() { return m_session; }
+    virtual void setSession(std::shared_ptr<dev::network::SessionFace> session) { m_session = session; }
 
     virtual NodeID nodeID() { return m_nodeID; }
     virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
@@ -57,7 +57,7 @@ public:
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
 
 private:
-    SessionFace::Ptr m_session;
+    dev::network::SessionFace::Ptr m_session;
     NodeID m_nodeID;
     std::shared_ptr<std::set<std::string> > m_topics;
     std::weak_ptr<Service> m_service;

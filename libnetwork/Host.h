@@ -44,7 +44,7 @@
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class Host : public std::enable_shared_from_this<Host>
 {

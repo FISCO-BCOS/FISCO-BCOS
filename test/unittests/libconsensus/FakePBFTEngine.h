@@ -201,7 +201,7 @@ public:
         for (size_t i = 0; i < m_minerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-            SessionInfo info(m_minerList[i], m_endpoint, std::set<std::string>());
+            P2PSessionInfo info(m_minerList[i], m_endpoint, std::set<std::string>());
             service->appendSessionInfo(info);
         }
     }

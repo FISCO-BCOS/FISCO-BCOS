@@ -23,12 +23,12 @@
 #include "P2PMessage.h"
 #include "P2PSession.h"
 #include <libdevcore/FixedHash.h>
-#include <libnetwork/Common.h>
 #include <libnetwork/SessionFace.h>
 #include <memory>
+#include <libp2p/Common.h>
 
 #define CallbackFuncWithSession                                                           \
-    std::function<void(dev::p2p::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, \
+    std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, \
         dev::p2p::P2PMessage::Ptr)>
 
 namespace dev
@@ -44,26 +44,26 @@ public:
     virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) = 0;
 
     virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, Options options = Options()) = 0;
+        CallbackFuncWithSession callback, dev::network::Options options = dev::network::Options()) = 0;
 
     virtual P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
 
     virtual void asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, Options options) = 0;
+        CallbackFuncWithSession callback, dev::network::Options options) = 0;
 
     virtual void asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
 
     virtual void asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message) = 0;
 
-    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, Options options) = 0;
+    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Options options) = 0;
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
 
     virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) = 0;
 
-    virtual SessionInfos sessionInfos() = 0;
-    virtual SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) = 0;
+    virtual P2PSessionInfos sessionInfos() = 0;
+    virtual P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) = 0;
 
     virtual bool isConnected(NodeID _nodeID) = 0;
 

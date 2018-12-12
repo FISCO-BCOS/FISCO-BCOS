@@ -32,13 +32,11 @@
 #include <openssl/ec.h>
 #include <openssl/ssl.h>
 #include <boost/filesystem.hpp>
-
-using namespace dev::eth;
-using namespace dev::p2p;
+#include <boost/beast.hpp>
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class Socket : public SocketFace, public std::enable_shared_from_this<Socket>
 {
@@ -49,8 +47,8 @@ public:
     {
         try
         {
-            m_sslSocket =
-                std::make_shared<ba::ssl::stream<bi::tcp::socket> >(_ioService, _sslContext);
+            m_wsSocket =
+                std::make_shared<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>> >(_ioService, _sslContext);
         }
         catch (Exception const& _e)
         {
@@ -61,16 +59,16 @@ public:
     }
     ~Socket() { close(); }
 
-    virtual bool isConnected() const { return m_sslSocket->lowest_layer().is_open(); }
+    virtual bool isConnected() const { return m_wsSocket->lowest_layer().is_open(); }
 
     virtual void close()
     {
         try
         {
             boost::system::error_code ec;
-            m_sslSocket->lowest_layer().shutdown(bi::tcp::socket::shutdown_both, ec);
-            if (m_sslSocket->lowest_layer().is_open())
-                m_sslSocket->lowest_layer().close();
+            m_wsSocket->lowest_layer().shutdown(bi::tcp::socket::shutdown_both, ec);
+            if (m_wsSocket->lowest_layer().is_open())
+                m_wsSocket->lowest_layer().close();
         }
         catch (...)
         {
@@ -80,11 +78,12 @@ public:
     virtual bi::tcp::endpoint remoteEndpoint()
     {
         boost::system::error_code ec;
-        return m_sslSocket->lowest_layer().remote_endpoint(ec);
+        return m_wsSocket->lowest_layer().remote_endpoint(ec);
     }
 
-    virtual bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
-    virtual ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
+    virtual ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
+    virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override { return *m_wsSocket; }
 
     virtual const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint)
@@ -95,7 +94,7 @@ public:
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket> > m_sslSocket;
+    std::shared_ptr<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>> > m_wsSocket;
 };
 
 }  // namespace p2p

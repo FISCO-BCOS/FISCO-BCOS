@@ -15,10 +15,6 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Common.h
- * @author Gav Wood <i@gavwood.com>
- * @author Alex Leverington <nessence@gmail.com>
- * @date 2014
- *
  * Miscellanea required for the Host/Session/NodeTable classes.
  *
  * @author yujiechen
@@ -53,15 +49,12 @@
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
-#define HOST_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#HOST] "
-#define SESSION_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#SESSION] "
-#define P2PMSG_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#P2PMSG] "
-#define NETWORK_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#NETWORK] "
-#define SERVICE_LOG(LEVEL) LOG(LEVEL) << "[#LIBP2P][#SERVICE] "
+#define HOST_LOG(LEVEL) LOG(LEVEL) << "[#LIBNETWORK][#HOST] "
+#define SESSION_LOG(LEVEL) LOG(LEVEL) << "[#LIBNETWORK][#SESSION] "
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 extern unsigned c_defaultIPPort;
 
@@ -69,10 +62,6 @@ class NodeIPEndpoint;
 class Node;
 extern const NodeIPEndpoint UnspecifiedNodeIPEndpoint;
 extern const Node UnspecifiedNode;
-
-using NodeID = dev::h512;
-/// Nice name for vector of NodeID.
-using NodeIDs = std::vector<NodeID>;
 
 bool isLocalHostAddress(bi::address const& _addressToCheck);
 bool isLocalHostAddress(std::string const& _addressToCheck);
@@ -123,6 +112,8 @@ enum PacketDecodeStatus
     PACKET_ERROR = -1,
     PACKET_INCOMPLETE = 0
 };
+
+using NodeID = dev::h512;
 
 struct Options
 {
@@ -208,36 +199,16 @@ struct NodeIPEndpoint
     }
     bool operator==(NodeIPEndpoint const& _cmp) const
     {
-        if (address == _cmp.address && tcpPort == _cmp.tcpPort)
-            return true;
-        if (udpPort == _cmp.udpPort)
-            return true;
-        if (host == _cmp.host)
-            return true;
-        return false;
+        return address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort;
     }
     bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
-    bool operator<(const dev::p2p::NodeIPEndpoint& rhs) const
+    bool operator<(const dev::network::NodeIPEndpoint& rhs) const
     {
-        if (address < rhs.address && tcpPort < rhs.tcpPort)
+        if (address < rhs.address)
         {
             return true;
         }
-        if (udpPort < rhs.udpPort)
-            return true;
-        if (host < rhs.host)
-            return true;
-        return false;
-    }
-    bool operator>(const dev::p2p::NodeIPEndpoint& rhs) const
-    {
-        if (address > rhs.address && tcpPort > rhs.tcpPort)
-            return true;
-        if (udpPort > rhs.udpPort)
-            return true;
-        if (host > rhs.host)
-            return true;
-        return false;
+        return tcpPort < rhs.tcpPort;
     }
     std::string name() const
     {
@@ -252,36 +223,7 @@ struct NodeIPEndpoint
     std::string host;
 };
 
-/*
- * Used by Host to pass negotiated information about a connection to a
- * new Peer Session; PeerSessionInfo is then maintained by Session and can
- * be queried for point-in-time status information via Host.
- */
-struct PeerSessionInfo
-{
-    NodeID const id;
-    std::string const host;
-    std::chrono::steady_clock::duration lastPing;
-    unsigned socketId;
-};
-
-using PeerSessionInfos = std::vector<PeerSessionInfo>;
-
-struct SessionInfo
-{
-    NodeID nodeID;
-    NodeIPEndpoint nodeIPEndpoint;
-    std::set<std::string> topics;
-    SessionInfo(NodeID _nodeID, NodeIPEndpoint _nodeIPEndpoint, std::set<std::string> _topics)
-    {
-        nodeID = _nodeID;
-        nodeIPEndpoint = _nodeIPEndpoint;
-        topics = _topics;
-    }
-};
-using SessionInfos = std::vector<SessionInfo>;
-
-}  // namespace p2p
+}  // namespace network
 /// Simple stream output for a NodeIPEndpoint.
-std::ostream& operator<<(std::ostream& _out, dev::p2p::NodeIPEndpoint const& _ep);
+std::ostream& operator<<(std::ostream& _out, dev::network::NodeIPEndpoint const& _ep);
 }  // namespace dev

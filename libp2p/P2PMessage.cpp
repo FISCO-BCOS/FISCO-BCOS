@@ -19,6 +19,7 @@
  *  @date 20181112
  */
 
+#include "Common.h"
 #include "P2PMessage.h"
 
 using namespace dev;
@@ -45,7 +46,7 @@ ssize_t P2PMessage::decode(const byte* buffer, size_t size)
 {
     if (size < HEADER_LENGTH)
     {
-        return PACKET_INCOMPLETE;
+        return dev::network::PACKET_INCOMPLETE;
     }
 
     int32_t offset = 0;
@@ -58,7 +59,7 @@ ssize_t P2PMessage::decode(const byte* buffer, size_t size)
 
     if (size < m_length)
     {
-        return PACKET_INCOMPLETE;
+        return dev::network::PACKET_INCOMPLETE;
     }
 
     offset += sizeof(m_length);
@@ -92,7 +93,7 @@ ssize_t P2PMessage::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string&
     ///< check protocolID is AMOP message or not
     if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
     {
-        return PACKET_ERROR;
+        return dev::network::PACKET_ERROR;
     }
 
     uint32_t topicLen = ntohl(*((uint32_t*)m_buffer->data()));
@@ -100,7 +101,7 @@ ssize_t P2PMessage::decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string&
                       << ", buffer size=" << m_buffer->size();
     if (topicLen + 4 > m_buffer->size())
     {
-        return PACKET_ERROR;
+        return dev::network::PACKET_ERROR;
     }
     topic = std::string((char*)(m_buffer->data()) + 4, topicLen);
     buffer->insert(buffer->end(), m_buffer->begin() + 4 + topicLen, m_buffer->end());

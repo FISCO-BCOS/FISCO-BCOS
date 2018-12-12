@@ -38,7 +38,7 @@ void P2PSession::start()
     }
 }
 
-void P2PSession::stop(DisconnectReason reason)
+void P2PSession::stop(dev::network::DisconnectReason reason)
 {
     if (m_run)
     {

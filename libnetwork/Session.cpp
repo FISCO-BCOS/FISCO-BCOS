@@ -37,7 +37,7 @@
 #include "SessionFace.h"
 
 using namespace dev;
-using namespace dev::p2p;
+using namespace dev::network;
 
 Session::Session()
 {
@@ -252,6 +252,7 @@ void Session::drop(DisconnectReason _reason)
     }
 
     SESSION_LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
+    RecursiveGuard l(x_seq2Callback);
     for (auto it : *m_seq2Callback)
     {
         if (it.second->timeoutHandler)
@@ -283,18 +284,26 @@ void Session::drop(DisconnectReason _reason)
         });
     }
 
-    bi::tcp::socket& socket = m_socket->ref();
     if (m_socket->isConnected())
     {
         try
         {
             boost::system::error_code ec;
 
-            SESSION_LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "("
+            SESSION_LOG(WARNING) << "Closing " << m_socket->ref().remote_endpoint(ec) << "("
                                  << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address
                                  << "," << ec.message();
 
-            socket.close();
+            auto socket = m_socket;
+            m_socket->sslref().async_shutdown([socket](const boost::system::error_code& error) {
+            	if(error) {
+					LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
+				}
+
+            	socket->ref().close();
+            });
+
+            //socket.close();
         }
         catch (...)
         {

@@ -57,13 +57,10 @@
 
 using namespace std;
 using namespace dev;
-using namespace dev::p2p;
+using namespace dev::network;
 using namespace dev::eth;
 using namespace dev::crypto;
-namespace dev
-{
-namespace p2p
-{
+
 Host::~Host()
 {
     stop();
@@ -440,6 +437,3 @@ void Host::stop()
         m_hostThread->join();
     }
 }
-
-}  // namespace p2p
-}  // namespace dev

@@ -312,7 +312,7 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 }
 
 void dev::ChannelRPCServer::onReceiveChannelMessage(
-    p2p::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
+		dev::network::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
 {
     uint32_t topicLen = ntohl(*((uint32_t*)msg->buffer()->data()));
     auto data = make_shared<bytes>(msg->buffer()->begin() + 4 + topicLen, msg->buffer()->end());
@@ -335,7 +335,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 
         Json::Value root;
         ss >> root;
-        std::function<void(dev::p2p::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
+        std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
             p2p::P2PMessage::Ptr)>
             fp = std::bind(&ChannelRPCServer::onReceiveChannelMessage, shared_from_this(),
                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);

@@ -39,7 +39,7 @@
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class Host;
 
