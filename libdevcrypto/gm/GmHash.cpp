@@ -194,12 +194,9 @@ bool sha3(bytesConstRef _input, bytesRef o_output)
 // add sha2 -- sha256 to this file begin
 h256 sha256(bytesConstRef _input) noexcept
 {
-    bytesRef o_output;
-    SM3Hash::getInstance().sm3(
-        (const unsigned char*)_input.data(), _input.size(), (unsigned char*)o_output.data());
-    //#endif
-    auto output = h256(toHex(o_output));
-    return output;
+    h256 ret;
+    sha3(_input, ret.ref());
+    return ret;
 }
 // add sha2 -- sha256 to this file end
 // add RIPEMD-160

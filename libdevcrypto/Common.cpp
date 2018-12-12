@@ -50,7 +50,12 @@ SignatureStruct::SignatureStruct(Signature const& _s)
 
 
 SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
-
+SignatureStruct::SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v)
+{
+    r = _r;
+    s = _s;
+    v = _v;
+}
 
 pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
 {
