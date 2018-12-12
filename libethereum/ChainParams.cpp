@@ -27,6 +27,7 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Precompiled.h>
 #include <libethereum/NodeConnParamsManagerApi.h>
+#include "CertificateServer.h"
 #include "GenesisInfo.h"
 #include "State.h"
 #include "Account.h"
@@ -132,6 +133,7 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 	}
 	
 	cp.transactionQueueLimit = obj.count("transactionQueueLimit") ? obj["transactionQueueLimit"].get_int() : 1024;
+	CertificateServer::GetInstance().queueSize = obj.count("channelQueueSize") ? obj["channelQueueSize"].get_int() : 1024;
 
 	/*
 	// genesis
