@@ -29,7 +29,6 @@
 #include <string>
 
 
-
 using namespace dev;
 namespace dev
 {
