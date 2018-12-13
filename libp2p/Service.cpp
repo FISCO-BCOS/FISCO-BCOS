@@ -166,14 +166,14 @@ void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID co
 
 void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session)
 {
-    SERVICE_LOG(TRACE) << "Service onConnect: " << nodeID;
-
     if (e.errorCode())
     {
         SERVICE_LOG(ERROR) << "Connect error: " << boost::diagnostic_information(e);
 
         return;
     }
+
+    SERVICE_LOG(TRACE) << "Service onConnect: " << nodeID;
 
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
