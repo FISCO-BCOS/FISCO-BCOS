@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
     /// BOOST_REQUIRE_NO_THROW();
     BOOST_CHECK(tmp_packet.data == packet.data);
     BOOST_CHECK(tmp_packet.packet_id == packet.packet_id);
-    BOOST_CHECK(tmp_packet == packet);
+    BOOST_CHECK_EQUAL(tmp_packet, packet);
     /// test exception case
     packet_data[1] += 1;
     BOOST_CHECK_THROW(tmp_packet.decode(ref(packet_data));, std::exception);
