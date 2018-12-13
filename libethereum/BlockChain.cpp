@@ -301,9 +301,16 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpe
 #else
 
 	ldb::Status dbstatus = ldb::DB::Open(o, chainPath + "/blocks", &m_blocksDB);
-	LOG(INFO) << "open m_blocksDB result:" << dbstatus.ToString();
-	dbstatus = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
-	LOG(INFO) << "open m_extrasDB result:" << dbstatus.ToString();
+	if(!dbstatus.ok()) {
+		LOG(INFO) << "open m_blocksDB error:" << dbstatus.ToString();
+	}
+
+	if(m_blocksDB) {
+		dbstatus = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
+		if(!dbstatus.ok()) {
+			LOG(INFO) << "open m_extrasDB error:" << dbstatus.ToString();
+		}
+	}
 
 #endif
 //	m_writeOptions.sync = true;
@@ -321,7 +328,7 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpe
 				  (chainPath + "/blocks") <<
 				  "or " <<
 				  (extrasPath + "/extras") <<
-				  "already open. You appear to have another instance of ethereum running. Bailing.";
+				  " error";
 
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
 		}
