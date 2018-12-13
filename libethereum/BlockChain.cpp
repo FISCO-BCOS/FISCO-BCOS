@@ -376,7 +376,7 @@ void BlockChain::reopen(ChainParams const& _p, WithExisting _we, ProgressCallbac
 {
 	close();
 	init(_p, m_dbPath);
-	open(m_dbPath, _we, _pc);
+	open(m_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize);
 }
 
 void BlockChain::close()
