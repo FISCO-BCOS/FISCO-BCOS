@@ -82,21 +82,9 @@ check_java() {
     }
 }
 
-need_install_tassl()
-{
-    if [ ! -f "${TARGET_DIR}/bin/openssl" ];then
-	echo "== TASSL HAS NOT BEEN INSTALLED, INSTALL NOW =="
-	return 1
-    fi
-    echo "== TASSL HAS BEEN INSTALLED, NO NEED TO INSTALL ==="
-    return 0
-}
-
 download_and_install_tassl()
 {
-    need_install_tassl
-    local required=$?
-    if [ $required -eq 1 ];then
+    if [ ! -f "${TARGET_DIR}/bin/openssl" ];then
         local url=${1}
         local pkg_name=${2}
         local install_cmd=${3}
@@ -124,6 +112,8 @@ check_and_install_tassl()
     download_and_install_tassl "${tassl_url}" "${tassl_name}" "${tassl_install_cmd}"
     OPENSSL_CMD=${TARGET_DIR}/bin/openssl
 }
+
+check_and_install_tassl
 
 usage() {
 printf "%s\n" \
@@ -182,7 +172,6 @@ gen_chain_cert() {
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
-    check_and_install_tassl
 
     chaindir=$path
     mkdir -p $chaindir
@@ -212,7 +201,6 @@ gen_agency_cert() {
     agencydir=$agencypath
     dir_must_not_exists "$agencydir"
     mkdir -p $agencydir
-    check_and_install_tassl
 
     $OPENSSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/agency.key
     $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/agency.key -config $chain/cert.cnf -out $agencydir/agency.csr
@@ -232,7 +220,6 @@ gen_node_cert_with_extensions() {
     name="$3"
     type="$4"
     extensions="$5"
-    check_and_install_tassl
 
     $OPENSSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/${type}.key
     $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
@@ -256,7 +243,6 @@ gen_node_certs() {
     check_name agency "$agency"
     dir_must_not_exists "$ndpath"
     check_name node "$node"
-    check_and_install_tassl
 
     mkdir -p $ndpath
     gen_node_cert_with_extensions "$agpath" "$ndpath" "$node" node v3_req
@@ -323,7 +309,6 @@ gen_sdk_cert() {
     file_must_exists "$agency/agency.key"
     dir_must_not_exists "$sdkpath"
     check_name sdk "$sdk"
-    check_and_install_tassl
 
     mkdir -p $sdkpath
     gen_cert_secp256k1 "$agency" "$sdkpath" "$sdk" sdk
