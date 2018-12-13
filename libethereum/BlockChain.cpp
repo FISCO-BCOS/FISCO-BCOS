@@ -151,7 +151,7 @@ BlockChain::BlockChain(Interface* _interface, ChainParams const& _p, std::string
 	m_pnoncecheck(make_shared<NonceCheck>())
 {
 	init(_p, _dbPath);
-	open(_dbPath, _we, _pc);
+	open(_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize);
 
 	m_pnoncecheck->init(*this );
 
@@ -229,7 +229,7 @@ void BlockChain::init(ChainParams const& _p, std::string const& _path)
 	upgradeDatabase(_path, genesisHash());
 }
 
-unsigned BlockChain::open(std::string const& _path, WithExisting _we)
+unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpenFile, int writeBufferSize)
 {
 	string path = _path.empty() ? Defaults::get()->m_dbPath : _path;
 	string chainPath = path + "/" + toHex(m_genesisHash.ref().cropped(0, 4));
@@ -261,10 +261,10 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	ldb::Options o;
 	o.create_if_missing = true;
 	//o.max_open_files = 256;
-	o.max_open_files = 8;
+	o.max_open_files = maxOpenFile;
 	//add by wheatli, for optimise
 	//o.write_buffer_size = 100 * 1024 * 1024;
-	o.write_buffer_size = 16;
+	o.write_buffer_size = writeBufferSize;
 	//o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
 	//o.block_cache = ldb::NewLRUCache( * 1024 * 1024);
 	if (_we == WithExisting::Rescue) {
@@ -322,6 +322,7 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 				  "or " <<
 				  (extrasPath + "/extras") <<
 				  "already open. You appear to have another instance of ethereum running. Bailing.";
+
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
 		}
 	}
@@ -365,9 +366,9 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	return lastMinor;
 }
 
-void BlockChain::open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc)
+void BlockChain::open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc, int maxOpenFile, int writeBufferSize)
 {
-	if (open(_path, _we) != c_minorProtocolVersion || _we == WithExisting::Verify)
+	if (open(_path, _we, maxOpenFile, writeBufferSize) != c_minorProtocolVersion || _we == WithExisting::Verify)
 		rebuild(_path, _pc);
 }
 
