@@ -152,6 +152,23 @@ Transactions TransactionQueue::topTransactions(unsigned _limit, h256Hash const& 
 	return ret;
 }
 
+Transactions TransactionQueue::topTransactions(unsigned _limit, QueueSet<h256> const& _avoid) const
+{
+	ReadGuard l(m_lock);
+	Transactions ret;
+	for (auto t = m_current.begin(); ret.size() < _limit && t != m_current.end(); ++t)
+		if (!_avoid.count(t->transaction.sha3()))
+		{
+			ret.push_back(t->transaction);
+			//LOG(TRACE) << "TransactionQueue::topTransactions " << t->transaction.sha3() << ",nonce=" << t->transaction.randomid();
+		}
+
+	LOG(TRACE) << "TransactionQueue::topTransactions: " << ret.size() << " total: " << m_current.size();
+
+	return ret;
+}
+
+
 Transactions TransactionQueue::allTransactions() const {
 	ReadGuard l(m_lock);
 	Transactions ret;
