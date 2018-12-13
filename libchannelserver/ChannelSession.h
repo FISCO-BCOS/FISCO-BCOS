@@ -81,7 +81,6 @@ public:
 	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
 	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
 
-	void setQueueSize(int queueSize) { _maxQueueSize = queueSize; }
 private:
 	void onHandshake(const boost::system::error_code& error);
 
@@ -134,10 +133,6 @@ private:
 
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
-
-	std::shared_ptr<std::atomic_int> _recvQueueSize;
-	std::shared_ptr<std::atomic_int> _sendQueueSize;
-	int _maxQueueSize = 1024;
 };
 
 }

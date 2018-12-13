@@ -261,12 +261,12 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	ldb::Options o;
 	o.create_if_missing = true;
 	//o.max_open_files = 256;
-	o.max_open_files = 16;
+	o.max_open_files = 8;
 	//add by wheatli, for optimise
 	//o.write_buffer_size = 100 * 1024 * 1024;
-	o.write_buffer_size = 1 * 1024 * 1024;
+	o.write_buffer_size = 16;
 	//o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
-	o.block_cache = ldb::NewLRUCache(16 * 1024 * 1024);
+	//o.block_cache = ldb::NewLRUCache( * 1024 * 1024);
 	if (_we == WithExisting::Rescue) {
 		ldb::Status blocksStatus = leveldb::RepairDB(chainPath + "/blocks", o);
 		LOG(INFO) << "repair blocksDB:" << blocksStatus.ToString();
