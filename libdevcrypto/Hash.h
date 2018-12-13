@@ -15,7 +15,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Hash.h
- * @author Asherli
+ * @author Alex Leverington <nessence@gmail.com> Asherli
  * @date 2018
  *
  * The FixedHash fixed-size "hash" container type.

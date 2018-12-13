@@ -15,6 +15,8 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Common.cpp
+ * @author Alex Leverington <nessence@gmail.com>
+ * @author Gav Wood <i@gavwood.com>
  * @author Asherli
  * @date 2018
  */
