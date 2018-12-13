@@ -930,7 +930,10 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
     {
         PBFTENGINE_LOG(INFO) << "[#catchupView] [toView]: " << m_toView
                              << " [INFO]:  " << oss.str();
-        broadcastViewChangeReq();
+        NodeID nodeId;
+        bool succ = getNodeIDByIndex(nodeId, req.idx);
+        if (succ)
+            sendViewChangeMsg(nodeId);
     }
 }
 
