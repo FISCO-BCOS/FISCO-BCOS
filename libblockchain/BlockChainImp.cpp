@@ -266,7 +266,7 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     s << "BlockChainImp::getNodeListByType " << type << ":";
     for (dev::h512 node : list)
         s << toJS(node) << ",";
-    LOG(INFO) << s.str();
+    LOG(TRACE) << s.str();
 
     return list;
 }
