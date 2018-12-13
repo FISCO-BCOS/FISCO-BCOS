@@ -345,18 +345,13 @@ static map<string, unsigned int> s_mlogIndex;
 void rolloutHandler(const char* filename, std::size_t )
 {
 	std::stringstream stream;
+	int index = 0;
+	do
+	{
+		stream << filename << "." << index++;
+	}
+	while(boost::filesystem::exists(stream.str().c_str()));
 
-	map<string, unsigned int>::iterator iter = s_mlogIndex.find(filename);
-	if (iter != s_mlogIndex.end())
-	{
-		stream << filename << "." << iter->second++;
-		s_mlogIndex[filename] = iter->second++;
-	}
-	else
-	{
-		stream << filename << "." << 0;
-		s_mlogIndex[filename] = 0;
-	}
 	boost::filesystem::rename(filename, stream.str().c_str());
 }
 

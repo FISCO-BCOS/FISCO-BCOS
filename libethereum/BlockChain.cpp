@@ -439,7 +439,7 @@ void BlockChain::rebuild(std::string const& _path, std::function<void(unsigned, 
 	LOG(INFO) << "reopen m_extrasDB result:" << status.ToString();
 
 	// Open a fresh state DB
-	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill));
+	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill, 8, 64 * 1024));
 
 	// Clear all memos ready for replay.
 	m_details.clear();
