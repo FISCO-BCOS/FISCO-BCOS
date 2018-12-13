@@ -65,7 +65,7 @@ Entries::Ptr LevelDBStorage::select(
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
 
-                if (entry->getStatus() == 0)
+                if (entry->getStatus() == Entry::Status::NORMAL)
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);
@@ -98,8 +98,11 @@ size_t LevelDBStorage::commit(
         {
             for (auto dataIt : it->data)
             {
+                if (dataIt.second->size() == 0u)
+                {
+                    continue;
+                }
                 std::string entryKey = it->tableName + "_" + dataIt.first;
-
                 Json::Value entry;
 
                 for (size_t i = 0; i < dataIt.second->size(); ++i)
@@ -119,7 +122,8 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-                // STORAGE_LOG(TRACE) << "leveldb commit key:" << entryKey << " data:" << entry;
+                STORAGE_LOG(TRACE)
+                    << "leveldb commit key:" << entryKey << " data size:" << ssOut.tellp();
             }
         }
 
