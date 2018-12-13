@@ -44,9 +44,8 @@ void Test_abi_gm(const string& _str)
     ContractABI ct;
     bytes serialBytes = ct.abiIn(_str);
     bytesConstRef serial = bytesConstRef(&serialBytes).cropped(4);
-    std::cout << "line 47====_str========== " << _str << std::endl;
+    std::cout << "====_str========== " << _str << std::endl;
     std::cout << "abi serialBytes ====>" << serialBytes << std::endl;
-    std::cout << "line 47============== " << toHex(serial) << "   ============== "<< std::endl;
 }
 BOOST_AUTO_TEST_CASE(ContractABITest)
 {
