@@ -394,7 +394,7 @@ void Client::reopenChain(ChainParams const& _p, WithExisting _we)
 
 		m_stateDB = OverlayDB();
 		bc().reopen(_p, _we);
-		m_stateDB = State::openDB(Defaults::dbPath(), bc().genesisHash(), _we);
+		m_stateDB = State::openDB(Defaults::dbPath(), bc().genesisHash(), _we, _p.maxOpenFile, _p.writeBufferSize);
 
 		m_preSeal = bc().genesisBlock(m_stateDB);
 		m_preSeal.setAuthor(author);
