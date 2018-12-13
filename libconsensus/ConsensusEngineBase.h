@@ -98,10 +98,11 @@ public:
     {
         status_obj.push_back(json_spirit::Pair("nodeNum", m_nodeNum));
         status_obj.push_back(json_spirit::Pair("node index", m_idx));
-        status_obj.push_back(json_spirit::Pair("f", m_f));
+        status_obj.push_back(json_spirit::Pair("max_faulty_leader", m_f));
         status_obj.push_back(json_spirit::Pair("consensusedBlockNumber", m_consensusBlockNumber));
         status_obj.push_back(json_spirit::Pair("highestblockNumber", m_highestBlock.number()));
         status_obj.push_back(json_spirit::Pair("highestblockHash", toHex(m_highestBlock.hash())));
+        status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
         int i = 0;
