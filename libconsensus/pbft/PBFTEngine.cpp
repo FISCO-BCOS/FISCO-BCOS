@@ -1107,11 +1107,11 @@ void PBFTEngine::updateMinerList()
         std::stringstream s2;
         s2 << "[#updateMinerList] Miners:";
         for (dev::h512 node : m_minerList)
-            s2 << toHex(node) << ",";
+            s2 << node.abridged() << ",";
         s2 << "Observers:";
         dev::h512s observerList = m_blockChain->observerList();
         for (dev::h512 node : observerList)
-            s2 << toHex(node) << ",";
+            s2 << node.abridged() << ",";
         PBFTENGINE_LOG(TRACE) << s2.str();
 
         if (m_lastNodeList != s2.str())

@@ -228,15 +228,15 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
     }
 }
 
-dev::h512s BlockChainImp::getNodeListByType(int64_t num, std::string const& type)
+dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
 {
-    LOG(INFO) << "BlockChainImp::getNodeListByType " << type << " at " << num;
+    LOG(TRACE) << "BlockChainImp::getNodeListByType " << type << " at " << blockNumber;
 
     dev::h512s list;
     try
     {
         auto nodes = m_stateStorage->select(
-            numberHash(num), num, storage::SYS_MINERS, blockverifier::PRI_KEY);
+            numberHash(blockNumber), blockNumber, storage::SYS_MINERS, blockverifier::PRI_KEY);
         if (!nodes)
             return list;
 
@@ -248,11 +248,11 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t num, std::string const& type
 
             if ((node->getField(blockverifier::NODE_TYPE) == type) &&
                 (boost::lexical_cast<int>(node->getField(blockverifier::NODE_KEY_ENABLENUM)) <=
-                    num))
+                    blockNumber))
             {
                 h512 nodeID = h512(node->getField(blockverifier::NODE_KEY_NODEID));
                 list.push_back(nodeID);
-                LOG(INFO) << "Add nodeID [nodeID/idx]: " << toHex(nodeID) << "/" << i << std::endl;
+                LOG(TRACE) << "Add nodeID [nodeID/idx]: " << toHex(nodeID) << "/" << i << std::endl;
             }
         }
     }
@@ -273,16 +273,16 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t num, std::string const& type
 
 dev::h512s BlockChainImp::minerList()
 {
-    int64_t num = number();
+    int64_t blockNumber = number();
     UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByMiner == num)
+    if (m_cacheNumByMiner == blockNumber)
     {
-        LOG(INFO) << "BlockChainImp::minerList by cache, size:" << m_minerList.size();
+        LOG(TRACE) << "BlockChainImp::minerList by cache, size:" << m_minerList.size();
         return m_minerList;
     }
-    dev::h512s list = getNodeListByType(num, blockverifier::NODE_TYPE_MINER);
+    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_MINER);
     UpgradeGuard ul(l);
-    m_cacheNumByMiner = num;
+    m_cacheNumByMiner = blockNumber;
     m_minerList = list;
 
     return list;
@@ -290,16 +290,16 @@ dev::h512s BlockChainImp::minerList()
 
 dev::h512s BlockChainImp::observerList()
 {
-    int64_t num = number();
+    int64_t blockNumber = number();
     UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByObserver == num)
+    if (m_cacheNumByObserver == blockNumber)
     {
-        LOG(INFO) << "BlockChainImp::observerList by cache, size:" << m_observerList.size();
+        LOG(TRACE) << "BlockChainImp::observerList by cache, size:" << m_observerList.size();
         return m_observerList;
     }
-    dev::h512s list = getNodeListByType(num, blockverifier::NODE_TYPE_OBSERVER);
+    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_OBSERVER);
     UpgradeGuard ul(l);
-    m_cacheNumByObserver = num;
+    m_cacheNumByObserver = blockNumber;
     m_observerList = list;
 
     return list;

@@ -32,6 +32,7 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 using namespace boost::property_tree;
 using namespace dev::blockverifier;
@@ -144,8 +145,10 @@ void Ledger::initConsensusConfig(ptree const& pt)
             if (it.first.find("node.") == 0)
             {
                 std::string data = it.second.data();
+                boost::to_lower(data);
                 Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]: " << it.first
                                  << " [node]: " << data << std::endl;
+                // Uniform lowercase nodeID
                 dev::h512 nodeID(data);
                 m_param->mutableConsensusParam().minerList.push_back(nodeID);
                 nodeListMark += data;

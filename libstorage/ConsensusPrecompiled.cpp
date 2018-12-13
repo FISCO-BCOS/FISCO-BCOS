@@ -23,6 +23,7 @@
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 using namespace dev;
 using namespace dev::blockverifier;
@@ -60,6 +61,8 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         // addMiner(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
+        // Uniform lowercase nodeID
+        boost::to_lower(nodeID);
         STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addMiner params:" << nodeID;
         if (nodeID.size() != 128u)
         {
@@ -114,6 +117,8 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         // addObserver(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
+        // Uniform lowercase nodeID
+        boost::to_lower(nodeID);
         STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addObserver params:" << nodeID;
         if (nodeID.size() != 128u)
         {
@@ -148,6 +153,11 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
             }
             else
             {
+                if (checkIsLastMiner(table, nodeID))
+                {
+                    break;
+                }
+
                 table->update(PRI_KEY, entry, condition);
                 STORAGE_LOG(DEBUG)
                     << "ConsensusPrecompiled change to observer, nodeID : " << nodeID;
@@ -169,6 +179,8 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         // remove(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
+        // Uniform lowercase nodeID
+        boost::to_lower(nodeID);
         STORAGE_LOG(DEBUG) << "ConsensusPrecompiled remove params:" << nodeID;
         if (nodeID.size() != 128u)
         {
@@ -180,6 +192,11 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         if (!table)
         {
             STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
+            break;
+        }
+
+        if (checkIsLastMiner(table, nodeID))
+        {
             break;
         }
 
@@ -234,4 +251,20 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
         }
     }
     STORAGE_LOG(TRACE) << s.str();
+}
+
+bool ConsensusPrecompiled::checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID)
+{
+    // Check is last miner or not.
+    auto condition = table->newCondition();
+    condition->EQ(NODE_TYPE, NODE_TYPE_MINER);
+    auto entries = table->select(PRI_KEY, condition);
+    if (entries->size() == 1u && entries->get(0)->getField(NODE_KEY_NODEID) == nodeID)
+    {
+        // The nodeID in param is the last miner, cannot be deleted.
+        STORAGE_LOG(WARNING) << "ConsensusPrecompiled the nodeID in param is the last "
+                                "miner, cannot be deleted.";
+        return true;
+    }
+    return false;
 }
