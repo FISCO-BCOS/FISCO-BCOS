@@ -345,8 +345,6 @@ void Session::doRead()
                 drop(TCPError);
                 return;
             }
-            SESSION_LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:"
-                               << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
             m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
             while (true)

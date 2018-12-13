@@ -669,19 +669,17 @@ void PBFTEngine::checkAndSave()
         {
             Block block(m_reqCache->prepareCache().block);
             m_reqCache->generateAndSetSigList(block, minValidNodes());
-            PBFTENGINE_LOG(DEBUG) << "[#checkAndSave: Consensus Succ] [number/hash/idx]:  "
-                                  << m_reqCache->prepareCache().height << "/"
-                                  << m_reqCache->prepareCache().block_hash.abridged() << "/"
-                                  << m_reqCache->prepareCache().idx << std::endl;
             /// callback block chain to commit block
             CommitResult ret = m_blockChain->commitBlock(
                 block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
-            PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
             /// drop handled transactions
             if (ret == CommitResult::OK)
             {
                 dropHandledTransactions(block);
-                PBFTENGINE_LOG(DEBUG) << "[#commitBlock Succ]" << std::endl;
+                PBFTENGINE_LOG(DEBUG) << "[#CommitBlock Succ:] [idx/nodeId/number/hash]:  "
+                                      << m_reqCache->prepareCache().idx << "/" << m_keyPair.pub()
+                                      << "/" << m_reqCache->prepareCache().height << "/"
+                                      << m_reqCache->prepareCache().block_hash.abridged();
             }
             else
             {
