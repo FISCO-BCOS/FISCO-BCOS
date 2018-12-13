@@ -6,14 +6,14 @@
 #
 
 #!/bin/bash
-
+SHELL_FOLDER=$(cd $(dirname $0);pwd)
 current_dir=`pwd`
 
 enable_guomi=0
 build_source=0
-version=`cat release_note.txt| sed "s/^[vV]//"`
-# binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/fisco-bcos
-binary_link=https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/release-1.3.5/bin/fisco-bcos
+version=`cat ${SHELL_FOLDER}/release_note.txt| sed "s/^[vV]//"`
+package_name="fisco-bcos.tar.gz"
+binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -230,7 +230,8 @@ build_source()
 download_binary()
 {
 	if [ ${enable_guomi} -eq 0 ];then
-		execute_cmd "curl -Lo fisco-bcos ${binary_link}"
+		execute_cmd "curl -LO ${binary_link}"
+		execute_cmd "tar -zxf ${package_name}"
 	else
 		build_source
 		# execute_cmd "curl -Lo fisco-bcos ${binary_link}-gm"
