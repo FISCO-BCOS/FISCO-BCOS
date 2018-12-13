@@ -334,13 +334,19 @@ bool PBFTEngine::sendMsg(
 {
     /// is miner?
     if (getIndexByMiner(nodeId) < 0)
+    {
         return true;
+    }
     /// packet has been broadcasted?
     if (broadcastFilter(nodeId, packetType, key))
+    {
         return true;
+    }
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     if (sessions.size() == 0)
+    {
         return false;
+    }
     for (auto session : sessions)
     {
         if (session.nodeID == nodeId)
