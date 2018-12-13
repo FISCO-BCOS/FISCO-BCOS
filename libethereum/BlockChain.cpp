@@ -151,7 +151,7 @@ BlockChain::BlockChain(Interface* _interface, ChainParams const& _p, std::string
 	m_pnoncecheck(make_shared<NonceCheck>())
 {
 	init(_p, _dbPath);
-	open(_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize);
+	open(_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize, _p.cacheSize);
 
 	m_pnoncecheck->init(*this );
 
@@ -229,7 +229,7 @@ void BlockChain::init(ChainParams const& _p, std::string const& _path)
 	upgradeDatabase(_path, genesisHash());
 }
 
-unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpenFile, int writeBufferSize)
+unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpenFile, int writeBufferSize, int cacheSize)
 {
 	string path = _path.empty() ? Defaults::get()->m_dbPath : _path;
 	string chainPath = path + "/" + toHex(m_genesisHash.ref().cropped(0, 4));
@@ -266,7 +266,7 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpe
 	//o.write_buffer_size = 100 * 1024 * 1024;
 	o.write_buffer_size = writeBufferSize;
 	//o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
-	//o.block_cache = ldb::NewLRUCache( * 1024 * 1024);
+	o.block_cache = ldb::NewLRUCache(cacheSize);
 	if (_we == WithExisting::Rescue) {
 		ldb::Status blocksStatus = leveldb::RepairDB(chainPath + "/blocks", o);
 		LOG(INFO) << "repair blocksDB:" << blocksStatus.ToString();
@@ -373,9 +373,9 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpe
 	return lastMinor;
 }
 
-void BlockChain::open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc, int maxOpenFile, int writeBufferSize)
+void BlockChain::open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc, int maxOpenFile, int writeBufferSize, int cacheSize)
 {
-	if (open(_path, _we, maxOpenFile, writeBufferSize) != c_minorProtocolVersion || _we == WithExisting::Verify)
+	if (open(_path, _we, maxOpenFile, writeBufferSize, cacheSize) != c_minorProtocolVersion || _we == WithExisting::Verify)
 		rebuild(_path, _pc);
 }
 
@@ -383,7 +383,7 @@ void BlockChain::reopen(ChainParams const& _p, WithExisting _we, ProgressCallbac
 {
 	close();
 	init(_p, m_dbPath);
-	open(m_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize);
+	open(m_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize, _p.cacheSize);
 }
 
 void BlockChain::close()
@@ -439,7 +439,7 @@ void BlockChain::rebuild(std::string const& _path, std::function<void(unsigned, 
 	LOG(INFO) << "reopen m_extrasDB result:" << status.ToString();
 
 	// Open a fresh state DB
-	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill, 8, 64 * 1024));
+	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill, 256, 64 * 1024 * 1024, 256 * 1024 * 1024));
 
 	// Clear all memos ready for replay.
 	m_details.clear();
