@@ -24,7 +24,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
-
+using namespace dev::storage;
 
 std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -47,7 +47,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
     switch (func)
     {
-    case 0xfda69fae:
+    case c_getInt_string:
     {  // getInt(string)
         std::string str;
         abi.abiOut(data, str);
@@ -59,7 +59,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0x2ef8ba74:
+    case c_set_string_int256:
     {  // set(string,int256)
         std::string str;
         u256 value;
@@ -69,7 +69,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0xe942b516:
+    case c_set_string_string:
     {  // set(string,string)
         std::string str;
         std::string value;
@@ -79,7 +79,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0xbf40fac1:
+    case c_getAddress_string:
     {  // getAddress(string)
         std::string str;
         abi.abiOut(data, str);
@@ -89,7 +89,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         out = abi.abiIn("", ret);
         break;
     }
-    case 0xd52decd4:
+    case c_getBytes64_string:
     {  //"getBytes64(string)"
         std::string str;
         abi.abiOut(data, str);

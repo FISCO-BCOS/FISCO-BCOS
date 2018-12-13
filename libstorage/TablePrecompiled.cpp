@@ -28,7 +28,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
-
+using namespace dev::storage;
 
 std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -50,7 +50,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
     switch (func)
     {
-    case 0xe8434e39:
+    case c_select_string_address:
     {  // select(string,address)
         std::string key;
         Address conditionAddress;
@@ -70,7 +70,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0x31afac36:
+    case c_insert_string_address:
     {  // insert(string,address)
         std::string key;
         Address entryAddress;
@@ -85,7 +85,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0x7857d7c9:
+    case c_newCondition:
     {  // newCondition()
         auto condition = m_table->newCondition();
         auto conditionPrecompiled = std::make_shared<ConditionPrecompiled>();
@@ -96,7 +96,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0x13db9346:
+    case c_newEntry:
     {  // newEntry()
         auto entry = m_table->newEntry();
         auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
@@ -107,7 +107,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0x28bb2117:
+    case c_remove_string_address:
     {  // remove(string,address)
         std::string key;
         Address conditionAddress;
@@ -123,7 +123,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         break;
     }
-    case 0xbf2b70a1:
+    case c_update_string_address_address:
     {  // update(string,address,address)
         std::string key;
         Address entryAddress;

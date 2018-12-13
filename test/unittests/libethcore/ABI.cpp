@@ -25,6 +25,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
+#include <string>
 
 using namespace std;
 using namespace dev;
@@ -38,6 +39,15 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(ABITest, TestOutputHelperFixture)
 
+void Test_abi_gm(const string& _str)
+{
+    ContractABI ct;
+    bytes serialBytes = ct.abiIn(_str);
+    bytesConstRef serial = bytesConstRef(&serialBytes).cropped(4);
+    std::cout << "line 47====_str========== " << _str << std::endl;
+    std::cout << "abi serialBytes ====>" << serialBytes << std::endl;
+    std::cout << "line 47============== " << toHex(serial) << "   ============== "<< std::endl;
+}
 BOOST_AUTO_TEST_CASE(ContractABITest)
 {
     ContractABI ct;
@@ -67,6 +77,41 @@ BOOST_AUTO_TEST_CASE(ContractABITest)
     BOOST_CHECK_EQUAL(ys, compareYs);
     BOOST_CHECK(str32 == compareStr32);
     BOOST_CHECK_EQUAL(b, compareB);  // There are some bug of convert the byte
+    Test_abi_gm("EQ(string,int256)");
+    Test_abi_gm("EQ(string,string)");
+    Test_abi_gm("GE(string,int256)");
+    Test_abi_gm("GT(string,int256)");
+    Test_abi_gm("LE(string,int256)");
+    Test_abi_gm("LT(string,int256)");
+    Test_abi_gm("NE(string,int256)");
+    Test_abi_gm("NE(string,string)");
+    Test_abi_gm("limit(int256)");
+    Test_abi_gm("limit(int256,int256)");
+
+    Test_abi_gm("select(string,string)");
+
+    Test_abi_gm("get(int256)");
+    Test_abi_gm("size()");
+
+    Test_abi_gm("getInt(string)");
+    Test_abi_gm("set(string,int256)");
+    Test_abi_gm("set(string,string)");
+    Test_abi_gm("getAddress(string)");
+    Test_abi_gm("getBytes64(string)");
+
+    Test_abi_gm("add(string)");
+    Test_abi_gm("remove(string)");
+
+    Test_abi_gm("openDB(string)");
+    Test_abi_gm("openTable(string)");
+    Test_abi_gm("createTable(string,string,string)");
+
+    Test_abi_gm("select(string,address)");
+    Test_abi_gm("insert(string,address)");
+    Test_abi_gm("newCondition()");
+    Test_abi_gm("newEntry()");
+    Test_abi_gm("remove(string,address)");
+    Test_abi_gm("update(string,address,address)");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

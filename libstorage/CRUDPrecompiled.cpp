@@ -26,6 +26,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::storage;
 
 std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
 {
@@ -57,7 +58,7 @@ bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 
     switch (func)
     {
-    case 0x73224cec:
+    case c_select_string_string:
     {  // select(string,string)
         std::string tableName, key;
         abi.abiOut(data, tableName, key);

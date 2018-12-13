@@ -26,6 +26,7 @@
 #include <boost/lexical_cast.hpp>
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::storage;
 
 bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 {
@@ -42,7 +43,7 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
     const std::string key("miner");
     switch (func)
     {
-    case 0xb0c8f9dc:
+    case c_add_string:
     {  // add(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
@@ -80,7 +81,7 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 
         break;
     }
-    case 0x80599e4b:
+    case c_remove_string:
     {  // remove(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
