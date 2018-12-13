@@ -359,9 +359,9 @@ private:
 	void init(ChainParams const& _p, std::string const& _path);
 	/// Open the database.
 	// TODO: rename to open.
-	unsigned open(std::string const& _path, WithExisting _we);
+	unsigned open(std::string const& _path, WithExisting _we, int maxOpenFile, int writeBufferSize, int cacheSize);
 	/// Open the database, rebuilding if necessary.
-	void open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc);
+	void open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc, int maxOpenFile, int writeBufferSize, int cacheSize);
 	/// Finalise everything and close the database.
 	void close();
 
