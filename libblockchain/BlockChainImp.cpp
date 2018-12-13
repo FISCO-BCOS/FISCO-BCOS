@@ -213,16 +213,17 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
     }
     else
     {
-        if (initParam.groupMark.compare(asString(block->header().extraData(0))))
+        /// compare() return 0 means equal!
+        /// If not equal, only print warning, willnot kill process.
+        if (!initParam.groupMark.compare(asString(block->header().extraData(0))))
         {
-            LOG(INFO) << "Already have the 0th block, groupMark "
-                      << asString(block->header().extraData(0));
+            LOG(INFO) << "Already have the 0th block, 0th groupMark is equal to file groupMark.";
         }
         else
         {
-            LOG(WARNING) << "Already have the 0th block, groupMark:"
+            LOG(WARNING) << "Already have the 0th block, 0th groupMark:"
                          << asString(block->header().extraData(0))
-                         << ", GroupMark does not allow modification!";
+                         << " is not equal to file groupMark:" << initParam.groupMark << " !";
         }
     }
 }
