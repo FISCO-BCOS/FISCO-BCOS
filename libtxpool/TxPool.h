@@ -76,10 +76,6 @@ public:
         assert(m_service && m_blockChain);
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(InvalidProtocolID() << errinfo_comment("ProtocolID must be > 0"));
-        /// register enqueue interface to p2p by protocalID
-        m_service->registerHandlerByProtoclID(
-            m_protocolId, boost::bind(&TxPool::enqueue, this, _1, _2, _3));
-
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain, m_protocolId);
         m_commonNonceCheck = std::make_shared<CommonTransactionNonceCheck>(m_protocolId);
@@ -149,9 +145,6 @@ protected:
      */
     ImportResult import(Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
-    /// obtain a transaction from lower network
-    void enqueue(dev::p2p::NetworkException exception, std::shared_ptr<P2PSession> session,
-        P2PMessage::Ptr pMessage);
     /// verify transcation
     virtual ImportResult verify(
         Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);

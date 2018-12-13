@@ -34,7 +34,7 @@ namespace dev
 {
 namespace p2p
 {
-const uint32_t CHECK_INTERVEL = 5000;
+const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
 {
