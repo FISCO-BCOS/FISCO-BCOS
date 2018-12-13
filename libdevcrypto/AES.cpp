@@ -15,7 +15,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file AES.cpp
- * @author Asherli
+ * @author Alex Leverington <nessence@gmail.com> Asherli
  * @date 2018
  */
 
