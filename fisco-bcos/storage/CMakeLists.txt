@@ -23,10 +23,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 aux_source_directory(. SRC_LIST)
 
 file(GLOB HEADERS "*.h")
-include(EthDependencies)
 
 add_executable(mini-storage ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-storage PRIVATE ..)
-target_include_directories(mini-storage PRIVATE ${BOOST_INCLUDE_DIR})
 target_link_libraries(mini-storage devcore storage initializer)
