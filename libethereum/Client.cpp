@@ -74,7 +74,7 @@ Client::Client(
      m_working(chainParams().accountStartNonce),
      m_p2p_host(_host)
 {
-	init(_host, _dbPath, _forceAction, _networkID);
+	init(_host, _dbPath, _forceAction, _networkID, _params.maxOpenFile, _params.writeBufferSize, _params.cacheSize);
 
 	//cout<<"Client::Client systemproxyaddress:0x"<<toString(_params.sysytemProxyAddress)<<"\n";
 	//cout<<"Client::Client god:0x"<<toString(_params.god)<<"\n";
@@ -218,14 +218,14 @@ Client::~Client()
 	stopWorking();
 }
 
-void Client::init(std::shared_ptr<p2p::HostApi>  _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
+void Client::init(std::shared_ptr<p2p::HostApi>  _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId, int maxOpenFile, int writeBufferSize, int cacheSize)
 {
 	DEV_TIMED_FUNCTION_ABOVE(500);
 
 	// Cannot be opened until after blockchain is open, since BlockChain may upgrade the database.
 	// TODO: consider returning the upgrade mechanism here. will delaying the opening of the blockchain database
 	// until after the construction.
-	m_stateDB = State::openDB(_dbPath, bc().genesisHash(), _forceAction);
+	m_stateDB = State::openDB(_dbPath, bc().genesisHash(), _forceAction, maxOpenFile, writeBufferSize, cacheSize);
 	// LAZY. TODO: move genesis state construction/commiting to stateDB openning and have this just take the root from the genesis block.
 	m_preSeal = bc().genesisBlock(m_stateDB);
 	m_postSeal = m_preSeal;
@@ -394,7 +394,7 @@ void Client::reopenChain(ChainParams const& _p, WithExisting _we)
 
 		m_stateDB = OverlayDB();
 		bc().reopen(_p, _we);
-		m_stateDB = State::openDB(Defaults::dbPath(), bc().genesisHash(), _we);
+		m_stateDB = State::openDB(Defaults::dbPath(), bc().genesisHash(), _we, _p.maxOpenFile, _p.writeBufferSize, _p.cacheSize);
 
 		m_preSeal = bc().genesisBlock(m_stateDB);
 		m_preSeal.setAuthor(author);

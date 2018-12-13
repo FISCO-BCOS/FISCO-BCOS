@@ -80,6 +80,7 @@ public:
 	std::shared_ptr<std::set<std::string> > topics() { return _topics; };
 	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
 	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
+
 private:
 	void onHandshake(const boost::system::error_code& error);
 
@@ -110,6 +111,7 @@ private:
 	bytes _recvProtocolBuffer;
 
 	std::queue<std::shared_ptr<bytes> > _sendBufferList;
+	std::queue<uint64_t > _sendTimeList;
 	bool _writing = false;
 
 	std::shared_ptr<boost::asio::deadline_timer> _idleTimer;

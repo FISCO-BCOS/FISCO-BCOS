@@ -70,7 +70,7 @@ State::State(State const& _s):
 	m_changeLog(_s.m_changeLog)
 {}
 
-OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, WithExisting _we)
+OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, WithExisting _we, int maxOpenFile, int writeBufferSize, int cacheSize)
 {
 	std::string path = _basePath.empty() ? Defaults::get()->m_dbPath : _basePath;
 
@@ -85,11 +85,11 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	DEV_IGNORE_EXCEPTIONS(fs::permissions(path, fs::owner_all));
 
 	ldb::Options o;
-	o.max_open_files = 256;
+	o.max_open_files = maxOpenFile;
 	o.create_if_missing = true;
 	//add by wheatli, for optimise
-	o.write_buffer_size = 100 * 1024 * 1024;
-	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
+	o.write_buffer_size = writeBufferSize;
+	o.block_cache = ldb::NewLRUCache(cacheSize);
 
 
 	ldb::DB* db = nullptr;
@@ -125,7 +125,7 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 			LOG(ERROR) << status.ToString();
 			LOG(ERROR) << "Database " <<
 			             (path + "/state") <<
-			             "already open. You appear to have another instance of ethereum running. Bailing.";
+			             status.ToString();
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
 		}
 	}
