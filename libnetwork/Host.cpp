@@ -107,10 +107,6 @@ void Host::startAccept(boost::system::error_code boost_error)
                     NodeIPEndpoint(endpoint.address(), endpoint.port(), endpoint.port()));
                 HOST_LOG(DEBUG) << "client port:" << endpoint.port()
                                 << "|ip:" << endpoint.address().to_string();
-#if 0
-                HOST_LOG(DEBUG) << "server port:" << m_listenPort
-                           << "|ip:" << m_listenHost;
-#endif
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
@@ -219,7 +215,9 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(WARNING) << "Handshake failed: " << error << socket->nodeIPEndpoint().name();
+        HOST_LOG(WARNING) << "[#handshakeServer] Handshake failed: [eid/emsg/endpoint]: "
+                          << error.value() << "/" << error.message() << "/"
+                          << socket->nodeIPEndpoint().name();
         socket->close();
 
         return;
@@ -229,16 +227,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
     {
         std::string node_id_str(*endpointPublicKey);
         NodeID nodeID = NodeID(node_id_str);
-        /// handshake failed
-        if (error)
-        {
-            HOST_LOG(ERROR) << "Host::async_handshake err:" << error.message();
-            socket->close();
-            return;
-        }
-
         startPeerSession(nodeID, socket, m_connectionHandler);
-
         startAccept();
     }
 }
@@ -273,8 +262,9 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
             HOST_LOG(WARNING) << "No connectionHandler, new connection may lost";
         }
     });
-
-    HOST_LOG(INFO) << "start a new peer: " << nodeID;
+    HOST_LOG(INFO) << "[#startPeerSession] [remoteEndpoint/nodeID]: "
+                   << socket->remote_endpoint().address().to_string() << ":"
+                   << socket->remote_endpoint().port() << "/" << nodeID;
 }
 
 /**
@@ -397,7 +387,9 @@ void Host::handshakeClient(const boost::system::error_code& error,
 
     if (error)
     {
-        HOST_LOG(WARNING) << "Handshake failed: " << error << " " << _nodeIPEndpoint.name();
+        HOST_LOG(WARNING) << "[#handshakeClient] Handshake failed: [eid/emsg/endpoint]: "
+                          << error.value() << "/" << error.message() << "/"
+                          << _nodeIPEndpoint.name();
         socket->close();
 
         return;
@@ -407,14 +399,6 @@ void Host::handshakeClient(const boost::system::error_code& error,
     {
         std::string node_id_str(*endpointPublicKey);
         NodeID nodeID = NodeID(node_id_str);
-        /// handshake failed
-        if (error)
-        {
-            HOST_LOG(ERROR) << "Host::async_handshake client err:" << error.message();
-            socket->close();
-            return;
-        }
-
         startPeerSession(nodeID, socket, callback);
     }
 }

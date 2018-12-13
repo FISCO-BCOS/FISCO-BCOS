@@ -43,7 +43,7 @@ cache:
   - $TRAVIS_BUILD_DIR/deps
   - $TRAVIS_BUILD_DIR/build
 before_cache:
-      - rm -rf $TRAVIS_BUILD_DIR/build/nodes
+      - cd $TRAVIS_BUILD_DIR && rm -rf $TRAVIS_BUILD_DIR/build/nodes
 addons:
   apt:
     packages:

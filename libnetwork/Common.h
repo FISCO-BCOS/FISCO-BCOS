@@ -216,7 +216,7 @@ struct NodeIPEndpoint
     bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
     bool operator<(const dev::p2p::NodeIPEndpoint& rhs) const
     {
-        if (address < rhs.address && tcpPort < rhs.tcpPort)
+        if (address < rhs.address || tcpPort < rhs.tcpPort)
         {
             return true;
         }
@@ -228,7 +228,7 @@ struct NodeIPEndpoint
     }
     bool operator>(const dev::p2p::NodeIPEndpoint& rhs) const
     {
-        if (address > rhs.address && tcpPort > rhs.tcpPort)
+        if (address > rhs.address || tcpPort > rhs.tcpPort)
             return true;
         if (udpPort > rhs.udpPort)
             return true;

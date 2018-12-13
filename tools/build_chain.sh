@@ -20,7 +20,7 @@ pkcs12_passwd=123456
 make_tar=
 debug_log="false"
 logfile=build.log
-enable_public_listen_ip="false"
+listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
@@ -29,24 +29,34 @@ help() {
     cat << EOF
 Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -f <IP list file>                   [Optional] "split by line, "ip:nodeNum"
+    -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
     -e <FISCO-BCOS binary path>         Default download from GitHub
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
-    -i <enable public rpc listen ip>    Default 127.0.0.1
+    -i <rpc listen public ip>           Default 127.0.0.1. If set -i, listen 0.0.0.0
     -P <PKCS12 passwd>                  Default generate PKCS12 file with passwd:123456, use -P to set custom passwd
     -s <State type>                     Default mpt. if set -s, use storage 
     -t <Cert config file>               Default auto generate
+    -T <Enable debug log>               Default off. If set -T, enable debug log
     -z <Generate tar packet>            Default no
     -h Help
 e.g 
     build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
 EOF
 
-#     cat << EOF > ip_conf
-# 127.0.0.1:4 agency1 1,2
-# EOF
 exit 0
+}
+
+LOG_WARN()
+{
+    local content=${1}
+    echo -e "\033[31m[WARN] ${content}\033[0m"
+}
+
+LOG_INFO()
+{
+    local content=${1}
+    echo -e "\033[32m[INFO] ${content}\033[0m"
 }
 
 parse_params()
@@ -60,7 +70,7 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
        use_ip_param="true"
     ;;
     o) output_dir=$OPTARG;;
-    i) enable_public_listen_ip="true";;
+    i) listen_ip="0.0.0.0";;
     p) port_start=$OPTARG;;
     e) eth_path=$OPTARG;;
     P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
@@ -76,6 +86,24 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
     h) help;;
     esac
 done
+}
+
+print_result()
+{
+echo "=============================================================="
+LOG_INFO "FISCO-BCOS Path   : $eth_path"
+[ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
+# [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
+[ ! -z $ip_param ] && LOG_INFO "IP List Param     : $ip_param"
+LOG_INFO "Start Port        : $port_start"
+LOG_INFO "Server IP         : ${ip_array[@]}"
+LOG_INFO "State Type        : ${state_type}"
+LOG_INFO "RPC listen IP     : ${listen_ip}"
+LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
+LOG_INFO "Output Dir        : $output_dir"
+LOG_INFO "CA Key Path       : $ca_file"
+echo "=============================================================="
+LOG_INFO "All completed. Files in $output_dir"
 }
 
 fail_message()
@@ -94,15 +122,6 @@ check_env() {
         echo "use \"openssl version\" command to check."
         exit $EXIT_CODE
     }
-}
-
-usage() {
-printf "%s\n" \
-"usage command gen_chain_cert chaindir|
-              gen_agency_cert chaindir agencydir|
-              gen_node_cert agencydir nodedir|
-              gen_sdk_cert agencydir sdkdir|
-              help"
 }
 
 getname() {
@@ -303,25 +322,19 @@ generate_config_ini()
     else
         group_conf_list="group_config.1=${conf_path}/group.1.ini"
     fi
-    if [ "${enable_public_listen_ip}" == "true" ];then
-        listen_ip="0.0.0.0"
-    else
-        listen_ip="127.0.0.1"
-    fi
     cat << EOF > ${output}
 [rpc]
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    listen_port=$(( port_start + 1 + index * 4 ))
+    listen_port=$(( port_start + 1 + index * 3 ))
     ;rpc listen port
-    http_listen_port=$(( port_start + 2 + index * 4 ))
-    console_port=$(( port_start + 3 + index * 4 ))
+    http_listen_port=$(( port_start + 2 + index * 3 ))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( port_start + index * 4 ))
+    listen_port=$(( port_start + index * 3 ))
     ;nodes to connect
     $ip_list
 
@@ -589,7 +602,7 @@ if [ ! -e "$ca_file" ]; then
 fi
 
 echo "=============================================================="
-echo "Generating node's key ..."
+echo "Generating keys ..."
 nodeid_list=""
 ip_list=""
 count=0
@@ -599,6 +612,9 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
+    if [ -z "$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")" ];then
+        LOG_WARN "Please check IP address: ${ip}"
+    fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
@@ -647,7 +663,7 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 4 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 3 ))"
     "
         ((++count))
     done
@@ -656,7 +672,7 @@ done
 cd ..
 
 echo "=============================================================="
-echo "Generating node's configurations..."
+echo "Generating configurations..."
 generate_script_template "$output_dir/start_all.sh"
 generate_script_template "$output_dir/stop_all.sh"
 generate_script_template "$output_dir/replace_all.sh"
@@ -697,19 +713,10 @@ echo "=============================================================="
         if [ ! -z "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
     done
 fi
-echo "=============================================================="
-echo "FISCO-BCOS Path : $eth_path"
-[ ! -z $ip_file ] && echo "IP List File    : $ip_file"
-# [ ! -z $ip_file ] && echo "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-[ ! -z $ip_param ] && echo "IP List Param   : $ip_param"
-echo "Start Port      : $port_start"
-echo "Servers         : ${ip_array[@]}"
-echo "Output Dir      : $output_dir"
-echo "CA Key Path     : $ca_file"
-echo "=============================================================="
-echo "All completed. Files in $output_dir"
+
 }
 
 check_env
 parse_params $@
 main
+print_result
