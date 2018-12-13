@@ -56,7 +56,7 @@ void Sealer::start()
 
 bool Sealer::shouldSeal()
 {
-    bool sealed;
+    bool sealed = false;
     {
         DEV_READ_GUARDED(x_sealing)
         sealed = m_sealing.block.isSealed();
