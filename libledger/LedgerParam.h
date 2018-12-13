@@ -40,6 +40,7 @@ struct ConsensusParam
 {
     std::string consensusType;
     dev::h512s minerList = dev::h512s();
+    dev::h512s observerList = dev::h512s();
     uint64_t maxTransactions;
     /// unsigned intervalBlockTime;
 };
@@ -60,6 +61,7 @@ struct SyncParam
 struct GenesisParam
 {
     std::string genesisMark;
+    std::string nodeListMark;
 };
 struct StorageParam
 {

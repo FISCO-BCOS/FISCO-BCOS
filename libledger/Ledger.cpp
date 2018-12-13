@@ -32,6 +32,10 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
+#include <boost/algorithm/algorithm.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 using namespace boost::property_tree;
 using namespace dev::blockverifier;
@@ -135,16 +139,39 @@ void Ledger::initConsensusConfig(ptree const& pt)
     Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum]:  "
                       << m_param->mutableConsensusParam().consensusType << "/"
                       << m_param->mutableConsensusParam().maxTransactions << std::endl;
+
+    std::string nodeListMark = ",nodeList:";
     try
     {
         for (auto it : pt.get_child("consensus"))
         {
             if (it.first.find("node.") == 0)
             {
-                Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]:  " << it.first
-                                 << "  [node]: " << it.second.data() << std::endl;
-                h512 miner(it.second.data());
-                m_param->mutableConsensusParam().minerList.push_back(miner);
+                std::string data = it.second.data();
+                Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]: " << it.first
+                                 << " [node]: " << data << std::endl;
+
+                std::vector<std::string> s;
+                boost::split(s, data, boost::is_any_of(","), boost::token_compress_on);
+                if (s.size() == 2 && s[0].size() == 128u && (s[1] == "miner" || s[1] == "observer"))
+                {
+                    h512 nodeID(s[0]);
+                    if (s[1] == "miner")
+                    {
+                        m_param->mutableConsensusParam().minerList.push_back(nodeID);
+                    }
+                    else
+                    {
+                        m_param->mutableConsensusParam().observerList.push_back(nodeID);
+                    }
+                }
+                else
+                {
+                    Ledger_LOG(ERROR) << "[#initConsensusConfig] parse node faield";
+                    continue;
+                }
+
+                nodeListMark += data;
             }
         }
     }
@@ -153,6 +180,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
         Ledger_LOG(ERROR) << "[#initConsensusConfig]: Parse consensus section failed: "
                           << boost::diagnostic_information(e) << std::endl;
     }
+    m_param->mutableGenesisParam().nodeListMark = nodeListMark;
 }
 
 /// init sync related configurations
@@ -188,7 +216,8 @@ void Ledger::initDBConfig(ptree const& pt)
 void Ledger::initGenesisConfig(ptree const& pt)
 {
     m_param->mutableGenesisParam().genesisMark =
-        pt.get<std::string>("genesis.mark", std::to_string(m_groupId));
+        pt.get<std::string>("genesis.mark", std::to_string(m_groupId)) +
+        m_param->mutableGenesisParam().nodeListMark;
     Ledger_LOG(DEBUG) << "[#initGenesisConfig] [genesisMark]:  "
                       << m_param->mutableGenesisParam().genesisMark << std::endl;
 }
@@ -243,7 +272,9 @@ bool Ledger::initBlockChain()
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     m_blockChain = blockChain;
-    m_blockChain->setGroupMark(m_param->mutableGenesisParam().genesisMark);
+    GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
+        m_param->mutableConsensusParam().minerList, m_param->mutableConsensusParam().observerList};
+    m_blockChain->checkAndBuildGenesisBlock(initParam);
     Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain SUCC]";
     return true;
 }

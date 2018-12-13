@@ -662,8 +662,14 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(_protocolID);
     SessionInfos infos;
 
-    auto it = m_groupID2NodeList.find(int(ret.first));
-    if (it != m_groupID2NodeList.end())
+    std::map<GROUP_ID, h512s> groupID2NodeList;
+    {
+        RecursiveMutex(x_nodeList);
+        groupID2NodeList = m_groupID2NodeList;
+    }
+
+    auto it = groupID2NodeList.find(int(ret.first));
+    if (it != groupID2NodeList.end())
     {
         try
         {

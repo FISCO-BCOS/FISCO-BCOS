@@ -144,7 +144,9 @@ public:
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
     }
-    void setGroupMark(std::string const& groupMark) override {}
+    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override {}
+    dev::h512s minerList() override { return dev::h512s(); };
+    dev::h512s observerList() override { return dev::h512s(); };
     void createTransaction()
     {
         bytes rlpBytes = fromHex(
