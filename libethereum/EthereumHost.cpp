@@ -476,12 +476,9 @@ bool EthereumHost::ensureInitialised()
 		m_latestBlockSent = m_chain.currentHash();
 		LOG(TRACE) << "Initialising: latest=" << m_latestBlockSent;
 
-		Guard l(x_transactions);
+        // No need to copy the txs to sent queue(wheatli)
+		//Guard l(x_transactions);
 		//m_transactionsSent = m_tq.knownTransactions();
-        auto txs = m_tq.knownTransactions();
-        for (auto t : txs) {
-            m_transactionsSent.insert(t);
-        }
 		return true;
 	}
 	return false;
