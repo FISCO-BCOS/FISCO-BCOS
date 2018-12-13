@@ -231,7 +231,7 @@ download_binary()
 {
 	if [ ${enable_guomi} -eq 0 ];then
 		execute_cmd "curl -LO ${binary_link}"
-    execute_cmd "tar -zxf ${package_name}"
+		execute_cmd "tar -zxf ${package_name}"
 	else
 		build_source
 		# execute_cmd "curl -Lo fisco-bcos ${binary_link}-gm"
