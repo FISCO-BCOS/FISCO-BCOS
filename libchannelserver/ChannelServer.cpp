@@ -103,7 +103,6 @@ void dev::channel::ChannelServer::startAccept() {
 		ChannelSession::Ptr session = std::make_shared<ChannelSession>();
 		session->setThreadPool(_threadPool);
 		session->setIOService(_ioService);
-		session->setQueueSize(_queueSize);
 
 		if (_enableSSL) {
 			session->setSSLSocket(std::make_shared<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> >(*_ioService, *_sslContext));
