@@ -42,7 +42,7 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_HASH_2_BLOCK);
 }
 
-Table::Ptr MemoryTableFactory::openTable(const string& tableName)
+Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
 {
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
@@ -81,23 +81,27 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
 	memoryTable->setBlockHash(m_blockHash);
 	memoryTable->setBlockNum(m_blockNum);
 
-    if(tableName != string(SYS_ACCESS_TABLE))
-    {
-    	setAuthorizedAddress(tableInfo);
-    }
-    else
-    {
-    	memoryTable->setTableInfo(tableInfo);
-    	auto tableEntries = memoryTable->select(tableInfo->name, memoryTable->newCondition());
-		for (size_t i = 0; i < tableEntries->size(); ++i)
-		{
-			auto entry = tableEntries->get(i);
-			if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+	if(authorityFlag)
+	{
+	    if(tableName != string(SYS_ACCESS_TABLE))
+	    {
+	    	setAuthorizedAddress(tableInfo);
+	    }
+	    else
+	    {
+	    	memoryTable->setTableInfo(tableInfo);
+	    	auto tableEntries = memoryTable->select(tableInfo->name, memoryTable->newCondition());
+			for (size_t i = 0; i < tableEntries->size(); ++i)
 			{
-				tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+				auto entry = tableEntries->get(i);
+				if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+				{
+					tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+				}
 			}
-		}
-    }
+	    }
+	}
+
     memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
                                  vector<Change::Record>& _records) {

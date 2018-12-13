@@ -38,7 +38,7 @@ public:
     MemoryTableFactory();
     virtual ~MemoryTableFactory() {}
 
-    Table::Ptr openTable(const std::string& table) override;
+    Table::Ptr openTable(const std::string& table, bool authorityFlag = true) override;
     Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField) override;
 

@@ -74,37 +74,21 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
             break;
         }
 
-        bool exist = false;
-        auto entries = table->select(tableName, table->newCondition());
-        if (entries.get())
-        {
-             for (size_t i = 0; i < entries->size(); i++)
-             {
-                 auto entry = entries->get(i);
-                 if (!entry)
-                     continue;
-                 if (entry->getField(SYS_AC_FIELD_ADDRESS) == addr)
-                 {
-                     exist = true;
-                     break;
-                 }
-             }
-         }
-         if (exist)
-         {
-             STORAGE_LOG(WARNING) << "Authority entry with same table name and address has existed.";
-             out = abi.abiIn("", u256(0));
-             break;
-         }
-
-         // do insert
-	    auto entry = table->newEntry();
-	    entry->setField(SYS_AC_FIELD_TABLE_NAME, tableName);
-	    entry->setField(SYS_AC_FIELD_ADDRESS, addr);
-	    entry->setField(SYS_AC_FIELD_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-
-	    size_t count = table->insert(tableName, entry, getOptions(origin));
-	    out = abi.abiIn("", u256(count));
+        auto condition = table->newCondition();
+		condition->EQ(SYS_AC_FIELD_ADDRESS, addr);
+		auto entries = table->select(tableName, condition);
+		if (entries->size() != 0u)
+		{
+			STORAGE_LOG(DEBUG) << "Authority entry with the same tableName and address has existed,  tableName : " << tableName << "address: " << addr;
+			break;
+		}
+		auto entry = table->newEntry();
+		entry->setField(SYS_AC_FIELD_TABLE_NAME, tableName);
+		entry->setField(SYS_AC_FIELD_ADDRESS, addr);
+		entry->setField(SYS_AC_FIELD_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+		size_t count = table->insert(tableName, entry, getOptions(origin));
+		out = abi.abiIn("", u256(count));
+		STORAGE_LOG(DEBUG) << "AuthorityPrecompiled add a record, tableName : " << tableName << "address: " << addr;
 
         break;
     }

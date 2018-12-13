@@ -52,7 +52,7 @@ struct AuthorityPrecompiledFixture
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
-        authorityPrecompiled = std::make_shared<AuthorityPrecompiled>();
+        authorityPrecompiled = context->getPrecompiled(Address(0x1005));
         memoryTableFactory = context->getMemoryTableFactory();
     }
 
@@ -60,7 +60,7 @@ struct AuthorityPrecompiledFixture
 
     ExecutiveContext::Ptr context;
     MemoryTableFactory::Ptr memoryTableFactory;
-    AuthorityPrecompiled::Ptr authorityPrecompiled;
+    Precompiled::Ptr authorityPrecompiled;
     BlockInfo blockInfo;
 };
 
@@ -115,7 +115,9 @@ BOOST_AUTO_TEST_CASE(remove)
 
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    entries = table->select(tableName, table->newCondition());
+	Condition::Ptr condition = table->newCondition();
+	condition->EQ(STATUS, "1");
+	entries = table->select(tableName, condition);
     BOOST_TEST(entries->size() == 0u);
 
     // remove not exist entry
