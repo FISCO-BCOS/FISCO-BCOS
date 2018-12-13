@@ -89,7 +89,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         {
             for (auto it : _pt.get_child("CRL"))
             {
-                if (it.first.find("node.") == 0)
+                if (it.first.find("crl.") == 0)
                 {
                     std::string nodeID = boost::to_upper_copy(it.second.data());
                     SESSION_LOG(TRACE)

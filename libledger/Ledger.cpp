@@ -32,10 +32,6 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
-#include <boost/algorithm/algorithm.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 using namespace boost::property_tree;
 using namespace dev::blockverifier;
@@ -150,27 +146,8 @@ void Ledger::initConsensusConfig(ptree const& pt)
                 std::string data = it.second.data();
                 Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]: " << it.first
                                  << " [node]: " << data << std::endl;
-
-                std::vector<std::string> s;
-                boost::split(s, data, boost::is_any_of(","), boost::token_compress_on);
-                if (s.size() == 2 && s[0].size() == 128u && (s[1] == "miner" || s[1] == "observer"))
-                {
-                    h512 nodeID(s[0]);
-                    if (s[1] == "miner")
-                    {
-                        m_param->mutableConsensusParam().minerList.push_back(nodeID);
-                    }
-                    else
-                    {
-                        m_param->mutableConsensusParam().observerList.push_back(nodeID);
-                    }
-                }
-                else
-                {
-                    Ledger_LOG(ERROR) << "[#initConsensusConfig] parse node faield";
-                    continue;
-                }
-
+                dev::h512 nodeID(data);
+                m_param->mutableConsensusParam().minerList.push_back(nodeID);
                 nodeListMark += data;
             }
         }

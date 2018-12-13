@@ -58,13 +58,6 @@ type=LevelDB
 ;state type, now support mpt/storage
 type=${state_type}
 
-
-
-;genesis configuration
-[genesis]
-;used to mark the genesis block of this group
-;mark=${group_id}
-
 ;txpool limit
 [txPool]
 limit=1000
@@ -139,8 +132,8 @@ function generateGroupConfig()
             if [ "${groupConfigPath}" == "" ];then
                 groupConfigPath=conf/
                 mkdir -p ${groupConfigPath}
-                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.ini"
-                groupConfigPath=${groupConfigPath}"/group."${groupId}".ini"
+                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.genesis"
+                groupConfigPath=${groupConfigPath}"/group."${groupId}".genesis"
             fi
             groupConfigPath=${prefix}_${minerNode}/${groupConfigPath}
             generate_group_ini "${nodeidList}" "${groupConfigPath}"
