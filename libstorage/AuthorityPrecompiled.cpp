@@ -103,7 +103,7 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
 	    entry->setField(SYS_AC_FIELD_ADDRESS, addr);
 	    entry->setField(SYS_AC_FIELD_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
 
-	    size_t count = table->insert(SYS_AC_FIELD_TABLE_NAME, entry, getOptions(origin));
+	    size_t count = table->insert(tableName, entry, getOptions(origin));
 	    out = abi.abiIn("", u256(count));
 
         break;
@@ -129,7 +129,7 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         auto entries = table->select(tableName, condition);
         if (entries->size() == 0u)
         {
-            STORAGE_LOG(WARNING) << "Authority entry with the table name and address has not existed.";
+            STORAGE_LOG(WARNING) << "Authority entry with the table name and address does not existed.";
             out = abi.abiIn("", u256(0));
         }
         else
