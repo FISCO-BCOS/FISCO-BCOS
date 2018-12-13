@@ -116,8 +116,9 @@ struct ChainOperationParams
 
 	bool broadcastToNormalNode = false; 
 	int transactionQueueLimit = 1024;
-	int maxOpenFile = 8;
-	int writeBufferSize = 64 * 1024;
+	int maxOpenFile = 256;
+	int writeBufferSize = 64 * 1024 * 1024;
+	int cacheSize = 256 * 1024 * 1024;
 
 	u256 godMinerStart = 0;
 	u256 godMinerEnd = 0;
