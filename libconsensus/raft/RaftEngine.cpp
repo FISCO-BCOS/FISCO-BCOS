@@ -430,6 +430,10 @@ void RaftEngine::runAsLeader()
                 resp.populate(RLP(ref(ret.second.data).cropped(1)));
                 {
                     Guard Guard(m_mutex);
+                    RAFTENGINE_LOG(DEBUG)
+                        << "[#runAsLeader] heartbeat ack from: " << ret.second.nodeId
+                        << ", heartbeat ack height: " << resp.height
+                        << ", heartbeat ack blockHash: " << toString(resp.blockHash);
                     m_memberBlock[ret.second.nodeId] = BlockRef(resp.height, resp.blockHash);
                 }
 
@@ -808,11 +812,11 @@ void RaftEngine::clearFirstVoteCache()
     }
 }
 
-bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _req)
+bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _resp)
 {
     RAFTENGINE_LOG(INFO) << "[#handleVoteRequest] [from]: " << _from
-                         << ", [node]: " << _node.hex().substr(0, 5) << ", [term]: " << _req.term
-                         << ", [candidate]: " << _req.candidate;
+                         << ", [node]: " << _node.hex().substr(0, 5) << ", [term]: " << _resp.term
+                         << ", [candidate]: " << _resp.candidate;
 
     RaftVoteResp resp;
     resp.idx = m_nodeIdx;
@@ -823,20 +827,20 @@ bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVot
     resp.voteFlag = VOTE_RESP_REJECT;
     resp.lastLeaderTerm = m_lastLeaderTerm;
 
-    if (_req.term <= m_term)
+    if (_resp.term <= m_term)
     {
         if (m_state == EN_STATE_LEADER)
         {
-            // include _req.term < m_term and _req.term == m_term
+            // include _resp.term < m_term and _resp.term == m_term
             resp.voteFlag = VOTE_RESP_LEADER_REJECT;
             RAFTENGINE_LOG(INFO) << "[#handleVoteRequest] Discard vreq for I'm the bigger leader"
-                                 << " [term]: " << m_term << ", [receiveTerm]: " << _req.term;
+                                 << " [term]: " << m_term << ", [receiveTerm]: " << _resp.term;
         }
         else
         {
-            if (_req.term == m_term)
+            if (_resp.term == m_term)
             {
-                // _req.term == m_term for follower and candidate
+                // _resp.term == m_term for follower and candidate
                 resp.voteFlag = VOTE_RESP_DISCARD;
                 RAFTENGINE_LOG(INFO)
                     << "[#handleVoteRequest] Discard vreq for I'm already in this term [term]: "
@@ -844,7 +848,7 @@ bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVot
             }
             else
             {
-                // _req.term < m_term for follower and candidate
+                // _resp.term < m_term for follower and candidate
                 resp.voteFlag = VOTE_RESP_REJECT;
                 RAFTENGINE_LOG(INFO)
                     << "[#handleVoteRequest] Discard vreq for smaller term, [term]: " << m_term;
@@ -855,12 +859,12 @@ bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVot
     }
 
     // handle lastLeaderTerm error
-    if (_req.lastLeaderTerm < m_lastLeaderTerm)
+    if (_resp.lastLeaderTerm < m_lastLeaderTerm)
     {
         resp.voteFlag = VOTE_RESP_LASTTERM_ERROR;
         RAFTENGINE_LOG(INFO)
             << "[#handleVoteRequest] Discard vreq for smaller last leader term, [lastLeaderTerm]: "
-            << m_lastLeaderTerm << ", [receiveLastLeaderTerm]: " << _req.lastLeaderTerm;
+            << m_lastLeaderTerm << ", [receiveLastLeaderTerm]: " << _resp.lastLeaderTerm;
         sendResponse(_from, _node, RaftVoteRespPacket, resp);
         return false;
     }
@@ -868,21 +872,21 @@ bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVot
     // first vote, not change term
     if (m_firstVote == raft::InvalidIndex)
     {
-        m_firstVote = _req.candidate;
+        m_firstVote = _resp.candidate;
         resp.voteFlag = VOTE_RESP_FIRST_VOTE;
         RAFTENGINE_LOG(INFO)
             << "[#handleVoteRequest] Discard vreq for I'm the first time to vote, [term]: "
-            << m_term << ", [voteReqTerm]: " << _req.term << ", [firstVote]: " << m_firstVote;
+            << m_term << ", [voteReqTerm]: " << _resp.term << ", [firstVote]: " << m_firstVote;
         sendResponse(_from, _node, RaftVoteRespPacket, resp);
         return false;
     }
 
-    m_term = _req.term;
+    m_term = _resp.term;
     m_leader = raft::InvalidIndex;
     m_vote = raft::InvalidIndex;
 
-    m_firstVote = _req.candidate;
-    setVote(_req.candidate);
+    m_firstVote = _resp.candidate;
+    setVote(_resp.candidate);
 
     resp.term = m_term;
     resp.voteFlag = VOTE_RESP_GRANTED;
@@ -1035,12 +1039,18 @@ bool RaftEngine::sendResponse(
 }
 
 HandleVoteResult RaftEngine::handleVoteResponse(
-    u256 const& _from, h512 const& _node, RaftVoteResp const& _req, VoteState& _vote_state)
+    u256 const& _from, h512 const& _node, RaftVoteResp const& _resp, VoteState& _vote_state)
 {
-    unsigned voteFlag = (unsigned)_req.voteFlag;
-    switch (voteFlag)
+    if (_resp.term < m_term)
     {
-    case VOTE_RESP_REJECT:
+        RAFTENGINE_LOG(DEBUG) << "[#handleVoteResponse] Peer's term is smaller than mine"
+                              << ", [respTerm/term]: " << _resp.term << "/" << m_term;
+        return HandleVoteResult::NONE;
+    }
+
+    switch (_resp.voteFlag)
+    {
+    case VoteRespFlag::VOTE_RESP_REJECT:
     {
         _vote_state.unVote++;
         if (isMajorityVote(_vote_state.unVote))
@@ -1051,15 +1061,15 @@ HandleVoteResult RaftEngine::handleVoteResponse(
         }
         break;
     }
-    case VOTE_RESP_LEADER_REJECT:
+    case VoteRespFlag::VOTE_RESP_LEADER_REJECT:
     {  // switch to leader directly
-        m_term = _req.term;
-        m_lastLeaderTerm = _req.lastLeaderTerm;
+        m_term = _resp.term;
+        m_lastLeaderTerm = _resp.lastLeaderTerm;
         // increase elect time
         increaseElectTime();
         return TO_FOLLOWER;
     }
-    case VOTE_RESP_LASTTERM_ERROR:
+    case VoteRespFlag::VOTE_RESP_LASTTERM_ERROR:
     {
         _vote_state.lastTermErr++;
         if (isMajorityVote(_vote_state.lastTermErr))
@@ -1070,21 +1080,21 @@ HandleVoteResult RaftEngine::handleVoteResponse(
         }
         break;
     }
-    case VOTE_RESP_FIRST_VOTE:
+    case VoteRespFlag::VOTE_RESP_FIRST_VOTE:
     {
         _vote_state.firstVote++;
         if (isMajorityVote(_vote_state.firstVote))
         {
             RAFTENGINE_LOG(INFO)
                 << "[#handleVoteResponse] Receive majority first vote, recover from " << m_term
-                << "to term " << m_term - 1;
+                << " to term " << m_term - 1;
             m_term--;
             RAFTENGINE_LOG(INFO) << "[#handleVoteResponse] Switch to Follower";
             return TO_FOLLOWER;
         }
         break;
     }
-    case VOTE_RESP_DISCARD:
+    case VoteRespFlag::VOTE_RESP_DISCARD:
     {
         _vote_state.discardedVote++;
         // do nothing
@@ -1100,7 +1110,7 @@ HandleVoteResult RaftEngine::handleVoteResponse(
     default:
     {
         RAFTENGINE_LOG(INFO) << "[#handleVoteResponse] Error voteFlag"
-                             << " [voteFlag]: " << voteFlag << ", [from]: " << _from
+                             << " [voteFlag]: " << _resp.voteFlag << ", [from]: " << _from
                              << ", [node]:" << _node.hex().substr(0, 5);
     }
     }
@@ -1125,37 +1135,47 @@ void RaftEngine::increaseElectTime()
 
 bool RaftEngine::shouldSeal()
 {
-    Guard Guard(m_mutex);
-    if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount || m_state != EN_STATE_LEADER)
+    if (getState() != RaftRole::EN_STATE_LEADER)
     {
+        RAFTENGINE_LOG(DEBUG) << "[#shouldSeal] I'm not the leader, shouldSeal return false";
         return false;
     }
 
-    u256 count = 1;
-    u256 currentHeight = m_highestBlockHeader.number();
-    for (auto iter = m_memberBlock.begin(); iter != m_memberBlock.end(); ++iter)
     {
-        if (iter->second.height > currentHeight)
+        Guard Guard(m_mutex);
+        if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount ||
+            m_state != EN_STATE_LEADER)
         {
-            RAFTENGINE_LOG(INFO) << "[#shouldSeal] Wait to download block, shouldSeal return false";
             return false;
         }
-        if (iter->second.height == currentHeight)
+        u256 count = 1;
+        u256 currentHeight = m_highestBlockHeader.number();
+        for (auto iter = m_memberBlock.begin(); iter != m_memberBlock.end(); ++iter)
         {
-            ++count;
+            if (iter->second.height > currentHeight)
+            {
+                RAFTENGINE_LOG(INFO)
+                    << "[#shouldSeal] Wait to download block, shouldSeal return false";
+                return false;
+            }
+            if (iter->second.height == currentHeight)
+            {
+                ++count;
+            }
         }
-    }
 
-    if (count < m_nodeNum - m_f)
-    {
-        RAFTENGINE_LOG(INFO) << "[#shouldSeal] Wait somebody to sync block, shouldSeal return false"
-                             << " [count]: " << count << ", [nodeNum]: " << m_nodeNum
-                             << ", [m_f]=" << m_f << ", [memberBlockSize]=" << m_memberBlock.size();
-        return false;
-    }
+        if (count < m_nodeNum - m_f)
+        {
+            RAFTENGINE_LOG(INFO)
+                << "[#shouldSeal] Wait somebody to sync block, shouldSeal return false"
+                << " [count]: " << count << ", [nodeNum]: " << m_nodeNum << ", [m_f]=" << m_f
+                << ", [memberBlockSize]=" << m_memberBlock.size();
+            return false;
+        }
 
-    RAFTENGINE_LOG(INFO) << "[#shouldSeal] Return true";
-    return true;
+        RAFTENGINE_LOG(INFO) << "[#shouldSeal] Return true";
+        return true;
+    }
 }
 
 bool RaftEngine::commit(Block const& _block)
