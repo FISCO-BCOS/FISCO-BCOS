@@ -24,6 +24,7 @@
 #pragma once
 #include <libconsensus/Common.h>
 #include <libconsensus/pbft/Common.h>
+#include <libdevcrypto/Common.h>
 #include <boost/test/unit_test.hpp>
 namespace dev
 {
@@ -41,9 +42,24 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
     BOOST_CHECK(msg.timestamp == _timestamp);
     BOOST_CHECK(msg.block_hash == _blockHash);
     if (msg.sig != Signature())
-        BOOST_CHECK(msg.sig == msg.signHash(msg.block_hash, _keyPair));
+    {
+#if FISCO_GM
+        bool result = dev::verify(dev::toPublic(_keyPair.secret()), msg.sig, msg.block_hash);
+        BOOST_CHECK_EQUAL(result, true);
+#else
+        BOOST_CHECK_EQUAL(msg.sig, msg.signHash(msg.block_hash, _keyPair));
+#endif
+    }
     if (msg.sig2 != Signature())
-        BOOST_CHECK(msg.sig2 == msg.signHash(msg.fieldsWithoutBlock(), _keyPair));
+    {
+#if FISCO_GM
+        bool result1 =
+            dev::verify(dev::toPublic(_keyPair.secret()), msg.sig2, msg.fieldsWithoutBlock());
+        BOOST_CHECK_EQUAL(result1, true);
+#else
+        BOOST_CHECK_EQUAL(msg.sig2, msg.signHash(msg.fieldsWithoutBlock(), _keyPair));
+#endif
+    }
 }
 
 }  // namespace test

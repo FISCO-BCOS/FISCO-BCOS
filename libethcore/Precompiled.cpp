@@ -20,7 +20,6 @@
  */
 
 #include "Precompiled.h"
-#include <libdevcore/SHA3.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
@@ -49,40 +48,8 @@ namespace
 {
 ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
 {
-    struct
-    {
-        h256 hash;
-        h256 v;
-        h256 r;
-        h256 s;
-    } in;
-
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-
-    h256 ret;
-    u256 v = (u256)in.v;
-    if (v >= 27 && v <= 28)
-    {
-        SignatureStruct sig(in.r, in.s, (byte)((int)v - 27));
-        if (sig.isValid())
-        {
-            try
-            {
-                if (Public rec = recover(sig, in.hash))
-                {
-                    ret = dev::sha3(rec);
-                    memset(ret.data(), 0, 12);
-                    return {true, ret.asBytes()};
-                }
-            }
-            catch (...)
-            {
-            }
-        }
-    }
-    return {true, {}};
+    return SignatureStruct::ecRecover(_in);
 }
-
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
 {
     return {true, dev::sha256(_in).asBytes()};

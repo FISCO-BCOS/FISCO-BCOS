@@ -25,7 +25,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
-
+using namespace dev::storage;
 
 std::string ConditionPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -49,7 +49,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
     assert(m_condition);
     switch (func)
     {
-    case 0xe44594b9:
+    case c_EQ_string_int256:
     {  // EQ(string,int256)
         std::string str;
         u256 num;
@@ -59,7 +59,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0xcd30a1d1:
+    case c_EQ_string_string:
     {  // EQ(string,string)
         std::string str;
         std::string value;
@@ -69,7 +69,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0x42f8dd31:
+    case c_GE_string_int256:
     {  // GE(string,int256)
         std::string str;
         u256 value;
@@ -79,7 +79,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0x08ad6333:
+    case c_GT_string_int256:
     {  // GT(string,int256)
         std::string str;
         u256 value;
@@ -89,7 +89,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0xb6f23857:
+    case c_LE_string_int256:
     {  // LE(string,int256)
         std::string str;
         u256 value;
@@ -99,7 +99,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0xc31c9b65:
+    case c_LT_string_int256:
     {  // LT(string,int256)
         std::string str;
         u256 value;
@@ -109,7 +109,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0x39aef024:
+    case c_NE_string_int256:
     {  // NE(string,int256)
         std::string str;
         u256 num;
@@ -119,7 +119,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0x2783acf5:
+    case c_NE_string_string:
     {  // NE(string,string)
         std::string str;
         std::string value;
@@ -129,7 +129,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0x2e0d738a:
+    case c_limit_int256:
     {  // limit(int256)
         u256 num;
         abi.abiOut(data, num);
@@ -138,7 +138,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         break;
     }
-    case 0x7ec1cc65:
+    case c_limit_int256_int256:
     {  // limit(int256,int256)
         u256 offset;
         u256 size;

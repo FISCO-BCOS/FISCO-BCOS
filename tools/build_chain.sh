@@ -24,6 +24,15 @@ listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
+guomi_mode=
+gm_conf_path="gmconf/"
+CUR_DIR=`pwd`
+TASSL_INSTALL_DIR="${HOME}/TASSL"
+OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
+
+TASSL_DOWNLOAD_URL=" https://github.com/jntass"
+TASSL_PKG_DIR="TASSL"
+
 help() {
     echo $1
     cat << EOF
@@ -39,6 +48,7 @@ Usage:
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -z <Generate tar packet>            Default no
+    -g <Generate guomi nodes>           Default no
     -h Help
 e.g 
     build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
@@ -239,14 +249,136 @@ gen_node_cert() {
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
-    dir_must_not_exists "$ndpath"
-    check_name node "$node"
 
     mkdir -p $ndpath
+    dir_must_exists "$ndpath"
+    check_name node "$node"
+
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
     openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
+    cp $agpath/ca.crt $agpath/agency.crt $ndpath
+
+    cd $ndpath
+    nodeid=`cat node.nodeid | head`
+    serial=`cat node.serial | head`
+    cat >node.json <<EOF
+{
+ "id":"$nodeid",
+ "name":"$node",
+ "agency":"$agency",
+ "caHash":"$serial"
+}
+EOF
+    cat >node.ca <<EOF
+{
+ "serial":"$serial",
+ "pubkey":"$nodeid",
+ "name":"$node"
+}
+EOF
+
+    echo "build $node node cert successful!"
+}
+
+
+
+gen_chain_cert_gm() {
+    path="$2"
+    name=`getname "$path"`
+    echo "$path --- $name"
+    dir_must_not_exists "$path"
+    check_name chain "$name"
+
+    chaindir=$path
+    mkdir -p $chaindir
+
+	$OPENSSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/ca.key
+	$OPENSSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/ca.key -extensions v3_ca -out $chaindir/ca.crt
+
+    ls $chaindir
+
+    cp gmcert.cnf gmsm2.param $chaindir
+
+    if [ $? -eq 0 ]; then
+        echo "build chain ca succussful!"
+    else
+        echo "please input at least Common Name!"
+    fi
+}
+
+gen_agency_cert_gm() {
+    chain="$2"
+    agencypath="$3"
+    name=`getname "$agencypath"`
+
+    dir_must_exists "$chain"
+    file_must_exists "$chain/ca.key"
+    check_name agency "$name"
+    agencydir=$agencypath
+    dir_must_not_exists "$agencydir"
+    mkdir -p $agencydir
+
+    $OPENSSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/agency.key
+    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/agency.key -config $chain/gmcert.cnf -out $agencydir/agency.csr
+    $OPENSSL_CMD x509 -req -CA $chain/ca.crt -CAkey $chain/ca.key -days 3650 -CAcreateserial -in $agencydir/agency.csr -out $agencydir/agency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
+
+    cp $chain/ca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
+    cp $chain/ca.crt $agencydir/ca-agency.crt
+    more $agencydir/agency.crt | cat >>$agencydir/ca-agency.crt
+    rm -f $agencydir/agency.csr
+
+    echo "build $name agency cert successful!"
+}
+
+gen_node_cert_with_extensions_gm() {
+    capath="$1"
+    certpath="$2"
+    name="$3"
+    type="$4"
+    extensions="$5"
+
+    $OPENSSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/${type}.key
+    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/${type}.key -config $capath/gmcert.cnf -out $certpath/${type}.csr
+    $OPENSSL_CMD x509 -req -CA $capath/agency.crt -CAkey $capath/agency.key -days 3650 -CAcreateserial -in $certpath/${type}.csr -out $certpath/${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
+
+    rm -f $certpath/${type}.csr
+}
+
+gen_node_cert_gm() {
+    if [ "" = "`openssl ecparam -list_curves 2>&1 | grep secp256k1`" ]; then
+        echo "openssl don't support secp256k1, please upgrade openssl!"
+        exit $EXIT_CODE
+    fi
+
+    agpath="$2"
+    agency=`getname "$agpath"`
+    ndpath="$3"
+    node=`getname "$ndpath"`
+    dir_must_exists "$agpath"
+    file_must_exists "$agpath/agency.key"
+    check_name agency "$agency"
+
+    mkdir -p $ndpath
+    dir_must_exists "$ndpath"
+    check_name node "$node"
+
+    mkdir -p $ndpath
+    gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req
+    gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req
+    #nodeid is pubkey
+    $OPENSSL_CMD ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/node.nodeid
+
+    #serial
+    if [ "" != "`$OPENSSL_CMD version | grep 1.0.2`" ];
+    then
+        $OPENSSL_CMD x509  -text -in $ndpath/node.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/node.serial
+    else
+        $OPENSSL_CMD x509  -text -in $ndpath/node.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/node.serial
+    fi
+
+
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
@@ -340,7 +472,7 @@ generate_config_ini()
 
 ;group configurations
 ;if need add a new group, eg. group2, can add the following configuration:
-;group_config.2=conf/group.2.ini
+;group_config.2=${conf_path}/group.2.ini
 ;group.2.ini can be populated from group.1.ini
 ;WARNING: group 0 is forbided
 [group]
@@ -660,14 +792,36 @@ for line in ${ip_array[*]};do
             mkdir -p ${conf_path}/
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
+
+            #private key should not start with 00
             cd $output_dir
             privateKey=`openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
             len=${#privateKey}
             head2=${privateKey:0:2}
-            if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
-                break;
+            if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
+                rm -rf ${node_dir}
+                continue;
             fi
-            rm -rf ${node_dir}
+
+            if [ -n "$guomi_mode" ]; then
+                gen_node_cert_gm "" ${output_dir}/gmcert/agency $node_dir >$output_dir/build.log 2>&1
+                mkdir -p ${gm_conf_path}/
+                rm node.json node.ca
+                mv *.* ${gm_conf_path}/
+
+                #private key should not start with 00
+                cd $output_dir
+                privateKey=`$OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+                len=${#privateKey}
+                head2=${privateKey:0:2}
+                if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
+                    rm -rf ${node_dir}
+                    continue;
+                fi
+                #move origin conf to gm conf
+                cp $node_dir/${conf_path} $node_dir/${gm_conf_path}/oricert -r
+            fi
+            break;
         done
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> $node_dir/${conf_path}/node.crt
         cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt

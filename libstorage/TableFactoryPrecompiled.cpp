@@ -31,7 +31,7 @@
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
-
+using namespace dev::storage;
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
     return "TableFactory";
@@ -52,8 +52,8 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
 
     switch (func)
     {
-    case 0xc184e0ff:  // openDB(string)
-    case 0xf23f63c9:
+    case c_openDB_string:  // openDB(string)
+    case c_openTable_string:
     {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
@@ -75,7 +75,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         out = abi.abiIn("", address);
         break;
     }
-    case 0x56004b6a:
+    case c_createTable_string_string_string:
     {  // createTable(string,string,string)
         string tableName;
         string keyField;

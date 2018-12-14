@@ -21,9 +21,9 @@
  * @date 2018-09-04
  */
 
+#include "libdevcrypto/Hash.h"
 #include <evmc/evmc.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/SHA3.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libinterpreter/interpreter.h>
@@ -989,8 +989,11 @@ BOOST_AUTO_TEST_CASE(callTest)
     cout << "new code: " << evmc.getState().accountCode(toEvmC(newContractAddr)).size() << endl;
     u256 xResult = getStateValueU256(
         newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
-
+#if FISCO_GM
+    BOOST_CHECK_EQUAL(100, xResult);
+#else
     BOOST_CHECK_EQUAL(456, xResult);
+#endif
     BOOST_CHECK(0 == result.status_code);
 }
 

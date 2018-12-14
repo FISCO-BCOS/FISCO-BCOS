@@ -111,26 +111,26 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 
     try
     {
-        m_sslContext =
+        std::shared_ptr<boost::asio::ssl::context> sslContext =
             std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
 
         std::shared_ptr<EC_KEY> ecdh(
             EC_KEY_new_by_curve_name(NID_secp256k1), [](EC_KEY* p) { EC_KEY_free(p); });
-        SSL_CTX_set_tmp_ecdh(m_sslContext->native_handle(), ecdh.get());
+        SSL_CTX_set_tmp_ecdh(sslContext->native_handle(), ecdh.get());
 
-        m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
+        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
         INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] [nodeID]: "
                                << m_key.pub().hex();
 
         boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
-        m_sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
         if (!cert.empty() && !contents(cert).empty())
         {
             INITIALIZER_LOG(DEBUG)
                 << "[#SecureInitializer::initConfig] use user certificate: [file]: " << cert;
-            m_sslContext->use_certificate_chain_file(cert);
-            m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+            sslContext->use_certificate_chain_file(cert);
+            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
@@ -146,9 +146,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             INITIALIZER_LOG(DEBUG)
                 << "[#SecureInitializer::initConfig] use ca certificate: [file]: " << caCert;
 
-            m_sslContext->add_certificate_authority(
+            sslContext->add_certificate_authority(
                 boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
-            m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
@@ -163,9 +163,11 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         {
             INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use ca: [path]: " << caPath;
 
-            m_sslContext->add_verify_path(caPath);
-            m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+            sslContext->add_verify_path(caPath);
+            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
+
+        m_sslContexts[Usage::Default] = sslContext;
     }
     catch (Exception& e)
     {
@@ -175,4 +177,22 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
                      << e.what() << std::endl;
         exit(1);
     }
+}
+
+std::shared_ptr<bas::context> SecureInitializer::SSLContext(Usage _usage)
+{
+    auto defaultP = m_sslContexts.find(Usage::Default);
+    if (defaultP == m_sslContexts.end())
+    {
+        INITIALIZER_LOG(ERROR)
+            << "[#SecureInitializer::SSLContext] SecureInitializer has not been initialied";
+        BOOST_THROW_EXCEPTION(SecureInitializerNotInitConfig());
+    }
+
+    auto p = m_sslContexts.find(_usage);
+    if (p != m_sslContexts.end())
+        return p->second;
+
+    // if not found, return default
+    return defaultP->second;
 }

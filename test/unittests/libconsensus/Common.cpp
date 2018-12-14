@@ -56,6 +56,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsg)
     /// test default construct
     PBFTMsg pbft_msg;
     checkPBFTMsg(pbft_msg);
+
     /// test encode
     h256 block_hash = sha3("block_hash");
     KeyPair key_pair = KeyPair::create();

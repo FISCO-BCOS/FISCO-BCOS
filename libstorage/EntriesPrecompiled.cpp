@@ -25,7 +25,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
-
+using namespace dev::storage;
 
 std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -48,7 +48,7 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
 
     switch (func)
     {
-    case 0x846719e0:
+    case c_get_int256:
     {  // get(int256)
         u256 num;
         abi.abiOut(data, num);
@@ -62,7 +62,7 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
 
         break;
     }
-    case 0x949d225d:
+    case c_size:
     {  // size()
         u256 c = m_entries->size();
 
