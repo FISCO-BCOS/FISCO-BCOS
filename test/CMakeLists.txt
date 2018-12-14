@@ -102,5 +102,3 @@ target_link_libraries(test-fisco-bcos rpc)
 
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
-
-install(TARGETS test-fisco-bcos DESTINATION bin)

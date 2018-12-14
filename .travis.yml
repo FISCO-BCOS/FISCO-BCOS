@@ -57,7 +57,7 @@ install: |
       chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash ./tools/ci/check-commit.sh;
     fi
 script:
-    mkdir -p build && cd build && cmake -DTESTS=ON  -G "Ninja" .. && ninja && CTEST_OUTPUT_ON_FAILURE=TRUE ninja test && ../tools/build_chain.sh -l "127.0.0.1:1" -e bin/fisco-bcos && cd nodes && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
+    mkdir -p build && cd build && cmake -DTESTS=ON -DCOVERAGE=ON .. && make -j2 && CTEST_OUTPUT_ON_FAILURE=TRUE make test && ../tools/build_chain.sh -l "127.0.0.1:1" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
 after_success:
     cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)
 after_failure:
