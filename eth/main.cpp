@@ -344,15 +344,16 @@ static map<string, unsigned int> s_mlogIndex;
 
 void rolloutHandler(const char* filename, std::size_t )
 {
-	std::stringstream stream;
-	int index = 0;
-	do
-	{
-		stream << filename << "." << index++;
-	}
-	while(boost::filesystem::exists(stream.str().c_str()));
+ std::stringstream stream;
+ int index = 0;
+ do
+ {
+  stream.str("");
+  stream << filename << "." << index++;
+ }
+ while(boost::filesystem::exists(stream.str().c_str()));
 
-	boost::filesystem::rename(filename, stream.str().c_str());
+ boost::filesystem::rename(filename, stream.str().c_str());
 }
 
 void logRotateByTime()
