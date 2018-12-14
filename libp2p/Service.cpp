@@ -662,27 +662,30 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(_protocolID);
     SessionInfos infos;
 
+    RecursiveGuard l(x_nodeList);
     auto it = m_groupID2NodeList.find(int(ret.first));
-    if (it != m_groupID2NodeList.end())
+    if (it == m_groupID2NodeList.end())
     {
-        try
+        return infos;
+    }
+
+    try
+    {
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;
+        for (auto const& i : s)
         {
-            RecursiveGuard l(x_sessions);
-            auto s = m_sessions;
-            for (auto const& i : s)
+            if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
-                if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
-                {
-                    SERVICE_LOG(TRACE) << "Finding nodeID: " << i.first;
-                    infos.push_back(SessionInfo(
-                        i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
-                }
+                SERVICE_LOG(TRACE) << "Finding nodeID: " << i.first;
+                infos.push_back(SessionInfo(
+                    i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
             }
         }
-        catch (std::exception& e)
-        {
-            SERVICE_LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
-        }
+    }
+    catch (std::exception& e)
+    {
+        SERVICE_LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
     }
 
     P2PMSG_LOG(DEBUG) << "[#sessionInfosByProtocolID] return: [list size]: " << infos.size();
