@@ -98,7 +98,7 @@ RaftMsgPacket transDataToPacket(RaftMsg& _msg, RaftPacketType _packetType)
     RLPStream ts;
     _msg.streamRLPFields(ts);
     RaftMsgPacket packet;
-    
+
     RLPStream listRLP;
     listRLP.appendList(1).append(ref(ts.out()));
     bytes packetData;
@@ -245,7 +245,7 @@ BOOST_AUTO_TEST_CASE(testHandleVoteResponse)
 
     resp.idx = 0;
     resp.term = 0;
-    resp.height =  raftEngine->getHighestBlockHeader().number();
+    resp.height = raftEngine->getHighestBlockHeader().number();
     resp.blockHash = raftEngine->getHighestBlockHeader().hash();
     resp.voteFlag = VOTE_RESP_REJECT;
     resp.lastLeaderTerm = 0;
@@ -305,7 +305,7 @@ BOOST_AUTO_TEST_CASE(testHandleVoteRequest)
     RaftVoteReq req;
     req.idx = 0;
     req.term = 0;
-    req.height =  raftEngine->getHighestBlockHeader().number();
+    req.height = raftEngine->getHighestBlockHeader().number();
     req.blockHash = raftEngine->getHighestBlockHeader().hash();
     req.candidate = 0;
     req.lastLeaderTerm = 0;
