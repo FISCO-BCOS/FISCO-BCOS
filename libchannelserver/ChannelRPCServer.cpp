@@ -265,9 +265,6 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
                 message->setData((const byte*)data.data(), data.size());
                 session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
             }
-            else if (data == "1")
-            {
-            }
             break;
         }
         case 0x30:
