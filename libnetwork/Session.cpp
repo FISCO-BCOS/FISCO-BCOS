@@ -171,6 +171,16 @@ void Session::onWrite(
     }
 }
 
+bool Session::isConnected() const
+{
+    auto server = m_server.lock();
+    if (!m_actived || !server || !server->haveNetwork() || !m_socket)
+    {
+        return false;
+    }
+    return m_socket->isConnected();
+}
+
 void Session::write()
 {
     if (!actived())
@@ -288,11 +298,8 @@ void Session::drop(DisconnectReason _reason)
     {
         try
         {
-            boost::system::error_code ec;
-
-            SESSION_LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "("
-                                 << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address
-                                 << "," << ec.message();
+            SESSION_LOG(WARNING) << "Closing " << socket.remote_endpoint() << "("
+                                 << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
 
             socket.close();
         }
@@ -338,8 +345,6 @@ void Session::doRead()
                 drop(TCPError);
                 return;
             }
-            SESSION_LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:"
-                               << std::string(m_recvBuffer, m_recvBuffer + bytesTransferred);
             m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
 
             while (true)

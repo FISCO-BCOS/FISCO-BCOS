@@ -31,13 +31,29 @@ rpc_port=
 rpc_command=
 function_name=
 support_rpc="getBlockNumber getPbftView getConsensusStatus getSyncStatus getClientVersion getPeers getGroupPeers getGroupList getPendingTransactions getTotalTransactionCount getMinerList"
+function get_json_value()
+{
+  local json=$1
+  local key=$2
+
+  if [[ -z "$3" ]]; then
+    local num=1
+  else
+    local num=$3
+  fi
+
+  local value=$(echo "${json}" | awk -F"[,:}]" '{for(i=1;i<=NF;i++){if($i~/'${key}'\042/){print $(i+1)}}}' | tr -d '"' | sed -n ${num}p)
+
+  echo ${value}
+}
+
 execRpcCommand() 
 {
     local functionName="${1}"
     if [ "${all_groups}" == true ];then
-        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[],\"id\":83}' http://${ip}:${rpc_port} | jq"
+        rpc_command="curl --fail --silent --show-error -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[],\"id\":83}' http://${ip}:${rpc_port}"
     else
-        rpc_command="curl -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[${group_id}],\"id\":83}' http://${ip}:${rpc_port} | jq"
+        rpc_command="curl --fail --silent --show-error -X POST --data '{\"jsonrpc\":\"2.0\",\"method\":\"${functionName}\",\"params\":[${group_id}],\"id\":83}' http://${ip}:${rpc_port}"
     fi
     execute_cmd "${rpc_command}"
 }
@@ -47,7 +63,14 @@ executeRpc()
 {
     functionName="${1}"
     LOG_INFO "============${functionName}===================="
-    execRpcCommand "${functionName}"
+    if [ "${functionName}" == "getBlockNumber" ];then
+        blockNumberJson=$(execRpcCommand "${functionName}")
+        blockNumber=$(get_json_value "${blockNumberJson}" "result" | cut -d '[' -f2 | cut -d ']' -f1)
+        blockNumberValue=$(printf "%d\n" "$blockNumber")
+        LOG_INFO "BlockNumber:"${blockNumberValue}
+    else
+        execRpcCommand "${functionName}" | jq
+    fi
 }
 # check the params
 checkParam()
@@ -67,12 +90,6 @@ checkParam()
         LOG_ERROR "Must set function name"
         help
     fi
-    
-    #result=`echo ${support_rpc} | grep -w ${function_name}`
-    #if [ "${result}" == "" ];then
-    #    LOG_ERROR "Not support "${function_name}" yet!"
-    #    help
-    #fi
 }
 
 help()
