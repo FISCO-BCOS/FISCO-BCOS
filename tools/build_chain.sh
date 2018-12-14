@@ -16,7 +16,7 @@ state_type=mpt
 storage_type=LevelDB
 conf_path="conf"
 eth_path=
-pkcs12_passwd=123456
+pkcs12_passwd=""
 make_tar=
 debug_log="false"
 logfile=build.log
@@ -34,7 +34,7 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
     -i <rpc listen public ip>           Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -P <PKCS12 passwd>                  Default generate PKCS12 file with passwd:123456, use -P to set custom passwd
+    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
     -s <State type>                     Default mpt. if set -s, use storage 
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
