@@ -31,6 +31,6 @@ Defaults* Defaults::s_this = nullptr;
 Defaults::Defaults()
 {
 	m_dbPath = getDataDir();
-	m_stateDbCacheSize = 268435456;  //Ä¬ÈÏ»º´æ´óÐ¡256M
+	m_stateDbCacheSize = 268435456;  //default  256M
 	m_blockDbCacheSize = 268435456;
 }
