@@ -527,6 +527,11 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
 void PBFTEngine::onRecvPBFTMessage(
     NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
 {
+    if (m_idx == MAXIDX)
+    {
+        PBFTENGINE_LOG(TRACE) << "[#workLoop: I am a observer, drop the PBFT packet directly";
+        return;
+    }
     PBFTMsgPacket pbft_msg;
     bool valid = decodeToRequests(pbft_msg, message, session);
     if (!valid)
