@@ -301,14 +301,14 @@ protected:
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
             PBFTENGINE_LOG(DEBUG)
-                << "#[checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
+                << "[#checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
                 << m_reqCache->prepareCache().block_hash.abridged() << "/" << req.block_hash
                 << "  [INFO]:  " << oss.str();
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
             {
-                PBFTENGINE_LOG(INFO) << "#[checkReq] Recv future request: [prepHash]:"
+                PBFTENGINE_LOG(INFO) << "[#checkReq] Recv future request: [prepHash]:"
                                      << m_reqCache->prepareCache().block_hash.abridged()
                                      << "  [INFO]:  " << oss.str();
                 return CheckResult::FUTURE;
