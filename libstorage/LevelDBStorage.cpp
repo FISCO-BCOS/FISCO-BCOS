@@ -40,7 +40,7 @@ Entries::Ptr LevelDBStorage::select(
         auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
         if (!s.ok() && !s.IsNotFound())
         {
-            STORAGE_LOG(ERROR) << "Query leveldb failed:" + s.ToString();
+            STORAGE_LEVELDB_LOG(ERROR) << "Query leveldb failed:" + s.ToString();
 
             BOOST_THROW_EXCEPTION(StorageException(-1, "Query leveldb exception:" + s.ToString()));
         }
@@ -77,7 +77,7 @@ Entries::Ptr LevelDBStorage::select(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Query leveldb exception:" << boost::diagnostic_information(e);
+        STORAGE_LEVELDB_LOG(ERROR) << "Query leveldb exception:" << boost::diagnostic_information(e);
 
         BOOST_THROW_EXCEPTION(e);
     }
@@ -90,7 +90,7 @@ size_t LevelDBStorage::commit(
 {
     try
     {
-        STORAGE_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash << " num:" << num;
+        STORAGE_LEVELDB_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash << " num:" << num;
         leveldb::WriteBatch batch;
 
         size_t total = 0;
@@ -122,7 +122,7 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-                STORAGE_LOG(TRACE)
+                STORAGE_LEVELDB_LOG(TRACE)
                     << "leveldb commit key:" << entryKey << " data size:" << ssOut.tellp();
             }
         }
@@ -133,7 +133,7 @@ size_t LevelDBStorage::commit(
         auto s = m_db->Write(writeOptions, &batch);
         if (!s.ok())
         {
-            STORAGE_LOG(ERROR) << "Commit leveldb failed: " << s.ToString();
+            STORAGE_LEVELDB_LOG(ERROR) << "Commit leveldb failed: " << s.ToString();
 
             BOOST_THROW_EXCEPTION(StorageException(-1, "Commit leveldb exception:" + s.ToString()));
         }
@@ -142,7 +142,7 @@ size_t LevelDBStorage::commit(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Commit leveldb exception" << e.what();
+        STORAGE_LEVELDB_LOG(ERROR) << "Commit leveldb exception" << e.what();
 
         BOOST_THROW_EXCEPTION(e);
     }

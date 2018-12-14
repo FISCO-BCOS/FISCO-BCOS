@@ -276,23 +276,20 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
 void Host::start()
 {
     /// if the p2p network has been stoped, then stop related service
-    if (!m_run)
+    if (!haveNetwork())
     {
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
-        auto self = std::weak_ptr<Host>(shared_from_this());
-        m_hostThread = std::make_shared<std::thread>([self] {
-            auto host = self.lock();
-            while (host && host->haveNetwork())
+        m_hostThread = std::make_shared<std::thread>([&] {
+            while (haveNetwork())
             {
                 try
                 {
-                    if (host->asioInterface()->acceptor())
+                    if (asioInterface()->acceptor())
                     {
-                        host->startAccept();
+                        startAccept();
                     }
-
-                    host->asioInterface()->run();
+                    asioInterface()->run();
                 }
                 catch (std::exception& e)
                 {
@@ -300,13 +297,11 @@ void Host::start()
                         << "Exception in Network Thread:" << boost::diagnostic_information(e);
                 }
 
-                host->asioInterface()->reset();
+                asioInterface()->reset();
             }
 
             HOST_LOG(WARNING) << "Host exit";
         });
-
-        m_hostThread->detach();
     }
 }
 
