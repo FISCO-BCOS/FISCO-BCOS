@@ -53,7 +53,49 @@ public:
         return dev::consensus::RaftEngine::getNodeIdByIndex(_nodeId, _nodeIdx);
     }
 
+    void setState(dev::consensus::RaftRole _role) { m_state = _role; }
+
+    void setTerm(size_t _term) { m_term = _term; }
+
+    void setLastLeaderTerm(size_t _term) { m_lastLeaderTerm = _term; }
+
+    dev::consensus::RaftRole getState() const { return dev::consensus::RaftEngine::getState(); }
+
+    bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& memberHeartbeatLog)
+    {
+        return dev::consensus::RaftEngine::runAsLeaderImp(memberHeartbeatLog);
+    }
+
+    void runAsFollower() { dev::consensus::RaftEngine::runAsFollower(); }
+
+    bool checkHeartbeatTimeout() override
+    {
+        dev::consensus::RaftEngine::checkHeartbeatTimeout();
+        return heartbeatTimeout;
+    }
+
+    bool handleHeartbeat(
+        dev::u256 const& _from, dev::h512 const& _node, dev::consensus::RaftHeartBeat const& _hb)
+    {
+        return dev::consensus::RaftEngine::handleHeartbeat(_from, _node, _hb);
+    }
+
+    bool handleVoteRequest(
+        dev::u256 const& _from, dev::h512 const& _node, dev::consensus::RaftVoteReq const& _req)
+    {
+        return dev::consensus::RaftEngine::handleVoteRequest(_from, _node, _req);
+    }
+
+    dev::consensus::HandleVoteResult handleVoteResponse(dev::u256 const& _from,
+        dev::h512 const& _node, dev::consensus::RaftVoteResp const& _resp,
+        dev::consensus::VoteState& vote)
+    {
+        return dev::consensus::RaftEngine::handleVoteResponse(_from, _node, _resp, vote);
+    }
+
     void workLoop() {}
+
+    bool heartbeatTimeout = false;
 };
 }  // namespace test
 }  // namespace dev
