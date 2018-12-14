@@ -22,7 +22,6 @@
 # 2018/09/05: yujiechen
 # 1. add DEBUG flag
 # 2. add ETH_DEBUG definition when DEBUG flag has been set
-# 3. add ETH_TESTS definition when TESTS flag has been set
 
 macro(eth_default_option O DEF)
     if (DEFINED ${O})
@@ -52,9 +51,8 @@ macro(configure_project)
     eth_default_option(ARCH_TYPE OFF)
     # unit tests
     eth_default_option(TESTS OFF)
-    if (TESTS)
-        add_definitions(-DETH_TESTS)
-    endif()
+    # code coverage
+    eth_default_option(COVERAGE OFF)
 
     # guomi
     eth_default_option(BUILD_GM OFF)

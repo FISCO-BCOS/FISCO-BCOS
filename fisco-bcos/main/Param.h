@@ -47,16 +47,20 @@ private:
     boost::program_options::variables_map m_vmMap;
 };
 
-static void version()
+static void version(bool shouldExit = true)
 {
 #if FISCO_GM
     std::cout << "FISCO-BCOS gm version " << dev::Version << "\n";
 #else
     std::cout << "FISCO-BCOS version " << dev::Version << "\n";
 #endif
-    std::cout << "Build: " << DEV_QUOTED(ETH_BUILD_PLATFORM) << "/" << DEV_QUOTED(ETH_BUILD_TYPE)
-              << "\n";
-    exit(0);
+    std::cout << "Build Number: " << DEV_QUOTED(FISCO_BCOS_BUILD_NUMBER) << std::endl;
+    std::cout << "Build Type: " << DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM) << "/"
+              << DEV_QUOTED(FISCO_BCOS_BUILD_TYPE) << std::endl;
+    std::cout << "Git Commit Hash: " << DEV_QUOTED(FISCO_BCOS_COMMIT_HASH) << std::endl;
+    std::cout << "Build Time: " << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << std::endl;
+    if (shouldExit)
+        exit(0);
 }
 
 static MainParams initCommandLine(int argc, const char* argv[])

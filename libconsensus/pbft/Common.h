@@ -27,13 +27,16 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
-#define PBFTENGINE_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS][#PBFTENGINE] [PROTOCOL: " << std::dec << m_protocolId << "] "
-#define PBFTSEALER_LOG(LEVEL)                                             \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTSEALER] [PROTOCOL: " << std::dec \
-               << m_pbftEngine->protocolId() << "] "
-#define PBFTReqCache_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << std::dec << m_protocolId << "] "
+#define PBFTENGINE_LOG(LEVEL)                                                         \
+    LOG(LEVEL) << "[#CONSENSUS][#PBFTENGINE] [PROTOCOL: " << std::dec << m_protocolId \
+               << "] [GROUP: " << std::to_string(m_groupId) << "]"
+#define PBFTSEALER_LOG(LEVEL)                                          \
+    LOG(LEVEL) << "[#CONSENSUS] [#PBFTSEALER] [PROTOCOL: " << std::dec \
+               << m_pbftEngine->protocolId()                           \
+               << "] [GROUP: " << std::to_string(m_pbftEngine->groupId()) << "]"
+#define PBFTReqCache_LOG(LEVEL)                                                          \
+    LOG(LEVEL) << "[#CONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << std::dec << m_protocolId \
+               << "] [GROUP:" << std::to_string(m_groupId) << "]"
 namespace dev
 {
 namespace consensus
@@ -52,12 +55,12 @@ enum PBFTPacketType : byte
 struct PBFTMsgPacket
 {
     /// the index of the node that sends this pbft message
-    u256 node_idx;
+    IDXTYPE node_idx;
     /// the node id of the node that sends this pbft message
     h512 node_id;
     /// type of the packet(maybe prepare, sign or commit)
     /// (receive from the network or send to the network)
-    unsigned packet_id;
+    byte packet_id;
     /// the data of concrete request(receive from or send to the network)
     bytes data;
     /// timestamp of receive this pbft message
@@ -65,8 +68,7 @@ struct PBFTMsgPacket
     /// endpoint
     std::string endpoint;
     /// default constructor
-    PBFTMsgPacket() : node_idx(h256(0)), node_id(h512(0)), packet_id(0), timestamp(u256(utcTime()))
-    {}
+    PBFTMsgPacket() : node_idx(0), node_id(h512(0)), packet_id(0), timestamp(u256(utcTime())) {}
 
     bool operator==(PBFTMsgPacket const& msg)
     {
@@ -99,7 +101,7 @@ struct PBFTMsgPacket
      * @param idx: the index of the node that send the PBFTMsgPacket
      * @param nodeId : the id of the node that send the PBFTMsgPacket
      */
-    void setOtherField(u256 const& idx, h512 const& nodeId, std::string const& _endpoint)
+    void setOtherField(IDXTYPE const& idx, h512 const& nodeId, std::string const& _endpoint)
     {
         node_idx = idx;
         node_id = nodeId;
@@ -111,7 +113,7 @@ struct PBFTMsgPacket
     {
         try
         {
-            packet_id = (unsigned)RLP(req_data.cropped(0, 1)).toInt<unsigned>(RLP::ThrowOnFail);
+            packet_id = RLP(req_data.cropped(0, 1)).toInt<uint8_t>(RLP::ThrowOnFail);
             data = RLP(req_data.cropped(1)).toBytes();
         }
         catch (Exception const& e)
@@ -128,9 +130,9 @@ struct PBFTMsg
     /// the number of the block that is handling
     int64_t height = -1;
     /// view when construct this PBFTMsg
-    u256 view = Invalid256;
+    VIEWTYPE view = MAXVIEW;
     /// index of the node generate the PBFTMsg
-    u256 idx = Invalid256;
+    IDXTYPE idx = MAXIDX;
     /// timestamp when generate the PBFTMsg
     u256 timestamp = Invalid256;
     /// block-header hash of the block handling
@@ -140,8 +142,8 @@ struct PBFTMsg
     /// signature to the hash of other fields except block_hash, sig and sig2
     Signature sig2 = Signature();
     PBFTMsg() = default;
-    PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, u256 const& _view, u256 const& _idx,
-        h256 const _blockHash)
+    PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
+        IDXTYPE const& _idx, h256 const _blockHash)
     {
         height = _height;
         view = _view;
@@ -197,8 +199,8 @@ struct PBFTMsg
         try
         {
             height = rlp[field = 0].toInt<int64_t>();
-            view = rlp[field = 1].toInt<u256>();
-            idx = rlp[field = 2].toInt<u256>();
+            view = rlp[field = 1].toInt<VIEWTYPE>();
+            idx = rlp[field = 2].toInt<IDXTYPE>();
             timestamp = rlp[field = 3].toInt<u256>();
             block_hash = rlp[field = 4].toHash<h256>(RLP::VeryStrict);
             sig = dev::Signature(rlp[field = 5].toBytesConstRef());
@@ -216,8 +218,8 @@ struct PBFTMsg
     void clear()
     {
         height = -1;
-        view = Invalid256;
-        idx = Invalid256;
+        view = MAXVIEW;
+        idx = MAXIDX;
         timestamp = Invalid256;
         block_hash = h256();
         sig = Signature();
@@ -256,8 +258,8 @@ struct PrepareReq : public PBFTMsg
     dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
     /// default constructor
     PrepareReq() = default;
-    PrepareReq(KeyPair const& _keyPair, int64_t const& _height, u256 const& _view, u256 const& _idx,
-        h256 const _blockHash)
+    PrepareReq(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
+        IDXTYPE const& _idx, h256 const _blockHash)
       : PBFTMsg(_keyPair, _height, _view, _idx, _blockHash), p_execContext(nullptr)
     {}
 
@@ -270,7 +272,8 @@ struct PrepareReq : public PBFTMsg
      * @param _view: current view
      * @param _idx: index of the node that generates this PrepareReq
      */
-    PrepareReq(PrepareReq const& req, KeyPair const& keyPair, u256 const& _view, u256 const& _idx)
+    PrepareReq(
+        PrepareReq const& req, KeyPair const& keyPair, VIEWTYPE const& _view, IDXTYPE const& _idx)
     {
         height = req.height;
         view = _view;
@@ -290,8 +293,8 @@ struct PrepareReq : public PBFTMsg
      * @param _view : current view
      * @param _idx : index of the node that generates this PrepareReq
      */
-    PrepareReq(dev::eth::Block const& blockStruct, KeyPair const& keyPair, u256 const& _view,
-        u256 const& _idx)
+    PrepareReq(dev::eth::Block const& blockStruct, KeyPair const& keyPair, VIEWTYPE const& _view,
+        IDXTYPE const& _idx)
     {
         height = blockStruct.blockHeader().number();
         view = _view;
@@ -368,7 +371,7 @@ struct SignReq : public PBFTMsg
      * @param keyPair: keypair used to sign for the SignReq
      * @param _idx: index of the node that generates this SignReq
      */
-    SignReq(PrepareReq const& req, KeyPair const& keyPair, u256 const& _idx)
+    SignReq(PrepareReq const& req, KeyPair const& keyPair, IDXTYPE const& _idx)
     {
         height = req.height;
         view = req.view;
@@ -391,7 +394,7 @@ struct CommitReq : public PBFTMsg
      * @param keyPair: keypair used to sign for the CommitReq
      * @param _idx: index of the node that generates this CommitReq
      */
-    CommitReq(PrepareReq const& req, KeyPair const& keyPair, u256 const& _idx)
+    CommitReq(PrepareReq const& req, KeyPair const& keyPair, IDXTYPE const& _idx)
     {
         height = req.height;
         view = req.view;
@@ -415,8 +418,8 @@ struct ViewChangeReq : public PBFTMsg
      * @param _idx: index of the node that generates this ViewChangeReq
      * @param _hash: block hash
      */
-    ViewChangeReq(KeyPair const& keyPair, int64_t const& _height, u256 const _view,
-        u256 const& _idx, h256 const& _hash)
+    ViewChangeReq(KeyPair const& keyPair, int64_t const& _height, VIEWTYPE const _view,
+        IDXTYPE const& _idx, h256 const& _hash)
     {
         height = _height;
         view = _view;

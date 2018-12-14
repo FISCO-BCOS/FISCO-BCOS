@@ -21,22 +21,36 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+include(ProcessorCount)
+ProcessorCount(CORES)
+if(CORES EQUAL 0)
+  set(CORES 1)
+endif()
+
 set(BOOST_CXXFLAGS "")
 set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh)
+set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
 set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
 if (${BUILD_SHARED_LIBS})
     set(BOOST_CXXFLAGS "cxxflags=-fPIC")
 endif()
 
+set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/src/boost/stage/lib/libboost_)
+set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
+        ${BOOST_LIB_PREFIX}random.a ${BOOST_LIB_PREFIX}regex.a 
+        ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a 
+        ${BOOST_LIB_PREFIX}unit_test_framework.a
+        ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
+set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
 set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
     #URL https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/deps/src/boost_1_63_0.tar.gz
-    URL http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz
     #URL_HASH SHA256=eb4c6f7e4e11905e1a98619f8a664dc4dca2d477bc985cfaf94463eef83a1aaa
+    URL http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz
     URL_HASH SHA256=da3411ea45622579d419bfda66f45cd0f8c32a181d84adfa936f5688388995cf
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${BOOST_BOOTSTRAP_COMMAND}
@@ -57,8 +71,12 @@ ExternalProject_Add(boost
         --with-thread
         --with-serialization
         --with-program_options
+        -j${CORES}
     LOG_BUILD 1
+    LOG_INSTALL 1
     INSTALL_COMMAND ""
+    # INSTALL_COMMAND ${BOOST_INSTALL_COMMAND}
+    BUILD_BYPRODUCTS ${BOOST_BUILD_FILES}
 )
 if (BUILD_GM)
     add_dependencies(boost tassl)
@@ -67,42 +85,48 @@ endif()
 ExternalProject_Get_Property(boost SOURCE_DIR)
 set(BOOST_INCLUDE_DIR ${SOURCE_DIR})
 set(BOOST_LIB_DIR ${SOURCE_DIR}/stage/lib)
-unset(BUILD_DIR)
 
-add_library(Boost::Chrono STATIC IMPORTED)
+add_library(Boost::Chrono STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Chrono PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_chrono${BOOST_LIBRARY_SUFFIX})
 add_dependencies(Boost::Chrono boost)
 
-add_library(Boost::DataTime STATIC IMPORTED)
+add_library(Boost::DataTime STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::DataTime PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_date_time${BOOST_LIBRARY_SUFFIX})
 add_dependencies(Boost::DataTime boost)
 
-add_library(Boost::Regex STATIC IMPORTED)
+add_library(Boost::Regex STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Regex PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_regex${BOOST_LIBRARY_SUFFIX})
 add_dependencies(Boost::Regex boost)
 
-add_library(Boost::System STATIC IMPORTED)
+add_library(Boost::System STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::System PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_system${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::System PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 add_dependencies(Boost::System boost)
 
-add_library(Boost::Filesystem STATIC IMPORTED)
+add_library(Boost::Filesystem STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Filesystem PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_filesystem${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::Filesystem PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 set_property(TARGET Boost::Filesystem PROPERTY INTERFACE_LINK_LIBRARIES Boost::System)
 add_dependencies(Boost::Filesystem boost)
 
-add_library(Boost::Random STATIC IMPORTED)
+add_library(Boost::Random STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Random PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_random${BOOST_LIBRARY_SUFFIX})
 add_dependencies(Boost::Random boost)
 
-add_library(Boost::UnitTestFramework STATIC IMPORTED)
+add_library(Boost::UnitTestFramework STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::UnitTestFramework PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_unit_test_framework${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::UnitTestFramework PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 add_dependencies(Boost::UnitTestFramework boost)
 
-add_library(Boost::Thread STATIC IMPORTED)
+add_library(Boost::Thread STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Thread PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_thread${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::Thread PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 set_property(TARGET Boost::Thread PROPERTY INTERFACE_LINK_LIBRARIES Boost::Chrono Boost::DataTime Boost::Regex)
 add_dependencies(Boost::Thread boost)
 
-add_library(Boost::program_options STATIC IMPORTED)
+add_library(Boost::program_options STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::program_options PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_program_options${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::program_options PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 add_dependencies(Boost::program_options boost)
+
+unset(SOURCE_DIR)

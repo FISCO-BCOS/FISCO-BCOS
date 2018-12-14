@@ -49,12 +49,12 @@ public:
 
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const = 0;
-
+    virtual GROUP_ID groupId() const { return 0; };
     /// get node account type
     virtual NodeAccountType accountType() = 0;
     /// set the node account type
     virtual void setNodeAccountType(NodeAccountType const&) = 0;
-    virtual u256 nodeIdx() const = 0;
+    virtual IDXTYPE nodeIdx() const = 0;
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const& block) = 0;
 };

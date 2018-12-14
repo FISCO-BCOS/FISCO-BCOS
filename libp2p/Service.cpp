@@ -34,7 +34,7 @@ namespace dev
 {
 namespace p2p
 {
-const uint32_t CHECK_INTERVEL = 5000;
+const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
 {
@@ -129,8 +129,7 @@ void Service::heartBeat()
             SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address" << std::endl;
             continue;
         }
-        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [nodeId/endpoint]" << it.second << "/"
-                           << it.first.name() << std::endl;
+        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [endpoint]" << it.first.name();
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
@@ -167,14 +166,14 @@ void Service::updateStaticNodes(std::shared_ptr<SocketFace> const& _s, NodeID co
 
 void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<SessionFace> session)
 {
-    SERVICE_LOG(TRACE) << "Service onConnect: " << nodeID;
-
     if (e.errorCode())
     {
         SERVICE_LOG(ERROR) << "Connect error: " << boost::diagnostic_information(e);
 
         return;
     }
+
+    SERVICE_LOG(TRACE) << "Service onConnect: " << nodeID;
 
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
@@ -387,7 +386,7 @@ void Service::asyncSendMessageByNodeID(
         {
             SERVICE_LOG(WARNING) << "NodeID: " << nodeID.hex() << " inactived";
 
-            BOOST_THROW_EXCEPTION(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]));
+            BOOST_THROW_EXCEPTION(NetworkException(Disconnect, "Disconnect"));
         }
     }
 #if 0
@@ -406,8 +405,8 @@ void Service::asyncSendMessageByNodeID(
         if (callback)
         {
             m_host->threadPool()->enqueue([callback, e] {
-                callback(NetworkException(Disconnect, g_P2PExceptionMsg[Disconnect]),
-                    P2PSession::Ptr(), P2PMessage::Ptr());
+                callback(NetworkException(Disconnect, "Disconnect"), P2PSession::Ptr(),
+                    P2PMessage::Ptr());
             });
         }
     }
@@ -662,6 +661,8 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(_protocolID);
     SessionInfos infos;
 
+    std::ostringstream oss;
+    oss << "[#sessionInfosByProtocolID] Finding nodeID in GroupID " << int(ret.first) << ":";
     auto it = m_groupID2NodeList.find(int(ret.first));
     if (it != m_groupID2NodeList.end())
     {
@@ -673,7 +674,9 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
             {
                 if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
                 {
-                    SERVICE_LOG(TRACE) << "Finding nodeID: " << i.first;
+                    const NodeIPEndpoint& nodeIPEndpoint = i.second->session()->nodeIPEndpoint();
+                    oss << i.first.abridged() << "[" << nodeIPEndpoint.address << ":"
+                        << nodeIPEndpoint.tcpPort << "],";
                     infos.push_back(SessionInfo(
                         i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
                 }
@@ -685,7 +688,8 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
         }
     }
 
-    P2PMSG_LOG(DEBUG) << "[#sessionInfosByProtocolID] return: [list size]: " << infos.size();
+    oss << "list size: " << infos.size();
+    P2PMSG_LOG(DEBUG) << oss.str();
     return infos;
 }
 

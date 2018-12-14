@@ -36,10 +36,10 @@ using namespace dev::initializer;
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
     std::string dataPath = pt.get<std::string>("secure.data_path", "./fisco-bcos-data/");
-    std::string key = dataPath + pt.get<std::string>("secure.key", "node.key");
-    std::string cert = dataPath + pt.get<std::string>("secure.cert", "node.crt");
-    std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "ca.crt");
-    std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
+    std::string key = dataPath + "/" + pt.get<std::string>("secure.key", "node.key");
+    std::string cert = dataPath + "/" + pt.get<std::string>("secure.cert", "node.crt");
+    std::string caCert = dataPath + "/" + pt.get<std::string>("secure.ca_cert", "ca.crt");
+    std::string caPath = dataPath + "/" + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
     if (!key.empty())
     {
@@ -51,8 +51,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         {
             INITIALIZER_LOG(ERROR)
                 << "[#SecureInitializer::initConfig] open privateKey failed: [file]: " << key;
-
-            BOOST_THROW_EXCEPTION(PrivateKeyError());
+            ERROR_OUTPUT << "[#SecureInitializer::initConfig] open privateKey failed: [file]: "
+                         << key << std::endl;
+            exit(1);
         }
     }
 
@@ -61,7 +62,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] load existing privateKey.";
+            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] loading privateKey.";
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
             BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
 
@@ -71,7 +72,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 
             if (!evpPKey)
             {
-                BOOST_THROW_EXCEPTION(PrivateKeyError());
+                ERROR_OUTPUT << "[#SecureInitializer::initConfig] load privateKey failed"
+                             << std::endl;
+                exit(1);
             }
 
             ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
@@ -81,13 +84,16 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             INITIALIZER_LOG(ERROR)
                 << "[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
                 << e.what();
-            BOOST_THROW_EXCEPTION(e);
+            ERROR_OUTPUT << "[[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
+                         << e.what() << std::endl;
+            exit(1);
         }
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] privatekey not exists!";
-        BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
+        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] privateKey doesn't exist!";
+        ERROR_OUTPUT << "[#SecureInitializer::initConfig] privateKey doesn't exist!" << std::endl;
+        exit(1);
     }
 
     std::shared_ptr<const BIGNUM> ecPrivateKey(
@@ -99,37 +105,39 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     std::string keyHex(privateKeyData.get());
     if (keyHex.size() != 64u)
     {
-        throw std::invalid_argument("Private Key file error! Missing bytes!");
+        throw std::invalid_argument("Incompleted privateKey!");
     }
     m_key = KeyPair(Secret(keyHex));
 
     try
     {
-        m_sslContext =
+        std::shared_ptr<boost::asio::ssl::context> sslContext =
             std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
 
         std::shared_ptr<EC_KEY> ecdh(
             EC_KEY_new_by_curve_name(NID_secp256k1), [](EC_KEY* p) { EC_KEY_free(p); });
-        SSL_CTX_set_tmp_ecdh(m_sslContext->native_handle(), ecdh.get());
+        SSL_CTX_set_tmp_ecdh(sslContext->native_handle(), ecdh.get());
 
-        m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
+        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
         INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] [nodeID]: "
                                << m_key.pub().hex();
 
         boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
-        m_sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
         if (!cert.empty() && !contents(cert).empty())
         {
             INITIALIZER_LOG(DEBUG)
                 << "[#SecureInitializer::initConfig] use user certificate: [file]: " << cert;
-            m_sslContext->use_certificate_chain_file(cert);
-            m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+            sslContext->use_certificate_chain_file(cert);
+            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
-            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate not exists!";
-            BOOST_THROW_EXCEPTION(CertificateNotExists());
+            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate doesn't exist!";
+            ERROR_OUTPUT << "[#SecureInitializer::initConfig] certificate doesn't exist!"
+                         << std::endl;
+            exit(1);
         }
 
         auto caCertContent = contents(caCert);
@@ -138,28 +146,53 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             INITIALIZER_LOG(DEBUG)
                 << "[#SecureInitializer::initConfig] use ca certificate: [file]: " << caCert;
 
-            m_sslContext->add_certificate_authority(
+            sslContext->add_certificate_authority(
                 boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
-            m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
-            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] CA Certificate not exists!";
-            BOOST_THROW_EXCEPTION(CertificateNotExists());
+            INITIALIZER_LOG(ERROR)
+                << "[#SecureInitializer::initConfig] CA Certificate doesn't exist!";
+            ERROR_OUTPUT << "[#SecureInitializer::initConfig] CA Certificate doesn't exist!"
+                         << std::endl;
+            exit(1);
         }
 
         if (!caPath.empty())
         {
             INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use ca: [path]: " << caPath;
 
-            m_sslContext->add_verify_path(caPath);
-            m_sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+            sslContext->add_verify_path(caPath);
+            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
+
+        m_sslContexts[Usage::Default] = sslContext;
     }
     catch (Exception& e)
     {
         INITIALIZER_LOG(ERROR)
             << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: " << e.what();
-        BOOST_THROW_EXCEPTION(e);
+        ERROR_OUTPUT << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: "
+                     << e.what() << std::endl;
+        exit(1);
     }
+}
+
+std::shared_ptr<bas::context> SecureInitializer::SSLContext(Usage _usage)
+{
+    auto defaultP = m_sslContexts.find(Usage::Default);
+    if (defaultP == m_sslContexts.end())
+    {
+        INITIALIZER_LOG(ERROR)
+            << "[#SecureInitializer::SSLContext] SecureInitializer has not been initialied";
+        BOOST_THROW_EXCEPTION(SecureInitializerNotInitConfig());
+    }
+
+    auto p = m_sslContexts.find(_usage);
+    if (p != m_sslContexts.end())
+        return p->second;
+
+    // if not found, return default
+    return defaultP->second;
 }

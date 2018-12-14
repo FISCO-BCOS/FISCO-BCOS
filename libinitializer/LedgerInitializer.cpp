@@ -37,59 +37,49 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     m_ledgerManager = std::make_shared<LedgerManager>(m_p2pService, m_keyPair);
     std::map<GROUP_ID, h512s> groudID2NodeList;
     bool succ = true;
-    for (auto it : _pt.get_child("group"))
+    try
     {
-        if (it.first.find("group_config.") == 0)
+        for (auto it : _pt.get_child("group"))
         {
+            if (it.first.find("group_config.") != 0)
+                continue;
+
             INITIALIZER_LOG(TRACE)
                 << "[#LedgerInitializer::initConfig] load group config: [groupID/config]: "
                 << it.first << "/" << it.second.data();
-
             std::vector<std::string> s;
-            try
+            boost::split(s, it.first, boost::is_any_of("."), boost::token_compress_on);
+            if (s.size() != 2)
             {
-                boost::split(s, it.first, boost::is_any_of("."), boost::token_compress_on);
-
-                if (s.size() != 2)
-                {
-                    INITIALIZER_LOG(ERROR)
-                        << "[#LedgerInitializer::initConfig] parse groupID failed: [data]: "
-                        << it.first.data();
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig() << errinfo_comment(
-                            "[#LedgerInitializer::initConfig] parse groupID failed!"));
-                    exit(1);
-                }
-
-                succ = initSingleGroup(
-                    boost::lexical_cast<int>(s[1]), it.second.data(), groudID2NodeList);
-                if (!succ)
-                {
-                    INITIALIZER_LOG(ERROR)
-                        << "[#LedgerInitializer::initConfig] initSingleGroup for "
-                        << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
-                    BOOST_THROW_EXCEPTION(
-                        InvalidConfig()
-                        << errinfo_comment("[#LedgerInitializer::initConfig] initSingleGroup for " +
-                                           s[1] + " failed!"));
-                    exit(1);
-                }
+                INITIALIZER_LOG(ERROR)
+                    << "[#LedgerInitializer::initConfig] parse groupID failed: [data]: "
+                    << it.first.data();
+                ERROR_OUTPUT << "[#LedgerInitializer::initConfig] parse groupID failed!"
+                             << std::endl;
+                exit(1);
             }
-            catch (std::exception& e)
+
+            succ =
+                initSingleGroup(boost::lexical_cast<int>(s[1]), it.second.data(), groudID2NodeList);
+            if (!succ)
             {
-                SESSION_LOG(ERROR)
-                    << "[#LedgerInitializer::initConfig] parse group config faield: [EINFO]: "
-                    << e.what();
-                BOOST_THROW_EXCEPTION(
-                    InvalidConfig() << errinfo_comment("[#LedgerInitiailizer::initConfig] "
-                                                       "initSingleGroup failed: [EINFO]: " +
-                                                       boost::diagnostic_information(e)));
+                INITIALIZER_LOG(ERROR) << "[#LedgerInitializer::initConfig] initSingleGroup for "
+                                       << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
+                ERROR_OUTPUT << "[#LedgerInitializer::initConfig] initSingleGroup for " << s[1]
+                             << " failed!" << std::endl;
                 exit(1);
             }
         }
+        m_p2pService->setGroupID2NodeList(groudID2NodeList);
     }
-    m_p2pService->setGroupID2NodeList(groudID2NodeList);
-    m_ledgerManager->startAll();
+    catch (std::exception& e)
+    {
+        SESSION_LOG(ERROR)
+            << "[#LedgerInitializer::initConfig] parse group config faield: [EINFO]: " << e.what();
+        ERROR_OUTPUT << "[#LedgerInitiailizer::initConfig] initSingleGroup failed: [EINFO]: "
+                     << boost::diagnostic_information(e) << std::endl;
+        exit(1);
+    }
 }
 
 bool LedgerInitializer::initSingleGroup(
@@ -99,9 +89,7 @@ bool LedgerInitializer::initSingleGroup(
     _groudID2NodeList[_groupID] =
         m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 
-    INITIALIZER_LOG(DEBUG) << "[#initSingleGroup] [groupID/count/status]: "
-                           << std::to_string(_groupID) << "/" << _groudID2NodeList[_groupID].size()
-                           << "/" << m_ledgerManager->consensus(_groupID)->consensusStatus();
+    INITIALIZER_LOG(DEBUG) << "[#initSingleGroup] [groupID/]: " << std::to_string(_groupID);
     for (auto i : _groudID2NodeList[_groupID])
         INITIALIZER_LOG(TRACE) << "miner:" << toHex(i);
     return succ;

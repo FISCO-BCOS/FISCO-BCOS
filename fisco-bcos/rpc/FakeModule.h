@@ -469,7 +469,7 @@ public:
     virtual NodeAccountType accountType() { return NodeAccountType::MinerAccount; };
     /// set the node account type
     virtual void setNodeAccountType(NodeAccountType const&){};
-    virtual u256 nodeIdx() const { return u256(0); };
+    virtual IDXTYPE nodeIdx() const { return 0; };
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const& block){};
 
