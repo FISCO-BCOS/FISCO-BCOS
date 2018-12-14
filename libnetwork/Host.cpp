@@ -320,15 +320,6 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     {
         return;
     }
-
-    {
-        Guard l(x_pendingNodeConns);
-        if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
-        {
-            return;
-        }
-        m_pendingPeerConns.insert(_nodeIPEndpoint.name());
-    }
     HOST_LOG(INFO) << "Attempting connection to node "
                    << "@" << _nodeIPEndpoint.name();
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
@@ -342,8 +333,6 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             {
                 HOST_LOG(ERROR) << "Connection refused to node"
                                 << "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
-                Guard l(x_pendingNodeConns);
-                m_pendingPeerConns.erase(_nodeIPEndpoint.name());
                 socket->close();
 
                 m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
@@ -380,11 +369,6 @@ void Host::handshakeClient(const boost::system::error_code& error,
     std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
     NodeIPEndpoint _nodeIPEndpoint)
 {
-    {
-        Guard l(x_pendingNodeConns);
-        m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-    }
-
     if (error)
     {
         HOST_LOG(WARNING) << "[#handshakeClient] Handshake failed: [eid/emsg/endpoint]: "

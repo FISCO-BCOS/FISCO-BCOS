@@ -34,7 +34,7 @@ namespace dev
 {
 namespace p2p
 {
-const uint32_t CHECK_INTERVEL = 5000;
+const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
 {
@@ -129,8 +129,7 @@ void Service::heartBeat()
             SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address" << std::endl;
             continue;
         }
-        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [nodeId/endpoint]" << it.second << "/"
-                           << it.first.name() << std::endl;
+        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [endpoint]" << it.first.name();
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
