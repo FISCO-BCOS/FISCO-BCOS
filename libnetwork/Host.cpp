@@ -196,10 +196,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 
             /// check nodeID in crl, only filter by nodeID.
             const std::vector<std::string>& crl = host->crl();
-            for (std::string const& str : crl)
-            {
-                HOST_LOG(TRACE) << "certificate rejected nodeID:" << str;
-            }
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
             if (find(crl.begin(), crl.end(), nodeID) != crl.end())
             {
