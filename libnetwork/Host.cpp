@@ -107,6 +107,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                     NodeIPEndpoint(endpoint.address(), endpoint.port(), endpoint.port()));
                 HOST_LOG(DEBUG) << "client port:" << endpoint.port()
                                 << "|ip:" << endpoint.address().to_string();
+
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));

@@ -467,23 +467,25 @@ generate_node_scripts()
     local output=$1
     generate_script_template "$output/start.sh"
     cat << EOF >> "$output/start.sh"
-fisco_bcos=\${SHELL_FOLDER}/fisco-bcos
+fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
 cd \${SHELL_FOLDER}
 nohup setsid \${fisco_bcos} -c config.ini&
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
-fisco_bcos=\${SHELL_FOLDER}/fisco-bcos
+fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
 weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 kill \${weth_pid}
 EOF
 }
 
+
 genTransTest()
 {
-    local file="${output_dir}/transTest.sh"
+    local output=$1
+    local file="${output}/transTest.sh"
+    generate_script_template "${file}"
     cat << EOF > "${file}"
-#! /bin/sh
 # This script only support for block number smaller than 65535 - 256
 
 ip_port=http://127.0.0.1:$(( port_start + 2 ))
@@ -523,7 +525,32 @@ send_many_tx()
 send_many_tx \${trans_num}
 
 EOF
-    chmod +x ${output_dir}"/transTest.sh"
+}
+
+generate_server_scripts()
+{
+    local output=$1
+    genTransTest "${output}"
+    generate_script_template "$output/start_all.sh"
+    # echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output/start_all.sh"
+    # echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "$output_dir/start_all.sh"
+    cat << EOF >> "$output/start_all.sh"
+for directory in \`ls \${SHELL_FOLDER}\`  
+do  
+    if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+        echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
+    fi  
+done  
+EOF
+    generate_script_template "$output/stop_all.sh"
+    cat << EOF >> "$output/stop_all.sh"
+for directory in \`ls \${SHELL_FOLDER}\`  
+do  
+    if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+        echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
+    fi  
+done  
+EOF
 }
 
 parse_ip_config()
@@ -624,7 +651,7 @@ for line in ${ip_array[*]};do
     
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
-        node_dir="$output_dir/node_${ip}_${i}"
+        node_dir="$output_dir/${ip}/node_${ip}_${i}"
         [ -d "$node_dir" ] && echo "$node_dir exist! Please delete!" && exit 1
         
         while :
@@ -678,11 +705,7 @@ cd ..
 
 echo "=============================================================="
 echo "Generating configurations..."
-generate_script_template "$output_dir/start_all.sh"
-generate_script_template "$output_dir/stop_all.sh"
 generate_script_template "$output_dir/replace_all.sh"
-echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output_dir/start_all.sh"
-echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output_dir/stop_all.sh"
 server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
@@ -695,7 +718,7 @@ for line in ${ip_array[*]};do
     fi
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
-        node_dir="$output_dir/node_${ip}_${i}"
+        node_dir="$output_dir/${ip}/node_${ip}_${i}"
         generate_config_ini "$node_dir/config.ini" ${i} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
@@ -706,15 +729,13 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini" "${nodeid_list}"
         fi
         generate_node_scripts "$node_dir"
-        cp "$eth_path" "$node_dir/fisco-bcos"
-        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "$output_dir/start_all.sh"
-        echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"stop node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/stop.sh; fi" >> "$output_dir/stop_all.sh"
-        echo "cp \${1} \${SHELL_FOLDER}/node_${ip}_${i}/" >> "$output_dir/replace_all.sh"
-        [ -n "$make_tar" ] && tar zcf "${node_dir}.tar.gz" "$node_dir"
     done
+    generate_server_scripts "$output_dir/${ip}"
+    cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
+    echo "cp \${1} \${SHELL_FOLDER}/$output_dir/${ip}/" >> "$output_dir/replace_all.sh"
+    [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 
-genTransTest
 rm $output_dir/${logfile} #cert.cnf
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="

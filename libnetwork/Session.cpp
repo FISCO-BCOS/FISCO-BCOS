@@ -291,8 +291,7 @@ void Session::drop(DisconnectReason _reason)
             boost::system::error_code ec;
 
             SESSION_LOG(WARNING) << "Closing " << socket.remote_endpoint(ec) << "("
-                                 << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address
-                                 << "," << ec.message();
+                                 << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
 
             socket.close();
         }
