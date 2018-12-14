@@ -662,6 +662,8 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(_protocolID);
     SessionInfos infos;
 
+    std::ostringstream oss;
+    oss << "[#sessionInfosByProtocolID] Finding nodeID in GroupID " << int(ret.first) << ":";
     auto it = m_groupID2NodeList.find(int(ret.first));
     if (it != m_groupID2NodeList.end())
     {
@@ -673,7 +675,9 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
             {
                 if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
                 {
-                    SERVICE_LOG(TRACE) << "Finding nodeID: " << i.first;
+                    const NodeIPEndpoint& nodeIPEndpoint = i.second->session()->nodeIPEndpoint();
+                    oss << i.first.abridged() << "[" << nodeIPEndpoint.address << ":"
+                        << nodeIPEndpoint.tcpPort << "],";
                     infos.push_back(SessionInfo(
                         i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
                 }
@@ -685,7 +689,8 @@ SessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
         }
     }
 
-    P2PMSG_LOG(DEBUG) << "[#sessionInfosByProtocolID] return: [list size]: " << infos.size();
+    oss << "list size: " << infos.size();
+    P2PMSG_LOG(DEBUG) << oss.str();
     return infos;
 }
 
