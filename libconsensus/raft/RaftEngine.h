@@ -35,8 +35,8 @@
 #include <libstorage/Storage.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
-
 #include <memory>
+#include <unordered_map>
 
 namespace dev
 {
@@ -65,13 +65,13 @@ public:
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
     }
 
-    dev::u256 getNodeIdx() const
+    raft::NodeIndex getNodeIdx() const
     {
         Guard Guard(m_mutex);
         return m_nodeIdx;
     }
 
-    dev::u256 getTerm() const
+    size_t getTerm() const
     {
         Guard Guard(m_mutex);
         return m_term;
@@ -83,7 +83,7 @@ public:
         return m_highestBlockHeader;
     }
 
-    dev::u256 getLastLeaderTerm() const
+    size_t getLastLeaderTerm() const
     {
         Guard Guard(m_mutex);
         return m_lastLeaderTerm;
@@ -109,7 +109,6 @@ protected:
     bool isValidReq(dev::p2p::P2PMessage::Ptr _message, dev::p2p::P2PSession::Ptr _session,
         ssize_t& _peerIndex) override;
 
-    bool checkElectTimeout();
     void resetElectTimeout();
 
     void switchToCandidate();
@@ -129,7 +128,7 @@ protected:
     // handle response
     bool handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _req);
     HandleVoteResult handleVoteResponse(
-        u256 const& _from, h512 const& _node, RaftVoteResp const& _req, VoteState& vote);
+        u256 const& _from, h512 const& _node, RaftVoteResp const& _resp, VoteState& vote);
     bool handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeartBeat const& _hb);
     bool sendResponse(
         u256 const& _to, h512 const& _node, RaftPacketType _packetType, RaftMsg const& _resp);
@@ -139,16 +138,18 @@ protected:
     void updateMinerList();
 
     void runAsLeader();
+    bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& memberHeartbeatLog);
     void runAsFollower();
     void runAsCandidate();
 
-    bool checkHeartbeatTimeout();
+    virtual bool checkHeartbeatTimeout();
+    virtual bool checkElectTimeout();
     ssize_t getIndexByMiner(dev::h512 const& _nodeId);
     bool getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const;
     dev::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, RaftPacketType const& packetType, PROTOCOL_ID const& protocolId);
 
-    RaftRole getState()
+    RaftRole getState() const
     {
         Guard l(m_mutex);
         return m_state;

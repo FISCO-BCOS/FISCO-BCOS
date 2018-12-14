@@ -318,19 +318,16 @@ void RaftEngine::workLoop()
         {
         case RaftRole::EN_STATE_LEADER:
         {
-            RAFTENGINE_LOG(DEBUG) << "[#workLoop] Run as leader";
             runAsLeader();
             break;
         }
         case RaftRole::EN_STATE_FOLLOWER:
         {
-            RAFTENGINE_LOG(DEBUG) << "[#workLoop] Run as follower";
             runAsFollower();
             break;
         }
         case RaftRole::EN_STATE_CANDIDATE:
         {
-            RAFTENGINE_LOG(DEBUG) << "[#workLoop] Run as candidate";
             runAsCandidate();
             break;
         }
@@ -338,6 +335,131 @@ void RaftEngine::workLoop()
         {
             RAFTENGINE_LOG(WARNING) << "[#workLoop] Unknown state [errorState]: " << m_state;
             break;
+        }
+        }
+    }
+}
+
+bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartbeatLog)
+{
+    if (m_state != RaftRole::EN_STATE_LEADER)
+    {
+        return false;
+    }
+
+    // heartbeat timeout, change role to candidate
+    if (m_nodeNum > 1 && checkHeartbeatTimeout())
+    {
+        RAFTENGINE_LOG(INFO) << "[#runAsLeader] Heartbeat Timeout [currentNodeNum]: " << m_nodeNum;
+        for (auto& i : memberHeartbeatLog)
+        {
+            RAFTENGINE_LOG(INFO) << "[#runAsLeader] ======= [node]: " << i.first.hex().substr(0, 5)
+                                 << " , [hbLog]:" << i.second;
+        }
+        switchToCandidate();
+        return false;
+    }
+
+    broadcastHeartbeat();
+
+    std::pair<bool, RaftMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
+
+    if (!ret.first)
+    {
+        return true;
+    }
+    else
+    {
+        switch (ret.second.packetType)
+        {
+        case RaftPacketType::RaftVoteReqPacket:
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve vote req packet";
+
+            RaftVoteReq req;
+            req.populate(RLP(ref(ret.second.data).cropped(1)));
+            if (handleVoteRequest(ret.second.nodeIdx, ret.second.nodeId, req))
+            {
+                switchToFollower(raft::InvalidIndex);
+                return false;
+            }
+            return true;
+        }
+        case RaftPacketType::RaftVoteRespPacket:
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve vote resp packet";
+
+            // do nothing
+            return true;
+        }
+        case RaftPacketType::RaftHeartBeatPacket:
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve heartbeat packet";
+
+            RaftHeartBeat hb;
+            hb.populate(RLP(ref(ret.second.data).cropped(1)));
+            if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
+            {
+                switchToFollower(hb.leader);
+                return false;
+            }
+            return true;
+        }
+        case RaftPacketType::RaftHeartBeatRespPacket:
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve heartbeat resp packet";
+
+            RaftHeartBeatResp resp;
+            RAFTENGINE_LOG(INFO) << "[#runAsLeader] Receive heartbeat ack [from]: "
+                                 << ret.second.nodeIdx
+                                 << ", [node]: " << ret.second.nodeId.hex().substr(0, 5);
+            resp.populate(RLP(ref(ret.second.data).cropped(1)));
+            {
+                Guard Guard(m_mutex);
+                RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] heartbeat ack from: " << ret.second.nodeId
+                                      << ", heartbeat ack height: " << resp.height
+                                      << ", heartbeat ack blockHash: " << toString(resp.blockHash);
+                m_memberBlock[ret.second.nodeId] = BlockRef(resp.height, resp.blockHash);
+            }
+
+            // receive large term
+            if (resp.term > m_term)
+                return true;
+
+            auto it = memberHeartbeatLog.find(ret.second.nodeId);
+            if (it == memberHeartbeatLog.end())
+            {
+                memberHeartbeatLog.insert(std::make_pair(ret.second.nodeId, 1));
+            }
+            else
+            {
+                it->second++;
+            }
+            int count = count_if(memberHeartbeatLog.begin(), memberHeartbeatLog.end(),
+                [](std::pair<const h512, unsigned>& item) {
+                    if (item.second > 0)
+                        return true;
+                    else
+                        return false;
+                });
+            // add myself
+            if (count + 1 >= m_nodeNum - m_f)
+            {
+                // collect heartbeat exceed half
+                // reset heartbeat timeout
+                m_lastHeartbeatReset = std::chrono::system_clock::now();
+                for_each(memberHeartbeatLog.begin(), memberHeartbeatLog.end(),
+                    [](std::pair<const h512, unsigned>& item) {
+                        if (item.second > 0)
+                            --item.second;
+                    });
+                RAFTENGINE_LOG(INFO) << "[#runAsLeader] Reset heartbeat timeout";
+            }
+            return true;
+        }
+        default:
+        {
+            return true;
         }
         }
     }
@@ -352,132 +474,8 @@ void RaftEngine::runAsLeader()
     m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::system_clock::now();
     std::unordered_map<h512, unsigned> memberHeartbeatLog;
 
-    while (true)
+    while (runAsLeaderImp(memberHeartbeatLog))
     {
-        if (m_state != RaftRole::EN_STATE_LEADER)
-        {
-            break;
-        }
-
-        // heartbeat timeout, change role to candidate
-        if (m_nodeNum > 1 && checkHeartbeatTimeout())
-        {
-            RAFTENGINE_LOG(INFO) << "[#runAsLeader] Heartbeat Timeout [currentNodeNum]: "
-                                 << m_nodeNum;
-            for (auto& i : memberHeartbeatLog)
-            {
-                RAFTENGINE_LOG(INFO)
-                    << "[#runAsLeader] ======= [node]: " << i.first.hex().substr(0, 5)
-                    << " , [hbLog]:" << i.second;
-            }
-            switchToCandidate();
-            return;
-        }
-
-        broadcastHeartbeat();
-
-        std::pair<bool, RaftMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
-
-        if (!ret.first)
-        {
-            continue;
-        }
-        else
-        {
-            switch (ret.second.packetType)
-            {
-            case RaftPacketType::RaftVoteReqPacket:
-            {
-                RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve vote req packet";
-
-                RaftVoteReq req;
-                req.populate(RLP(ref(ret.second.data).cropped(1)));
-                if (handleVoteRequest(ret.second.nodeIdx, ret.second.nodeId, req))
-                {
-                    switchToFollower(raft::InvalidIndex);
-                    return;
-                }
-                break;
-            }
-            case RaftPacketType::RaftVoteRespPacket:
-            {
-                RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve vote resp packet";
-
-                // do nothing
-                break;
-            }
-            case RaftPacketType::RaftHeartBeatPacket:
-            {
-                RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve heartbeat packet";
-
-                RaftHeartBeat hb;
-                hb.populate(RLP(ref(ret.second.data).cropped(1)));
-                if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
-                {
-                    switchToFollower(hb.leader);
-                    return;
-                }
-                break;
-            }
-            case RaftPacketType::RaftHeartBeatRespPacket:
-            {
-                RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve heartbeat resp packet";
-
-                RaftHeartBeatResp resp;
-                RAFTENGINE_LOG(INFO)
-                    << "[#runAsLeader] Receive heartbeat ack [from]: " << ret.second.nodeIdx
-                    << ", [node]: " << ret.second.nodeId.hex().substr(0, 5);
-                resp.populate(RLP(ref(ret.second.data).cropped(1)));
-                {
-                    Guard Guard(m_mutex);
-                    RAFTENGINE_LOG(DEBUG)
-                        << "[#runAsLeader] heartbeat ack from: " << ret.second.nodeId
-                        << ", heartbeat ack height: " << resp.height
-                        << ", heartbeat ack blockHash: " << toString(resp.blockHash);
-                    m_memberBlock[ret.second.nodeId] = BlockRef(resp.height, resp.blockHash);
-                }
-
-                // receive large term
-                if (resp.term > m_term)
-                    break;
-
-                auto it = memberHeartbeatLog.find(ret.second.nodeId);
-                if (it == memberHeartbeatLog.end())
-                {
-                    memberHeartbeatLog.insert(std::make_pair(ret.second.nodeId, 1));
-                }
-                else
-                {
-                    it->second++;
-                }
-                int count = count_if(memberHeartbeatLog.begin(), memberHeartbeatLog.end(),
-                    [](std::pair<const h512, unsigned>& item) {
-                        if (item.second > 0)
-                            return true;
-                        else
-                            return false;
-                    });
-                // add myself
-                if (count + 1 >= m_nodeNum - m_f)
-                {
-                    // collect heartbeat exceed half
-                    // reset heartbeat timeout
-                    m_lastHeartbeatReset = std::chrono::system_clock::now();
-                    for_each(memberHeartbeatLog.begin(), memberHeartbeatLog.end(),
-                        [](std::pair<const h512, unsigned>& item) {
-                            if (item.second > 0)
-                                --item.second;
-                        });
-                    RAFTENGINE_LOG(INFO) << "[#runAsLeader] Reset heartbeat timeout";
-                }
-                break;
-            }
-            default:
-            {
-                break;
-            }
-            }
-        }
     }
 }
 
@@ -685,22 +683,23 @@ bool RaftEngine::checkHeartbeatTimeout()
     return interval >= std::chrono::milliseconds(m_heartbeatTimeout);
 }
 
-P2PMessage::Ptr RaftEngine::generateHeartbeat()
+P2PMessage::Ptr RaftEngine::generateHeartbeat(
+    raft::NodeIndex _idx, size_t _term, int64_t _height, h256 _blockHash, raft::NodeIndex =)
 {
-    RaftHeartBeat req;
-    req.idx = m_nodeIdx;
-    req.term = m_term;
-    req.height = m_highestBlockHeader.number();
-    req.blockHash = m_highestBlockHeader.hash();
-    req.leader = m_nodeIdx;
+    RaftHeartBeat hb;
+    hb.idx = m_nodeIdx;
+    hb.term = m_term;
+    hb.height = m_highestBlockHeader.number();
+    hb.blockHash = m_highestBlockHeader.hash();
+    hb.leader = m_nodeIdx;
 
     RLPStream ts;
-    req.streamRLPFields(ts);
+    hb.streamRLPFields(ts);
     auto heartbeatMsg =
         transDataToMessage(ref(ts.out()), RaftPacketType::RaftHeartBeatPacket, m_protocolId);
 
-    RAFTENGINE_LOG(INFO) << "[#generateHeartbeat] Heartbeat message generated, [term]: " << req.term
-                         << ", [leader]: " << req.leader;
+    RAFTENGINE_LOG(INFO) << "[#generateHeartbeat] Heartbeat message generated, [term]: " << hb.term
+                         << ", [leader]: " << hb.leader;
     return heartbeatMsg;
 }
 
