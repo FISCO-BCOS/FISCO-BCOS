@@ -89,7 +89,7 @@ OverlayDB State::openDB(std::string const& _basePath, h256 const& _genesisHash, 
 	o.create_if_missing = true;
 	//add by wheatli, for optimise
 	o.write_buffer_size = 100 * 1024 * 1024;
-	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
+	o.block_cache = ldb::NewLRUCache(Defaults::stateDbCacheSize());
 
 
 	ldb::DB* db = nullptr;

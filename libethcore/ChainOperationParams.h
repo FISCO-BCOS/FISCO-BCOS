@@ -122,6 +122,9 @@ struct ChainOperationParams
 	std::map<std::string, NodeConnParams> godMinerList;
 	//for ssl 
 	std::map<std::string, NodeParams> godMinerListSSL;
+
+	unsigned long stateDbCacheSize = 0;
+	unsigned long blockDbCacheSize = 0;
 };
 
 }

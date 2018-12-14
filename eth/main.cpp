@@ -1265,6 +1265,15 @@ int main(int argc, char** argv)
 	cout << "EVENTLOG:" << (chainParams.evmEventLog ? "ON" : "OFF") << "\n";
 	cout << "COVERLOG:" << (chainParams.evmCoverLog ? "ON" : "OFF") << "\n";
 
+
+	if(chainParams.stateDbCacheSize > 0)
+	{
+		Defaults::setStateDbCacheSize(chainParams.stateDbCacheSize);
+	}
+	if(chainParams.blockDbCacheSize > 0)
+	{
+		Defaults::setBlockDbCacheSize(chainParams.blockDbCacheSize);	
+	}	
 	jsonRPCURL = chainParams.rpcPort;
 	jsonRPCSSLURL = chainParams.rpcSSLPort;
 	setDataDir(chainParams.dataDir);

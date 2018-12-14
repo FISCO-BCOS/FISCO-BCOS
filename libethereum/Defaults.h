@@ -39,9 +39,15 @@ public:
 	static Defaults* get() { if (!s_this) s_this = new Defaults; return s_this; }
 	static void setDBPath(std::string const& _dbPath) { get()->m_dbPath = _dbPath; }
 	static std::string const& dbPath() { return get()->m_dbPath; }
+	static void setStateDbCacheSize(unsigned long _size){ get()->m_stateDbCacheSize = _size; }
+	static unsigned long stateDbCacheSize(){return get()->m_stateDbCacheSize; }
+	static void setBlockDbCacheSize(unsigned long _size){ get()->m_blockDbCacheSize = _size; }
+	static unsigned long blockDbCacheSize(){return get()->m_blockDbCacheSize; }
 
 private:
 	std::string m_dbPath;
+	unsigned long m_stateDbCacheSize;
+	unsigned long m_blockDbCacheSize;
 
 	static Defaults* s_this;
 };

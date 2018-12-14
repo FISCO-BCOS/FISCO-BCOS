@@ -118,6 +118,8 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 
 	cp.statLog = obj.count("statlog") ? ( (obj["statlog"].get_str() == "ON") ? true : false) : false;
 	cp.broadcastToNormalNode = obj.count("broadcastToNormalNode") ? ( (obj["broadcastToNormalNode"].get_str() == "ON") ? true : false) : false;
+	cp.stateDbCacheSize = obj.count("stateDbCacheSize") ? std::strtoul(obj["stateDbCacheSize"].get_str().c_str(),NULL,10) : 0;
+	cp.blockDbCacheSize = obj.count("blockDbCacheSize") ? std::strtoul(obj["blockDbCacheSize"].get_str().c_str(),NULL,10) : 0;
 	// params
 	if( obj.count("params") )
 	{

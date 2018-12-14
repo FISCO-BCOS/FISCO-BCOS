@@ -263,7 +263,7 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	o.max_open_files = 256;
 	//add by wheatli, for optimise
 	o.write_buffer_size = 100 * 1024 * 1024;
-	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
+	o.block_cache = ldb::NewLRUCache(Defaults::blockDbCacheSize());
 	if (_we == WithExisting::Rescue) {
 		ldb::Status blocksStatus = leveldb::RepairDB(chainPath + "/blocks", o);
 		LOG(INFO) << "repair blocksDB:" << blocksStatus.ToString();
