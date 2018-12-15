@@ -22,11 +22,20 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+
+const char* const CRUD_METHOD_select_string_string = "select(string,string)";
+
+CRUDPrecompiled::CRUDPrecompiled()
+{
+    name2Selector[CRUD_METHOD_select_string_string] =
+        *(uint32_t*)(sha3(CRUD_METHOD_select_string_string).ref().cropped(0, 4).data());
+}
 
 std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
 {
@@ -56,9 +65,7 @@ bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
     dev::eth::ContractABI abi;
     bytes out;
 
-    switch (func)
-    {
-    case c_select_string_string:
+    if (func == name2Selector[CRUD_METHOD_select_string_string])
     {  // select(string,string)
         std::string tableName, key;
         abi.abiOut(data, tableName, key);
@@ -71,13 +78,6 @@ bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
             auto newAddress = context->registerPrecompiled(entriesPrecompiled);
             out = abi.abiIn("", newAddress);
         }
-        break;
     }
-    default:
-    {
-        break;
-    }
-    }
-
     return out;
 }

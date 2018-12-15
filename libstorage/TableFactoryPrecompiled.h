@@ -47,7 +47,7 @@ class TableFactoryPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<TableFactoryPrecompiled> Ptr;
-
+    TableFactoryPrecompiled();
     virtual ~TableFactoryPrecompiled(){};
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);

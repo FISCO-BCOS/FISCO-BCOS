@@ -48,7 +48,7 @@ class MinerPrecompiled : public CRUDPrecompiled
 {
 public:
     typedef std::shared_ptr<MinerPrecompiled> Ptr;
-
+    MinerPrecompiled();
     virtual ~MinerPrecompiled(){};
 
     virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);

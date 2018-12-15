@@ -22,11 +22,23 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 #include <boost/lexical_cast.hpp>
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+
+const char* const MINER_METHOD_ADD = "add(string)";
+const char* const MINER_METHOD_REMOVE = "remove(string)";
+
+MinerPrecompiled::MinerPrecompiled()
+{
+    name2Selector[MINER_METHOD_ADD] =
+        *(uint32_t*)(sha3(MINER_METHOD_ADD).ref().cropped(0, 4).data());
+    name2Selector[MINER_METHOD_REMOVE] =
+        *(uint32_t*)(sha3(MINER_METHOD_REMOVE).ref().cropped(0, 4).data());
+}
 
 bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
 {
@@ -41,88 +53,87 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
     dev::eth::ContractABI abi;
     bytes out;
     const std::string key("miner");
-    switch (func)
-    {
-    case c_add_string:
+    if (func == name2Selector[MINER_METHOD_ADD])
     {  // add(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)
         {
             STORAGE_LOG(DEBUG) << "NodeID length error. " << nodeID;
-            break;
         }
-        storage::Table::Ptr table = openTable(context, "_sys_miners_");
-        if (table.get())
+        else
         {
-            auto condition = table->newCondition();
-            condition->EQ(NODE_KEY_NODEID, nodeID);
-            auto entries = table->select(PRI_KEY, condition);
-            auto entry = table->newEntry();
-            entry->setField(NODE_TYPE, NODE_TYPE_MINER);
-            entry->setField("name", PRI_KEY);
-
-            if (entries->size() == 0u)
+            storage::Table::Ptr table = openTable(context, "_sys_miners_");
+            if (table.get())
             {
-                entry->setField(NODE_KEY_ENABLENUM,
-                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-                entry->setField(NODE_KEY_NODEID, nodeID);
-                table->insert(PRI_KEY, entry);
-                STORAGE_LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
+                auto condition = table->newCondition();
+                condition->EQ(NODE_KEY_NODEID, nodeID);
+                auto entries = table->select(PRI_KEY, condition);
+                auto entry = table->newEntry();
+                entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+                entry->setField("name", PRI_KEY);
+
+                if (entries->size() == 0u)
+                {
+                    entry->setField(NODE_KEY_ENABLENUM,
+                        boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+                    entry->setField(NODE_KEY_NODEID, nodeID);
+                    table->insert(PRI_KEY, entry);
+                    STORAGE_LOG(DEBUG) << "MinerPrecompiled new miner node, nodeID : " << nodeID;
+                }
+                else
+                {
+                    table->update(PRI_KEY, entry, condition);
+                    STORAGE_LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
+                }
             }
             else
             {
-                table->update(PRI_KEY, entry, condition);
-                STORAGE_LOG(DEBUG) << "MinerPrecompiled change to miner, nodeID : " << nodeID;
+                STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
             }
-            break;
         }
-        STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
-
-        break;
     }
-    case c_remove_string:
+    else if (func == name2Selector[MINER_METHOD_REMOVE])
     {  // remove(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)
         {
             STORAGE_LOG(DEBUG) << "NodeID length error. " << nodeID;
-            break;
         }
-        storage::Table::Ptr table = openTable(context, "_sys_miners_");
-        if (table.get())
+        else
         {
-            auto condition = table->newCondition();
-            condition->EQ(NODE_KEY_NODEID, nodeID);
-            auto entries = table->select(PRI_KEY, condition);
-            auto entry = table->newEntry();
-            entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
-            entry->setField("name", PRI_KEY);
-
-            if (entries->size() == 0u)
+            storage::Table::Ptr table = openTable(context, "_sys_miners_");
+            if (table.get())
             {
-                STORAGE_LOG(DEBUG)
-                    << "MinerPrecompiled remove node not in _sys_miners_, nodeID : " << nodeID;
-                entry->setField(NODE_KEY_NODEID, nodeID);
-                entry->setField(NODE_KEY_ENABLENUM,
-                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-                table->insert(PRI_KEY, entry);
+                auto condition = table->newCondition();
+                condition->EQ(NODE_KEY_NODEID, nodeID);
+                auto entries = table->select(PRI_KEY, condition);
+                auto entry = table->newEntry();
+                entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
+                entry->setField("name", PRI_KEY);
+
+                if (entries->size() == 0u)
+                {
+                    STORAGE_LOG(DEBUG)
+                        << "MinerPrecompiled remove node not in _sys_miners_, nodeID : " << nodeID;
+                    entry->setField(NODE_KEY_NODEID, nodeID);
+                    entry->setField(NODE_KEY_ENABLENUM,
+                        boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+                    table->insert(PRI_KEY, entry);
+                }
+                else
+                {
+                    table->update(PRI_KEY, entry, condition);
+                    STORAGE_LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
+                }
             }
             else
             {
-                table->update(PRI_KEY, entry, condition);
-                STORAGE_LOG(DEBUG) << "MinerPrecompiled remove miner nodeID : " << nodeID;
+                STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
             }
-            break;
         }
-        STORAGE_LOG(ERROR) << "MinerPrecompiled open _sys_miners_ failed.";
-        break;
     }
-    default:
-    {
-        break;
-    }
-    }
+
     return out;
 }

@@ -51,7 +51,7 @@ class TablePrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<TablePrecompiled> Ptr;
-
+    TablePrecompiled();
     virtual ~TablePrecompiled(){};
 
 

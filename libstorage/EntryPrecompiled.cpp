@@ -20,11 +20,32 @@
  */
 #include "EntryPrecompiled.h"
 #include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+
+const char* const ENTRYIY_METHOD_getInt_string = "getInt(string)";
+const char* const ENTRYIY_METHOD_set_string_int256 = "set(string,int256)";
+const char* const ENTRYIY_METHOD_set_string_string = "set(string,string)";
+const char* const ENTRYIY_METHOD_getAddress_string = "getAddress(string)";
+const char* const ENTRYIY_METHOD_getBytes64_string = "getBytes64(string)";
+
+EntryPrecompiled::EntryPrecompiled()
+{
+    name2Selector[ENTRYIY_METHOD_getInt_string] =
+        *(uint32_t*)(sha3(ENTRYIY_METHOD_getInt_string).ref().cropped(0, 4).data());
+    name2Selector[ENTRYIY_METHOD_set_string_int256] =
+        *(uint32_t*)(sha3(ENTRYIY_METHOD_set_string_int256).ref().cropped(0, 4).data());
+    name2Selector[ENTRYIY_METHOD_set_string_string] =
+        *(uint32_t*)(sha3(ENTRYIY_METHOD_set_string_string).ref().cropped(0, 4).data());
+    name2Selector[ENTRYIY_METHOD_getAddress_string] =
+        *(uint32_t*)(sha3(ENTRYIY_METHOD_getAddress_string).ref().cropped(0, 4).data());
+    name2Selector[ENTRYIY_METHOD_getBytes64_string] =
+        *(uint32_t*)(sha3(ENTRYIY_METHOD_getBytes64_string).ref().cropped(0, 4).data());
+}
 
 std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -45,9 +66,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
     bytes out;
 
-    switch (func)
-    {
-    case c_getInt_string:
+    if (func == name2Selector[ENTRYIY_METHOD_getInt_string])
     {  // getInt(string)
         std::string str;
         abi.abiOut(data, str);
@@ -56,30 +75,24 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         u256 num = boost::lexical_cast<u256>(value);
         out = abi.abiIn("", num);
-
-        break;
     }
-    case c_set_string_int256:
+    else if (func == name2Selector[ENTRYIY_METHOD_set_string_int256])
     {  // set(string,int256)
         std::string str;
         u256 value;
         abi.abiOut(data, str, value);
 
         m_entry->setField(str, boost::lexical_cast<std::string>(value));
-
-        break;
     }
-    case c_set_string_string:
+    else if (func == name2Selector[ENTRYIY_METHOD_set_string_string])
     {  // set(string,string)
         std::string str;
         std::string value;
         abi.abiOut(data, str, value);
 
         m_entry->setField(str, value);
-
-        break;
     }
-    case c_getAddress_string:
+    else if (func == name2Selector[ENTRYIY_METHOD_getAddress_string])
     {  // getAddress(string)
         std::string str;
         abi.abiOut(data, str);
@@ -87,10 +100,9 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         std::string value = m_entry->getField(str);
         Address ret = Address(value);
         out = abi.abiIn("", ret);
-        break;
     }
-    case c_getBytes64_string:
-    {  //"getBytes64(string)"
+    else if (func == name2Selector[ENTRYIY_METHOD_getBytes64_string])
+    {  // getBytes64(string)
         std::string str;
         abi.abiOut(data, str);
 
@@ -100,12 +112,6 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
             ret[i] = i < value.size() ? value[i] : 0;
 
         out = abi.abiIn("", ret);
-        break;
-    }
-    default:
-    {
-        break;
-    }
     }
 
     return out;

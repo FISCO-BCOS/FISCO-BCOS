@@ -21,11 +21,48 @@
 #include "ConditionPrecompiled.h"
 #include "Common.h"
 #include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+
+
+const char* const CONDITION_METHOD_EQ_string_int256 = "EQ(string,int256)";
+const char* const CONDITION_METHOD_EQ_string_string = "EQ(string,string)";
+const char* const CONDITION_METHOD_GE_string_int256 = "GE(string,int256)";
+const char* const CONDITION_METHOD_GT_string_int256 = "GT(string,int256)";
+const char* const CONDITION_METHOD_LE_string_int256 = "LE(string,int256)";
+const char* const CONDITION_METHOD_LT_string_int256 = "LT(string,int256)";
+const char* const CONDITION_METHOD_NE_string_int256 = "NE(string,int256)";
+const char* const CONDITION_METHOD_NE_string_string = "NE(string,string)";
+const char* const CONDITION_METHOD_limit_int256 = "limit(int256)";
+const char* const CONDITION_METHOD_limit_int256_int256 = "limit(int256,int256)";
+
+ConditionPrecompiled::ConditionPrecompiled()
+{
+    name2Selector[CONDITION_METHOD_EQ_string_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_EQ_string_int256).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_EQ_string_string] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_EQ_string_string).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_GE_string_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_GE_string_int256).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_GT_string_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_GT_string_int256).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_LE_string_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_LE_string_int256).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_LT_string_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_LT_string_int256).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_NE_string_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_NE_string_int256).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_NE_string_string] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_NE_string_string).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_limit_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_limit_int256).ref().cropped(0, 4).data());
+    name2Selector[CONDITION_METHOD_limit_int256_int256] =
+        *(uint32_t*)(sha3(CONDITION_METHOD_limit_int256_int256).ref().cropped(0, 4).data());
+}
 
 std::string ConditionPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -47,112 +84,85 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
     bytes out;
 
     assert(m_condition);
-    switch (func)
+    if (func == name2Selector[CONDITION_METHOD_EQ_string_int256])
     {
-    case c_EQ_string_int256:
-    {  // EQ(string,int256)
+        // EQ(string,int256)
         std::string str;
         u256 num;
         abi.abiOut(data, str, num);
 
         m_condition->EQ(str, boost::lexical_cast<std::string>(num));
-
-        break;
     }
-    case c_EQ_string_string:
+    else if (func == name2Selector[CONDITION_METHOD_EQ_string_string])
     {  // EQ(string,string)
         std::string str;
         std::string value;
         abi.abiOut(data, str, value);
 
         m_condition->EQ(str, value);
-
-        break;
     }
-    case c_GE_string_int256:
+    else if (func == name2Selector[CONDITION_METHOD_GE_string_int256])
     {  // GE(string,int256)
         std::string str;
         u256 value;
         abi.abiOut(data, str, value);
 
         m_condition->GE(str, boost::lexical_cast<std::string>(value));
-
-        break;
     }
-    case c_GT_string_int256:
+    else if (func == name2Selector[CONDITION_METHOD_GT_string_int256])
     {  // GT(string,int256)
         std::string str;
         u256 value;
         abi.abiOut(data, str, value);
 
         m_condition->GT(str, boost::lexical_cast<std::string>(value));
-
-        break;
     }
-    case c_LE_string_int256:
+    else if (func == name2Selector[CONDITION_METHOD_LE_string_int256])
     {  // LE(string,int256)
         std::string str;
         u256 value;
         abi.abiOut(data, str, value);
 
         m_condition->LE(str, boost::lexical_cast<std::string>(value));
-
-        break;
     }
-    case c_LT_string_int256:
+    else if (func == name2Selector[CONDITION_METHOD_LT_string_int256])
     {  // LT(string,int256)
         std::string str;
         u256 value;
         abi.abiOut(data, str, value);
 
         m_condition->LT(str, boost::lexical_cast<std::string>(value));
-
-        break;
     }
-    case c_NE_string_int256:
+    else if (func == name2Selector[CONDITION_METHOD_NE_string_int256])
     {  // NE(string,int256)
         std::string str;
         u256 num;
         abi.abiOut(data, str, num);
 
         m_condition->NE(str, boost::lexical_cast<std::string>(num));
-
-        break;
     }
-    case c_NE_string_string:
+    else if (func == name2Selector[CONDITION_METHOD_NE_string_string])
     {  // NE(string,string)
         std::string str;
         std::string value;
         abi.abiOut(data, str, value);
 
         m_condition->NE(str, value);
-
-        break;
     }
-    case c_limit_int256:
+    else if (func == name2Selector[CONDITION_METHOD_limit_int256])
     {  // limit(int256)
         u256 num;
         abi.abiOut(data, num);
 
         m_condition->limit(num.convert_to<size_t>());
-
-        break;
     }
-    case c_limit_int256_int256:
+    else if (func == name2Selector[CONDITION_METHOD_limit_int256_int256])
     {  // limit(int256,int256)
         u256 offset;
         u256 size;
         abi.abiOut(data, offset, size);
 
         m_condition->limit(offset.convert_to<size_t>(), size.convert_to<size_t>());
-
-        break;
     }
-    default:
-    {
-        break;
-    }
-    }
-
     return out;
 }

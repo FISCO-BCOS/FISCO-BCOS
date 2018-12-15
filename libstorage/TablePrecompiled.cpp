@@ -30,6 +30,32 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
+const char* const TABLE_METHOD_select_string_address = "select(string,address)";
+const char* const TABLE_METHOD_insert_string_address = "insert(string,address)";
+const char* const TABLE_METHOD_newCondition = "newCondition()";
+const char* const TABLE_METHOD_newEntry = "newEntry()";
+const char* const TABLE_METHOD_remove_string_address = "remove(string,address)";
+const char* const TABLE_METHOD_update_string_address_address = "update(string,address,address)";
+
+
+TablePrecompiled::TablePrecompiled()
+{
+    name2Selector[TABLE_METHOD_select_string_address] =
+        *(uint32_t*)(sha3(TABLE_METHOD_select_string_address).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_insert_string_address] =
+        *(uint32_t*)(sha3(TABLE_METHOD_insert_string_address).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_newCondition] =
+        *(uint32_t*)(sha3(TABLE_METHOD_newCondition).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_newEntry] =
+        *(uint32_t*)(sha3(TABLE_METHOD_newEntry).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_remove_string_address] =
+        *(uint32_t*)(sha3(TABLE_METHOD_remove_string_address).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_remove_string_address] =
+        *(uint32_t*)(sha3(TABLE_METHOD_remove_string_address).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_update_string_address_address] =
+        *(uint32_t*)(sha3(TABLE_METHOD_update_string_address_address).ref().cropped(0, 4).data());
+}
+
 std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
     return "Table";
@@ -48,9 +74,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
     bytes out;
 
-    switch (func)
-    {
-    case c_select_string_address:
+    if (func == name2Selector[TABLE_METHOD_select_string_address])
     {  // select(string,address)
         std::string key;
         Address conditionAddress;
@@ -67,10 +91,8 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         auto newAddress = context->registerPrecompiled(entriesPrecompiled);
         out = abi.abiIn("", newAddress);
-
-        break;
     }
-    case c_insert_string_address:
+    else if (func == name2Selector[TABLE_METHOD_insert_string_address])
     {  // insert(string,address)
         std::string key;
         Address entryAddress;
@@ -82,10 +104,8 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         size_t count = m_table->insert(key, entry);
         out = abi.abiIn("", u256(count));
-
-        break;
     }
-    case c_newCondition:
+    else if (func == name2Selector[TABLE_METHOD_newCondition])
     {  // newCondition()
         auto condition = m_table->newCondition();
         auto conditionPrecompiled = std::make_shared<ConditionPrecompiled>();
@@ -93,10 +113,8 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         auto newAddress = context->registerPrecompiled(conditionPrecompiled);
         out = abi.abiIn("", newAddress);
-
-        break;
     }
-    case c_newEntry:
+    else if (func == name2Selector[TABLE_METHOD_newEntry])
     {  // newEntry()
         auto entry = m_table->newEntry();
         auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
@@ -104,10 +122,8 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         auto newAddress = context->registerPrecompiled(entryPrecompiled);
         out = abi.abiIn("", newAddress);
-
-        break;
     }
-    case c_remove_string_address:
+    else if (func == name2Selector[TABLE_METHOD_remove_string_address])
     {  // remove(string,address)
         std::string key;
         Address conditionAddress;
@@ -120,10 +136,8 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         size_t count = m_table->remove(key, condition);
         out = abi.abiIn("", u256(count));
-
-        break;
     }
-    case c_update_string_address_address:
+    else if (func == name2Selector[TABLE_METHOD_update_string_address_address])
     {  // update(string,address,address)
         std::string key;
         Address entryAddress;
@@ -140,15 +154,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         size_t count = m_table->update(key, entry, condition);
         out = abi.abiIn("", u256(count));
-
-        break;
     }
-    default:
-    {
-        break;
-    }
-    }
-
     return out;
 }
 

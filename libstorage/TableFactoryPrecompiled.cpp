@@ -23,6 +23,7 @@
 #include "TablePrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -32,6 +33,18 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
 using namespace dev::storage;
+
+const char* const TABLE_METHOD_openTable_string = "openTable(string)";
+const char* const TABLE_METHOD_createTable_string_string = "createTable(string,string,string)";
+
+TableFactoryPrecompiled::TableFactoryPrecompiled()
+{
+    name2Selector[TABLE_METHOD_openTable_string] =
+        *(uint32_t*)(sha3(TABLE_METHOD_openTable_string).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_createTable_string_string] =
+        *(uint32_t*)(sha3(TABLE_METHOD_createTable_string_string).ref().cropped(0, 4).data());
+}
+
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
     return "TableFactory";
@@ -50,10 +63,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
     dev::eth::ContractABI abi;
     bytes out;
 
-    switch (func)
-    {
-    case c_openDB_string:  // openDB(string)
-    case c_openTable_string:
+    if (func == name2Selector[TABLE_METHOD_openTable_string])
     {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
@@ -73,9 +83,8 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         }
 
         out = abi.abiIn("", address);
-        break;
     }
-    case c_createTable_string_string_string:
+    else if (func == name2Selector[TABLE_METHOD_createTable_string_string])
     {  // createTable(string,string,string)
         string tableName;
         string keyField;
@@ -96,12 +105,6 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
             errorCode = 1;
         }
         out = abi.abiIn("", errorCode);
-        break;
-    }
-    default:
-    {
-        break;
-    }
     }
 
     return out;
