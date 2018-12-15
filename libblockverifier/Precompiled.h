@@ -50,6 +50,7 @@ public:
     }
 
     virtual bytesConstRef getParamData(bytesConstRef param) { return param.cropped(4); }
+
 protected:
     std::unordered_map<std::string, uint32_t> name2Selector;
 };
