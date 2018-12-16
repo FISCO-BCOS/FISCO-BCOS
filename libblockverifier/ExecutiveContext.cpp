@@ -35,8 +35,10 @@ bytes ExecutiveContext::call(Address address, bytesConstRef param)
 {
     try
     {
-        LOG(TRACE) << "PrecompiledEngine call:" << m_blockInfo.hash << " " << m_blockInfo.number
-                   << " " << address << " " << toHex(param);
+        EXECUTIVECONTEXT_LOG(TRACE)
+            << "[#call] PrecompiledEngine call [blockHash/number/address/param]: "
+            << "[" << m_blockInfo.hash << "/" << m_blockInfo.number << "/" << address << "/"
+            << toHex(param) << "]";
 
         auto p = getPrecompiled(address);
 
@@ -47,12 +49,14 @@ bytes ExecutiveContext::call(Address address, bytesConstRef param)
         }
         else
         {
-            LOG(DEBUG) << "can't find address:" << address;
+            EXECUTIVECONTEXT_LOG(DEBUG) << "[#call] Can't find address [address]: "
+                                        << "[" << address << "]";
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Precompiled call error:" << e.what();
+        EXECUTIVECONTEXT_LOG(ERROR) << "[#call] Precompiled call error [errorMsg]: "
+                                    << "[" << e.what() << "]";
 
         throw dev::eth::PrecompiledError();
     }
