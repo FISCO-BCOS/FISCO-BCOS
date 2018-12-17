@@ -29,12 +29,11 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
-const char* const CRUD_METHOD_select_string_string = "select(string,string)";
+const char* const CRUD_METHOD_SLT_STR_STR = "select(string,string)";
 
 CRUDPrecompiled::CRUDPrecompiled()
 {
-    name2Selector[CRUD_METHOD_select_string_string] =
-        getFuncSelector(CRUD_METHOD_select_string_string);
+    name2Selector[CRUD_METHOD_SLT_STR_STR] = getFuncSelector(CRUD_METHOD_SLT_STR_STR);
 }
 
 std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
@@ -65,7 +64,7 @@ bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
     dev::eth::ContractABI abi;
     bytes out;
 
-    if (func == name2Selector[CRUD_METHOD_select_string_string])
+    if (func == name2Selector[CRUD_METHOD_SLT_STR_STR])
     {  // select(string,string)
         std::string tableName, key;
         abi.abiOut(data, tableName, key);

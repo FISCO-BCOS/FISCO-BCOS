@@ -27,23 +27,20 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
-const char* const ENTRYIY_METHOD_getInt_string = "getInt(string)";
-const char* const ENTRYIY_METHOD_set_string_int256 = "set(string,int256)";
-const char* const ENTRYIY_METHOD_set_string_string = "set(string,string)";
-const char* const ENTRYIY_METHOD_getAddress_string = "getAddress(string)";
-const char* const ENTRYIY_METHOD_getBytes64_string = "getBytes64(string)";
+const char* const ENTRYIES_METENTRYIY_METHOD_GETI_STR = "getInt(string)";
+const char* const ENTRYIY_METHOD_SET_STR_INT = "set(string,int256)";
+const char* const ENTRYIY_METHOD_SET_STR_STR = "set(string,string)";
+const char* const ENTRYIY_METHOD_GETA_STR = "getAddress(string)";
+const char* const ENTRYIY_METHOD_GETB_STR = "getBytes64(string)";
 
 EntryPrecompiled::EntryPrecompiled()
 {
-    name2Selector[ENTRYIY_METHOD_getInt_string] = getFuncSelector(ENTRYIY_METHOD_getInt_string);
-    name2Selector[ENTRYIY_METHOD_set_string_int256] =
-        getFuncSelector(ENTRYIY_METHOD_set_string_int256);
-    name2Selector[ENTRYIY_METHOD_set_string_string] =
-        getFuncSelector(ENTRYIY_METHOD_set_string_string);
-    name2Selector[ENTRYIY_METHOD_getAddress_string] =
-        getFuncSelector(ENTRYIY_METHOD_getAddress_string);
-    name2Selector[ENTRYIY_METHOD_getBytes64_string] =
-        getFuncSelector(ENTRYIY_METHOD_getBytes64_string);
+    name2Selector[ENTRYIES_METENTRYIY_METHOD_GETI_STR] =
+        getFuncSelector(ENTRYIES_METENTRYIY_METHOD_GETI_STR);
+    name2Selector[ENTRYIY_METHOD_SET_STR_INT] = getFuncSelector(ENTRYIY_METHOD_SET_STR_INT);
+    name2Selector[ENTRYIY_METHOD_SET_STR_STR] = getFuncSelector(ENTRYIY_METHOD_SET_STR_STR);
+    name2Selector[ENTRYIY_METHOD_GETA_STR] = getFuncSelector(ENTRYIY_METHOD_GETA_STR);
+    name2Selector[ENTRYIY_METHOD_GETB_STR] = getFuncSelector(ENTRYIY_METHOD_GETB_STR);
 }
 
 std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
@@ -65,7 +62,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
     bytes out;
 
-    if (func == name2Selector[ENTRYIY_METHOD_getInt_string])
+    if (func == name2Selector[ENTRYIES_METENTRYIY_METHOD_GETI_STR])
     {  // getInt(string)
         std::string str;
         abi.abiOut(data, str);
@@ -75,7 +72,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         u256 num = boost::lexical_cast<u256>(value);
         out = abi.abiIn("", num);
     }
-    else if (func == name2Selector[ENTRYIY_METHOD_set_string_int256])
+    else if (func == name2Selector[ENTRYIY_METHOD_SET_STR_INT])
     {  // set(string,int256)
         std::string str;
         u256 value;
@@ -83,7 +80,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         m_entry->setField(str, boost::lexical_cast<std::string>(value));
     }
-    else if (func == name2Selector[ENTRYIY_METHOD_set_string_string])
+    else if (func == name2Selector[ENTRYIY_METHOD_SET_STR_STR])
     {  // set(string,string)
         std::string str;
         std::string value;
@@ -91,7 +88,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         m_entry->setField(str, value);
     }
-    else if (func == name2Selector[ENTRYIY_METHOD_getAddress_string])
+    else if (func == name2Selector[ENTRYIY_METHOD_GETA_STR])
     {  // getAddress(string)
         std::string str;
         abi.abiOut(data, str);
@@ -100,7 +97,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         Address ret = Address(value);
         out = abi.abiIn("", ret);
     }
-    else if (func == name2Selector[ENTRYIY_METHOD_getBytes64_string])
+    else if (func == name2Selector[ENTRYIY_METHOD_GETB_STR])
     {  // getBytes64(string)
         std::string str;
         abi.abiOut(data, str);

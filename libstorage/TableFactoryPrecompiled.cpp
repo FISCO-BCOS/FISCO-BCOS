@@ -34,14 +34,13 @@ using namespace dev::blockverifier;
 using namespace std;
 using namespace dev::storage;
 
-const char* const TABLE_METHOD_openTable_string = "openTable(string)";
-const char* const TABLE_METHOD_createTable_string_string = "createTable(string,string,string)";
+const char* const TABLE_METHOD_OPT_STR = "openTable(string)";
+const char* const TABLE_METHOD_CRT_STR_STR = "createTable(string,string,string)";
 
 TableFactoryPrecompiled::TableFactoryPrecompiled()
 {
-    name2Selector[TABLE_METHOD_openTable_string] = getFuncSelector(TABLE_METHOD_openTable_string);
-    name2Selector[TABLE_METHOD_createTable_string_string] =
-        getFuncSelector(TABLE_METHOD_createTable_string_string);
+    name2Selector[TABLE_METHOD_OPT_STR] = getFuncSelector(TABLE_METHOD_OPT_STR);
+    name2Selector[TABLE_METHOD_CRT_STR_STR] = getFuncSelector(TABLE_METHOD_CRT_STR_STR);
 }
 
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
@@ -62,7 +61,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
     dev::eth::ContractABI abi;
     bytes out;
 
-    if (func == name2Selector[TABLE_METHOD_openTable_string])
+    if (func == name2Selector[TABLE_METHOD_OPT_STR])
     {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
@@ -83,7 +82,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
 
         out = abi.abiIn("", address);
     }
-    else if (func == name2Selector[TABLE_METHOD_createTable_string_string])
+    else if (func == name2Selector[TABLE_METHOD_CRT_STR_STR])
     {  // createTable(string,string,string)
         string tableName;
         string keyField;

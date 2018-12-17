@@ -29,38 +29,29 @@ using namespace dev::blockverifier;
 using namespace dev::storage;
 
 
-const char* const CONDITION_METHOD_EQ_string_int256 = "EQ(string,int256)";
-const char* const CONDITION_METHOD_EQ_string_string = "EQ(string,string)";
-const char* const CONDITION_METHOD_GE_string_int256 = "GE(string,int256)";
-const char* const CONDITION_METHOD_GT_string_int256 = "GT(string,int256)";
-const char* const CONDITION_METHOD_LE_string_int256 = "LE(string,int256)";
-const char* const CONDITION_METHOD_LT_string_int256 = "LT(string,int256)";
-const char* const CONDITION_METHOD_NE_string_int256 = "NE(string,int256)";
-const char* const CONDITION_METHOD_NE_string_string = "NE(string,string)";
-const char* const CONDITION_METHOD_limit_int256 = "limit(int256)";
-const char* const CONDITION_METHOD_limit_int256_int256 = "limit(int256,int256)";
+const char* const CONDITION_METHOD_EQ_STR_INT = "EQ(string,int256)";
+const char* const CONDITION_METHOD_EQ_STR_STR = "EQ(string,string)";
+const char* const CONDITION_METHOD_GE_STR_INT = "GE(string,int256)";
+const char* const CONDITION_METHOD_GT_STR_INT = "GT(string,int256)";
+const char* const CONDITION_METHOD_LE_STR_INT = "LE(string,int256)";
+const char* const CONDITION_METHOD_LT_STR_INT = "LT(string,int256)";
+const char* const CONDITION_METHOD_NE_STR_INT = "NE(string,int256)";
+const char* const CONDITION_METHOD_NE_STR_STR = "NE(string,string)";
+const char* const CONDITION_METHOD_LIMIT_INT = "limit(int256)";
+const char* const CONDITION_METHOD_LIMIT_2INT = "limit(int256,int256)";
 
 ConditionPrecompiled::ConditionPrecompiled()
 {
-    name2Selector[CONDITION_METHOD_EQ_string_int256] =
-        getFuncSelector(CONDITION_METHOD_EQ_string_int256);
-    name2Selector[CONDITION_METHOD_EQ_string_string] =
-        getFuncSelector(CONDITION_METHOD_EQ_string_string);
-    name2Selector[CONDITION_METHOD_GE_string_int256] =
-        getFuncSelector(CONDITION_METHOD_GE_string_int256);
-    name2Selector[CONDITION_METHOD_GT_string_int256] =
-        getFuncSelector(CONDITION_METHOD_GT_string_int256);
-    name2Selector[CONDITION_METHOD_LE_string_int256] =
-        getFuncSelector(CONDITION_METHOD_LE_string_int256);
-    name2Selector[CONDITION_METHOD_LT_string_int256] =
-        getFuncSelector(CONDITION_METHOD_LT_string_int256);
-    name2Selector[CONDITION_METHOD_NE_string_int256] =
-        getFuncSelector(CONDITION_METHOD_NE_string_int256);
-    name2Selector[CONDITION_METHOD_NE_string_string] =
-        getFuncSelector(CONDITION_METHOD_NE_string_string);
-    name2Selector[CONDITION_METHOD_limit_int256] = getFuncSelector(CONDITION_METHOD_limit_int256);
-    name2Selector[CONDITION_METHOD_limit_int256_int256] =
-        getFuncSelector(CONDITION_METHOD_limit_int256_int256);
+    name2Selector[CONDITION_METHOD_EQ_STR_INT] = getFuncSelector(CONDITION_METHOD_EQ_STR_INT);
+    name2Selector[CONDITION_METHOD_EQ_STR_STR] = getFuncSelector(CONDITION_METHOD_EQ_STR_STR);
+    name2Selector[CONDITION_METHOD_GE_STR_INT] = getFuncSelector(CONDITION_METHOD_GE_STR_INT);
+    name2Selector[CONDITION_METHOD_GT_STR_INT] = getFuncSelector(CONDITION_METHOD_GT_STR_INT);
+    name2Selector[CONDITION_METHOD_LE_STR_INT] = getFuncSelector(CONDITION_METHOD_LE_STR_INT);
+    name2Selector[CONDITION_METHOD_LT_STR_INT] = getFuncSelector(CONDITION_METHOD_LT_STR_INT);
+    name2Selector[CONDITION_METHOD_NE_STR_INT] = getFuncSelector(CONDITION_METHOD_NE_STR_INT);
+    name2Selector[CONDITION_METHOD_NE_STR_STR] = getFuncSelector(CONDITION_METHOD_NE_STR_STR);
+    name2Selector[CONDITION_METHOD_LIMIT_INT] = getFuncSelector(CONDITION_METHOD_LIMIT_INT);
+    name2Selector[CONDITION_METHOD_LIMIT_2INT] = getFuncSelector(CONDITION_METHOD_LIMIT_2INT);
 }
 
 std::string ConditionPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
@@ -83,7 +74,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
     bytes out;
 
     assert(m_condition);
-    if (func == name2Selector[CONDITION_METHOD_EQ_string_int256])
+    if (func == name2Selector[CONDITION_METHOD_EQ_STR_INT])
     {
         // EQ(string,int256)
         std::string str;
@@ -92,7 +83,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->EQ(str, boost::lexical_cast<std::string>(num));
     }
-    else if (func == name2Selector[CONDITION_METHOD_EQ_string_string])
+    else if (func == name2Selector[CONDITION_METHOD_EQ_STR_STR])
     {  // EQ(string,string)
         std::string str;
         std::string value;
@@ -100,7 +91,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->EQ(str, value);
     }
-    else if (func == name2Selector[CONDITION_METHOD_GE_string_int256])
+    else if (func == name2Selector[CONDITION_METHOD_GE_STR_INT])
     {  // GE(string,int256)
         std::string str;
         u256 value;
@@ -108,7 +99,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->GE(str, boost::lexical_cast<std::string>(value));
     }
-    else if (func == name2Selector[CONDITION_METHOD_GT_string_int256])
+    else if (func == name2Selector[CONDITION_METHOD_GT_STR_INT])
     {  // GT(string,int256)
         std::string str;
         u256 value;
@@ -116,7 +107,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->GT(str, boost::lexical_cast<std::string>(value));
     }
-    else if (func == name2Selector[CONDITION_METHOD_LE_string_int256])
+    else if (func == name2Selector[CONDITION_METHOD_LE_STR_INT])
     {  // LE(string,int256)
         std::string str;
         u256 value;
@@ -124,7 +115,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->LE(str, boost::lexical_cast<std::string>(value));
     }
-    else if (func == name2Selector[CONDITION_METHOD_LT_string_int256])
+    else if (func == name2Selector[CONDITION_METHOD_LT_STR_INT])
     {  // LT(string,int256)
         std::string str;
         u256 value;
@@ -132,7 +123,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->LT(str, boost::lexical_cast<std::string>(value));
     }
-    else if (func == name2Selector[CONDITION_METHOD_NE_string_int256])
+    else if (func == name2Selector[CONDITION_METHOD_NE_STR_INT])
     {  // NE(string,int256)
         std::string str;
         u256 num;
@@ -140,7 +131,7 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->NE(str, boost::lexical_cast<std::string>(num));
     }
-    else if (func == name2Selector[CONDITION_METHOD_NE_string_string])
+    else if (func == name2Selector[CONDITION_METHOD_NE_STR_STR])
     {  // NE(string,string)
         std::string str;
         std::string value;
@@ -148,14 +139,14 @@ bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, byte
 
         m_condition->NE(str, value);
     }
-    else if (func == name2Selector[CONDITION_METHOD_limit_int256])
+    else if (func == name2Selector[CONDITION_METHOD_LIMIT_INT])
     {  // limit(int256)
         u256 num;
         abi.abiOut(data, num);
 
         m_condition->limit(num.convert_to<size_t>());
     }
-    else if (func == name2Selector[CONDITION_METHOD_limit_int256_int256])
+    else if (func == name2Selector[CONDITION_METHOD_LIMIT_2INT])
     {  // limit(int256,int256)
         u256 offset;
         u256 size;
