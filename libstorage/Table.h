@@ -190,7 +190,7 @@ public:
 
     virtual ~StateDBFactory() {}
 
-    virtual Table::Ptr openTable(const std::string& table) = 0;
+    virtual Table::Ptr openTable(const std::string& table, bool authorityFlag = true) = 0;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField) = 0;
 };
