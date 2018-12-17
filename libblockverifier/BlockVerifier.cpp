@@ -91,7 +91,9 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     }
     catch (exception& e)
     {
-        BLOCKVERIFIER_LOG(ERROR) << "[#executeTransaction] Error during execute initExecutiveContext [errorMsg]: " << e.what();
+        BLOCKVERIFIER_LOG(ERROR)
+            << "[#executeTransaction] Error during execute initExecutiveContext [errorMsg]: "
+            << e.what();
     }
 
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
