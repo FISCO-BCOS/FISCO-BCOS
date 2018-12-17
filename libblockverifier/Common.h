@@ -24,6 +24,10 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
+
+#define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << "[#BLOCKVERIFIER]"
+#define EXECUTIVECONTEXT_LOG(LEVEL) LOG(LEVEL) << "[#EXECUTIVECONTEXT]"
+
 namespace dev
 {
 namespace blockverifier
