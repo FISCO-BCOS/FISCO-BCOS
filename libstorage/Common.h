@@ -25,7 +25,8 @@ namespace dev
 {
 namespace storage
 {
-#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[#storage] "
+#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[#STORAGE] "
+#define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << "[#STORAGE] [LEVELDB]"
 
 /// \brief Sign of the DB key is valid or not
 const char* const STATUS = "_status_";

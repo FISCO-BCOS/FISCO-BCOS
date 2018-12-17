@@ -43,8 +43,9 @@ void PBFTSealer::handleBlock()
 {
     setBlock();
     PBFTSEALER_LOG(INFO) << "+++++++++++++++++++++++++++ [#Generating seal on]:  "
-                         << "[blockNumber/txNum/hash]:  " << m_sealing.block.header().number()
-                         << "/" << m_sealing.block.getTransactionSize() << "/"
+                         << "[myIdx/blockNumber/txNum/hash]:  " << m_pbftEngine->nodeIdx() << "/"
+                         << m_sealing.block.header().number() << "/"
+                         << m_sealing.block.getTransactionSize() << "/"
                          << m_sealing.block.header().hash() << std::endl;
     bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
     if (!succ)

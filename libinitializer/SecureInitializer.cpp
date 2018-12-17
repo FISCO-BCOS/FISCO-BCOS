@@ -36,10 +36,10 @@ using namespace dev::initializer;
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
     std::string dataPath = pt.get<std::string>("secure.data_path", "./fisco-bcos-data/");
-    std::string key = dataPath + pt.get<std::string>("secure.key", "node.key");
-    std::string cert = dataPath + pt.get<std::string>("secure.cert", "node.crt");
-    std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "ca.crt");
-    std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
+    std::string key = dataPath + "/" + pt.get<std::string>("secure.key", "node.key");
+    std::string cert = dataPath + "/" + pt.get<std::string>("secure.cert", "node.crt");
+    std::string caCert = dataPath + "/" + pt.get<std::string>("secure.ca_cert", "ca.crt");
+    std::string caPath = dataPath + "/" + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
     if (!key.empty())
     {
@@ -51,8 +51,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         {
             INITIALIZER_LOG(ERROR)
                 << "[#SecureInitializer::initConfig] open privateKey failed: [file]: " << key;
-
-            BOOST_THROW_EXCEPTION(PrivateKeyError());
+            ERROR_OUTPUT << "[#SecureInitializer::initConfig] open privateKey failed: [file]: "
+                         << key << std::endl;
+            exit(1);
         }
     }
 
@@ -61,7 +62,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] load existing privateKey.";
+            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] loading privateKey.";
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
             BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
 
@@ -71,7 +72,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 
             if (!evpPKey)
             {
-                BOOST_THROW_EXCEPTION(PrivateKeyError());
+                ERROR_OUTPUT << "[#SecureInitializer::initConfig] load privateKey failed"
+                             << std::endl;
+                exit(1);
             }
 
             ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
@@ -81,13 +84,16 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             INITIALIZER_LOG(ERROR)
                 << "[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
                 << e.what();
-            BOOST_THROW_EXCEPTION(e);
+            ERROR_OUTPUT << "[[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
+                         << e.what() << std::endl;
+            exit(1);
         }
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] privatekey not exists!";
-        BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
+        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] privateKey doesn't exist!";
+        ERROR_OUTPUT << "[#SecureInitializer::initConfig] privateKey doesn't exist!" << std::endl;
+        exit(1);
     }
 
     std::shared_ptr<const BIGNUM> ecPrivateKey(
@@ -99,7 +105,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     std::string keyHex(privateKeyData.get());
     if (keyHex.size() != 64u)
     {
-        throw std::invalid_argument("Private Key file error! Missing bytes!");
+        throw std::invalid_argument("Incompleted privateKey!");
     }
     m_key = KeyPair(Secret(keyHex));
 
@@ -128,8 +134,10 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         }
         else
         {
-            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate not exists!";
-            BOOST_THROW_EXCEPTION(CertificateNotExists());
+            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate doesn't exist!";
+            ERROR_OUTPUT << "[#SecureInitializer::initConfig] certificate doesn't exist!"
+                         << std::endl;
+            exit(1);
         }
 
         auto caCertContent = contents(caCert);
@@ -144,8 +152,11 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         }
         else
         {
-            INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] CA Certificate not exists!";
-            BOOST_THROW_EXCEPTION(CertificateNotExists());
+            INITIALIZER_LOG(ERROR)
+                << "[#SecureInitializer::initConfig] CA Certificate doesn't exist!";
+            ERROR_OUTPUT << "[#SecureInitializer::initConfig] CA Certificate doesn't exist!"
+                         << std::endl;
+            exit(1);
         }
 
         if (!caPath.empty())
@@ -160,6 +171,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     {
         INITIALIZER_LOG(ERROR)
             << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: " << e.what();
-        BOOST_THROW_EXCEPTION(e);
+        ERROR_OUTPUT << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: "
+                     << e.what() << std::endl;
+        exit(1);
     }
 }

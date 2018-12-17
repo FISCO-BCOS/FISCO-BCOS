@@ -26,6 +26,11 @@ set(ETH_SCRIPTS_DIR ${ETH_CMAKE_DIR}/scripts)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 
 if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
+    find_program(CCACHE_PROGRAM ccache)
+    if(CCACHE_PROGRAM)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
+    endif()
     # Use ISO C++11 standard language.
     set(CMAKE_CXX_FLAGS -std=c++11)
 
@@ -58,9 +63,9 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 
 	# Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG")
-    set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread -DETH_RELEASE")
-    set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread -DETH_RELEASE")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread -DETH_RELEASE")
+    set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread")
+    set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread")
 
     option(USE_LD_GOLD "Use GNU gold linker" ON)
     if (USE_LD_GOLD)
@@ -111,8 +116,7 @@ if (SANITIZE)
     endif()
 endif()
 
-
-if (TESTS)
+if (COVERAGE)
     set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
     set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
     set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
@@ -120,9 +124,9 @@ if (TESTS)
     find_program(LCOV_TOOL lcov)
     message(STATUS "lcov tool: ${LCOV_TOOL}")
     if (LCOV_TOOL)
-        add_custom_target(coverage.info
+        add_custom_target(coverage
             COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -c -d ${CMAKE_BINARY_DIR}
             COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -r ${CMAKE_BINARY_DIR}/coverage.info '/usr*' '${CMAKE_BINARY_DIR}/deps/*' '${CMAKE_SOURCE_DIR}/deps/*'
-    )
+            COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
     endif()
 endif ()

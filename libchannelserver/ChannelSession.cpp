@@ -223,8 +223,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
         if (!error)
         {
-            CHANNEL_LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:"
-                               << std::string(_recvBuffer, _recvBuffer + bytesTransferred);
+            CHANNEL_LOG(TRACE) << "Read: " << bytesTransferred;
 
             _recvProtocolBuffer.insert(
                 _recvProtocolBuffer.end(), _recvBuffer, _recvBuffer + bytesTransferred);

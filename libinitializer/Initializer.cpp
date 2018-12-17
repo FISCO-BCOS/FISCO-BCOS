@@ -53,13 +53,14 @@ void Initializer::init(std::string const& _path)
         m_rpcInitializer->setSSLContext(m_secureInitializer->SSLContext());
         m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
         m_rpcInitializer->initConfig(pt);
+        m_ledgerInitializer->startAll();
     }
     catch (std::exception& e)
     {
         INITIALIZER_LOG(ERROR) << "[#Initializer::init] load configuration failed! [EINFO]:  "
                                << boost::diagnostic_information(e);
-        BOOST_THROW_EXCEPTION(ConfigNotExist() << errinfo_comment(
-                                  "load configuration " + _path +
-                                  "failed, [EINFO]: " + boost::diagnostic_information(e)));
+        ERROR_OUTPUT << "[#Initializer] INIT Failed, [ERROR INFO]: "
+                     << boost::diagnostic_information(e) << std::endl;
+        exit(1);
     }
 }

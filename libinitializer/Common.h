@@ -29,12 +29,14 @@
 #include <boost/property_tree/ptree.hpp>
 
 #define INITIALIZER_LOG(LEVEL) LOG(LEVEL) << "[#INITIALIZER] "
+#define ERROR_OUTPUT std::cout << "[#INITIALIZER] "
 
 namespace dev
 {
 DEV_SIMPLE_EXCEPTION(InvalidListenPort);
 DEV_SIMPLE_EXCEPTION(ConfigNotExist);
 DEV_SIMPLE_EXCEPTION(InvalidConfig);
+DEV_SIMPLE_EXCEPTION(InitFailed);
 namespace initializer
 {
 static uint16_t maxPort = 65535;

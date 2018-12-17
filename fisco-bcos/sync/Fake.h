@@ -69,7 +69,9 @@ public:
         m_totalTxCommit(0),
         m_protocolId(0),
         m_blockGenerationInterval(_idleWaitMs)
-    {}
+    {
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+    }
 
     virtual ~FakeConcensus(){};
 
@@ -188,6 +190,7 @@ private:
 
     size_t m_totalTxCommit;
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
     unsigned m_blockGenerationInterval;
 };
 
