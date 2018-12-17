@@ -43,25 +43,24 @@ const char* const CONDITION_METHOD_limit_int256_int256 = "limit(int256,int256)";
 ConditionPrecompiled::ConditionPrecompiled()
 {
     name2Selector[CONDITION_METHOD_EQ_string_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_EQ_string_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_EQ_string_int256);
     name2Selector[CONDITION_METHOD_EQ_string_string] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_EQ_string_string).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_EQ_string_string);
     name2Selector[CONDITION_METHOD_GE_string_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_GE_string_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_GE_string_int256);
     name2Selector[CONDITION_METHOD_GT_string_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_GT_string_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_GT_string_int256);
     name2Selector[CONDITION_METHOD_LE_string_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_LE_string_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_LE_string_int256);
     name2Selector[CONDITION_METHOD_LT_string_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_LT_string_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_LT_string_int256);
     name2Selector[CONDITION_METHOD_NE_string_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_NE_string_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_NE_string_int256);
     name2Selector[CONDITION_METHOD_NE_string_string] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_NE_string_string).ref().cropped(0, 4).data());
-    name2Selector[CONDITION_METHOD_limit_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_limit_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_NE_string_string);
+    name2Selector[CONDITION_METHOD_limit_int256] = getFuncSelector(CONDITION_METHOD_limit_int256);
     name2Selector[CONDITION_METHOD_limit_int256_int256] =
-        *(uint32_t*)(sha3(CONDITION_METHOD_limit_int256_int256).ref().cropped(0, 4).data());
+        getFuncSelector(CONDITION_METHOD_limit_int256_int256);
 }
 
 std::string ConditionPrecompiled::toString(std::shared_ptr<ExecutiveContext>)

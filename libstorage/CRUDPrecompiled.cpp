@@ -34,7 +34,7 @@ const char* const CRUD_METHOD_select_string_string = "select(string,string)";
 CRUDPrecompiled::CRUDPrecompiled()
 {
     name2Selector[CRUD_METHOD_select_string_string] =
-        *(uint32_t*)(sha3(CRUD_METHOD_select_string_string).ref().cropped(0, 4).data());
+        getFuncSelector(CRUD_METHOD_select_string_string);
 }
 
 std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)

@@ -39,10 +39,9 @@ const char* const TABLE_METHOD_createTable_string_string = "createTable(string,s
 
 TableFactoryPrecompiled::TableFactoryPrecompiled()
 {
-    name2Selector[TABLE_METHOD_openTable_string] =
-        *(uint32_t*)(sha3(TABLE_METHOD_openTable_string).ref().cropped(0, 4).data());
+    name2Selector[TABLE_METHOD_openTable_string] = getFuncSelector(TABLE_METHOD_openTable_string);
     name2Selector[TABLE_METHOD_createTable_string_string] =
-        *(uint32_t*)(sha3(TABLE_METHOD_createTable_string_string).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_createTable_string_string);
 }
 
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)

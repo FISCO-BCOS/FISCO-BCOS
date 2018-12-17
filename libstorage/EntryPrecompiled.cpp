@@ -35,16 +35,15 @@ const char* const ENTRYIY_METHOD_getBytes64_string = "getBytes64(string)";
 
 EntryPrecompiled::EntryPrecompiled()
 {
-    name2Selector[ENTRYIY_METHOD_getInt_string] =
-        *(uint32_t*)(sha3(ENTRYIY_METHOD_getInt_string).ref().cropped(0, 4).data());
+    name2Selector[ENTRYIY_METHOD_getInt_string] = getFuncSelector(ENTRYIY_METHOD_getInt_string);
     name2Selector[ENTRYIY_METHOD_set_string_int256] =
-        *(uint32_t*)(sha3(ENTRYIY_METHOD_set_string_int256).ref().cropped(0, 4).data());
+        getFuncSelector(ENTRYIY_METHOD_set_string_int256);
     name2Selector[ENTRYIY_METHOD_set_string_string] =
-        *(uint32_t*)(sha3(ENTRYIY_METHOD_set_string_string).ref().cropped(0, 4).data());
+        getFuncSelector(ENTRYIY_METHOD_set_string_string);
     name2Selector[ENTRYIY_METHOD_getAddress_string] =
-        *(uint32_t*)(sha3(ENTRYIY_METHOD_getAddress_string).ref().cropped(0, 4).data());
+        getFuncSelector(ENTRYIY_METHOD_getAddress_string);
     name2Selector[ENTRYIY_METHOD_getBytes64_string] =
-        *(uint32_t*)(sha3(ENTRYIY_METHOD_getBytes64_string).ref().cropped(0, 4).data());
+        getFuncSelector(ENTRYIY_METHOD_getBytes64_string);
 }
 
 std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)

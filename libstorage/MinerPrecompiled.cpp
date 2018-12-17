@@ -34,10 +34,8 @@ const char* const MINER_METHOD_REMOVE = "remove(string)";
 
 MinerPrecompiled::MinerPrecompiled()
 {
-    name2Selector[MINER_METHOD_ADD] =
-        *(uint32_t*)(sha3(MINER_METHOD_ADD).ref().cropped(0, 4).data());
-    name2Selector[MINER_METHOD_REMOVE] =
-        *(uint32_t*)(sha3(MINER_METHOD_REMOVE).ref().cropped(0, 4).data());
+    name2Selector[MINER_METHOD_ADD] = getFuncSelector(MINER_METHOD_ADD);
+    name2Selector[MINER_METHOD_REMOVE] = getFuncSelector(MINER_METHOD_REMOVE);
 }
 
 bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
@@ -53,8 +51,12 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
     dev::eth::ContractABI abi;
     bytes out;
     const std::string key("miner");
+    std::cout << "*******add  " << std::hex << name2Selector[MINER_METHOD_ADD] << "*******" << std::endl;
+    std::cout << "*******remove  " << std::hex << name2Selector[MINER_METHOD_REMOVE] << "*******" << std::endl;
+    std::cout << "*******func " << std::hex << func << "*******" << std::endl;
     if (func == name2Selector[MINER_METHOD_ADD])
     {  // add(string)
+        
         std::string nodeID;
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)

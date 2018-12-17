@@ -41,19 +41,19 @@ const char* const TABLE_METHOD_update_string_address_address = "update(string,ad
 TablePrecompiled::TablePrecompiled()
 {
     name2Selector[TABLE_METHOD_select_string_address] =
-        *(uint32_t*)(sha3(TABLE_METHOD_select_string_address).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_select_string_address);
     name2Selector[TABLE_METHOD_insert_string_address] =
-        *(uint32_t*)(sha3(TABLE_METHOD_insert_string_address).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_insert_string_address);
     name2Selector[TABLE_METHOD_newCondition] =
-        *(uint32_t*)(sha3(TABLE_METHOD_newCondition).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_newCondition);
     name2Selector[TABLE_METHOD_newEntry] =
-        *(uint32_t*)(sha3(TABLE_METHOD_newEntry).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_newEntry);
     name2Selector[TABLE_METHOD_remove_string_address] =
-        *(uint32_t*)(sha3(TABLE_METHOD_remove_string_address).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_remove_string_address);
     name2Selector[TABLE_METHOD_remove_string_address] =
-        *(uint32_t*)(sha3(TABLE_METHOD_remove_string_address).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_remove_string_address);
     name2Selector[TABLE_METHOD_update_string_address_address] =
-        *(uint32_t*)(sha3(TABLE_METHOD_update_string_address_address).ref().cropped(0, 4).data());
+        getFuncSelector(TABLE_METHOD_update_string_address_address);
 }
 
 std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)

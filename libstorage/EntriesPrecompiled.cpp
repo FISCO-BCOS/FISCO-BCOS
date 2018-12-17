@@ -32,10 +32,8 @@ const char* const ENTRYIES_METHOD_size = "size()";
 
 EntriesPrecompiled::EntriesPrecompiled()
 {
-    name2Selector[ENTRYIES_METHOD_get_int256] =
-        *(uint32_t*)(sha3(ENTRYIES_METHOD_get_int256).ref().cropped(0, 4).data());
-    name2Selector[ENTRYIES_METHOD_size] =
-        *(uint32_t*)(sha3(ENTRYIES_METHOD_size).ref().cropped(0, 4).data());
+    name2Selector[ENTRYIES_METHOD_get_int256] = getFuncSelector(ENTRYIES_METHOD_get_int256);
+    name2Selector[ENTRYIES_METHOD_size] = getFuncSelector(ENTRYIES_METHOD_size);
 }
 
 std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
