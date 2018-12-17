@@ -394,11 +394,11 @@ void StorageState::clear()
 
 bool StorageState::checkAuthority(Address _origin, Address __contract) const
 {
-	auto table = getTable(__contract);
-	if(table)
-		return table->checkAuthority(_origin);
-	else
-		return true;
+    auto table = getTable(__contract);
+    if (table)
+        return table->checkAuthority(_origin);
+    else
+        return true;
 }
 
 void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)

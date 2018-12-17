@@ -77,30 +77,30 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     tableInfo->fields.emplace_back("_num_");
 
     MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
-	memoryTable->setStateStorage(m_stateStorage);
-	memoryTable->setBlockHash(m_blockHash);
-	memoryTable->setBlockNum(m_blockNum);
+    memoryTable->setStateStorage(m_stateStorage);
+    memoryTable->setBlockHash(m_blockHash);
+    memoryTable->setBlockNum(m_blockNum);
 
-	if(authorityFlag)
-	{
-	    if(tableName != string(SYS_ACCESS_TABLE))
-	    {
-	    	setAuthorizedAddress(tableInfo);
-	    }
-	    else
-	    {
-	    	memoryTable->setTableInfo(tableInfo);
-	    	auto tableEntries = memoryTable->select(tableInfo->name, memoryTable->newCondition());
-			for (size_t i = 0; i < tableEntries->size(); ++i)
-			{
-				auto entry = tableEntries->get(i);
-				if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
-				{
-					tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
-				}
-			}
-	    }
-	}
+    if (authorityFlag)
+    {
+        if (tableName != string(SYS_ACCESS_TABLE))
+        {
+            setAuthorizedAddress(tableInfo);
+        }
+        else
+        {
+            memoryTable->setTableInfo(tableInfo);
+            auto tableEntries = memoryTable->select(tableInfo->name, memoryTable->newCondition());
+            for (size_t i = 0; i < tableEntries->size(); ++i)
+            {
+                auto entry = tableEntries->get(i);
+                if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+                {
+                    tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+                }
+            }
+        }
+    }
 
     memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
@@ -316,18 +316,17 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
 
 void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
-	Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
-	if(accessTable)
-	{
-		auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());
-		for (size_t i = 0; i < tableEntries->size(); ++i)
-		{
-			auto entry = tableEntries->get(i);
-			if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
-			{
-				_tableInfo->authorizedAddress.emplace_back(
-						entry->getField("address"));
-			}
-		}
-	}
+    Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    if (accessTable)
+    {
+        auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());
+        for (size_t i = 0; i < tableEntries->size(); ++i)
+        {
+            auto entry = tableEntries->get(i);
+            if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+            {
+                _tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+            }
+        }
+    }
 }

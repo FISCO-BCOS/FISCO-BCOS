@@ -41,7 +41,7 @@ namespace test_AuthorityPrecompiled
 {
 struct AuthorityPrecompiledFixture
 {
-	AuthorityPrecompiledFixture()
+    AuthorityPrecompiledFixture()
     {
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
@@ -115,9 +115,9 @@ BOOST_AUTO_TEST_CASE(remove)
 
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-	Condition::Ptr condition = table->newCondition();
-	condition->EQ(STATUS, "1");
-	entries = table->select(tableName, condition);
+    Condition::Ptr condition = table->newCondition();
+    condition->EQ(STATUS, "1");
+    entries = table->select(tableName, condition);
     BOOST_TEST(entries->size() == 0u);
 
     // remove not exist entry
@@ -125,7 +125,6 @@ BOOST_AUTO_TEST_CASE(remove)
     in = abi.abiIn("remove(string,string)", tableName, addr);
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     BOOST_TEST(out[31] == 0);
-
 }
 
 BOOST_AUTO_TEST_CASE(toString)

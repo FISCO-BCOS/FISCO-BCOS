@@ -75,20 +75,24 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         }
 
         auto condition = table->newCondition();
-		condition->EQ(SYS_AC_FIELD_ADDRESS, addr);
-		auto entries = table->select(tableName, condition);
-		if (entries->size() != 0u)
-		{
-			STORAGE_LOG(DEBUG) << "Authority entry with the same tableName and address has existed,  tableName : " << tableName << "address: " << addr;
-			break;
-		}
-		auto entry = table->newEntry();
-		entry->setField(SYS_AC_FIELD_TABLE_NAME, tableName);
-		entry->setField(SYS_AC_FIELD_ADDRESS, addr);
-		entry->setField(SYS_AC_FIELD_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-		size_t count = table->insert(tableName, entry, getOptions(origin));
-		out = abi.abiIn("", u256(count));
-		STORAGE_LOG(DEBUG) << "AuthorityPrecompiled add a record, tableName : " << tableName << "address: " << addr;
+        condition->EQ(SYS_AC_FIELD_ADDRESS, addr);
+        auto entries = table->select(tableName, condition);
+        if (entries->size() != 0u)
+        {
+            STORAGE_LOG(DEBUG)
+                << "Authority entry with the same tableName and address has existed,  tableName : "
+                << tableName << "address: " << addr;
+            break;
+        }
+        auto entry = table->newEntry();
+        entry->setField(SYS_AC_FIELD_TABLE_NAME, tableName);
+        entry->setField(SYS_AC_FIELD_ADDRESS, addr);
+        entry->setField(SYS_AC_FIELD_ENABLENUM,
+            boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+        size_t count = table->insert(tableName, entry, getOptions(origin));
+        out = abi.abiIn("", u256(count));
+        STORAGE_LOG(DEBUG) << "AuthorityPrecompiled add a record, tableName : " << tableName
+                           << "address: " << addr;
 
         break;
     }
@@ -113,12 +117,13 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         auto entries = table->select(tableName, condition);
         if (entries->size() == 0u)
         {
-            STORAGE_LOG(WARNING) << "Authority entry with the table name and address does not existed.";
+            STORAGE_LOG(WARNING)
+                << "Authority entry with the table name and address does not existed.";
             out = abi.abiIn("", u256(0));
         }
         else
         {
-			size_t count = table->remove(tableName, condition, getOptions(origin));
+            size_t count = table->remove(tableName, condition, getOptions(origin));
             out = abi.abiIn("", count);
         }
 
@@ -131,4 +136,3 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
     }
     return out;
 }
-

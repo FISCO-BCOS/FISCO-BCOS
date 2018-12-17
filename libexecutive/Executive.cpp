@@ -154,7 +154,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
         LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
-        auto result = m_envInfo.precompiledEngine()->call(_p.senderAddress, _p.codeAddress, _p.data);
+        auto result =
+            m_envInfo.precompiledEngine()->call(_p.senderAddress, _p.codeAddress, _p.data);
         size_t outputSize = result.size();
         m_output = owning_bytes_ref{std::move(result), 0, outputSize};
         LOG(DEBUG) << "Precompiled result: " << result;
@@ -316,8 +317,8 @@ bool Executive::go(OnOpFunc const& _onOp)
         }
         catch (PermissionDenied const& _e)
         {
-        	revert();
-        	throw;
+            revert();
+            throw;
         }
         catch (Exception const& _e)
         {

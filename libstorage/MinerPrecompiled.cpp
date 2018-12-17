@@ -19,10 +19,10 @@
  *  @date 20180921
  */
 #include "MinerPrecompiled.h"
-#include <libstorage/EntriesPrecompiled.h>
 #include <libdevcore/easylog.h>
-#include <libstorage/TableFactoryPrecompiled.h>
 #include <libethcore/ABI.h>
+#include <libstorage/EntriesPrecompiled.h>
+#include <libstorage/TableFactoryPrecompiled.h>
 #include <boost/lexical_cast.hpp>
 using namespace dev;
 using namespace dev::blockverifier;

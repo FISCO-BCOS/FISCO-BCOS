@@ -93,7 +93,7 @@ public:
 
     /// Set the value of a storage position of an account.
     virtual void setStorage(
-    		Address const& _contract, u256 const& _location, u256 const& _value) override;
+        Address const& _contract, u256 const& _location, u256 const& _value) override;
 
     /// Clear the storage root hash of an account to the hash of the empty trie.
     virtual void clearStorage(Address const& _contract) override;
