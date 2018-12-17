@@ -215,6 +215,8 @@ protected:
     dev::blockverifier::ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
     virtual void checkBlockValid(dev::eth::Block const& block);
 
+    virtual void updateNodeListInP2P();
+
 private:
     bool blockExists(h256 const& blockHash)
     {

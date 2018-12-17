@@ -42,6 +42,12 @@ enum class CommitResult
     ERROR_PARENT_HASH = -2,
     ERROR_COMMITTING = -3
 };
+struct GenesisBlockParam
+{
+    std::string groupMark;
+    dev::h512s minerList;
+    dev::h512s observerList;
+};
 class BlockChainInterface
 {
 public:
@@ -63,7 +69,10 @@ public:
 
 
     /// set group mark to genesis block
-    virtual void setGroupMark(std::string const& groupMark) = 0;
+    virtual void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) = 0;
+    /// get miner or observer nodes
+    virtual dev::h512s minerList() = 0;
+    virtual dev::h512s observerList() = 0;
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>

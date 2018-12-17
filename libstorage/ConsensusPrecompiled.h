@@ -14,9 +14,9 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file MinerPrecompiled.h
- *  @author ancelmo
- *  @date 20180921
+/** @file ConsensusPrecompiled.h
+ *  @author chaychen
+ *  @date 20181211
  */
 #pragma once
 #include "libblockverifier/ExecutiveContext.h"
@@ -42,16 +42,21 @@ const char* const NODE_TYPE_MINER = "miner";
 const char* const NODE_TYPE_OBSERVER = "observer";
 const char* const NODE_KEY_NODEID = "node_id";
 const char* const NODE_KEY_ENABLENUM = "enable_num";
+const char* const PRI_COLUMN = "name";
 const char* const PRI_KEY = "node";
 
-class MinerPrecompiled : public CRUDPrecompiled
+class ConsensusPrecompiled : public CRUDPrecompiled
 {
 public:
-    typedef std::shared_ptr<MinerPrecompiled> Ptr;
+    typedef std::shared_ptr<ConsensusPrecompiled> Ptr;
 
-    virtual ~MinerPrecompiled(){};
+    virtual ~ConsensusPrecompiled(){};
 
     virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+
+private:
+    void showConsensusTable(ExecutiveContext::Ptr context);
+    bool checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID);
 };
 
 }  // namespace blockverifier

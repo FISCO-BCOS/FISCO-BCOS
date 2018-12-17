@@ -115,5 +115,12 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     }
 }
 
+void ConsensusEngineBase::updateNodeListInP2P()
+{
+    dev::h512s nodeList = m_blockChain->minerList() + m_blockChain->observerList();
+    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(m_protocolId);
+    m_service->setNodeListByGroupID(ret.first, nodeList);
+}
+
 }  // namespace consensus
 }  // namespace dev
