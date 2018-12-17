@@ -444,8 +444,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     if ((block.blockHeader().number() != num + 1))
     {
         BLOCKCHAIN_LOG(WARNING) << "[#commitBlock] Commit fail [needNumber/committedNumber]: "
-                                << "[" << (num + 1) << "/" << block.blockHeader().number()
-                                << "]";
+                                << "[" << (num + 1) << "/" << block.blockHeader().number() << "]";
         return CommitResult::ERROR_NUMBER;
     }
 
