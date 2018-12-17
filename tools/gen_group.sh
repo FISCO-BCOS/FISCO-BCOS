@@ -89,10 +89,10 @@ function generateNodeIdList()
     for ip in ${ipList[*]};do
         IFS=" "
         ipMiners=`echo ${ip} | cut -d':' -f2`
-        signleIp=`echo ${ip} | cut -d':' -f1`
+        singleIp=`echo ${ip} | cut -d':' -f1`
         miners=(${ipMiners})
         IFS="$OLD_IFS" 
-        local prefix=$node_dir"/node_"${signleIp}
+        local prefix=$node_dir"/${singleIp}/node_"${singleIp}
         for miner in ${miners[*]};do
                 if [ ! -f "${prefix}_${miner}/config.ini" ];then
                     LOG_ERROR "${prefix}_${miner}/config.ini doesn't exist!"
@@ -125,10 +125,10 @@ function generateGroupConfig()
     for ip in ${ipList[*]};do
         IFS=" "
         ipMiners=`echo ${ip} | cut -d':' -f2`
-        signleIp=`echo ${ip} | cut -d':' -f1`
+        singleIp=`echo ${ip} | cut -d':' -f1`
         miners=(${ipMiners})
         IFS="$OLD_IFS" 
-        local prefix=$node_dir"/node_"${signleIp}
+        local prefix=$node_dir"/${singleIp}/node_"${singleIp}
         # get nodeidList for specified machine
         for minerNode in ${miners[*]};do
             if [ ! -d "${prefix}_${minerNode}" ];then

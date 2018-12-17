@@ -137,7 +137,6 @@ if [ ${test_mode} -eq 1 ];then
 else
     execute_cmd "cmake -DTESTS=OFF .."
 fi
-execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
 build_centos_source()
@@ -149,7 +148,6 @@ if [ ${test_mode} -eq 1 ];then
 else
     execute_cmd "cmake3 -DTESTS=OFF .."
 fi
-execute_cmd "make && sudo make install && cd ${current_dir}"
 }
 
 build_source()
@@ -165,6 +163,7 @@ else
     LOG_ERROR "Unsupported Platform, Exit"
     exit 1
 fi
+execute_cmd "make && cd ${current_dir}"
 }
 
 download_binary()
