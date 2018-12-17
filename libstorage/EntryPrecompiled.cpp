@@ -31,7 +31,8 @@ std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
     return "Entry";
 }
 
-bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param, Address origin)
+bytes EntryPrecompiled::call(
+    std::shared_ptr<ExecutiveContext> context, bytesConstRef param, Address origin)
 {
     STORAGE_LOG(DEBUG) << "call Entry:";
 
@@ -100,6 +101,17 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
             ret[i] = i < value.size() ? value[i] : 0;
 
         out = abi.abiIn("", ret);
+        break;
+    }
+    case 0x27314f79:
+    {  //"getBytes32(string)"
+        std::string str;
+        abi.abiOut(data, str);
+
+        std::string value = m_entry->getField(str);
+        dev::string32 s32 = dev::eth::toString32(value);
+        out = abi.abiIn("", s32);
+
         break;
     }
     default:
