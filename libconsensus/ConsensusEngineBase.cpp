@@ -115,5 +115,49 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     }
 }
 
+void ConsensusEngineBase::updateConsensusNodeList()
+{
+    try
+    {
+        {
+            WriteGuard l(m_minerListMutex);
+            m_minerList = m_blockChain->minerList();
+            /// to make sure the index of all miners are consistent
+            std::sort(m_minerList.begin(), m_minerList.end());
+        }
+
+        ReadGuard l(m_minerListMutex);
+        std::stringstream s2;
+        s2 << "[#updateConsensusNodeList] Miners:";
+        for (dev::h512 node : m_minerList)
+            s2 << node.abridged() << ",";
+        s2 << "Observers:";
+        dev::h512s observerList = m_blockChain->observerList();
+        for (dev::h512 node : observerList)
+            s2 << node.abridged() << ",";
+        ENGINE_LOG(TRACE) << s2.str();
+
+        if (m_lastNodeList != s2.str())
+        {
+            ENGINE_LOG(TRACE) << "[#updateConsensusNodeList] update P2P List done.";
+            updateNodeListInP2P();
+            m_lastNodeList = s2.str();
+        }
+    }
+    catch (std::exception& e)
+    {
+        ENGINE_LOG(ERROR)
+            << "[#updateConsensusNodeList] update consensus node list failed [EINFO]:  "
+            << boost::diagnostic_information(e);
+    }
+}
+
+void ConsensusEngineBase::updateNodeListInP2P()
+{
+    dev::h512s nodeList = m_blockChain->minerList() + m_blockChain->observerList();
+    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(m_protocolId);
+    m_service->setNodeListByGroupID(ret.first, nodeList);
+}
+
 }  // namespace consensus
 }  // namespace dev
