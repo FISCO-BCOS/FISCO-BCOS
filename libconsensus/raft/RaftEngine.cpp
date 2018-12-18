@@ -683,8 +683,7 @@ bool RaftEngine::checkHeartbeatTimeout()
     return interval >= std::chrono::milliseconds(m_heartbeatTimeout);
 }
 
-P2PMessage::Ptr RaftEngine::generateHeartbeat(
-    raft::NodeIndex _idx, size_t _term, int64_t _height, h256 _blockHash, raft::NodeIndex =)
+P2PMessage::Ptr RaftEngine::generateHeartbeat()
 {
     RaftHeartBeat hb;
     hb.idx = m_nodeIdx;
@@ -924,7 +923,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
         return false;
     }
 
-    bool step_down = false;
+    bool stepDown = false;
 
     // _hb.term >= m_term || _hb.lastLeaderTerm > m_lastLeaderTerm
     // receive larger lastLeaderTerm, recover my term to hb term, set self to next step (follower)
@@ -935,7 +934,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
             << "[lastLeaderTerm]: " << m_lastLeaderTerm << ", [hbLastLeader]: " << _hb.term;
         m_term = _hb.term;
         m_vote = raft::InvalidIndex;
-        step_down = true;
+        stepDown = true;
     }
 
     if (_hb.term > m_term)
@@ -945,7 +944,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
             << " [term]: " << m_term << ", [hbTerm]: " << _hb.term;
         m_term = _hb.term;
         m_vote = raft::InvalidIndex;
-        step_down = true;
+        stepDown = true;
     }
 
     if (m_state == EN_STATE_CANDIDATE && _hb.term >= m_term)
@@ -955,7 +954,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
                              << " [term]: " << m_term << ", [hbTerm]: " << _hb.term;
         m_term = _hb.term;
         m_vote = raft::InvalidIndex;
-        step_down = true;
+        stepDown = true;
     }
 
     clearFirstVoteCache();
@@ -964,7 +963,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
 
     resetElectTimeout();
 
-    return step_down;
+    return stepDown;
 }
 
 void RaftEngine::recoverElectTime()
