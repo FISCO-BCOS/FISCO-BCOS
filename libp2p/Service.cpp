@@ -284,7 +284,7 @@ void Service::onMessage(
             }
             else
             {
-                SERVICE_LOG(WARNING) << "Request protocolID not found" << message->seq();
+                SERVICE_LOG(DEBUG) << "Request protocolID not found" << message->seq();
             }
         }
         else
