@@ -298,8 +298,20 @@ void Session::drop(DisconnectReason _reason)
     {
         try
         {
-            SESSION_LOG(WARNING) << "Closing " << socket.remote_endpoint() << "("
-                                 << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
+            if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
+                _reason == ClientQuit || _reason == UserReason)
+            {
+                SESSION_LOG(DEBUG)
+                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << m_socket->nodeIPEndpoint().address;
+            }
+            else
+            {
+                SESSION_LOG(WARNING)
+                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << m_socket->nodeIPEndpoint().address;
+            }
+
             /// if get Host object failed, close the socket directly
             auto socket = m_socket;
             auto server = m_server.lock();

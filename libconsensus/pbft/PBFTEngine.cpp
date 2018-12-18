@@ -1205,9 +1205,8 @@ void PBFTEngine::updateMinerList()
                 if (find(miner_list.begin(), miner_list.end(), nodeID) == miner_list.end())
                 {
                     miner_list.push_back(nodeID);
-                    PBFTENGINE_LOG(INFO)
-                        << "[#updateMinerList] Add nodeID [nodeID/idx]: " << nodeID.abridged()
-                        << "/" << i;
+                    PBFTENGINE_LOG(INFO) << "[#updateMinerList] Add nodeID [idx/nodeID]: " << i
+                                         << "/" nodeID.abridged();
                 }
             }
         }
