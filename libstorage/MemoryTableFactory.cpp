@@ -75,7 +75,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     tableInfo->fields.emplace_back(tableInfo->key);
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
-    getAuthorizedAddress(tableInfo);
+
     MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
