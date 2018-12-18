@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file ConsensusPrecompiled.cpp
  *  @author chaychen
  *  @date 20181211
@@ -83,13 +83,13 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         auto entry = table->newEntry();
         entry->setField(NODE_TYPE, NODE_TYPE_MINER);
         entry->setField(PRI_COLUMN, PRI_KEY);
+        entry->setField(
+            NODE_KEY_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
 
         if (entries.get())
         {
             if (entries->size() == 0u)
             {
-                entry->setField(NODE_KEY_ENABLENUM,
-                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 table->insert(PRI_KEY, entry);
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new miner node, nodeID : " << nodeID;
@@ -139,13 +139,13 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         auto entry = table->newEntry();
         entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
         entry->setField(PRI_COLUMN, PRI_KEY);
+        entry->setField(
+            NODE_KEY_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
 
         if (entries.get())
         {
             if (entries->size() == 0u)
             {
-                entry->setField(NODE_KEY_ENABLENUM,
-                    boost::lexical_cast<std::string>(context->blockInfo().number + 1));
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 table->insert(PRI_KEY, entry);
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new observer node, nodeID : " << nodeID;
