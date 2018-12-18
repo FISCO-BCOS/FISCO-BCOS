@@ -147,9 +147,10 @@ ExternalProject_Add(cryptopp
     LOG_CONFIGURE 1
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
+    LOG_BUILD 1
     LOG_INSTALL 1
+    BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a
 )
-
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)
 add_library(Cryptopp STATIC IMPORTED)
 

@@ -51,6 +51,8 @@ macro(configure_project)
     eth_default_option(ARCH_TYPE OFF)
     # unit tests
     eth_default_option(TESTS OFF)
+    # code coverage
+    eth_default_option(COVERAGE OFF)
 
     #debug
     eth_default_option(DEBUG OFF)

@@ -55,7 +55,7 @@ public:
     virtual void start() override;
     virtual void disconnect(DisconnectReason _reason) override;
 
-    virtual bool isConnected() const override { return m_socket->isConnected(); }
+    virtual bool isConnected() const override;
 
     virtual void asyncSendMessage(
         Message::Ptr message, Options options, CallbackFunc callback) override;
