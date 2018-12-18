@@ -59,9 +59,7 @@ public:
 
     virtual dev::storage::AccessOptions::Ptr getOptions(Address origin)
     {
-        auto options = std::make_shared<dev::storage::AccessOptions>();
-        options->origin = origin;
-        return options;
+    	return std::make_shared<dev::storage::AccessOptions>(origin);
     }
 };
 

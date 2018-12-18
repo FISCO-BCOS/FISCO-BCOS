@@ -190,7 +190,7 @@ void MPTState::clear()
     m_state.cacheClear();
 }
 
-bool MPTState::checkAuthority(Address _origin, Address __contract) const
+bool MPTState::checkAuthority(Address _origin, Address _contract) const
 {
     return true;
 }

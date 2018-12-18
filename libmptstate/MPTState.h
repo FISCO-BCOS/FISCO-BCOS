@@ -128,7 +128,7 @@ public:
 
     virtual void clear() override;
 
-    virtual bool checkAuthority(Address _origin, Address __contract) const override;
+    virtual bool checkAuthority(Address _origin, Address _contract) const override;
 
     State& getState();
 
