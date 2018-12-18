@@ -53,6 +53,8 @@ public:
     // consensus part
     virtual std::string getBlockNumber(int _groupID) override;
     virtual std::string getPbftView(int _groupID) override;
+    virtual Json::Value getMinerList(int _groupID) override;
+    virtual Json::Value getObserverList(int _groupID) override;
     virtual Json::Value getConsensusStatus(int _groupID) override;
 
     // sync part

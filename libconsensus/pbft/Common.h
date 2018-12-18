@@ -27,13 +27,16 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
-#define PBFTENGINE_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS][#PBFTENGINE] [PROTOCOL: " << std::dec << m_protocolId << "] "
-#define PBFTSEALER_LOG(LEVEL)                                             \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTSEALER] [PROTOCOL: " << std::dec \
-               << m_pbftEngine->protocolId() << "] "
-#define PBFTReqCache_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << std::dec << m_protocolId << "] "
+#define PBFTENGINE_LOG(LEVEL)                                                         \
+    LOG(LEVEL) << "[#CONSENSUS][#PBFTENGINE] [PROTOCOL: " << std::dec << m_protocolId \
+               << "] [GROUP: " << std::to_string(m_groupId) << "]"
+#define PBFTSEALER_LOG(LEVEL)                                          \
+    LOG(LEVEL) << "[#CONSENSUS] [#PBFTSEALER] [PROTOCOL: " << std::dec \
+               << m_pbftEngine->protocolId()                           \
+               << "] [GROUP: " << std::to_string(m_pbftEngine->groupId()) << "]"
+#define PBFTReqCache_LOG(LEVEL)                                                          \
+    LOG(LEVEL) << "[#CONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << std::dec << m_protocolId \
+               << "] [GROUP:" << std::to_string(m_groupId) << "]"
 namespace dev
 {
 namespace consensus
