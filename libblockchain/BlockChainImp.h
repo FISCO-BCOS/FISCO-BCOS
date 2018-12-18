@@ -33,6 +33,8 @@
 #include <libstoragestate/StorageStateFactory.h>
 #include <memory>
 
+#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << "[#BLOCKCHAIN]"
+
 namespace dev
 {
 namespace blockverifier
