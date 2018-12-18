@@ -57,7 +57,7 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
     m_connectedNode = m_nodeNum;
-    PBFTENGINE_LOG(INFO) << "[#PBFT init env success]";
+    PBFTENGINE_LOG(INFO) << "[#PBFT init env successfully]";
 }
 
 bool PBFTEngine::shouldSeal()
@@ -152,7 +152,7 @@ void PBFTEngine::initBackupDB()
     if (!isDiskSpaceEnough(path))
     {
         PBFTENGINE_LOG(ERROR)
-            << "[#initBackupDB] Not enough available of disk, please free the space and run again";
+            << "[#initBackupDB] Disk space is insufficient. Release disk space and try again";
         BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
     }
     // reload msg from db to commited-prepare-cache
@@ -528,7 +528,8 @@ void PBFTEngine::onRecvPBFTMessage(
 {
     if (m_idx == MAXIDX)
     {
-        PBFTENGINE_LOG(TRACE) << "[#workLoop: I am a observer, drop the PBFT packet directly";
+        PBFTENGINE_LOG(TRACE)
+            << "[#workLoop: I'm an observer, drop the PBFT message packets directly";
         return;
     }
     PBFTMsgPacket pbft_msg;

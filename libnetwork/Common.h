@@ -249,11 +249,8 @@ struct SessionInfo
     NodeIPEndpoint nodeIPEndpoint;
     std::set<std::string> topics;
     SessionInfo(NodeID _nodeID, NodeIPEndpoint _nodeIPEndpoint, std::set<std::string> _topics)
-    {
-        nodeID = _nodeID;
-        nodeIPEndpoint = _nodeIPEndpoint;
-        topics = _topics;
-    }
+      : nodeID(_nodeID), nodeIPEndpoint(_nodeIPEndpoint), topics(_topics)
+    {}
 };
 using SessionInfos = std::vector<SessionInfo>;
 
