@@ -70,6 +70,7 @@ public:
         // signal registration
         m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
         m_blockSubmitted = m_blockChain->onReady([&]() { this->noteNewBlocks(); });
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -103,6 +104,7 @@ public:
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
     {
         m_protocolId = _protocolId;
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     };
 
     void noteNewTransactions() { m_newTransactions = true; }
@@ -152,6 +154,7 @@ private:
 
     // Internal data
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 

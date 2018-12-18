@@ -55,7 +55,7 @@ public:
     virtual void start() override;
     virtual void disconnect(DisconnectReason _reason) override;
 
-    virtual bool isConnected() const override { return m_socket->isConnected(); }
+    virtual bool isConnected() const override;
 
     virtual void asyncSendMessage(
         Message::Ptr message, Options options, CallbackFunc callback) override;
@@ -173,6 +173,7 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
+    uint64_t m_shutDownTimeThres = 30000;
 };
 
 class SessionFactory

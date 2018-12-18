@@ -1,4 +1,6 @@
 #!/bin/bash
+pkcs12_passwd=""
+
 getname() {
     local name="$1"
     if [ -z "$name" ]; then
@@ -78,8 +80,8 @@ gen_sdk_cert() {
     cat ${agpath}/agency.crt >> ${sdkpath}/sdk.crt
     cat ${agpath}/ca.crt >> ${sdkpath}/sdk.crt
     # create keystore
-    openssl pkcs12 -export -name client -in ${sdkpath}/sdk.crt -inkey ${sdkpath}/sdk.key -out ${sdkpath}/keystore.p12
-    keytool -importkeystore -destkeystore ${sdkpath}/client.keystore -srckeystore ${sdkpath}/keystore.p12 -srcstoretype pkcs12 -alias client
+    openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in ${sdkpath}/sdk.crt -inkey ${sdkpath}/sdk.key -out ${sdkpath}/keystore.p12
+    # keytool -importkeystore -destkeystore ${sdkpath}/client.keystore -srckeystore ${sdkpath}/keystore.p12 -srcstoretype pkcs12 -alias client
     #nodeid is pubkey
     openssl ec -in $sdkpath/sdk.key
     echo "build $sdk sdk cert successful!"
@@ -92,7 +94,7 @@ help()
     cat << EOF
 Usage:
     -a <dir of agency cert>     [Required]
-    -s <dir of the sdk cert>   [Optional] default is sdk
+    -s <dir of the sdk cert>    [Optional] default is sdk
     -h Help
 e.g: 
     bash sdk.sh -a agencyA -s sdk1

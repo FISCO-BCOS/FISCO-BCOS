@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file Initializer.h
  *  @author chaychen
  *  @modify first draft
@@ -53,13 +53,14 @@ void Initializer::init(std::string const& _path)
         m_rpcInitializer->setSSLContext(m_secureInitializer->SSLContext());
         m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
         m_rpcInitializer->initConfig(pt);
+        m_ledgerInitializer->startAll();
     }
     catch (std::exception& e)
     {
         INITIALIZER_LOG(ERROR) << "[#Initializer::init] load configuration failed! [EINFO]:  "
                                << boost::diagnostic_information(e);
-        BOOST_THROW_EXCEPTION(ConfigNotExist() << errinfo_comment(
-                                  "load configuration " + _path +
-                                  "failed, [EINFO]: " + boost::diagnostic_information(e)));
+        ERROR_OUTPUT << "[#Initializer] INIT Failed, [ERROR INFO]: "
+                     << boost::diagnostic_information(e) << std::endl;
+        exit(1);
     }
 }

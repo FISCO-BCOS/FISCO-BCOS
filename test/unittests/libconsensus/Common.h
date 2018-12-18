@@ -31,7 +31,8 @@ namespace test
 {
 template <typename T>
 void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
-    int64_t const& _height = -1, u256 const& _view = Invalid256, u256 const& _idx = Invalid256,
+    int64_t const& _height = -1, dev::consensus::VIEWTYPE const& _view = dev::consensus::MAXVIEW,
+    dev::consensus::IDXTYPE const& _idx = dev::consensus::MAXIDX,
     u256 const& _timestamp = Invalid256, h256 const& _blockHash = h256())
 {
     BOOST_CHECK(msg.height == _height);
