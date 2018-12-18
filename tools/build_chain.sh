@@ -731,7 +731,7 @@ for line in ${ip_array[*]};do
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
-    echo "cp \${1} \${SHELL_FOLDER}/$output_dir/${ip}/" >> "$output_dir/replace_all.sh"
+    echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 
