@@ -34,6 +34,7 @@ void P2PSession::start()
     if (!m_run)
     {
         m_run = true;
+
         m_session->start();
         heartBeat();
     }
@@ -60,10 +61,9 @@ void P2PSession::heartBeat()
     {
         if (m_session->isConnected())
         {
-#if 0
             auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
-            message->setProtocolID(dev::eth::ProtocolID::AMOP);
+            message->setProtocolID(dev::eth::ProtocolID::Topic);
             message->setPacketType(AMOPPacketType::SendTopicSeq);
             std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
             std::string s = boost::lexical_cast<std::string>(service->topicSeq());
@@ -73,7 +73,6 @@ void P2PSession::heartBeat()
             std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
 
             m_session->asyncSendMessage(message);
-#endif
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
@@ -92,4 +91,25 @@ void P2PSession::heartBeat()
             }
         });
     }
+}
+
+void P2PSession::onTopicMessage(uint32_t topicSeq) {
+	if(topicSeq != m_topicSeq) {
+		SESSION_LOG(TRACE) << "Remote seq: " << topicSeq << " not equal to local seq: " << m_topicSeq << ", update";
+
+		auto service = m_service.lock();
+		if (service && service->actived())
+		{
+			auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+
+			message->setProtocolID(dev::eth::ProtocolID::Topic);
+			message->setPacketType(AMOPPacketType::RequestTopics);
+			std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+			std::string s = boost::lexical_cast<std::string>(service->topicSeq());
+			buffer->assign(s.begin(), s.end());
+			message->setBuffer(buffer);
+			message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
+			m_session->asyncSendMessage(message);
+		}
+	}
 }

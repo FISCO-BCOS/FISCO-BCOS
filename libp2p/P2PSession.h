@@ -57,9 +57,12 @@ public:
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
 
+    virtual void onTopicMessage(uint32_t topicSeq);
+
 private:
     dev::network::SessionFace::Ptr m_session;
     NodeID m_nodeID;
+    uint32_t m_topicSeq = 0;
     std::shared_ptr<std::set<std::string> > m_topics;
     std::weak_ptr<Service> m_service;
     uint32_t failTimes = 0;

@@ -263,6 +263,12 @@ void Service::onMessage(
         SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+
+        //AMOP message, redirect to p2psession
+        if(p2pMessage->protocolID() == dev::eth::ProtocolID::Topic && p2pMessage->packetType() == AMOPPacketType::SendTopicSeq) {
+
+        }
+
         if (p2pMessage->isRequestPacket())
         {
             SERVICE_LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-"
