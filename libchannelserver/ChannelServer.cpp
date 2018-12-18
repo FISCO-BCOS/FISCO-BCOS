@@ -69,8 +69,6 @@ void dev::channel::ChannelServer::run()
             }
         }
     });
-
-    _serverThread->detach();
 }
 
 
@@ -150,7 +148,11 @@ void dev::channel::ChannelServer::stop()
     {
         CHANNEL_LOG(DEBUG) << "Close acceptor";
 
-        _acceptor->close();
+        if (_acceptor->is_open())
+        {
+            _acceptor->cancel();
+            _acceptor->close();
+        }
     }
     catch (std::exception& e)
     {
@@ -166,6 +168,7 @@ void dev::channel::ChannelServer::stop()
     {
         CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
     }
+    _serverThread->join();
 }
 
 void dev::channel::ChannelServer::onHandshake(

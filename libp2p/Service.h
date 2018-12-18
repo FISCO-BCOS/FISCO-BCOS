@@ -109,8 +109,8 @@ public:
         ++m_topicSeq;
     }
 
-    virtual std::shared_ptr<Host> host() { return m_host; }
-    virtual void setHost(std::shared_ptr<Host> host) { m_host = host; }
+    virtual std::shared_ptr<dev::network::Host> host() { return m_host; }
+    virtual void setHost(std::shared_ptr<dev::network::Host> host) { m_host = host; }
 
     virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override
     {
@@ -133,7 +133,7 @@ private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
 
-    std::shared_ptr<Host> m_host;
+    std::shared_ptr<dev::network::Host> m_host;
 
     std::unordered_map<NodeID, P2PSession::Ptr> m_sessions;
     RecursiveMutex x_sessions;

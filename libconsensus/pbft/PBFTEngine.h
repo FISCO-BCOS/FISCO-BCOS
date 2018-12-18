@@ -50,6 +50,7 @@ using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
 class PBFTEngine : public ConsensusEngineBase
 {
 public:
+    virtual ~PBFTEngine() { stop(); }
     PBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -112,7 +113,7 @@ protected:
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
-    bool getNodeIDByIndex(h512& nodeId, const u256& idx) const;
+    bool getNodeIDByIndex(h512& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block)
     {
         ConsensusEngineBase::checkBlockValid(block);
@@ -123,6 +124,10 @@ protected:
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>());
+
+    void sendViewChangeMsg(dev::network::NodeID const& nodeId);
+    bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key,
+        bytesConstRef data);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -260,8 +265,8 @@ protected:
         peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
-            PBFTENGINE_LOG(WARNING)
-                << "[#isValidReq] Recv PBFT msg from unkown peer:  " << session->nodeID();
+            PBFTENGINE_LOG(DEBUG) << "[#isValidReq] Recv PBFT msg from unkown peer:  "
+                                  << session->nodeID();
             return false;
         }
         /// check whether this node is in the miner list
@@ -295,15 +300,15 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            PBFTENGINE_LOG(WARNING)
-                << "#[checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
+            PBFTENGINE_LOG(DEBUG)
+                << "[#checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
                 << m_reqCache->prepareCache().block_hash.abridged() << "/" << req.block_hash
                 << "  [INFO]:  " << oss.str();
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
             {
-                PBFTENGINE_LOG(INFO) << "#[checkReq] Recv future request: [prepHash]:"
+                PBFTENGINE_LOG(INFO) << "[#checkReq] Recv future request: [prepHash]:"
                                      << m_reqCache->prepareCache().block_hash.abridged()
                                      << "  [INFO]:  " << oss.str();
                 return CheckResult::FUTURE;
@@ -313,22 +318,21 @@ protected:
         /// check the sealer of this request
         if (req.idx == m_idx)
         {
-            PBFTENGINE_LOG(WARNING) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
+            PBFTENGINE_LOG(DEBUG) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
             return CheckResult::INVALID;
         }
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            PBFTENGINE_LOG(WARNING)
+            PBFTENGINE_LOG(DEBUG)
                 << "[#checkReq] Recv req with unconsistent view: [prepView/view]:  "
                 << m_reqCache->prepareCache().view << "/" << req.view << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            PBFTENGINE_LOG(WARNING)
-                << "[#checkReq] invalid sign: [hash]:" << req.block_hash.abridged()
-                << "  [INFO]: " << oss.str();
+            PBFTENGINE_LOG(DEBUG) << "[#checkReq] invalid sign: [hash]:"
+                                  << req.block_hash.abridged() << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         return CheckResult::VALID;
@@ -337,7 +341,7 @@ protected:
     bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
     bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
     bool isValidViewChangeReq(
-        ViewChangeReq const& req, u256 const& source, std::ostringstream& oss);
+        ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss);
 
     template <class T>
     inline bool hasConsensused(T const& req) const
@@ -388,25 +392,26 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            PBFTENGINE_LOG(WARNING)
-                << "[#InvalidPrepare] Get leader failed: "
-                   "[cfgErr/idx/req.idx/leader/m_leaderFailed/view/highSealer/highNumber]:  "
-                << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/" << leader.second << "/"
-                << m_leaderFailed << "/" << m_highestBlock.sealer() << "/"
-                << m_highestBlock.number();
+            if (!m_emptyBlockViewChange)
+                PBFTENGINE_LOG(WARNING)
+                    << "[#InvalidPrepare] Get leader failed: "
+                       "[cfgErr/idx/req.idx/leader/m_leaderFailed/view/highSealer/highNumber]:  "
+                    << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/" << leader.second << "/"
+                    << m_leaderFailed << "/" << m_highestBlock.sealer() << "/"
+                    << m_highestBlock.number();
             return false;
         }
 
         return true;
     }
 
-    inline std::pair<bool, u256> getLeader() const
+    inline std::pair<bool, IDXTYPE> getLeader() const
     {
         if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
         {
-            return std::make_pair(false, Invalid256);
+            return std::make_pair(false, MAXIDX);
         }
-        return std::make_pair(true, (m_view + u256(m_highestBlock.number())) % u256(m_nodeNum));
+        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
     void checkMinerList(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
@@ -419,9 +424,9 @@ protected:
     void updateMinerList();
 
 protected:
-    u256 m_view = u256(0);
-    u256 m_toView = u256(0);
-    u256 m_connectedNode;
+    VIEWTYPE m_view = 0;
+    VIEWTYPE m_toView = 0;
+    IDXTYPE m_connectedNode;
     KeyPair m_keyPair;
     std::string m_baseDir;
     bool m_cfgErr = false;
@@ -452,6 +457,7 @@ protected:
 
     /// the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
+    bool m_emptyBlockViewChange = false;
 };
 }  // namespace consensus
 }  // namespace dev

@@ -24,6 +24,7 @@
 #include <libdevcore/Common.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
+#include "Service.h"
 
 using namespace dev;
 using namespace dev::p2p;

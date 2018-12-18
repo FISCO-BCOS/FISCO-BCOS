@@ -265,9 +265,6 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
                 message->setData((const byte*)data.data(), data.size());
                 session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
             }
-            else if (data == "1")
-            {
-            }
             break;
         }
         case 0x30:
@@ -557,7 +554,8 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
         {
             try
             {
-                asyncPushChannelMessage(topic, message, [nodeID, message](dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
+            	auto service = m_service;
+                asyncPushChannelMessage(topic, message, [nodeID, message, service](dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
                 	if(e.errorCode()) {
                 		CHANNEL_LOG(ERROR) << "Push channel message failed: " << e.what();
 
@@ -567,12 +565,12 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 						auto buffer = std::make_shared<bytes>();
 						message->encode(*buffer);
 						auto msg = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-							m_service->p2pMessageFactory()->buildMessage());
+							service->p2pMessageFactory()->buildMessage());
 						msg->setBuffer(buffer);
 						msg->setProtocolID(dev::eth::ProtocolID::Topic);
 						msg->setPacketType(0u);
 						msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
-						m_service->asyncSendMessageByNodeID(nodeID, msg, CallbackFuncWithSession(), dev::network::Options());
+						service->asyncSendMessageByNodeID(nodeID, msg, CallbackFuncWithSession(), dev::network::Options());
 
 						return;
                 	}
@@ -583,12 +581,12 @@ void ChannelRPCServer::onNodeChannelRequest(h512 nodeID, dev::channel::Message::
 					auto buffer = std::make_shared<bytes>();
 					message->encode(*buffer);
 					auto msg = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-						m_service->p2pMessageFactory()->buildMessage());
+						service->p2pMessageFactory()->buildMessage());
 					msg->setBuffer(buffer);
 					msg->setProtocolID(dev::eth::ProtocolID::Topic);
 					msg->setPacketType(0u);
 					msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
-					m_service->asyncSendMessageByNodeID(nodeID, msg, CallbackFuncWithSession(), dev::network::Options());
+					service->asyncSendMessageByNodeID(nodeID, msg, CallbackFuncWithSession(), dev::network::Options());
                 });
             }
             catch (std::exception& e)

@@ -57,43 +57,11 @@ bool isLocalHostAddress(bi::address const& _addressToCheck)
 
 bool isLocalHostAddress(std::string const& _addressToCheck)
 {
+#if 0
     return _addressToCheck.empty() ? false :
                                      isLocalHostAddress(bi::address::from_string(_addressToCheck));
-}
-
-std::string reasonOf(DisconnectReason _r)
-{
-    switch (_r)
-    {
-    case DisconnectRequested:
-        return "Disconnect was requested.";
-    case TCPError:
-        return "Low-level TCP communication error.";
-    case BadProtocol:
-        return "Data format error.";
-    case UselessPeer:
-        return "Peer had no use for this node.";
-    case TooManyPeers:
-        return "Peer had too many connections.";
-    case DuplicatePeer:
-        return "Peer was already connected.";
-    case IncompatibleProtocol:
-        return "Peer protocol versions are incompatible.";
-    case NullIdentity:
-        return "Null identity given.";
-    case ClientQuit:
-        return "Peer is exiting.";
-    case UnexpectedIdentity:
-        return "Unexpected identity given.";
-    case LocalIdentity:
-        return "Connected to ourselves.";
-    case UserReason:
-        return "Subprotocol reason.";
-    case NoDisconnect:
-        return "(No disconnect has happened.)";
-    default:
-        return "Unknown reason.";
-    }
+#endif
+    return false;
 }
 
 namespace dev

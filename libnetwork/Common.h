@@ -104,9 +104,6 @@ enum P2PExceptionType
     ALL,
 };
 
-static std::string g_P2PExceptionMsg[ALL] = {"Success", "ProtocolError", "NetworkTimeout",
-    "Disconnect", "P2PError", "ConnectError", "DuplicateSession"};
-
 enum PacketDecodeStatus
 {
     PACKET_ERROR = -1,
@@ -166,7 +163,39 @@ private:
 class Session;
 
 /// @returns the string form of the given disconnection reason.
-std::string reasonOf(DisconnectReason _r);
+inline std::string reasonOf(DisconnectReason _r) {
+    switch (_r)
+    {
+    case DisconnectRequested:
+        return "Disconnect was requested.";
+    case TCPError:
+        return "Low-level TCP communication error.";
+    case BadProtocol:
+        return "Data format error.";
+    case UselessPeer:
+        return "Peer had no use for this node.";
+    case TooManyPeers:
+        return "Peer had too many connections.";
+    case DuplicatePeer:
+        return "Peer was already connected.";
+    case IncompatibleProtocol:
+        return "Peer protocol versions are incompatible.";
+    case NullIdentity:
+        return "Null identity given.";
+    case ClientQuit:
+        return "Peer is exiting.";
+    case UnexpectedIdentity:
+        return "Unexpected identity given.";
+    case LocalIdentity:
+        return "Connected to ourselves.";
+    case UserReason:
+        return "Subprotocol reason.";
+    case NoDisconnect:
+        return "(No disconnect has happened.)";
+    default:
+        return "Unknown reason.";
+    }
+}
 
 /**
  * @brief IPv4,UDP/TCP endpoints.
@@ -204,11 +233,25 @@ struct NodeIPEndpoint
     bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
     bool operator<(const dev::network::NodeIPEndpoint& rhs) const
     {
-        if (address < rhs.address)
+        if (address < rhs.address || tcpPort < rhs.tcpPort)
         {
             return true;
         }
-        return tcpPort < rhs.tcpPort;
+        if (udpPort < rhs.udpPort)
+            return true;
+        if (host < rhs.host)
+            return true;
+        return false;
+    }
+    bool operator>(const dev::network::NodeIPEndpoint& rhs) const
+    {
+        if (address > rhs.address || tcpPort > rhs.tcpPort)
+            return true;
+        if (udpPort > rhs.udpPort)
+            return true;
+        if (host > rhs.host)
+            return true;
+        return false;
     }
     std::string name() const
     {

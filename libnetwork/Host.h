@@ -150,9 +150,6 @@ private:
     Mutex x_runTimer;
     bool m_run = false;
 
-    std::set<std::string> m_pendingPeerConns;
-    Mutex x_pendingNodeConns;
-
     std::shared_ptr<std::thread> m_hostThread;
 };
 }  // namespace p2p

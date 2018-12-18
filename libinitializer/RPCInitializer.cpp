@@ -33,44 +33,55 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
         INITIALIZER_LOG(ERROR) << "[#RPCInitializer] initConfig for RPCInitializer failed";
-        BOOST_THROW_EXCEPTION(InvalidListenPort() << errinfo_comment(
-                                  "[#RPCInitializer] initConfig for RPCInitializer "
-                                  "failed! Invalid ListenPort for RPC, must between [0,65536]"));
+        ERROR_OUTPUT << "[#RPCInitializer] initConfig for RPCInitializer failed! Invalid "
+                        "ListenPort for RPC, must between [0,65536]"
+                     << std::endl;
         exit(1);
     }
     /// init channelServer
     ChannelRPCServer::Ptr m_channelRPCServer;
     ///< TODO: Double free or no free?
     ///< Donot to set destructions, the ModularServer will destruct.
-    m_channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
-    m_channelRPCServer->setListenAddr(listenIP);
-    m_channelRPCServer->setListenPort(listenPort);
-    m_channelRPCServer->setSSLContext(m_sslContext);
-    m_channelRPCServer->setService(m_p2pService);
+    try
+    {
+        m_channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
+        m_channelRPCServer->setListenAddr(listenIP);
+        m_channelRPCServer->setListenPort(listenPort);
+        m_channelRPCServer->setSSLContext(m_sslContext);
+        m_channelRPCServer->setService(m_p2pService);
 
-    auto ioService = std::make_shared<boost::asio::io_service>();
+        auto ioService = std::make_shared<boost::asio::io_service>();
 
-    auto server = std::make_shared<dev::channel::ChannelServer>();
-    server->setIOService(ioService);
-    server->setSSLContext(m_sslContext);
-    server->setEnableSSL(true);
-    server->setBind(listenIP, listenPort);
-    server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
+        auto server = std::make_shared<dev::channel::ChannelServer>();
+        server->setIOService(ioService);
+        server->setSSLContext(m_sslContext);
+        server->setEnableSSL(true);
+        server->setBind(listenIP, listenPort);
+        server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
 
-    m_channelRPCServer->setChannelServer(server);
+        m_channelRPCServer->setChannelServer(server);
 
-    auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
-    m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
-    m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
-    m_channelRPCHttpServer->StartListening();
-    INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer started.";
+        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+        m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+        m_channelRPCHttpServer->StartListening();
+        INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer started.";
 
-    /// init httpListenPort
-    ///< Donot to set destructions, the ModularServer will destruct.
-    m_safeHttpServer.reset(
-        new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
-    m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
-    m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
-    m_jsonrpcHttpServer->StartListening();
-    INITIALIZER_LOG(INFO) << "JsonrpcHttpServer started.";
+        /// init httpListenPort
+        ///< Donot to set destructions, the ModularServer will destruct.
+        m_safeHttpServer.reset(
+            new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
+        m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+        m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
+        m_jsonrpcHttpServer->StartListening();
+        INITIALIZER_LOG(INFO) << "JsonrpcHttpServer started.";
+    }
+    catch (std::exception& e)
+    {
+        INITIALIZER_LOG(ERROR) << "[#RPCInitializer] init RPC/channelserver failed, [EINFO]: "
+                               << boost::diagnostic_information(e);
+        ERROR_OUTPUT << "Init rpc/channelserver failed, EINFO: " << boost::diagnostic_information(e)
+                     << std::endl;
+        exit(1);
+    }
 }

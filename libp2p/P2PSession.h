@@ -23,6 +23,7 @@
 
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
+#include <libp2p/Common.h>
 #include <memory>
 
 namespace dev

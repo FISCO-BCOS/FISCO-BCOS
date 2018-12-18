@@ -45,7 +45,16 @@ public:
             auto tableData = search->second;
             auto it = tableData->data.find(key);
             if (it != tableData->data.end())
+            {
+                for (size_t i = 0; i < it->second->size(); ++i)
+                {
+                    if (it->second->get(i)->getStatus() == Entry::Status::DELETED)
+                    {
+                        it->second->removeEntry(i);
+                    }
+                }
                 return it->second;
+            }
         }
         return std::make_shared<Entries>();
     }
