@@ -50,7 +50,7 @@ class Host : public std::enable_shared_from_this<Host>
 {
 public:
     Host(){};
-    virtual ~Host();
+    virtual ~Host() { stop(); };
 
     typedef std::shared_ptr<Host> Ptr;
 
