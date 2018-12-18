@@ -30,11 +30,10 @@
 #include <boost/random.hpp>
 #include <unordered_map>
 
-namespace dev
-{
-namespace p2p
-{
-const uint32_t CHECK_INTERVEL = 10000;
+using namespace dev;
+using namespace dev::p2p;
+
+static const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
 {
@@ -70,6 +69,10 @@ void Service::stop()
     if (m_run)
     {
         m_run = false;
+        if (m_timer)
+        {
+            m_timer->cancel();
+        }
         m_host->stop();
         /// disconnect sessions
         {
@@ -738,7 +741,3 @@ bool Service::isConnected(NodeID nodeID)
 
     return true;
 }
-
-}  // namespace p2p
-
-}  // namespace dev
