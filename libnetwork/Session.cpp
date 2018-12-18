@@ -298,10 +298,75 @@ void Session::drop(DisconnectReason _reason)
     {
         try
         {
-            SESSION_LOG(WARNING) << "Closing " << socket.remote_endpoint() << "("
-                                 << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
+            if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
+                _reason == ClientQuit || _reason == UserReason)
+            {
+                SESSION_LOG(DEBUG)
+                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << m_socket->nodeIPEndpoint().address;
+            }
+            else
+            {
+                SESSION_LOG(WARNING)
+                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << m_socket->nodeIPEndpoint().address;
+            }
 
-            socket.close();
+            /// if get Host object failed, close the socket directly
+            auto socket = m_socket;
+            auto server = m_server.lock();
+            if (server || !server->asioInterface() || !server->asioInterface()->ioService())
+            {
+                if (socket->isConnected())
+                    socket->close();
+            }
+            auto shutdown_timer =
+                std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService(),
+                    boost::posix_time::milliseconds(m_shutDownTimeThres));
+            /// async wait for shutdown
+            shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
+                /// drop operation has been aborted
+                if (error == boost::asio::error::operation_aborted)
+                {
+                    SESSION_LOG(DEBUG)
+                        << "[#drop] operation aborted  [ECODE/EINFO]:" << error.value() << "/"
+                        << error.message();
+                    return;
+                }
+                /// shutdown timer error
+                if (error && error != boost::asio::error::operation_aborted)
+                {
+                    SESSION_LOG(WARNING)
+                        << "[#drop] shutdown timer error [ECODE/EINFO]: " << error.value() << "/"
+                        << error.message();
+                }
+                /// force to shutdown when timeout
+                if (socket->ref().is_open())
+                {
+                    SESSION_LOG(WARNING)
+                        << "[#drop] timeout, force close the socket [remote_ip:remote_port]"
+                        << socket->ref().remote_endpoint().address().to_string() << ":"
+                        << socket->ref().remote_endpoint().port();
+                    socket->close();
+                }
+            });
+
+            /// async shutdown normally
+            socket->sslref().async_shutdown(
+                [socket, shutdown_timer](const boost::system::error_code& error) {
+                    if (error)
+                    {
+                        SESSION_LOG(WARNING)
+                            << "[#drop] shutdown failed [ECODE/EINFO]: " << error.value() << "/"
+                            << error.message();
+                    }
+                    shutdown_timer->cancel();
+                    /// force to close the socket
+                    if (socket->ref().is_open())
+                    {
+                        socket->close();
+                    }
+                });
         }
         catch (...)
         {

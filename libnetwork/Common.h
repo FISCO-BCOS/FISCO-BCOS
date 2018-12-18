@@ -203,39 +203,18 @@ struct NodeIPEndpoint
         return NodeIPEndpoint::test_allowLocal ? !address.is_unspecified() :
                                                  isPublicAddress(address);
     }
-    bool operator==(NodeIPEndpoint const& _cmp) const
-    {
-        if (address == _cmp.address && tcpPort == _cmp.tcpPort)
-            return true;
-        if (udpPort == _cmp.udpPort)
-            return true;
-        if (host == _cmp.host)
-            return true;
-        return false;
-    }
-    bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
+
     bool operator<(const dev::p2p::NodeIPEndpoint& rhs) const
     {
-        if (address < rhs.address || tcpPort < rhs.tcpPort)
+        if (address < rhs.address)
         {
             return true;
         }
-        if (udpPort < rhs.udpPort)
-            return true;
-        if (host < rhs.host)
+        if ((address == rhs.address) && tcpPort < rhs.tcpPort)
             return true;
         return false;
     }
-    bool operator>(const dev::p2p::NodeIPEndpoint& rhs) const
-    {
-        if (address > rhs.address || tcpPort > rhs.tcpPort)
-            return true;
-        if (udpPort > rhs.udpPort)
-            return true;
-        if (host > rhs.host)
-            return true;
-        return false;
-    }
+
     std::string name() const
     {
         std::ostringstream os;
@@ -270,11 +249,8 @@ struct SessionInfo
     NodeIPEndpoint nodeIPEndpoint;
     std::set<std::string> topics;
     SessionInfo(NodeID _nodeID, NodeIPEndpoint _nodeIPEndpoint, std::set<std::string> _topics)
-    {
-        nodeID = _nodeID;
-        nodeIPEndpoint = _nodeIPEndpoint;
-        topics = _topics;
-    }
+      : nodeID(_nodeID), nodeIPEndpoint(_nodeIPEndpoint), topics(_topics)
+    {}
 };
 using SessionInfos = std::vector<SessionInfo>;
 

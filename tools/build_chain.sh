@@ -434,8 +434,6 @@ gen_sdk_cert() {
     
     read_password
     openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
-    # keytool -importkeystore -srckeystore $sdkpath/keystore.p12 -srcstoretype pkcs12 -srcstorepass $jks_passwd\
-    #     -destkeystore $sdkpath/client.keystore -deststoretype jks -deststorepass $jks_passwd -alias client 2>/dev/null 
 
     echo "build $sdk sdk cert successful!"
 }
@@ -752,7 +750,9 @@ if [ ! -e "$ca_file" ]; then
     mv $output_dir/chain $output_dir/cert
     if [ "${use_ip_param}" == "false" ];then
         for agency_name in ${agency_array[*]};do
-            gen_agency_cert "" $output_dir/cert $output_dir/cert/${agency_name} >$output_dir/${logfile} 2>&1
+            if [ ! -d $output_dir/cert/${agency_name} ];then 
+                gen_agency_cert "" $output_dir/cert $output_dir/cert/${agency_name} >$output_dir/${logfile} 2>&1
+            fi
         done
     else
         gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/${logfile} 2>&1
@@ -829,7 +829,6 @@ for line in ${ip_array[*]};do
         mkdir -p $node_dir/sdk/
         # read_password
         openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
-        # keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $pkcs12_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $pkcs12_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
         cp ${output_dir}/cert/ca.crt $node_dir/sdk/
         # gen_sdk_cert ${output_dir}/cert/agency $node_dir
         # mv $node_dir/* $node_dir/sdk/
