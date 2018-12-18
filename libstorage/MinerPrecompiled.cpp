@@ -51,12 +51,9 @@ bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
     dev::eth::ContractABI abi;
     bytes out;
     const std::string key("miner");
-    std::cout << "*******add  " << std::hex << name2Selector[MINER_METHOD_ADD] << "*******" << std::endl;
-    std::cout << "*******remove  " << std::hex << name2Selector[MINER_METHOD_REMOVE] << "*******" << std::endl;
-    std::cout << "*******func " << std::hex << func << "*******" << std::endl;
     if (func == name2Selector[MINER_METHOD_ADD])
     {  // add(string)
-        
+
         std::string nodeID;
         abi.abiOut(data, nodeID);
         if (nodeID.size() != 128u)
