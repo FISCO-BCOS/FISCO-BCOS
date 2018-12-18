@@ -394,7 +394,7 @@ void StorageState::clear()
 
 bool StorageState::checkAuthority(Address _origin, Address _contract) const
 {
-    auto table = getTable(__contract);
+    auto table = getTable(_contract);
     if (table)
         return table->checkAuthority(_origin);
     else

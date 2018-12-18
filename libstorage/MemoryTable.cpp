@@ -459,7 +459,7 @@ inline void MemoryTable::checkFiled(Entry::Ptr entry)
     }
 }
 
-inline bool MemoryTable::checkAuthority(Address _origin)
+inline bool MemoryTable::checkAuthority(Address _origin) const
 {
     if (m_tableInfo->authorizedAddress.empty())
         return true;
