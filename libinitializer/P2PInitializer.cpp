@@ -84,6 +84,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         auto asioInterface = std::make_shared<dev::network::ASIOInterface>();
         asioInterface->setIOService(std::make_shared<ba::io_service>());
         asioInterface->setSSLContext(m_SSLContext);
+        asioInterface->setType(dev::network::ASIOInterface::SSL);
 
         auto messageFactory = std::make_shared<P2PMessageFactory>();
 
