@@ -1008,7 +1008,13 @@ for line in ${ip_array[*]};do
         # gen_sdk_cert ${output_dir}/cert/agency $node_dir
         # mv $node_dir/* $node_dir/sdk/
 
-        nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+        if [ -n "$guomi_mode" ]; then
+            nodeid=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+        else
+            nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+        fi
+
+
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })
             for j in ${node_groups[@]};do
