@@ -88,7 +88,6 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
 
     memoryTable->init(tableName);
     m_name2Table.insert({tableName, memoryTable});
-    STORAGE_LOG(TRACE) << "open " << tableName << " successfully.";
     return memoryTable;
 }
 

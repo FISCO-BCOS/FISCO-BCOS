@@ -122,7 +122,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 void PBFTEngine::resetConfig()
 {
     m_idx = MAXIDX;
-    updateMinerList();
+    updateConsensusNodeList();
     {
         ReadGuard l(m_minerListMutex);
         for (size_t i = 0; i < m_minerList.size(); i++)
@@ -1172,43 +1172,6 @@ const std::string PBFTEngine::consensusStatus() const
     return status_str;
 }
 
-void PBFTEngine::updateMinerList()
-{
-    if (m_storage == nullptr)
-        return;
-    if (m_highestBlock.number() == m_lastObtainMinerNum)
-        return;
-    try
-    {
-        UpgradableGuard l(m_minerListMutex);
-        UpgradeGuard ul(l);
-        m_minerList = m_blockChain->minerList();
-        /// to make sure the index of all miners are consistent
-        std::sort(m_minerList.begin(), m_minerList.end());
-        m_lastObtainMinerNum = m_highestBlock.number();
 
-        std::stringstream s2;
-        s2 << "[#updateMinerList] Miners:";
-        for (dev::h512 node : m_minerList)
-            s2 << node.abridged() << ",";
-        s2 << "Observers:";
-        dev::h512s observerList = m_blockChain->observerList();
-        for (dev::h512 node : observerList)
-            s2 << node.abridged() << ",";
-        PBFTENGINE_LOG(TRACE) << s2.str();
-
-        if (m_lastNodeList != s2.str())
-        {
-            PBFTENGINE_LOG(TRACE) << "[#updateMinerList] done.";
-            updateNodeListInP2P();
-            m_lastNodeList = s2.str();
-        }
-    }
-    catch (std::exception& e)
-    {
-        PBFTENGINE_LOG(ERROR) << "[#updateMinerList] update minerList failed [EINFO]:  "
-                              << boost::diagnostic_information(e);
-    }
-}
 }  // namespace consensus
 }  // namespace dev

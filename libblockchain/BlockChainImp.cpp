@@ -217,7 +217,7 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
         }
 
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
-        BLOCKCHAIN_LOG(INFO) << "[#setGroupMark] Insert the 0th block";
+        BLOCKCHAIN_LOG(INFO) << "[#checkAndBuildGenesisBlock] Insert the 0th block";
     }
     else
     {
@@ -225,13 +225,14 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
         /// If not equal, only print warning, willnot kill process.
         if (!initParam.groupMark.compare(asString(block->header().extraData(0))))
         {
-            BLOCKCHAIN_LOG(INFO) << "[#setGroupMark] Already have the 0th block, 0th groupMark is "
-                                    "equal to file groupMark.";
+            BLOCKCHAIN_LOG(INFO)
+                << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark is "
+                   "equal to file groupMark.";
         }
         else
         {
             BLOCKCHAIN_LOG(WARNING)
-                << "[#setGroupMark] Already have the 0th block, 0th groupMark:"
+                << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark:"
                 << asString(block->header().extraData(0))
                 << " is not equal to file groupMark:" << initParam.groupMark << " !";
         }
@@ -262,7 +263,6 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
             {
                 h512 nodeID = h512(node->getField(blockverifier::NODE_KEY_NODEID));
                 list.push_back(nodeID);
-                LOG(TRACE) << "Add nodeID [nodeID/idx]: " << toHex(nodeID) << "/" << i << std::endl;
             }
         }
     }

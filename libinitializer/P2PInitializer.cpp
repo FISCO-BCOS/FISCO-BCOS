@@ -91,11 +91,20 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             {
                 if (it.first.find("crl.") == 0)
                 {
-                    std::string nodeID = boost::to_upper_copy(it.second.data());
-                    SESSION_LOG(TRACE)
-                        << "[#P2PInitializer::initConfig] get certificate rejected by nodeID: "
-                        << nodeID;
-                    crl.push_back(nodeID);
+                    try
+                    {
+                        std::string nodeID = boost::to_upper_copy(it.second.data());
+                        SESSION_LOG(TRACE)
+                            << "[#P2PInitializer::initConfig] get certificate rejected by nodeID: "
+                            << nodeID;
+                        crl.push_back(nodeID);
+                    }
+                    catch (std::exception& e)
+                    {
+                        INITIALIZER_LOG(ERROR)
+                            << "[#P2PInitializer::initConfig] get crl faield: [data/EINFO]: "
+                            << e.what();
+                    }
                 }
             }
         }
