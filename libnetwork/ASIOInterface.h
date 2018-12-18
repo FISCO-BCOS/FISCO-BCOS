@@ -91,9 +91,11 @@ public:
         m_ioService->reset();
 
         // shutdown acceptor
-        m_acceptor->cancel();
         if (m_acceptor->is_open())
+        {
+            m_acceptor->cancel();
             m_acceptor->close();
+        }
 
         // There maybe an incoming connection which started but hasn't finished.
         // Wait for acceptor to end itself instead of assuming it's complete.

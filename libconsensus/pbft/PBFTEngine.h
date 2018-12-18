@@ -50,6 +50,7 @@ using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
 class PBFTEngine : public ConsensusEngineBase
 {
 public:
+    virtual ~PBFTEngine() { stop(); }
     PBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -123,6 +124,10 @@ protected:
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>());
+
+    void sendViewChangeMsg(NodeID const& nodeId);
+    bool sendMsg(NodeID const& nodeId, unsigned const& packetType, std::string const& key,
+        bytesConstRef data);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -260,8 +265,8 @@ protected:
         peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
-            PBFTENGINE_LOG(WARNING)
-                << "[#isValidReq] Recv PBFT msg from unkown peer:  " << session->nodeID();
+            PBFTENGINE_LOG(DEBUG) << "[#isValidReq] Recv PBFT msg from unkown peer:  "
+                                  << session->nodeID();
             return false;
         }
         /// check whether this node is in the miner list
@@ -295,15 +300,15 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            PBFTENGINE_LOG(WARNING)
-                << "#[checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
+            PBFTENGINE_LOG(DEBUG)
+                << "[#checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
                 << m_reqCache->prepareCache().block_hash.abridged() << "/" << req.block_hash
                 << "  [INFO]:  " << oss.str();
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
             {
-                PBFTENGINE_LOG(INFO) << "#[checkReq] Recv future request: [prepHash]:"
+                PBFTENGINE_LOG(INFO) << "[#checkReq] Recv future request: [prepHash]:"
                                      << m_reqCache->prepareCache().block_hash.abridged()
                                      << "  [INFO]:  " << oss.str();
                 return CheckResult::FUTURE;
@@ -313,22 +318,21 @@ protected:
         /// check the sealer of this request
         if (req.idx == m_idx)
         {
-            PBFTENGINE_LOG(WARNING) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
+            PBFTENGINE_LOG(DEBUG) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
             return CheckResult::INVALID;
         }
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            PBFTENGINE_LOG(WARNING)
+            PBFTENGINE_LOG(DEBUG)
                 << "[#checkReq] Recv req with unconsistent view: [prepView/view]:  "
                 << m_reqCache->prepareCache().view << "/" << req.view << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            PBFTENGINE_LOG(WARNING)
-                << "[#checkReq] invalid sign: [hash]:" << req.block_hash.abridged()
-                << "  [INFO]: " << oss.str();
+            PBFTENGINE_LOG(DEBUG) << "[#checkReq] invalid sign: [hash]:"
+                                  << req.block_hash.abridged() << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         return CheckResult::VALID;
@@ -388,12 +392,13 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            PBFTENGINE_LOG(WARNING)
-                << "[#InvalidPrepare] Get leader failed: "
-                   "[cfgErr/idx/req.idx/leader/m_leaderFailed/view/highSealer/highNumber]:  "
-                << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/" << leader.second << "/"
-                << m_leaderFailed << "/" << m_highestBlock.sealer() << "/"
-                << m_highestBlock.number();
+            if (!m_emptyBlockViewChange)
+                PBFTENGINE_LOG(WARNING)
+                    << "[#InvalidPrepare] Get leader failed: "
+                       "[cfgErr/idx/req.idx/leader/m_leaderFailed/view/highSealer/highNumber]:  "
+                    << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/" << leader.second << "/"
+                    << m_leaderFailed << "/" << m_highestBlock.sealer() << "/"
+                    << m_highestBlock.number();
             return false;
         }
 
@@ -452,6 +457,7 @@ protected:
 
     /// the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
+    bool m_emptyBlockViewChange = false;
 };
 }  // namespace consensus
 }  // namespace dev

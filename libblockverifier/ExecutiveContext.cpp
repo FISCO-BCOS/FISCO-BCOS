@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file ExecutiveContext.cpp
  *  @author mingzhenliu
  *  @date 20180921
@@ -35,8 +35,10 @@ bytes ExecutiveContext::call(Address address, bytesConstRef param)
 {
     try
     {
-        LOG(TRACE) << "PrecompiledEngine call:" << m_blockInfo.hash << " " << m_blockInfo.number
-                   << " " << address << " " << toHex(param);
+        EXECUTIVECONTEXT_LOG(TRACE)
+            << "[#call] PrecompiledEngine call [blockHash/number/address/param]: "
+            << "[" << m_blockInfo.hash << "/" << m_blockInfo.number << "/" << address << "/"
+            << toHex(param) << "]";
 
         auto p = getPrecompiled(address);
 
@@ -47,12 +49,14 @@ bytes ExecutiveContext::call(Address address, bytesConstRef param)
         }
         else
         {
-            LOG(DEBUG) << "can't find address:" << address;
+            EXECUTIVECONTEXT_LOG(DEBUG) << "[#call] Can't find address [address]: "
+                                        << "[" << address << "]";
         }
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Precompiled call error:" << e.what();
+        EXECUTIVECONTEXT_LOG(ERROR) << "[#call] Precompiled call error [errorMsg]: "
+                                    << "[" << e.what() << "]";
 
         throw dev::eth::PrecompiledError();
     }

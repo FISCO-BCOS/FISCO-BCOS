@@ -24,6 +24,7 @@
 #include <string>
 
 #define INVALIDNUMBER -1
+#define RPC_LOG(LEVEL) LOG(LEVEL) << "[#RPC] [Request] "
 
 namespace dev
 {

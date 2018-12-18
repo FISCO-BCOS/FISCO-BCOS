@@ -62,6 +62,7 @@ public:
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
     void start() override;
@@ -96,10 +97,12 @@ public:
     void getBasicConsensusStatus(json_spirit::Object& status_obj) const
     {
         status_obj.push_back(json_spirit::Pair("nodeNum", m_nodeNum));
-        status_obj.push_back(json_spirit::Pair("f", m_f));
+        status_obj.push_back(json_spirit::Pair("node index", m_idx));
+        status_obj.push_back(json_spirit::Pair("max_faulty_leader", m_f));
         status_obj.push_back(json_spirit::Pair("consensusedBlockNumber", m_consensusBlockNumber));
         status_obj.push_back(json_spirit::Pair("highestblockNumber", m_highestBlock.number()));
         status_obj.push_back(json_spirit::Pair("highestblockHash", toHex(m_highestBlock.hash())));
+        status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
         int i = 0;
@@ -117,6 +120,7 @@ public:
 
     /// protocol id used when register handler to p2p module
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; }
+    GROUP_ID groupId() const override { return m_groupId; }
     /// get account type
     ///@return NodeAccountType::MinerAccount: the node can generate and execute block
     ///@return NodeAccountType::ObserveAccout: the node can only sync block from other nodes
@@ -203,7 +207,7 @@ protected:
         }
         catch (std::exception& e)
         {
-            ENGINE_LOG(WARNING) << "[#decodeToRequests] Invalid network-received packet";
+            ENGINE_LOG(DEBUG) << "[#decodeToRequests] Invalid network-received packet";
             return false;
         }
     }
@@ -241,6 +245,7 @@ protected:
     IDXTYPE m_f = 0;
 
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
     /// type of this node (MinerAccount or ObserveAccount)
     NodeAccountType m_accountType;
     /// index of this node
