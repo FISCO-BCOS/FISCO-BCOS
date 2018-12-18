@@ -183,7 +183,6 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
     BOOST_REQUIRE_NO_THROW(packet.encode(packet_data));
     PBFTMsgPacket tmp_packet;
     tmp_packet.decode(ref(packet_data));
-    /// BOOST_REQUIRE_NO_THROW();
     BOOST_CHECK(tmp_packet.data == packet.data);
     BOOST_CHECK(tmp_packet.packet_id == packet.packet_id);
     BOOST_CHECK(tmp_packet == packet);
