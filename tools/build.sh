@@ -5,17 +5,20 @@
 #              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
 #              and execute this shell script later
 # @ author   : yujiechen  
-# @ file     : build.sh
+# @ file     : install.sh
 # @ date     : 2018
 
 #!/bin/bash
-
-current_dir=`pwd`"/../.."
+SHELL_FOLDER=$(cd $(dirname $0);pwd)
+project_dir="${SHELL_FOLDER}/.."
+use_cores=1
+test_mode=0
 Ubuntu_Platform=0
 Centos_Platform=1
+
 clear_cache()
 { 
-    cd ${current_dir}
+    cd ${project_dir}
     execute_cmd "rm -rf deps/src/*stamp"
 }
 
@@ -39,7 +42,7 @@ execute_cmd()
     ret=$?
     if [ $ret -ne 0 ];then
         LOG_ERROR "FAILED execution of command: ${command}"
-        clear_cache
+        # clear_cache
         exit 1
     else
         LOG_INFO "SUCCESS execution of command: ${command}"
@@ -58,7 +61,7 @@ get_platform()
         LOG_ERROR "Not Support FreeBSD Yet!"
         exit 1;;
     Linux)
-        if [ -f "/etc/arch-release" ]; then
+        if [ -f "/etc/arch-release" ];then
             LOG_ERROR "Not Support arch-linux Yet!"
         elif [ -f "/etc/os-release" ];then
             DISTRO_NAME=$(. /etc/os-release; echo $NAME)
@@ -101,19 +104,19 @@ done
 #install ubuntu package
 install_ubuntu_deps()
 {
-install_ubuntu_package "cmake" "openssl" "libssl-dev" "libcurl4-openssl-dev" "libgmp-dev" "libleveldb-dev"
+install_ubuntu_package "cmake" "libssl-dev" "libleveldb-dev" "openssl"
 }
 
 # install centos package
 install_centos_deps()
 {
-install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel" "curl-devel" "gmp-devel"
+install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel"
 }
 
 install_all_deps()
 {
     get_platform
-        platform=`echo $?`
+    platform=`echo $?`
     if [ ${platform} -eq ${Ubuntu_Platform} ];then
         install_ubuntu_deps
     elif [ ${platform} -eq ${Centos_Platform} ];then
@@ -124,44 +127,64 @@ install_all_deps()
     fi
 }
 
-
-build_ubuntu_source()
-{
-# build source
-execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake -DTESTS=ON .. "
-execute_cmd "make -j2"
-}
-
-build_centos_source()
-{
-# build source
-execute_cmd "mkdir -p build && cd build/"
-execute_cmd "cmake3 -DTESTS=ON .. "
-execute_cmd "make && cd ${current_dir}"
-}
-
 build_source()
 {
-cd ${current_dir}
-get_platform
-platform=`echo $?`
-if [ ${platform} -eq ${Ubuntu_Platform} ];then
-    build_ubuntu_source
-elif [ ${platform} -eq ${Centos_Platform} ];then
-     build_centos_source
-else
-    LOG_ERROR "Unsupported Platform, Exit"
-    exit 1
-fi
+    cd ${project_dir}
+    get_platform
+    platform=`echo $?`
+    cmake_cmd="cmake"
+    if [ ${platform} -eq ${Centos_Platform} ];then
+        cmake_cmd="cmake3"
+    fi
+    execute_cmd "mkdir -p build && cd build/"
+    if [ ${test_mode} -eq 1 ];then
+        execute_cmd "${cmake_cmd} -DTESTS=ON .."
+    else
+        execute_cmd "${cmake_cmd} -DTESTS=OFF .."
+    fi
+    execute_cmd "make -j${use_cores}"
+}
+
+Usage()
+{
+	echo $1
+	cat << EOF
+Usage:
+Optional:
+    -j       Cores will be used to compile
+    -t       Enable test mode (generate mini-consensus/mini-sync/mini-evm/mini-storage/test_verifier)
+    -h       Help
+Example: 
+    bash install.sh 
+    bash install.sh -j4
+    bash install.sh -t
+EOF
+	exit 0
+}
+
+parse_param()
+{
+	while getopts "htj:" option;do
+		case $option in
+		j) use_cores=$OPTARG
+            if [ ${use_cores} -gt $(nproc) ];then
+                use_cores=$(nproc)
+            elif [ ${use_cores} -lt 1 ];then
+                use_cores=1
+            fi
+        ;;
+        t) test_mode=1;;
+		h) Usage;;
+		esac
+	done
 }
 
 install_all()
 {
 	install_all_deps
 	build_source
+    cd ${project_dir}
 }
 
-cd ${current_dir}
-execute_cmd "git submodule update --init"
+parse_param "$@"
 install_all

@@ -1,19 +1,19 @@
 /*
-    This file is part of cpp-ethereum.
-
-    cpp-ethereum is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    cpp-ethereum is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 
 /**
  * @brief : class for pbft request cache
@@ -35,7 +35,10 @@ namespace consensus
 class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
-    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol) {}
+    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol)
+    {
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+    }
     /// specified prepareRequest exists in raw-prepare-cache or not?
     /// @return true : the prepare request exists in the  raw-prepare-cache
     /// @return false : the prepare request doesn't exist in the  raw-prepare-cache
@@ -63,36 +66,30 @@ public:
     }
 
     /// get the size of the cached sign requests according to given block hash
-    inline u256 const getSigCacheSize(h256 const& blockHash)
+    inline size_t getSigCacheSize(h256 const& blockHash) const
     {
         return getSizeFromCache(blockHash, m_signCache);
     }
     /// get the size of the cached commit requests according to given block hash
-    inline u256 const getCommitCacheSize(h256 const& blockHash)
+    inline size_t getCommitCacheSize(h256 const& blockHash) const
     {
         return getSizeFromCache(blockHash, m_commitCache);
     }
     /// get the size of cached viewchange requests according to given view
-    inline u256 const getViewChangeSize(u256 const& toView)
+    inline size_t getViewChangeSize(VIEWTYPE const& toView) const
     {
         return getSizeFromCache(toView, m_recvViewChangeReq);
     }
 
     template <typename T, typename S>
-    inline u256 const getSizeFromCache(T const& key, S& cache)
+    inline size_t getSizeFromCache(T const& key, S& cache) const
     {
         auto it = cache.find(key);
         if (it != cache.end())
         {
-            return u256(it->second.size());
+            return it->second.size();
         }
-
-#if 0
-        if (cache.count(key) > 0)
-            return u256(cache[key].size());
-#endif
-
-        return u256(0);
+        return 0;
     }
 
     inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
@@ -144,7 +141,7 @@ public:
         }
         else
         {
-            std::unordered_map<u256, ViewChangeReq> viewMap;
+            std::unordered_map<IDXTYPE, ViewChangeReq> viewMap;
             viewMap.insert(std::make_pair(req.idx, req));
 
             m_recvViewChangeReq.insert(std::make_pair(req.view, viewMap));
@@ -172,13 +169,14 @@ public:
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
     inline void updateCommittedPrepare() { m_committedPrepareCache = m_rawPrepareCache; }
     /// obtain the sig-list from m_commitCache, and append the sig-list to given block
-    bool generateAndSetSigList(dev::eth::Block& block, u256 const& minSigSize);
+    bool generateAndSetSigList(dev::eth::Block& block, const IDXTYPE& minSigSize);
     ///  determine can trigger viewchange or not
-    bool canTriggerViewChange(u256& minView, u256 const& minInvalidNodeNum, u256 const& toView,
-        dev::eth::BlockHeader const& highestBlock, int64_t const& consensusBlockNumber);
+    bool canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& minInvalidNodeNum,
+        VIEWTYPE const& toView, dev::eth::BlockHeader const& highestBlock,
+        int64_t const& consensusBlockNumber);
 
     /// trigger viewchange
-    inline void triggerViewChange(u256 const& curView)
+    inline void triggerViewChange(VIEWTYPE const& curView)
     {
         m_rawPrepareCache.clear();
         m_prepareCache.clear();
@@ -194,7 +192,7 @@ public:
         removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
     }
     /// remove invalid view-change requests according to view and the current block header
-    void removeInvalidViewChange(u256 const& view, dev::eth::BlockHeader const& highestBlock);
+    void removeInvalidViewChange(VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock);
     inline void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
     {
         removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
@@ -222,7 +220,8 @@ public:
     {
         return m_commitCache;
     }
-    std::unordered_map<u256, std::unordered_map<u256, ViewChangeReq>>& mutableViewChangeCache()
+    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq>>&
+    mutableViewChangeCache()
     {
         return m_recvViewChangeReq;
     }
@@ -255,7 +254,7 @@ private:
         }
     }
 
-    inline void removeInvalidViewChange(u256 const& curView)
+    inline void removeInvalidViewChange(VIEWTYPE const& curView)
     {
         for (auto it = m_recvViewChangeReq.begin(); it != m_recvViewChangeReq.end();)
         {
@@ -266,9 +265,9 @@ private:
         }
     }
     /// remove sign cache according to block hash and view
-    void removeInvalidSignCache(h256 const& blockHash, u256 const& view);
+    void removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const& view);
     /// remove commit cache according to block hash and view
-    void removeInvalidCommitCache(h256 const& blockHash, u256 const& view);
+    void removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE const& view);
 
     template <typename T, typename U, typename S>
     inline bool cacheExists(T const& cache, U const& mainKey, S const& key)
@@ -310,6 +309,7 @@ private:
 
 private:
     dev::PROTOCOL_ID m_protocolId;
+    dev::GROUP_ID m_groupId;
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
@@ -317,7 +317,7 @@ private:
     /// cache for signReq(maps between hash and sign requests)
     std::unordered_map<h256, std::unordered_map<std::string, SignReq>> m_signCache;
     /// cache for received-viewChange requests(maps between view and view change requests)
-    std::unordered_map<u256, std::unordered_map<u256, ViewChangeReq>> m_recvViewChangeReq;
+    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq>> m_recvViewChangeReq;
     /// cache for commited requests(maps between hash and commited requests)
     std::unordered_map<h256, std::unordered_map<std::string, CommitReq>> m_commitCache;
     /// cache for prepare request need to be backup and saved
