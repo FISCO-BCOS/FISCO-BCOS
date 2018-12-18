@@ -71,7 +71,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:P:t:iszhT" option;do
+while getopts "f:l:o:p:e:P:t:iszhgT" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -93,6 +93,7 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
     t) CertConfig=$OPTARG;;
     T) debug_log="true";;
     z) make_tar="yes";;
+    g) guomi_mode="yes";;
     h) help;;
     esac
 done
@@ -112,6 +113,7 @@ LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : $output_dir"
 LOG_INFO "CA Key Path       : $ca_file"
+[ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
 echo "=============================================================="
 LOG_INFO "All completed. Files in $output_dir"
 }
@@ -133,6 +135,27 @@ check_env() {
         exit $EXIT_CODE
     }
 }
+
+# TASSL env
+check_and_install_tassl()
+{
+    if [ ! -f "${TASSL_INSTALL_DIR}/bin/openssl" ];then
+        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR}
+
+        cd ${TASSL_PKG_DIR}
+        local shell_list=`find . -name *.sh`
+        chmod a+x ${shell_list}
+        chmod a+x ./util/pod2mantest        
+
+        bash config --prefix=${TASSL_INSTALL_DIR} no-shared && make -j2 && make install
+
+        cd ${CUR_DIR}
+        rm -rf ${TASSL_PKG_DIR}
+    fi
+
+    OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
+}
+
 
 getname() {
     local name="$1"
@@ -594,6 +617,136 @@ EOF
     chmod +x ${filepath}
 }
 
+generate_cert_conf_gm()
+{
+    local output=$1
+    cat << EOF > ${output} 
+HOME			= .
+RANDFILE		= $ENV::HOME/.rnd
+oid_section		= new_oids
+
+[ new_oids ]
+tsa_policy1 = 1.2.3.4.1
+tsa_policy2 = 1.2.3.4.5.6
+tsa_policy3 = 1.2.3.4.5.7
+
+####################################################################
+[ ca ]
+default_ca	= CA_default		# The default ca section
+
+####################################################################
+[ CA_default ]
+
+dir		= ./demoCA		# Where everything is kept
+certs		= $dir/certs		# Where the issued certs are kept
+crl_dir		= $dir/crl		# Where the issued crl are kept
+database	= $dir/index.txt	# database index file.
+#unique_subject	= no			# Set to 'no' to allow creation of
+					# several ctificates with same subject.
+new_certs_dir	= $dir/newcerts		# default place for new certs.
+
+certificate	= $dir/cacert.pem 	# The CA certificate
+serial		= $dir/serial 		# The current serial number
+crlnumber	= $dir/crlnumber	# the current crl number
+					# must be commented out to leave a V1 CRL
+crl		= $dir/crl.pem 		# The current CRL
+private_key	= $dir/private/cakey.pem # The private key
+RANDFILE	= $dir/private/.rand	# private random number file
+
+x509_extensions	= usr_cert		# The extentions to add to the cert
+
+name_opt 	= ca_default		# Subject Name options
+cert_opt 	= ca_default		# Certificate field options
+
+default_days	= 365			# how long to certify for
+default_crl_days= 30			# how long before next CRL
+default_md	= default		# use public key default MD
+preserve	= no			# keep passed DN ordering
+
+policy		= policy_match
+
+[ policy_match ]
+countryName		= match
+stateOrProvinceName	= match
+organizationName	= match
+organizationalUnitName	= optional
+commonName		= supplied
+emailAddress		= optional
+
+[ policy_anything ]
+countryName		= optional
+stateOrProvinceName	= optional
+localityName		= optional
+organizationName	= optional
+organizationalUnitName	= optional
+commonName		= supplied
+emailAddress		= optional
+
+####################################################################
+[ req ]
+default_bits		= 2048
+default_md		= sm3
+default_keyfile 	= privkey.pem
+distinguished_name	= req_distinguished_name
+x509_extensions	= v3_ca	# The extentions to add to the self signed cert
+
+string_mask = utf8only
+
+# req_extensions = v3_req # The extensions to add to a certificate request
+
+[ req_distinguished_name ]
+countryName = CN
+countryName_default = CN
+stateOrProvinceName = State or Province Name (full name)
+stateOrProvinceName_default =GuangDong
+localityName = Locality Name (eg, city)
+localityName_default = ShenZhen
+organizationalUnitName = Organizational Unit Name (eg, section)
+organizationalUnitName_default = webank
+commonName =  Organizational  commonName (eg, webank)
+commonName_default =  webank
+commonName_max = 64
+
+[ usr_cert ]
+
+basicConstraints=CA:FALSE
+
+nsComment			= "OpenSSL Generated Certificate"
+
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer
+
+
+[ v3_req ]
+
+# Extensions to add to a certificate request
+
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature
+
+
+[ v3enc_req ]
+
+# Extensions to add to a certificate request
+
+basicConstraints = CA:FALSE
+keyUsage = keyAgreement, keyEncipherment, dataEncipherment
+
+[ v3_agency_root ]
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign
+
+[ v3_ca ]
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign
+
+EOF
+}
+
 generate_node_scripts()
 {
     local output=$1
@@ -702,7 +855,6 @@ parse_ip_config()
 
 main()
 {
-
 output_dir="`pwd`/${output_dir}"
 [ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
 if [ "${use_ip_param}" == "true" ];then
@@ -759,6 +911,22 @@ if [ ! -e "$ca_file" ]; then
     fi
     ca_file="$output_dir/cert/ca.key"
 fi
+
+echo "guomi mode " $guomi_mode
+
+if [ -n "$guomi_mode" ]; then
+    check_and_install_tassl
+
+    generate_cert_conf_gm "gmcert.cnf"
+
+    echo "Generating Guomi CA key..."
+    dir_must_not_exists $output_dir/gmchain
+    gen_chain_cert_gm "" $output_dir/gmchain >$output_dir/build.log 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
+    mv $output_dir/gmchain $output_dir/gmcert
+    gen_agency_cert_gm "" $output_dir/gmcert $output_dir/gmcert/agency >$output_dir/build.log 2>&1
+    ca_file="$output_dir/gmcert/ca.key"    
+fi
+
 
 echo "=============================================================="
 echo "Generating keys ..."
@@ -818,13 +986,20 @@ for line in ${ip_array[*]};do
                     rm -rf ${node_dir}
                     continue;
                 fi
-                #move origin conf to gm conf
-                cp $node_dir/${conf_path} $node_dir/${gm_conf_path}/oricert -r
             fi
             break;
         done
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> $node_dir/${conf_path}/node.crt
         cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
+
+        if [ -n "$guomi_mode" ]; then
+            cat ${output_dir}/gmcert/agency/agency.crt >> $node_dir/${gm_conf_path}/node.crt
+            cat ${output_dir}/gmcert/ca.crt >> $node_dir/${gm_conf_path}/node.crt
+
+            #move origin conf to gm conf
+            cp $node_dir/${conf_path} $node_dir/${gm_conf_path}/oricert -r
+        fi
+
         # gen sdk files
         mkdir -p $node_dir/sdk/
         # read_password
@@ -856,6 +1031,11 @@ for line in ${ip_array[*]};do
     ((++server_count))
 done 
 cd ..
+
+if [ -n "$guomi_mode" ]; then
+    # redirect config files to gm dir
+    conf_path=${gm_conf_path} 
+fi
 
 echo "=============================================================="
 echo "Generating configurations..."
