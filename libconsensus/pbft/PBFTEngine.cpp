@@ -1206,7 +1206,7 @@ void PBFTEngine::updateMinerList()
                 {
                     miner_list.push_back(nodeID);
                     PBFTENGINE_LOG(INFO) << "[#updateMinerList] Add nodeID [idx/nodeID]: " << i
-                                         << "/" nodeID.abridged();
+                                         << "/" << nodeID.abridged();
                 }
             }
         }

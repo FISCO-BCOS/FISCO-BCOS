@@ -325,12 +325,20 @@ void Session::drop(DisconnectReason _reason)
                     boost::posix_time::milliseconds(m_shutDownTimeThres));
             /// async wait for shutdown
             shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
+                /// drop operation has been aborted
+                if (error == boost::asio::error::operation_aborted)
+                {
+                    SESSION_LOG(DEBUG)
+                        << "[#drop] operation aborted  [ECODE/EINFO]:" << error.value() << "/"
+                        << error.message();
+                    return;
+                }
+                /// shutdown timer error
                 if (error && error != boost::asio::error::operation_aborted)
                 {
                     SESSION_LOG(WARNING)
                         << "[#drop] shutdown timer error [ECODE/EINFO]: " << error.value() << "/"
                         << error.message();
-                    return;
                 }
                 /// force to shutdown when timeout
                 if (socket->ref().is_open())
@@ -351,12 +359,12 @@ void Session::drop(DisconnectReason _reason)
                         SESSION_LOG(WARNING)
                             << "[#drop] shutdown failed [ECODE/EINFO]: " << error.value() << "/"
                             << error.message();
-                        shutdown_timer->cancel();
-                        /// force to close the socket
-                        if (socket->ref().is_open())
-                        {
-                            socket->close();
-                        }
+                    }
+                    shutdown_timer->cancel();
+                    /// force to close the socket
+                    if (socket->ref().is_open())
+                    {
+                        socket->close();
                     }
                 });
         }
