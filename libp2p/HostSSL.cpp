@@ -150,7 +150,7 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 
 	NodeIPEndpoint _nodeIPEndpoint;
 	_nodeIPEndpoint.address = _s->remoteEndpoint().address();
-	_nodeIPEndpoint.tcpPort=listenPort;
+	_nodeIPEndpoint.tcpPort=_s->remoteEndpoint().port();
 	_nodeIPEndpoint.udpPort=listenPort;
 	_nodeIPEndpoint.host=_s->nodeIPEndpoint().host;
 
@@ -296,6 +296,9 @@ void HostSSL::sslHandshakeServer(const boost::system::error_code& error, std::sh
 	if (error)
 	{
 		LOG(WARNING) << "HostSSL::async_handshake err:" << error.message();
+
+		socket->ref().close();
+		return;
 	}
 
 	bool success = false;

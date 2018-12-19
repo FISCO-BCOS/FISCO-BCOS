@@ -163,7 +163,7 @@ void PBFTClient::syncTransactionQueue(u256 const& _max_block_txs)
 			LOG(TRACE) << "Skipping txq sync for a sealed block.";
 			return;
 		}
-		if ( m_working.pending().size() >= m_maxBlockTranscations )
+		if ( m_working.pending().size() >= m_maxBlockTransactions )
 		{
 			LOG(TRACE) << "Skipping txq sync for Full block .";
 			return;
@@ -247,13 +247,14 @@ void PBFTClient::doWork(bool _doWait)
 void PBFTClient::rejigSealing() {
 	bool would_seal = m_wouldSeal && (pbft()->accountType() == EN_ACCOUNT_TYPE_MINER);
 	bool is_major_syncing = isMajorSyncing();
-	if (would_seal && !is_major_syncing)
+	//if (would_seal && !is_major_syncing)
+	if (would_seal)
 	{
 		if (pbft()->shouldSeal(this)) // am i leader? 自己是不是leader？
 		{
 			uint64_t tx_num = 0;
 			bytes block_data;
-			u256 max_block_txs = m_maxBlockTranscations;
+			u256 max_block_txs = m_maxBlockTransactions;
 			DEV_WRITE_GUARDED(x_working)
 			{
 				if (m_working.isSealed()) {
@@ -299,8 +300,8 @@ void PBFTClient::rejigSealing() {
 					if (left_time > 0 && left_time < m_exec_time_per_tx) {
 						max_block_txs = 1; // try pack one tx at least 只要还有时间，至少尝试再打一条
 					}
-					if (max_block_txs > m_maxBlockTranscations) {
-						max_block_txs = m_maxBlockTranscations;
+					if (max_block_txs > m_maxBlockTransactions) {
+						max_block_txs = m_maxBlockTransactions;
 					}
 				}
 
@@ -342,7 +343,7 @@ void PBFTClient::rejigSealing() {
 				PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), ss.str(), tx_num == 0);
 			}
 			// broadcast which not contains execution result 广播（不含交易执行结果的块）
-			LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number() << "tx:" << tx_num << ",maxtx:" << max_block_txs << ",tq.num=" << m_tq.currentTxNum() << "time:" << utcTime();
+			LOG(INFO) << "+++++++++++++++++++++++++++ Generating seal on #" << m_sealingInfo.hash(WithoutSeal).abridged() << "#" << m_sealingInfo.number() << "tx:" << tx_num << ",maxtx:" << max_block_txs << ",tq.num=" << m_tq.currentTxNum() << "time:" << utcTime();
 
 			u256 view = 0;
 			bool generate_ret = pbft()->generateSeal(m_sealingInfo, block_data, view);
@@ -429,7 +430,7 @@ void PBFTClient::rejigSealing() {
 				ss << "hash:" << m_sealingInfo.hash(WithoutSeal) << " height:" << m_sealingInfo.number();
 				PBFTFlowLog(pbft()->getHighestBlock().number() + pbft()->view(), ss.str());
 
-				LOG(INFO) << "************************** Generating sign on" << m_sealingInfo.hash(WithoutSeal) << "#" << m_sealingInfo.number() << "tx:" << tx_num << "time:" << utcTime();
+				LOG(INFO) << "************************** Generating sign on #" << m_sealingInfo.hash(WithoutSeal).abridged() << "#" << m_sealingInfo.number() << "tx:" << tx_num << "time:" << utcTime();
 
 				if (!pbft()->generateCommit(m_sealingInfo, m_working.blockData(), view)) {
 					//do nothing, wait timeout & viewchange

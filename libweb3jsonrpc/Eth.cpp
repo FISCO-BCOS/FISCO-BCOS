@@ -303,6 +303,19 @@ string Eth::eth_pendingTransactions()
 }
 */
 
+
+string Eth::eth_pendingTransactionsNum()
+{
+	try
+	{
+		return toJS(client()->transactionQueue().currentTxNum());
+	}
+	catch (...)
+	{
+		BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+	}
+}
+
 Json::Value Eth::eth_pendingTransactions()
 {
 	try

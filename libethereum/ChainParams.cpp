@@ -27,6 +27,7 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Precompiled.h>
 #include <libethereum/NodeConnParamsManagerApi.h>
+#include "CertificateServer.h"
 #include "GenesisInfo.h"
 #include "State.h"
 #include "Account.h"
@@ -131,6 +132,11 @@ ChainParams ChainParams::loadConfig(string const& _json, h256 const& ) const
 				cp.otherParams[i.first] = i.second.get_str();
 	}
 	
+	cp.transactionQueueLimit = obj.count("transactionQueueLimit") ? obj["transactionQueueLimit"].get_int() : 1024;
+	cp.maxOpenFile = obj.count("maxOpenFile") ? obj["maxOpenFile"].get_int() : 256;
+	cp.writeBufferSize = obj.count("writeBufferSize") ? obj["writeBufferSize"].get_int() : 64 * 1024 * 1024;
+	cp.cacheSize = obj.count("cacheSize") ? obj["cacheSize"].get_int() : 256 * 1024 * 1024;
+
 	/*
 	// genesis
 	string genesisStr = json_spirit::write_string(obj["genesis"], false);
