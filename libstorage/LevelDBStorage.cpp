@@ -77,7 +77,8 @@ Entries::Ptr LevelDBStorage::select(
     }
     catch (std::exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << "Query leveldb exception:" << boost::diagnostic_information(e);
+        STORAGE_LEVELDB_LOG(ERROR)
+            << "Query leveldb exception:" << boost::diagnostic_information(e);
 
         BOOST_THROW_EXCEPTION(e);
     }
@@ -90,7 +91,8 @@ size_t LevelDBStorage::commit(
 {
     try
     {
-        STORAGE_LEVELDB_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash << " num:" << num;
+        STORAGE_LEVELDB_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash
+                                  << " num:" << num;
         leveldb::WriteBatch batch;
 
         size_t total = 0;
