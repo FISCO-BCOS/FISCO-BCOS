@@ -119,18 +119,16 @@ void ConsensusEngineBase::updateConsensusNodeList()
 {
     try
     {
+        std::stringstream s2;
+        s2 << "[#updateConsensusNodeList] Miners:";
         {
             WriteGuard l(m_minerListMutex);
             m_minerList = m_blockChain->minerList();
             /// to make sure the index of all miners are consistent
             std::sort(m_minerList.begin(), m_minerList.end());
+            for (dev::h512 node : m_minerList)
+                s2 << node.abridged() << ",";
         }
-
-        ReadGuard l(m_minerListMutex);
-        std::stringstream s2;
-        s2 << "[#updateConsensusNodeList] Miners:";
-        for (dev::h512 node : m_minerList)
-            s2 << node.abridged() << ",";
         s2 << "Observers:";
         dev::h512s observerList = m_blockChain->observerList();
         for (dev::h512 node : observerList)
