@@ -166,19 +166,22 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
 				responseTopics->setPacketType(AMOPPacketType::SendTopics);
 				std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
 
-				std::string s = boost::lexical_cast<std::string>(m_topicSeq);
-				for(auto it: *m_topics) {
-					s.append("\t");
-					s.append(it);
+				auto service = m_service.lock();
+				if(service) {
+					std::string s = boost::lexical_cast<std::string>(service->topicSeq());
+					for(auto it: *m_topics) {
+						s.append("\t");
+						s.append(it);
+					}
+
+					buffer->assign(s.begin(), s.end());
+
+					responseTopics->setBuffer(buffer);
+					responseTopics->setLength(P2PMessage::HEADER_LENGTH + responseTopics->buffer()->size());
+					responseTopics->setSeq(message->seq());
+
+					m_session->asyncSendMessage(responseTopics, dev::network::Options(), CallbackFunc());
 				}
-
-				buffer->assign(s.begin(), s.end());
-
-				responseTopics->setBuffer(buffer);
-				responseTopics->setLength(P2PMessage::HEADER_LENGTH + responseTopics->buffer()->size());
-				responseTopics->setSeq(message->seq());
-
-				m_session->asyncSendMessage(responseTopics, dev::network::Options(), CallbackFunc());
 
 				break;
 			}
