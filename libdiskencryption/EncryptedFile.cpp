@@ -21,26 +21,30 @@
  */
 
 #include "EncryptedFile.h"
+#include <libdevcore/Base64.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
+
 
 using namespace std;
 using namespace dev;
 
-bytes EncryptedFile::decryptContents(
-    const std::string& _filePath, std::shared_ptr<dev::KeyCenter> _keyCenter)
+bytes EncryptedFile::decryptContents(const std::string& _filePath)
 {
-    if (!_keyCenter)
-        _keyCenter.reset(&(g_keyCenter));
-
     bytes encFileBytes;
+    bytes encFileBase64Bytes;
     bytes decFileBytes;
     try
     {
-        encFileBytes = fromHex(contentsString(_filePath));
+        string encContextsStr = contentsString(_filePath);
+        encFileBytes = fromHex(encContextsStr);
 
-        bytes dataKey = _keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
-        decFileBytes = aesCBCDecrypt(ref(encFileBytes), ref(dataKey));
+        bytes dataKey = g_keyCenter.getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
+        encFileBase64Bytes = aesCBCDecrypt(ref(encFileBytes), ref(dataKey));
+
+        string decFileBytesBase64 = asString(encFileBase64Bytes);
+        LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << decFileBytesBase64 << endl;
+        decFileBytes = fromBase64(decFileBytesBase64);
     }
     catch (exception& e)
     {
