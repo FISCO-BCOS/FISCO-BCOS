@@ -16,9 +16,9 @@
  */
 
 #pragma once
+#include "libdevcrypto/Hash.h"
 #include <evmc/helpers.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcore/SHA3.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/LastBlockHashesFace.h>

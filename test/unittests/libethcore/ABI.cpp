@@ -25,6 +25,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
+#include <string>
 
 using namespace std;
 using namespace dev;
@@ -38,6 +39,14 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(ABITest, TestOutputHelperFixture)
 
+void Test_abi_gm(const string& _str)
+{
+    ContractABI ct;
+    bytes serialBytes = ct.abiIn(_str);
+    bytesConstRef serial = bytesConstRef(&serialBytes).cropped(4);
+    std::cout << "====_str========== " << _str << std::endl;
+    std::cout << "abi serialBytes ====>" << serialBytes << std::endl;
+}
 BOOST_AUTO_TEST_CASE(ContractABITest)
 {
     ContractABI ct;
@@ -50,6 +59,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest)
         0, 0, 0, 0, 0, 0}};
     byte b = 'a';
     bytes serialBytes = ct.abiIn("caculate(u256,u160)", b, xs, x, str32, y, ys);
+    std::cout << "abi serialBytes ====>" << serialBytes << std::endl;
     bytesConstRef serial = bytesConstRef(&serialBytes).cropped(4);
 
     u256 compareX;

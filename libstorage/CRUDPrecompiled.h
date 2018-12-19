@@ -34,7 +34,7 @@ class CRUDPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<CRUDPrecompiled> Ptr;
-
+    CRUDPrecompiled();
     virtual ~CRUDPrecompiled(){};
 
 
