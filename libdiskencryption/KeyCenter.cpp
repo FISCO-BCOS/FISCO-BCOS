@@ -25,6 +25,7 @@
 #include <jsonrpccpp/client/connectors/httpclient.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/SHA3.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 
@@ -58,6 +59,10 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
             LOG(DEBUG) << "[KeyCenter] Get datakey exception. keycentr info: " << info << endl;
             BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(info));
         }
+        // update query cache
+        m_lastQueryCipherDataKey = _cipherDataKey;
+        bytes readableDataKey = fromHex(dataKeyBytesStr);
+        m_lastRcvDataKey = uniformDataKey(readableDataKey);
     }
     catch (exception& e)
     {
@@ -65,9 +70,6 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
-    // update query cache
-    m_lastQueryCipherDataKey = _cipherDataKey;
-    m_lastRcvDataKey = fromHex(dataKeyBytesStr);
 
     return m_lastRcvDataKey;
 };
@@ -88,4 +90,11 @@ KeyCenter& KeyCenter::instance()
 {
     static KeyCenter ins;
     return ins;
+}
+
+dev::bytes KeyCenter::uniformDataKey(const dev::bytes& _readableDataKey)
+{
+    // Uniform datakey to a fix size 32 bytes by hashing it
+    // Because we has no limit to _readableDataKey size
+    return sha3(ref(_readableDataKey)).asBytes();
 }

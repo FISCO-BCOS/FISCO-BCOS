@@ -46,6 +46,9 @@ private:
     // Query cache
     std::string m_lastQueryCipherDataKey;
     dev::bytes m_lastRcvDataKey;
+
+private:
+    dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
 };
 
 #define g_keyCenter KeyCenter::instance()  // Only one keycenter in a node
