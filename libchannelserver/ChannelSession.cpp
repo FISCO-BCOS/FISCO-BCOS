@@ -245,6 +245,13 @@ void ChannelSession::startWrite() {
 		auto buffer = _sendBufferList.front();
 		_sendBufferList.pop();
 
+		auto cost = dev::utcTime() - _sendTimeList.front();
+		_sendTimeList.pop();
+
+		if(cost > 2000) {
+			LOG(WARNING) << "Channel write queue-time=" << cost;
+		}
+
 		auto session = shared_from_this();
 
 		_sslSocket->get_io_service().post(
@@ -254,8 +261,9 @@ void ChannelSession::startWrite() {
 				std::lock_guard<std::recursive_mutex> lock(s->_mutex);
 				boost::asio::async_write(*s->sslSocket(),
 						boost::asio::buffer(buffer->data(), buffer->size()),
-						[session, buffer](const boost::system::error_code& error, size_t bytesTransferred) {
+						[session, buffer ](const boost::system::error_code& error, size_t bytesTransferred) {
 							auto s = session;
+
 							if(s && s->actived()) {
 								std::lock_guard<std::recursive_mutex> lock(s->_mutex);
 								s->onWrite(error, buffer, bytesTransferred);
@@ -274,6 +282,7 @@ void ChannelSession::writeBuffer(std::shared_ptr<bytes> buffer) {
 		std::lock_guard<std::recursive_mutex> lock(_mutex);
 
 		_sendBufferList.push(buffer);
+		_sendTimeList.push(dev::utcTime());
 
 		startWrite();
 	}
@@ -325,7 +334,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 		if (it != _responseCallbacks.end()) {
 				callback = it->second;
 			}
-			}
+		}
 
 		if (callback) {
 			if(callback->timeoutHandler.get() != NULL) {
@@ -333,6 +342,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			}
 
 			if (callback->callback) {
+
 				_threadPool->enqueue([=]() {
 					callback->callback(e, message);
 
@@ -356,7 +366,8 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 		else {
 			if (_messageHandler) {
 				auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
-				_threadPool->enqueue([session, message]() {
+
+				_threadPool->enqueue([session, message ]() {
 					auto s = session.lock();
 					if(s && s->_messageHandler) {
 						s->_messageHandler(s, ChannelException(0, ""), message);
@@ -425,6 +436,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 		std::lock_guard<std::recursive_mutex> lock(_mutex);
 		if (_actived) {
 			_idleTimer->cancel();
+			_actived = false;
 
 			if (!_responseCallbacks.empty()) {
 				for (auto it : _responseCallbacks) {
@@ -467,15 +479,33 @@ void ChannelSession::disconnect(dev::channel::ChannelException e) {
 				//_messageHandler = std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
 			}
 
-			_actived = false;
 
 			auto sslSocket = _sslSocket;
-			_sslSocket->async_shutdown([sslSocket](const boost::system::error_code& error) {
-				if(error) {
-					LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
-				}
+			//force close socket after 30 seconds
+			auto shutdownTimer = std::make_shared<boost::asio::deadline_timer>(*_ioService, boost::posix_time::milliseconds(30000));
+			shutdownTimer->async_wait(
+					[sslSocket](const boost::system::error_code& error) {
+						if (error && error != boost::asio::error::operation_aborted)
+						{
+							LOG(WARNING) << "channel shutdown timer error: " << error.message();
+							return;
+						}
 
-				sslSocket->next_layer().close();
+						if(sslSocket->next_layer().is_open()) {
+							LOG(WARNING) << "channel shutdown timeout, force close";
+							sslSocket->next_layer().close();
+						}
+					});
+
+			_sslSocket->async_shutdown([sslSocket, shutdownTimer](const boost::system::error_code& error) {
+				if(error) {
+					LOG(WARNING) << "Error while shutdown the channel ssl socket: " << error.message();
+				}
+				shutdownTimer->cancel();
+
+				if(sslSocket->next_layer().is_open()) {
+					sslSocket->next_layer().close();
+				}
 			});
 			//_sslSocket->lowest_layer().close();
 

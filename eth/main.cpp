@@ -227,7 +227,8 @@ void version()
 #endif
 	cout << "FISCO-BCOS network protocol version: " << dev::eth::c_protocolVersion << "\n";
 	cout << "Client database version: " << dev::eth::c_databaseVersion << "\n";
-	cout << "Build: " << DEV_QUOTED(ETH_BUILD_PLATFORM) << "/" << DEV_QUOTED(ETH_BUILD_TYPE) << "\n";
+	cout << "Build: [platform]:" << DEV_QUOTED(ETH_BUILD_PLATFORM) << "\n[type]:" << DEV_QUOTED(ETH_BUILD_TYPE) 
+        << "\n[time]:" << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << "\n[commit]:" << DEV_QUOTED(ETH_COMMIT_HASH) << "\n";
 	exit(0);
 }
 
@@ -343,20 +344,16 @@ static map<string, unsigned int> s_mlogIndex;
 
 void rolloutHandler(const char* filename, std::size_t )
 {
-	std::stringstream stream;
+ std::stringstream stream;
+ int index = 0;
+ do
+ {
+  stream.str("");
+  stream << filename << "." << index++;
+ }
+ while(boost::filesystem::exists(stream.str().c_str()));
 
-	map<string, unsigned int>::iterator iter = s_mlogIndex.find(filename);
-	if (iter != s_mlogIndex.end())
-	{
-		stream << filename << "." << iter->second++;
-		s_mlogIndex[filename] = iter->second++;
-	}
-	else
-	{
-		stream << filename << "." << 0;
-		s_mlogIndex[filename] = 0;
-	}
-	boost::filesystem::rename(filename, stream.str().c_str());
+ boost::filesystem::rename(filename, stream.str().c_str());
 }
 
 void logRotateByTime()
@@ -1404,6 +1401,7 @@ int main(int argc, char** argv)
 	ChannelRPCServer::Ptr channelServer;
 	channelServer.reset(new ChannelRPCServer(), [](ChannelRPCServer *) {});
 	channelServer->setHost(web3.ethereum()->host());
+
 	web3.ethereum()->host().lock()->setWeb3Observer(channelServer->buildObserver());
 
 	if (!extraData.empty())

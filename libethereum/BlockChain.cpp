@@ -151,7 +151,7 @@ BlockChain::BlockChain(Interface* _interface, ChainParams const& _p, std::string
 	m_pnoncecheck(make_shared<NonceCheck>())
 {
 	init(_p, _dbPath);
-	open(_dbPath, _we, _pc);
+	open(_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize, _p.cacheSize);
 
 	m_pnoncecheck->init(*this );
 
@@ -229,7 +229,7 @@ void BlockChain::init(ChainParams const& _p, std::string const& _path)
 	upgradeDatabase(_path, genesisHash());
 }
 
-unsigned BlockChain::open(std::string const& _path, WithExisting _we)
+unsigned BlockChain::open(std::string const& _path, WithExisting _we, int maxOpenFile, int writeBufferSize, int cacheSize)
 {
 	string path = _path.empty() ? Defaults::get()->m_dbPath : _path;
 	string chainPath = path + "/" + toHex(m_genesisHash.ref().cropped(0, 4));
@@ -260,10 +260,13 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 
 	ldb::Options o;
 	o.create_if_missing = true;
-	o.max_open_files = 256;
+	//o.max_open_files = 256;
+	o.max_open_files = maxOpenFile;
 	//add by wheatli, for optimise
-	o.write_buffer_size = 100 * 1024 * 1024;
-	o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
+	//o.write_buffer_size = 100 * 1024 * 1024;
+	o.write_buffer_size = writeBufferSize;
+	//o.block_cache = ldb::NewLRUCache(256 * 1024 * 1024);
+	o.block_cache = ldb::NewLRUCache(cacheSize);
 	if (_we == WithExisting::Rescue) {
 		ldb::Status blocksStatus = leveldb::RepairDB(chainPath + "/blocks", o);
 		LOG(INFO) << "repair blocksDB:" << blocksStatus.ToString();
@@ -298,9 +301,16 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 #else
 
 	ldb::Status dbstatus = ldb::DB::Open(o, chainPath + "/blocks", &m_blocksDB);
-	LOG(INFO) << "open m_blocksDB result:" << dbstatus.ToString();
-	dbstatus = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
-	LOG(INFO) << "open m_extrasDB result:" << dbstatus.ToString();
+	if(!dbstatus.ok()) {
+		LOG(INFO) << "open m_blocksDB error:" << dbstatus.ToString();
+	}
+
+	if(m_blocksDB) {
+		dbstatus = ldb::DB::Open(o, extrasPath + "/extras", &m_extrasDB);
+		if(!dbstatus.ok()) {
+			LOG(INFO) << "open m_extrasDB error:" << dbstatus.ToString();
+		}
+	}
 
 #endif
 //	m_writeOptions.sync = true;
@@ -318,7 +328,8 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 				  (chainPath + "/blocks") <<
 				  "or " <<
 				  (extrasPath + "/extras") <<
-				  "already open. You appear to have another instance of ethereum running. Bailing.";
+				  " error";
+
 			BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
 		}
 	}
@@ -362,9 +373,9 @@ unsigned BlockChain::open(std::string const& _path, WithExisting _we)
 	return lastMinor;
 }
 
-void BlockChain::open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc)
+void BlockChain::open(std::string const& _path, WithExisting _we, ProgressCallback const& _pc, int maxOpenFile, int writeBufferSize, int cacheSize)
 {
-	if (open(_path, _we) != c_minorProtocolVersion || _we == WithExisting::Verify)
+	if (open(_path, _we, maxOpenFile, writeBufferSize, cacheSize) != c_minorProtocolVersion || _we == WithExisting::Verify)
 		rebuild(_path, _pc);
 }
 
@@ -372,7 +383,7 @@ void BlockChain::reopen(ChainParams const& _p, WithExisting _we, ProgressCallbac
 {
 	close();
 	init(_p, m_dbPath);
-	open(m_dbPath, _we, _pc);
+	open(m_dbPath, _we, _pc, _p.maxOpenFile, _p.writeBufferSize, _p.cacheSize);
 }
 
 void BlockChain::close()
@@ -428,7 +439,7 @@ void BlockChain::rebuild(std::string const& _path, std::function<void(unsigned, 
 	LOG(INFO) << "reopen m_extrasDB result:" << status.ToString();
 
 	// Open a fresh state DB
-	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill));
+	Block s = genesisBlock(State::openDB(path, m_genesisHash, WithExisting::Kill, 256, 64 * 1024 * 1024, 256 * 1024 * 1024));
 
 	// Clear all memos ready for replay.
 	m_details.clear();
@@ -989,7 +1000,7 @@ ImportRoute BlockChain::import(VerifiedBlockRef const& _block, OverlayDB const& 
 			br.receipts.push_back(tempBlock->receipt(i));
 			goodTransactions.push_back(tempBlock->pending()[i]);
 
-			LOG(INFO) << " Hash=" << (tempBlock->pending()[i].sha3()) << ",Randid=" << tempBlock->pending()[i].randomid() << ",上链=" << utcTime();
+			LOG(INFO) << " Hash=" << (tempBlock->pending()[i].sha3()) << ",Randid=" << tempBlock->pending()[i].randomid() << ",Packed=" << utcTime();
 
 		}
 
