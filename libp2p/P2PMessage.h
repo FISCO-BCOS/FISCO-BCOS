@@ -110,7 +110,7 @@ enum AMOPPacketType
 {
     SendTopicSeq = 1,
     RequestTopics = 2,
-    SendTopics = -3
+    SendTopics = 3
 };
 
 class P2PMessageFactory : public dev::network::MessageFactory

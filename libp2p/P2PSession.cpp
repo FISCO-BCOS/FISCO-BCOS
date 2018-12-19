@@ -162,7 +162,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
 
 				auto responseTopics = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
-				responseTopics->setProtocolID(dev::eth::ProtocolID::Topic);
+				responseTopics->setProtocolID(-((PROTOCOL_ID)dev::eth::ProtocolID::Topic));
 				responseTopics->setPacketType(AMOPPacketType::SendTopics);
 				std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
 
