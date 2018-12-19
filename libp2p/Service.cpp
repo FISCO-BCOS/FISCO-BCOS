@@ -267,7 +267,7 @@ void Service::onMessage(
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
 
         //AMOP message, redirect to p2psession
-        if(p2pMessage->protocolID() == dev::eth::ProtocolID::Topic && p2pMessage->packetType() == AMOPPacketType::SendTopicSeq) {
+        if(p2pMessage->protocolID() == dev::eth::ProtocolID::Topic) {
         	p2pSession->onTopicMessage(p2pMessage);
         	return;
         }

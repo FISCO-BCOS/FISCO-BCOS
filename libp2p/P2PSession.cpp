@@ -108,19 +108,19 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
 				if(m_topicSeq != topicSeq) {
 					SESSION_LOG(TRACE) << "Remote seq: " << topicSeq << " not equal to local seq: " << m_topicSeq << ", update";
 
-					auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+					auto requestTopics = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
-					message->setProtocolID(dev::eth::ProtocolID::Topic);
-					message->setPacketType(AMOPPacketType::RequestTopics);
+					requestTopics->setProtocolID(dev::eth::ProtocolID::Topic);
+					requestTopics->setPacketType(AMOPPacketType::RequestTopics);
 					std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-					message->setBuffer(buffer);
-					message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
-					message->setSeq(service->p2pMessageFactory()->newSeq());
+					requestTopics->setBuffer(buffer);
+					requestTopics->setLength(P2PMessage::HEADER_LENGTH + requestTopics->buffer()->size());
+					requestTopics->setSeq(service->p2pMessageFactory()->newSeq());
 
 					auto self = std::weak_ptr<P2PSession>(shared_from_this());
 					dev::network::Options option;
 					option.timeout = 5 * 1000; // 5 seconds timeout
-					m_session->asyncSendMessage(message, option, [self](NetworkException e, dev::network::Message::Ptr response) {
+					m_session->asyncSendMessage(requestTopics, option, [self](NetworkException e, dev::network::Message::Ptr response) {
 						try {
 							if(e.errorCode()) {
 								SESSION_LOG(ERROR) << "Error while requesting topic: " << e.errorCode() << " " << e.what();
@@ -158,10 +158,12 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
 			}
 			case AMOPPacketType::RequestTopics:
 			{
-				auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+				SESSION_LOG(TRACE) << "Receive request topics, reponse topics";
 
-				message->setProtocolID(dev::eth::ProtocolID::Topic);
-				message->setPacketType(AMOPPacketType::SendTopics);
+				auto responseTopics = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+
+				responseTopics->setProtocolID(dev::eth::ProtocolID::Topic);
+				responseTopics->setPacketType(AMOPPacketType::SendTopics);
 				std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
 
 				std::string s = boost::lexical_cast<std::string>(m_topicSeq);
@@ -172,23 +174,23 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
 
 				buffer->assign(s.begin(), s.end());
 
-				message->setBuffer(buffer);
-				message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
-				message->setSeq(service->p2pMessageFactory()->newSeq());
+				responseTopics->setBuffer(buffer);
+				responseTopics->setLength(P2PMessage::HEADER_LENGTH + responseTopics->buffer()->size());
+				responseTopics->setSeq(message->seq());
 
-				m_session->asyncSendMessage(message, dev::network::Options(), CallbackFunc());
-
+				m_session->asyncSendMessage(responseTopics, dev::network::Options(), CallbackFunc());
 
 				break;
 			}
 			default:
 			{
+				SESSION_LOG(ERROR) << "Unknown topic packet type: " << message->packetType();
 				break;
 			}
 			}
 		}
 		catch(std::exception &e) {
-
+			SESSION_LOG(ERROR) << "Error onTopicMessage: " << boost::diagnostic_information(e);
 		}
 	}
 }
