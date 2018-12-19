@@ -44,7 +44,6 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
 set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
-set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
