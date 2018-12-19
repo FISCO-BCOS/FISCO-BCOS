@@ -24,6 +24,7 @@
 #include <libstorage/CRUDPrecompiled.h>
 #include <libstorage/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstorage/SystemConfigPrecompiled.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
@@ -43,6 +44,8 @@ void ExecutiveContextFactory::initExecutiveContext(
     auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
 
+    context->setAddress2Precompiled(
+        Address(0x1000), std::make_shared<dev::blockverifier::SystemConfigPrecompiled>());
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
     context->setAddress2Precompiled(
         Address(0x1002), std::make_shared<dev::blockverifier::CRUDPrecompiled>());
