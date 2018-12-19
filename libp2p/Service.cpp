@@ -146,7 +146,7 @@ void Service::heartBeat()
             return;
         }
         auto service = self.lock();
-        if (service)
+        if (service && service->host()->haveNetwork())
         {
             service->heartBeat();
         }

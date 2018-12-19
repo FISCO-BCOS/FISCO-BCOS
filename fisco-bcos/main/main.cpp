@@ -47,8 +47,8 @@ int main(int argc, const char* argv[])
     auto initialize = std::make_shared<Initializer>();
     initialize->init(param.configPath());
     /// input the success info
-    std::cout << "start FISCO BCOS SUCCESS" << std::endl;
     version(false);
+    std::cout << "The FISCO-BCOS started." << std::endl;
     ExitHandler exitHandler;
     signal(SIGABRT, &ExitHandler::exitHandler);
     signal(SIGTERM, &ExitHandler::exitHandler);

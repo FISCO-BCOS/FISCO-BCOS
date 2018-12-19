@@ -378,21 +378,11 @@ void Host::handshakeClient(const boost::system::error_code& error,
 /// stop the network and worker thread
 void Host::stop()
 {
-    // called to force io_service to kill any remaining tasks it might have -
-    // such tasks may involve socket reads from Capabilities that maintain references
-    // to resources we're about to free.
-    {
-        // Although m_run is set by stop() or start(), it effects m_runTimer so x_runTimer is
-        // used instead of a mutex for m_run.
-        Guard l(x_runTimer);
-        // ignore if already stopped/stopping
-        if (!m_run)
-            return;
-        // signal run() to prepare for shutdown and reset m_timer
-        m_run = false;
-
-        m_asioInterface->stop();
-
-        m_hostThread->join();
-    }
+    // ignore if already stopped/stopping
+    if (!m_run)
+        return;
+    // signal run() to prepare for shutdown and reset m_timer
+    m_run = false;
+    m_asioInterface->stop();
+    m_hostThread->join();
 }
