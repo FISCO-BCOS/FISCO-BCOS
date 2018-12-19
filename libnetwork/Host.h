@@ -50,7 +50,7 @@ class Host : public std::enable_shared_from_this<Host>
 {
 public:
     Host(){};
-    virtual ~Host();
+    virtual ~Host() { stop(); };
 
     typedef std::shared_ptr<Host> Ptr;
 
@@ -147,7 +147,6 @@ private:
 
     std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> m_connectionHandler;
 
-    Mutex x_runTimer;
     bool m_run = false;
 
     std::shared_ptr<std::thread> m_hostThread;
