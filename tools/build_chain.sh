@@ -272,10 +272,10 @@ gen_node_cert() {
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
+    dir_must_not_exists "$ndpath"	
+    check_name node "$node"
 
     mkdir -p $ndpath
-    dir_must_exists "$ndpath"
-    check_name node "$node"
 
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
     #nodeid is pubkey
