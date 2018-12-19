@@ -302,8 +302,6 @@ void Session::onWrite(boost::system::error_code ec, std::size_t length)
 {
 	try
 	{
-		m_sending = false;
-
 		if (m_dropped)
 		return;
 
@@ -372,7 +370,6 @@ void Session::write()
 		{
 			if( m_socket->isConnected())
 			{
-				m_sending = true;
 				m_server->getIOService()->post(
 					[ = ] {
 						if(m_dropped) {
@@ -393,7 +390,6 @@ void Session::write()
 		}
 		else
 		{
-			m_sending = true;
 			ba::async_write(m_socket->ref(), ba::buffer(*out), boost::bind(&Session::onWrite, session, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
 		
@@ -475,13 +471,35 @@ void Session::drop(DisconnectReason _reason)
 		LOG(WARNING) << "Session::Drop Closing " << socket.remote_endpoint(ec) << "(" << reasonOf(_reason) << ")"<<m_peer->address();
 
 		auto sslSocket = m_socket;
-		sslSocket->sslref().async_shutdown([sslSocket](const boost::system::error_code& error) {
+
+		//force close socket after 30 seconds
+		auto shutdownTimer = std::make_shared<boost::asio::deadline_timer>(*m_server->getIOService(), boost::posix_time::milliseconds(30000));
+		shutdownTimer->async_wait(
+				[sslSocket](const boost::system::error_code& error) {
+					if (error && error != boost::asio::error::operation_aborted)
+					{
+						LOG(WARNING) << "shutdown timer error: " << error.message();
+						return;
+					}
+
+					if(sslSocket->ref().is_open()) {
+						LOG(WARNING) << "shutdown timeout, force close";
+						sslSocket->ref().close();
+					}
+				});
+
+		sslSocket->sslref().async_shutdown([sslSocket, shutdownTimer](const boost::system::error_code& error) {
 			if(error) {
 				LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
 			}
+			shutdownTimer->cancel();
 
-			sslSocket->ref().close();
+			if(sslSocket->ref().is_open()) {
+				sslSocket->ref().close();
+			}
 		});
+
+		//m_server->getIOService()
 	}
 	catch (...) {}
 
@@ -492,9 +510,10 @@ void Session::drop(DisconnectReason _reason)
 		m_peer->m_score /= 2;
 	}
 	
-
+#if 0
 	if( TCPError == _reason )
 		m_server->reconnectNow();
+#endif
 }
 
 void Session::disconnect(DisconnectReason _reason)
