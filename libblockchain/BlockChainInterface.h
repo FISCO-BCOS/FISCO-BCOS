@@ -73,6 +73,8 @@ public:
     /// get miner or observer nodes
     virtual dev::h512s minerList() = 0;
     virtual dev::h512s observerList() = 0;
+    /// get system config
+    virtual std::string getSystemConfigByKey(std::string const& key) = 0;
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>

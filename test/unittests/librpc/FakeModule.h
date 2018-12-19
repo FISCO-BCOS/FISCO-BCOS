@@ -150,6 +150,8 @@ public:
     }
     dev::h512s minerList() override { return m_initParam.minerList; };
     dev::h512s observerList() override { return m_initParam.observerList; };
+    std::string getSystemConfigByKey(std::string const& key) override { return ""; };
+
     void createTransaction()
     {
         bytes rlpBytes = fromHex(

@@ -30,6 +30,7 @@
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
+#include <libstorage/SystemConfigPrecompiled.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <memory>
 
@@ -73,6 +74,7 @@ public:
 
     dev::h512s minerList() override;
     dev::h512s observerList() override;
+    std::string getSystemConfigByKey(std::string const& key) override;
 
 private:
     void writeNumber(const dev::eth::Block& block,
@@ -99,6 +101,11 @@ private:
     dev::h512s m_observerList;
     int64_t m_cacheNumByMiner = -1;
     int64_t m_cacheNumByObserver = -1;
+
+    int32_t getSystemConfigItemIndex(std::string const& key);
+    mutable SharedMutex m_systemConfigMutex;
+    std::string m_configValueList[blockverifier::SystemConfigItem::SYSTEM_CONFIG_ITEM_COUNT];
+    int64_t m_cacheNumListByKey[blockverifier::SystemConfigItem::SYSTEM_CONFIG_ITEM_COUNT];
 };
 }  // namespace blockchain
 }  // namespace dev

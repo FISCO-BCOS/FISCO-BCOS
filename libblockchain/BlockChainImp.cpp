@@ -182,6 +182,22 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
             tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
         }
 
+        tb = mtb->openTable(SYS_CONFIG);
+        if (tb)
+        {
+            Entry::Ptr entry1 = std::make_shared<Entry>();
+            entry1->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_COUNT_LIMIT);
+            entry1->setField(SYSTEM_CONFIG_VALUE, SYSTEM_INIT_VALUE_TX_COUNT_LIMIT);
+            entry1->setField(SYSTEM_CONFIG_ENABLENUM, "0");
+            tb->insert(SYSTEM_KEY_TX_COUNT_LIMIT, entry1);
+
+            Entry::Ptr entry2 = std::make_shared<Entry>();
+            entry2->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_GAS_LIMIT);
+            entry2->setField(SYSTEM_CONFIG_VALUE, SYSTEM_INIT_VALUE_TX_GAS_LIMIT);
+            entry2->setField(SYSTEM_CONFIG_ENABLENUM, "0");
+            tb->insert(SYSTEM_KEY_TX_COUNT_LIMIT, entry2);
+        }
+
         tb = mtb->openTable(SYS_MINERS);
         if (tb)
         {
@@ -241,7 +257,7 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
 
 dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
 {
-    LOG(TRACE) << "BlockChainImp::getNodeListByType " << type << " at " << blockNumber;
+    BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getNodeListByType " << type << " at " << blockNumber;
 
     dev::h512s list;
     try
@@ -268,15 +284,15 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "BlockChainImp::getNodeListByType failed [EINFO]: "
-                   << boost::diagnostic_information(e);
+        BLOCKCHAIN_LOG(ERROR) << "BlockChainImp::getNodeListByType failed [EINFO]: "
+                              << boost::diagnostic_information(e);
     }
 
     std::stringstream s;
     s << "BlockChainImp::getNodeListByType " << type << ":";
     for (dev::h512 node : list)
         s << toJS(node) << ",";
-    LOG(TRACE) << s.str();
+    BLOCKCHAIN_LOG(TRACE) << s.str();
 
     return list;
 }
@@ -287,7 +303,7 @@ dev::h512s BlockChainImp::minerList()
     UpgradableGuard l(m_nodeListMutex);
     if (m_cacheNumByMiner == blockNumber)
     {
-        LOG(TRACE) << "BlockChainImp::minerList by cache, size:" << m_minerList.size();
+        BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::minerList by cache, size:" << m_minerList.size();
         return m_minerList;
     }
     dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_MINER);
@@ -304,7 +320,8 @@ dev::h512s BlockChainImp::observerList()
     UpgradableGuard l(m_nodeListMutex);
     if (m_cacheNumByObserver == blockNumber)
     {
-        LOG(TRACE) << "BlockChainImp::observerList by cache, size:" << m_observerList.size();
+        BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::observerList by cache, size:"
+                              << m_observerList.size();
         return m_observerList;
     }
     dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_OBSERVER);
@@ -313,6 +330,82 @@ dev::h512s BlockChainImp::observerList()
     m_observerList = list;
 
     return list;
+}
+
+std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
+{
+    int64_t blockNumber = number();
+    BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getSystemConfigByKey " << key << " at " << blockNumber;
+    int32_t keyIdx = getSystemConfigItemIndex(key);
+    std::string ret;
+
+    // invalid config key
+    if (SystemConfigItem::SYSTEM_CONFIG_ITEM_INVALID == keyIdx)
+    {
+        return ret;
+    }
+
+    // get value from cache
+    {
+        ReadGuard l(m_systemConfigMutex);
+        if (blockNumber == m_cacheNumListByKey[keyIdx])
+        {
+            BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getSystemConfigByKey value:"
+                                  << m_configValueList[keyIdx];
+            return m_configValueList[keyIdx];
+        }
+    }
+
+    // get value from db
+    try
+    {
+        auto values =
+            m_stateStorage->select(numberHash(blockNumber), blockNumber, storage::SYS_CONFIG, key);
+        if (!values || values->size() != 1)
+            return ret;
+
+        auto value = values->get(0);
+        if (!value)
+            return ret;
+
+        if (boost::lexical_cast<int>(value->getField(blockverifier::SYSTEM_CONFIG_ENABLENUM)) <=
+            blockNumber)
+        {
+            ret = value->getField(blockverifier::SYSTEM_CONFIG_VALUE);
+        }
+    }
+    catch (std::exception& e)
+    {
+        BLOCKCHAIN_LOG(ERROR) << "BlockChainImp::getSystemConfigByKey failed [EINFO]: "
+                              << boost::diagnostic_information(e);
+    }
+
+    // update cache
+    {
+        WriteGuard l(m_systemConfigMutex);
+        m_configValueList[keyIdx] = ret;
+        m_cacheNumListByKey[keyIdx] = blockNumber;
+    }
+
+    BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getSystemConfigByKey value:" << ret;
+    return ret;
+}
+
+int32_t BlockChainImp::getSystemConfigItemIndex(std::string const& key)
+{
+    if (SYSTEM_KEY_TX_COUNT_LIMIT == key)
+    {
+        return SystemConfigItem::SYSTEM_CONFIG_TX_COUNT_LIMIT;
+    }
+    else if (SYSTEM_KEY_TX_GAS_LIMIT == key)
+    {
+        return SystemConfigItem::SYSTEM_CONFIG_TX_GAS_LIMIT;
+    }
+    else
+    {
+        BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigItemIndex] key error:" << key;
+        return SystemConfigItem::SYSTEM_CONFIG_ITEM_INVALID;
+    }
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
