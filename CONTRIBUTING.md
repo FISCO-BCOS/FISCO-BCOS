@@ -1,3 +1,5 @@
+English / [中文](docs/CONTRIBUTING_CN.md)
+
 # Contributing and Review Guidelines
 
 All contributions are welcome! 
