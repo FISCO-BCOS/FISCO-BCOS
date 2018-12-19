@@ -80,6 +80,8 @@ void Service::stop()
                 session.second->stop(dev::network::ClientQuit);
             }
         }
+
+        m_timer->cancel();
         /// clear sessions
         RecursiveGuard l(x_sessions);
         m_sessions.clear();
@@ -266,7 +268,8 @@ void Service::onMessage(
 
         //AMOP message, redirect to p2psession
         if(p2pMessage->protocolID() == dev::eth::ProtocolID::Topic && p2pMessage->packetType() == AMOPPacketType::SendTopicSeq) {
-
+        	p2pSession->onTopicMessage(p2pMessage);
+        	return;
         }
 
         if (p2pMessage->isRequestPacket())

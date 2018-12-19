@@ -24,6 +24,7 @@
 #include <libdevcore/Common.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
+#include <boost/algorithm/string.hpp>
 #include "Service.h"
 
 using namespace dev;
@@ -93,23 +94,101 @@ void P2PSession::heartBeat()
     }
 }
 
-void P2PSession::onTopicMessage(uint32_t topicSeq) {
-	if(topicSeq != m_topicSeq) {
-		SESSION_LOG(TRACE) << "Remote seq: " << topicSeq << " not equal to local seq: " << m_topicSeq << ", update";
+void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
+	auto service = m_service.lock();
 
-		auto service = m_service.lock();
-		if (service && service->actived())
-		{
-			auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+	if(service && service->actived()) {
+		try {
+			switch(message->packetType()) {
+			case AMOPPacketType::SendTopicSeq:
+			{
+				std::string s((const char*)message->buffer()->data(), message->buffer()->size());
+				auto topicSeq = boost::lexical_cast<uint32_t>(s);
 
-			message->setProtocolID(dev::eth::ProtocolID::Topic);
-			message->setPacketType(AMOPPacketType::RequestTopics);
-			std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-			std::string s = boost::lexical_cast<std::string>(service->topicSeq());
-			buffer->assign(s.begin(), s.end());
-			message->setBuffer(buffer);
-			message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
-			m_session->asyncSendMessage(message);
+				if(m_topicSeq != topicSeq) {
+					SESSION_LOG(TRACE) << "Remote seq: " << topicSeq << " not equal to local seq: " << m_topicSeq << ", update";
+
+					auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+
+					message->setProtocolID(dev::eth::ProtocolID::Topic);
+					message->setPacketType(AMOPPacketType::RequestTopics);
+					std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+					message->setBuffer(buffer);
+					message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
+					message->setSeq(service->p2pMessageFactory()->newSeq());
+
+					auto self = std::weak_ptr<P2PSession>(shared_from_this());
+					dev::network::Options option;
+					option.timeout = 5 * 1000; // 5 seconds timeout
+					m_session->asyncSendMessage(message, option, [self](NetworkException e, dev::network::Message::Ptr response) {
+						try {
+							if(e.errorCode()) {
+								SESSION_LOG(ERROR) << "Error while requesting topic: " << e.errorCode() << " " << e.what();
+								return;
+							}
+
+							std::vector<std::string> topics;
+
+							auto p2pResponse = std::dynamic_pointer_cast<P2PMessage>(response);
+							std::string s((const char*)p2pResponse->buffer()->data(), p2pResponse->buffer()->size());
+							boost::split(topics, s, boost::is_any_of("\t"));
+
+							uint32_t topicSeq = 0;
+							auto topicList = std::make_shared<std::set<std::string> >();
+							for(uint32_t i=0; i<topics.size(); ++i) {
+								if(i == 0) {
+									topicSeq = boost::lexical_cast<uint32_t>(topics[i]);
+								}
+								else {
+									topicList->insert(topics[i]);
+								}
+							}
+
+							auto session = self.lock();
+							if(session) {
+								session->setTopics(topicSeq, topicList);
+							}
+						}
+						catch(std::exception &e) {
+							SESSION_LOG(ERROR) << "Parse topics error: " << boost::diagnostic_information(e);
+						}
+					});
+				}
+				break;
+			}
+			case AMOPPacketType::RequestTopics:
+			{
+				auto message = std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+
+				message->setProtocolID(dev::eth::ProtocolID::Topic);
+				message->setPacketType(AMOPPacketType::SendTopics);
+				std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+
+				std::string s = boost::lexical_cast<std::string>(m_topicSeq);
+				for(auto it: *m_topics) {
+					s.append("\t");
+					s.append(it);
+				}
+
+				buffer->assign(s.begin(), s.end());
+
+				message->setBuffer(buffer);
+				message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
+				message->setSeq(service->p2pMessageFactory()->newSeq());
+
+				m_session->asyncSendMessage(message, dev::network::Options(), CallbackFunc());
+
+
+				break;
+			}
+			default:
+			{
+				break;
+			}
+			}
+		}
+		catch(std::exception &e) {
+
 		}
 	}
 }

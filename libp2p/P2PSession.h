@@ -25,6 +25,7 @@
 #include <libnetwork/Session.h>
 #include <libp2p/Common.h>
 #include <memory>
+#include "P2PMessage.h"
 
 namespace dev
 {
@@ -57,11 +58,20 @@ public:
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
 
-    virtual void onTopicMessage(uint32_t topicSeq);
+    virtual void onTopicMessage(P2PMessage::Ptr message);
+
+    virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<std::string> > topics) {
+    	std::lock_guard<std::mutex> lock(x_topic);
+
+    	m_topicSeq = seq;
+    	m_topics = topics;
+    }
 
 private:
     dev::network::SessionFace::Ptr m_session;
     NodeID m_nodeID;
+
+    std::mutex x_topic;
     uint32_t m_topicSeq = 0;
     std::shared_ptr<std::set<std::string> > m_topics;
     std::weak_ptr<Service> m_service;

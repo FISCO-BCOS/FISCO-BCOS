@@ -34,7 +34,7 @@ namespace dev
 {
 namespace network
 {
-#define CallbackFunc std::function<void(NetworkException, Message::Ptr)>
+#define CallbackFunc std::function<void(dev::network::NetworkException, dev::network::Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
