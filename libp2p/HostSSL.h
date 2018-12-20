@@ -103,7 +103,12 @@ namespace dev
 			//virtual void getAnnouncementNodeList(h256& _allPeerHash,std::vector<Node> & _nodes)override;
 
 			virtual void onNodeTableEvent(NodeID const& _n, NodeTableEventType const& _e)override;
-			virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint)override;	
+			virtual void connect(NodeIPEndpoint const& _nodeIPEndpoint)override;
+
+			virtual void erasePeedingPeerConn(NodeIPEndpoint endpoint) {
+				Guard l(x_pendingNodeConns);
+				m_pendingPeerConns.erase(endpoint.name());
+			}
 		
 		private:
 			void sslHandshakeServer(const boost::system::error_code& error,std::shared_ptr<RLPXSocketSSL> socket);

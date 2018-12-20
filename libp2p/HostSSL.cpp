@@ -446,8 +446,7 @@ void HostSSL::sslHandshakeClient(const boost::system::error_code& error, std::sh
 	}
 	handshake->start();
 
-	Guard l(x_pendingNodeConns);
-	m_pendingPeerConns.erase(_nodeIPEndpoint.name());
+	erasePeedingPeerConn(_nodeIPEndpoint);
 }
 
 void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
@@ -511,18 +510,51 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 	socket->sslref().set_verify_depth(3);
 	socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
 
-	socket->ref().async_connect(_nodeIPEndpoint, m_strand.wrap([ = ](boost::system::error_code const & ec)
+	auto connectTimer = std::make_shared<boost::asio::deadline_timer>(m_ioService, boost::posix_time::milliseconds(30000));
+	auto self = std::weak_ptr<HostSSL>(std::dynamic_pointer_cast<HostSSL>(shared_from_this()));
+	connectTimer->async_wait(
+			[socket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
+				if (error && error != boost::asio::error::operation_aborted)
+				{
+					LOG(WARNING) << "shutdown timer error: " << error.message();
+					return;
+				}
+
+				if(socket->ref().is_open()) {
+					LOG(WARNING) << "connection timeout, force close";
+					socket->ref().close();
+				}
+
+				auto host = self.lock();
+				if(host) {
+					host->erasePeedingPeerConn(_nodeIPEndpoint);
+				}
+			});
+
+	socket->ref().async_connect(_nodeIPEndpoint, m_strand.wrap([ self, socket, _nodeIPEndpoint, connectTimer ](boost::system::error_code const & ec)
 	{
-		if (ec)
-		{
-			LOG(WARNING) << "Connection refused to node" << id().abridged() <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
-			
-			Guard l(x_pendingNodeConns);
-			m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-		}
-		else
-		{
-			socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket,NodeID(), _nodeIPEndpoint)) );
+		auto host = self.lock();
+		if(host) {
+			if (ec)
+			{
+				LOG(WARNING) << "Connection refused to node" << host->id().abridged() <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
+
+				connectTimer->cancel();
+				host->erasePeedingPeerConn(_nodeIPEndpoint);
+			}
+			else
+			{
+				//socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket, NodeID(), _nodeIPEndpoint)) );
+				socket->sslref().async_handshake(ba::ssl::stream_base::client, host->getStrand()->wrap([self, socket, _nodeIPEndpoint, connectTimer] (boost::system::error_code const & ec) {
+					connectTimer->cancel();
+
+					auto host = self.lock();
+					if(host) {
+						auto nodeIDEndpoint = _nodeIPEndpoint;
+						host->sslHandshakeClient(ec, socket, NodeID(), nodeIDEndpoint);
+					}
+				}) );
+			}
 		}
 	}));
 }
