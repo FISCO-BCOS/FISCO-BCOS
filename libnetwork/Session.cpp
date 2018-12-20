@@ -81,7 +81,6 @@ void Session::asyncSendMessage(
         return;
     }
 
-    SESSION_LOG(TRACE) << "Session sendMessage seq: " << message->seq();
     auto handler = std::make_shared<ResponseCallback>();
     handler->callbackFunc = callback;
     if (options.timeout > 0)
@@ -220,7 +219,6 @@ void Session::write()
         {
             if (m_socket->isConnected())
             {
-                SESSION_LOG(TRACE) << "Start send " << buffer->size() << " bytes data";
                 server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
                         boost::asio::placeholders::bytes_transferred, buffer));
@@ -302,14 +300,14 @@ void Session::drop(DisconnectReason _reason)
                 _reason == ClientQuit || _reason == UserReason)
             {
                 SESSION_LOG(DEBUG)
-                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
-                    << m_socket->nodeIPEndpoint().address;
+                    << "Disconnecting | Closing " << socket.remote_endpoint() << "("
+                    << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
             }
             else
             {
                 SESSION_LOG(WARNING)
-                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
-                    << m_socket->nodeIPEndpoint().address;
+                    << "Disconnecting | Closing " << socket.remote_endpoint() << "("
+                    << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
             }
 
             /// if get Host object failed, close the socket directly
@@ -376,8 +374,8 @@ void Session::drop(DisconnectReason _reason)
 
 void Session::disconnect(DisconnectReason _reason)
 {
-    SESSION_LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")"
-                         << " at " << m_socket->nodeIPEndpoint().name();
+    /// SESSION_LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")"
+    ///                     << " at " << m_socket->nodeIPEndpoint().name();
     drop(_reason);
 }
 
@@ -420,10 +418,9 @@ void Session::doRead()
                 {
                     Message::Ptr message = s->m_messageFactory->buildMessage();
                     ssize_t result = message->decode(s->m_data.data(), s->m_data.size());
-                    SESSION_LOG(TRACE) << "Parse result: " << result;
                     if (result > 0)
                     {
-                        SESSION_LOG(TRACE) << "Decode success: " << result;
+                        /// SESSION_LOG(TRACE) << "Decode success: " << result;
                         NetworkException e(P2PExceptionType::Success, "Success");
                         s->onMessage(e, s, message);
                         s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
@@ -447,7 +444,6 @@ void Session::doRead()
 
         if (m_socket->isConnected())
         {
-            SESSION_LOG(TRACE) << "Start read";
             server->asioInterface()->asyncReadSome(
                 m_socket, boost::asio::buffer(m_recvBuffer, BUFFER_LENGTH), asyncRead);
         }

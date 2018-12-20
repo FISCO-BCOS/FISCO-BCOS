@@ -95,7 +95,6 @@ void Service::heartBeat()
         return;
     }
 
-    SERVICE_LOG(TRACE) << "Service onHeartBeat";
     std::map<NodeIPEndpoint, NodeID> staticNodes;
     std::unordered_map<NodeID, P2PSession::Ptr> sessions;
 
@@ -265,13 +264,13 @@ void Service::onMessage(
             return;
         }
 
-        SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
+        /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
         if (p2pMessage->isRequestPacket())
         {
-            SERVICE_LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-"
-                               << p2pMessage->packetType();
+            // SERVICE_LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-"
+            ///                   << p2pMessage->packetType();
             CallbackFuncWithSession callback;
             {
                 RecursiveGuard lock(x_protocolID2Handler);
@@ -415,7 +414,6 @@ void Service::asyncSendMessageByNodeID(
 
 P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr message)
 {
-    SERVICE_LOG(TRACE) << "Call Service::sendMessageByTopic";
     try
     {
         struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
@@ -445,7 +443,6 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
 
         callback->mutex.lock();
         callback->mutex.unlock();
-        SERVICE_LOG(TRACE) << "Service::sendMessageByNodeID mutex unlock.";
 
         NetworkException error = callback->error;
         if (error.errorCode() != 0)
@@ -469,7 +466,7 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
 void Service::asyncSendMessageByTopic(
     std::string topic, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
-    SERVICE_LOG(TRACE) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
+    /// SERVICE_LOG(TRACE) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
     // assert(options.timeout > 0 && options.subTimeout > 0);
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     if (nodeIDsToSend.size() == 0)

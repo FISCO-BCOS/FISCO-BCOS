@@ -239,7 +239,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
                 if (result > 0)
                 {
-                    CHANNEL_LOG(TRACE) << "Decode success: " << result;
+                    // CHANNEL_LOG(TRACE) << "Decode success: " << result;
 
                     onMessage(ChannelException(0, ""), message);
 

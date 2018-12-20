@@ -304,10 +304,10 @@ void PBFTEngine::sendViewChangeMsg(NodeID const& nodeId)
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
     PBFTENGINE_LOG(DEBUG) << "[#sendViewChangeMsg] send viewchange to started node "
-                             "[myIdx/myNode/PeernodeID/hash/higNumber]"
-                          << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
-                          << nodeId.abridged() << "/" << req.block_hash.abridged() << "/"
-                          << m_highestBlock.number();
+                             "[view/toView/myIdx/myNode/PeernodeID/hash/higNumber]"
+                          << m_view << "/" << m_toView << "/" << nodeIdx() << "/"
+                          << m_keyPair.pub().abridged() << "/" << nodeId.abridged() << "/"
+                          << req.block_hash.abridged() << "/" << m_highestBlock.number();
 
     bytes view_change_data;
     req.encode(view_change_data);
@@ -317,9 +317,10 @@ void PBFTEngine::sendViewChangeMsg(NodeID const& nodeId)
 bool PBFTEngine::broadcastViewChangeReq()
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
-    PBFTENGINE_LOG(DEBUG) << "[#broadcastViewChangeReq] [myIdx/myNode/hash/higNumber]:  "
-                          << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
-                          << req.block_hash.abridged() << "/" << m_highestBlock.number();
+    PBFTENGINE_LOG(DEBUG)
+        << "[#broadcastViewChangeReq] [myIdx/myNode/hash/higNumber/view/toView]:  " << nodeIdx()
+        << "/" << m_keyPair.pub().abridged() << "/" << req.block_hash.abridged() << "/"
+        << m_highestBlock.number() << m_view << "/" << m_toView;
     /// view change not caused by omit empty block
     if (!m_emptyBlockViewChange)
     {
@@ -330,7 +331,6 @@ bool PBFTEngine::broadcastViewChangeReq()
     }
     /// reset the flag
     m_emptyBlockViewChange = false;
-
     bytes view_change_data;
     req.encode(view_change_data);
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
@@ -401,10 +401,10 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         /// packet has been broadcasted?
         if (broadcastFilter(session.nodeID, packetType, key))
             continue;
-        PBFTENGINE_LOG(TRACE) << "[#broadcastMsg] [myIdx/myNode/dstId/dstIp/packetType]:  "
+        PBFTENGINE_LOG(TRACE) << "[#broadcastMsg] [myIdx/myNode/dstId/dstIp/packetType/ttl]:  "
                               << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                               << session.nodeID.abridged() << "/" << session.nodeIPEndpoint.name()
-                              << "/" << packetType;
+                              << "/" << packetType << "/" << ttl;
         /// send messages
         m_service->asyncSendMessageByNodeID(
             session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
@@ -1025,10 +1025,6 @@ void PBFTEngine::checkTimeout()
             m_timeManager.m_lastConsensusTime = utcTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
-            PBFTENGINE_LOG(DEBUG)
-                << "[#checkTimeout: broadcastViewChangeReq] [myIdx/myNode/highNum/view/toView]:  "
-                << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << m_highestBlock.number()
-                << "/" << m_view << "/" << m_toView;
             if (!broadcastViewChangeReq())
                 return;
             checkAndChangeView();

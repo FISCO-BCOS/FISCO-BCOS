@@ -125,8 +125,6 @@ bytes BlockChainImp::getCode(Address _address)
 
 h256 BlockChainImp::numberHash(int64_t _i)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#number] [num]: "
-                          << "[" << _i << "]";
     string numberHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -143,8 +141,6 @@ h256 BlockChainImp::numberHash(int64_t _i)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByHash] [blockHash]: "
-                          << "[" << toHex(_blockHash) << "]";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
     if (tb)
