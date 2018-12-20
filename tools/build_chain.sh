@@ -406,8 +406,8 @@ gen_node_cert_gm() {
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=$(cat node.nodeid | head)
-    serial=$(cat node.serial | head)
+    nodeid=$(head node.nodeid)
+    serial=$(head node.serial)
     cat >node.json <<EOF
 {
  "id":"$nodeid",
@@ -976,7 +976,7 @@ for line in ${ip_array[*]};do
                 gen_node_cert_gm "" ${output_dir}/gmcert/agency $node_dir >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
                 rm node.json node.ca
-                mv * ${gm_conf_path}/
+                mv ./* ${gm_conf_path}/
 
                 #private key should not start with 00
                 cd $output_dir
