@@ -390,7 +390,7 @@ generate_group_ini()
     ;the max number of transactions of a block
     maxTransNum=1000
     ;the ttl of broadcasted pbft message
-    ;maxTTL=3
+    ;maxTTL=2
     ;the node id of leaders
     ${node_list}
 
