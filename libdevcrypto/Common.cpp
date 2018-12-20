@@ -361,13 +361,6 @@ bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
 }
 
 
-KeyPair::KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec))
-{
-    // Assign address only if the secret key is valid.
-    if (m_public)
-        m_address = toAddress(m_public);
-}
-
 KeyPair KeyPair::create()
 {
     while (true)

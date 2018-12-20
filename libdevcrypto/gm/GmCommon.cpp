@@ -171,7 +171,10 @@ Address dev::toAddress(Address const& _from, u256 const& _nonce)
  * @param _plain : plain text need to be encrypted
  * @param o_cipher : encrypted ciper text
  */
-void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher) {}
+void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
 /**
  * @brief : decrypt ciper text with secret key
@@ -183,46 +186,61 @@ void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher) {}
  */
 bool dev::decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return true;
 }
 
-void dev::encryptECIES(Public const& _k, bytesConstRef _plain, bytes& o_cipher) {}
+void dev::encryptECIES(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
 void dev::encryptECIES(
     Public const& _k, bytesConstRef _sharedMacData, bytesConstRef _plain, bytes& o_cipher)
-{}
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
 bool dev::decryptECIES(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return decryptECIES(_k, bytesConstRef(), _cipher, o_plaintext);
 }
 
 bool dev::decryptECIES(
     Secret const& _k, bytesConstRef _sharedMacData, bytesConstRef _cipher, bytes& o_plaintext)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return true;
 }
 
-void dev::encryptSym(Secret const& _k, bytesConstRef _plain, bytes& o_cipher) {}
+void dev::encryptSym(Secret const& _k, bytesConstRef _plain, bytes& o_cipher)
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
 bool dev::decryptSym(Secret const& _k, bytesConstRef _cipher, bytes& o_plain)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return true;
 }
 
 std::pair<bytes, h128> dev::encryptSymNoAuth(SecureFixedHash<16> const& _k, bytesConstRef _plain)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     h128 iv(Nonce::get().makeInsecure());
     return make_pair(encryptSymNoAuth(_k, iv, _plain), iv);
 }
 
 bytes dev::encryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _plain)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return bytes();
 }
 
 bytesSec dev::decryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _cipher)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return bytesSec();
 }
 
@@ -241,9 +259,6 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
     // return sign.pub;
 }
 
-static const u256 c_secp256k1n(
-    "115792089237316195423570985008687907852837564279074904382605163141518161494337");
-
 Signature dev::sign(Secret const& _k, h256 const& _hash)
 {
     string pri = toHex(bytesConstRef{_k.data(), 32});
@@ -260,28 +275,6 @@ Signature dev::sign(Secret const& _k, h256 const& _hash)
     return Signature{byteSign};
 }
 
-bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
-{
-    string signData = toHex(_s.asBytes());
-    // LOG(DEBUG)<<"verify signData:"<<signData;
-    // LOG(DEBUG)<<"_hash:"<<toHex(_hash.asBytes());
-    string pub = toHex(_p.asBytes());
-    pub = "04" + pub;
-    // LOG(DEBUG)<<"verify pub:"<<pub;
-    bool lresult = SM2::getInstance().verify(
-        signData, signData.length(), (const char*)_hash.data(), h256::size, pub);
-    // LOG(DEBUG)<<"verify lresult:"<<lresult;
-    // assert(lresult);
-    return lresult;
-}
-
-
-KeyPair::KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec))
-{
-    // Assign address only if the secret key is valid.
-    if (m_public)
-        m_address = toAddress(m_public);
-}
 
 KeyPair KeyPair::create()
 {
@@ -307,12 +300,30 @@ Secret Nonce::next()
     return sha3(~m_value);
 }
 
+bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
+{
+    string signData = toHex(_s.asBytes());
+    // LOG(DEBUG)<<"verify signData:"<<signData;
+    // LOG(DEBUG)<<"_hash:"<<toHex(_hash.asBytes());
+    string pub = toHex(_p.asBytes());
+    pub = "04" + pub;
+    // LOG(DEBUG)<<"verify pub:"<<pub;
+    bool lresult = SM2::getInstance().verify(
+        signData, signData.length(), (const char*)_hash.data(), h256::size, pub);
+    // LOG(DEBUG)<<"verify lresult:"<<lresult;
+    // assert(lresult);
+    return lresult;
+}
+
+
 bool dev::crypto::ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return true;
 }
 
 bytes ecies::kdf(Secret const& _z, bytes const& _s1, unsigned kdByteLen)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return bytes();
 }

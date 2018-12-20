@@ -286,7 +286,7 @@ BOOST_AUTO_TEST_CASE(GM_testGetTransactionReceipt)
     BOOST_CHECK(
         response["logs"][0]["address"].asString() == "0x0000000000000000000000000000000000002000");
     BOOST_CHECK(response["logs"][0]["data"].asString() == "0x");
-    BOOST_CHECK(response["logs"][0]["topics"].asString() == "0x[]");
+    BOOST_CHECK(response["logs"][0]["topics"].size() == 0);
     BOOST_CHECK(response["status"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getTransactionReceipt(invalidGroup, txHash), JsonRpcException);

@@ -34,23 +34,6 @@ using namespace dev;
 using namespace dev::crypto;
 using namespace std;
 
-char* ascii2hex(const char* chs, int len)
-{
-    char hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-
-    char* ascii = (char*)calloc(len * 3 + 1, sizeof(char));  // calloc ascii
-
-    int i = 0;
-    while (i < len)
-    {
-        int b = chs[i] & 0x000000ff;
-        ascii[i * 2] = hex[b / 16];
-        ascii[i * 2 + 1] = hex[b % 16];
-        ++i;
-    }
-    return ascii;
-}
-
 
 bytes dev::aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key)
 {
