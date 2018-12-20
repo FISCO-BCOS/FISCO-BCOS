@@ -36,7 +36,10 @@ using namespace jsonrpc;
 const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
 {
     if (_cipherDataKey.empty())
-        return bytes();
+    {
+        LOG(DEBUG) << "[KeyCenter] Get datakey exception. cipherDataKey is empty" << endl;
+        BOOST_THROW_EXCEPTION(KeyCenterDataKeyError());
+    }
 
     if (m_lastQueryCipherDataKey == _cipherDataKey)
         return m_lastRcvDataKey;

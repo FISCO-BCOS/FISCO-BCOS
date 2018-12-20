@@ -92,6 +92,7 @@ DEV_SIMPLE_EXCEPTION(InitLedgerConfigFailed);
 DEV_SIMPLE_EXCEPTION(InvalidConsensusType);
 DEV_SIMPLE_EXCEPTION(OpenLevelDBFailed);
 DEV_SIMPLE_EXCEPTION(KeyCenterAlreadyInit);
+DEV_SIMPLE_EXCEPTION(KeyCenterDataKeyError);
 DEV_SIMPLE_EXCEPTION(KeyCenterConnectionError);
 DEV_SIMPLE_EXCEPTION(EncryptedFileError);
 DEV_SIMPLE_EXCEPTION(LevelDBNotOpened);
