@@ -2,13 +2,24 @@
 LOG_WARN()
 {
     local content=${1}
-    echo -e "\033[31m${content}\033[0m"
+    echo -e "\033[31m[WARNING] ${content}\033[0m"
 }
 
 LOG_INFO()
 {
     local content=${1}
     echo -e "\033[32m[INFO] ${content}\033[0m"
+}
+
+check_file()
+{
+    file=$1
+
+    [ ! -f "$file" ] && LOG_WARN "$file is not exist." && exit;
+
+    [ -z "$(cat $file |grep 'BEGIN PRIVATE KEY')" ] && LOG_WARN "\"$file\" has already encrypted." && exit;
+
+    LOG_INFO "Check file Ok."
 }
 
 set -e
@@ -19,8 +30,7 @@ ORIGIN_FILE=$2
 CIPHER_KEY=$3
 BACKUP_FILE=$ORIGIN_FILE.bak.$(date +%s)
 
-[ ! -f "$ORIGIN_FILE" ] && LOG_WARN "$ORIGIN_FILE is not exist." && exit;
-
+check_file $ORIGIN_FILE
 
 fileStream=`base64 $ORIGIN_FILE |tr -d "\n"`
 #echo $fileStream
