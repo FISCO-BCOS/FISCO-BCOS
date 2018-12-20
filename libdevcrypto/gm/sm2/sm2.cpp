@@ -105,7 +105,6 @@ string SM2::getPrivateKey()
 bool SM2::sign(
     const char* originalData, int originalDataLen, const string& privateKey, string& r, string& s)
 {
-    // LOG(DEBUG)<<"originalData:"<<ascii2hex(originalData,originalDataLen)<<"
     // originalDataLen:"<<originalDataLen<<" Sign privateKey:"<<privateKey;
 
     bool lresult = false;
@@ -186,7 +185,7 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
     int originalDataLen, const string& publicKey)
 {
     // LOG(DEBUG)<<"_signData:"<<_signData<<" _signDataLen:"<<_signDataLen<<"
-    // originalData:"<<ascii2hex(originalData,originalDataLen)<<"
+    // originalData:"<<(originalData,originalDataLen)<<"
     // originalDataLen:"<<originalDataLen<<" publicKey:"<<publicKey;
     bool lresult = false;
     SM3_CTX sm3Ctx;

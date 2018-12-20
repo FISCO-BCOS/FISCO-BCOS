@@ -174,7 +174,13 @@ public:
     /// Normal constructor - populates object from the given secret key.
     /// If the secret key is invalid the constructor succeeds, but public key
     /// and address stay "null".
-    KeyPair(Secret const& _sec);
+    KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec))
+    {
+        // Assign address only if the secret key is valid.
+        if (m_public)
+            m_address = toAddress(m_public);
+    }
+
     KeyPair() {}
 
     /// Create a new, randomly generated object.

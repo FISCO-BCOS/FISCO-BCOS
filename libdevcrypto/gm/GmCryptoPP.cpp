@@ -20,6 +20,7 @@
  */
 
 #include "libdevcrypto/CryptoPP.h"
+#include "libdevcrypto/Exceptions.h"
 #include "libdevcrypto/Hash.h"
 #include <cryptopp/eccrypto.h>
 #include <cryptopp/oids.h>
@@ -73,13 +74,14 @@ private:
 
 inline CryptoPP::ECP::Point publicToPoint(Public const& _p)
 {
-    CryptoPP::Integer x(_p.data(), 32);
-    CryptoPP::Integer y(_p.data() + 32, 32);
-    return CryptoPP::ECP::Point(x, y);
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+    return CryptoPP::ECP::Point(0, 0);
 }
 
 inline CryptoPP::Integer secretToExponent(Secret const& _s)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+
     return CryptoPP::Integer(_s.data(), Secret::size);
 }
 
@@ -88,28 +90,46 @@ inline CryptoPP::Integer secretToExponent(Secret const& _s)
 Secp256k1PP* Secp256k1PP::get()
 {
     static Secp256k1PP s_this;
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return &s_this;
 }
 
-void Secp256k1PP::encryptECIES(Public const& _k, bytes& io_cipher) {}
+void Secp256k1PP::encryptECIES(Public const& _k, bytes& io_cipher)
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
-void Secp256k1PP::encryptECIES(Public const& _k, bytesConstRef _sharedMacData, bytes& io_cipher) {}
+void Secp256k1PP::encryptECIES(Public const& _k, bytesConstRef _sharedMacData, bytes& io_cipher)
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
 bool Secp256k1PP::decryptECIES(Secret const& _k, bytes& io_text)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+
     return true;
 }
 
 bool Secp256k1PP::decryptECIES(Secret const& _k, bytesConstRef _sharedMacData, bytes& io_text)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+
     return true;
 }
 
-void Secp256k1PP::encrypt(Public const& _k, bytes& io_cipher) {}
+void Secp256k1PP::encrypt(Public const& _k, bytes& io_cipher)
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
-void Secp256k1PP::decrypt(Secret const& _k, bytes& io_text) {}
+void Secp256k1PP::decrypt(Secret const& _k, bytes& io_text)
+{
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
+}
 
 bool Secp256k1PP::agree(Secret const& _s, Public const& _r, Secret& o_s)
 {
+    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return true;
 }

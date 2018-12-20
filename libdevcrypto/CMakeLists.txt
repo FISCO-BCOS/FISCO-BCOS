@@ -1,10 +1,9 @@
+file(GLOB_RECURSE HEADERS "*.h")
 
 if (BUILD_GM)
     file(GLOB_RECURSE SRC_LIST "gm/*.cpp") 
-    file(GLOB_RECURSE HEADERS "*.h")  
-else()
+else ()
     file(GLOB SRC_LIST "./*.cpp")
-    file(GLOB HEADERS "*.h")
 endif()
 
 add_library(devcrypto ${SRC_LIST} ${HEADERS})
