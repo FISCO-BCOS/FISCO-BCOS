@@ -1,13 +1,35 @@
 #! /bin/sh
+LOG_WARN()
+{
+    local content=${1}
+    echo -e "\033[31m${content}\033[0m"
+}
+
+LOG_INFO()
+{
+    local content=${1}
+    echo -e "\033[32m[INFO] ${content}\033[0m"
+}
+
 set -e
-[ ! -n "$3" ] && echo "Usage: sh $0 <URL 127.0.0.1:31443> <file> <cipherdatakey>" && exit;
+[ ! -n "$3" ] && LOG_WARN "Usage: sh $0 <URL 127.0.0.1:31443> <file> <cipherdatakey>" && exit;
 
-fileStream=`base64 $2 |tr -d "\n"`
-echo $fileStream
+URL=$1
+ORIGIN_FILE=$2
+CIPHER_KEY=$3
+BACKUP_FILE=$ORIGIN_FILE.bak.$(date +%s)
 
-curl -X POST --data '{"jsonrpc":"2.0","method":"encWithCipherKey","params":["'$fileStream'", "'$3'"],"id":83}' $1 |jq
+[ ! -f "$ORIGIN_FILE" ] && LOG_WARN "$ORIGIN_FILE is not exist." && exit;
 
-cypherDataKey=`curl -X POST --data '{"jsonrpc":"2.0","method":"encWithCipherKey","params":["'$fileStream'", "'$3'"],"id":83}' $1 |jq .result.dataKey  |sed 's/\"//g'`
+fileStream=`base64 $ORIGIN_FILE |tr -d "\n"`
+#echo $fileStream
+
+curl -X POST --data '{"jsonrpc":"2.0","method":"encWithCipherKey","params":["'$fileStream'", "'$CIPHER_KEY'"],"id":83}' $URL |jq
+
+cypherDataKey=`curl -X POST --data '{"jsonrpc":"2.0","method":"encWithCipherKey","params":["'$fileStream'", "'$CIPHER_KEY'"],"id":83}' $URL |jq .result.dataKey  |sed 's/\"//g'`
 [ -z "$cypherDataKey" ] && echo "Generate failed." && exit;
-echo "Encfile is: $cypherDataKey"
-echo -e $cypherDataKey"\c > $2.enc
+cp $ORIGIN_FILE $BACKUP_FILE
+echo -e "$cypherDataKey\c" > $ORIGIN_FILE
+
+LOG_INFO "File backup to \"$BACKUP_FILE\""
+LOG_INFO "\"$ORIGIN_FILE\" encrypted!"
