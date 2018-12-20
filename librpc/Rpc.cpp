@@ -46,6 +46,29 @@ Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
+std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
+{
+    try
+    {
+        RPC_LOG(INFO) << "[#getSystemConfigByKey] [groupID/key]: " << _groupID << "/" << key;
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (!blockchain)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        }
+        return blockchain->getSystemConfigByKey(key);
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, e.what()));
+    }
+}
+
 std::string Rpc::getBlockNumber(int _groupID)
 {
     try

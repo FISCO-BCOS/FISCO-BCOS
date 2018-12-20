@@ -50,6 +50,9 @@ public:
         return RPCModules{RPCModule{"FISCO BCOS", "2.0"}};
     }
 
+    // system config part
+    virtual std::string getSystemConfigByKey(int _groupID, std::string const& key) override;
+
     // consensus part
     virtual std::string getBlockNumber(int _groupID) override;
     virtual std::string getPbftView(int _groupID) override;

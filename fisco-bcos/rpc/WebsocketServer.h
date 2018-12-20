@@ -60,6 +60,9 @@ class session : public std::enable_shared_from_this<session>
 
     void setMapRpc()
     {
+        m_mapRpc.insert(std::make_pair(
+            "getSystemConfigByKey", std::bind(&RpcFace::getSystemConfigByKeyI, m_rpcFace,
+                                        std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
             std::make_pair("getBlockNumber", std::bind(&RpcFace::getBlockNumberI, m_rpcFace,
                                                  std::placeholders::_1, std::placeholders::_2)));
