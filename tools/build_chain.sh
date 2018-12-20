@@ -143,7 +143,7 @@ check_and_install_tassl()
         git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR}
 
         cd ${TASSL_PKG_DIR}
-        local shell_list=$(find . -name *.sh)
+        local shell_list=$(find . -name '*.sh')
         chmod a+x ${shell_list}
         chmod a+x ./util/pod2mantest        
 
@@ -309,7 +309,7 @@ EOF
 
 gen_chain_cert_gm() {
     path="$2"
-    name=`getname "$path"`
+    name=$(getname "$path")
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
@@ -324,7 +324,8 @@ gen_chain_cert_gm() {
 
     cp gmcert.cnf gmsm2.param $chaindir
 
-    if [ $? -eq 0 ]; then
+    if $(cp gmcert.cnf gmsm2.param $chaindir)
+    then
         echo "build chain ca succussful!"
     else
         echo "please input at least Common Name!"
@@ -334,7 +335,7 @@ gen_chain_cert_gm() {
 gen_agency_cert_gm() {
     chain="$2"
     agencypath="$3"
-    name=`getname "$agencypath"`
+    name=$(getname "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/ca.key"
@@ -376,9 +377,9 @@ gen_node_cert_gm() {
     fi
 
     agpath="$2"
-    agency=`getname "$agpath"`
+    agency=$(getname "$agpath")
     ndpath="$3"
-    node=`getname "$ndpath"`
+    node=$(getname "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
@@ -405,8 +406,8 @@ gen_node_cert_gm() {
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=`cat node.nodeid | head`
-    serial=`cat node.serial | head`
+    nodeid=$(cat node.nodeid | head)
+    serial=$(cat node.serial | head)
     cat >node.json <<EOF
 {
  "id":"$nodeid",
@@ -445,7 +446,7 @@ read_password() {
 gen_sdk_cert() {
     agency="$2"
     sdkpath="$3"
-    sdk=`getname "$sdkpath"`
+    sdk=$(getname "$sdkpath")
     dir_must_exists "$agency"
     file_must_exists "$agency/agency.key"
     dir_must_not_exists "$sdkpath"
@@ -975,7 +976,7 @@ for line in ${ip_array[*]};do
                 gen_node_cert_gm "" ${output_dir}/gmcert/agency $node_dir >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
                 rm node.json node.ca
-                mv *.* ${gm_conf_path}/
+                mv * ${gm_conf_path}/
 
                 #private key should not start with 00
                 cd $output_dir
