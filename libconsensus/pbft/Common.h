@@ -61,6 +61,8 @@ struct PBFTMsgPacket
     /// type of the packet(maybe prepare, sign or commit)
     /// (receive from the network or send to the network)
     byte packet_id;
+    /// ttl
+    uint8_t ttl;
     /// the data of concrete request(receive from or send to the network)
     bytes data;
     /// timestamp of receive this pbft message
@@ -68,12 +70,14 @@ struct PBFTMsgPacket
     /// endpoint
     std::string endpoint;
     /// default constructor
-    PBFTMsgPacket() : node_idx(0), node_id(h512(0)), packet_id(0), timestamp(u256(utcTime())) {}
+    PBFTMsgPacket()
+      : node_idx(0), node_id(h512(0)), packet_id(0), ttl(MAXTTL), timestamp(u256(utcTime()))
+    {}
 
     bool operator==(PBFTMsgPacket const& msg)
     {
         return node_idx == msg.node_idx && node_id == msg.node_id && packet_id == msg.packet_id &&
-               data == msg.data && timestamp == msg.timestamp;
+               ttl == msg.ttl && data == msg.data && timestamp == msg.timestamp;
     }
     bool operator!=(PBFTMsgPacket const& msg) { return !operator==(msg); }
     /**
@@ -84,17 +88,27 @@ struct PBFTMsgPacket
     {
         RLPStream tmp;
         streamRLPFields(tmp);
-        tmp.swapOut(encodedBytes);
+        RLPStream list_rlp;
+        list_rlp.appendList(1).append(tmp.out());
+        list_rlp.swapOut(encodedBytes);
     }
     /**
      * @brief : decode the network-receive part of PBFTMsgPacket into PBFTMsgPacket object
      * @param data: network-receive part of PBFTMsgPacket
      * @ Exception Case: if decode failed, we throw exceptions
      */
-    virtual void decode(bytesConstRef data) { populate(data); }
+    virtual void decode(bytesConstRef data)
+    {
+        RLP rlp(data);
+        populate(rlp[0]);
+    }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    void streamRLPFields(RLPStream& s) const { s.append(unsigned(packet_id)).append(data); }
+    void streamRLPFields(RLPStream& s) const
+    {
+        s << packet_id << ttl << data;
+        /// s.append(packet_id).append(ttl).append(data);
+    }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -109,12 +123,17 @@ struct PBFTMsgPacket
         timestamp = u256(utcTime());
     }
     /// populate PBFTMsgPacket from RLP object
-    void populate(bytesConstRef req_data)
+    void populate(RLP const& rlp)
     {
         try
         {
-            packet_id = RLP(req_data.cropped(0, 1)).toInt<uint8_t>(RLP::ThrowOnFail);
-            data = RLP(req_data.cropped(1)).toBytes();
+            int field = 0;
+            /*packet_id = RLP(req_data.cropped(0, 1)).toInt<uint8_t>(RLP::ThrowOnFail);
+            ttl = RLP(req_data.cropped(1, 2)).toInt<uint8_t>(RLP::ThrowOnFail);
+            data = RLP(req_data.cropped(2)).toBytes();*/
+            packet_id = rlp[field = 0].toInt<uint8_t>();
+            ttl = rlp[field = 1].toInt<uint8_t>();
+            data = rlp[field = 2].toBytes();
         }
         catch (Exception const& e)
         {

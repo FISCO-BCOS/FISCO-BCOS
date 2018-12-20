@@ -355,7 +355,6 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
 void Service::asyncSendMessageByNodeID(
     NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
 {
-    P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] nodeID: " << nodeID.hex();
     try
     {
         RecursiveGuard l(x_sessions);
@@ -368,10 +367,6 @@ void Service::asyncSendMessageByNodeID(
             {
                 message->setSeq(m_p2pMessageFactory->newSeq());
             }
-
-            P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] seq: " << message->seq()
-                              << " nodeID: " << nodeID.hex();
-
             auto session = it->second;
             session->session()->asyncSendMessage(
                 message, options, [session, callback](NetworkException e, Message::Ptr message) {

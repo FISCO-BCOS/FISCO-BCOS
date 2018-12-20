@@ -76,8 +76,6 @@ int64_t BlockChainImp::number()
             num = lexical_cast<int64_t>(currentNumber.c_str());
         }
     }
-    BLOCKCHAIN_LOG(TRACE) << "[#number] [currentNum]: "
-                          << "[" << num << "]";
     return num;
 }
 
@@ -212,8 +210,6 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByNumber] [num]: "
-                          << "[" << _i << "]";
     string numberHash = "";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);

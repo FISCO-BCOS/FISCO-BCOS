@@ -41,7 +41,7 @@ typedef uint16_t IDXTYPE;
 typedef int64_t VIEWTYPE;
 static const IDXTYPE MAXIDX = UINT16_MAX;
 static const VIEWTYPE MAXVIEW = INT64_MAX;
-
+static const uint8_t MAXTTL = 3;
 DEV_SIMPLE_EXCEPTION(DisabledFutureTime);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
 DEV_SIMPLE_EXCEPTION(ExistedBlock);

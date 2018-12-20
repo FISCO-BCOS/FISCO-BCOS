@@ -39,6 +39,7 @@ namespace consensus
 {
 const std::string PBFTEngine::c_backupKeyCommitted = "committed";
 const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
+uint8_t PBFTEngine::maxTTL = MAXTTL;
 
 void PBFTEngine::start()
 {
@@ -335,8 +336,8 @@ bool PBFTEngine::broadcastViewChangeReq()
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
-bool PBFTEngine::sendMsg(
-    NodeID const& nodeId, unsigned const& packetType, std::string const& key, bytesConstRef data)
+bool PBFTEngine::sendMsg(NodeID const& nodeId, unsigned const& packetType, std::string const& key,
+    bytesConstRef data, unsigned const& ttl)
 {
     /// is miner?
     if (getIndexByMiner(nodeId) < 0)
@@ -358,7 +359,7 @@ bool PBFTEngine::sendMsg(
         if (session.nodeID == nodeId)
         {
             m_service->asyncSendMessageByNodeID(
-                session.nodeID, transDataToMessage(data, packetType), nullptr);
+                session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
             PBFTENGINE_LOG(DEBUG)
                 << "[#sendMsg] [myIdx/myNode/dstNodeId/packetType/remote_endpoint]: " << nodeIdx()
                 << "/" << m_keyPair.pub().abridged() << "/" << nodeId.abridged() << "/"
@@ -382,7 +383,7 @@ bool PBFTEngine::sendMsg(
  * @param filter: the list that shouldn't be broadcasted to
  */
 bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
-    bytesConstRef data, std::unordered_set<h512> const& filter)
+    bytesConstRef data, std::unordered_set<h512> const& filter, unsigned const& ttl)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
@@ -406,7 +407,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << "/" << packetType;
         /// send messages
         m_service->asyncSendMessageByNodeID(
-            session.nodeID, transDataToMessage(data, packetType), nullptr);
+            session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
         broadcastMark(session.nodeID, packetType, key);
     }
     return true;
@@ -1087,6 +1088,9 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         return;
     }
     }
+
+    if (pbftMsg.ttl == 1)
+        return;
     bool height_flag = (pbft_msg.height > m_highestBlock.number()) ||
                        (m_highestBlock.number() - pbft_msg.height < 10);
     if (key.size() > 0 && height_flag)
@@ -1097,7 +1101,8 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         h512 gen_node_id = getMinerByIndex(pbft_msg.idx);
         if (gen_node_id != h512())
             filter.insert(gen_node_id);
-        broadcastMsg(pbftMsg.packet_id, key, ref(pbftMsg.data), filter);
+        unsigned current_ttl = pbftMsg.ttl - 1;
+        broadcastMsg(pbftMsg.packet_id, key, ref(pbftMsg.data), filter, current_ttl);
     }
 }
 

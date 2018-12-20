@@ -108,6 +108,8 @@ public:
     const std::string consensusStatus() const override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
+    static void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
+
 protected:
     void workLoop() override;
     void handleFutureBlock();
@@ -123,11 +125,12 @@ protected:
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>());
+        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+        unsigned const& ttl = maxTTL);
 
     void sendViewChangeMsg(NodeID const& nodeId);
     bool sendMsg(NodeID const& nodeId, unsigned const& packetType, std::string const& key,
-        bytesConstRef data);
+        bytesConstRef data, unsigned const& ttl = maxTTL);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -222,15 +225,15 @@ protected:
     }
 
     /// trans data into message
-    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
-        bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
+        PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
         dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
         packet.packet_id = packetType;
-
+        packet.ttl = ttl;
         packet.encode(*p_data);
         message->setBuffer(p_data);
         message->setProtocolID(protocolId);
@@ -238,9 +241,9 @@ protected:
     }
 
     inline dev::p2p::P2PMessage::Ptr transDataToMessage(
-        bytesConstRef data, PACKET_TYPE const& packetType)
+        bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl)
     {
-        return transDataToMessage(data, packetType, m_protocolId);
+        return transDataToMessage(data, packetType, m_protocolId, ttl);
     }
 
     /**
@@ -458,6 +461,8 @@ protected:
     /// the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
     bool m_emptyBlockViewChange = false;
+
+    static byte maxTTL;
 };
 }  // namespace consensus
 }  // namespace dev
