@@ -328,7 +328,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     std::shared_ptr<Sealer> pbftSealer =
         std::make_shared<PBFTSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             protocol_id, m_param->baseDir(), m_keyPair, m_param->mutableConsensusParam().minerList);
-    std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit");
+    std::string ret = m_blockChain->getSystemConfigByKey(SYSTEM_KEY_TX_COUNT_LIMIT);
     pbftSealer->setMaxBlockTransactions(boost::lexical_cast<uint64_t>(ret));
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =

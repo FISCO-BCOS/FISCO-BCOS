@@ -58,6 +58,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
+    setTxGasLimitToContext(context);
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)
@@ -69,4 +70,49 @@ void ExecutiveContextFactory::setStateFactory(
     std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface)
 {
     m_stateFactoryInterface = stateFactoryInterface;
+}
+
+void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr context)
+{
+    // get value from db
+    try
+    {
+        std::string key = "tx_gas_limit";
+        BlockInfo blockInfo = context->blockInfo();
+        std::string ret;
+
+        auto values =
+            m_stateStorage->select(blockInfo.hash, blockInfo.number, storage::SYS_CONFIG, key);
+        if (!values || values->size() != 1)
+        {
+            EXECUTIVECONTEXT_LOG(ERROR) << "[#setTxGasLimitToContext] select error.";
+            return;
+        }
+
+        auto value = values->get(0);
+        if (!value)
+        {
+            EXECUTIVECONTEXT_LOG(ERROR) << "[#setTxGasLimitToContext] null point.";
+            return;
+        }
+
+        if (boost::lexical_cast<int>(value->getField("enable_num")) <= blockInfo.number)
+        {
+            ret = value->getField("value");
+        }
+
+        if (ret != "")
+        {
+            context->setTxGasLimit(boost::lexical_cast<uint64_t>(ret));
+        }
+        else
+        {
+            EXECUTIVECONTEXT_LOG(ERROR) << "[#setTxGasLimitToContext] tx_count_limit is null.";
+        }
+    }
+    catch (std::exception& e)
+    {
+        EXECUTIVECONTEXT_LOG(ERROR)
+            << "[#setTxGasLimitToContext] failed [EINFO]: " << boost::diagnostic_information(e);
+    }
 }

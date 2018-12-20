@@ -61,6 +61,8 @@ private:
     dev::storage::Storage::Ptr m_stateStorage;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
+
+    void setTxGasLimitToContext(ExecutiveContext::Ptr context);
 };
 
 }  // namespace blockverifier
