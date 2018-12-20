@@ -107,7 +107,7 @@ private:
     std::shared_ptr<dev::executive::StateFace> m_stateFace;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
-    uint64_t m_txGasLimit;
+    uint64_t m_txGasLimit = 300000000;
 };
 
 }  // namespace blockverifier
