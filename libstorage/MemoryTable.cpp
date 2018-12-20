@@ -84,7 +84,8 @@ size_t dev::storage::MemoryTable::update(
 {
     try
     {
-        if (!checkAuthority(options->origin))
+
+    	if (!checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->origin
                                  << " failed! key:" << key;
@@ -149,7 +150,8 @@ size_t dev::storage::MemoryTable::insert(
 {
     try
     {
-        if (!checkAuthority(options->origin))
+
+    	if (!checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << m_tableInfo->name << " checkAuthority of " << options->origin
                                  << " failed! key:" << key;

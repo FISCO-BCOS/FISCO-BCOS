@@ -23,6 +23,7 @@
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
@@ -59,7 +60,6 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
 
     switch (func)
     {
-    // insert(string,string)
     // insert(string tableName,string addr)
     case 0x06e63ff8:
     {
@@ -96,7 +96,6 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
 
         break;
     }
-    // remove(string,string)
     // remove(string tableName,string addr)
     case 0x44590a7e:
     {
@@ -129,8 +128,47 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
 
         break;
     }
+    // queryByName(string table_name)
+    case 0x20586031:
+    {
+        std::string tableName;
+        abi.abiOut(data, tableName);
+        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+
+        if (!table)
+        {
+            STORAGE_LOG(WARNING) << "open SYS_ACCESS_TABLE table failed.";
+            out = abi.abiIn("", u256(0));
+            break;
+        }
+
+        auto condition = table->newCondition();
+        auto entries = table->select(tableName, condition);
+        json_spirit::Array AuthorityInfos;
+        if (entries)
+        {
+            for (size_t i = 0; i < entries->size(); i++)
+            {
+                auto entry = entries->get(i);
+                if (!entry) { continue; }
+
+                json_spirit::Object AuthorityInfo;
+                AuthorityInfo.push_back(json_spirit::Pair(SYS_AC_FIELD_TABLE_NAME, tableName));
+                AuthorityInfo.push_back(json_spirit::Pair(
+                		SYS_AC_FIELD_ADDRESS, entry->getField(SYS_AC_FIELD_ADDRESS)));
+                AuthorityInfo.push_back(json_spirit::Pair(
+                		SYS_AC_FIELD_ENABLENUM, entry->getField(SYS_AC_FIELD_ENABLENUM)));
+                AuthorityInfos.push_back(AuthorityInfo);
+            }
+        }
+        json_spirit::Value value(AuthorityInfos);
+        std::string str = json_spirit::write_string(value, true);
+        out = abi.abiIn("", str);
+        break;
+    }
     default:
     {
+        STORAGE_LOG(ERROR) << "error func:" << std::hex << func;
         break;
     }
     }

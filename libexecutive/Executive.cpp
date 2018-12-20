@@ -155,7 +155,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
         auto result =
-            m_envInfo.precompiledEngine()->call(_p.senderAddress, _p.codeAddress, _p.data);
+            m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
         size_t outputSize = result.size();
         m_output = owning_bytes_ref{std::move(result), 0, outputSize};
         LOG(DEBUG) << "Precompiled result: " << result;
