@@ -91,10 +91,10 @@ public:
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
-    uint64_t calculateMaxPackTxNum(uint64_t const maxTransactions)
+    /*uint64_t calculateMaxPackTxNum(uint64_t const maxTransactions)
     {
         return m_timeManager.calculateMaxPackTxNum(maxTransactions, m_view);
-    }
+    }*/
     /// broadcast prepare message
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
