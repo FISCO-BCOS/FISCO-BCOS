@@ -31,6 +31,8 @@
 #include <libstorage/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
 #include <string>
 #include <utility>
@@ -165,8 +167,17 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
     return nullptr;
 }
 
-void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam)
+bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
 {
+    {
+        WriteGuard l(m_systemConfigMutex);
+        for (int i = 0; i < blockverifier::SystemConfigItem::SYSTEM_CONFIG_ITEM_COUNT; i++)
+        {
+            m_configValueList[i] = "";
+            m_cacheNumListByKey[i] = -1;
+        }
+    }
+
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr)
     {
@@ -187,15 +198,17 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
         {
             Entry::Ptr entry1 = std::make_shared<Entry>();
             entry1->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_COUNT_LIMIT);
-            entry1->setField(SYSTEM_CONFIG_VALUE, SYSTEM_INIT_VALUE_TX_COUNT_LIMIT);
+            entry1->setField(
+                SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txCountLimit));
             entry1->setField(SYSTEM_CONFIG_ENABLENUM, "0");
             tb->insert(SYSTEM_KEY_TX_COUNT_LIMIT, entry1);
 
             Entry::Ptr entry2 = std::make_shared<Entry>();
             entry2->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_GAS_LIMIT);
-            entry2->setField(SYSTEM_CONFIG_VALUE, SYSTEM_INIT_VALUE_TX_GAS_LIMIT);
+            entry2->setField(
+                SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txGasLimit));
             entry2->setField(SYSTEM_CONFIG_ENABLENUM, "0");
-            tb->insert(SYSTEM_KEY_TX_COUNT_LIMIT, entry2);
+            tb->insert(SYSTEM_KEY_TX_GAS_LIMIT, entry2);
         }
 
         tb = mtb->openTable(SYS_MINERS);
@@ -234,23 +247,43 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
 
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
         BLOCKCHAIN_LOG(INFO) << "[#checkAndBuildGenesisBlock] Insert the 0th block";
+
+        return true;
     }
     else
     {
+        std::string extraData = asString(block->header().extraData(0));
         /// compare() return 0 means equal!
         /// If not equal, only print warning, willnot kill process.
-        if (!initParam.groupMark.compare(asString(block->header().extraData(0))))
+        if (!initParam.groupMark.compare(extraData))
         {
             BLOCKCHAIN_LOG(INFO)
                 << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark is "
                    "equal to file groupMark.";
+            return true;
         }
         else
         {
             BLOCKCHAIN_LOG(WARNING)
                 << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark:"
-                << asString(block->header().extraData(0))
-                << " is not equal to file groupMark:" << initParam.groupMark << " !";
+                << extraData << " is not equal to file groupMark:" << initParam.groupMark << " !";
+
+            // maybe consensusType/storageType/stateType diff, then update config
+            std::vector<std::string> s;
+            try
+            {
+                boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
+                initParam.consensusType = s[2];
+                initParam.storageType = s[3];
+                initParam.stateType = s[4];
+            }
+            catch (std::exception& e)
+            {
+                BLOCKCHAIN_LOG(ERROR)
+                    << "[#checkAndBuildGenesisBlock] parse groupMark faield: [data/EINFO]: "
+                    << e.what();
+            }
+            return false;
         }
     }
 }
@@ -335,13 +368,15 @@ dev::h512s BlockChainImp::observerList()
 std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
 {
     int64_t blockNumber = number();
-    BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getSystemConfigByKey " << key << " at " << blockNumber;
+    BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key:" << key
+                          << " at blockNumer:" << blockNumber;
     int32_t keyIdx = getSystemConfigItemIndex(key);
     std::string ret;
 
     // invalid config key
     if (SystemConfigItem::SYSTEM_CONFIG_ITEM_INVALID == keyIdx)
     {
+        BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigByKey] invalid config key.";
         return ret;
     }
 
@@ -350,7 +385,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
         ReadGuard l(m_systemConfigMutex);
         if (blockNumber == m_cacheNumListByKey[keyIdx])
         {
-            BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getSystemConfigByKey value:"
+            BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] value in cache:"
                                   << m_configValueList[keyIdx];
             return m_configValueList[keyIdx];
         }
@@ -362,11 +397,17 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
         auto values =
             m_stateStorage->select(numberHash(blockNumber), blockNumber, storage::SYS_CONFIG, key);
         if (!values || values->size() != 1)
+        {
+            BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigByKey] select error.";
             return ret;
+        }
 
         auto value = values->get(0);
         if (!value)
+        {
+            BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigByKey] null point.";
             return ret;
+        }
 
         if (boost::lexical_cast<int>(value->getField(blockverifier::SYSTEM_CONFIG_ENABLENUM)) <=
             blockNumber)
@@ -376,7 +417,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
     }
     catch (std::exception& e)
     {
-        BLOCKCHAIN_LOG(ERROR) << "BlockChainImp::getSystemConfigByKey failed [EINFO]: "
+        BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigByKey] failed [EINFO]: "
                               << boost::diagnostic_information(e);
     }
 
@@ -387,7 +428,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
         m_cacheNumListByKey[keyIdx] = blockNumber;
     }
 
-    BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getSystemConfigByKey value:" << ret;
+    BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] value in db:" << ret;
     return ret;
 }
 
@@ -667,10 +708,10 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     }
     else
     {
-        BLOCKCHAIN_LOG(INFO)
-            << "[#commitBlock] Try lock commitMutex fail [blockNumber/blockParentHash/parentHash]"
-            << "[" << block.blockHeader().number() << "/" << block.blockHeader().parentHash() << "/"
-            << parentHash << "]";
+        BLOCKCHAIN_LOG(INFO) << "[#commitBlock] Try lock commitMutex fail "
+                                "[blockNumber/blockParentHash/parentHash]"
+                             << "[" << block.blockHeader().number() << "/"
+                             << block.blockHeader().parentHash() << "/" << parentHash << "]";
         return CommitResult::ERROR_COMMITTING;
     }
 }

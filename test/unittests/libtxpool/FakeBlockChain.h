@@ -184,7 +184,7 @@ public:
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
-    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override {}
+    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override { return true; }
     dev::h512s minerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
     std::string getSystemConfigByKey(std::string const& key) override { return ""; };

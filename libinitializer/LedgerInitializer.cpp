@@ -74,7 +74,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR)
+        INITIALIZER_LOG(ERROR)
             << "[#LedgerInitializer::initConfig] parse group config faield: [EINFO]: " << e.what();
         ERROR_OUTPUT << "[#LedgerInitiailizer::initConfig] initSingleGroup failed: [EINFO]: "
                      << boost::diagnostic_information(e) << std::endl;

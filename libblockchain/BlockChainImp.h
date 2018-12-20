@@ -68,7 +68,7 @@ public:
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
-    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override;
+    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
 
