@@ -120,10 +120,14 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     {
     case OpenDBStatus::FirstCreation:
         if (m_cipherDataKey.empty())
-            m_cipherDataKey = m_keyCenter->generateCipherDataKey();
+            ENCDBLOG(FATAL) << "[Open] Database key ERROR! Please set cipherDataKey when enable "
+                               "disk encryption!"
+                            << endl;
         setCipherDataKey(m_cipherDataKey);
-        ENCDBLOG(DEBUG) << "[Open] First creation encrypted DB" << endl;
-        // No need break here, break with Encrypted type
+        ENCDBLOG(DEBUG)
+            << "[open] First creation encrypted DB [name/db/keyCenterUrl/cipherDataKey]: " << _name
+            << "/" << m_db << "/" << m_keyCenter->url() << "/" << m_cipherDataKey << endl;
+        break;
     case OpenDBStatus::Encrypted:
         ENCDBLOG(DEBUG)
             << "[open] Encrypted leveldb open success [name/db/keyCenterUrl/cipherDataKey]: "
@@ -155,7 +159,8 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
 }
 
 leveldb::Status EncryptedLevelDB::Open(const leveldb::Options& _options, const std::string& _name,
-    BasicLevelDB** _dbptr, const std::string& _cipherDataKey, std::shared_ptr<dev::KeyCenter> _keyCenter)
+    BasicLevelDB** _dbptr, const std::string& _cipherDataKey,
+    std::shared_ptr<dev::KeyCenter> _keyCenter)
 {
     *_dbptr = new EncryptedLevelDB(_options, _name, _cipherDataKey, _keyCenter);
     leveldb::Status status = (*_dbptr)->OpenStatus();
