@@ -26,7 +26,7 @@ Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 
 guomi_mode=
 gm_conf_path="gmconf/"
-CUR_DIR=`pwd`
+CUR_DIR=$(pwd)
 TASSL_INSTALL_DIR="${HOME}/TASSL"
 OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
 
@@ -143,7 +143,7 @@ check_and_install_tassl()
         git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR}
 
         cd ${TASSL_PKG_DIR}
-        local shell_list=`find . -name *.sh`
+        local shell_list=$(find . -name *.sh)
         chmod a+x ${shell_list}
         chmod a+x ./util/pod2mantest        
 
@@ -370,7 +370,7 @@ gen_node_cert_with_extensions_gm() {
 }
 
 gen_node_cert_gm() {
-    if [ "" = "`openssl ecparam -list_curves 2>&1 | grep secp256k1`" ]; then
+    if [ "" = "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
         echo "openssl don't support secp256k1, please upgrade openssl!"
         exit $EXIT_CODE
     fi
@@ -394,7 +394,7 @@ gen_node_cert_gm() {
     $OPENSSL_CMD ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/node.nodeid
 
     #serial
-    if [ "" != "`$OPENSSL_CMD version | grep 1.0.2`" ];
+    if [ "" != "$($OPENSSL_CMD version | grep 1.0.2)" ];
     then
         $OPENSSL_CMD x509  -text -in $ndpath/node.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/node.serial
     else
@@ -979,7 +979,7 @@ for line in ${ip_array[*]};do
 
                 #private key should not start with 00
                 cd $output_dir
-                privateKey=`$OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+                privateKey=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
                 len=${#privateKey}
                 head2=${privateKey:0:2}
                 if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
