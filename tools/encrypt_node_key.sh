@@ -21,6 +21,7 @@ BACKUP_FILE=$ORIGIN_FILE.bak.$(date +%s)
 
 [ ! -f "$ORIGIN_FILE" ] && LOG_WARN "$ORIGIN_FILE is not exist." && exit;
 
+
 fileStream=`base64 $ORIGIN_FILE |tr -d "\n"`
 #echo $fileStream
 
