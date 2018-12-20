@@ -476,8 +476,9 @@ bool EthereumHost::ensureInitialised()
 		m_latestBlockSent = m_chain.currentHash();
 		LOG(TRACE) << "Initialising: latest=" << m_latestBlockSent;
 
-		Guard l(x_transactions);
-		m_transactionsSent = m_tq.knownTransactions();
+        // No need to copy the txs to sent queue(wheatli)
+		//Guard l(x_transactions);
+		//m_transactionsSent = m_tq.knownTransactions();
 		return true;
 	}
 	return false;
@@ -555,28 +556,53 @@ void EthereumHost::maintainTransactions()
 		Guard l(x_transactions);
 		for (size_t i = 0; i < ts.size(); ++i) {
 			auto const& t = ts[i];
-			bool unsent = !m_transactionsSent.count(t.sha3());
+            if (m_transactionsSent.count(t.sha3())) {
+               continue;
+            }
 			vector<shared_ptr<EthereumPeer>> peers;
 			if (t.importType() == 0) {
 				peers = get<1>(randomSelection(0, [&](EthereumPeer * p) {
 					DEV_GUARDED(p->x_knownTransactions)
-					return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
-					return false;
+                    {//return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
+                        if (p->m_knownTransactions.count(t.sha3())) {
+                            return false;
+                        }
+                    }
+                    unsigned account_type = 0;
+                    if (!NodeConnManagerSingleton::GetInstance().getAccountType(p->id(), account_type)) {
+                        return false;
+                    }
+                    if (account_type != EN_ACCOUNT_TYPE_MINER) {
+                        return false;
+                    }
+                    return true;
 				}));
 			} else {
 				peers = get<0>(randomSelection(25, [&](EthereumPeer * p) {
 					DEV_GUARDED(p->x_knownTransactions)
-					return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
-					return false;
+                    {//return p->m_requireTransactions || (unsent && !p->m_knownTransactions.count(t.sha3()));
+                        if (p->m_knownTransactions.count(t.sha3())) {
+                            return false;
+                        }
+                    }
+                    unsigned account_type = 0;
+                    if (!NodeConnManagerSingleton::GetInstance().getAccountType(p->id(), account_type)) {
+                        return false;
+                    }
+                    if (account_type != EN_ACCOUNT_TYPE_MINER) {
+                        return false;
+                    }
+                    return true;
 				}));
 			}
 			for (auto const& p : peers) {
 				peerTransactions[p].push_back(i);
 			}
 
-			if (unsent) {
-				m_transactionsSent.insert(t.sha3());
-			}
+            if (m_transactionsSent.size() > kTransactionsSentSize) {
+                m_transactionsSent.pop();
+            }
+            m_transactionsSent.insert(t.sha3());
 		}
 	}
 
@@ -599,7 +625,8 @@ void EthereumHost::maintainTransactions()
 
 		//_p->clearKnownTransactions();
 
-		if (n || _p->m_requireTransactions)
+		//if (n || _p->m_requireTransactions)
+        if (n > 0) // Don't care the requireTransactions flag
 		{
 			RLPStream ts;
 			_p->prep(ts, TransactionsPacket, n).appendRaw(b, n);
@@ -702,7 +729,7 @@ void EthereumHost::maintainBlocks(h256 const & _currentHash)
 				p->sealAndSend(ts);
 				//p->m_knownBlocks.clear();
 			}
-			
+		    /*// No need to broadcast Block because those peers will download from me if they need
 			std::this_thread::sleep_for(chrono::milliseconds(100));
 			
 			auto s2 = randomSelection(25, [&](EthereumPeer * p) {
@@ -731,7 +758,8 @@ void EthereumHost::maintainBlocks(h256 const & _currentHash)
 						}
 					}
 				}
-		}
+            */
+		} 
 		m_latestBlockSent = _currentHash;
 	}
 }
@@ -769,7 +797,12 @@ void EthereumHost::onTransactionImported(ImportResult _ir, h256 const & _h, h512
 	case ImportResult::AlreadyKnown:
 		// if we already had the transaction, then don't bother sending it on.
 		DEV_GUARDED(x_transactions)
-		m_transactionsSent.insert(_h);
+        {
+            if (m_transactionsSent.size() > kTransactionsSentSize) {
+                m_transactionsSent.pop();
+            }
+	        m_transactionsSent.insert(_h);
+        }
 		peer->addRating(0);
 		break;
 	case ImportResult::Success:

@@ -74,7 +74,7 @@ Client::Client(
      m_working(chainParams().accountStartNonce),
      m_p2p_host(_host)
 {
-	init(_host, _dbPath, _forceAction, _networkID);
+	init(_host, _dbPath, _forceAction, _networkID, _params.maxOpenFile, _params.writeBufferSize, _params.cacheSize);
 
 	//cout<<"Client::Client systemproxyaddress:0x"<<toString(_params.sysytemProxyAddress)<<"\n";
 	//cout<<"Client::Client god:0x"<<toString(_params.god)<<"\n";
@@ -116,17 +116,17 @@ Client::Client(
 void Client::updateConfig() {
 	string value;
 
-	m_systemcontractapi->getValue("maxBlockTranscations", value);
-	m_maxBlockTranscations = 1000;
+	m_systemcontractapi->getValue("maxBlockTransactions", value);
+	m_maxBlockTransactions = 1000;
 	u256 uvalue = u256(fromBigEndian<u256>(fromHex(value)));
 	if (uvalue > 2000)
 		uvalue = 2000;
 	if (uvalue > 0)
-		m_maxBlockTranscations = uvalue;
+		m_maxBlockTransactions = uvalue;
 	//Block::c_maxSyncTransactions = static_cast<unsigned>(uvalue);
 
 	value = "";
-	m_systemcontractapi->getValue("maxTranscationGas", value);
+	m_systemcontractapi->getValue("maxTransactionGas", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
 	if ( uvalue < 30000000 )
 		uvalue = 30000000;
@@ -135,7 +135,7 @@ void Client::updateConfig() {
 	value = "";
 	m_systemcontractapi->getValue("maxBlockHeadGas", value);
 	uvalue = u256(fromBigEndian<u256>(fromHex(value)));
-	u256 min_block_gas = (m_maxBlockTranscations + 100) * TransactionBase::maxGas; //100: We assume that each block has 100 extra times to call systemcontract 
+	u256 min_block_gas = (m_maxBlockTransactions + 100) * TransactionBase::maxGas; //100: We assume that each block has 100 extra times to call systemcontract 
 	if ( uvalue < min_block_gas )
 		uvalue = min_block_gas;
 	BlockHeader::maxBlockHeadGas = uvalue;
@@ -180,10 +180,10 @@ void Client::updateConfig() {
 	else
 		m_omit_empty_block = true;
 
-	LOG(TRACE) << "Client::Client m_maxBlockTranscations：" << m_maxBlockTranscations;
+	LOG(TRACE) << "Client::Client m_maxBlockTransactions：" << m_maxBlockTransactions;
 	LOG(TRACE) << "Client::Client sealEngine() m_intervalBlockTime：" << sealEngine()->getIntervalBlockTime();
 	LOG(TRACE) << "Client::Client BlockHeader::maxBlockHeadGas：" << BlockHeader::maxBlockHeadGas;
-	LOG(TRACE) << "Client::Client TransactionBase::maxTranscationGas:" << TransactionBase::maxGas;
+	LOG(TRACE) << "Client::Client TransactionBase::maxTransactionGas:" << TransactionBase::maxGas;
 	LOG(TRACE) << "Client::Client NonceCheck::maxNonceCheckBlock:" << NonceCheck::maxblocksize;
 	LOG(TRACE) << "Client::Client BlockChain::maxBlockLimit:" << BlockChain::maxBlockLimit;
 	LOG(TRACE) << "Client::Client BlockChain::CAVerify:" << NodeConnParamsManager::CAVerify;
@@ -218,14 +218,14 @@ Client::~Client()
 	stopWorking();
 }
 
-void Client::init(std::shared_ptr<p2p::HostApi>  _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId)
+void Client::init(std::shared_ptr<p2p::HostApi>  _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId, int maxOpenFile, int writeBufferSize, int cacheSize)
 {
 	DEV_TIMED_FUNCTION_ABOVE(500);
 
 	// Cannot be opened until after blockchain is open, since BlockChain may upgrade the database.
 	// TODO: consider returning the upgrade mechanism here. will delaying the opening of the blockchain database
 	// until after the construction.
-	m_stateDB = State::openDB(_dbPath, bc().genesisHash(), _forceAction);
+	m_stateDB = State::openDB(_dbPath, bc().genesisHash(), _forceAction, maxOpenFile, writeBufferSize, cacheSize);
 	// LAZY. TODO: move genesis state construction/commiting to stateDB openning and have this just take the root from the genesis block.
 	m_preSeal = bc().genesisBlock(m_stateDB);
 	m_postSeal = m_preSeal;
@@ -394,7 +394,7 @@ void Client::reopenChain(ChainParams const& _p, WithExisting _we)
 
 		m_stateDB = OverlayDB();
 		bc().reopen(_p, _we);
-		m_stateDB = State::openDB(Defaults::dbPath(), bc().genesisHash(), _we);
+		m_stateDB = State::openDB(Defaults::dbPath(), bc().genesisHash(), _we, _p.maxOpenFile, _p.writeBufferSize, _p.cacheSize);
 
 		m_preSeal = bc().genesisBlock(m_stateDB);
 		m_preSeal.setAuthor(author);
@@ -568,7 +568,7 @@ void Client::syncTransactionQueue()
 			LOG(TRACE) << "Skipping txq sync for a sealed block.";
 			return;
 		}
-		if ( m_working.pending().size() >= m_maxBlockTranscations )
+		if ( m_working.pending().size() >= m_maxBlockTransactions )
 		{
 			LOG(TRACE) << "Skipping txq sync for Full block .";
 			return;

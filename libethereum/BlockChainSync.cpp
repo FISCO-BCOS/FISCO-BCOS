@@ -232,7 +232,7 @@ BlockChainSync::BlockChainSync(EthereumHost& _host):
 	m_bqRoomAvailable = host().bq().onRoomAvailable([this]()
 	{
 		RecursiveGuard l(x_sync);
-		LOG(INFO) << "onRoomAvailable set state=SyncState::Blocks, before=" << EthereumHost::stateName(m_state);
+		LOG(TRACE) << "onRoomAvailable set state=SyncState::Blocks, before=" << EthereumHost::stateName(m_state);
 		auto raw_state = m_state;
 		m_state = SyncState::Blocks;
 		bool ret = continueSync();
@@ -251,7 +251,7 @@ BlockChainSync::~BlockChainSync()
 void BlockChainSync::onForceSync() {
 	RecursiveGuard l(x_sync);
 	if (m_state != SyncState::Blocks) {
-		LOG(INFO) << "onForceSync set state=SyncState::Blocks, before=" << EthereumHost::stateName(m_state);
+		LOG(TRACE) << "onForceSync set state=SyncState::Blocks, before=" << EthereumHost::stateName(m_state);
 		auto raw_state = m_state;
 		m_state = SyncState::Blocks;
 		bool ret = continueSync();
@@ -274,7 +274,7 @@ void BlockChainSync::onBlockImported(BlockHeader const& _info)
 
 		auto head = findItem(m_headers, m_lastImportedBlock);
 		if (head && head->hash == m_lastImportedBlockHash) { 
-			LOG(INFO) << "BlockChainSync::onBlockImported remove header&body blk=" << m_lastImportedBlock << ",hash=" << m_lastImportedBlockHash;
+			LOG(TRACE) << "BlockChainSync::onBlockImported remove header&body blk=" << m_lastImportedBlock << ",hash=" << m_lastImportedBlockHash;
 			removeItem(m_headers, m_lastImportedBlock);
 			removeItem(m_bodies, m_lastImportedBlock);
 		}
@@ -284,11 +284,11 @@ void BlockChainSync::onBlockImported(BlockHeader const& _info)
 		m_downloadingHeaders.erase(m_lastImportedBlock);
 		if (m_headers.empty()) {
 			if (!m_bodies.empty()) {
-				LOG(INFO) << "Block headers map is empty, but block bodies map is not. Force-clearing.";
+				LOG(TRACE) << "Block headers map is empty, but block bodies map is not. Force-clearing.";
 				m_bodies.clear();
 			}
 			completeSync();
-			LOG(INFO) << "BlockChainSync::onBlockImported completeSync";
+			LOG(TRACE) << "BlockChainSync::onBlockImported completeSync";
 		}
 	}
 }
@@ -332,16 +332,16 @@ bool BlockChainSync::syncPeer(std::shared_ptr<EthereumPeer> _peer, bool _force)
 {
 	printInfo();
 
-	LOG(INFO) << "syncPeer: _force=" << _force << ",m_state=" << EthereumHost::stateName(m_state) << ",asking=" << EthereumPeer::toString(_peer->m_asking) << ",peer=" << _peer->id();
+	LOG(TRACE) << "syncPeer: _force=" << _force << ",m_state=" << EthereumHost::stateName(m_state) << ",asking=" << EthereumPeer::toString(_peer->m_asking) << ",peer=" << _peer->id().abridged();
 
 	if (_peer->m_asking != Asking::Nothing)
 	{
-		LOG(INFO) << "Can't sync with this peer - outstanding asks.";
+		LOG(TRACE) << "Can't sync with this peer - outstanding asks.";
 		return false;
 	}
 
 	if (m_state == SyncState::Waiting) { 
-		LOG(INFO) << "Can't sync with this peer - waiting.";
+		LOG(TRACE) << "Can't sync with this peer - waiting.";
 		return false;
 	}
 
@@ -351,7 +351,7 @@ bool BlockChainSync::syncPeer(std::shared_ptr<EthereumPeer> _peer, bool _force)
 
 	u256 syncingDifficulty = std::max(m_syncingTotalDifficulty, td);
 
-	LOG(INFO) << "syncPeer: _force=" << _force  << ",td=" << _peer->m_totalDifficulty << syncingDifficulty << m_syncingTotalDifficulty;
+	LOG(TRACE) << "syncPeer: _force=" << _force  << ",td=" << _peer->m_totalDifficulty << syncingDifficulty << m_syncingTotalDifficulty;
 
 	if (_force || _peer->m_totalDifficulty > syncingDifficulty)
 	{
@@ -359,21 +359,21 @@ bool BlockChainSync::syncPeer(std::shared_ptr<EthereumPeer> _peer, bool _force)
 		m_syncingTotalDifficulty = _peer->m_totalDifficulty;
 
 		if (m_state == SyncState::Idle || m_state == SyncState::NotSynced) {
-			LOG(INFO) << "syncPeer set state=SyncState::Blocks, before=" << EthereumHost::stateName(m_state);
+			LOG(TRACE) << "syncPeer set state=SyncState::Blocks, before=" << EthereumHost::stateName(m_state);
 			m_state = SyncState::Blocks;
 		}
 
 		m_downloadingHeaders.insert(static_cast<unsigned>(_peer->m_height));
 		m_headerSyncPeers[_peer].push_back(static_cast<unsigned>(_peer->m_height));
 		_peer->requestBlockHeaders(_peer->m_latestHash, 1, 0, false);
-		LOG(INFO) << "syncPeer:requestBlockHeaders, blk=" << _peer->m_height << ",peer=" << _peer->id();
+		LOG(INFO) << "syncPeer:requestBlockHeaders, blk=" << _peer->m_height << ",peer=" << _peer->id().abridged();
 		_peer->m_requireTransactions = true;
 		return true;
 	}
 
 	if (m_state == SyncState::Blocks)
 	{
-		LOG(INFO) << "syncPeer:requestBlocks, peer=" << _peer->id();
+		LOG(INFO) << "syncPeer:requestBlocks, peer=" << _peer->id().abridged();
 		return requestBlocks(_peer);
 	}
 
@@ -430,7 +430,7 @@ bool BlockChainSync::requestBlocks(std::shared_ptr<EthereumPeer> _peer)
 	{
 		m_bodySyncPeers[_peer] = neededNumbers;
 		_peer->requestBlockBodies(neededBodies);
-		LOG(INFO) << "requestBlockBodies, size=" << neededBodies.size() << ",peer=" << _peer->id();
+		LOG(INFO) << "requestBlockBodies, size=" << neededBodies.size() << ",peer=" << _peer->id().abridged();
 		return true;
 	}
 	else
@@ -488,7 +488,7 @@ bool BlockChainSync::requestBlocks(std::shared_ptr<EthereumPeer> _peer)
 					m_headerSyncPeers[_peer] = headers;
 					assert(!haveItem(m_headers, start));
 					_peer->requestBlockHeaders(start, count, 0, false);
-					LOG(INFO) << "requestBlockHeaders, start=" << start << ",count=" << count << ",peer=" << _peer->id();
+					LOG(INFO) << "requestBlockHeaders, start=" << start << ",count=" << count << ",peer=" << _peer->id().abridged();
 					return true;
 				}
 				else if (start >= next->first)
@@ -502,7 +502,7 @@ bool BlockChainSync::requestBlocks(std::shared_ptr<EthereumPeer> _peer)
 			m_downloadingHeaders.insert(start);
 			m_headerSyncPeers[_peer].push_back(start);
 			_peer->requestBlockHeaders(start, 1, 0, false);
-			LOG(INFO) << "requestBlockHeaders, start=" << start << ",count=1,peer=" << _peer->id();
+			LOG(INFO) << "requestBlockHeaders, start=" << start << ",count=1,peer=" << _peer->id().abridged();
 			return true;
 		}
 	}
@@ -532,7 +532,7 @@ void BlockChainSync::clearPeerDownload(std::shared_ptr<EthereumPeer> _peer)
 		m_bodySyncPeers.erase(syncPeer);
 	}
 
-	LOG(INFO) << "clearPeerDownload: peer=" << _peer->id() << ", delete_header=" << oss1.str() << "delete_body=" << oss2.str();
+	LOG(TRACE) << "clearPeerDownload: peer=" << _peer->id().abridged() << ", delete_header=" << oss1.str() << "delete_body=" << oss2.str();
 }
 
 void BlockChainSync::clearPeerDownloadHeaders(std::shared_ptr<EthereumPeer> _peer)
@@ -548,7 +548,7 @@ void BlockChainSync::clearPeerDownloadHeaders(std::shared_ptr<EthereumPeer> _pee
 		m_headerSyncPeers.erase(syncPeer);
 	}
 
-	LOG(INFO) << "clearPeerDownloadHeaders: peer=" << _peer->id() << ", delete_header=" << oss1.str();
+	LOG(TRACE) << "clearPeerDownloadHeaders: peer=" << _peer->id().abridged() << ", delete_header=" << oss1.str();
 }
 
 void BlockChainSync::clearPeerDownloadBodies(std::shared_ptr<EthereumPeer> _peer)
@@ -564,7 +564,7 @@ void BlockChainSync::clearPeerDownloadBodies(std::shared_ptr<EthereumPeer> _peer
 		m_bodySyncPeers.erase(syncPeer);
 	}
 
-	LOG(INFO) << "clearPeerDownloadBodies: peer=" << _peer->id() << "delete_body=" << oss2.str();
+	LOG(TRACE) << "clearPeerDownloadBodies: peer=" << _peer->id().abridged() << "delete_body=" << oss2.str();
 }
 
 void BlockChainSync::clearPeerDownload()
@@ -608,7 +608,7 @@ void BlockChainSync::onPeerBlockHeaders(std::shared_ptr<EthereumPeer> _peer, RLP
 	RecursiveGuard l(x_sync);
 	DEV_INVARIANT_CHECK;
 	size_t itemCount = _r.itemCount();
-	LOG(INFO) << "BlocksHeaders (" << dec << itemCount << "entries)" << (itemCount ? "" : ": NoMoreHeaders") << ",from=" << _peer->id();
+	LOG(INFO) << "BlocksHeaders (" << dec << itemCount << "entries)" << (itemCount ? "" : ": NoMoreHeaders") << ",from=" << _peer->id().abridged();
 	//clearPeerDownloadHeaders(_peer);
 	clearPeerDownload(_peer);
 	if (m_state != SyncState::Blocks && m_state != SyncState::NewBlocks && m_state != SyncState::Waiting)
@@ -720,7 +720,7 @@ void BlockChainSync::onPeerBlockBodies(std::shared_ptr<EthereumPeer> _peer, RLP 
 	RecursiveGuard l(x_sync);
 	DEV_INVARIANT_CHECK;
 	size_t itemCount = _r.itemCount();
-	LOG(INFO) << "BlocksBodies (" << dec << itemCount << "entries)" << (itemCount ? "" : ": NoMoreBodies") << ",from=" << _peer->id();
+	LOG(INFO) << "BlocksBodies (" << dec << itemCount << "entries)" << (itemCount ? "" : ": NoMoreBodies") << ",from=" << _peer->id().abridged();
 	//clearPeerDownloadBodies(_peer);
 	clearPeerDownload(_peer);
 	if (m_state != SyncState::Blocks && m_state != SyncState::NewBlocks && m_state != SyncState::Waiting) {
@@ -1109,10 +1109,10 @@ void BlockChainSync::onPeerNewHashes(std::shared_ptr<EthereumPeer> _peer, RLP co
 		else
 			knowns++;
 	}
-	LOG(INFO) << "onPeerNewHashes:" << itemCount << " newHashes," << knowns << " knowns," << unknowns << " unknowns" << ",peer=" << _peer->id();
+	LOG(INFO) << "onPeerNewHashes:" << itemCount << " newHashes," << knowns << " knowns," << unknowns << " unknowns" << ",peer=" << _peer->id().abridged();
 	if (unknowns > 0)
 	{
-		LOG(INFO) << "Not syncing and new block hash discovered: syncing." << _peer->id();
+		LOG(INFO) << "Not syncing and new block hash discovered: syncing." << _peer->id().abridged();
 		syncPeer(_peer, true);
 	}
 }

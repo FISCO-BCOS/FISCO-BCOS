@@ -217,8 +217,8 @@ private:
 	Mutex x_knownTransactions;
 	//h256Hash m_knownTransactions;			///< Transactions that the peer already knows of.
 	QueueSet<h256> m_knownTransactions;
-	static const size_t kKnownBlockSize = 100;
-	static const size_t kKnownTranscationsSize = 10000;
+	static const size_t kKnownBlockSize = 10;
+	static const size_t kKnownTranscationsSize = 1024;
 	unsigned m_unknownNewBlocks = 0;		///< Number of unknown NewBlocks received from this peer
 	unsigned m_lastAskedHeaders = 0;		///< Number of hashes asked
 
