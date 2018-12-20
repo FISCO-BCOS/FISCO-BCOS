@@ -223,7 +223,7 @@ public:
 protected:
 	/// Perform critical setup functions.
 	/// Must be called in the constructor of the finally derived class.
-	void init(std::shared_ptr<p2p::HostApi> _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId);
+	void init(std::shared_ptr<p2p::HostApi> _extNet, std::string const& _dbPath, WithExisting _forceAction, u256 _networkId, int maxOpenFile, int writeBufferSize, int cacheSize);
 
 	/// InterfaceStub methods
 	BlockChain& bc() override { return m_bc; }
@@ -357,7 +357,7 @@ protected:
 
 	bytes m_extraData;
 
-	u256 m_maxBlockTranscations = 1000; 
+	u256 m_maxBlockTransactions = 1000; 
 	std::shared_ptr<SystemContractApi> m_systemcontractapi;
 
 	bool m_omit_empty_block = true;

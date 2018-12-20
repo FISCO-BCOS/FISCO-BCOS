@@ -115,7 +115,10 @@ struct ChainOperationParams
 	u256 intervalBlockTime = 3000;
 
 	bool broadcastToNormalNode = false; 
-
+	int transactionQueueLimit = 1024;
+	int maxOpenFile = 256;
+	int writeBufferSize = 64 * 1024 * 1024;
+	int cacheSize = 256 * 1024 * 1024;
 
 	u256 godMinerStart = 0;
 	u256 godMinerEnd = 0;

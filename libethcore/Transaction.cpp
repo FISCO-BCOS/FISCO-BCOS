@@ -158,7 +158,7 @@ void TransactionBase::transactionRLPDecode10Ele(const RLP &rlp)
 			m_type            = (m_receiveAddress == Address() ? ContractCreation : MessageCall);
 			m_transactionType = DefaultTransaction;
 
-			LOG(TRACE) << "[CNSDefaultTransaction] to address = " << m_receiveAddress;
+			//LOG(TRACE) << "[CNSDefaultTransaction] to address = " << m_receiveAddress;
 		}
 	}
 }
