@@ -115,6 +115,21 @@ BOOST_AUTO_TEST_CASE(testGetBytes64)
     BOOST_TEST_TRUE(retout == ret);
 }
 
+BOOST_AUTO_TEST_CASE(testGetBytes32)
+{
+    entry->setField("keyString", "1000");
+    ContractABI abi;
+    bytes sstr = abi.abiIn("getBytes32(string)", "keyString");
+    bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
+    string32 retout;
+    abi.abiOut(bytesConstRef(&out), retout);
+    std::string s = "1000";
+    string32 ret;
+    for (unsigned i = 0; i < retout.size(); ++i)
+        ret[i] = i < s.size() ? s[i] : 0;
+    BOOST_TEST_TRUE(retout == ret);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_precompiled
