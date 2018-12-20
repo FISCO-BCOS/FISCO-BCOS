@@ -28,7 +28,6 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/ThreadPool.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
 

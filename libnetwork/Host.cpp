@@ -386,4 +386,5 @@ void Host::stop()
     m_run = false;
     m_asioInterface->stop();
     m_hostThread->join();
+    m_threadPool->stop();
 }

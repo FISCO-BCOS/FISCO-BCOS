@@ -24,7 +24,6 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/ThreadPool.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
