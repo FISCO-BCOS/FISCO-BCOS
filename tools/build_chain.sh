@@ -99,7 +99,7 @@ LOG_INFO "Start Port        : $port_start"
 LOG_INFO "Server IP         : ${ip_array[@]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
-LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
+[ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : $output_dir"
 LOG_INFO "CA Key Path       : $ca_file"
 echo "=============================================================="
@@ -189,7 +189,7 @@ gen_chain_cert() {
 gen_agency_cert() {
     chain="$2"
     agencypath="$3"
-    name=`getname "$agencypath"`
+    name=$(getname "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/ca.key"
@@ -233,9 +233,9 @@ gen_node_cert() {
     fi
 
     agpath="$2"
-    agency=`getname "$agpath"`
+    agency=$(getname "$agpath")
     ndpath="$3"
-    node=`getname "$ndpath"`
+    node=$(getname "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
@@ -250,8 +250,8 @@ gen_node_cert() {
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=`cat node.nodeid | head`
-    serial=`cat node.serial | head`
+    nodeid=$(cat node.nodeid | head)
+    serial=$(cat node.serial | head)
     cat >node.json <<EOF
 {
  "id":"$nodeid",
@@ -290,7 +290,7 @@ read_password() {
 gen_sdk_cert() {
     agency="$2"
     sdkpath="$3"
-    sdk=`getname "$sdkpath"`
+    sdk=$(getname "$sdkpath")
     dir_must_exists "$agency"
     file_must_exists "$agency/agency.key"
     dir_must_not_exists "$sdkpath"
@@ -661,7 +661,7 @@ for line in ${ip_array[*]};do
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
             cd $output_dir
-            privateKey=`openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+            privateKey=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
             len=${#privateKey}
             head2=${privateKey:0:2}
             if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
@@ -687,14 +687,14 @@ for line in ${ip_array[*]};do
                 echo "groups_count[${j}]=${groups_count[${j}]}"  >> $output_dir/${logfile}
         groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=${nodeid}
     "
-                ((++groups_count[${j}]))
+                ((++groups_count[j]))
             done
         else
         nodeid_list=$"${nodeid_list}node.${count}=${nodeid}
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 3 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + i * 3 ))"
     "
         ((++count))
     done

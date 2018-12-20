@@ -25,8 +25,8 @@ Use clang-format tool to format your changes, see [CONTRIBUTING](CONTRIBUTING.md
 ## Preprocessor
 
 1. File comment is always at top, and includes:
-   - Copyright.
-   - License.
+    - Copyright.
+    - License.
 
 2. Never use `#ifdef`/`#define`/`#endif` file guards. Prefer `#pragma once` as first line below file comment.
 3. Prefer static const variable to value macros.
@@ -48,7 +48,6 @@ GOLDEN RULE: Preprocessor: ALL_CAPS; C++: camelCase.
 
 All other entities' first alpha is lower case.
 
-
 ## Variable prefixes
 
 1. Leading underscore `_` to parameter names.
@@ -59,8 +58,6 @@ All other entities' first alpha is lower case.
 2. Leading `c_` to const variables (unless part of an external API).
 3. Leading `g_` to global (non-const) variables.
 4. Leading `s_` to static (non-const, non-global) variables.
-
-
 
 ## Error reporting
 
