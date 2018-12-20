@@ -27,7 +27,7 @@
 using namespace dev;
 using namespace dev::blockverifier;
 
-bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address origin)
+bytes MinerPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
 

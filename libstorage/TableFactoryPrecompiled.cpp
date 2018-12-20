@@ -38,7 +38,7 @@ std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 }
 
 bytes TableFactoryPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address origin)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "this: " << this << " call TableFactory:" << toHex(param);
 

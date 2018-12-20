@@ -31,7 +31,7 @@ using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev;
 
-bytes ExecutiveContext::call(Address origin, Address address, bytesConstRef param)
+bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstRef param)
 {
     try
     {

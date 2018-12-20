@@ -45,7 +45,7 @@ storage::Table::Ptr AuthorityPrecompiled::openTable(
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address origin)
+bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call Authority:" << toHex(param);
 

@@ -82,9 +82,11 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
 
+    // authority flag
     if (authorityFlag)
     {
-        if (tableName != string(SYS_ACCESS_TABLE))
+        //set authorized address to memoryTable
+    	if (tableName != string(SYS_ACCESS_TABLE))
         {
             setAuthorizedAddress(tableInfo);
         }

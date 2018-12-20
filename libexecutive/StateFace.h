@@ -158,7 +158,7 @@ public:
     virtual void clear() = 0;
 
     /// Check authority
-    virtual bool checkAuthority(Address _origin, Address _contract) const = 0;
+    virtual bool checkAuthority(Address const& _origin, Address const& _contract) const = 0;
 };
 
 }  // namespace executive

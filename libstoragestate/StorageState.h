@@ -167,7 +167,7 @@ public:
     /// Clear state's cache
     virtual void clear() override;
 
-    virtual bool checkAuthority(Address _origin, Address _contract) const override;
+    virtual bool checkAuthority(Address const& _origin, Address const& _contract) const override;
 
     void setMemoryTableFactory(
         std::shared_ptr<dev::storage::MemoryTableFactory> _memoryTableFactory)

@@ -35,7 +35,7 @@ std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)
     return "Table";
 }
 
-bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address origin)
+bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "call Table";
 

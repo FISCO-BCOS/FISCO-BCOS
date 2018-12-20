@@ -32,7 +32,7 @@ std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 }
 
 bytes EntryPrecompiled::call(
-    std::shared_ptr<ExecutiveContext> context, bytesConstRef param, Address origin)
+    std::shared_ptr<ExecutiveContext> context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "call Entry:";
 

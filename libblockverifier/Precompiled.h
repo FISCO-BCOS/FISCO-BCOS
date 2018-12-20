@@ -44,7 +44,7 @@ public:
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) { return ""; }
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
-        Address origin = Address()) = 0;
+        Address const& origin = Address()) = 0;
 
     virtual uint32_t getParamFunc(bytesConstRef param)
     {

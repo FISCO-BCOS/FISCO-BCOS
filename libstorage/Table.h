@@ -193,7 +193,7 @@ public:
     virtual h256 hash() = 0;
     virtual void clear() = 0;
     virtual std::map<std::string, Entries::Ptr>* data() { return NULL; }
-    virtual bool checkAuthority(Address _caller) const = 0;
+    virtual bool checkAuthority(Address const& _origin) const = 0;
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>

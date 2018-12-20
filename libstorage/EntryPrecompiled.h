@@ -57,7 +57,7 @@ public:
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
     virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address origin = Address());
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
     void setEntry(dev::storage::Entry::Ptr entry) { m_entry = entry; }
     dev::storage::Entry::Ptr getEntry() { return m_entry; }

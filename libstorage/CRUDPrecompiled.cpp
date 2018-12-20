@@ -42,7 +42,7 @@ storage::Table::Ptr CRUDPrecompiled::openTable(
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address origin)
+bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
 

@@ -52,7 +52,7 @@ public:
     void setBlockNum(int blockNum);
     void setTableInfo(TableInfo::Ptr tableInfo);
 
-    bool checkAuthority(Address _caller) const override;
+    bool checkAuthority(Address const& _origin) const override;
 
 private:
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);

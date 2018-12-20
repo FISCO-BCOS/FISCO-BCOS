@@ -41,7 +41,7 @@ public:
     virtual std::string toString(ExecutiveContext::Ptr);
 
     virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address origin = Address());
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
 protected:
     std::shared_ptr<storage::Table> openTable(

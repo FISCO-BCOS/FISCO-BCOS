@@ -70,7 +70,7 @@ public:
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
     virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address origin = Address());
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
     void setPrecompiledEngine(ExecutiveContext::Ptr engine) { m_exeEngine = engine; }
 

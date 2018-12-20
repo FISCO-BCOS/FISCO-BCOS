@@ -391,7 +391,7 @@ void StorageState::clear()
     m_cache.clear();
 }
 
-bool StorageState::checkAuthority(Address _origin, Address _contract) const
+bool StorageState::checkAuthority(Address const& _origin, Address const& _contract) const
 {
     auto table = getTable(_contract);
     if (table)

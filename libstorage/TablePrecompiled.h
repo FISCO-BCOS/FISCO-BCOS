@@ -58,7 +58,7 @@ public:
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) override;
 
     virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address origin = Address()) override;
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address()) override;
 
     dev::storage::Table::Ptr getTable() { return m_table; }
     void setTable(dev::storage::Table::Ptr table) { m_table = table; }
