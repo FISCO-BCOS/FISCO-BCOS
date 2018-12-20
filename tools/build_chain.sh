@@ -381,7 +381,7 @@ generate_config_ini()
 EOF
 }
 
-generate_group_ini()
+generate_group_genesis()
 {
     local output=$1
     local node_list=$2
@@ -395,15 +395,26 @@ generate_group_ini()
     ;the node id of leaders
     ${node_list}
 
-;sync period time
-[sync]
-    idleWaitMs=200
 [storage]
     ;storage db type, now support leveldb 
     type=${storage_type}
 [state]
     ;support mpt/storage
     type=${state_type}
+
+;tx gas limit
+[tx]
+    gasLimit=300000000
+EOF
+}
+
+function generate_group_ini()
+{
+    local output="${1}"
+    cat << EOF > ${output}
+;sync period time
+[sync]
+    idleWaitMs=200
 
 ;txpool limit
 [txPool]
@@ -720,10 +731,12 @@ for line in ${ip_array[*]};do
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
-                generate_group_ini "$node_dir/${conf_path}/group.${j}.genesis" "${groups[${j}]}"
+                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${groups[${j}]}"
+                generate_group_ini "$node_dir/${conf_path}/group.${j}.ini"
             done
         else
-            generate_group_ini "$node_dir/${conf_path}/group.1.genesis" "${nodeid_list}"
+            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "${nodeid_list}"
+            generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "$node_dir"
     done

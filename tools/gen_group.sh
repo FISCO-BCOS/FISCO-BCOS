@@ -32,7 +32,7 @@ group_id=
 ip_miner=
 node_dir=nodes
 state_type=mpt
-function generate_group_ini()
+function generate_group_genesis()
 {
     local nodeid_list="${1}"
     local output="${2}"
@@ -46,10 +46,6 @@ maxTransNum=1000
 ;the node id of leaders
 $nodeid_list
 
-;sync period time
-[sync]
-idleWaitMs=200
-
 [storage]
 ;storage db type, now support leveldb 
 type=LevelDB
@@ -58,9 +54,23 @@ type=LevelDB
 ;state type, now support mpt/storage
 type=${state_type}
 
+;tx gas limit
+[tx]
+    gasLimit=300000000
+EOF
+}
+
+function generate_group_ini()
+{
+    local output="${1}"
+    cat << EOF > ${output}
+;sync period time
+[sync]
+    idleWaitMs=200
+
 ;txpool limit
 [txPool]
-limit=1000
+    limit=1000
 EOF
 }
 
@@ -136,7 +146,9 @@ function generateGroupConfig()
                 groupConfigPath=${groupConfigPath}"/group."${groupId}".genesis"
             fi
             groupConfigPath=${prefix}_${minerNode}/${groupConfigPath}
-            generate_group_ini "${nodeidList}" "${groupConfigPath}"
+            generate_group_genesis "${nodeidList}" "${groupConfigPath}"
+            groupIniConfigPath=$(echo $groupConfigPath | awk -F. '{ print $1".ini" }')
+            generate_group_ini "${groupIniConfigPath}"
         done
     done
 }
