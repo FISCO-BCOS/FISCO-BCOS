@@ -70,14 +70,15 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
-
     return m_lastRcvDataKey;
 };
 
 const std::string KeyCenter::generateCipherDataKey()
 {
-    // Fake it
-    return std::string("0123456701234567012345670123456") + std::to_string(utcTime() % 10);
+    std::string ret;
+    for (size_t i = 0; i < 32; i++)
+        ret += std::to_string(utcTime() % 10);
+    return ret;
 }
 
 void KeyCenter::setUrl(const std::string& _url)
