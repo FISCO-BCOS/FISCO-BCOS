@@ -389,6 +389,8 @@ generate_group_ini()
     consensusType=pbft
     ;the max number of transactions of a block
     maxTransNum=1000
+    ;the ttl of broadcasted pbft message
+    ;maxTTL=3
     ;the node id of leaders
     ${node_list}
 

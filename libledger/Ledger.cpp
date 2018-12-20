@@ -128,12 +128,12 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.maxTransNum", 1000);
-    m_param->mutableConsensusParam().maxTransactions = pt.get<uint64_t>("consensus.maxTTL", MAXTTL);
+    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.maxTTL", MAXTTL);
 
     Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum/maxTTL]:  "
                       << m_param->mutableConsensusParam().consensusType << "/"
                       << m_param->mutableConsensusParam().maxTransactions << "/"
-                      << m_param->mutableConsensusParam().maxTTL;
+                      << std::to_string(m_param->mutableConsensusParam().maxTTL);
     try
     {
         for (auto it : pt.get_child("consensus"))
