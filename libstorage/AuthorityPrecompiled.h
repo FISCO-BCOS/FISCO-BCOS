@@ -58,6 +58,7 @@ public:
 protected:
     std::shared_ptr<storage::Table> openTable(
         ExecutiveContext::Ptr context, const std::string& tableName);
+    void addPrefixToUserTable(std::string& tableName);
 };
 
 }  // namespace blockverifier

@@ -76,14 +76,14 @@ BOOST_AUTO_TEST_CASE(insert)
     bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    auto entries = table->select(tableName, table->newCondition());
+    auto entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // insert again with same item
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    entries = table->select(tableName, table->newCondition());
+    entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // insert new item with same table name, but diffrent address
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(insert)
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    entries = table->select(tableName, table->newCondition());
+    entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
     BOOST_TEST(entries->size() == 2u);
 }
 
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(remove)
     bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    auto entries = table->select(tableName, table->newCondition());
+    auto entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // remove
@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(remove)
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     Condition::Ptr condition = table->newCondition();
     condition->EQ(STATUS, "1");
-    entries = table->select(tableName, condition);
+    entries = table->select(USER_TABLE_PREFIX + tableName, condition);
     BOOST_TEST(entries->size() == 0u);
 
     // remove not exist entry
@@ -127,6 +127,31 @@ BOOST_AUTO_TEST_CASE(remove)
     BOOST_TEST(out[31] == 0);
 }
 
+BOOST_AUTO_TEST_CASE(queryByName)
+{
+    // insert
+    eth::ContractABI abi;
+    std::string tableName = "t_test";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string,string)", tableName, addr);
+    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+
+    // queryByName by a existing key
+    in = abi.abiIn("queryByName(string)", tableName);
+    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    std::string retStr;
+    json_spirit::mValue retJson;
+    abi.abiOut(&out, retStr);
+    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
+    BOOST_TEST(retJson.get_array().size() == 1);
+
+    // queryByName by a no existing key
+    in = abi.abiIn("queryByName(string)", "test");
+    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    abi.abiOut(&out, retStr);
+    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
+    BOOST_TEST(retJson.get_array().size() == 0);
+}
 BOOST_AUTO_TEST_CASE(toString)
 {
     BOOST_TEST(authorityPrecompiled->toString(context) == "Authority");

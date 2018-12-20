@@ -154,8 +154,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
         LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
-        auto result =
-            m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
+        auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
         size_t outputSize = result.size();
         m_output = owning_bytes_ref{std::move(result), 0, outputSize};
         LOG(DEBUG) << "Precompiled result: " << result;
@@ -203,8 +202,6 @@ bool Executive::create2Opcode(Address const& _sender, u256 const& _endowment, u2
 bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice,
     u256 const& _gas, bytesConstRef _init, Address const& _origin)
 {
-    // if (_sender != MaxAddress ||
-    // m_envInfo.number() < m_sealEngine.chainParams().experimentalForkBlock)  // EIP86
     m_s->incNonce(_sender);
 
     m_savepoint = m_s->savepoint();
@@ -318,6 +315,7 @@ bool Executive::go(OnOpFunc const& _onOp)
         catch (PermissionDenied const& _e)
         {
             revert();
+            m_excepted = TransactionException::PermissionDenied;
             throw;
         }
         catch (Exception const& _e)

@@ -44,8 +44,7 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
 {
-
-	auto it = m_name2Table.find(tableName);
+    auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
         STORAGE_LOG(TRACE) << "Table:" << tableName << " already open:" << it->second;
@@ -85,8 +84,8 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     // authority flag
     if (authorityFlag)
     {
-        //set authorized address to memoryTable
-    	if (tableName != string(SYS_ACCESS_TABLE))
+        // set authorized address to memoryTable
+        if (tableName != string(SYS_ACCESS_TABLE))
         {
             setAuthorizedAddress(tableInfo);
         }

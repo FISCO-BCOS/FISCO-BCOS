@@ -21,9 +21,9 @@
 #include "AuthorityPrecompiled.h"
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
@@ -45,7 +45,8 @@ storage::Table::Ptr AuthorityPrecompiled::openTable(
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes AuthorityPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call Authority:" << toHex(param);
 
@@ -65,6 +66,8 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
     {
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
+        addPrefixToUserTable(tableName);
+
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         if (!table)
@@ -101,6 +104,8 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
     {
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
+        addPrefixToUserTable(tableName);
+
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         if (!table)
@@ -133,6 +138,8 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
     {
         std::string tableName;
         abi.abiOut(data, tableName);
+        addPrefixToUserTable(tableName);
+
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         if (!table)
@@ -150,19 +157,23 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
             for (size_t i = 0; i < entries->size(); i++)
             {
                 auto entry = entries->get(i);
-                if (!entry) { continue; }
+                if (!entry)
+                {
+                    continue;
+                }
 
                 json_spirit::Object AuthorityInfo;
                 AuthorityInfo.push_back(json_spirit::Pair(SYS_AC_FIELD_TABLE_NAME, tableName));
+                AuthorityInfo.push_back(
+                    json_spirit::Pair(SYS_AC_FIELD_ADDRESS, entry->getField(SYS_AC_FIELD_ADDRESS)));
                 AuthorityInfo.push_back(json_spirit::Pair(
-                		SYS_AC_FIELD_ADDRESS, entry->getField(SYS_AC_FIELD_ADDRESS)));
-                AuthorityInfo.push_back(json_spirit::Pair(
-                		SYS_AC_FIELD_ENABLENUM, entry->getField(SYS_AC_FIELD_ENABLENUM)));
+                    SYS_AC_FIELD_ENABLENUM, entry->getField(SYS_AC_FIELD_ENABLENUM)));
                 AuthorityInfos.push_back(AuthorityInfo);
             }
         }
         json_spirit::Value value(AuthorityInfos);
         std::string str = json_spirit::write_string(value, true);
+
         out = abi.abiIn("", str);
         break;
     }
@@ -173,4 +184,16 @@ bytes AuthorityPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
     }
     }
     return out;
+}
+
+void AuthorityPrecompiled::addPrefixToUserTable(std::string& tableName)
+{
+    if (tableName == SYS_ACCESS_TABLE || tableName == SYS_MINERS || tableName == SYS_TABLES)
+    {
+        return;
+    }
+    else
+    {
+        tableName = USER_TABLE_PREFIX + tableName;
+    }
 }
