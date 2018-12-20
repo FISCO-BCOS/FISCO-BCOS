@@ -217,7 +217,6 @@ static inline void checkResetConfig(FakeConsensus<FakePBFTEngine>& fake_pbft, bo
     }
     else
     {
-        BOOST_CHECK(fake_pbft.consensus()->nodeIdx() >= 0);
         BOOST_CHECK(fake_pbft.consensus()->nodeIdx() == MAXIDX);
         BOOST_CHECK(fake_pbft.consensus()->cfgErr() == true);
     }
