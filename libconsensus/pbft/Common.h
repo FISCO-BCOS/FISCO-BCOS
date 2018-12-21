@@ -77,7 +77,7 @@ struct PBFTMsgPacket
     bool operator==(PBFTMsgPacket const& msg)
     {
         return node_idx == msg.node_idx && node_id == msg.node_id && packet_id == msg.packet_id &&
-               ttl == msg.ttl && data == msg.data && timestamp == msg.timestamp;
+               data == msg.data && timestamp == msg.timestamp;
     }
     bool operator!=(PBFTMsgPacket const& msg) { return !operator==(msg); }
     /**
@@ -104,11 +104,7 @@ struct PBFTMsgPacket
     }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    void streamRLPFields(RLPStream& s) const
-    {
-        s << packet_id << ttl << data;
-        /// s.append(packet_id).append(ttl).append(data);
-    }
+    void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -128,9 +124,6 @@ struct PBFTMsgPacket
         try
         {
             int field = 0;
-            /*packet_id = RLP(req_data.cropped(0, 1)).toInt<uint8_t>(RLP::ThrowOnFail);
-            ttl = RLP(req_data.cropped(1, 2)).toInt<uint8_t>(RLP::ThrowOnFail);
-            data = RLP(req_data.cropped(2)).toBytes();*/
             packet_id = rlp[field = 0].toInt<uint8_t>();
             ttl = rlp[field = 1].toInt<uint8_t>();
             data = rlp[field = 2].toBytes();

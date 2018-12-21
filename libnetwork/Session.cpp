@@ -148,9 +148,6 @@ void Session::onWrite(
             drop(TCPError);
             return;
         }
-
-        SESSION_LOG(TRACE) << "Successfully send " << length << " bytes";
-
         {
             Guard l(x_writeQueue);
             if (m_writing)
@@ -477,7 +474,7 @@ void Session::onMessage(
         ResponseCallback::Ptr callbackPtr = getCallbackBySeq(message->seq());
         if (callbackPtr && !message->isRequestPacket())
         {
-            SESSION_LOG(TRACE) << "Found callbackPtr: " << message->seq();
+            /// SESSION_LOG(TRACE) << "Found callbackPtr: " << message->seq();
 
             if (callbackPtr->timeoutHandler)
             {
