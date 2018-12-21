@@ -39,14 +39,6 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(ABITest, TestOutputHelperFixture)
 
-void Test_abi_gm(const string& _str)
-{
-    ContractABI ct;
-    bytes serialBytes = ct.abiIn(_str);
-    bytesConstRef serial = bytesConstRef(&serialBytes).cropped(4);
-    std::cout << "====_str========== " << _str << std::endl;
-    std::cout << "abi serialBytes ====>" << serialBytes << std::endl;
-}
 BOOST_AUTO_TEST_CASE(ContractABITest)
 {
     ContractABI ct;
