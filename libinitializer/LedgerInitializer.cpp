@@ -80,6 +80,14 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                      << boost::diagnostic_information(e) << std::endl;
         BOOST_THROW_EXCEPTION(e);
     }
+    /// stop the node if there is no group
+    if (m_ledgerManager->getGrouplList().size() == 0)
+    {
+        SESSION_LOG(ERROR) << "[#LedgerInitializer]: Should init at least on group!";
+        BOOST_THROW_EXCEPTION(InitLedgerConfigFailed()
+                              << errinfo_comment("[#LedgerInitializer]: Should init at least on "
+                                                 "group! Please check configuration!"));
+    }
 }
 
 bool LedgerInitializer::initSingleGroup(
