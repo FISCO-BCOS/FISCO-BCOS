@@ -37,6 +37,7 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(SocketTest, TestOutputHelperFixture)
+#ifndef FISCO_GM
 BOOST_AUTO_TEST_CASE(testSocket)
 {
     ba::io_service m_io_service;
@@ -60,6 +61,7 @@ BOOST_AUTO_TEST_CASE(testSocket)
     m_socket.close();
     BOOST_CHECK(m_socket.isConnected() == false);
 }
+#endif
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

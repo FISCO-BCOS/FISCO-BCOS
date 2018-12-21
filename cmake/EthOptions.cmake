@@ -54,6 +54,12 @@ macro(configure_project)
     # code coverage
     eth_default_option(COVERAGE OFF)
 
+    # guomi
+    eth_default_option(BUILD_GM OFF)
+    if (BUILD_GM)
+        add_definitions(-DFISCO_GM)
+    endif()
+
     #debug
     eth_default_option(DEBUG OFF)
     if (DEBUG)
@@ -95,6 +101,11 @@ macro(print_config NAME)
     message("-- TARGET_PLATFORM  Target platform                          ${CMAKE_SYSTEM_NAME}")
     message("-- STATIC_BUILD     Build static                             ${STATIC_BUILD}")
     message("-- ARCH_TYPE                                                 ${ARCH_TYPE}")
+if (BUILD_GM)
+    message("------------------------------------------------------------------------")
+    message("-- GM                Build GM                                 ${BUILD_GM}")
+    message("------------------------------------------------------------------------")
+endif()
 if (SUPPORT_TESTS)
     message("-- TESTS            Build tests                              ${TESTS}")
 endif()

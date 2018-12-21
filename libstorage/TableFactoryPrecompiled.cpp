@@ -23,6 +23,7 @@
 #include "TablePrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -31,6 +32,16 @@
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
+using namespace dev::storage;
+
+const char* const TABLE_METHOD_OPT_STR = "openTable(string)";
+const char* const TABLE_METHOD_CRT_STR_STR = "createTable(string,string,string)";
+
+TableFactoryPrecompiled::TableFactoryPrecompiled()
+{
+    name2Selector[TABLE_METHOD_OPT_STR] = getFuncSelector(TABLE_METHOD_OPT_STR);
+    name2Selector[TABLE_METHOD_CRT_STR_STR] = getFuncSelector(TABLE_METHOD_CRT_STR_STR);
+}
 
 std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -50,10 +61,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
     dev::eth::ContractABI abi;
     bytes out;
 
-    switch (func)
-    {
-    case 0xc184e0ff:  // openDB(string)
-    case 0xf23f63c9:
+    if (func == name2Selector[TABLE_METHOD_OPT_STR])
     {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
@@ -73,9 +81,8 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         }
 
         out = abi.abiIn("", address);
-        break;
     }
-    case 0x56004b6a:
+    else if (func == name2Selector[TABLE_METHOD_CRT_STR_STR])
     {  // createTable(string,string,string)
         string tableName;
         string keyField;
@@ -96,12 +103,6 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
             errorCode = 1;
         }
         out = abi.abiIn("", errorCode);
-        break;
-    }
-    default:
-    {
-        break;
-    }
     }
 
     return out;

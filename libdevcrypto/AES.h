@@ -1,25 +1,25 @@
 /*
- This file is part of cpp-ethereum.
+    This file is part of FISCO-BCOS.
 
- cpp-ethereum is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
+    FISCO-BCOS is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
- cpp-ethereum is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+    FISCO-BCOS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
- You should have received a copy of the GNU General Public License
- along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
- */
+    You should have received a copy of the GNU General Public License
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
+*/
 /** @file AES.h
- * @author Alex Leverington <nessence@gmail.com>
- * @date 2014
+ * @author Alex Leverington <nessence@gmail.com> asherli
+ * @date 2018
  *
  * AES
- * todo: use openssl
+ * todo: use openssl tassl
  */
 
 #pragma once
@@ -28,6 +28,8 @@
 
 namespace dev
 {
-bytes aesDecrypt(bytesConstRef _cipher, std::string const& _password, unsigned _rounds = 2000,
-    bytesConstRef _salt = bytesConstRef());
-}
+DEV_SIMPLE_EXCEPTION(AESKeyLengthError);
+bytes aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key);
+bytes aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key);
+bytes readableKeyBytes(const std::string& _readableKey);
+}  // namespace dev
