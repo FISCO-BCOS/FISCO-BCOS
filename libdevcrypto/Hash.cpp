@@ -15,7 +15,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Hash.cpp
- * @author Gav Wood <i@gavwood.com>
+ * @author Gav Wood Asher Li
  * @date 2018
  */
 

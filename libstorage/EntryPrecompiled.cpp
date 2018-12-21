@@ -32,9 +32,9 @@ const char* const ENTRYIY_METHOD_SET_STR_INT = "set(string,int256)";
 const char* const ENTRYIY_METHOD_SET_STR_STR = "set(string,string)";
 const char* const ENTRYIY_METHOD_GETA_STR = "getAddress(string)";
 const char* const ENTRYIY_METHOD_GETB_STR = "getBytes64(string)";
-const char* const ENTRYIY_METHOD_GETB_STR32 = "getBytes32(string)"
+const char* const ENTRYIY_METHOD_GETB_STR32 = "getBytes32(string)";
 
-    EntryPrecompiled::EntryPrecompiled()
+EntryPrecompiled::EntryPrecompiled()
 {
     name2Selector[ENTRYIES_METENTRYIY_METHOD_GETI_STR] =
         getFuncSelector(ENTRYIES_METENTRYIY_METHOD_GETI_STR);
