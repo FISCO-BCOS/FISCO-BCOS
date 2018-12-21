@@ -273,6 +273,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             try
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
+                assert(s.size() == 7);
                 initParam.consensusType = s[2];
                 initParam.storageType = s[3];
                 initParam.stateType = s[4];
@@ -368,8 +369,6 @@ dev::h512s BlockChainImp::observerList()
 std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
 {
     int64_t blockNumber = number();
-    BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key:" << key
-                          << " at blockNumer:" << blockNumber;
     int32_t keyIdx = getSystemConfigItemIndex(key);
     std::string ret;
 
@@ -385,7 +384,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
         ReadGuard l(m_systemConfigMutex);
         if (blockNumber == m_cacheNumListByKey[keyIdx])
         {
-            BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] value in cache:"
+            BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in cache:" << key << "/"
                                   << m_configValueList[keyIdx];
             return m_configValueList[keyIdx];
         }
@@ -428,7 +427,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
         m_cacheNumListByKey[keyIdx] = blockNumber;
     }
 
-    BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] value in db:" << ret;
+    BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in db:" << key << "/" << ret;
     return ret;
 }
 

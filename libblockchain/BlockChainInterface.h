@@ -46,14 +46,14 @@ enum class CommitResult
 // groupMark/consensusType/storageType/stateType excluded.
 struct GenesisBlockParam
 {
-    std::string groupMark;  // Data written to extra data of genesis block.
-    dev::h512s minerList;
-    dev::h512s observerList;
-    std::string consensusType;
-    std::string storageType;
-    std::string stateType;
-    uint64_t txCountLimit;
-    uint64_t txGasLimit;
+    std::string groupMark;      // Data written to extra data of genesis block.
+    dev::h512s minerList;       // miner nodes for consensus/syns modules
+    dev::h512s observerList;    // observer nodes for syns module
+    std::string consensusType;  // the type of consensus, now pbft
+    std::string storageType;    // the type of storage, now LevelDB
+    std::string stateType;      // the type of state, now mpt/storage
+    uint64_t txCountLimit;      // the maximum number of transactions recorded in a block
+    uint64_t txGasLimit;        // the maximum gas required to execute a transaction
 };
 class BlockChainInterface
 {
