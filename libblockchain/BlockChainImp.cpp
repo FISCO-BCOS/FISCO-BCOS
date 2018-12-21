@@ -96,8 +96,6 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             number = lexical_cast<int64_t>(strNumber);
         }
     }
-    BLOCKCHAIN_LOG(TRACE) << "[#totalTransactionCount] [txCount/currentNum]: "
-                          << "[" << count << "/" << number << "]";
     return std::make_pair(count, number);
 }
 
@@ -225,8 +223,6 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getTxByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     string strblock = "";
     string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
@@ -252,8 +248,6 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 
 LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getLocalisedTxByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     string strblockhash = "";
     string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
@@ -280,8 +274,6 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 
 TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getTransactionReceiptByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     string strblock = "";
     string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
@@ -308,8 +300,6 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 
 LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getLocalisedTxReceiptByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
     if (tb)
     {
