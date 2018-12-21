@@ -482,10 +482,10 @@ void Service::asyncSendMessageByTopic(
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     if (nodeIDsToSend.size() == 0)
     {
-    	SERVICE_LOG(WARNING) << "[#asyncSendMessageByTopic] no nodeID to be sent.";
+    	SERVICE_LOG(WARNING) << "[#asyncSendMessageByTopic] no topic to be sent.";
 
     	m_host->threadPool()->enqueue([callback]() {
-    		dev::network::NetworkException e(TOPIC_NOT_FOUND, "No nodeID to be sent");
+    		dev::network::NetworkException e(TOPIC_NOT_FOUND, "No topic to be sent");
 			callback(e, std::shared_ptr<dev::p2p::P2PSession>(), dev::p2p::P2PMessage::Ptr());
     	});
 

@@ -131,21 +131,23 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
 
 							auto p2pResponse = std::dynamic_pointer_cast<P2PMessage>(response);
 							std::string s((const char*)p2pResponse->buffer()->data(), p2pResponse->buffer()->size());
-							boost::split(topics, s, boost::is_any_of("\t"));
-
-							uint32_t topicSeq = 0;
-							auto topicList = std::make_shared<std::set<std::string> >();
-							for(uint32_t i=0; i<topics.size(); ++i) {
-								if(i == 0) {
-									topicSeq = boost::lexical_cast<uint32_t>(topics[i]);
-								}
-								else {
-									topicList->insert(topics[i]);
-								}
-							}
 
 							auto session = self.lock();
 							if(session) {
+								SESSION_LOG(INFO) << "Received topic: [" << s << "] from " << session->nodeID().hex();
+								boost::split(topics, s, boost::is_any_of("\t"));
+
+								uint32_t topicSeq = 0;
+								auto topicList = std::make_shared<std::set<std::string> >();
+								for(uint32_t i=0; i<topics.size(); ++i) {
+									if(i == 0) {
+										topicSeq = boost::lexical_cast<uint32_t>(topics[i]);
+									}
+									else {
+										topicList->insert(topics[i]);
+									}
+								}
+
 								session->setTopics(topicSeq, topicList);
 							}
 						}
