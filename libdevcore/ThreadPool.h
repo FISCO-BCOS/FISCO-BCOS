@@ -55,12 +55,12 @@ public:
             });
         }
     }
-
-    ~ThreadPool()
+    void stop()
     {
         _ioService.stop();
         _workers.join_all();
     }
+    ~ThreadPool() { stop(); }
 
     // Add new work item to the pool.
     template <class F>

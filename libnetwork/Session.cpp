@@ -28,7 +28,6 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/ThreadPool.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
 
@@ -315,10 +314,9 @@ void Session::drop(DisconnectReason _reason)
             /// if get Host object failed, close the socket directly
             auto socket = m_socket;
             auto server = m_server.lock();
-            if (server || !server->asioInterface() || !server->asioInterface()->ioService())
+            if (server && socket->isConnected())
             {
-                if (socket->isConnected())
-                    socket->close();
+                socket->close();
             }
             auto shutdown_timer =
                 std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService(),

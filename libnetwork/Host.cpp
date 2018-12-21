@@ -273,6 +273,7 @@ void Host::start()
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
         m_hostThread = std::make_shared<std::thread>([&] {
+            dev::pthread_setThreadName("io_service");
             while (haveNetwork())
             {
                 try
@@ -385,4 +386,5 @@ void Host::stop()
     m_run = false;
     m_asioInterface->stop();
     m_hostThread->join();
+    m_threadPool->stop();
 }

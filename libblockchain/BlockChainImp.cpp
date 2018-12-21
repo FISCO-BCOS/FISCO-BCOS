@@ -76,8 +76,6 @@ int64_t BlockChainImp::number()
             num = lexical_cast<int64_t>(currentNumber.c_str());
         }
     }
-    BLOCKCHAIN_LOG(TRACE) << "[#number] [currentNum]: "
-                          << "[" << num << "]";
     return num;
 }
 
@@ -98,8 +96,6 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             number = lexical_cast<int64_t>(strNumber);
         }
     }
-    BLOCKCHAIN_LOG(TRACE) << "[#totalTransactionCount] [txCount/currentNum]: "
-                          << "[" << count << "/" << number << "]";
     return std::make_pair(count, number);
 }
 
@@ -127,8 +123,6 @@ bytes BlockChainImp::getCode(Address _address)
 
 h256 BlockChainImp::numberHash(int64_t _i)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#number] [num]: "
-                          << "[" << _i << "]";
     string numberHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -145,8 +139,6 @@ h256 BlockChainImp::numberHash(int64_t _i)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByHash] [blockHash]: "
-                          << "[" << toHex(_blockHash) << "]";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
     if (tb)
@@ -212,8 +204,6 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByNumber] [num]: "
-                          << "[" << _i << "]";
     string numberHash = "";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
@@ -233,8 +223,6 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getTxByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     string strblock = "";
     string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
@@ -260,8 +248,6 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 
 LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getLocalisedTxByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     string strblockhash = "";
     string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
@@ -288,8 +274,6 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 
 TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getTransactionReceiptByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     string strblock = "";
     string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
@@ -316,8 +300,6 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 
 LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
 {
-    BLOCKCHAIN_LOG(TRACE) << "[#getLocalisedTxReceiptByHash] [txHash]: "
-                          << "[" << _txHash << "]";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
     if (tb)
     {

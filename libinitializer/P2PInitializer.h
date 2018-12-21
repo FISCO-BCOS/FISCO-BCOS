@@ -37,7 +37,13 @@ class P2PInitializer : public std::enable_shared_from_this<P2PInitializer>
 public:
     typedef std::shared_ptr<P2PInitializer> Ptr;
 
-    ~P2PInitializer() {}
+    ~P2PInitializer()
+    {
+        if (m_p2pService)
+        {
+            m_p2pService->stop();
+        }
+    }
 
     void initConfig(boost::property_tree::ptree const& _pt);
 
