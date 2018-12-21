@@ -70,7 +70,7 @@ void DBInitializer::initLevelDBStorage()
         if (!status.ok())
         {
             DBInitializer_LOG(ERROR) << "[#initStorageDB] [openLevelDBStorage failed]" << std::endl;
-            return;
+            throw std::runtime_error("open LevelDB failed");
         }
         DBInitializer_LOG(DEBUG) << "[#initStorageDB] [#initLevelDBStorage] [status]: "
                                  << status.ok() << std::endl;
