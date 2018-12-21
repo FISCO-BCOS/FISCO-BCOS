@@ -104,7 +104,8 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         if (ret != "")
         {
             context->setTxGasLimit(boost::lexical_cast<uint64_t>(ret));
-            EXECUTIVECONTEXT_LOG(TRACE) << "[#setTxGasLimitToContext] tx_gas_limit:" << context->txGasLimit();
+            EXECUTIVECONTEXT_LOG(TRACE)
+                << "[#setTxGasLimitToContext] tx_gas_limit:" << context->txGasLimit();
         }
         else
         {
