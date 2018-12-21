@@ -510,7 +510,7 @@ void Service::asyncSendMessageByTopic(
                 if (m_nodeIDs.empty())
                 {
                     SERVICE_LOG(WARNING) << "Send topics message all failed";
-                    m_callback(dev::network::NetworkException(), session, P2PMessage::Ptr());
+                    m_callback(dev::network::NetworkException(e.errorCode(), "Send topics message all failed"), session, P2PMessage::Ptr());
 
                     return;
                 }
