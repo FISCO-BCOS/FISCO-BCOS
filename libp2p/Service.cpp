@@ -30,11 +30,10 @@
 #include <boost/random.hpp>
 #include <unordered_map>
 
-namespace dev
-{
-namespace p2p
-{
-const uint32_t CHECK_INTERVEL = 10000;
+using namespace dev;
+using namespace dev::p2p;
+
+static const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
 {
@@ -70,6 +69,10 @@ void Service::stop()
     if (m_run)
     {
         m_run = false;
+        if (m_timer)
+        {
+            m_timer->cancel();
+        }
         m_host->stop();
         /// disconnect sessions
         {
@@ -134,7 +137,7 @@ void Service::heartBeat()
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
     }
-    auto self = shared_from_this();
+    auto self = std::weak_ptr<Service>(shared_from_this());
     m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
@@ -142,8 +145,11 @@ void Service::heartBeat()
             SERVICE_LOG(TRACE) << "timer canceled" << error;
             return;
         }
-
-        self->heartBeat();
+        auto service = self.lock();
+        if (service && service->host()->haveNetwork())
+        {
+            service->heartBeat();
+        }
     });
 }
 
@@ -509,8 +515,6 @@ void Service::asyncSendMessageByTopic(
                 auto s = m_service.lock();
                 if (s)
                 {
-                    auto self = shared_from_this();
-
                     // auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
                     s->asyncSendMessageByNodeID(m_current, msg,
                         std::bind(&TopicStatus::onResponse, shared_from_this(),
@@ -737,7 +741,3 @@ bool Service::isConnected(NodeID nodeID)
 
     return true;
 }
-
-}  // namespace p2p
-
-}  // namespace dev

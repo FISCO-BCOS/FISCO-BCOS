@@ -56,8 +56,8 @@ public:
      * @return false: init single ledger failed
      */
     template <class T>
-    inline bool initSingleLedger(dev::GROUP_ID const& _groupId,
-        std::string const& _baseDir = "data", std::string const& configFileName = "")
+    bool initSingleLedger(dev::GROUP_ID const& _groupId, std::string const& _baseDir = "data",
+        std::string const& configFileName = "")
     {
         if ((_groupId <= 0) || (_groupId > maxGroupID))
         {
@@ -93,7 +93,7 @@ public:
      * @return true : start success
      * @return false : start failed (maybe the ledger doesn't exist)
      */
-    virtual inline bool startByGroupID(dev::GROUP_ID const& groupId)
+    virtual bool startByGroupID(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return false;
@@ -107,7 +107,7 @@ public:
      * @return true: stop the ledger succeed
      * @return false: stop the ledger failed
      */
-    virtual inline bool stopByGroupID(dev::GROUP_ID const& groupId)
+    virtual bool stopByGroupID(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return false;
@@ -116,7 +116,7 @@ public:
     }
 
     /// start all the ledgers that have been created
-    virtual inline void startAll()
+    virtual void startAll()
     {
         for (auto item : m_ledgerMap)
         {
@@ -126,7 +126,7 @@ public:
         }
     }
     /// stop all the ledgers that have been started
-    virtual inline void stopAll()
+    virtual void stopAll()
     {
         for (auto item : m_ledgerMap)
         {
@@ -136,7 +136,7 @@ public:
         }
     }
     /// get pointer of txPool by group id
-    inline std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::GROUP_ID const& groupId)
+    std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
@@ -144,7 +144,7 @@ public:
     }
 
     /// get pointer of blockverifier by group id
-    inline std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
         dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
@@ -152,30 +152,28 @@ public:
         return m_ledgerMap[groupId]->blockVerifier();
     }
     /// get pointer of blockchain by group id
-    inline std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(
-        dev::GROUP_ID const& groupId)
+    std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockChain();
     }
     /// get pointer of consensus by group id
-    inline std::shared_ptr<dev::consensus::ConsensusInterface> consensus(
-        dev::GROUP_ID const& groupId)
+    std::shared_ptr<dev::consensus::ConsensusInterface> consensus(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->consensus();
     }
     /// get pointer of blocksync by group id
-    inline std::shared_ptr<dev::sync::SyncInterface> sync(dev::GROUP_ID const& groupId)
+    std::shared_ptr<dev::sync::SyncInterface> sync(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->sync();
     }
     /// get ledger params by group id
-    inline std::shared_ptr<LedgerParamInterface> getParamByGroupId(dev::GROUP_ID const& groupId)
+    std::shared_ptr<LedgerParamInterface> getParamByGroupId(dev::GROUP_ID const& groupId)
     {
         if (!m_ledgerMap.count(groupId))
             return nullptr;

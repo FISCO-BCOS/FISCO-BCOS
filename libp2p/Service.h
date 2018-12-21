@@ -43,7 +43,7 @@ class Service : public P2PInterface, public std::enable_shared_from_this<Service
 {
 public:
     Service();
-    virtual ~Service() {}
+    virtual ~Service() { stop(); }
 
     typedef std::shared_ptr<Service> Ptr;
 

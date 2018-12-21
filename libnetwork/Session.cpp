@@ -28,7 +28,6 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/ThreadPool.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
 
@@ -315,10 +314,9 @@ void Session::drop(DisconnectReason _reason)
             /// if get Host object failed, close the socket directly
             auto socket = m_socket;
             auto server = m_server.lock();
-            if (server || !server->asioInterface() || !server->asioInterface()->ioService())
+            if (server && socket->isConnected())
             {
-                if (socket->isConnected())
-                    socket->close();
+                socket->close();
             }
             auto shutdown_timer =
                 std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService(),
@@ -401,40 +399,46 @@ void Session::doRead()
     auto server = m_server.lock();
     if (m_actived && server && server->haveNetwork())
     {
-        auto self(shared_from_this());
-        auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
-            if (ec)
+        auto self = std::weak_ptr<Session>(shared_from_this());
+        auto asyncRead = [self](boost::system::error_code ec, std::size_t bytesTransferred) {
+            auto s = self.lock();
+            if (s)
             {
-                SESSION_LOG(WARNING)
-                    << "Error reading: " << ec.message() << " at " << self->nodeIPEndpoint().name();
-                drop(TCPError);
-                return;
-            }
-            m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
+                if (ec)
+                {
+                    SESSION_LOG(WARNING) << "Error reading: " << ec.message() << " at "
+                                         << s->nodeIPEndpoint().name();
+                    s->drop(TCPError);
+                    return;
+                }
+                s->m_data.insert(
+                    s->m_data.end(), s->m_recvBuffer, s->m_recvBuffer + bytesTransferred);
 
-            while (true)
-            {
-                Message::Ptr message = m_messageFactory->buildMessage();
-                ssize_t result = message->decode(m_data.data(), m_data.size());
-                SESSION_LOG(TRACE) << "Parse result: " << result;
-                if (result > 0)
+                while (true)
                 {
-                    SESSION_LOG(TRACE) << "Decode success: " << result;
-                    NetworkException e(P2PExceptionType::Success, "Success");
-                    onMessage(e, self, message);
-                    m_data.erase(m_data.begin(), m_data.begin() + result);
-                }
-                else if (result == 0)
-                {
-                    doRead();
-                    break;
-                }
-                else
-                {
-                    SESSION_LOG(ERROR) << "Decode message error: " << result;
-                    onMessage(NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
-                        self, message);
-                    break;
+                    Message::Ptr message = s->m_messageFactory->buildMessage();
+                    ssize_t result = message->decode(s->m_data.data(), s->m_data.size());
+                    SESSION_LOG(TRACE) << "Parse result: " << result;
+                    if (result > 0)
+                    {
+                        SESSION_LOG(TRACE) << "Decode success: " << result;
+                        NetworkException e(P2PExceptionType::Success, "Success");
+                        s->onMessage(e, s, message);
+                        s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
+                    }
+                    else if (result == 0)
+                    {
+                        s->doRead();
+                        break;
+                    }
+                    else
+                    {
+                        SESSION_LOG(ERROR) << "Decode message error: " << result;
+                        s->onMessage(
+                            NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"), s,
+                            message);
+                        break;
+                    }
                 }
             }
         };
