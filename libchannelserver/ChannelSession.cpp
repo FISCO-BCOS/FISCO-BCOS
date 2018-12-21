@@ -452,6 +452,13 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
 {
     try
     {
+    	if(error) {
+    		if(error != boost::asio::error::operation_aborted) {
+    			CHANNEL_LOG(ERROR) << "Timer error: " << error.message();
+    		}
+    		return;
+    	}
+
         if (!_actived)
         {
             CHANNEL_LOG(ERROR) << "ChannelSession inactived";
