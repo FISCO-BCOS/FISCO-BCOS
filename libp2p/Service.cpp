@@ -272,8 +272,6 @@ void Service::onMessage(
         	return;
         }
 
-        //AMOP channel message
-
         if (p2pMessage->isRequestPacket())
         {
             SERVICE_LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-"
