@@ -28,7 +28,6 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/ThreadPool.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
 
@@ -299,19 +298,74 @@ void Session::drop(DisconnectReason _reason)
     {
         try
         {
-            SESSION_LOG(WARNING) << "Closing " << m_socket->ref().remote_endpoint() << "("
-                                 << dev::network::reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
+            if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
+                _reason == ClientQuit || _reason == UserReason)
+            {
+                SESSION_LOG(DEBUG)
+                    << "Closing " << m_socket->remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << m_socket->nodeIPEndpoint().address;
+            }
+            else
+            {
+                SESSION_LOG(WARNING)
+                    << "Closing " << m_socket->remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << m_socket->nodeIPEndpoint().address;
+            }
 
+            /// if get Host object failed, close the socket directly
             auto socket = m_socket;
-            m_socket->sslref().async_shutdown([socket](const boost::system::error_code& error) {
-            	if(error) {
-					LOG(WARNING) << "Error while shutdown the ssl socket: " << error.message();
-				}
-
-            	socket->ref().close();
+            auto server = m_server.lock();
+            if (server && socket->isConnected())
+            {
+                socket->close();
+            }
+            auto shutdown_timer =
+                std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService(),
+                    boost::posix_time::milliseconds(m_shutDownTimeThres));
+            /// async wait for shutdown
+            shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
+                /// drop operation has been aborted
+                if (error == boost::asio::error::operation_aborted)
+                {
+                    SESSION_LOG(DEBUG)
+                        << "[#drop] operation aborted  [ECODE/EINFO]:" << error.value() << "/"
+                        << error.message();
+                    return;
+                }
+                /// shutdown timer error
+                if (error && error != boost::asio::error::operation_aborted)
+                {
+                    SESSION_LOG(WARNING)
+                        << "[#drop] shutdown timer error [ECODE/EINFO]: " << error.value() << "/"
+                        << error.message();
+                }
+                /// force to shutdown when timeout
+                if (socket->ref().is_open())
+                {
+                    SESSION_LOG(WARNING)
+                        << "[#drop] timeout, force close the socket [remote_ip:remote_port]"
+                        << socket->ref().remote_endpoint().address().to_string() << ":"
+                        << socket->ref().remote_endpoint().port();
+                    socket->close();
+                }
             });
 
-            //socket.close();
+            /// async shutdown normally
+            socket->sslref().async_shutdown(
+                [socket, shutdown_timer](const boost::system::error_code& error) {
+                    if (error)
+                    {
+                        SESSION_LOG(WARNING)
+                            << "[#drop] shutdown failed [ECODE/EINFO]: " << error.value() << "/"
+                            << error.message();
+                    }
+                    shutdown_timer->cancel();
+                    /// force to close the socket
+                    if (socket->ref().is_open())
+                    {
+                        socket->close();
+                    }
+                });
         }
         catch (...)
         {
@@ -346,40 +400,46 @@ void Session::doRead()
     auto server = m_server.lock();
     if (m_actived && server && server->haveNetwork())
     {
-        auto self(shared_from_this());
-        auto asyncRead = [this, self](boost::system::error_code ec, std::size_t bytesTransferred) {
-            if (ec)
+        auto self = std::weak_ptr<Session>(shared_from_this());
+        auto asyncRead = [self](boost::system::error_code ec, std::size_t bytesTransferred) {
+            auto s = self.lock();
+            if (s)
             {
-                SESSION_LOG(WARNING)
-                    << "Error reading: " << ec.message() << " at " << self->nodeIPEndpoint().name();
-                drop(TCPError);
-                return;
-            }
-            m_data.insert(m_data.end(), m_recvBuffer, m_recvBuffer + bytesTransferred);
+                if (ec)
+                {
+                    SESSION_LOG(WARNING) << "Error reading: " << ec.message() << " at "
+                                         << s->nodeIPEndpoint().name();
+                    s->drop(TCPError);
+                    return;
+                }
+                s->m_data.insert(
+                    s->m_data.end(), s->m_recvBuffer, s->m_recvBuffer + bytesTransferred);
 
-            while (true)
-            {
-                Message::Ptr message = m_messageFactory->buildMessage();
-                ssize_t result = message->decode(m_data.data(), m_data.size());
-                SESSION_LOG(TRACE) << "Parse result: " << result;
-                if (result > 0)
+                while (true)
                 {
-                    SESSION_LOG(TRACE) << "Decode success: " << result;
-                    NetworkException e(P2PExceptionType::Success, "Success");
-                    onMessage(e, self, message);
-                    m_data.erase(m_data.begin(), m_data.begin() + result);
-                }
-                else if (result == 0)
-                {
-                    doRead();
-                    break;
-                }
-                else
-                {
-                    SESSION_LOG(ERROR) << "Decode message error: " << result;
-                    onMessage(NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
-                        self, message);
-                    break;
+                    Message::Ptr message = s->m_messageFactory->buildMessage();
+                    ssize_t result = message->decode(s->m_data.data(), s->m_data.size());
+                    SESSION_LOG(TRACE) << "Parse result: " << result;
+                    if (result > 0)
+                    {
+                        SESSION_LOG(TRACE) << "Decode success: " << result;
+                        NetworkException e(P2PExceptionType::Success, "Success");
+                        s->onMessage(e, s, message);
+                        s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
+                    }
+                    else if (result == 0)
+                    {
+                        s->doRead();
+                        break;
+                    }
+                    else
+                    {
+                        SESSION_LOG(ERROR) << "Decode message error: " << result;
+                        s->onMessage(
+                            NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"), s,
+                            message);
+                        break;
+                    }
                 }
             }
         };

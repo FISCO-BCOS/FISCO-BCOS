@@ -61,11 +61,6 @@ using namespace dev::network;
 using namespace dev::eth;
 using namespace dev::crypto;
 
-Host::~Host()
-{
-    stop();
-}
-
 /**
  * @brief: accept connection requests, maily include procedures:
  *         1. async_accept: accept connection requests
@@ -278,6 +273,7 @@ void Host::start()
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
         m_hostThread = std::make_shared<std::thread>([&] {
+            dev::pthread_setThreadName("io_service");
             while (haveNetwork())
             {
                 try
@@ -383,21 +379,12 @@ void Host::handshakeClient(const boost::system::error_code& error,
 /// stop the network and worker thread
 void Host::stop()
 {
-    // called to force io_service to kill any remaining tasks it might have -
-    // such tasks may involve socket reads from Capabilities that maintain references
-    // to resources we're about to free.
-    {
-        // Although m_run is set by stop() or start(), it effects m_runTimer so x_runTimer is
-        // used instead of a mutex for m_run.
-        Guard l(x_runTimer);
-        // ignore if already stopped/stopping
-        if (!m_run)
-            return;
-        // signal run() to prepare for shutdown and reset m_timer
-        m_run = false;
-
-        m_asioInterface->stop();
-
-        m_hostThread->join();
-    }
+    // ignore if already stopped/stopping
+    if (!m_run)
+        return;
+    // signal run() to prepare for shutdown and reset m_timer
+    m_run = false;
+    m_asioInterface->stop();
+    m_hostThread->join();
+    m_threadPool->stop();
 }

@@ -1,3 +1,5 @@
+English / [中文](docs/CONTRIBUTING_CN.md)
+
 # Contributing and Review Guidelines
 
 All contributions are welcome! 
@@ -19,22 +21,24 @@ Go to [issues page](https://github.com/FISCO-BCOS/lab-bcos/issues)
 
 ### Fix bugs
 
-1. **Create** a new branch named **bugfix-xxxx** forked from **master** branch
-2. **Fix** the bug..
-3. **Test** the fixed code
-4. Make **pull request** to **dev** and **master** simultaneously
-5. Wait the community to review the code
-6. Merged(**Bug fixed**)
+1. **Fork** this repo
+2. **Create** a new branch named **bugfix-xxxx** forked from your repo's **master** branch
+3. **Fix** the bug
+4. **Test** the fixed code
+5. Make **pull request** back to this repo's **dev** branch 
+6. Wait the community to review the code
+7. Merged(**Bug fixed**)
 
 ### Develop a new feature
 
-1. **Create** a new branch named **feature-xxxx** forked from **dev** branch
-2. **Coding** in feature-xxxx
-3. **Pull** origin dev branch to feature-xxxx constantly
-4. **Test** your code
-5. Make **pull request** back to dev branch
-6. Wait the community to review the code
-7. Merged !!!!
+1. **Fork** this repo
+2. **Create** a new branch named **feature-xxxx** forked from your repo's **dev** branch
+3. **Coding** in feature-xxxx
+4. **Pull** this repo's dev branch to your feature-xxxx constantly
+5. **Test** your code
+6. Make **pull request** back to this repo's dev branch
+7. Wait the community to review the code
+8. Merged !!!!
 
 ## Coding Style
 

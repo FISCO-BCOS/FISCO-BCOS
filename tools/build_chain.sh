@@ -94,12 +94,11 @@ echo "=============================================================="
 LOG_INFO "FISCO-BCOS Path   : $eth_path"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-[ ! -z $ip_param ] && LOG_INFO "IP List Param     : $ip_param"
 LOG_INFO "Start Port        : $port_start"
 LOG_INFO "Server IP         : ${ip_array[@]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
-LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
+[ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : $output_dir"
 LOG_INFO "CA Key Path       : $ca_file"
 echo "=============================================================="
@@ -189,7 +188,7 @@ gen_chain_cert() {
 gen_agency_cert() {
     chain="$2"
     agencypath="$3"
-    name=`getname "$agencypath"`
+    name=$(getname "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/ca.key"
@@ -233,9 +232,9 @@ gen_node_cert() {
     fi
 
     agpath="$2"
-    agency=`getname "$agpath"`
+    agency=$(getname "$agpath")
     ndpath="$3"
-    node=`getname "$ndpath"`
+    node=$(getname "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
@@ -250,8 +249,8 @@ gen_node_cert() {
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=`cat node.nodeid | head`
-    serial=`cat node.serial | head`
+    nodeid=$(cat node.nodeid | head)
+    serial=$(cat node.serial | head)
     cat >node.json <<EOF
 {
  "id":"$nodeid",
@@ -290,7 +289,7 @@ read_password() {
 gen_sdk_cert() {
     agency="$2"
     sdkpath="$3"
-    sdk=`getname "$sdkpath"`
+    sdk=$(getname "$sdkpath")
     dir_must_exists "$agency"
     file_must_exists "$agency/agency.key"
     dir_must_not_exists "$sdkpath"
@@ -302,8 +301,6 @@ gen_sdk_cert() {
     
     read_password
     openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
-    # keytool -importkeystore -srckeystore $sdkpath/keystore.p12 -srcstoretype pkcs12 -srcstorepass $jks_passwd\
-    #     -destkeystore $sdkpath/client.keystore -deststoretype jks -deststorepass $jks_passwd -alias client 2>/dev/null 
 
     echo "build $sdk sdk cert successful!"
 }
@@ -620,7 +617,9 @@ if [ ! -e "$ca_file" ]; then
     mv $output_dir/chain $output_dir/cert
     if [ "${use_ip_param}" == "false" ];then
         for agency_name in ${agency_array[*]};do
-            gen_agency_cert "" $output_dir/cert $output_dir/cert/${agency_name} >$output_dir/${logfile} 2>&1
+            if [ ! -d $output_dir/cert/${agency_name} ];then 
+                gen_agency_cert "" $output_dir/cert $output_dir/cert/${agency_name} >$output_dir/${logfile} 2>&1
+            fi
         done
     else
         gen_agency_cert "" $output_dir/cert $output_dir/cert/agency >$output_dir/${logfile} 2>&1
@@ -661,7 +660,7 @@ for line in ${ip_array[*]};do
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
             cd $output_dir
-            privateKey=`openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+            privateKey=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
             len=${#privateKey}
             head2=${privateKey:0:2}
             if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
@@ -675,7 +674,6 @@ for line in ${ip_array[*]};do
         mkdir -p $node_dir/sdk/
         # read_password
         openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
-        # keytool -importkeystore  -srckeystore "$node_dir/sdk/keystore.p12" -srcstoretype pkcs12 -srcstorepass $pkcs12_passwd -alias client -destkeystore "$node_dir/sdk/client.keystore" -deststoretype jks -deststorepass $pkcs12_passwd >> /dev/null 2>&1 || fail_message "java keytool error!" 
         cp ${output_dir}/cert/ca.crt $node_dir/sdk/
         # gen_sdk_cert ${output_dir}/cert/agency $node_dir
         # mv $node_dir/* $node_dir/sdk/
@@ -688,14 +686,14 @@ for line in ${ip_array[*]};do
                 echo "groups_count[${j}]=${groups_count[${j}]}"  >> $output_dir/${logfile}
         groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=${nodeid}
     "
-                ((++groups_count[${j}]))
+                ((++groups_count[j]))
             done
         else
         nodeid_list=$"${nodeid_list}node.${count}=${nodeid}
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 3 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + i * 3 ))"
     "
         ((++count))
     done
@@ -732,7 +730,7 @@ for line in ${ip_array[*]};do
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
-    echo "cp \${1} \${SHELL_FOLDER}/$output_dir/${ip}/" >> "$output_dir/replace_all.sh"
+    echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 

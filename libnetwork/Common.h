@@ -226,33 +226,18 @@ struct NodeIPEndpoint
         return NodeIPEndpoint::test_allowLocal ? !address.is_unspecified() :
                                                  isPublicAddress(address);
     }
-    bool operator==(NodeIPEndpoint const& _cmp) const
+
+    bool operator<(const NodeIPEndpoint& rhs) const
     {
-        return address == _cmp.address && udpPort == _cmp.udpPort && tcpPort == _cmp.tcpPort;
-    }
-    bool operator!=(NodeIPEndpoint const& _cmp) const { return !operator==(_cmp); }
-    bool operator<(const dev::network::NodeIPEndpoint& rhs) const
-    {
-        if (address < rhs.address || tcpPort < rhs.tcpPort)
+        if (address < rhs.address)
         {
             return true;
         }
-        if (udpPort < rhs.udpPort)
-            return true;
-        if (host < rhs.host)
+        if ((address == rhs.address) && tcpPort < rhs.tcpPort)
             return true;
         return false;
     }
-    bool operator>(const dev::network::NodeIPEndpoint& rhs) const
-    {
-        if (address > rhs.address || tcpPort > rhs.tcpPort)
-            return true;
-        if (udpPort > rhs.udpPort)
-            return true;
-        if (host > rhs.host)
-            return true;
-        return false;
-    }
+
     std::string name() const
     {
         std::ostringstream os;

@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file LedgerInitializer.h
  *  @author chaychen
  *  @modify first draft
@@ -56,7 +56,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     << it.first.data();
                 ERROR_OUTPUT << "[#LedgerInitializer::initConfig] parse groupID failed!"
                              << std::endl;
-                exit(1);
+                BOOST_THROW_EXCEPTION(MissingField());
             }
 
             succ =
@@ -67,18 +67,18 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                                        << boost::lexical_cast<int>(s[1]) << "failed" << std::endl;
                 ERROR_OUTPUT << "[#LedgerInitializer::initConfig] initSingleGroup for " << s[1]
                              << " failed!" << std::endl;
-                exit(1);
+                BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
             }
         }
         m_p2pService->setGroupID2NodeList(groudID2NodeList);
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR)
-            << "[#LedgerInitializer::initConfig] parse group config faield: [EINFO]: " << e.what();
+        SESSION_LOG(ERROR) << "[#LedgerInitializer::initConfig] initSingleGroup faield: [EINFO]: "
+                           << e.what();
         ERROR_OUTPUT << "[#LedgerInitiailizer::initConfig] initSingleGroup failed: [EINFO]: "
                      << boost::diagnostic_information(e) << std::endl;
-        exit(1);
+        BOOST_THROW_EXCEPTION(e);
     }
 }
 
@@ -86,6 +86,10 @@ bool LedgerInitializer::initSingleGroup(
     GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
 {
     bool succ = m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
+    if (!succ)
+    {
+        return succ;
+    }
     _groudID2NodeList[_groupID] =
         m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
 

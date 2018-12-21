@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file Service.cpp
  *  @author chaychen
  *  @date 20180910
@@ -31,11 +31,10 @@
 #include <unordered_map>
 #include "Common.h"
 
-namespace dev
-{
-namespace p2p
-{
-const uint32_t CHECK_INTERVEL = 10000;
+using namespace dev;
+using namespace dev::p2p;
+
+static const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
 {
@@ -71,6 +70,10 @@ void Service::stop()
     if (m_run)
     {
         m_run = false;
+        if (m_timer)
+        {
+            m_timer->cancel();
+        }
         m_host->stop();
         /// disconnect sessions
         {
@@ -137,7 +140,7 @@ void Service::heartBeat()
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
     }
-    auto self = shared_from_this();
+    auto self = std::weak_ptr<Service>(shared_from_this());
     m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
@@ -145,8 +148,11 @@ void Service::heartBeat()
             SERVICE_LOG(TRACE) << "timer canceled" << error;
             return;
         }
-
-        self->heartBeat();
+        auto service = self.lock();
+        if (service && service->host()->haveNetwork())
+        {
+            service->heartBeat();
+        }
     });
 }
 
@@ -294,7 +300,7 @@ void Service::onMessage(
             }
             else
             {
-                SERVICE_LOG(WARNING) << "Request protocolID not found" << message->seq();
+                SERVICE_LOG(DEBUG) << "Request protocolID not found" << message->seq();
             }
         }
         else
@@ -751,7 +757,3 @@ bool Service::isConnected(NodeID nodeID)
 
     return true;
 }
-
-}  // namespace p2p
-
-}  // namespace dev

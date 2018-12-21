@@ -111,7 +111,8 @@ void SyncMaster::stop()
 void SyncMaster::doWork()
 {
     // Debug print
-    printSyncInfo();
+    if (isSyncing())
+        printSyncInfo();
 
     // Always do
     maintainPeersConnection();
