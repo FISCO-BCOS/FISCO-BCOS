@@ -343,7 +343,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 					if(e.errorCode()) {
 						CHANNEL_LOG(ERROR) << "Push channel message failed: " << e.what();
 
-						channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
+						channelMessage->setResult(e.errorCode());
 						channelMessage->setType(0x31);
 
 						auto buffer = std::make_shared<bytes>();
@@ -360,6 +360,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 						return;
 					}
 
+					CHANNEL_LOG(TRACE) << "Receive sdk response: " << response->seq();
 					auto buffer = std::make_shared<bytes>();
 					response->encode(*buffer);
 					auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
@@ -643,7 +644,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                         std::placeholders::_2);
                 session->asyncSendMessage(_message, fp, 5000);
 
-                CHANNEL_LOG(INFO) << "push to session: " << session->host() << ":"
+                CHANNEL_LOG(INFO) << "Push channel message: " << _message->seq() << "to session: " << session->host() << ":"
                                   << session->port() << " success";
                 _currentSession = session;
             }

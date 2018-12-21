@@ -404,7 +404,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
         auto it = _responseCallbacks.find(message->seq());
         if (it != _responseCallbacks.end())
         {
-            if (it->second->timeoutHandler.get() != NULL)
+            if (it->second->timeoutHandler)
             {
                 it->second->timeoutHandler->cancel();
             }
