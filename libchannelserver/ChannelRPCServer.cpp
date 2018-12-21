@@ -577,18 +577,20 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                         return;
                     }
                 }
-                catch (dev::channel::ChannelException& e)
+                catch (dev::channel::ChannelException& ex)
                 {
-                    CHANNEL_LOG(ERROR) << "ERROR:" << e.errorCode() << " " << e.what();
+                    CHANNEL_LOG(ERROR) << "ERROR:" << ex.errorCode() << " " << ex.what();
 
                     try
                     {
-                        _callback(e, dev::channel::Message::Ptr());
+                        _callback(ex, dev::channel::Message::Ptr());
                     }
                     catch (exception& e)
                     {
                         CHANNEL_LOG(ERROR) << "ERROR" << e.what();
                     }
+
+                    return;
                 }
 
                 try
