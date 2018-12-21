@@ -171,7 +171,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message) {
 				auto service = m_service.lock();
 				if(service) {
 					std::string s = boost::lexical_cast<std::string>(service->topicSeq());
-					for(auto it: *m_topics) {
+					for(auto it: *service->topics()) {
 						s.append("\t");
 						s.append(it);
 					}
