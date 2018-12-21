@@ -479,11 +479,16 @@ void Service::asyncSendMessageByTopic(
     std::string topic, P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options)
 {
     SERVICE_LOG(TRACE) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
-    // assert(options.timeout > 0 && options.subTimeout > 0);
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     if (nodeIDsToSend.size() == 0)
     {
-        P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByTopic] no nodeID to be Sent.";
+    	SERVICE_LOG(WARNING) << "[#asyncSendMessageByTopic] no nodeID to be sent.";
+
+    	m_host->threadPool()->enqueue([callback]() {
+    		dev::network::NetworkException e(TOPIC_NOT_FOUND, "No nodeID to be sent");
+			callback(e, std::shared_ptr<dev::p2p::P2PSession>(), dev::p2p::P2PMessage::Ptr());
+    	});
+
         return;
     }
 

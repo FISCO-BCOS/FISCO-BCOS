@@ -1,7 +1,7 @@
 /*
  * Common.h
  *
- *  Created on: 2018Äê12ÔÂ3ÈÕ
+ *  Created on: 2018ï¿½ï¿½12ï¿½ï¿½3ï¿½ï¿½
  *      Author: ancelmo
  */
 
@@ -14,6 +14,11 @@ namespace dev
 {
 namespace p2p
 {
+
+enum DisconnectReason
+{
+    TOPIC_NOT_FOUND = 101
+};
 
 typedef dev::network::NodeID NodeID;
 typedef dev::network::Options Options;
