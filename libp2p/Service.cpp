@@ -266,11 +266,13 @@ void Service::onMessage(
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
 
-        //AMOP message, redirect to p2psession
+        //AMOP topic message, redirect to p2psession
         if(abs(p2pMessage->protocolID()) == dev::eth::ProtocolID::Topic) {
         	p2pSession->onTopicMessage(p2pMessage);
         	return;
         }
+
+        //AMOP channel message
 
         if (p2pMessage->isRequestPacket())
         {

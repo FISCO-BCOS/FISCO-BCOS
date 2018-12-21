@@ -68,6 +68,13 @@ bool ChannelRPCServer::StartListening()
 
         _server->run();
 
+        std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
+                   p2p::P2PMessage::Ptr)>
+                   channelHandler = std::bind(&ChannelRPCServer::onReceiveChannelMessage, shared_from_this(),
+                       std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
+        m_service->registerHandlerByProtoclID(dev::eth::ProtocolID::AMOP, channelHandler);
+
         CHANNEL_LOG(INFO) << "ChannelRPCServer started";
 
         _running = true;
@@ -332,10 +339,14 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 
         Json::Value root;
         ss >> root;
+
+#if 0
         std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
             p2p::P2PMessage::Ptr)>
             fp = std::bind(&ChannelRPCServer::onReceiveChannelMessage, shared_from_this(),
                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+#endif
+
         std::shared_ptr<std::set<std::string> > topics = std::make_shared<std::set<std::string> >();
         Json::Value topicsValue = root;
         if (!topicsValue.empty())
@@ -347,7 +358,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(
                 CHANNEL_LOG(DEBUG) << "topic:" << topic;
 
                 topics->insert(topic);
-                m_service->registerHandlerByTopic(topic, fp);
+                //m_service->registerHandlerByTopic(topic, fp);
             }
         }
 
