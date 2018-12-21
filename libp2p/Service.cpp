@@ -526,8 +526,7 @@ void Service::asyncSendMessageByTopic(
                 {
                     auto self = shared_from_this();
 
-                    // auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-                    s->asyncSendMessageByNodeID(m_current, msg,
+                    s->asyncSendMessageByNodeID(m_current, m_message,
                         std::bind(&TopicStatus::onResponse, shared_from_this(),
                             std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
                         m_options);
