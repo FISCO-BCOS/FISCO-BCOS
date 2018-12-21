@@ -17,7 +17,7 @@ check_file()
 
     [ ! -f "$file" ] && LOG_WARN "$file is not exist." && exit;
 
-    [ -z "$(cat $file |grep 'BEGIN PRIVATE KEY')" ] && LOG_WARN "\"$file\" has already encrypted." && exit;
+    [ -z "$(grep 'BEGIN PRIVATE KEY' $file)" ] && LOG_WARN "\"$file\" has already encrypted." && exit;
 
     LOG_INFO "Check file Ok."
 }
@@ -32,12 +32,12 @@ BACKUP_FILE=$ORIGIN_FILE.bak.$(date +%s)
 
 check_file $ORIGIN_FILE
 
-fileStream=`base64 $ORIGIN_FILE |tr -d "\n"`
+fileStream=$(base64 $ORIGIN_FILE |tr -d "\n")
 #echo $fileStream
 
 curl -X POST --data '{"jsonrpc":"2.0","method":"encWithCipherKey","params":["'$fileStream'", "'$CIPHER_KEY'"],"id":83}' $URL |jq
 
-cypherDataKey=`curl -X POST --data '{"jsonrpc":"2.0","method":"encWithCipherKey","params":["'$fileStream'", "'$CIPHER_KEY'"],"id":83}' $URL |jq .result.dataKey  |sed 's/\"//g'`
+cypherDataKey=$(curl -X POST --data '{"jsonrpc":"2.0","method":"encWithCipherKey","params":["'$fileStream'", "'$CIPHER_KEY'"],"id":83}' $URL |jq .result.dataKey  |sed 's/\"//g')
 [ -z "$cypherDataKey" ] && echo "Generate failed." && exit;
 cp $ORIGIN_FILE $BACKUP_FILE
 echo -e "$cypherDataKey\c" > $ORIGIN_FILE
