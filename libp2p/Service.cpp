@@ -231,7 +231,8 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
                            << p2pSession->session()->nodeIPEndpoint().name();
 
         m_sessions.erase(it);
-
+        if (e.errorCode() == P2PExceptionType::DuplicateSession)
+            return;
         RecursiveGuard l(x_nodes);
         for (auto it : m_staticNodes)
         {
@@ -255,12 +256,8 @@ void Service::onMessage(
                                << session->nodeIPEndpoint().name()
                                << " error, disconnect: " << e.errorCode() << ", " << e.what();
 
-            if (e.errorCode() != P2PExceptionType::DuplicateSession)
-            {
-                p2pSession->stop(UserReason);
-                onDisconnect(e, p2pSession);
-            }
-
+            p2pSession->stop(UserReason);
+            onDisconnect(e, p2pSession);
             return;
         }
 
