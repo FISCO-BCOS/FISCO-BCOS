@@ -15,7 +15,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Hash.cpp
- * @author Alex Leverington <nessence@gmail.com> Asherli
+ * @author Gav Wood <i@gavwood.com>
  * @date 2018
  */
 
@@ -95,7 +95,7 @@ static inline void keccakf(void* state)
         // Chi
         FOR5(y, 5,
             FOR5(x, 1, b[x] = a[y + x];)
-                FOR5(x, 1, a[y + x] = b[x] ^ ((~b[(x + 1) % 5]) & b[(x + 2) % 5])))
+                FOR5(x, 1, a[y + x] = b[x] ^ ((~b[(x + 1) % 5]) & b[(x + 2) % 5]);))
         // Iota
         a[0] ^= RC[i];
     }
