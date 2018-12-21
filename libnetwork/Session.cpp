@@ -325,8 +325,8 @@ void Session::drop(DisconnectReason _reason)
                 if (error == boost::asio::error::operation_aborted)
                 {
                     SESSION_LOG(DEBUG)
-                        << "[#drop] operation aborted  [ECODE/EINFO]:" << error.value() << "/"
-                        << error.message();
+                        << "[#drop] operation aborted  by async_shutdown [ECODE/EINFO]:"
+                        << error.value() << "/" << error.message();
                     return;
                 }
                 /// shutdown timer error
@@ -350,13 +350,13 @@ void Session::drop(DisconnectReason _reason)
             /// async shutdown normally
             socket->sslref().async_shutdown(
                 [socket, shutdown_timer](const boost::system::error_code& error) {
+                    shutdown_timer->cancel();
                     if (error)
                     {
                         SESSION_LOG(WARNING)
                             << "[#drop] shutdown failed [ECODE/EINFO]: " << error.value() << "/"
                             << error.message();
                     }
-                    shutdown_timer->cancel();
                     /// force to close the socket
                     if (socket->ref().is_open())
                     {
