@@ -528,6 +528,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
         if (_actived)
         {
             _idleTimer->cancel();
+            _actived = false;
 
             if (!_responseCallbacks.empty())
             {
@@ -574,8 +575,38 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
                     ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
             }
 
-            _actived = false;
-            _sslSocket->lowest_layer().close();
+            auto sslSocket = _sslSocket;
+            // force close socket after 30 seconds
+            auto shutdownTimer = std::make_shared<boost::asio::deadline_timer>(
+                *_ioService, boost::posix_time::milliseconds(30000));
+            shutdownTimer->async_wait([sslSocket](const boost::system::error_code& error) {
+                if (error && error != boost::asio::error::operation_aborted)
+                {
+                    LOG(WARNING) << "channel shutdown timer error: " << error.message();
+                    return;
+                }
+
+                if (sslSocket->next_layer().is_open())
+                {
+                    LOG(WARNING) << "channel shutdown timeout, force close";
+                    sslSocket->next_layer().close();
+                }
+            });
+
+            _sslSocket->async_shutdown(
+                [sslSocket, shutdownTimer](const boost::system::error_code& error) {
+                    if (error)
+                    {
+                        LOG(WARNING)
+                            << "Error while shutdown the channel ssl socket: " << error.message();
+                    }
+                    shutdownTimer->cancel();
+
+                    if (sslSocket->next_layer().is_open())
+                    {
+                        sslSocket->next_layer().close();
+                    }
+                });
 
             CHANNEL_LOG(DEBUG) << "Disconnected";
         }
