@@ -172,7 +172,7 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
-    uint64_t m_shutDownTimeThres = 3000;
+    uint64_t m_shutDownTimeThres = 50000;
 };
 
 class SessionFactory

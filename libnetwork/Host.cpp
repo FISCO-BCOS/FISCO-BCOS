@@ -311,11 +311,15 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     }
     HOST_LOG(INFO) << "Attempting connection to node "
                    << "@" << _nodeIPEndpoint.name();
-    if (m_pendingConns.count(_nodeIPEndpoint.name()))
     {
-        LOG(DEBUG) << "[#asyncConnect] " << _nodeIPEndpoint.name() << " is in the pending list";
-        return;
+        Guard l(x_pendingConns);
+        if (m_pendingConns.count(_nodeIPEndpoint.name()))
+        {
+            LOG(DEBUG) << "[#asyncConnect] " << _nodeIPEndpoint.name() << " is in the pending list";
+            return;
+        }
     }
+
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
 
     /// if async connect timeout, close the socket directly
@@ -337,8 +341,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         if (socket->isConnected())
         {
             LOG(WARNING) << "[#asyncConnect] timeout, erase " << _nodeIPEndpoint.name();
+            erasePendingConns(_nodeIPEndpoint);
             socket->close();
-            m_pendingConns.erase(_nodeIPEndpoint.name());
         }
     });
     /// callback async connect
@@ -359,10 +363,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             }
             else
             {
-                {
-                    Guard l(x_pendingConns);
-                    m_pendingConns.insert(_nodeIPEndpoint.name());
-                }
+                insertPendingConns(_nodeIPEndpoint);
                 m_tcpClient = socket->remote_endpoint();
                 /// get the public key of the server during handshake
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
@@ -388,12 +389,12 @@ void Host::handshakeClient(const boost::system::error_code& error,
     NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr)
 {
     timerPtr->cancel();
+    erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
         HOST_LOG(WARNING) << "[#handshakeClient] Handshake failed: [eid/emsg/endpoint]: "
                           << error.value() << "/" << error.message() << "/"
                           << _nodeIPEndpoint.name();
-        m_pendingConns.erase(_nodeIPEndpoint.name());
         if (socket->isConnected())
         {
             socket->close();
