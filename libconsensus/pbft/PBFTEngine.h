@@ -268,7 +268,7 @@ protected:
         peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
-            PBFTENGINE_LOG(DEBUG) << "[#isValidReq] Recv PBFT msg from unkown peer:  "
+            PBFTENGINE_LOG(TRACE) << "[#isValidReq] Recv PBFT msg from unkown peer:  "
                                   << session->nodeID();
             return false;
         }
@@ -303,7 +303,7 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            PBFTENGINE_LOG(DEBUG)
+            PBFTENGINE_LOG(TRACE)
                 << "[#checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
                 << m_reqCache->prepareCache().block_hash.abridged() << "/" << req.block_hash
                 << "  [INFO]:  " << oss.str();
@@ -321,20 +321,20 @@ protected:
         /// check the sealer of this request
         if (req.idx == m_idx)
         {
-            PBFTENGINE_LOG(DEBUG) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
+            PBFTENGINE_LOG(TRACE) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
             return CheckResult::INVALID;
         }
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            PBFTENGINE_LOG(DEBUG)
+            PBFTENGINE_LOG(TRACE)
                 << "[#checkReq] Recv req with unconsistent view: [prepView/view]:  "
                 << m_reqCache->prepareCache().view << "/" << req.view << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            PBFTENGINE_LOG(DEBUG) << "[#checkReq] invalid sign: [hash]:"
+            PBFTENGINE_LOG(TRACE) << "[#checkReq] invalid sign: [hash]:"
                                   << req.block_hash.abridged() << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }

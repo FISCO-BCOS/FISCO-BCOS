@@ -206,7 +206,6 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
     p2pSession->start();
     updateStaticNodes(session->socket(), nodeID);
-    it = m_sessions.find(nodeID);
     if (it != m_sessions.end())
     {
         it->second = p2pSession;
@@ -215,7 +214,6 @@ void Service::onConnect(NetworkException e, NodeID nodeID, std::shared_ptr<Sessi
     {
         m_sessions.insert(std::make_pair(nodeID, p2pSession));
     }
-
     SERVICE_LOG(INFO) << "Connection established to: " << nodeID << "@"
                       << session->nodeIPEndpoint().name();
 }

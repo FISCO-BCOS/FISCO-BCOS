@@ -431,12 +431,12 @@ bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) 
 {
     if (m_reqCache->isExistPrepare(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
         return false;
     }
     if (hasConsensused(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Consensused Prep: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Consensused Prep: [INFO]:  " << oss.str();
         return false;
     }
 
@@ -452,12 +452,12 @@ bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) 
     }
     if (!isHashSavedAfterCommit(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Not saved after commit: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Not saved after commit: [INFO]:  " << oss.str();
         return false;
     }
     if (!checkSign(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidPrepare] Invalid sig: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Invalid sig: [INFO]:  " << oss.str();
         return false;
     }
     return true;
@@ -638,7 +638,7 @@ void PBFTEngine::checkAndCommit()
             << sign_size << "/" << m_reqCache->prepareCache().block_hash.abridged();
         if (m_reqCache->prepareCache().view != m_view)
         {
-            PBFTENGINE_LOG(DEBUG)
+            PBFTENGINE_LOG(TRACE)
                 << "[#checkAndCommit: InvalidView] [myIdx/myNode/prepView/view/prepHeight/hash]:  "
                 << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                 << m_reqCache->prepareCache().view << "/" << m_view << "/"
@@ -720,7 +720,6 @@ void PBFTEngine::checkAndSave()
                 m_txPool->handleBadBlock(block);
             }
             /// clear caches to in case of repeated commit
-            resetConfig();
             m_reqCache->clearAllExceptCommitCache();
             m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
         }
@@ -816,7 +815,7 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
 {
     if (m_reqCache->isExistSign(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InValidSignReq] Duplicated sign: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InValidSignReq] Duplicated sign: [INFO]:  " << oss.str();
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -873,7 +872,7 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistCommit(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidCommitReq] Duplicated: [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidCommitReq] Duplicated: [INFO]:  " << oss.str();
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -931,12 +930,12 @@ bool PBFTEngine::isValidViewChangeReq(
 {
     if (m_reqCache->isExistViewChange(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Duplicated: [INFO]  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Duplicated: [INFO]  " << oss.str();
         return false;
     }
     if (req.idx == m_idx)
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
         return false;
     }
     if (req.view + 1 < m_toView && req.idx == source)
@@ -944,7 +943,7 @@ bool PBFTEngine::isValidViewChangeReq(
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Invalid view or height: [INFO]:  "
+        PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Invalid view or height: [INFO]:  "
                               << oss.str();
         return false;
     }
@@ -952,13 +951,13 @@ bool PBFTEngine::isValidViewChangeReq(
     if ((req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash()) ||
         (m_blockChain->getBlockByHash(req.block_hash) == nullptr))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Invalid hash [highHash]:  "
+        PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Invalid hash [highHash]:  "
                               << m_highestBlock.hash().abridged() << " [INFO]:  " << oss.str();
         return false;
     }
     if (!checkSign(req))
     {
-        PBFTENGINE_LOG(DEBUG) << "[#InvalidViewChangeReq] Invalid Sign [INFO]:  " << oss.str();
+        PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Invalid Sign [INFO]:  " << oss.str();
         return false;
     }
     return true;
