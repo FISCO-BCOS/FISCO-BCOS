@@ -163,7 +163,8 @@ private:
 class Session;
 
 /// @returns the string form of the given disconnection reason.
-inline std::string reasonOf(DisconnectReason _r) {
+inline std::string reasonOf(DisconnectReason _r)
+{
     switch (_r)
     {
     case DisconnectRequested:

@@ -31,8 +31,8 @@
 #include <libdevcore/easylog.h>
 #include <openssl/ec.h>
 #include <openssl/ssl.h>
-#include <boost/filesystem.hpp>
 #include <boost/beast.hpp>
+#include <boost/filesystem.hpp>
 
 namespace dev
 {
@@ -48,7 +48,8 @@ public:
         try
         {
             m_wsSocket =
-                std::make_shared<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>> >(_ioService, _sslContext);
+                std::make_shared<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>>(
+                    _ioService, _sslContext);
         }
         catch (Exception const& _e)
         {
@@ -83,7 +84,10 @@ public:
 
     virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
-    virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override { return *m_wsSocket; }
+    virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override
+    {
+        return *m_wsSocket;
+    }
 
     virtual const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint)
@@ -94,8 +98,8 @@ public:
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;
-    std::shared_ptr<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>> > m_wsSocket;
+    std::shared_ptr<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>> m_wsSocket;
 };
 
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

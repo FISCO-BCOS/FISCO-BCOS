@@ -335,8 +335,8 @@ bool PBFTEngine::broadcastViewChangeReq()
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
-bool PBFTEngine::sendMsg(
-		dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key, bytesConstRef data)
+bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
+    std::string const& key, bytesConstRef data)
 {
     /// is miner?
     if (getIndexByMiner(nodeId) < 0)

@@ -14,7 +14,6 @@ namespace dev
 {
 namespace p2p
 {
-
 enum DisconnectReason
 {
     TOPIC_NOT_FOUND = 101
@@ -35,7 +34,8 @@ struct P2PSessionInfo
     NodeID nodeID;
     dev::network::NodeIPEndpoint nodeIPEndpoint;
     std::set<std::string> topics;
-    P2PSessionInfo(NodeID _nodeID, dev::network::NodeIPEndpoint _nodeIPEndpoint, std::set<std::string> _topics)
+    P2PSessionInfo(
+        NodeID _nodeID, dev::network::NodeIPEndpoint _nodeIPEndpoint, std::set<std::string> _topics)
     {
         nodeID = _nodeID;
         nodeIPEndpoint = _nodeIPEndpoint;
@@ -44,5 +44,5 @@ struct P2PSessionInfo
 };
 using P2PSessionInfos = std::vector<P2PSessionInfo>;
 
-}
-}
+}  // namespace p2p
+}  // namespace dev

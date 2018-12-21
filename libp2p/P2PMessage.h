@@ -21,11 +21,11 @@
 
 #pragma once
 
+#include "Common.h"
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
 #include <memory>
-#include "Common.h"
 
 namespace dev
 {

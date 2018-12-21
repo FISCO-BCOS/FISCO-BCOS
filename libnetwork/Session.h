@@ -191,5 +191,5 @@ public:
     }
 };
 
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

@@ -21,11 +21,11 @@
 
 #pragma once
 
+#include "P2PMessage.h"
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/Common.h>
 #include <memory>
-#include "P2PMessage.h"
 
 namespace dev
 {
@@ -48,7 +48,10 @@ public:
     virtual void heartBeat();
 
     virtual dev::network::SessionFace::Ptr session() { return m_session; }
-    virtual void setSession(std::shared_ptr<dev::network::SessionFace> session) { m_session = session; }
+    virtual void setSession(std::shared_ptr<dev::network::SessionFace> session)
+    {
+        m_session = session;
+    }
 
     virtual NodeID nodeID() { return m_nodeID; }
     virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
@@ -60,11 +63,12 @@ public:
 
     virtual void onTopicMessage(P2PMessage::Ptr message);
 
-    virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<std::string> > topics) {
-    	std::lock_guard<std::mutex> lock(x_topic);
+    virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<std::string> > topics)
+    {
+        std::lock_guard<std::mutex> lock(x_topic);
 
-    	m_topicSeq = seq;
-    	m_topics = topics;
+        m_topicSeq = seq;
+        m_topics = topics;
     }
 
 private:

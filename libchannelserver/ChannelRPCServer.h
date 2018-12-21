@@ -100,7 +100,7 @@ public:
     void CloseConnection(int _socket);
 
     void onNodeChannelRequest(
-    		dev::network::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
+        dev::network::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
 
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
 

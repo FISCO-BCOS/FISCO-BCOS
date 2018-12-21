@@ -31,8 +31,8 @@
 #include <libdevcore/easylog.h>
 #include <chrono>
 
-#include "Common.h"
 #include "ASIOInterface.h"
+#include "Common.h"
 #include "Host.h"
 #include "SessionFace.h"
 

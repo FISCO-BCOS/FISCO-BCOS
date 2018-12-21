@@ -37,7 +37,8 @@ namespace network
 class ASIOInterface
 {
 public:
-    enum ASIO_TYPE {
+    enum ASIO_TYPE
+    {
         TCP_ONLY = 0,
         SSL = 1,
         WEBSOCKET = 2
@@ -52,9 +53,7 @@ public:
     typedef boost::function<bool(bool, boost::asio::ssl::verify_context&)> VerifyCallback;
 
     virtual ~ASIOInterface(){};
-    virtual void setType(int type) {
-        m_type = type;
-    }
+    virtual void setType(int type) { m_type = type; }
 
     virtual std::shared_ptr<ba::io_service> ioService() { return m_ioService; }
     virtual void setIOService(std::shared_ptr<ba::io_service> ioService)
@@ -135,28 +134,27 @@ public:
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
         auto type = m_type;
-        m_ioService->post([type, socket, buffers, handler]()
-        {
+        m_ioService->post([type, socket, buffers, handler]() {
             if (socket->isConnected())
             {
-                switch(type)
+                switch (type)
                 {
-                    case TCP_ONLY:
-                    {
-                        ba::async_write(socket->ref(), buffers, handler);
-                        break;
-                    }
-                    case SSL:
-            {
-                ba::async_write(socket->sslref(), buffers, handler);
-                        break;
-                    }
-                    case WEBSOCKET:
-                    {
-                        //ba::async_write(socket->wsref(), buffers, handler);
-                        socket->wsref().async_write(buffers, handler);
-                        break;
-                    }
+                case TCP_ONLY:
+                {
+                    ba::async_write(socket->ref(), buffers, handler);
+                    break;
+                }
+                case SSL:
+                {
+                    ba::async_write(socket->sslref(), buffers, handler);
+                    break;
+                }
+                case WEBSOCKET:
+                {
+                    // ba::async_write(socket->wsref(), buffers, handler);
+                    socket->wsref().async_write(buffers, handler);
+                    break;
+                }
                 }
             }
         });
@@ -165,36 +163,43 @@ public:
     virtual void asyncRead(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
-        switch(m_type) {
-        case TCP_ONLY: {
+        switch (m_type)
+        {
+        case TCP_ONLY:
+        {
             ba::async_read(socket->ref(), buffers, handler);
             break;
         }
-        case SSL: {
-        ba::async_read(socket->sslref(), buffers, handler);
+        case SSL:
+        {
+            ba::async_read(socket->sslref(), buffers, handler);
             break;
         }
-        case WEBSOCKET: {
+        case WEBSOCKET:
+        {
             ba::async_read(socket->wsref(), buffers, handler);
             break;
         }
-
         }
     }
 
     virtual void asyncReadSome(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
     {
-        switch(m_type) {
-        case TCP_ONLY: {
+        switch (m_type)
+        {
+        case TCP_ONLY:
+        {
             socket->ref().async_read_some(buffers, handler);
             break;
         }
-        case SSL: {
-        socket->sslref().async_read_some(buffers, handler);
+        case SSL:
+        {
+            socket->sslref().async_read_some(buffers, handler);
             break;
         }
-        case WEBSOCKET: {
+        case WEBSOCKET:
+        {
             socket->wsref().async_read_some(buffers, handler);
             break;
         }
@@ -230,5 +235,5 @@ private:
     std::shared_ptr<ba::ssl::context> m_sslContext;
     int m_type = 0;
 };
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

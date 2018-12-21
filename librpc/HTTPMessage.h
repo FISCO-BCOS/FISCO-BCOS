@@ -24,8 +24,8 @@
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
-#include <memory>
 #include <boost/beast.hpp>
+#include <memory>
 
 namespace dev
 {
@@ -36,7 +36,7 @@ class HttpMessage : public Message
 public:
     typedef std::shared_ptr<HttpMessage> Ptr;
 
-    HttpMessage() { }
+    HttpMessage() {}
 
     virtual ~HttpMessage() {}
 
@@ -52,45 +52,70 @@ public:
     virtual bool isRequestPacket() override { return m_isRequest; }
     virtual void setIsRequestPacket(bool isRequest) { m_isRequest = isRequest; }
 
-    std::shared_ptr<boost::beast::http::request<boost::beast::http::string_body> > request() { return m_request; }
-    void setRequest(std::shared_ptr<boost::beast::http::request<boost::beast::http::string_body> > request) { m_request = request; }
+    std::shared_ptr<boost::beast::http::request<boost::beast::http::string_body>> request()
+    {
+        return m_request;
+    }
+    void setRequest(
+        std::shared_ptr<boost::beast::http::request<boost::beast::http::string_body>> request)
+    {
+        m_request = request;
+    }
 
-    std::shared_ptr<boost::beast::http::response<boost::beast::http::string_body> > response() { return m_response; }
-    void setResponse(std::shared_ptr<boost::beast::http::response<boost::beast::http::string_body> > response) { m_response = response; }
+    std::shared_ptr<boost::beast::http::response<boost::beast::http::string_body>> response()
+    {
+        return m_response;
+    }
+    void setResponse(
+        std::shared_ptr<boost::beast::http::response<boost::beast::http::string_body>> response)
+    {
+        m_response = response;
+    }
 
-    virtual void encode(bytes& buffer) override {
-        if(m_isRequest) {
-            auto serializer = std::make_shared<boost::beast::http::request_serializer<boost::beast::http::string_body>>(*m_request);
+    virtual void encode(bytes& buffer) override
+    {
+        if (m_isRequest)
+        {
+            auto serializer = std::make_shared<
+                boost::beast::http::request_serializer<boost::beast::http::string_body>>(
+                *m_request);
 
             boost::system::error_code ec;
-            do {
-                serializer->next(ec, [serializer, &buffer](boost::system::error_code& ec, auto const& buf) {
-                    ec.assign(0, ec.category());
-                    buffer.insert(buffer.end(), buf.begin(), buf.end());
-                    serializer->consume(boost::asio::buffer_size(buf));
-                });
-            }
-            while(!ec && !serializer->is_done());
+            do
+            {
+                serializer->next(
+                    ec, [serializer, &buffer](boost::system::error_code& ec, auto const& buf) {
+                        ec.assign(0, ec.category());
+                        buffer.insert(buffer.end(), buf.begin(), buf.end());
+                        serializer->consume(boost::asio::buffer_size(buf));
+                    });
+            } while (!ec && !serializer->is_done());
 
-            if(ec) {
-               LOG(ERROR) << "Encode message failed!";
+            if (ec)
+            {
+                LOG(ERROR) << "Encode message failed!";
             }
         }
-        else {
-            auto serializer = std::make_shared<boost::beast::http::response_serializer<boost::beast::http::string_body>>(*m_response);
+        else
+        {
+            auto serializer = std::make_shared<
+                boost::beast::http::response_serializer<boost::beast::http::string_body>>(
+                *m_response);
 
             boost::system::error_code ec;
-            do {
-                serializer->next(ec, [serializer, &buffer](boost::system::error_code& ec, auto const& buf) {
-                    ec.assign(0, ec.category());
-                    buffer.insert(buffer.end(), buf.begin(), buf.end());
-                    serializer->consume(boost::asio::buffer_size(buf));
-                });
-            }
-            while(!ec && !serializer->is_done());
+            do
+            {
+                serializer->next(
+                    ec, [serializer, &buffer](boost::system::error_code& ec, auto const& buf) {
+                        ec.assign(0, ec.category());
+                        buffer.insert(buffer.end(), buf.begin(), buf.end());
+                        serializer->consume(boost::asio::buffer_size(buf));
+                    });
+            } while (!ec && !serializer->is_done());
 
-            if(ec) {
-               LOG(ERROR) << "Encode message failed!";
+            if (ec)
+            {
+                LOG(ERROR) << "Encode message failed!";
             }
         }
     }
@@ -102,19 +127,16 @@ public:
         if (m_isRequest)
         {
             m_request =
-                    std::make_shared<
-                            boost::beast::http::request<
-                                    boost::beast::http::string_body> >();
-            boost::beast::http::request_parser<boost::beast::http::string_body> parser(
-                    *m_request);
+                std::make_shared<boost::beast::http::request<boost::beast::http::string_body>>();
+            boost::beast::http::request_parser<boost::beast::http::string_body> parser(*m_request);
 
             boost::system::error_code ec;
-            auto result = parser.put(boost::asio::const_buffer(buffer, size),
-                    ec);
+            auto result = parser.put(boost::asio::const_buffer(buffer, size), ec);
 
             if (ec)
             {
-                LOG(ERROR)<< "Parse http request failed: " << ec << " " << std::string(buffer, size);
+                LOG(ERROR) << "Parse http request failed: " << ec << " "
+                           << std::string(buffer, size);
                 return PACKET_ERROR;
             }
 
@@ -130,19 +152,17 @@ public:
         else
         {
             m_response =
-                    std::make_shared<
-                            boost::beast::http::response<
-                                    boost::beast::http::string_body> >();
+                std::make_shared<boost::beast::http::response<boost::beast::http::string_body>>();
             boost::beast::http::response_parser<boost::beast::http::string_body> parser(
-                    *m_response);
+                *m_response);
 
             boost::system::error_code ec;
-            auto result = parser.put(boost::asio::const_buffer(buffer, size),
-                    ec);
+            auto result = parser.put(boost::asio::const_buffer(buffer, size), ec);
 
             if (ec)
             {
-                LOG(ERROR)<< "Parse http request failed: " << ec << " " << std::string(buffer, size);
+                LOG(ERROR) << "Parse http request failed: " << ec << " "
+                           << std::string(buffer, size);
                 return PACKET_ERROR;
             }
 
@@ -158,15 +178,15 @@ public:
     }
 
 private:
-    uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
-    PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
-                                      ///< greater than 0 is the ID of the request package.
-    PACKET_TYPE m_packetType = 0;     ///< message sub type, the second two bytes of information
-    uint32_t m_seq = 0;               ///< the message identify
+    uint32_t m_length = 0;         ///< m_length = HEADER_LENGTH + length(m_buffer)
+    PROTOCOL_ID m_protocolID = 0;  ///< message type, the first two bytes of information, when
+                                   ///< greater than 0 is the ID of the request package.
+    PACKET_TYPE m_packetType = 0;  ///< message sub type, the second two bytes of information
+    uint32_t m_seq = 0;            ///< the message identify
 
     bool m_isRequest = true;
-    std::shared_ptr<boost::beast::http::request<boost::beast::http::string_body> > m_request;
-    std::shared_ptr<boost::beast::http::response<boost::beast::http::string_body> > m_response;
+    std::shared_ptr<boost::beast::http::request<boost::beast::http::string_body>> m_request;
+    std::shared_ptr<boost::beast::http::response<boost::beast::http::string_body>> m_response;
 };
 
 class HttpMessageFactory : public MessageFactory

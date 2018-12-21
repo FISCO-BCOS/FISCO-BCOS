@@ -19,8 +19,8 @@
  *  @date 20181112
  */
 
-#include "Common.h"
 #include "P2PMessage.h"
+#include "Common.h"
 
 using namespace dev;
 using namespace dev::p2p;

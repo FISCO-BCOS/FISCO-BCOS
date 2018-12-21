@@ -46,5 +46,5 @@ public:
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
     virtual boost::asio::ip::tcp::endpoint remote_endpoint() = 0;
 };
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

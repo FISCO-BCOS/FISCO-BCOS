@@ -27,8 +27,8 @@
  */
 
 #pragma once
-#include <memory>
 #include "SocketFace.h"
+#include <memory>
 
 namespace dev
 {
@@ -71,5 +71,5 @@ public:
 
     virtual bool actived() const = 0;
 };
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

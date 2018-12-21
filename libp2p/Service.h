@@ -54,14 +54,16 @@ public:
     virtual bool actived() { return m_run; }
     virtual NodeID id() const { return m_alias.pub(); }
 
-    virtual void onConnect(dev::network::NetworkException e, NodeID nodeID, std::shared_ptr<dev::network::SessionFace> session);
+    virtual void onConnect(dev::network::NetworkException e, NodeID nodeID,
+        std::shared_ptr<dev::network::SessionFace> session);
     virtual void onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession);
-    virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session, dev::network::Message::Ptr message,
-        P2PSession::Ptr p2pSession);
+    virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
+        dev::network::Message::Ptr message, P2PSession::Ptr p2pSession);
 
     virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) override;
     virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, dev::network::Options options = dev::network::Options()) override;
+        CallbackFuncWithSession callback,
+        dev::network::Options options = dev::network::Options()) override;
 
     virtual P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) override;
     virtual void asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
@@ -69,8 +71,9 @@ public:
 
     virtual void asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message) override;
     virtual void asyncMulticastMessageByNodeIDList(
-    		NodeIDs nodeIDs, P2PMessage::Ptr message) override;
-    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Options options) override;
+        NodeIDs nodeIDs, P2PMessage::Ptr message) override;
+    virtual void asyncBroadcastMessage(
+        P2PMessage::Ptr message, dev::network::Options options) override;
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
@@ -123,7 +126,8 @@ public:
 
     virtual KeyPair keyPair() { return m_alias; }
     virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
-    void updateStaticNodes(std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
+    void updateStaticNodes(
+        std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
 
 private:
     NodeIDs getPeersByTopic(std::string const& topic);

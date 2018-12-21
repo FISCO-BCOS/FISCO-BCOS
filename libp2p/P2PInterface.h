@@ -24,10 +24,10 @@
 #include "P2PSession.h"
 #include <libdevcore/FixedHash.h>
 #include <libnetwork/SessionFace.h>
-#include <memory>
 #include <libp2p/Common.h>
+#include <memory>
 
-#define CallbackFuncWithSession                                                           \
+#define CallbackFuncWithSession                                                               \
     std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, \
         dev::p2p::P2PMessage::Ptr)>
 
@@ -43,7 +43,8 @@ public:
     virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) = 0;
 
     virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, dev::network::Options options = dev::network::Options()) = 0;
+        CallbackFuncWithSession callback,
+        dev::network::Options options = dev::network::Options()) = 0;
 
     virtual P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
 

@@ -70,7 +70,10 @@ public:
     void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
+    {
+        return m_sessionInfos;
+    }
 
     void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
         CallbackFuncWithSession callback, dev::p2p::Options) override

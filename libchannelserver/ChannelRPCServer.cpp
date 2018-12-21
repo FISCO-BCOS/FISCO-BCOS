@@ -69,9 +69,9 @@ bool ChannelRPCServer::StartListening()
         _server->run();
 
         std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
-                   p2p::P2PMessage::Ptr)>
-                   channelHandler = std::bind(&ChannelRPCServer::onNodeChannelRequest, shared_from_this(),
-                       std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+            p2p::P2PMessage::Ptr)>
+            channelHandler = std::bind(&ChannelRPCServer::onNodeChannelRequest, shared_from_this(),
+                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
         m_service->registerHandlerByProtoclID(dev::eth::ProtocolID::AMOP, channelHandler);
 
@@ -305,98 +305,110 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 }
 
 void dev::ChannelRPCServer::onNodeChannelRequest(
-		dev::network::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
+    dev::network::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
 {
     auto channelMessage = _server->messageFactory()->buildMessage();
-	ssize_t result = channelMessage->decode(msg->buffer()->data(), msg->buffer()->size());
+    ssize_t result = channelMessage->decode(msg->buffer()->data(), msg->buffer()->size());
 
-	if (result <= 0)
-	{
-		CHANNEL_LOG(ERROR) << "decode error:" << result << " package size:" << msg->buffer()->size();
-		return;
-	}
+    if (result <= 0)
+    {
+        CHANNEL_LOG(ERROR) << "decode error:" << result
+                           << " package size:" << msg->buffer()->size();
+        return;
+    }
 
-	CHANNEL_LOG(DEBUG) << "receive node from:" << s->nodeID() << " mssage length:" << msg->buffer()->size()
-					   << " type:" << channelMessage->type() << " seq:" << channelMessage->seq();
+    CHANNEL_LOG(DEBUG) << "receive node from:" << s->nodeID()
+                       << " mssage length:" << msg->buffer()->size()
+                       << " type:" << channelMessage->type() << " seq:" << channelMessage->seq();
 
-	try
-	{
-		if (channelMessage->dataSize() < 1)
-		{
-			CHANNEL_LOG(ERROR) << "invalid channel message, too short:" << channelMessage->dataSize();
-			return;
-		}
+    try
+    {
+        if (channelMessage->dataSize() < 1)
+        {
+            CHANNEL_LOG(ERROR) << "invalid channel message, too short:"
+                               << channelMessage->dataSize();
+            return;
+        }
 
-		uint8_t topicLen = *((uint8_t*)channelMessage->data());
-		std::string topic((char*)channelMessage->data() + 1, topicLen - 1);
+        uint8_t topicLen = *((uint8_t*)channelMessage->data());
+        std::string topic((char*)channelMessage->data() + 1, topicLen - 1);
 
-		CHANNEL_LOG(DEBUG) << "target topic:" << topic;
+        CHANNEL_LOG(DEBUG) << "target topic:" << topic;
 
-		if (channelMessage->type() == 0x30)
-		{
-			try
-			{
-				auto nodeID = s->nodeID();
-				auto p2pMessage = msg;
-				auto service = m_service;
-				asyncPushChannelMessage(topic, channelMessage, [nodeID, channelMessage, service, p2pMessage](dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
-					if(e.errorCode()) {
-						CHANNEL_LOG(ERROR) << "Push channel message failed: " << e.what();
+        if (channelMessage->type() == 0x30)
+        {
+            try
+            {
+                auto nodeID = s->nodeID();
+                auto p2pMessage = msg;
+                auto service = m_service;
+                asyncPushChannelMessage(topic, channelMessage,
+                    [nodeID, channelMessage, service, p2pMessage](
+                        dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
+                        if (e.errorCode())
+                        {
+                            CHANNEL_LOG(ERROR) << "Push channel message failed: " << e.what();
 
-						channelMessage->setResult(e.errorCode());
-						channelMessage->setType(0x31);
+                            channelMessage->setResult(e.errorCode());
+                            channelMessage->setType(0x31);
 
-						auto buffer = std::make_shared<bytes>();
-						channelMessage->encode(*buffer);
-						auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-							service->p2pMessageFactory()->buildMessage());
-						p2pResponse->setBuffer(buffer);
-						p2pResponse->setProtocolID(- dev::eth::ProtocolID::AMOP);
-						p2pResponse->setPacketType(0u);
-						p2pResponse->setSeq(p2pMessage->seq());
-						p2pResponse->setLength(p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
-						service->asyncSendMessageByNodeID(nodeID, p2pResponse, CallbackFuncWithSession(), dev::network::Options());
+                            auto buffer = std::make_shared<bytes>();
+                            channelMessage->encode(*buffer);
+                            auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+                                service->p2pMessageFactory()->buildMessage());
+                            p2pResponse->setBuffer(buffer);
+                            p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
+                            p2pResponse->setPacketType(0u);
+                            p2pResponse->setSeq(p2pMessage->seq());
+                            p2pResponse->setLength(
+                                p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
+                            service->asyncSendMessageByNodeID(nodeID, p2pResponse,
+                                CallbackFuncWithSession(), dev::network::Options());
 
-						return;
-					}
+                            return;
+                        }
 
-					CHANNEL_LOG(TRACE) << "Receive sdk response: " << response->seq();
-					auto buffer = std::make_shared<bytes>();
-					response->encode(*buffer);
-					auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-						service->p2pMessageFactory()->buildMessage());
-					p2pResponse->setBuffer(buffer);
-					p2pResponse->setProtocolID(- dev::eth::ProtocolID::AMOP);
-					p2pResponse->setPacketType(0u);
-					p2pResponse->setSeq(p2pMessage->seq());
-					p2pResponse->setLength(p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
-					service->asyncSendMessageByNodeID(nodeID, p2pResponse, CallbackFuncWithSession(), dev::network::Options());
-				});
-			}
-			catch (std::exception& e)
-			{
-				CHANNEL_LOG(ERROR) << "push message totaly failed:" << e.what();
+                        CHANNEL_LOG(TRACE) << "Receive sdk response: " << response->seq();
+                        auto buffer = std::make_shared<bytes>();
+                        response->encode(*buffer);
+                        auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+                            service->p2pMessageFactory()->buildMessage());
+                        p2pResponse->setBuffer(buffer);
+                        p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
+                        p2pResponse->setPacketType(0u);
+                        p2pResponse->setSeq(p2pMessage->seq());
+                        p2pResponse->setLength(
+                            p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
+                        service->asyncSendMessageByNodeID(nodeID, p2pResponse,
+                            CallbackFuncWithSession(), dev::network::Options());
+                    });
+            }
+            catch (std::exception& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message totaly failed:" << e.what();
 
-				channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
-				channelMessage->setType(0x31);
+                channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
+                channelMessage->setType(0x31);
 
-				auto buffer = std::make_shared<bytes>();
-				channelMessage->encode(*buffer);
-				auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-					m_service->p2pMessageFactory()->buildMessage());
-				p2pResponse->setBuffer(buffer);
-				p2pResponse->setProtocolID(dev::eth::ProtocolID::AMOP);
-				p2pResponse->setPacketType(0u);
-				p2pResponse->setSeq(msg->seq());
-				p2pResponse->setLength(p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
-				m_service->asyncSendMessageByNodeID(s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
-			}
-		}
-	}
-	catch (std::exception& e)
-	{
-		CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
-	}
+                auto buffer = std::make_shared<bytes>();
+                channelMessage->encode(*buffer);
+                auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+                    m_service->p2pMessageFactory()->buildMessage());
+                p2pResponse->setBuffer(buffer);
+                p2pResponse->setProtocolID(dev::eth::ProtocolID::AMOP);
+                p2pResponse->setPacketType(0u);
+                p2pResponse->setSeq(msg->seq());
+                p2pResponse->setLength(
+                    p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
+                m_service->asyncSendMessageByNodeID(
+                    s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+    }
 }
 
 void dev::ChannelRPCServer::onClientTopicRequest(
@@ -473,29 +485,32 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             p2pMessage->setLength(p2p::P2PMessage::HEADER_LENGTH + p2pMessage->buffer()->size());
 
             dev::network::Options options;
-            options.timeout = 30 * 1000; // 30 seconds
+            options.timeout = 30 * 1000;  // 30 seconds
 
-            m_service->asyncSendMessageByTopic(topic, p2pMessage, [session, message](dev::network::NetworkException e,
-            		std::shared_ptr<dev::p2p::P2PSession> p2pSession,
-					dev::p2p::P2PMessage::Ptr response) {
-            	if(e.errorCode()) {
-            		LOG(ERROR) << "ChannelMessage failed: " << e.errorCode() << ", " << e.what();
-            		message->setType(0x31);
-					message->setResult(REMOTE_PEER_UNAVAILIBLE);
-					message->clearData();
+            m_service->asyncSendMessageByTopic(topic, p2pMessage,
+                [session, message](dev::network::NetworkException e,
+                    std::shared_ptr<dev::p2p::P2PSession> p2pSession,
+                    dev::p2p::P2PMessage::Ptr response) {
+                    if (e.errorCode())
+                    {
+                        LOG(ERROR)
+                            << "ChannelMessage failed: " << e.errorCode() << ", " << e.what();
+                        message->setType(0x31);
+                        message->setResult(REMOTE_PEER_UNAVAILIBLE);
+                        message->clearData();
 
-					session->asyncSendMessage(
-						message, dev::channel::ChannelSession::CallbackType(), 0);
+                        session->asyncSendMessage(
+                            message, dev::channel::ChannelSession::CallbackType(), 0);
 
-            		return;
-            	}
+                        return;
+                    }
 
-            	message->decode(response->buffer()->data(), response->buffer()->size());
+                    message->decode(response->buffer()->data(), response->buffer()->size());
 
-				session->asyncSendMessage(
-					message, dev::channel::ChannelSession::CallbackType(), 0);
-
-            }, options);
+                    session->asyncSendMessage(
+                        message, dev::channel::ChannelSession::CallbackType(), 0);
+                },
+                options);
         }
         catch (exception& e)
         {
@@ -505,8 +520,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             message->setResult(REMOTE_PEER_UNAVAILIBLE);
             message->clearData();
 
-            session->asyncSendMessage(
-                message, dev::channel::ChannelSession::CallbackType(), 0);
+            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         }
     }
     else
@@ -646,8 +660,9 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                         std::placeholders::_2);
                 session->asyncSendMessage(_message, fp, 5000);
 
-                CHANNEL_LOG(INFO) << "Push channel message: " << _message->seq() << "to session: " << session->host() << ":"
-                                  << session->port() << " success";
+                CHANNEL_LOG(INFO) << "Push channel message: " << _message->seq()
+                                  << "to session: " << session->host() << ":" << session->port()
+                                  << " success";
                 _currentSession = session;
             }
 
