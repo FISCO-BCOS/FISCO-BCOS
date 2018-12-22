@@ -84,7 +84,7 @@ public:
     {
         string res;
         for (size_t i = 0; i < _len; i++)
-            res += string(to_string(rand() % 10));
+            res += string(to_string(rand_r() % 10));
         return res;
     }
 };
