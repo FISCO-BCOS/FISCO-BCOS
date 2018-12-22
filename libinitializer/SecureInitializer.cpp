@@ -47,9 +47,13 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         try
         {
             if (g_BCOSConfig.diskEncryption.enable)
+            {
                 keyContent = EncryptedFile::decryptContents(key);
+            }
             else
+            {
                 keyContent = contents(key);
+            }
         }
         catch (std::exception& e)
         {
