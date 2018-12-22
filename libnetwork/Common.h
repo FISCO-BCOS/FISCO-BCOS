@@ -63,11 +63,6 @@ class Node;
 extern const NodeIPEndpoint UnspecifiedNodeIPEndpoint;
 extern const Node UnspecifiedNode;
 
-bool isLocalHostAddress(bi::address const& _addressToCheck);
-bool isLocalHostAddress(std::string const& _addressToCheck);
-bool isPublicAddress(bi::address const& _addressToCheck);
-bool isPublicAddress(std::string const& _addressToCheck);
-
 /// define Exceptions
 DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
 DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
@@ -221,12 +216,6 @@ struct NodeIPEndpoint
     operator bi::tcp::endpoint() const { return bi::tcp::endpoint(address, tcpPort); }
 
     operator bool() const { return !address.is_unspecified() && udpPort > 0 && tcpPort > 0; }
-
-    bool isAllowed() const
-    {
-        return NodeIPEndpoint::test_allowLocal ? !address.is_unspecified() :
-                                                 isPublicAddress(address);
-    }
 
     bool operator<(const NodeIPEndpoint& rhs) const
     {

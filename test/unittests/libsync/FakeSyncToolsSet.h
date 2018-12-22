@@ -25,33 +25,36 @@
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <test/unittests/libp2p/FakeHost.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
+#include <libp2p/Common.h>
 #include <memory>
 
 namespace dev
 {
 namespace test
 {
-class FakeBaseSession : public SessionFace
+class FakeBaseSession : public dev::network::SessionFace
 {
 public:
     FakeBaseSession()
     {
         m_endpoint = NodeIPEndpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
     }
-    NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
-    void start() override {}
-    void disconnect(DisconnectReason _reason) override {}
+    virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
+    virtual void start() override {}
+    virtual void disconnect(dev::network::DisconnectReason _reason) override {}
 
-    bool isConnected() const override { return true; }
+    virtual bool isConnected() const override { return true; }
 
-    void asyncSendMessage(Message::Ptr message, Options options = Options(),
+    virtual void asyncSendMessage(dev::network::Message::Ptr message, dev::network::Options options = Options(),
         CallbackFunc callback = CallbackFunc()) override
     {}
     void setMessageHandler(
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
+        std::function<void(NetworkException, std::shared_ptr<dev::network::SessionFace>, dev::network::Message::Ptr)>
             messageHandler) override
     {}
     bool actived() const override { return true; }
+
+    virtual std::shared_ptr<dev::network::SocketFace> socket() override { return std::shared_ptr<dev::network::SocketFace>(); }
 
 private:
     NodeIPEndpoint m_endpoint;
@@ -75,10 +78,10 @@ public:
 
     bool m_run = false;
 
-    SessionFace::Ptr session() override { return m_session; }
+    dev::network::SessionFace::Ptr session() override { return m_session; }
 
     NodeID m_id;
-    SessionFace::Ptr m_session;
+    dev::network::SessionFace::Ptr m_session;
 };
 
 class FakeSyncToolsSet
@@ -86,7 +89,7 @@ class FakeSyncToolsSet
     using TxPoolPtr = std::shared_ptr<dev::txpool::TxPoolInterface>;
     using ServicePtr = std::shared_ptr<dev::p2p::Service>;
     using BlockChainPtr = std::shared_ptr<dev::blockchain::BlockChainInterface>;
-    using SessionPtr = std::shared_ptr<dev::p2p::SessionFace>;
+    using SessionPtr = std::shared_ptr<dev::network::SessionFace>;
     using TransactionPtr = std::shared_ptr<dev::eth::Transaction>;
 
 public:
@@ -126,8 +129,10 @@ public:
     {
         unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(_ip), m_listenPort, m_listenPort);
-        PeerSessionInfo peer_info(
+#if 0
+        dev::p2p::P2PSessionInfo peer_info(
             {_peerID, peer_endpoint.address.to_string(), std::chrono::steady_clock::duration(), 0});
+#endif
 
 #if 0
         std::shared_ptr<SessionFace> session =

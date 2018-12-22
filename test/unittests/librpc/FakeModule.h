@@ -91,7 +91,7 @@ public:
         return m_asyncSend[nodeID];
     }
 
-    Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    dev::network::Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
     {
         auto msg = m_asyncSendMsgs.find(nodeID);
         if (msg == m_asyncSendMsgs.end())
@@ -105,7 +105,7 @@ public:
 private:
     P2PSessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
-    std::map<NodeID, Message::Ptr> m_asyncSendMsgs;
+    std::map<NodeID, dev::network::Message::Ptr> m_asyncSendMsgs;
     bool m_connected;
 };
 

@@ -30,40 +30,6 @@ using namespace dev::network;
 unsigned dev::network::c_defaultIPPort = 16789;
 bool dev::network::NodeIPEndpoint::test_allowLocal = false;
 
-bool isPublicAddress(std::string const& _addressToCheck)
-{
-    return _addressToCheck.empty() ? false :
-                                     isPublicAddress(bi::address::from_string(_addressToCheck));
-}
-
-bool isPublicAddress(bi::address const& _addressToCheck)
-{
-    if (_addressToCheck.to_string() == "0.0.0.0")
-        return false;
-    return !_addressToCheck.is_unspecified();
-}
-
-// Helper function to determine if an address is localhost
-bool isLocalHostAddress(bi::address const& _addressToCheck)
-{
-    // @todo: ivp6 link-local adresses (macos), ex: fe80::1%lo0
-    static const set<bi::address> c_rejectAddresses = {{bi::address_v4::from_string("127.0.0.1")},
-        {bi::address_v4::from_string("0.0.0.0")}, {bi::address_v6::from_string("::1")},
-        {bi::address_v6::from_string("::")}};
-
-    return find(c_rejectAddresses.begin(), c_rejectAddresses.end(), _addressToCheck) !=
-           c_rejectAddresses.end();
-}
-
-bool isLocalHostAddress(std::string const& _addressToCheck)
-{
-#if 0
-    return _addressToCheck.empty() ? false :
-                                     isLocalHostAddress(bi::address::from_string(_addressToCheck));
-#endif
-    return false;
-}
-
 namespace dev
 {
 std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _ep)

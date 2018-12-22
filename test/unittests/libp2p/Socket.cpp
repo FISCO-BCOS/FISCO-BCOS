@@ -31,7 +31,8 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
-using namespace dev::p2p;
+using namespace dev::network;
+
 namespace dev
 {
 namespace test
