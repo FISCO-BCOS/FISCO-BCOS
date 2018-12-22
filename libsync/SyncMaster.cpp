@@ -375,36 +375,50 @@ bool SyncMaster::maintainDownloadingQueue()
     BlockPtr topBlock = bq.top();
     while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
-        if (isNewBlock(topBlock))
+        try
         {
-            auto parentBlock = m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
-            BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
-                parentBlock->header().stateRoot()};
-            ExecutiveContext::Ptr exeCtx =
-                m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
-            CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
-            if (ret == CommitResult::OK)
+            if (isNewBlock(topBlock))
             {
-                m_txPool->dropBlockTrans(*topBlock);
-                SYNCLOG(DEBUG) << "[Download] [BlockSync] Download block commit [number/txs/hash]: "
-                               << topBlock->header().number() << "/"
-                               << topBlock->transactions().size() << "/" << topBlock->headerHash()
-                               << endl;
+                auto parentBlock =
+                    m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
+                BlockInfo parentBlockInfo{parentBlock->header().hash(),
+                    parentBlock->header().number(), parentBlock->header().stateRoot()};
+                ExecutiveContext::Ptr exeCtx =
+                    m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
+                CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+                if (ret == CommitResult::OK)
+                {
+                    m_txPool->dropBlockTrans(*topBlock);
+                    SYNCLOG(DEBUG)
+                        << "[Download] [BlockSync] Download block commit [number/txs/hash]: "
+                        << topBlock->header().number() << "/" << topBlock->transactions().size()
+                        << "/" << topBlock->headerHash() << endl;
+                }
+                else
+                {
+                    m_txPool->handleBadBlock(*topBlock);
+                    SYNCLOG(TRACE)
+                        << "[Download] [BlockSync] Block commit failed [number/txs/hash]: "
+                        << topBlock->header().number() << "/" << topBlock->transactions().size()
+                        << "/" << topBlock->headerHash() << endl;
+                }
             }
             else
             {
-                m_txPool->handleBadBlock(*topBlock);
-                SYNCLOG(TRACE) << "[Download] [BlockSync] Block commit failed [number/txs/hash]: "
+                SYNCLOG(TRACE) << "[Download] [BlockSync] Block of queue top is not new block "
+                                  "[number/txs/hash]: "
                                << topBlock->header().number() << "/"
                                << topBlock->transactions().size() << "/" << topBlock->headerHash()
                                << endl;
             }
         }
-        else
-            SYNCLOG(TRACE)
-                << "[Download] [BlockSync] Block in queue is not new block [number/txs/hash]: "
-                << topBlock->header().number() << "/" << topBlock->transactions().size() << "/"
-                << topBlock->headerHash() << endl;
+        catch (exception& e)
+        {
+            SYNCLOG(ERROR) << "[Download] [BlockSync] Block of queue top is not a valid block "
+                              "[number/txs/hash]: "
+                           << topBlock->header().number() << "/" << topBlock->transactions().size()
+                           << "/" << topBlock->headerHash() << endl;
+        }
 
         bq.pop();
         topBlock = bq.top();
