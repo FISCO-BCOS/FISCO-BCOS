@@ -22,10 +22,10 @@
  */
 
 #pragma once
+#include <libp2p/Common.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <test/unittests/libp2p/FakeHost.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
-#include <libp2p/Common.h>
 #include <memory>
 
 namespace dev
@@ -45,16 +45,19 @@ public:
 
     virtual bool isConnected() const override { return true; }
 
-    virtual void asyncSendMessage(dev::network::Message::Ptr message, dev::network::Options options = Options(),
-        CallbackFunc callback = CallbackFunc()) override
+    virtual void asyncSendMessage(dev::network::Message::Ptr message,
+        dev::network::Options options = Options(), CallbackFunc callback = CallbackFunc()) override
     {}
-    void setMessageHandler(
-        std::function<void(NetworkException, std::shared_ptr<dev::network::SessionFace>, dev::network::Message::Ptr)>
+    void setMessageHandler(std::function<void(NetworkException,
+            std::shared_ptr<dev::network::SessionFace>, dev::network::Message::Ptr)>
             messageHandler) override
     {}
     bool actived() const override { return true; }
 
-    virtual std::shared_ptr<dev::network::SocketFace> socket() override { return std::shared_ptr<dev::network::SocketFace>(); }
+    virtual std::shared_ptr<dev::network::SocketFace> socket() override
+    {
+        return std::shared_ptr<dev::network::SocketFace>();
+    }
 
 private:
     NodeIPEndpoint m_endpoint;
