@@ -25,7 +25,7 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
-#include <libdiskencryption/EncryptedFile.h>
+#include <libsecurity/EncryptedFile.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/algorithm/string/replace.hpp>
@@ -47,13 +47,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         try
         {
             if (g_BCOSConfig.diskEncryption.enable)
-            {
                 keyContent = EncryptedFile::decryptContents(key);
-            }
             else
-            {
                 keyContent = contents(key);
-            }
         }
         catch (std::exception& e)
         {
