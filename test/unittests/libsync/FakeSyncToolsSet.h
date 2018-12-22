@@ -75,7 +75,7 @@ public:
 
     virtual void start() override { m_run = true; }
 
-    virtual void stop(DisconnectReason reason) { m_run = false; }
+    virtual void stop(dev::network::DisconnectReason reason) override { m_run = false; }
 
     virtual NodeID nodeID() override { return m_id; }
 
