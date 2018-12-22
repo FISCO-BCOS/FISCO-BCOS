@@ -68,7 +68,9 @@ public:
     {
         shared_ptr<KeyCenter> keycenter = make_shared<FakeKeyCenter>();
         if (boost::filesystem::exists(_name))
+        {
             boost::filesystem::remove_all(_name);
+        }
         dev::db::BasicLevelDB* pleveldb = nullptr;
         auto status =
             EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), _name, &pleveldb, "", keycenter);
@@ -84,7 +86,9 @@ public:
     {
         string res;
         for (size_t i = 0; i < _len; i++)
+        {
             res += string(to_string(rand_r() % 10));
+        }
         return res;
     }
 };
@@ -124,7 +128,9 @@ BOOST_AUTO_TEST_CASE(WriteTest)
     auto writeBatch = db->createWriteBatch();
 
     for (size_t i = 0; i < 10; i++)
+    {
         writeBatch->insertSlice(Slice(ks[i]), Slice(vs[i]));
+    }
 
     db->Write(LevelDB::defaultWriteOptions(), &writeBatch->writeBatch());
 

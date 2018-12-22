@@ -42,7 +42,9 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     }
 
     if (m_lastQueryCipherDataKey == _cipherDataKey)
+    {
         return m_lastRcvDataKey;
+    }
 
     HttpClient client(m_url);
     Client node(client);
@@ -80,7 +82,9 @@ const std::string KeyCenter::generateCipherDataKey()
 {
     std::string ret;
     for (size_t i = 0; i < 32; i++)
+    {
         ret += std::to_string(utcTime() % 10);
+    }
     return ret;
 }
 
