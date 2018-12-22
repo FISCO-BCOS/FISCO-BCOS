@@ -175,11 +175,11 @@ public:
     virtual ~Table() {}
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
-    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+    virtual ssize_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
-    virtual size_t insert(const std::string& key, Entry::Ptr entry,
+    virtual ssize_t insert(const std::string& key, Entry::Ptr entry,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
-    virtual size_t remove(const std::string& key, Condition::Ptr condition,
+    virtual ssize_t remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
 
     virtual Entry::Ptr newEntry();
