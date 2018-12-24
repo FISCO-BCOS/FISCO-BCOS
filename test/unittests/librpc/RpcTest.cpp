@@ -326,8 +326,8 @@ BOOST_AUTO_TEST_CASE(testGetCode)
 BOOST_AUTO_TEST_CASE(testGetTotalTransactionCount)
 {
     Json::Value response = rpc->getTotalTransactionCount(groupId);
-    BOOST_CHECK(response["count"].asString() == "0x0");
-    BOOST_CHECK(response["number"].asString() == "0x0");
+    BOOST_CHECK(response["txSum"].asString() == "0x0");
+    BOOST_CHECK(response["blockNumber"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getTotalTransactionCount(invalidGroup), JsonRpcException);
 }
