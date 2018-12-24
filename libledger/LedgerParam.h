@@ -42,6 +42,8 @@ struct ConsensusParam
     dev::h512s minerList = dev::h512s();
     uint64_t maxTransactions;
     /// unsigned intervalBlockTime;
+    uint64_t minElectTime;
+    uint64_t maxElectTime;
 };
 
 struct AMDBParam

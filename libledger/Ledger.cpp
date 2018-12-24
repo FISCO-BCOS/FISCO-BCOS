@@ -131,6 +131,11 @@ void Ledger::initConsensusConfig(ptree const& pt)
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.maxTransNum", 1000);
 
+    m_param->mutableConsensusParam().minElectTime =
+        pt.get<uint64_t>("consensus.minElectTime", 1000);
+    m_param->mutableConsensusParam().maxElectTime =
+        pt.get<uint64_t>("consensus.maxElectTime", 2000);
+
     // m_param->mutableConsensusParam().intervalBlockTime =
     ///    pt.get<unsigned>("consensus.intervalBlockTime", 1000);
 
@@ -283,21 +288,25 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
 {
-    Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer]" << std::endl;
+    Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer]";
     if (!m_txPool || !m_blockChain || !m_sync || !m_blockVerifier || !m_dbInitializer)
     {
-        Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer Failed]" << std::endl;
+        Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer Failed]";
         return nullptr;
     }
 
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::Raft);
     /// create consensus engine according to "consensusType"
-    Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer] [Protocol ID]:  " << protocol_id
-                      << std::endl;
-    auto intervalBlockTime = dev::config::SystemConfigMgr::c_intervalBlockTime;
-    std::shared_ptr<Sealer> raftSealer = std::make_shared<RaftSealer>(m_service, m_txPool,
-        m_blockChain, m_sync, m_blockVerifier, m_keyPair, intervalBlockTime,
-        intervalBlockTime + 1000, protocol_id, m_param->mutableConsensusParam().minerList);
+    Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer] [Protocol ID]:  " << protocol_id;
+    // auto intervalBlockTime = dev::config::SystemConfigMgr::c_intervalBlockTime;
+    // std::shared_ptr<Sealer> raftSealer = std::make_shared<RaftSealer>(m_service, m_txPool,
+    //    m_blockChain, m_sync, m_blockVerifier, m_keyPair, intervalBlockTime,
+    //    intervalBlockTime + 1000, protocol_id, m_param->mutableConsensusParam().minerList);
+    std::shared_ptr<Sealer> raftSealer =
+        std::make_shared<RaftSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
+            m_keyPair, m_param->mutableConsensusParam().minElectTime,
+            m_param->mutableConsensusParam().maxElectTime, protocol_id,
+            m_param->mutableConsensusParam().minerList);
     /// set params for RaftEngine
     std::shared_ptr<RaftEngine> raftEngine =
         std::dynamic_pointer_cast<RaftEngine>(raftSealer->consensusEngine());
