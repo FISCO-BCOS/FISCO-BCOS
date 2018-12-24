@@ -128,9 +128,9 @@ protected:
         std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
         unsigned const& ttl = 0);
 
-    void sendViewChangeMsg(NodeID const& nodeId);
-    bool sendMsg(NodeID const& nodeId, unsigned const& packetType, std::string const& key,
-        bytesConstRef data, unsigned const& ttl = 0);
+    void sendViewChangeMsg(dev::network::NodeID const& nodeId);
+    bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
+        std::string const& key, bytesConstRef data, unsigned const& ttl = 0);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);

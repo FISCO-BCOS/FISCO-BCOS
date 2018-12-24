@@ -299,7 +299,7 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 
 
 /// send view change message to the given node
-void PBFTEngine::sendViewChangeMsg(NodeID const& nodeId)
+void PBFTEngine::sendViewChangeMsg(dev::network::NodeID const& nodeId)
 {
     ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
     PBFTENGINE_LOG(DEBUG) << "[#sendViewChangeMsg] send viewchange to started node "
@@ -335,8 +335,8 @@ bool PBFTEngine::broadcastViewChangeReq()
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
-bool PBFTEngine::sendMsg(NodeID const& nodeId, unsigned const& packetType, std::string const& key,
-    bytesConstRef data, unsigned const& ttl)
+bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
+    std::string const& key, bytesConstRef data, unsigned const& ttl)
 {
     /// is miner?
     if (getIndexByMiner(nodeId) < 0)
@@ -968,7 +968,7 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
     {
         PBFTENGINE_LOG(INFO) << "[#catchupView] [toView]: " << m_toView
                              << " [INFO]:  " << oss.str();
-        NodeID nodeId;
+        dev::network::NodeID nodeId;
         bool succ = getNodeIDByIndex(nodeId, req.idx);
         if (succ)
             sendViewChangeMsg(nodeId);

@@ -766,8 +766,8 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 
         Json::Value response;
         std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
-        response["count"] = toJS(result.first);
-        response["number"] = toJS(result.second);
+        response["txSum"] = toJS(result.first);
+        response["blockNumber"] = toJS(result.second);
         return response;
     }
     catch (JsonRpcException& e)

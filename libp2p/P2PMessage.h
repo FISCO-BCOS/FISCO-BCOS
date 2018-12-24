@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "Common.h"
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
@@ -30,7 +31,7 @@ namespace dev
 {
 namespace p2p
 {
-class P2PMessage : public Message
+class P2PMessage : public dev::network::Message
 {
 public:
     typedef std::shared_ptr<P2PMessage> Ptr;
@@ -56,7 +57,7 @@ public:
     virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
     virtual void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
 
-    virtual bool isRequestPacket() { return (m_protocolID > 0); }
+    virtual bool isRequestPacket() override { return (m_protocolID > 0); }
     virtual PROTOCOL_ID getResponceProtocolID()
     {
         if (isRequestPacket())
@@ -112,11 +113,11 @@ enum AMOPPacketType
     SendTopics = 3
 };
 
-class P2PMessageFactory : public MessageFactory
+class P2PMessageFactory : public dev::network::MessageFactory
 {
 public:
     virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override
+    virtual dev::network::Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
 

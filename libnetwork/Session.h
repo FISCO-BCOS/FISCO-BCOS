@@ -38,7 +38,7 @@
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class Host;
 
@@ -190,5 +190,5 @@ public:
     }
 };
 
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

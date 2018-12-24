@@ -66,7 +66,7 @@ void DBInitializer::initLevelDBStorage()
         ldb_option.max_open_files = 100;
         DBInitializer_LOG(DEBUG) << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler"
                                  << std::endl;
-        leveldb::Status status = leveldb::DB::Open(ldb_option, m_param->baseDir(), &(pleveldb));
+        leveldb::Status status = leveldb::DB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
         if (!status.ok())
         {
             DBInitializer_LOG(ERROR) << "[#initStorageDB] [openLevelDBStorage failed]" << std::endl;
