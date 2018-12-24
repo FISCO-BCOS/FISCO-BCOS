@@ -60,7 +60,7 @@ public:
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
-    std::shared_ptr<Host> m_host;
+    std::shared_ptr<dev::network::Host> m_host;
     dev::GROUP_ID groupId = 1;
     dev::GROUP_ID invalidGroup = 2;
 };
@@ -80,6 +80,14 @@ BOOST_AUTO_TEST_CASE(testConsensusPart)
     Json::Value status = rpc->getConsensusStatus(groupId);
     BOOST_CHECK(status.size() == 8);
     BOOST_CHECK_THROW(rpc->getConsensusStatus(invalidGroup), JsonRpcException);
+
+    Json::Value minerList = rpc->getMinerList(groupId);
+    BOOST_CHECK(minerList.size() == 1);
+    BOOST_CHECK_THROW(rpc->getMinerList(invalidGroup), JsonRpcException);
+
+    Json::Value observerList = rpc->getObserverList(groupId);
+    BOOST_CHECK(observerList.size() == 0);
+    BOOST_CHECK_THROW(rpc->getObserverList(invalidGroup), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testSyncPart)
@@ -286,7 +294,7 @@ BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
     BOOST_CHECK(
         response["logs"][0]["address"].asString() == "0x0000000000000000000000000000000000002000");
     BOOST_CHECK(response["logs"][0]["data"].asString() == "0x");
-    BOOST_CHECK(response["logs"][0]["topics"].asString() == "0x[]");
+    BOOST_CHECK(response["logs"][0]["topics"].size() == 0);
     BOOST_CHECK(response["status"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getTransactionReceipt(invalidGroup, txHash), JsonRpcException);
@@ -318,8 +326,8 @@ BOOST_AUTO_TEST_CASE(testGetCode)
 BOOST_AUTO_TEST_CASE(testGetTotalTransactionCount)
 {
     Json::Value response = rpc->getTotalTransactionCount(groupId);
-    BOOST_CHECK(response["count"].asString() == "0x0");
-    BOOST_CHECK(response["number"].asString() == "0x0");
+    BOOST_CHECK(response["txSum"].asString() == "0x0");
+    BOOST_CHECK(response["blockNumber"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getTotalTransactionCount(invalidGroup), JsonRpcException);
 }

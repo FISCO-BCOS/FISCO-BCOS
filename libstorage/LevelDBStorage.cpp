@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file MinerPrecompiled.h
  *  @author ancelmo
  *  @date 20180921
@@ -40,7 +40,7 @@ Entries::Ptr LevelDBStorage::select(
         auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
         if (!s.ok() && !s.IsNotFound())
         {
-            STORAGE_LOG(ERROR) << "Query leveldb failed:" + s.ToString();
+            STORAGE_LEVELDB_LOG(ERROR) << "Query leveldb failed:" + s.ToString();
 
             BOOST_THROW_EXCEPTION(StorageException(-1, "Query leveldb exception:" + s.ToString()));
         }
@@ -65,7 +65,7 @@ Entries::Ptr LevelDBStorage::select(
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
 
-                if (entry->getStatus() == 0)
+                if (entry->getStatus() == Entry::Status::NORMAL)
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);
@@ -77,7 +77,8 @@ Entries::Ptr LevelDBStorage::select(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Query leveldb exception:" << boost::diagnostic_information(e);
+        STORAGE_LEVELDB_LOG(ERROR)
+            << "Query leveldb exception:" << boost::diagnostic_information(e);
 
         BOOST_THROW_EXCEPTION(e);
     }
@@ -90,7 +91,8 @@ size_t LevelDBStorage::commit(
 {
     try
     {
-        STORAGE_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash << " num:" << num;
+        STORAGE_LEVELDB_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash
+                                  << " num:" << num;
         leveldb::WriteBatch batch;
 
         size_t total = 0;
@@ -98,8 +100,11 @@ size_t LevelDBStorage::commit(
         {
             for (auto dataIt : it->data)
             {
+                if (dataIt.second->size() == 0u)
+                {
+                    continue;
+                }
                 std::string entryKey = it->tableName + "_" + dataIt.first;
-
                 Json::Value entry;
 
                 for (size_t i = 0; i < dataIt.second->size(); ++i)
@@ -119,7 +124,8 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-                // STORAGE_LOG(TRACE) << "leveldb commit key:" << entryKey << " data:" << entry;
+                STORAGE_LEVELDB_LOG(TRACE)
+                    << "leveldb commit key:" << entryKey << " data size:" << ssOut.tellp();
             }
         }
 
@@ -129,7 +135,7 @@ size_t LevelDBStorage::commit(
         auto s = m_db->Write(writeOptions, &batch);
         if (!s.ok())
         {
-            STORAGE_LOG(ERROR) << "Commit leveldb failed: " << s.ToString();
+            STORAGE_LEVELDB_LOG(ERROR) << "Commit leveldb failed: " << s.ToString();
 
             BOOST_THROW_EXCEPTION(StorageException(-1, "Commit leveldb exception:" + s.ToString()));
         }
@@ -138,7 +144,7 @@ size_t LevelDBStorage::commit(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Commit leveldb exception" << e.what();
+        STORAGE_LEVELDB_LOG(ERROR) << "Commit leveldb exception" << e.what();
 
         BOOST_THROW_EXCEPTION(e);
     }

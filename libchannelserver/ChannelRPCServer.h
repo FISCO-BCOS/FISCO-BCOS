@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /**
  * @file: ChannelRPCServer.h
  * @author: monan
@@ -61,22 +61,6 @@ public:
         TIMEOUT = 102
     };
 
-    struct ChannelMessageSession
-    {
-        // When sending channelmessage
-        dev::channel::ChannelSession::Ptr fromSession;
-        h512 toNodeID;
-        std::set<h512> failedNodeIDs;
-
-        // When receiveing channelmessage
-        h512 fromNodeID;
-        dev::channel::ChannelSession::Ptr toSession;
-        std::set<dev::channel::ChannelSession::Ptr> failedSessions;
-
-        // message
-        dev::channel::Message::Ptr message;
-    };
-
     typedef std::shared_ptr<ChannelRPCServer> Ptr;
 
     ChannelRPCServer(std::string listenAddr = "", int listenPort = 0)
@@ -107,10 +91,6 @@ public:
     virtual void onClientChannelRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-    virtual void onNodeRequest(dev::h512 nodeID, std::shared_ptr<dev::bytes> message);
-
-    virtual void onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message);
-
     void setListenAddr(const std::string& listenAddr);
 
     void setListenPort(int listenPort);
@@ -119,8 +99,8 @@ public:
 
     void CloseConnection(int _socket);
 
-    void onReceiveChannelMessage(
-        p2p::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
+    void onNodeChannelRequest(
+        dev::network::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
 
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
 
@@ -161,9 +141,6 @@ private:
 
     std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
-
-    std::map<std::string, ChannelMessageSession> _seq2MessageSession;
-    std::mutex _seqMessageMutex;
 
     int _sessionCount = 1;
 

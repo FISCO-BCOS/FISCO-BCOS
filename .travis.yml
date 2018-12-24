@@ -22,10 +22,7 @@
 language: cpp
 branches:
   only:
-      - feature-Raft
-      - dev
-      - master
-      - release
+      - /.*/
 env:
     global:
       - TRAVIS_BUILD_TYPE=RelWithDebInfo
@@ -33,32 +30,38 @@ env:
 matrix:
     include:
         - os: linux
-          dist: trusty
+          dist: xenial
           sudo: required
           node_js:
               - "8"
     env:
-        - ZIP_SUFFIX=ubuntu-trusty
+        - ZIP_SUFFIX=ubuntu-xenial
 git:
     depth: 2
 cache:
   directories:
   - $TRAVIS_BUILD_DIR/deps
-  - $TRAVIS_BUILD_DIR/build/test
+  - $TRAVIS_BUILD_DIR/build
+before_cache:
+      - cd $TRAVIS_BUILD_DIR && rm -rf $TRAVIS_BUILD_DIR/build/nodes
 addons:
   apt:
     packages:
     - cmake
+    - libssl-dev
+    - libleveldb-dev
+    - ninja-build
+    - openssl
 install: |
     if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-      sudo chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash -x ./tools/ci/check-commit.sh;
+      chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash ./tools/ci/check-commit.sh;
     fi
 script:
-    cd tools/ci && bash build.sh && cd ../../ && ./build/bin/test-fisco-bcos -- --testpath=test/data/ 
+    mkdir -p build && cd build && cmake -DTESTS=ON -DCOVERAGE=ON .. && make -j2 && CTEST_OUTPUT_ON_FAILURE=TRUE make test && ../tools/build_chain.sh -l "127.0.0.1:1" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
 after_success:
-    bash <(curl -s https://codecov.io/bash)
+    cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)
 after_failure:
-    cd tools/ci && bash clean_cache.sh 
+    # rm -rf $TRAVIS_BUILD_DIR/build $TRAVIS_BUILD_DIR/deps
 webhooks:
     urls:
       - https://webhooks.gitter.im/e/334c46f8aee9f5fb65dc

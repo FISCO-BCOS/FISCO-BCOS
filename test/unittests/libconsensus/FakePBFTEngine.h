@@ -53,7 +53,7 @@ public:
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _minerList)
     {}
-
+    void updateConsensusNodeList() override {}
     KeyPair const& keyPair() const { return m_keyPair; }
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
@@ -62,8 +62,8 @@ public:
     const std::shared_ptr<dev::db::LevelDB> backupDB() const { return m_backupDB; }
     bool const& leaderFailed() const { return m_leaderFailed; }
     int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
-    u256 const& toView() const { return m_toView; }
-    u256 const& view() const { return m_view; }
+    VIEWTYPE const& toView() const { return m_toView; }
+    VIEWTYPE const& view() const { return m_view; }
 
     bool isDiskSpaceEnough(std::string const& path) override
     {
@@ -77,7 +77,7 @@ public:
         /// import block
         header.setTimestamp(utcTime());
         header.setSealerList(minerList());
-        header.setSealer(nodeIdx());
+        header.setSealer(u256(nodeIdx()));
         header.setLogBloom(LogBloom());
         header.setGasUsed(u256(0));
     }
@@ -88,7 +88,7 @@ public:
         resetSealingHeader(block.header());
     }
 
-    u256 const& f() { return m_f; }
+    IDXTYPE const& f() { return m_f; }
     void resetConfig() { PBFTEngine::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
@@ -117,16 +117,16 @@ public:
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
     bool broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
-    u256 view() { return m_view; }
-    void setView(u256 const& _view) { m_view = _view; }
+    VIEWTYPE view() { return m_view; }
+    void setView(VIEWTYPE const& _view) { m_view = _view; }
     void checkAndSave() { return PBFTEngine::checkAndSave(); }
 
     void setHighest(BlockHeader const& header) { m_highestBlock = header; }
     BlockHeader& mutableHighest() { return m_highestBlock; }
-    void setNodeNum(u256 const& nodeNum) { m_nodeNum = nodeNum; }
-    u256 const& nodeNum() { return m_nodeNum; }
-    u256 const& fValue() { return m_f; }
-    void setF(u256 const& fValue) { m_f = fValue; }
+    void setNodeNum(IDXTYPE const& nodeNum) { m_nodeNum = nodeNum; }
+    IDXTYPE const& nodeNum() { return m_nodeNum; }
+    IDXTYPE const& fValue() { return m_f; }
+    void setF(IDXTYPE const& fValue) { m_f = fValue; }
     int64_t& mutableConsensusNumber() { return m_consensusBlockNumber; }
     bool const& leaderFailed() { return m_leaderFailed; }
     bool const& cfgErr() { return m_cfgErr; }
@@ -144,7 +144,7 @@ public:
         return PBFTEngine::isValidPrepare(req, oss);
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
-    inline std::pair<bool, u256> getLeader() const { return PBFTEngine::getLeader(); }
+    inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
     void handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
@@ -172,7 +172,7 @@ public:
 
     bool shouldSeal() { return PBFTEngine::shouldSeal(); }
 
-    void setNodeIdx(u256 const& _idx) { m_idx = _idx; }
+    void setNodeIdx(IDXTYPE const& _idx) { m_idx = _idx; }
     void collectGarbage() { return PBFTEngine::collectGarbage(); }
     void handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
 };
@@ -187,10 +187,10 @@ public:
             std::make_shared<FakeBlockverifier>(),
         std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5))
     {
-        /// fake minerList
-        FakeMinerList(minerSize);
         m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
             txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_minerList);
+        /// fake minerList
+        FakeMinerList(minerSize);
         resetSessionInfo();
     }
 
@@ -201,7 +201,7 @@ public:
         for (size_t i = 0; i < m_minerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-            SessionInfo info(m_minerList[i], m_endpoint, std::set<std::string>());
+            P2PSessionInfo info(m_minerList[i], m_endpoint, std::set<std::string>());
             service->appendSessionInfo(info);
         }
     }
@@ -215,6 +215,7 @@ public:
             KeyPair key_pair = KeyPair::create();
             m_minerList.push_back(key_pair.pub());
             m_secrets.push_back(key_pair.secret());
+            m_consensus->appendMiner(key_pair.pub());
         }
     }
     std::shared_ptr<T> consensus() { return m_consensus; }

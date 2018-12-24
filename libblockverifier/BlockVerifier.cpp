@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file BlockVerifier.cpp
  *  @author mingzhenliu
  *  @date 20180921
@@ -34,11 +34,10 @@ using namespace dev::executive;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
-    LOG(TRACE) << "BlockVerifier::executeBlock tx_num=" << block.transactions().size()
-               << " num: " << block.blockHeader().number()
-               << " parent hash: " << parentBlockInfo.hash
-               << " parent num: " << parentBlockInfo.number
-               << " parent stateRoot: " << parentBlockInfo.stateRoot;
+    BLOCKVERIFIER_LOG(INFO) << "[#executeBlock] [txNum/num/parentHash/parentNum/parentStateRoot]:"
+                            << "[ " << block.transactions().size() << "/ "
+                            << block.blockHeader().number() << "/ " << parentBlockInfo.hash << "/ "
+                            << parentBlockInfo.number << "/ " << parentBlockInfo.stateRoot;
 
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
@@ -48,8 +47,12 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     }
     catch (exception& e)
     {
-        LOG(ERROR) << "Error:" << e.what();
+        BLOCKVERIFIER_LOG(ERROR) << "[#executeBlock] Error during initExecutiveContext [errorMsg]: "
+                                 << e.what();
+        BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
+                              << errinfo_comment("Error during initExecutiveContext"));
     }
+
     unsigned i = 0;
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
@@ -82,15 +85,17 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     const BlockHeader& blockHeader, dev::eth::Transaction const& _t)
 {
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
+    BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
     try
     {
-        BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
         m_executiveContextFactory->initExecutiveContext(
             blockInfo, blockHeader.stateRoot(), executiveContext);
     }
     catch (exception& e)
     {
-        LOG(ERROR) << "Error:" << e.what();
+        BLOCKVERIFIER_LOG(ERROR)
+            << "[#executeTransaction] Error during execute initExecutiveContext [errorMsg]: "
+            << e.what();
     }
 
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
@@ -101,14 +106,11 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
 std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo const& _envInfo,
     Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
 {
-    LOG(TRACE) << "BlockVerifier::execute ";
-
     auto onOp = _onOp;
 #if ETH_VMTRACE
     if (isChannelVisible<VMTraceChannel>())
         onOp = Executive::simpleTrace();  // override tracer
 #endif
-
 
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.

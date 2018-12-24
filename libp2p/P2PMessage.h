@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file P2PMessage.h
  *  @author monan
  *  @date 20181112
@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "Common.h"
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
@@ -30,7 +31,7 @@ namespace dev
 {
 namespace p2p
 {
-class P2PMessage : public Message
+class P2PMessage : public dev::network::Message
 {
 public:
     typedef std::shared_ptr<P2PMessage> Ptr;
@@ -56,7 +57,7 @@ public:
     virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
     virtual void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
 
-    virtual bool isRequestPacket() { return (m_protocolID > 0); }
+    virtual bool isRequestPacket() override { return (m_protocolID > 0); }
     virtual PROTOCOL_ID getResponceProtocolID()
     {
         if (isRequestPacket())
@@ -112,11 +113,11 @@ enum AMOPPacketType
     SendTopics = 3
 };
 
-class P2PMessageFactory : public MessageFactory
+class P2PMessageFactory : public dev::network::MessageFactory
 {
 public:
     virtual ~P2PMessageFactory() {}
-    virtual Message::Ptr buildMessage() override
+    virtual dev::network::Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
 

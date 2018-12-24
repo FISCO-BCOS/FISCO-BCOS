@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /**
  * @file: ChannelSession.cpp
  * @author: monan
@@ -223,8 +223,7 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
         if (!error)
         {
-            CHANNEL_LOG(TRACE) << "Read: " << bytesTransferred << " bytes data:"
-                               << std::string(_recvBuffer, _recvBuffer + bytesTransferred);
+            CHANNEL_LOG(TRACE) << "Read: " << bytesTransferred;
 
             _recvProtocolBuffer.insert(
                 _recvProtocolBuffer.end(), _recvBuffer, _recvBuffer + bytesTransferred);
@@ -405,7 +404,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
         auto it = _responseCallbacks.find(message->seq());
         if (it != _responseCallbacks.end())
         {
-            if (it->second->timeoutHandler.get() != NULL)
+            if (it->second->timeoutHandler)
             {
                 it->second->timeoutHandler->cancel();
             }
@@ -453,6 +452,15 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
 {
     try
     {
+        if (error)
+        {
+            if (error != boost::asio::error::operation_aborted)
+            {
+                CHANNEL_LOG(ERROR) << "Timer error: " << error.message();
+            }
+            return;
+        }
+
         if (!_actived)
         {
             CHANNEL_LOG(ERROR) << "ChannelSession inactived";
@@ -520,6 +528,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
         if (_actived)
         {
             _idleTimer->cancel();
+            _actived = false;
 
             if (!_responseCallbacks.empty())
             {
@@ -566,8 +575,38 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
                     ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
             }
 
-            _actived = false;
-            _sslSocket->lowest_layer().close();
+            auto sslSocket = _sslSocket;
+            // force close socket after 30 seconds
+            auto shutdownTimer = std::make_shared<boost::asio::deadline_timer>(
+                *_ioService, boost::posix_time::milliseconds(30000));
+            shutdownTimer->async_wait([sslSocket](const boost::system::error_code& error) {
+                if (error && error != boost::asio::error::operation_aborted)
+                {
+                    LOG(WARNING) << "channel shutdown timer error: " << error.message();
+                    return;
+                }
+
+                if (sslSocket->next_layer().is_open())
+                {
+                    LOG(WARNING) << "channel shutdown timeout, force close";
+                    sslSocket->next_layer().close();
+                }
+            });
+
+            _sslSocket->async_shutdown(
+                [sslSocket, shutdownTimer](const boost::system::error_code& error) {
+                    if (error)
+                    {
+                        LOG(WARNING)
+                            << "Error while shutdown the channel ssl socket: " << error.message();
+                    }
+                    shutdownTimer->cancel();
+
+                    if (sslSocket->next_layer().is_open())
+                    {
+                        sslSocket->next_layer().close();
+                    }
+                });
 
             CHANNEL_LOG(DEBUG) << "Disconnected";
         }

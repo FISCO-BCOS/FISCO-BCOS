@@ -9,16 +9,16 @@
 # @ date     : 2018
 
 #!/bin/bash
-
-current_dir=`pwd`"/.."
-build_source=1
+SHELL_FOLDER=$(cd $(dirname $0);pwd)
+project_dir="${SHELL_FOLDER}/.."
+use_cores=1
 test_mode=0
-binary_link=https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/bin/fisco-bcos
 Ubuntu_Platform=0
 Centos_Platform=1
+
 clear_cache()
 { 
-    cd ${current_dir}
+    cd ${project_dir}
     execute_cmd "rm -rf deps/src/*stamp"
 }
 
@@ -42,7 +42,7 @@ execute_cmd()
     ret=$?
     if [ $ret -ne 0 ];then
         LOG_ERROR "FAILED execution of command: ${command}"
-        clear_cache
+        # clear_cache
         exit 1
     else
         LOG_INFO "SUCCESS execution of command: ${command}"
@@ -61,7 +61,7 @@ get_platform()
         LOG_ERROR "Not Support FreeBSD Yet!"
         exit 1;;
     Linux)
-        if [ -f "/etc/arch-release" ]; then
+        if [ -f "/etc/arch-release" ];then
             LOG_ERROR "Not Support arch-linux Yet!"
         elif [ -f "/etc/os-release" ];then
             DISTRO_NAME=$(. /etc/os-release; echo $NAME)
@@ -104,13 +104,13 @@ done
 #install ubuntu package
 install_ubuntu_deps()
 {
-install_ubuntu_package "cmake" "openssl" "libssl-dev" "libcurl4-openssl-dev" "libgmp-dev" "libleveldb-dev" "jq"
+install_ubuntu_package "cmake" "libssl-dev" "libleveldb-dev" "openssl"
 }
 
 # install centos package
 install_centos_deps()
 {
-install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel" "curl-devel" "gmp-devel" "jq"
+install_centos_package "cmake3" "gcc-c++" "openssl" "openssl-devel" "leveldb-devel"
 }
 
 install_all_deps()
@@ -127,68 +127,23 @@ install_all_deps()
     fi
 }
 
-
-build_ubuntu_source()
-{
-# build source
-execute_cmd "mkdir -p build && cd build/"
-if [ ${test_mode} -eq 1 ];then 
-    execute_cmd "cmake -DTESTS=ON .."
-else
-    execute_cmd "cmake -DTESTS=OFF .."
-fi
-execute_cmd "make && sudo make install && cd ${current_dir}"
-}
-
-build_centos_source()
-{
-# build source
-execute_cmd "mkdir -p build && cd build/"
-if [ ${test_mode} -eq 1 ];then
-    execute_cmd "cmake3 -DTESTS=ON .."
-else
-    execute_cmd "cmake3 -DTESTS=OFF .."
-fi
-execute_cmd "make && sudo make install && cd ${current_dir}"
-}
-
 build_source()
 {
-cd ${current_dir}
-get_platform
-platform=`echo $?`
-if [ ${platform} -eq ${Ubuntu_Platform} ];then
-    build_ubuntu_source
-elif [ ${platform} -eq ${Centos_Platform} ];then
-     build_centos_source
-else
-    LOG_ERROR "Unsupported Platform, Exit"
-    exit 1
-fi
+    cd ${project_dir}
+    get_platform
+    platform=`echo $?`
+    cmake_cmd="cmake"
+    if [ ${platform} -eq ${Centos_Platform} ];then
+        cmake_cmd="cmake3"
+    fi
+    execute_cmd "mkdir -p build && cd build/"
+    if [ ${test_mode} -eq 1 ];then
+        execute_cmd "${cmake_cmd} -DTESTS=ON .."
+    else
+        execute_cmd "${cmake_cmd} -DTESTS=OFF .."
+    fi
+    execute_cmd "make -j${use_cores}"
 }
-
-download_binary()
-{
-execute_cmd "curl -LO ${binary_link}"
-execute_cmd "chmod a+x fisco-bcos"
-execute_cmd "sudo mv fisco-bcos /usr/local/bin/"
-}
-
-
-#### check fisco-bcos
-check_fisco()
-{
-if [ ! -f "/usr/local/bin/fisco-bcos" ]; then
-    LOG_ERROR "fisco-bcos build fail!"
-else
-    LOG_INFO "fisco-bcos build SUCCESS! path: /usr/local/bin/fisco-bcos"
-fi
-}
-
-check()
-{
-check_fisco
-}	
 
 Usage()
 {
@@ -196,12 +151,12 @@ Usage()
 	cat << EOF
 Usage:
 Optional:
-    -d       Download from GitHub
+    -j       Cores will be used to compile
     -t       Enable test mode (generate mini-consensus/mini-sync/mini-evm/mini-storage/test_verifier)
     -h       Help
 Example: 
     bash install.sh 
-    bash install.sh -d
+    bash install.sh -j4
     bash install.sh -t
 EOF
 	exit 0
@@ -209,9 +164,15 @@ EOF
 
 parse_param()
 {
-	while getopts "htd" option;do
+	while getopts "htj:" option;do
 		case $option in
-		d) build_source=0;;
+		j) use_cores=$OPTARG
+            if [ ${use_cores} -gt $(nproc) ];then
+                use_cores=$(nproc)
+            elif [ ${use_cores} -lt 1 ];then
+                use_cores=1
+            fi
+        ;;
         t) test_mode=1;;
 		h) Usage;;
 		esac
@@ -221,15 +182,9 @@ parse_param()
 install_all()
 {
 	install_all_deps
-	if [ ${build_source} -eq 0 ];then
-		download_binary
-	else
-		build_source
-	fi
-	check
+	build_source
+    cd ${project_dir}
 }
 
 parse_param "$@"
-cd ${current_dir}
-execute_cmd "git submodule update --init"
 install_all

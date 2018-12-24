@@ -41,10 +41,10 @@ class FakeService : public Service
 {
 public:
     FakeService() : Service() {}
-    void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
-    void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
+    void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override
     {
         return m_sessionInfos;
     }
@@ -77,7 +77,7 @@ public:
     bool isConnected(NodeID const& nodeId) const { return m_connected; }
 
 private:
-    SessionInfos m_sessionInfos;
+    P2PSessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
     std::map<NodeID, P2PMessage::Ptr> m_asyncSendMsgs;
     bool m_connected = false;
@@ -184,7 +184,9 @@ public:
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
-    void setGroupMark(std::string const& groupMark) override {}
+    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override {}
+    dev::h512s minerList() override { return dev::h512s(); };
+    dev::h512s observerList() override { return dev::h512s(); };
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;

@@ -44,6 +44,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Rsa.h>
 #include <libethcore/CommonJS.h>
+#include <boost/algorithm/algorithm.hpp>
 #include <boost/algorithm/string.hpp>
 #include <chrono>
 #include <functional>
@@ -57,17 +58,9 @@
 
 using namespace std;
 using namespace dev;
-using namespace dev::p2p;
+using namespace dev::network;
 using namespace dev::eth;
 using namespace dev::crypto;
-namespace dev
-{
-namespace p2p
-{
-Host::~Host()
-{
-    stop();
-}
 
 /**
  * @brief: accept connection requests, maily include procedures:
@@ -107,10 +100,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                     NodeIPEndpoint(endpoint.address(), endpoint.port(), endpoint.port()));
                 HOST_LOG(DEBUG) << "client port:" << endpoint.port()
                                 << "|ip:" << endpoint.address().to_string();
-#if 0
-                HOST_LOG(DEBUG) << "server port:" << m_listenPort
-                           << "|ip:" << m_listenHost;
-#endif
+
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
@@ -196,6 +186,16 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 }
                 HOST_LOG(DEBUG) << "Get endpoint publickey:" << *nodeIDOut;
             }
+
+            /// check nodeID in crl, only filter by nodeID.
+            const std::vector<std::string>& crl = host->crl();
+            std::string nodeID = boost::to_upper_copy(*nodeIDOut);
+            if (find(crl.begin(), crl.end(), nodeID) != crl.end())
+            {
+                HOST_LOG(INFO) << "NodeID in certificate rejected list.";
+                return false;
+            }
+
             return preverified;
         }
         catch (std::exception& e)
@@ -219,7 +219,9 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(WARNING) << "Handshake failed: " << error << socket->nodeIPEndpoint().name();
+        HOST_LOG(WARNING) << "[#handshakeServer] Handshake failed: [eid/emsg/endpoint]: "
+                          << error.value() << "/" << error.message() << "/"
+                          << socket->nodeIPEndpoint().name();
         socket->close();
 
         return;
@@ -229,16 +231,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
     {
         std::string node_id_str(*endpointPublicKey);
         NodeID nodeID = NodeID(node_id_str);
-        /// handshake failed
-        if (error)
-        {
-            HOST_LOG(ERROR) << "Host::async_handshake err:" << error.message();
-            socket->close();
-            return;
-        }
-
         startPeerSession(nodeID, socket, m_connectionHandler);
-
         startAccept();
     }
 }
@@ -273,8 +266,9 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
             HOST_LOG(WARNING) << "No connectionHandler, new connection may lost";
         }
     });
-
-    HOST_LOG(INFO) << "start a new peer: " << nodeID;
+    HOST_LOG(INFO) << "[#startPeerSession] [remoteEndpoint/nodeID]: "
+                   << socket->remote_endpoint().address().to_string() << ":"
+                   << socket->remote_endpoint().port() << "/" << nodeID;
 }
 
 /**
@@ -285,23 +279,21 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
 void Host::start()
 {
     /// if the p2p network has been stoped, then stop related service
-    if (!m_run)
+    if (!haveNetwork())
     {
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
-        auto self = std::weak_ptr<Host>(shared_from_this());
-        m_hostThread = std::make_shared<std::thread>([self] {
-            auto host = self.lock();
-            while (host && host->haveNetwork())
+        m_hostThread = std::make_shared<std::thread>([&] {
+            dev::pthread_setThreadName("io_service");
+            while (haveNetwork())
             {
                 try
                 {
-                    if (host->asioInterface()->acceptor())
+                    if (asioInterface()->acceptor())
                     {
-                        host->startAccept();
+                        startAccept();
                     }
-
-                    host->asioInterface()->run();
+                    asioInterface()->run();
                 }
                 catch (std::exception& e)
                 {
@@ -309,13 +301,11 @@ void Host::start()
                         << "Exception in Network Thread:" << boost::diagnostic_information(e);
                 }
 
-                host->asioInterface()->reset();
+                asioInterface()->reset();
             }
 
             HOST_LOG(WARNING) << "Host exit";
         });
-
-        m_hostThread->detach();
     }
 }
 
@@ -330,15 +320,6 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     {
         return;
     }
-
-    {
-        Guard l(x_pendingNodeConns);
-        if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
-        {
-            return;
-        }
-        m_pendingPeerConns.insert(_nodeIPEndpoint.name());
-    }
     HOST_LOG(INFO) << "Attempting connection to node "
                    << "@" << _nodeIPEndpoint.name();
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
@@ -352,8 +333,6 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             {
                 HOST_LOG(ERROR) << "Connection refused to node"
                                 << "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
-                Guard l(x_pendingNodeConns);
-                m_pendingPeerConns.erase(_nodeIPEndpoint.name());
                 socket->close();
 
                 m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
@@ -390,14 +369,11 @@ void Host::handshakeClient(const boost::system::error_code& error,
     std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
     NodeIPEndpoint _nodeIPEndpoint)
 {
-    {
-        Guard l(x_pendingNodeConns);
-        m_pendingPeerConns.erase(_nodeIPEndpoint.name());
-    }
-
     if (error)
     {
-        HOST_LOG(WARNING) << "Handshake failed: " << error << " " << _nodeIPEndpoint.name();
+        HOST_LOG(WARNING) << "[#handshakeClient] Handshake failed: [eid/emsg/endpoint]: "
+                          << error.value() << "/" << error.message() << "/"
+                          << _nodeIPEndpoint.name();
         socket->close();
 
         return;
@@ -407,14 +383,6 @@ void Host::handshakeClient(const boost::system::error_code& error,
     {
         std::string node_id_str(*endpointPublicKey);
         NodeID nodeID = NodeID(node_id_str);
-        /// handshake failed
-        if (error)
-        {
-            HOST_LOG(ERROR) << "Host::async_handshake client err:" << error.message();
-            socket->close();
-            return;
-        }
-
         startPeerSession(nodeID, socket, callback);
     }
 }
@@ -422,24 +390,12 @@ void Host::handshakeClient(const boost::system::error_code& error,
 /// stop the network and worker thread
 void Host::stop()
 {
-    // called to force io_service to kill any remaining tasks it might have -
-    // such tasks may involve socket reads from Capabilities that maintain references
-    // to resources we're about to free.
-    {
-        // Although m_run is set by stop() or start(), it effects m_runTimer so x_runTimer is
-        // used instead of a mutex for m_run.
-        Guard l(x_runTimer);
-        // ignore if already stopped/stopping
-        if (!m_run)
-            return;
-        // signal run() to prepare for shutdown and reset m_timer
-        m_run = false;
-
-        m_asioInterface->stop();
-
-        m_hostThread->join();
-    }
+    // ignore if already stopped/stopping
+    if (!m_run)
+        return;
+    // signal run() to prepare for shutdown and reset m_timer
+    m_run = false;
+    m_asioInterface->stop();
+    m_hostThread->join();
+    m_threadPool->stop();
 }
-
-}  // namespace p2p
-}  // namespace dev

@@ -1,20 +1,19 @@
 /*
-    @CopyRight:
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /**
  * @Mpt state interface for EVM
  *
@@ -188,10 +187,21 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
     auto table = getTable(_address);
     if (table)
     {
-        auto entry = table->newEntry();
-        entry->setField(STORAGE_KEY, _location.str());
-        entry->setField(STORAGE_VALUE, _value.str());
-        table->insert(_location.str(), entry);
+        auto entries = table->select(_location.str(), table->newCondition());
+        if (entries->size() == 0u)
+        {
+            auto entry = table->newEntry();
+            entry->setField(STORAGE_KEY, _location.str());
+            entry->setField(STORAGE_VALUE, _value.str());
+            table->insert(_location.str(), entry);
+        }
+        else
+        {
+            auto entry = table->newEntry();
+            entry->setField(STORAGE_KEY, _location.str());
+            entry->setField(STORAGE_VALUE, _value.str());
+            table->update(_location.str(), entry, table->newCondition());
+        }
     }
 }
 
@@ -209,6 +219,7 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
         entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
     }
+    m_cache[_address] = _code;
 }
 
 void StorageState::kill(Address _address)
@@ -219,27 +230,37 @@ void StorageState::kill(Address _address)
         auto entry = table->newEntry();
         entry->setField(STORAGE_VALUE, m_accountStartNonce.str());
         table->update(ACCOUNT_NONCE, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, u256(0).str());
         table->update(ACCOUNT_BALANCE, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, "");
         table->update(ACCOUNT_CODE, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
+        entry = table->newEntry();
         entry->setField(STORAGE_VALUE, "false");
         table->update(ACCOUNT_ALIVE, entry, table->newCondition());
     }
     clear();
 }
 
-bytes const StorageState::code(Address const& _address) const
+bytes const& StorageState::code(Address const& _address) const
 {
+    auto it = m_cache.find(_address);
+    if (it != m_cache.end())
+        return it->second;
+    if (codeHash(_address) == EmptySHA3)
+        return NullBytes;
     auto table = getTable(_address);
     if (table)
     {
         auto entries = table->select(ACCOUNT_CODE, table->newCondition());
         if (entries->size() != 0u)
         {
-            return fromHex(entries->get(0)->getField(STORAGE_VALUE));
+            m_cache[_address] = fromHex(entries->get(0)->getField(STORAGE_VALUE));
+            return m_cache[_address];
         }
     }
     return NullBytes;
@@ -280,6 +301,7 @@ void StorageState::incNonce(Address const& _address)
             auto entry = entries->get(0);
             auto nonce = u256(entry->getField(STORAGE_VALUE));
             ++nonce;
+            entry = table->newEntry();
             entry->setField(STORAGE_VALUE, nonce.str());
             table->update(ACCOUNT_NONCE, entry, table->newCondition());
         }
@@ -313,7 +335,7 @@ u256 StorageState::getNonce(Address const& _address) const
             return u256(entry->getField(STORAGE_VALUE));
         }
     }
-    return u256();
+    return m_accountStartNonce;
 }
 
 h256 StorageState::rootHash() const
@@ -364,7 +386,10 @@ void StorageState::rollback(size_t _savepoint)
     m_memoryTableFactory->rollback(_savepoint);
 }
 
-void StorageState::clear() {}
+void StorageState::clear()
+{
+    m_cache.clear();
+}
 
 void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)
 {

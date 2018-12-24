@@ -1,3 +1,20 @@
+/*
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
+
 #include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -93,6 +110,21 @@ BOOST_AUTO_TEST_CASE(testGetBytes64)
     abi.abiOut(bytesConstRef(&out), retout);
     std::string s = "1000";
     string64 ret;
+    for (unsigned i = 0; i < retout.size(); ++i)
+        ret[i] = i < s.size() ? s[i] : 0;
+    BOOST_TEST_TRUE(retout == ret);
+}
+
+BOOST_AUTO_TEST_CASE(testGetBytes32)
+{
+    entry->setField("keyString", "1000");
+    ContractABI abi;
+    bytes sstr = abi.abiIn("getBytes32(string)", "keyString");
+    bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
+    string32 retout;
+    abi.abiOut(bytesConstRef(&out), retout);
+    std::string s = "1000";
+    string32 ret;
     for (unsigned i = 0; i < retout.size(); ++i)
         ret[i] = i < s.size() ? s[i] : 0;
     BOOST_TEST_TRUE(retout == ret);

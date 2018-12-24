@@ -1,24 +1,25 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file MemoryTableFactory.h
  *  @author ancelmo
  *  @date 20180921
  */
 #include "MemoryTableFactory.h"
+#include "CNSPrecompiled.h"
 #include "Common.h"
 #include "MemoryTable.h"
 #include "TablePrecompiled.h"
@@ -39,6 +40,7 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_NUMBER_2_HASH);
     m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
     m_sysTables.push_back(SYS_HASH_2_BLOCK);
+    m_sysTables.push_back(SYS_CNS);
 }
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName)
@@ -46,7 +48,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
-        STORAGE_LOG(DEBUG) << "Table:" << tableName << " already open:" << it->second;
+        STORAGE_LOG(TRACE) << "Table:" << tableName << " already open:" << it->second;
         return it->second;
     }
     auto tableInfo = make_shared<storage::TableInfo>();
@@ -61,7 +63,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
-            STORAGE_LOG(DEBUG) << tableName << " not exist in _sys_tables_.";
+            STORAGE_LOG(DEBUG) << tableName << " doesn't exist in _sys_tables_.";
             return nullptr;
         }
         auto entry = tableEntries->get(0);
@@ -69,9 +71,11 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
         tableInfo->key = entry->getField("key_field");
         string valueFields = entry->getField("value_field");
         boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
-        tableInfo->fields.emplace_back(STATUS);
-        tableInfo->fields.emplace_back(tableInfo->key);
     }
+    tableInfo->fields.emplace_back(STATUS);
+    tableInfo->fields.emplace_back(tableInfo->key);
+    tableInfo->fields.emplace_back("_hash_");
+    tableInfo->fields.emplace_back("_num_");
     MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
@@ -90,8 +94,8 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
 Table::Ptr MemoryTableFactory::createTable(
     const string& tableName, const string& keyField, const std::string& valueField)
 {
-    /// STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum << " table:"
-    /// << tableName;
+    STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum
+                       << " table:" << tableName;
 
     auto sysTable = openTable(SYS_TABLES);
 
@@ -278,8 +282,11 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = "key";
         tableInfo->fields = std::vector<std::string>{"value"};
     }
-    tableInfo->fields.emplace_back(tableInfo->key);
-    tableInfo->fields.emplace_back(STATUS);
-
+    else if (tableName == SYS_CNS)
+    {
+        tableInfo->key = dev::SYS_CNS_FIELD_NAME;
+        tableInfo->fields = std::vector<std::string>{
+            dev::SYS_CNS_FIELD_VERSION, dev::SYS_CNS_FIELD_ADDRESS, dev::SYS_CNS_FIELD_ABI};
+    }
     return tableInfo;
 }

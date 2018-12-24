@@ -26,7 +26,9 @@
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
+#include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libstorage/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/lexical_cast.hpp>
@@ -76,7 +78,6 @@ int64_t BlockChainImp::number()
             num = lexical_cast<int64_t>(currentNumber.c_str());
         }
     }
-    /// LOG(TRACE) << "BlockChainImp::number num=" << num;
     return num;
 }
 
@@ -102,12 +103,15 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
 
 bytes BlockChainImp::getCode(Address _address)
 {
+    BLOCKCHAIN_LOG(TRACE) << "[#getCode] [address]: "
+                          << "[" << toHex(_address) << "]";
     bytes ret;
     int64_t num = number();
     auto block = getBlockByNumber(num);
 
     if (!block)
     {
+        BLOCKCHAIN_LOG(TRACE) << "[#getCode] Can't find the block, return empty code";
         return ret;
     }
 
@@ -115,12 +119,12 @@ bytes BlockChainImp::getCode(Address _address)
     auto memoryFactory = getMemoryTableFactory();
 
     auto state = m_stateFactory->getState(stateRoot, memoryFactory);
-    return state->code(_address);
+    auto code = state->code(_address);
+    return code;
 }
 
 h256 BlockChainImp::numberHash(int64_t _i)
 {
-    /// LOG(TRACE) << "BlockChainImp::numberHash _i=" << _i;
     string numberHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -132,14 +136,11 @@ h256 BlockChainImp::numberHash(int64_t _i)
             numberHash = entry->getField(SYS_VALUE);
         }
     }
-    /// LOG(TRACE) << "BlockChainImp::numberHash numberHash=" << numberHash;
     return h256(numberHash);
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
-    /*LOG(TRACE) << "BlockChainImp::getBlockByHash _blockHash=" << _blockHash
-               << "_blockHash.hex()=" << _blockHash.hex();*/
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
     if (tb)
@@ -152,17 +153,18 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
             return std::make_shared<Block>(fromHex(strblock.c_str()));
         }
     }
+    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByHash] Can't find block, return nullptr";
     return nullptr;
 }
 
-void BlockChainImp::setGroupMark(std::string const& groupMark)
+void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam)
 {
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr)
     {
         block = std::make_shared<Block>();
         block->setEmptyBlock();
-        block->header().appendExtraDataArray(asBytes(groupMark));
+        block->header().appendExtraDataArray(asBytes(initParam.groupMark));
         shared_ptr<MemoryTableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH);
         if (tb)
@@ -170,6 +172,30 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
             Entry::Ptr entry = std::make_shared<Entry>();
             entry->setField(SYS_VALUE, block->blockHeader().hash().hex());
             tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
+        }
+
+        tb = mtb->openTable(SYS_MINERS);
+        if (tb)
+        {
+            for (dev::h512 node : initParam.minerList)
+            {
+                Entry::Ptr entry = std::make_shared<Entry>();
+                entry->setField(PRI_COLUMN, PRI_KEY);
+                entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
+                entry->setField(NODE_KEY_ENABLENUM, "0");
+                tb->insert(PRI_KEY, entry);
+            }
+
+            for (dev::h512 node : initParam.observerList)
+            {
+                Entry::Ptr entry = std::make_shared<Entry>();
+                entry->setField(PRI_COLUMN, PRI_KEY);
+                entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
+                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
+                entry->setField(NODE_KEY_ENABLENUM, "0");
+                tb->insert(PRI_KEY, entry);
+            }
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK);
@@ -183,27 +209,106 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
         }
 
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
-        LOG(INFO) << "insert the 0th block";
+        BLOCKCHAIN_LOG(INFO) << "[#checkAndBuildGenesisBlock] Insert the 0th block";
     }
     else
     {
-        if (groupMark.compare(asString(block->header().extraData(0))))
+        /// compare() return 0 means equal!
+        /// If not equal, only print warning, willnot kill process.
+        if (!initParam.groupMark.compare(asString(block->header().extraData(0))))
         {
-            LOG(INFO) << "Already have the 0th block, groupMark "
-                      << asString(block->header().extraData(0));
+            BLOCKCHAIN_LOG(INFO)
+                << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark is "
+                   "equal to file groupMark.";
         }
         else
         {
-            LOG(WARNING) << "Already have the 0th block, groupMark:"
-                         << asString(block->header().extraData(0))
-                         << ", GroupMark does not allow modification!";
+            BLOCKCHAIN_LOG(WARNING)
+                << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark:"
+                << asString(block->header().extraData(0))
+                << " is not equal to file groupMark:" << initParam.groupMark << " !";
         }
     }
 }
 
+dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
+{
+    LOG(TRACE) << "BlockChainImp::getNodeListByType " << type << " at " << blockNumber;
+
+    dev::h512s list;
+    try
+    {
+        auto nodes = m_stateStorage->select(
+            numberHash(blockNumber), blockNumber, storage::SYS_MINERS, blockverifier::PRI_KEY);
+        if (!nodes)
+            return list;
+
+        for (size_t i = 0; i < nodes->size(); i++)
+        {
+            auto node = nodes->get(i);
+            if (!node)
+                return list;
+
+            if ((node->getField(blockverifier::NODE_TYPE) == type) &&
+                (boost::lexical_cast<int>(node->getField(blockverifier::NODE_KEY_ENABLENUM)) <=
+                    blockNumber))
+            {
+                h512 nodeID = h512(node->getField(blockverifier::NODE_KEY_NODEID));
+                list.push_back(nodeID);
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "BlockChainImp::getNodeListByType failed [EINFO]: "
+                   << boost::diagnostic_information(e);
+    }
+
+    std::stringstream s;
+    s << "BlockChainImp::getNodeListByType " << type << ":";
+    for (dev::h512 node : list)
+        s << toJS(node) << ",";
+    LOG(TRACE) << s.str();
+
+    return list;
+}
+
+dev::h512s BlockChainImp::minerList()
+{
+    int64_t blockNumber = number();
+    UpgradableGuard l(m_nodeListMutex);
+    if (m_cacheNumByMiner == blockNumber)
+    {
+        LOG(TRACE) << "BlockChainImp::minerList by cache, size:" << m_minerList.size();
+        return m_minerList;
+    }
+    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_MINER);
+    UpgradeGuard ul(l);
+    m_cacheNumByMiner = blockNumber;
+    m_minerList = list;
+
+    return list;
+}
+
+dev::h512s BlockChainImp::observerList()
+{
+    int64_t blockNumber = number();
+    UpgradableGuard l(m_nodeListMutex);
+    if (m_cacheNumByObserver == blockNumber)
+    {
+        LOG(TRACE) << "BlockChainImp::observerList by cache, size:" << m_observerList.size();
+        return m_observerList;
+    }
+    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_OBSERVER);
+    UpgradeGuard ul(l);
+    m_cacheNumByObserver = blockNumber;
+    m_observerList = list;
+
+    return list;
+}
+
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
-    /// LOG(TRACE) << "BlockChainImp::getBlockByNumber _i=" << _i;
     string numberHash = "";
     string strblock = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
@@ -217,6 +322,7 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
             return getBlockByHash(h256(numberHash));
         }
     }
+    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByNumber] Can't find block, return nullptr";
     return nullptr;
 }
 
@@ -241,6 +347,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             }
         }
     }
+    BLOCKCHAIN_LOG(TRACE) << "[#getTxByHash] Can't find tx, return empty tx";
     return Transaction();
 }
 
@@ -266,6 +373,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
             }
         }
     }
+    BLOCKCHAIN_LOG(TRACE) << "[#getLocalisedTxByHash] Can't find tx, return empty localised tx";
     return LocalisedTransaction(Transaction(), h256(0), -1, -1);
 }
 
@@ -290,6 +398,8 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             }
         }
     }
+    BLOCKCHAIN_LOG(TRACE)
+        << "[#getTransactionReceiptByHash] Can't find tx, return empty localised tx receipt";
     return TransactionReceipt();
 }
 
@@ -319,6 +429,8 @@ LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256
             }
         }
     }
+    BLOCKCHAIN_LOG(TRACE)
+        << "[#getLocalisedTxReceiptByHash] Can't find tx, return empty localised tx receipt";
     return LocalisedTransactionReceipt(
         TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
 }
@@ -418,16 +530,17 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     int64_t num = number();
     if ((block.blockHeader().number() != num + 1))
     {
-        LOG(WARNING) << "commit fail,need number: " << number()
-                     << " committed block number: " << block.blockHeader().number();
+        BLOCKCHAIN_LOG(WARNING) << "[#commitBlock] Commit fail [needNumber/committedNumber]: "
+                                << "[" << (num + 1) << "/" << block.blockHeader().number() << "]";
         return CommitResult::ERROR_NUMBER;
     }
 
     h256 parentHash = numberHash(number());
     if (block.blockHeader().parentHash() != numberHash(number()))
     {
-        LOG(WARNING) << "commit fail,need parentHash: " << parentHash
-                     << " committed block parentHash: " << block.blockHeader().parentHash();
+        BLOCKCHAIN_LOG(WARNING)
+            << "[#commitBlock] Commit fail [needParentHash/committedParentHash]: "
+            << "[" << parentHash << "/" << block.blockHeader().parentHash() << "]";
         return CommitResult::ERROR_PARENT_HASH;
     }
     if (commitMutex.try_lock())
@@ -443,9 +556,10 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     }
     else
     {
-        LOG(INFO) << "commit try_lock fail, block number: " << block.blockHeader().number()
-                  << " block parentHash: " << block.blockHeader().parentHash() << " num: " << num
-                  << " parentHash: " << parentHash;
+        BLOCKCHAIN_LOG(INFO)
+            << "[#commitBlock] Try lock commitMutex fail [blockNumber/blockParentHash/parentHash]"
+            << "[" << block.blockHeader().number() << "/" << block.blockHeader().parentHash() << "/"
+            << parentHash << "]";
         return CommitResult::ERROR_COMMITTING;
     }
 }

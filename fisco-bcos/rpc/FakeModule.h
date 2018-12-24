@@ -62,18 +62,21 @@ public:
     {
         p2p::NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
-        SessionInfo info(nodeID, m_endpoint, std::set<std::string>());
+        P2PSessionInfo info(nodeID, m_endpoint, std::set<std::string>());
         std::set<std::string> topics;
         std::string topic = "Topic1";
         topics.insert(topic);
-        m_sessionInfos.push_back(SessionInfo(nodeID, m_endpoint, topics));
+        m_sessionInfos.push_back(P2PSessionInfo(nodeID, m_endpoint, topics));
     }
 
-    virtual SessionInfos sessionInfos() override { return m_sessionInfos; }
-    void setSessionInfos(SessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
-    void appendSessionInfo(SessionInfo const& info) { m_sessionInfos.push_back(info); }
+    virtual P2PSessionInfos sessionInfos() override { return m_sessionInfos; }
+    void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    SessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const { return m_sessionInfos; }
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
+    {
+        return m_sessionInfos;
+    }
 
     virtual void asyncSendMessageByNodeID(p2p::NodeID nodeID, P2PMessage::Ptr message,
         CallbackFuncWithSession callback, Options options = Options()) override
@@ -91,7 +94,7 @@ public:
         return m_asyncSend[nodeID];
     }
 
-    Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    dev::network::Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
     {
         auto msg = m_asyncSendMsgs.find(nodeID);
         if (msg == m_asyncSendMsgs.end())
@@ -103,9 +106,9 @@ public:
     bool isConnected(NodeID const& nodeId) const { return m_connected; }
 
 private:
-    SessionInfos m_sessionInfos;
+    P2PSessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
-    std::map<NodeID, Message::Ptr> m_asyncSendMsgs;
+    std::map<NodeID, dev::network::Message::Ptr> m_asyncSendMsgs;
     bool m_connected;
 };
 
@@ -235,7 +238,9 @@ public:
         return CommitResult::OK;
     }
 
-    void setGroupMark(std::string const& groupMark) override {}
+    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override {}
+    dev::h512s minerList() override { return dev::h512s(); };
+    dev::h512s observerList() override { return dev::h512s(); };
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
@@ -447,7 +452,7 @@ public:
     virtual NodeAccountType accountType() { return NodeAccountType::MinerAccount; };
     /// set the node account type
     virtual void setNodeAccountType(NodeAccountType const&){};
-    virtual u256 nodeIdx() const { return u256(0); };
+    virtual IDXTYPE nodeIdx() const { return 0; };
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const& block){};
 
