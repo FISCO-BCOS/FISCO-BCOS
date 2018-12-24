@@ -43,11 +43,11 @@ void SyncMaster::printSyncInfo()
     SYNCLOG(TRACE) << "            TxPool size:  " << m_txPool->pendingSize() << endl;
     SYNCLOG(TRACE) << "            Peers size:   " << m_syncStatus->peers().size() << endl;
     SYNCLOG(TRACE) << "[Peer Info] --------------------------------------------" << endl;
-    SYNCLOG(TRACE) << "    Host: " << m_nodeId << endl;
+    SYNCLOG(TRACE) << "    Host: " << m_nodeId.abridged() << endl;
 
     NodeIDs peers = m_syncStatus->peers();
     for (auto& peer : peers)
-        SYNCLOG(TRACE) << "    Peer: " << peer << endl;
+        SYNCLOG(TRACE) << "    Peer: " << peer.abridged() << endl;
     SYNCLOG(TRACE) << "            --------------------------------------------" << endl;
 }
 
@@ -226,8 +226,8 @@ void SyncMaster::maintainTransactions()
         auto msg = packet.toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
         SYNCLOG(DEBUG) << "[Tx] Send transaction to peer [txNum/toNodeId/messageSize]: "
-                       << int(txsSize) << "/" << _p->nodeId << "/" << msg->buffer()->size() << "B"
-                       << endl;
+                       << int(txsSize) << "/" << _p->nodeId.abridged() << "/"
+                       << msg->buffer()->size() << "B" << endl;
 
         return true;
     });
@@ -248,7 +248,7 @@ void SyncMaster::maintainBlocks()
         SYNCLOG(DEBUG) << "[Status] Send current status when maintainBlocks "
                           "[number/genesisHash/currentHash/peer] :"
                        << int(number) << "/" << m_genesisHash << "/" << currentHash << "/"
-                       << _p->nodeId << endl;
+                       << _p->nodeId.abridged() << endl;
 
         return true;
     });
@@ -375,36 +375,50 @@ bool SyncMaster::maintainDownloadingQueue()
     BlockPtr topBlock = bq.top();
     while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
-        if (isNewBlock(topBlock))
+        try
         {
-            auto parentBlock = m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
-            BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
-                parentBlock->header().stateRoot()};
-            ExecutiveContext::Ptr exeCtx =
-                m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
-            CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
-            if (ret == CommitResult::OK)
+            if (isNewBlock(topBlock))
             {
-                m_txPool->dropBlockTrans(*topBlock);
-                SYNCLOG(DEBUG) << "[Download] [BlockSync] Download block commit [number/txs/hash]: "
-                               << topBlock->header().number() << "/"
-                               << topBlock->transactions().size() << "/" << topBlock->headerHash()
-                               << endl;
+                auto parentBlock =
+                    m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
+                BlockInfo parentBlockInfo{parentBlock->header().hash(),
+                    parentBlock->header().number(), parentBlock->header().stateRoot()};
+                ExecutiveContext::Ptr exeCtx =
+                    m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
+                CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+                if (ret == CommitResult::OK)
+                {
+                    m_txPool->dropBlockTrans(*topBlock);
+                    SYNCLOG(DEBUG)
+                        << "[Download] [BlockSync] Download block commit [number/txs/hash]: "
+                        << topBlock->header().number() << "/" << topBlock->transactions().size()
+                        << "/" << topBlock->headerHash() << endl;
+                }
+                else
+                {
+                    m_txPool->handleBadBlock(*topBlock);
+                    SYNCLOG(TRACE)
+                        << "[Download] [BlockSync] Block commit failed [number/txs/hash]: "
+                        << topBlock->header().number() << "/" << topBlock->transactions().size()
+                        << "/" << topBlock->headerHash() << endl;
+                }
             }
             else
             {
-                m_txPool->handleBadBlock(*topBlock);
-                SYNCLOG(TRACE) << "[Download] [BlockSync] Block commit failed [number/txs/hash]: "
+                SYNCLOG(TRACE) << "[Download] [BlockSync] Block of queue top is not new block "
+                                  "[number/txs/hash]: "
                                << topBlock->header().number() << "/"
                                << topBlock->transactions().size() << "/" << topBlock->headerHash()
                                << endl;
             }
         }
-        else
-            SYNCLOG(TRACE)
-                << "[Download] [BlockSync] Block in queue is not new block [number/txs/hash]: "
-                << topBlock->header().number() << "/" << topBlock->transactions().size() << "/"
-                << topBlock->headerHash() << endl;
+        catch (exception& e)
+        {
+            SYNCLOG(ERROR) << "[Download] [BlockSync] Block of queue top is not a valid block "
+                              "[number/txs/hash]: "
+                           << topBlock->header().number() << "/" << topBlock->transactions().size()
+                           << "/" << topBlock->headerHash() << endl;
+        }
 
         bq.pop();
         topBlock = bq.top();
@@ -455,7 +469,7 @@ void SyncMaster::maintainPeersConnection()
             SYNCLOG(DEBUG) << "[Status] Send current status to new peer "
                               "[number/genesisHash/currentHash/peer] :"
                            << int(currentNumber) << "/" << m_genesisHash << "/" << currentHash
-                           << "/" << session.nodeID << endl;
+                           << "/" << session.nodeID.abridged() << endl;
         }
     }
 }
@@ -495,16 +509,18 @@ void SyncMaster::maintainBlockRequest()
                 shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
                 if (!block)
                 {
-                    SYNCLOG(TRACE) << "[Download] [Request] Get block for node failed "
-                                      "[reason/number/nodeId]: "
-                                   << "block is null/" << number << "/" << _p->nodeId << endl;
+                    SYNCLOG(TRACE)
+                        << "[Download] [Request] Get block for node failed "
+                           "[reason/number/nodeId]: "
+                        << "block is null/" << number << "/" << _p->nodeId.abridged() << endl;
                     break;
                 }
                 else if (block->header().number() != number)
                 {
-                    SYNCLOG(TRACE) << "[Download] [Request] Get block for node failed "
-                                      "[reason/number/nodeId]: "
-                                   << number << "number incorrect /" << _p->nodeId << endl;
+                    SYNCLOG(TRACE)
+                        << "[Download] [Request] Get block for node failed "
+                           "[reason/number/nodeId]: "
+                        << number << "number incorrect /" << _p->nodeId.abridged() << endl;
                     break;
                 }
 
@@ -513,15 +529,16 @@ void SyncMaster::maintainBlockRequest()
 
             if (req.fromNumber < number)
                 SYNCLOG(DEBUG) << "[Download] [Request] [BlockSync] Send blocks [" << req.fromNumber
-                               << ", " << number - 1 << "] to peer " << _p->nodeId << endl;
+                               << ", " << number - 1 << "] to peer " << _p->nodeId.abridged()
+                               << endl;
 
             if (number < numberLimit)  // This respond not reach the end due to timeout
             {
                 // write back the rest request range
                 reqQueue.enablePush();
                 SYNCLOG(DEBUG) << "[Download] [Request] Push unsent requests back to reqQueue ["
-                               << number << ", " << numberLimit - 1 << "] of " << _p->nodeId
-                               << endl;
+                               << number << ", " << numberLimit - 1 << "] of "
+                               << _p->nodeId.abridged() << endl;
                 reqQueue.push(number, numberLimit - number);
                 return false;
             }
