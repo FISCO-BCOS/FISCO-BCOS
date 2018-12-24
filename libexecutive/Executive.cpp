@@ -22,6 +22,7 @@
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/VMFactory.h>
+#include <libstorage/Common.h>
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
@@ -32,6 +33,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::executive;
+using namespace dev::storage;
 
 u256 Executive::gasUsed() const
 {
@@ -202,7 +204,20 @@ bool Executive::create2Opcode(Address const& _sender, u256 const& _endowment, u2
 bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice,
     u256 const& _gas, bytesConstRef _init, Address const& _origin)
 {
-    m_s->incNonce(_sender, _origin);
+    // check authority for deploy contract
+	auto memeryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
+	auto table = memeryTableFactory->openTable(SYS_TABLES);
+	if(!table->checkAuthority(_origin))
+	{
+        LOG(WARNING) << "deploy contract checkAuthority of " << _origin.hex() << " failed!";
+        m_gas = 0;
+        m_excepted = TransactionException::PermissionDenied;
+        revert();
+        m_ext = {};
+        return !m_ext;
+	}
+
+	m_s->incNonce(_sender, _origin);
 
     m_savepoint = m_s->savepoint();
     m_memoryTableFactorySavePoint =

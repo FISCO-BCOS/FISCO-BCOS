@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(open_Table)
     std::string tableName("t_test");
     std::string keyField("key");
     std::string valueField("value");
-    memoryDBFactory->createTable(tableName, keyField, valueField);
+    memoryDBFactory->createTable(tableName, keyField, valueField, true);
     MemoryTable::Ptr table =
         std::dynamic_pointer_cast<MemoryTable>(memoryDBFactory->openTable("t_test"));
     table->remove("name", table->newCondition());

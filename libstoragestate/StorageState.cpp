@@ -405,7 +405,7 @@ void StorageState::createAccount(
     Address const& _origin, Address const& _address, u256 const& _nonce, u256 const& _amount)
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
-    auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, _origin);
+    auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false, _origin);
     if (!table)
     {
         return;

@@ -116,12 +116,12 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
 }
 
 Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string& keyField,
-    const std::string& valueField, Address const& _origin)
+    const std::string& valueField, bool authorigytFlag, Address const& _origin)
 {
     STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum
                        << " table:" << tableName;
 
-    auto sysTable = openTable(SYS_TABLES);
+    auto sysTable = openTable(SYS_TABLES, authorigytFlag);
 
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
