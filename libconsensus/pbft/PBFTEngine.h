@@ -108,7 +108,7 @@ public:
     const std::string consensusStatus() const override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
-    static void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
+    void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
 
 protected:
     void workLoop() override;
@@ -126,11 +126,11 @@ protected:
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
-        unsigned const& ttl = maxTTL);
+        unsigned const& ttl = 0);
 
     void sendViewChangeMsg(NodeID const& nodeId);
     bool sendMsg(NodeID const& nodeId, unsigned const& packetType, std::string const& key,
-        bytesConstRef data, unsigned const& ttl = maxTTL);
+        bytesConstRef data, unsigned const& ttl = 0);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -233,7 +233,10 @@ protected:
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
         packet.packet_id = packetType;
-        packet.ttl = ttl;
+        if (ttl == 0)
+            packet.ttl = maxTTL;
+        else
+            packet.ttl = ttl;
         packet.encode(*p_data);
         message->setBuffer(p_data);
         message->setProtocolID(protocolId);
@@ -462,7 +465,7 @@ protected:
     int64_t m_lastObtainMinerNum = 0;
     bool m_emptyBlockViewChange = false;
 
-    static byte maxTTL;
+    uint8_t maxTTL = MAXTTL;
 };
 }  // namespace consensus
 }  // namespace dev

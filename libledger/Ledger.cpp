@@ -275,7 +275,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftEngine->setIntervalBlockTime(SystemConfigMgr::c_intervalBlockTime);
     pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(SystemConfigMgr::c_omitEmptyBlock);
-    PBFTEngine::setMaxTTL(m_param->mutableConsensusParam().maxTTL);
+    pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     return pbftSealer;
 }
 

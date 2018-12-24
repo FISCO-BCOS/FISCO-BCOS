@@ -39,7 +39,6 @@ namespace consensus
 {
 const std::string PBFTEngine::c_backupKeyCommitted = "committed";
 const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
-uint8_t PBFTEngine::maxTTL = MAXTTL;
 
 void PBFTEngine::start()
 {
@@ -404,7 +403,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         PBFTENGINE_LOG(TRACE) << "[#broadcastMsg] [myIdx/myNode/dstId/dstIp/packetType/ttl]:  "
                               << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                               << session.nodeID.abridged() << "/" << session.nodeIPEndpoint.name()
-                              << "/" << packetType << "/" << ttl;
+                              << "/" << packetType << "/" << (ttl == 0 ? maxTTL : ttl);
         /// send messages
         m_service->asyncSendMessageByNodeID(
             session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);

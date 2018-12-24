@@ -105,7 +105,7 @@ public:
 
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
-        unsigned const& ttl = MAXTTL)
+        unsigned const& ttl = 0)
     {
         return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl);
     }

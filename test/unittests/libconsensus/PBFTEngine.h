@@ -85,7 +85,7 @@ static std::shared_ptr<FakeSession> FakeSessionFunc(Public node_id)
 /// fake message
 template <typename T>
 P2PMessage::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& req,
-    PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl = MAXTTL)
+    PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl = 0)
 {
     bytes data;
     req.encode(data);
