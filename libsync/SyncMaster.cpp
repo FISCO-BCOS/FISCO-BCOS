@@ -581,7 +581,7 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
     }
 
     // check block minerlist sig
-    if (fp_isConsensusOk && !(*fp_isConsensusOk)(*_block))
+    if (fp_isConsensusOk && !(fp_isConsensusOk)(*_block))
     {
         SYNCLOG(WARNING) << "[Download] [BlockSync] Ignore illegal block "
                             "[reason/thisNumber/currentNumber/thisParentHash/currentHash]: "
