@@ -29,6 +29,7 @@
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <random>
 #include <thread>
 #include <unordered_map>
@@ -38,10 +39,14 @@ using namespace dev::consensus;
 using namespace dev::p2p;
 using namespace dev::eth;
 using namespace dev::blockchain;
+using namespace std;
+using namespace std::chrono;
+
+typename raft::NodeIndex RaftEngine::InvalidIndex = raft::NodeIndex(-1);
 
 void RaftEngine::resetElectTimeout()
 {
-    Guard l(m_mutex);
+    Guard guard(m_mutex);
 
     m_electTimeout =
         m_minElectTimeout + std::rand() % 100 * (m_maxElectTimeout - m_minElectTimeout) / 100;
@@ -55,7 +60,7 @@ void RaftEngine::initRaftEnv()
     resetConfig();
 
     {
-        Guard l(m_mutex);
+        Guard guard(m_mutex);
         m_minElectTimeoutInit = m_minElectTimeout;
         m_maxElectTimeoutInit = m_maxElectTimeout;
         m_minElectTimeoutBoundary = m_minElectTimeout;
@@ -77,12 +82,10 @@ void RaftEngine::resetConfig()
 {
     updateMinerList();
 
-    auto needReset = false;
-    size_t nodeNum;
-    raft::NodeIndex nodeIdx;
+    auto shouldSwitchToFollower = false;
     {
-        Guard l(m_mutex);
-        nodeNum = m_minerList.size();
+        Guard guard(m_mutex);
+        auto nodeNum = m_minerList.size();
         if (nodeNum == 0)
         {
             RAFTENGINE_LOG(WARNING) << "[#resetConfig] Reset config error: no miner. Stop sealing";
@@ -100,42 +103,41 @@ void RaftEngine::resetConfig()
         }
 
         m_accountType = NodeAccountType::MinerAccount;
-        nodeIdx = iter - m_minerList.begin();
-        needReset = (nodeNum != m_nodeNum || nodeIdx != m_nodeIdx);
+        auto nodeIdx = iter - m_minerList.begin();
+        if (nodeNum != m_nodeNum || nodeIdx != m_idx)
+        {
+            m_nodeNum = nodeNum;
+            m_idx = nodeIdx;
+            m_idx = m_idx;
+            m_f = (m_nodeNum - 1) / 2;
+            shouldSwitchToFollower = true;
+            RAFTENGINE_LOG(DEBUG) << "[#resetConfig] [m_nodeNum]: " << m_nodeNum
+                                  << ", [m_idx]: " << m_idx << ", [m_f]: " << m_f;
+        }
+
+        m_cfgErr = false;
     }
 
-    if (needReset)
+    if (shouldSwitchToFollower)
     {
-        {
-            Guard l(m_mutex);
-            m_nodeNum = nodeNum;
-            m_nodeIdx = nodeIdx;
-            m_f = (m_nodeNum - 1) / 2;
-        }
-        RAFTENGINE_LOG(DEBUG) << "[#resetConfig] [m_nodeNum]: " << m_nodeNum
-                              << ", [m_nodeIdx]: " << m_nodeIdx << ", [m_f]: " << m_f;
-        switchToFollower(raft::InvalidIndex);
+        switchToFollower(InvalidIndex);
         resetElectTimeout();
     }
-
-    Guard l(m_mutex);
-    m_cfgErr = false;
 }
 
 void RaftEngine::updateMinerList()
 {
     if (m_storage == nullptr)
         return;
-    if (m_highestBlockHeader.number() == m_lastObtainMinerNum)
+    if (m_highestBlock.number() == m_lastObtainMinerNum)
         return;
     try
     {
-        UpgradableGuard l(m_minerListMutex);
+        UpgradableGuard guard(m_minerListMutex);
         auto minerList = m_minerList;
-        int64_t curBlockNum = m_highestBlockHeader.number();
+        int64_t curBlockNum = m_highestBlock.number();
         /// get node from storage DB
-        auto nodes =
-            m_storage->select(m_highestBlockHeader.hash(), curBlockNum, "_sys_miners_", "node");
+        auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
         /// obtain miner list
         if (!nodes)
             return;
@@ -177,7 +179,7 @@ void RaftEngine::updateMinerList()
                 }
             }
         }
-        UpgradeGuard ul(l);
+        UpgradeGuard ul(guard);
         m_minerList = minerList;
         /// to make sure the index of all miners are consistent
         std::sort(m_minerList.begin(), m_minerList.end());
@@ -200,28 +202,34 @@ void RaftEngine::start()
 
 void RaftEngine::reportBlock(dev::eth::Block const& _block)
 {
-    auto canReport = false;
+    auto shouldReport = false;
     {
-        Guard Guard(m_mutex);
-        canReport =
-            m_blockChain->number() == 0 || m_highestBlock.number() < _block.blockHeader().number();
+        Guard guard(m_mutex);
+        shouldReport = (m_blockChain->number() == 0 ||
+                        m_highestBlock.number() < _block.blockHeader().number());
+        if (shouldReport)
+        {
+            m_lastBlockTime = utcTime();
+            m_highestBlock = _block.blockHeader();
+        }
     }
 
-    if (canReport)
+    if (shouldReport)
     {
         {
-            Guard Guard(m_mutex);
-            m_lastBlockTime = utcTime();
-            m_highestBlockHeader = _block.blockHeader();
+            Guard guard(m_commitMutex);
+            m_uncommittedBlock = Block();
+            m_uncommittedBlockNumber = 0;
             if (m_highestBlock.number() >= m_consensusBlockNumber)
             {
                 m_consensusBlockNumber = m_highestBlock.number() + 1;
             }
         }
+
         resetConfig();
         RAFTENGINE_LOG(INFO) << "[#reportBlock] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report:"
                              << " [number]: " << m_highestBlock.number()
-                             << ", [idx]: " << m_highestBlock.sealer()
+                             << ", [sealer]: " << m_highestBlock.sealer()
                              << ", [hash]: " << m_highestBlock.hash().abridged()
                              << ", [next]: " << m_consensusBlockNumber
                              << ", [txNum]: " << _block.getTransactionSize()
@@ -244,7 +252,7 @@ bool RaftEngine::isValidReq(P2PMessage::Ptr _message, P2PSession::Ptr _session, 
     }
     /// check whether this node is in the miner list
     h512 nodeId;
-    bool isMiner = getNodeIdByIndex(nodeId, m_nodeIdx);
+    bool isMiner = getNodeIdByIndex(nodeId, m_idx);
     if (!isMiner || _session->nodeID() == nodeId)
     {
         RAFTENGINE_LOG(WARNING) << "[#isValidReq] I'm not a miner";
@@ -255,7 +263,7 @@ bool RaftEngine::isValidReq(P2PMessage::Ptr _message, P2PSession::Ptr _session, 
 
 ssize_t RaftEngine::getIndexByMiner(dev::h512 const& _nodeId)
 {
-    ReadGuard l(m_minerListMutex);
+    ReadGuard guard(m_minerListMutex);
     ssize_t index = -1;
     for (size_t i = 0; i < m_minerList.size(); ++i)
     {
@@ -377,10 +385,10 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
             RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve vote req packet";
 
             RaftVoteReq req;
-            req.populate(RLP(ref(ret.second.data).cropped(1)));
+            req.populate(RLP(ref(ret.second.data))[0]);
             if (handleVoteRequest(ret.second.nodeIdx, ret.second.nodeId, req))
             {
-                switchToFollower(raft::InvalidIndex);
+                switchToFollower(InvalidIndex);
                 return false;
             }
             return true;
@@ -397,7 +405,7 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
             RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] Receieve heartbeat packet";
 
             RaftHeartBeat hb;
-            hb.populate(RLP(ref(ret.second.data).cropped(1)));
+            hb.populate(RLP(ref(ret.second.data))[0]);
             if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
             {
                 switchToFollower(hb.leader);
@@ -413,9 +421,9 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
             RAFTENGINE_LOG(INFO) << "[#runAsLeader] Receive heartbeat ack [from]: "
                                  << ret.second.nodeIdx
                                  << ", [node]: " << ret.second.nodeId.hex().substr(0, 5);
-            resp.populate(RLP(ref(ret.second.data).cropped(1)));
+            resp.populate(RLP(ref(ret.second.data))[0]);
             {
-                Guard Guard(m_mutex);
+                Guard guard(m_mutex);
                 RAFTENGINE_LOG(DEBUG) << "[#runAsLeader] heartbeat ack from: " << ret.second.nodeId
                                       << ", heartbeat ack height: " << resp.height
                                       << ", heartbeat ack blockHash: " << toString(resp.blockHash);
@@ -445,15 +453,55 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
             // add myself
             if (count + 1 >= m_nodeNum - m_f)
             {
-                // collect heartbeat exceed half
-                // reset heartbeat timeout
+                RAFTENGINE_LOG(TRACE) << "[#runAsLeader] Collect heartbeat resp exceed half";
+
                 m_lastHeartbeatReset = std::chrono::system_clock::now();
                 for_each(memberHeartbeatLog.begin(), memberHeartbeatLog.end(),
                     [](std::pair<const h512, unsigned>& item) {
                         if (item.second > 0)
                             --item.second;
                     });
-                RAFTENGINE_LOG(INFO) << "[#runAsLeader] Reset heartbeat timeout";
+                RAFTENGINE_LOG(TRACE) << "[#runAsLeader] Reset heartbeat timeout";
+
+                {
+                    std::unique_lock<std::mutex> ul(m_commitMutex);
+                    if (bool(m_uncommittedBlock))
+                    {
+                        if (m_uncommittedBlockNumber == m_consensusBlockNumber)
+                        {
+                            if (m_waitingForCommitting)
+                            {
+                                RAFTENGINE_LOG(TRACE) << "[#runAsLeader] Some thread waiting on "
+                                                         "commitCV, commit by other thread";
+                                m_commitReady = true;
+                                ul.unlock();
+                                m_commitCV.notify_all();
+                            }
+                            else
+                            {
+                                RAFTENGINE_LOG(TRACE) << "[#runAsLeader] No thread waiting on "
+                                                         "commitCV, commit by meself";
+                                checkAndExecute(m_uncommittedBlock);
+                                ul.unlock();
+                                reportBlock(m_uncommittedBlock);
+                            }
+                        }
+                        else
+                        {
+                            RAFTENGINE_LOG(TRACE)
+                                << "[#runAsLeader] Give up uncommited block, "
+                                   "[nextHeight/myHeight]: "
+                                << m_uncommittedBlockNumber << "/" << m_highestBlock.number();
+                            m_uncommittedBlock = Block();
+                            m_uncommittedBlockNumber = 0;
+                        }
+                    }
+                    else
+                    {
+                        RAFTENGINE_LOG(TRACE) << "[#runAsLeader] no uncommited block";
+                        ul.unlock();
+                    }
+                }
             }
             return true;
         }
@@ -469,7 +517,7 @@ void RaftEngine::runAsLeader()
 {
     RAFTENGINE_LOG(DEBUG) << "[#runAsLeader]";
 
-    m_firstVote = raft::InvalidIndex;
+    m_firstVote = InvalidIndex;
     m_lastLeaderTerm = m_term;
     m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::system_clock::now();
     std::unordered_map<h512, unsigned> memberHeartbeatLog;
@@ -494,8 +542,8 @@ void RaftEngine::runAsCandidate()
 
     VoteState voteState;
     voteState.vote += 1;  // vote self
-    setVote(m_nodeIdx);
-    m_firstVote = m_nodeIdx;
+    setVote(m_idx);
+    m_firstVote = m_idx;
 
     if (wonElection(voteState.vote))
     {
@@ -527,7 +575,7 @@ void RaftEngine::runAsCandidate()
                 increaseElectTime();
                 m_term--;  // recover to previous term
                 RAFTENGINE_LOG(INFO) << "[#runAsCandidate] Switch to Follower";
-                switchToFollower(raft::InvalidIndex);
+                switchToFollower(InvalidIndex);
             }
             return;
         }
@@ -545,10 +593,10 @@ void RaftEngine::runAsCandidate()
                 RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve vote req packet";
 
                 RaftVoteReq req;
-                req.populate(RLP(ref(ret.second.data).cropped(1)));
+                req.populate(RLP(ref(ret.second.data))[0]);
                 if (handleVoteRequest(ret.second.nodeIdx, ret.second.nodeId, req))
                 {
-                    switchToFollower(raft::InvalidIndex);
+                    switchToFollower(InvalidIndex);
                     return;
                 }
                 break;
@@ -558,7 +606,7 @@ void RaftEngine::runAsCandidate()
                 RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve vote resp packet";
 
                 RaftVoteResp resp;
-                resp.populate(RLP(ref(ret.second.data).cropped(1)));
+                resp.populate(RLP(ref(ret.second.data))[0]);
                 RAFTENGINE_LOG(INFO)
                     << "[#runAsCandidate] Receieve response [term]: " << resp.term
                     << ", [voteFlag]: " << resp.voteFlag << ", [from]: " << ret.second.nodeIdx
@@ -572,7 +620,7 @@ void RaftEngine::runAsCandidate()
                 }
                 else if (handleRet == TO_FOLLOWER)
                 {
-                    switchToFollower(raft::InvalidIndex);
+                    switchToFollower(InvalidIndex);
                     return;
                 }
                 break;
@@ -582,7 +630,7 @@ void RaftEngine::runAsCandidate()
                 RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve heartbeat packet";
 
                 RaftHeartBeat hb;
-                hb.populate(RLP(ref(ret.second.data).cropped(1)));
+                hb.populate(RLP(ref(ret.second.data))[0]);
                 if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
                 {
                     switchToFollower(hb.leader);
@@ -601,20 +649,34 @@ void RaftEngine::runAsCandidate()
 
 void RaftEngine::runAsFollower()
 {
-    RAFTENGINE_LOG(DEBUG) << "[#runAsFollwer] [currentLeader]: " << m_leader;
+    RAFTENGINE_LOG(DEBUG) << "[#runAsFollower] [currentLeader]: " << m_leader;
 
     while (true)
     {
         if (m_state != EN_STATE_FOLLOWER)
         {
-            RAFTENGINE_LOG(DEBUG) << "[#runAsFollwer] [state]:" << m_state
+            RAFTENGINE_LOG(DEBUG) << "[#runAsFollower] [state]:" << m_state
                                   << " != EN_STATE_FOLLOWER";
             break;
         }
 
+        std::unique_lock<std::mutex> ul(m_commitMutex);
+        if (m_waitingForCommitting)
+        {
+            RAFTENGINE_LOG(TRACE) << "[#runAsFollower] some thread waiting on "
+                                     "commitCV, need to wake up";
+            m_commitReady = true;
+            ul.unlock();
+            m_commitCV.notify_all();
+        }
+        else
+        {
+            ul.unlock();
+        }
+
         if (checkElectTimeout())
         {
-            RAFTENGINE_LOG(DEBUG) << "[#runAsFollwer] Elect timeout, switch to Candidate";
+            RAFTENGINE_LOG(DEBUG) << "[#runAsFollower] Elect timeout, switch to Candidate";
             switchToCandidate();
             return;
         }
@@ -633,7 +695,7 @@ void RaftEngine::runAsFollower()
                 RAFTENGINE_LOG(DEBUG) << "[#runAsFollower] Receieve vote req packet";
 
                 RaftVoteReq req;
-                req.populate(RLP(ref(ret.second.data).cropped(1)));
+                req.populate(RLP(ref(ret.second.data))[0]);
                 if (handleVoteRequest(ret.second.nodeIdx, ret.second.nodeId, req))
                 {
                     return;
@@ -652,7 +714,7 @@ void RaftEngine::runAsFollower()
                 RAFTENGINE_LOG(DEBUG) << "[#runAsFollower] Receieve heartbeat packet";
 
                 RaftHeartBeat hb;
-                hb.populate(RLP(ref(ret.second.data).cropped(1)));
+                hb.populate(RLP(ref(ret.second.data))[0]);
                 if (m_leader == Invalid256)
                 {
                     setLeader(hb.leader);
@@ -674,23 +736,40 @@ void RaftEngine::runAsFollower()
 
 bool RaftEngine::checkHeartbeatTimeout()
 {
-    std::chrono::system_clock::time_point nowTime = std::chrono::system_clock::now();
-    auto interval = nowTime - m_lastHeartbeatReset;
+    system_clock::time_point nowTime = system_clock::now();
+    auto interval = duration_cast<milliseconds>(nowTime - m_lastHeartbeatReset).count();
 
-    RAFTENGINE_LOG(DEBUG) << "[#checkHeartbeatTimeout] [interval]: " << interval.count()
+    RAFTENGINE_LOG(DEBUG) << "[#checkHeartbeatTimeout] [interval]: " << interval
                           << ", [heartbeatTimeout]: " << m_heartbeatTimeout;
 
-    return interval >= std::chrono::milliseconds(m_heartbeatTimeout);
+    return interval >= m_heartbeatTimeout;
 }
 
 P2PMessage::Ptr RaftEngine::generateHeartbeat()
 {
     RaftHeartBeat hb;
-    hb.idx = m_nodeIdx;
+    hb.idx = m_idx;
     hb.term = m_term;
-    hb.height = m_highestBlockHeader.number();
-    hb.blockHash = m_highestBlockHeader.hash();
-    hb.leader = m_nodeIdx;
+    hb.height = m_highestBlock.number();
+    hb.blockHash = m_highestBlock.hash();
+    hb.leader = m_idx;
+    {
+        Guard guard(m_commitMutex);
+        if (bool(m_uncommittedBlock))
+        {
+            RAFTENGINE_LOG(TRACE) << "[#generateHeartbeat] Has uncommited block";
+            m_uncommittedBlock.encode(hb.uncommitedBlock);
+            hb.uncommitedBlockNumber = m_consensusBlockNumber;
+            RAFTENGINE_LOG(DEBUG) << "[#generateHeartbeat] [nextBlockNumber]: "
+                                  << hb.uncommitedBlockNumber;
+        }
+        else
+        {
+            RAFTENGINE_LOG(TRACE) << "[#generateHeartbeat] No uncommited block";
+            hb.uncommitedBlock = bytes();
+            hb.uncommitedBlockNumber = 0;
+        }
+    }
 
     RLPStream ts;
     hb.streamRLPFields(ts);
@@ -705,30 +784,46 @@ P2PMessage::Ptr RaftEngine::generateHeartbeat()
 void RaftEngine::broadcastHeartbeat()
 {
     std::chrono::system_clock::time_point nowTime = std::chrono::system_clock::now();
-    if (nowTime - m_lastHeartbeatTime >= std::chrono::milliseconds(m_heartbeatInterval))
+    auto interval =
+        std::chrono::duration_cast<std::chrono::milliseconds>(nowTime - m_lastHeartbeatTime)
+            .count();
+    if (interval >= m_heartbeatInterval)
     {
         m_lastHeartbeatTime = nowTime;
         auto heartbeatMsg = generateHeartbeat();
-        RAFTENGINE_LOG(INFO) << "[#broadcastHeartbeat] Ready to broadcast heartbeat";
+        RAFTENGINE_LOG(TRACE) << "[#broadcastHeartbeat] Ready to broadcast heartbeat";
         broadcastMsg(heartbeatMsg);
         clearFirstVoteCache();
     }
     else
     {
-        RAFTENGINE_LOG(INFO)
-            << "[#broadcastHeartbeat] Failed to broadcast heartbeat: broadcast too fast";
+        RAFTENGINE_LOG(TRACE) << "[#broadcastHeartbeat] Failed to broadcast heartbeat: broadcast "
+                                 "too fast, [interval/heartbeatInterval]: "
+                              << interval << "/" << m_heartbeatInterval;
     }
 }
 
 P2PMessage::Ptr RaftEngine::generateVoteReq()
 {
     RaftVoteReq req;
-    req.idx = m_nodeIdx;
+    req.idx = m_idx;
     req.term = m_term;
-    req.height = m_highestBlockHeader.number();
-    req.blockHash = m_highestBlockHeader.hash();
-    req.candidate = m_nodeIdx;
+    req.height = m_highestBlock.number();
+    req.blockHash = m_highestBlock.hash();
+    req.candidate = m_idx;
     req.lastLeaderTerm = m_lastLeaderTerm;
+    auto currentBlockNumber = m_blockChain->number();
+    {
+        Guard guard(m_commitMutex);
+        if (bool(m_uncommittedBlock))
+        {
+            req.lastBlockNumber = currentBlockNumber + 1;
+        }
+        else
+        {
+            req.lastBlockNumber = currentBlockNumber;
+        }
+    }
 
     RLPStream ts;
     req.streamRLPFields(ts);
@@ -737,7 +832,8 @@ P2PMessage::Ptr RaftEngine::generateVoteReq()
 
     RAFTENGINE_LOG(INFO) << "[#generateVoteReq] VoteReq message generated, [term]: " << req.term
                          << ", [lastLeaderTerm]: " << req.lastLeaderTerm
-                         << ", [vote]: " << req.candidate;
+                         << ", [vote]: " << req.candidate << ", [lastBlockNumber]"
+                         << req.lastBlockNumber;
     return voteReqMsg;
 }
 
@@ -803,42 +899,42 @@ void RaftEngine::clearFirstVoteCache()
         {
             // clear m_firstVote
             m_heartbeatCount = 0;
-            m_firstVote = raft::InvalidIndex;
+            m_firstVote = InvalidIndex;
             RAFTENGINE_LOG(INFO) << "[#clearFirstVoteCache] Broadcast or receive enough hb package "
                                     "and clear m_firstVote cache";
         }
     }
 }
 
-bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _resp)
+bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _req)
 {
     RAFTENGINE_LOG(INFO) << "[#handleVoteRequest] [from]: " << _from
-                         << ", [node]: " << _node.hex().substr(0, 5) << ", [term]: " << _resp.term
-                         << ", [candidate]: " << _resp.candidate;
+                         << ", [node]: " << _node.hex().substr(0, 5) << ", [term]: " << _req.term
+                         << ", [candidate]: " << _req.candidate;
 
     RaftVoteResp resp;
-    resp.idx = m_nodeIdx;
+    resp.idx = m_idx;
     resp.term = m_term;
-    resp.height = m_highestBlockHeader.number();
-    resp.blockHash = m_highestBlockHeader.hash();
+    resp.height = m_highestBlock.number();
+    resp.blockHash = m_highestBlock.hash();
 
     resp.voteFlag = VOTE_RESP_REJECT;
     resp.lastLeaderTerm = m_lastLeaderTerm;
 
-    if (_resp.term <= m_term)
+    if (_req.term <= m_term)
     {
         if (m_state == EN_STATE_LEADER)
         {
-            // include _resp.term < m_term and _resp.term == m_term
+            // include _req.term < m_term and _req.term == m_term
             resp.voteFlag = VOTE_RESP_LEADER_REJECT;
             RAFTENGINE_LOG(INFO) << "[#handleVoteRequest] Discard vreq for I'm the bigger leader"
-                                 << " [term]: " << m_term << ", [receiveTerm]: " << _resp.term;
+                                 << " [term]: " << m_term << ", [receiveTerm]: " << _req.term;
         }
         else
         {
-            if (_resp.term == m_term)
+            if (_req.term == m_term)
             {
-                // _resp.term == m_term for follower and candidate
+                // _req.term == m_term for follower and candidate
                 resp.voteFlag = VOTE_RESP_DISCARD;
                 RAFTENGINE_LOG(INFO)
                     << "[#handleVoteRequest] Discard vreq for I'm already in this term [term]: "
@@ -846,7 +942,7 @@ bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVot
             }
             else
             {
-                // _resp.term < m_term for follower and candidate
+                // _req.term < m_term for follower and candidate
                 resp.voteFlag = VOTE_RESP_REJECT;
                 RAFTENGINE_LOG(INFO)
                     << "[#handleVoteRequest] Discard vreq for smaller term, [term]: " << m_term;
@@ -857,34 +953,52 @@ bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVot
     }
 
     // handle lastLeaderTerm error
-    if (_resp.lastLeaderTerm < m_lastLeaderTerm)
+    if (_req.lastLeaderTerm < m_lastLeaderTerm)
     {
         resp.voteFlag = VOTE_RESP_LASTTERM_ERROR;
         RAFTENGINE_LOG(INFO)
             << "[#handleVoteRequest] Discard vreq for smaller last leader term, [lastLeaderTerm]: "
-            << m_lastLeaderTerm << ", [receiveLastLeaderTerm]: " << _resp.lastLeaderTerm;
+            << m_lastLeaderTerm << ", [receiveLastLeaderTerm]: " << _req.lastLeaderTerm;
+        sendResponse(_from, _node, RaftVoteRespPacket, resp);
+        return false;
+    }
+
+    auto currentBlockNumber = m_blockChain->number();
+    {
+        Guard guard(m_commitMutex);
+        if (bool(m_uncommittedBlock))
+        {
+            currentBlockNumber++;
+        }
+    }
+
+    if (_req.lastBlockNumber < currentBlockNumber)
+    {
+        resp.voteFlag = VOTE_RESP_OUTDATED;
+        RAFTENGINE_LOG(INFO)
+            << "[#handleVoteRequest] Discard vreq for peer's data is older than me";
         sendResponse(_from, _node, RaftVoteRespPacket, resp);
         return false;
     }
 
     // first vote, not change term
-    if (m_firstVote == raft::InvalidIndex)
+    if (m_firstVote == InvalidIndex)
     {
-        m_firstVote = _resp.candidate;
+        m_firstVote = _req.candidate;
         resp.voteFlag = VOTE_RESP_FIRST_VOTE;
         RAFTENGINE_LOG(INFO)
             << "[#handleVoteRequest] Discard vreq for I'm the first time to vote, [term]: "
-            << m_term << ", [voteReqTerm]: " << _resp.term << ", [firstVote]: " << m_firstVote;
+            << m_term << ", [voteReqTerm]: " << _req.term << ", [firstVote]: " << m_firstVote;
         sendResponse(_from, _node, RaftVoteRespPacket, resp);
         return false;
     }
 
-    m_term = _resp.term;
-    m_leader = raft::InvalidIndex;
-    m_vote = raft::InvalidIndex;
+    m_term = _req.term;
+    m_leader = InvalidIndex;
+    m_vote = InvalidIndex;
 
-    m_firstVote = _resp.candidate;
-    setVote(_resp.candidate);
+    m_firstVote = _req.candidate;
+    setVote(_req.candidate);
 
     resp.term = m_term;
     resp.voteFlag = VOTE_RESP_GRANTED;
@@ -903,28 +1017,43 @@ bool RaftEngine::checkElectTimeout()
 
 bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeartBeat const& _hb)
 {
-    RAFTENGINE_LOG(INFO) << "[#handleHeartbeat] [from]: " << _from
-                         << ", [node]: " << _node.hex().substr(0, 5) << ", [term]: " << _hb.term
-                         << ", [leader]: " << _hb.leader;
+    RAFTENGINE_LOG(INFO) << "[#handleHeartbeat][fromIdx/fromId/term/leader]: " << _from << "/"
+                         << _node.hex().substr(0, 5) << "/" << _hb.term << "/" << _hb.leader;
 
     RaftHeartBeatResp resp;
-    resp.idx = m_nodeIdx;
+    resp.idx = m_idx;
     resp.term = m_term;
-    resp.height = m_highestBlockHeader.number();
-    resp.blockHash = m_highestBlockHeader.hash();
-    sendResponse(_from, _node, RaftPacketType::RaftHeartBeatRespPacket, resp);
+    resp.height = m_highestBlock.number();
+    resp.blockHash = m_highestBlock.hash();
 
     if (_hb.term < m_term && _hb.term <= m_lastLeaderTerm)
     {
-        RAFTENGINE_LOG(INFO) << "[#handleHeartbeat] Discard hb for smaller term"
-                             << "[term]: " << m_term << ", [receiveTerm]: " << _hb.term
-                             << ", [lastLeaderTerm]: " << m_lastLeaderTerm
-                             << ", [receivelastLeaderTerm]: " << _hb.term;
+        RAFTENGINE_LOG(INFO) << "[#handleHeartbeat] Discard hb for smaller term "
+                                "[term/receiveTerm/lastLeaderTerm/receiveLastLeaderTerm]: "
+                             << m_term << "/" << _hb.term << "/" << m_lastLeaderTerm << "/"
+                             << _hb.term;
         return false;
     }
 
-    bool stepDown = false;
+    if (_hb.hasData())
+    {
+        if (_hb.uncommitedBlockNumber - 1 == m_highestBlock.number())
+        {
+            Guard guard(m_commitMutex);
+            m_uncommittedBlock = Block(_hb.uncommitedBlock);
+            m_uncommittedBlockNumber = _hb.uncommitedBlockNumber;
+        }
+        else
+        {
+            RAFTENGINE_LOG(WARNING) << "[#handleHeartbeat] Leader's height is not match "
+                                    << "[leaderNextHeight/myHeight]: " << _hb.uncommitedBlockNumber
+                                    << "/" << m_highestBlock.number();
+            return false;
+        }
+    }
+    sendResponse(_from, _node, RaftPacketType::RaftHeartBeatRespPacket, resp);
 
+    bool stepDown = false;
     // _hb.term >= m_term || _hb.lastLeaderTerm > m_lastLeaderTerm
     // receive larger lastLeaderTerm, recover my term to hb term, set self to next step (follower)
     if (_hb.term > m_lastLeaderTerm)
@@ -933,7 +1062,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
             << "[#handleHeartbeat] Prepare to switch follower due to last leader term error "
             << "[lastLeaderTerm]: " << m_lastLeaderTerm << ", [hbLastLeader]: " << _hb.term;
         m_term = _hb.term;
-        m_vote = raft::InvalidIndex;
+        m_vote = InvalidIndex;
         stepDown = true;
     }
 
@@ -943,7 +1072,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
             << "[#handleHeartbeat] Prepare to switch follower due to receive higher term"
             << " [term]: " << m_term << ", [hbTerm]: " << _hb.term;
         m_term = _hb.term;
-        m_vote = raft::InvalidIndex;
+        m_vote = InvalidIndex;
         stepDown = true;
     }
 
@@ -953,7 +1082,7 @@ bool RaftEngine::handleHeartbeat(u256 const& _from, h512 const& _node, RaftHeart
                                 "higher or equal term in candidate"
                              << " [term]: " << m_term << ", [hbTerm]: " << _hb.term;
         m_term = _hb.term;
-        m_vote = raft::InvalidIndex;
+        m_vote = InvalidIndex;
         stepDown = true;
     }
 
@@ -978,8 +1107,8 @@ void RaftEngine::recoverElectTime()
 void RaftEngine::switchToLeader()
 {
     {
-        Guard Guard(m_mutex);
-        m_leader = m_nodeIdx;
+        Guard guard(m_mutex);
+        m_leader = m_idx;
         m_state = EN_STATE_LEADER;
     }
     recoverElectTime();
@@ -989,7 +1118,7 @@ void RaftEngine::switchToLeader()
 void RaftEngine::switchToFollower(raft::NodeIndex const& _leader)
 {
     {
-        Guard Guard(m_mutex);
+        Guard guard(m_mutex);
         m_leader = _leader;
         m_state = EN_STATE_FOLLOWER;
         m_heartbeatCount = 0;
@@ -1001,9 +1130,9 @@ void RaftEngine::switchToFollower(raft::NodeIndex const& _leader)
 void RaftEngine::switchToCandidate()
 {
     {
-        Guard Guard(m_mutex);
+        Guard guard(m_mutex);
         m_term++;
-        m_leader = raft::InvalidIndex;
+        m_leader = InvalidIndex;
         m_state = RaftRole::EN_STATE_CANDIDATE;
     }
     resetElectTimeout();
@@ -1039,7 +1168,7 @@ bool RaftEngine::sendResponse(
 HandleVoteResult RaftEngine::handleVoteResponse(
     u256 const& _from, h512 const& _node, RaftVoteResp const& _resp, VoteState& _vote_state)
 {
-    if (_resp.term < m_term)
+    if (_resp.term < m_term - 1)
     {
         RAFTENGINE_LOG(DEBUG) << "[#handleVoteResponse] Peer's term is smaller than mine"
                               << ", [respTerm/term]: " << _resp.term << "/" << m_term;
@@ -1098,6 +1227,12 @@ HandleVoteResult RaftEngine::handleVoteResponse(
         // do nothing
         break;
     }
+    case VoteRespFlag::VOTE_RESP_OUTDATED:
+    {
+        _vote_state.outdated++;
+        // do nothing
+        break;
+    }
     case VOTE_RESP_GRANTED:
     {
         _vote_state.vote++;
@@ -1135,19 +1270,20 @@ bool RaftEngine::shouldSeal()
 {
     if (getState() != RaftRole::EN_STATE_LEADER)
     {
-        RAFTENGINE_LOG(DEBUG) << "[#shouldSeal] I'm not the leader, shouldSeal return false";
+        RAFTENGINE_LOG(TRACE) << "[#shouldSeal] I'm not the leader, shouldSeal return false";
         return false;
     }
 
     {
-        Guard Guard(m_mutex);
+        Guard guard(m_mutex);
         if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount ||
             m_state != EN_STATE_LEADER)
         {
             return false;
         }
+
         u256 count = 1;
-        u256 currentHeight = m_highestBlockHeader.number();
+        u256 currentHeight = m_highestBlock.number();
         for (auto iter = m_memberBlock.begin(); iter != m_memberBlock.end(); ++iter)
         {
             if (iter->second.height > currentHeight)
@@ -1167,46 +1303,84 @@ bool RaftEngine::shouldSeal()
             RAFTENGINE_LOG(INFO)
                 << "[#shouldSeal] Wait somebody to sync block, shouldSeal return false"
                 << " [count]: " << count << ", [nodeNum]: " << m_nodeNum << ", [m_f]=" << m_f
-                << ", [memberBlockSize]=" << m_memberBlock.size();
+                << ", [memberBlockSize]: " << m_memberBlock.size();
             return false;
         }
-
-        RAFTENGINE_LOG(INFO) << "[#shouldSeal] Return true";
-        return true;
     }
+
+    {
+        Guard guard(m_commitMutex);
+        if (bool(m_uncommittedBlock))
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#shouldSeal] Wait to commit uncommitted block, return false "
+                                  << "[uncommittedBlockHeight/uncommittedBlockHash]: "
+                                  << m_uncommittedBlock.header().number() << "/"
+                                  << m_uncommittedBlock.header().hash();
+            return false;
+        }
+    }
+
+    RAFTENGINE_LOG(INFO) << "[#shouldSeal] Return true";
+    return true;
 }
 
 bool RaftEngine::commit(Block const& _block)
 {
-    if (getState() == RaftRole::EN_STATE_LEADER)
     {
-        Sealing workingSealing;
-        try
-        {
-            execBlock(workingSealing, _block);
-        }
-        catch (std::exception& e)
-        {
-            RAFTENGINE_LOG(WARNING)
-                << "[#commit] Block execute failed: [EINFO]:  " << boost::diagnostic_information(e);
-            return false;
-        }
-
-        checkAndSave(workingSealing);
-        return true;
+        Guard guard(m_commitMutex);
+        m_uncommittedBlock = _block;
+        m_uncommittedBlockNumber = m_consensusBlockNumber;
+        RAFTENGINE_LOG(TRACE) << "[#commit] Prepare to commit block, [nextHeight]: "
+                              << m_uncommittedBlockNumber;
     }
-    RAFTENGINE_LOG(INFO) << "[#commit] I'm not the leader";
-    return false;
+
+    std::unique_lock<std::mutex> ul(m_commitMutex);
+    m_waitingForCommitting = true;
+    m_commitReady = false;
+    RAFTENGINE_LOG(TRACE) << "[#commit] Wait to commit block";
+    m_commitCV.wait(ul, [this]() { return m_commitReady; });
+
+    m_uncommittedBlock = Block();
+    m_commitReady = false;
+    m_waitingForCommitting = false;
+    ul.unlock();
+
+    if (getState() != RaftRole::EN_STATE_LEADER)
+    {
+        RAFTENGINE_LOG(TRACE) << "[#commit] I'm not the leader anymore, stop committing";
+        return false;
+    }
+
+    RAFTENGINE_LOG(TRACE) << "[#commit] Start to commit block";
+    return checkAndExecute(_block);
+}
+
+bool RaftEngine::checkAndExecute(Block const& _block)
+{
+    Sealing workingSealing;
+    try
+    {
+        execBlock(workingSealing, _block);
+    }
+    catch (std::exception& e)
+    {
+        RAFTENGINE_LOG(WARNING) << "[#commit] Block execute failed [EINFO]: "
+                                << boost::diagnostic_information(e);
+        return false;
+    }
+
+    checkAndSave(workingSealing);
+    return true;
 }
 
 void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
 {
     Block working_block(_block);
-    RAFTENGINE_LOG(INFO) << "[#execBlock] [number/hash]:  " << working_block.header().number()
-                         << "/" << working_block.header().hash().abridged();
+    RAFTENGINE_LOG(INFO) << "[#execBlock] [number/hash]: " << working_block.header().number() << "/"
+                         << working_block.header().hash();
 
     checkBlockValid(working_block);
-    // m_blockSync->noteSealingBlockNumber(working_block.header().number());
+    m_blockSync->noteSealingBlockNumber(working_block.header().number());
     _sealing.p_execContext = executeBlock(working_block);
     _sealing.block = working_block;
 }
@@ -1219,37 +1393,35 @@ void RaftEngine::checkBlockValid(dev::eth::Block const& _block)
 
 void RaftEngine::checkMinerList(Block const& _block)
 {
-    ReadGuard l(m_minerListMutex);
+    ReadGuard guard(m_minerListMutex);
     if (m_minerList != _block.blockHeader().sealerList())
     {
         std::string miners;
         for (auto miner : m_minerList)
             miners += toHex(miner) + " ";
         RAFTENGINE_LOG(ERROR) << "[#checkMinerList] [miners]: " << miners
-                              << "Wrong miners : [Cminers/CblockMiner/hash] : "
-                              << m_minerList.size() << "/"
-                              << _block.blockHeader().sealerList().size() << "/"
+                              << "Wrong miners : [Cminers/CblockMiner/hash]: " << m_minerList.size()
+                              << "/" << _block.blockHeader().sealerList().size() << "/"
                               << _block.blockHeader().hash();
         BOOST_THROW_EXCEPTION(
-            BlockMinerListWrong() << errinfo_comment("Wrong Miner List of Block"));
+            BlockMinerListWrong() << errinfo_comment("Wrong miner list of block"));
     }
 }
 
 void RaftEngine::checkAndSave(Sealing& _sealing)
 {
-    /// callback block chain to commit block
+    // callback block chain to commit block
     CommitResult ret = m_blockChain->commitBlock(_sealing.block, _sealing.p_execContext);
-    RAFTENGINE_LOG(DEBUG) << "[#checkAndSave] Commit block succ";
-    /// drop handled transactions
     if (ret == CommitResult::OK)
     {
+        RAFTENGINE_LOG(TRACE) << "[#checkAndSave] Commit block succ";
+        // drop handled transactions
         dropHandledTransactions(_sealing.block);
-        RAFTENGINE_LOG(DEBUG) << "[#checkAndSave] Commit block succ";
     }
     else
     {
         RAFTENGINE_LOG(ERROR) << "[#checkAndSave] Commit block failed"
-                              << " [highNum/SNum/Shash]:  " << m_highestBlockHeader.number() << "/"
+                              << " [highNum/SNum/Shash]:  " << m_highestBlock.number() << "/"
                               << _sealing.block.blockHeader().number() << "/"
                               << _sealing.block.blockHeader().hash().abridged() << std::endl;
         /// note blocksync to sync

@@ -42,8 +42,7 @@ namespace consensus
 {
 namespace raft
 {
-using NodeIndex = std::ptrdiff_t;
-NodeIndex constexpr InvalidIndex = NodeIndex(-1);
+using NodeIndex = dev::u256;
 }  // namespace raft
 
 enum RaftPacketType : byte
@@ -67,9 +66,10 @@ enum VoteRespFlag : byte
     VOTE_RESP_REJECT = 0,
     VOTE_RESP_LEADER_REJECT = 1,
     VOTE_RESP_LASTTERM_ERROR = 2,
-    VOTE_RESP_FIRST_VOTE = 3,
-    VOTE_RESP_DISCARD = 4,
-    VOTE_RESP_GRANTED = 5
+    VOTE_RESP_OUTDATED = 3,
+    VOTE_RESP_FIRST_VOTE = 4,
+    VOTE_RESP_DISCARD = 5,
+    VOTE_RESP_GRANTED = 6
 };
 
 enum HandleVoteResult : byte
@@ -176,11 +176,12 @@ struct RaftVoteReq : public RaftMsg
 {
     raft::NodeIndex candidate;
     size_t lastLeaderTerm;
+    int64_t lastBlockNumber;
 
     virtual void streamRLPFields(RLPStream& _s) const
     {
         RaftMsg::streamRLPFields(_s);
-        _s << candidate << lastLeaderTerm;
+        _s << candidate << lastLeaderTerm << lastBlockNumber;
     }
 
     virtual void populate(RLP const& _rlp)
@@ -191,6 +192,7 @@ struct RaftVoteReq : public RaftMsg
         {
             candidate = _rlp[field = 4].toInt<raft::NodeIndex>();
             lastLeaderTerm = _rlp[field = 5].toInt<size_t>();
+            lastBlockNumber = _rlp[field = 6].toInt<int64_t>();
         }
         catch (Exception const& _e)
         {
@@ -210,8 +212,12 @@ struct VoteState
     size_t lastTermErr = 0;
     size_t firstVote = 0;
     size_t discardedVote = 0;
+    size_t outdated = 0;
 
-    u64 totalVoteCount() { return vote + unVote + lastTermErr + firstVote + discardedVote; }
+    u64 totalVoteCount()
+    {
+        return vote + unVote + lastTermErr + firstVote + discardedVote + outdated;
+    }
 };
 
 struct RaftVoteResp : public RaftMsg
@@ -248,11 +254,15 @@ struct RaftVoteResp : public RaftMsg
 struct RaftHeartBeat : public RaftMsg
 {
     raft::NodeIndex leader;
+    bytes uncommitedBlock;
+    int64_t uncommitedBlockNumber;
+
+    bool hasData() const { return uncommitedBlock.size() != 0; }
 
     virtual void streamRLPFields(RLPStream& _s) const
     {
         RaftMsg::streamRLPFields(_s);
-        _s << leader;
+        _s << leader << uncommitedBlock << uncommitedBlockNumber;
     }
 
     virtual void populate(RLP const& _rlp)
@@ -262,6 +272,8 @@ struct RaftHeartBeat : public RaftMsg
         try
         {
             leader = _rlp[field = 4].toInt<raft::NodeIndex>();
+            uncommitedBlock = _rlp[field = 5].toBytes();
+            uncommitedBlockNumber = _rlp[field = 6].toInt<int64_t>();
         }
         catch (Exception const& _e)
         {

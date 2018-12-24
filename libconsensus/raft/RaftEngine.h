@@ -35,8 +35,11 @@
 #include <libstorage/Storage.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
+
 
 namespace dev
 {
@@ -59,7 +62,9 @@ public:
             _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
         m_keyPair(_keyPair),
         m_minElectTimeout(_minElectTime),
-        m_maxElectTimeout(_maxElectTime)
+        m_maxElectTimeout(_maxElectTime),
+        m_uncommittedBlock(dev::eth::Block()),
+        m_waitingForCommitting(false)
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
@@ -68,7 +73,7 @@ public:
     raft::NodeIndex getNodeIdx() const
     {
         Guard Guard(m_mutex);
-        return m_nodeIdx;
+        return m_idx;
     }
 
     size_t getTerm() const
@@ -77,10 +82,10 @@ public:
         return m_term;
     }
 
-    dev::eth::BlockHeader getHighestBlockHeader() const
+    dev::eth::BlockHeader getHighestBlock() const
     {
         Guard Guard(m_mutex);
-        return m_highestBlockHeader;
+        return m_highestBlock;
     }
 
     size_t getLastLeaderTerm() const
@@ -174,6 +179,7 @@ protected:
     void execBlock(Sealing& _sealing, dev::eth::Block const& _block);
     void checkBlockValid(dev::eth::Block const& _block);
     void checkMinerList(dev::eth::Block const& _block);
+    bool checkAndExecute(dev::eth::Block const& _block);
     void checkAndSave(Sealing& _sealing);
 
     mutable Mutex m_mutex;
@@ -197,20 +203,17 @@ protected:
 
     unsigned m_increaseTime;
 
-    // header of highest block
-    dev::eth::BlockHeader m_highestBlockHeader;
     // message queue, defined in Common.h
     RaftMsgQueue m_msgQueue;
     // role of node
     RaftRole m_state = EN_STATE_FOLLOWER;
 
-    raft::NodeIndex m_firstVote = raft::InvalidIndex;
+    raft::NodeIndex m_firstVote = InvalidIndex;
     size_t m_term = 0;
     size_t m_lastLeaderTerm = 0;
 
     raft::NodeIndex m_leader;
     raft::NodeIndex m_vote;
-    raft::NodeIndex m_nodeIdx;
 
     struct BlockRef
     {
@@ -226,8 +229,18 @@ protected:
     dev::storage::Storage::Ptr m_storage;
     // the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
-
     uint64_t m_lastBlockTime;
+
+    dev::eth::Block m_uncommittedBlock;
+    int64_t m_uncommittedBlockNumber;
+
+    std::mutex m_commitMutex;
+    std::condition_variable m_commitCV;
+    bool m_commitReady;
+    bool m_waitingForCommitting;
+
+private:
+    static typename raft::NodeIndex InvalidIndex;
 };
 }  // namespace consensus
 }  // namespace dev
