@@ -559,7 +559,8 @@ parse_ip_config()
         ip_array[n]=`echo ${line} | cut -d ' ' -f 1`
         agency_array[n]=`echo ${line} | cut -d ' ' -f 2`
         group_array[n]=`echo ${line} | cut -d ' ' -f 3`
-        if [ -z ${ip_array[n]} -o -z ${agency_array[n]} -o -z ${group_array[n]} ];then
+        if [ -z "${ip_array[$n]}" -o -z "${agency_array[$n]}" -o -z "${group_array[$n]}" ];then
+            LOG_WARN "Please check ${config}, make sure there is no empty line!"
             return -1
         fi
         ((++n))
