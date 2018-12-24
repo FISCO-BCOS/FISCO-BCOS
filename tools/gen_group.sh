@@ -171,7 +171,7 @@ function checkExists()
     local groupId="${1}"
     local node_dir="${2}"
     local ret=0
-    for configFile in `ls $node_dir/*/node_*/conf/group.${group_id}.ini 2>err.log`
+    for configFile in $(ls $node_dir/*/node_*/conf/group.${group_id}.ini 2>err.log)
     do
         LOG_ERROR "${configFile} already exists, please delete it at first"
         ret=1
