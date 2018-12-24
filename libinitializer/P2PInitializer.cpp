@@ -109,15 +109,17 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             }
         }
 
-        auto asioInterface = std::make_shared<ASIOInterface>();
+        auto asioInterface = std::make_shared<dev::network::ASIOInterface>();
+
         asioInterface->setIOService(std::make_shared<ba::io_service>());
         asioInterface->setSSLContext(m_SSLContext);
+        asioInterface->setType(dev::network::ASIOInterface::SSL);
 
         auto messageFactory = std::make_shared<P2PMessageFactory>();
 
-        auto host = std::make_shared<Host>();
+        auto host = std::make_shared<dev::network::Host>();
         host->setASIOInterface(asioInterface);
-        host->setSessionFactory(std::make_shared<SessionFactory>());
+        host->setSessionFactory(std::make_shared<dev::network::SessionFactory>());
         host->setMessageFactory(messageFactory);
         host->setHostPort(listenIP, listenPort);
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", 4));

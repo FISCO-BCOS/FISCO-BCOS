@@ -24,7 +24,6 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/ThreadPool.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
@@ -39,7 +38,7 @@
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class Host;
 
@@ -173,6 +172,7 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
+    uint64_t m_shutDownTimeThres = 3000;
 };
 
 class SessionFactory
@@ -191,5 +191,5 @@ public:
     }
 };
 
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

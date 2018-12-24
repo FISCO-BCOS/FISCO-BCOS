@@ -61,22 +61,6 @@ public:
         TIMEOUT = 102
     };
 
-    struct ChannelMessageSession
-    {
-        // When sending channelmessage
-        dev::channel::ChannelSession::Ptr fromSession;
-        h512 toNodeID;
-        std::set<h512> failedNodeIDs;
-
-        // When receiveing channelmessage
-        h512 fromNodeID;
-        dev::channel::ChannelSession::Ptr toSession;
-        std::set<dev::channel::ChannelSession::Ptr> failedSessions;
-
-        // message
-        dev::channel::Message::Ptr message;
-    };
-
     typedef std::shared_ptr<ChannelRPCServer> Ptr;
 
     ChannelRPCServer(std::string listenAddr = "", int listenPort = 0)
@@ -107,10 +91,6 @@ public:
     virtual void onClientChannelRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-    virtual void onNodeRequest(dev::h512 nodeID, std::shared_ptr<dev::bytes> message);
-
-    virtual void onNodeChannelRequest(h512 nodeID, dev::channel::Message::Ptr message);
-
     void setListenAddr(const std::string& listenAddr);
 
     void setListenPort(int listenPort);
@@ -119,8 +99,8 @@ public:
 
     void CloseConnection(int _socket);
 
-    void onReceiveChannelMessage(
-        p2p::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
+    void onNodeChannelRequest(
+        dev::network::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
 
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
 
@@ -161,9 +141,6 @@ private:
 
     std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
-
-    std::map<std::string, ChannelMessageSession> _seq2MessageSession;
-    std::mutex _seqMessageMutex;
 
     int _sessionCount = 1;
 
