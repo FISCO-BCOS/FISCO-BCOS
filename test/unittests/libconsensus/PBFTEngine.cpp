@@ -622,13 +622,12 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
                 fake_pbft.consensus()->minValidNodes());
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq.block_hash) ==
                 fake_pbft.consensus()->minValidNodes());
-
     /// can trigger collectGarbage
     fake_pbft.consensus()->mutableTimeManager().m_lastGarbageCollection =
         std::chrono::system_clock::now() - std::chrono::seconds(TimeManager::CollectInterval + 10);
     fake_pbft.consensus()->collectGarbage();
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq.block_hash) == 0);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq.block_hash) == 0);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(highest.hash()) == 0);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(highest.hash()) == 0);
 }
 /// test handle future block
 BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
