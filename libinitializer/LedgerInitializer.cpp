@@ -75,7 +75,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     catch (std::exception& e)
     {
         SESSION_LOG(ERROR) << "[#LedgerInitializer::initConfig] initSingleGroup faield: [EINFO]: "
-                           << e.what();
+                           << boost::diagnostic_information(e);
         ERROR_OUTPUT << "[#LedgerInitiailizer::initConfig] initSingleGroup failed: [EINFO]: "
                      << boost::diagnostic_information(e) << std::endl;
         BOOST_THROW_EXCEPTION(e);

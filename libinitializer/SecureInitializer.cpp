@@ -83,9 +83,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         {
             INITIALIZER_LOG(ERROR)
                 << "[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
-                << e.what();
+                << boost::diagnostic_information(e);
             ERROR_OUTPUT << "[[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
-                         << e.what() << std::endl;
+                         << boost::diagnostic_information(e) << std::endl;
             exit(1);
         }
     }
@@ -170,9 +170,10 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     catch (Exception& e)
     {
         INITIALIZER_LOG(ERROR)
-            << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: " << e.what();
+            << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: "
+            << boost::diagnostic_information(e);
         ERROR_OUTPUT << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: "
-                     << e.what() << std::endl;
+                     << boost::diagnostic_information(e) << std::endl;
         exit(1);
     }
 }
