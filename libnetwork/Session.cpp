@@ -54,8 +54,6 @@ Session::~Session()
             bi::tcp::socket& socket = m_socket->ref();
             if (m_socket->isConnected())
             {
-                boost::system::error_code ec;
-
                 socket.close();
             }
         }

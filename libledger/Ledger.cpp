@@ -173,15 +173,14 @@ void Ledger::initDBConfig(ptree const& pt)
     /// init the basic config
     /// set storage db related param
     m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
-    std::string baseDir = m_param->baseDir() + "/data";
-    m_param->setBaseDir(baseDir);
-    m_param->mutableStorageParam().path = baseDir;
+    m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "mpt");
 
     Ledger_LOG(DEBUG) << "[#initDBConfig] [storageDB/storagePath/stateDB/baseDir]:  "
                       << m_param->mutableStorageParam().type << "/"
-                      << m_param->mutableStorageParam().path << "/" << baseDir << std::endl;
+                      << m_param->mutableStorageParam().path << "/" << m_param->baseDir()
+                      << std::endl;
 }
 
 /// init genesis configuration
