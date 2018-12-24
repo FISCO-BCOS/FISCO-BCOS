@@ -34,7 +34,7 @@ void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
     {
         SYNCLOG(TRACE)
             << "[Download] [Request] Drop request when responding blocks [fromNumber/size/nodeId] "
-            << _fromNumber << "/" << _size << "/" << m_nodeId << endl;
+            << _fromNumber << "/" << _size << "/" << m_nodeId.abridged() << endl;
         return;
     }
 
@@ -42,15 +42,15 @@ void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
     {
         SYNCLOG(TRACE) << "[Download] [Request] Drop request for reqQueue full "
                           "[reqQueueSize/fromNumber/size/nodeId] "
-                       << m_reqQueue.size() << "/" << _fromNumber << "/" << _size << "/" << m_nodeId
-                       << endl;
+                       << m_reqQueue.size() << "/" << _fromNumber << "/" << _size << "/"
+                       << m_nodeId.abridged() << endl;
         x_canPush.unlock();
         return;
     }
 
     m_reqQueue.push(DownloadRequest(_fromNumber, _size));
     SYNCLOG(TRACE) << "[Download] [Request] Push request in reqQueue req[" << _fromNumber << ", "
-                   << _fromNumber + _size - 1 << "] from " << m_nodeId << endl;
+                   << _fromNumber + _size - 1 << "] from " << m_nodeId.abridged() << endl;
 
     x_canPush.unlock();
 }
