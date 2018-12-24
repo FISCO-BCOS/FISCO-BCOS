@@ -28,8 +28,8 @@ using namespace dev::initializer;
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
-    int listenPort = _pt.get<int>("rpc.listen_port", 30301);
-    int httpListenPort = _pt.get<int>("rpc.http_listen_port", 0);
+    int listenPort = _pt.get<int>("rpc.channel_listen_port", 30301);
+    int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 0);
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
         INITIALIZER_LOG(ERROR) << "[#RPCInitializer] initConfig for RPCInitializer failed";
