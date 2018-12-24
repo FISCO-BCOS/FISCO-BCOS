@@ -68,7 +68,7 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-    SessionInfo info(node_id, m_endpoint, std::set<std::string>());
+    P2PSessionInfo info(node_id, m_endpoint, std::set<std::string>());
     size_t origin_size =
         service->sessionInfosByProtocolID(fake_pbft.consensus()->protocolId()).size();
     service->appendSessionInfo(info);

@@ -49,6 +49,9 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     {
         BLOCKVERIFIER_LOG(ERROR) << "[#executeBlock] Error during initExecutiveContext [errorMsg]: "
                                  << boost::diagnostic_information(e);
+
+        BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
+                              << errinfo_comment("Error during initExecutiveContext"));
     }
 
     unsigned i = 0;
