@@ -389,7 +389,7 @@ generate_group_ini()
 ;consensus configuration
 [consensus]
     ;consensus algorithm type, now support PBFT(consensusType=pbft) and Raft(consensusType=raft)
-    consensusType=raft
+    consensusType=pbft
     ;the max number of transactions of a block
     maxTransNum=1000
     ;the node id of leaders
