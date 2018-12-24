@@ -449,7 +449,7 @@ void SyncMaster::maintainPeersConnection()
     }
 
     // Add new peers
-    SessionInfos sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     int64_t currentNumber = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(currentNumber);
     for (auto const& session : sessions)

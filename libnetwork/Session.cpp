@@ -32,11 +32,12 @@
 #include <chrono>
 
 #include "ASIOInterface.h"
+#include "Common.h"
 #include "Host.h"
 #include "SessionFace.h"
 
 using namespace dev;
-using namespace dev::p2p;
+using namespace dev::network;
 
 Session::Session()
 {
@@ -54,8 +55,6 @@ Session::~Session()
             bi::tcp::socket& socket = m_socket->ref();
             if (m_socket->isConnected())
             {
-                boost::system::error_code ec;
-
                 socket.close();
             }
         }
@@ -263,6 +262,7 @@ void Session::drop(DisconnectReason _reason)
     }
 
     SESSION_LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
+    RecursiveGuard l(x_seq2Callback);
     for (auto it : *m_seq2Callback)
     {
         if (it.second->timeoutHandler)
@@ -292,7 +292,6 @@ void Session::drop(DisconnectReason _reason)
         });
     }
 
-    bi::tcp::socket& socket = m_socket->ref();
     if (m_socket->isConnected())
     {
         try
@@ -301,13 +300,13 @@ void Session::drop(DisconnectReason _reason)
                 _reason == ClientQuit || _reason == UserReason)
             {
                 SESSION_LOG(DEBUG)
-                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << "Closing " << m_socket->remote_endpoint() << "(" << reasonOf(_reason) << ")"
                     << m_socket->nodeIPEndpoint().address;
             }
             else
             {
                 SESSION_LOG(WARNING)
-                    << "Closing " << socket.remote_endpoint() << "(" << reasonOf(_reason) << ")"
+                    << "Closing " << m_socket->remote_endpoint() << "(" << reasonOf(_reason) << ")"
                     << m_socket->nodeIPEndpoint().address;
             }
 
@@ -374,7 +373,7 @@ void Session::drop(DisconnectReason _reason)
 
 void Session::disconnect(DisconnectReason _reason)
 {
-    SESSION_LOG(WARNING) << "Disconnecting (our reason:" << reasonOf(_reason) << ")"
+    SESSION_LOG(WARNING) << "Disconnecting (our reason:" << dev::network::reasonOf(_reason) << ")"
                          << " at " << m_socket->nodeIPEndpoint().name();
     drop(_reason);
 }

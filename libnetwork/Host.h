@@ -44,7 +44,7 @@
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class Host : public std::enable_shared_from_this<Host>
 {
@@ -151,6 +151,6 @@ private:
 
     std::shared_ptr<std::thread> m_hostThread;
 };
-}  // namespace p2p
+}  // namespace network
 
 }  // namespace dev
