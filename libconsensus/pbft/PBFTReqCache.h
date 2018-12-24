@@ -228,7 +228,7 @@ public:
     void getCacheConsensusStatus(json_spirit::Array& statusArray) const;
 
 private:
-    /// remove invalid requests cached in cache according to curretn block
+    /// remove invalid requests cached in cache according to current block
     template <typename T, typename U, typename S>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
         std::unordered_map<T, std::unordered_map<U, S>>& cache)

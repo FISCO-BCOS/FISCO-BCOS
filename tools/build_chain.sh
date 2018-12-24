@@ -313,11 +313,11 @@ generate_config_ini()
     local group_conf_list=
     if [ "${use_ip_param}" == "false" ];then
         for j in ${node_groups[@]};do
-        group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.ini
+        group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.genesis
     "
         done
     else
-        group_conf_list="group_config.1=${conf_path}/group.1.ini"
+        group_conf_list="group_config.1=${conf_path}/group.1.genesis"
     fi
     cat << EOF > ${output}
 [rpc]
@@ -334,11 +334,14 @@ generate_config_ini()
     listen_port=$(( port_start + index * 3 ))
     ;nodes to connect
     $ip_list
+;certificate rejected list
+[CRL]
+    ;crl.0=4d9752efbb1de1253d1d463a934d34230398e787b3112805728525ed5b9d2ba29e4ad92c6fcde5156ede8baa5aca372a209f94dc8f283c8a4fa63e3787c338a4
 
 ;group configurations
 ;if need add a new group, eg. group2, can add the following configuration:
-;group_config.2=conf/group.2.ini
-;group.2.ini can be populated from group.1.ini
+;group_config.2=conf/group.2.genesis
+;group.2.genesis can be populated from group.1.genesis
 ;WARNING: group 0 is forbided
 [group]
     group_data_path=data/
@@ -400,11 +403,6 @@ generate_group_ini()
 [state]
     ;support mpt/storage
     type=${state_type}
-
-;genesis configuration
-[genesis]
-    ;used to mark the genesis block of this group
-    ;mark=${group_id}
 
 ;txpool limit
 [txPool]
@@ -721,10 +719,10 @@ for line in ${ip_array[*]};do
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
-                generate_group_ini "$node_dir/${conf_path}/group.${j}.ini" "${groups[${j}]}"
+                generate_group_ini "$node_dir/${conf_path}/group.${j}.genesis" "${groups[${j}]}"
             done
         else
-            generate_group_ini "$node_dir/${conf_path}/group.1.ini" "${nodeid_list}"
+            generate_group_ini "$node_dir/${conf_path}/group.1.genesis" "${nodeid_list}"
         fi
         generate_node_scripts "$node_dir"
     done

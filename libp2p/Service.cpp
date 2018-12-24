@@ -693,14 +693,20 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
 
     std::ostringstream oss;
     oss << "[#sessionInfosByProtocolID] Finding nodeID in GroupID " << int(ret.first) << ":";
+    RecursiveGuard l(x_nodeList);
     auto it = m_groupID2NodeList.find(int(ret.first));
-    if (it != m_groupID2NodeList.end())
+    if (it == m_groupID2NodeList.end())
     {
-        try
+        return infos;
+    }
+
+    try
+    {
+        RecursiveGuard l(x_sessions);
+        auto s = m_sessions;
+        for (auto const& i : s)
         {
-            RecursiveGuard l(x_sessions);
-            auto s = m_sessions;
-            for (auto const& i : s)
+            if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
                 if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
                 {
@@ -712,10 +718,10 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
                 }
             }
         }
-        catch (std::exception& e)
-        {
-            SERVICE_LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
-        }
+    }
+    catch (std::exception& e)
+    {
+        SERVICE_LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
     }
 
     oss << "list size: " << infos.size();
