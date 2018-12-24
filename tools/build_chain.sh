@@ -305,6 +305,16 @@ EOF
 }
 
 
+generate_gmsm2_param()
+{
+    local output=$1
+    cat << EOF > ${output} 
+-----BEGIN EC PARAMETERS-----
+BggqgRzPVQGCLQ==
+-----END EC PARAMETERS-----
+
+EOF
+}
 
 gen_chain_cert_gm() {
     path="$2"
@@ -316,6 +326,7 @@ gen_chain_cert_gm() {
     chaindir=$path
     mkdir -p $chaindir
 
+    generate_gmsm2_param "gmsm2.param"
 	$OPENSSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/ca.key
 	$OPENSSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/ca.key -extensions v3_ca -out $chaindir/ca.crt
 
@@ -975,7 +986,7 @@ for line in ${ip_array[*]};do
                 gen_node_cert_gm "" ${output_dir}/gmcert/agency $node_dir >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
                 rm node.json node.ca
-                mv ./* ${gm_conf_path}/
+                mv *.* ${gm_conf_path}/
 
                 #private key should not start with 00
                 cd $output_dir
@@ -1012,6 +1023,11 @@ for line in ${ip_array[*]};do
             nodeid=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         else
             nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+        fi
+
+        if [ -n "$guomi_mode" ]; then
+            #remove original cert files
+            rm $node_dir/${conf_path} -rf
         fi
 
 
