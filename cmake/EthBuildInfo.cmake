@@ -39,6 +39,7 @@ function(create_build_info)
 
     set(ETH_BUILD_PLATFORM "${ETH_BUILD_OS}/${ETH_BUILD_COMPILER}")
 
+
     if (CMAKE_BUILD_TYPE)
         set(_cmake_build_type ${CMAKE_BUILD_TYPE})
     else()
@@ -49,12 +50,12 @@ function(create_build_info)
     add_custom_target(BuildInfo.h ALL
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
         COMMAND ${CMAKE_COMMAND} -DETH_SOURCE_DIR="${PROJECT_SOURCE_DIR}" -DETH_BUILDINFO_IN="${ETH_CMAKE_DIR}/templates/BuildInfo.h.in" -DETH_DST_DIR="${PROJECT_BINARY_DIR}/include" -DETH_CMAKE_DIR="${ETH_CMAKE_DIR}"
-        -DETH_BUILD_TYPE="${_cmake_build_type}"
-        -DETH_BUILD_OS="${ETH_BUILD_OS}"
-        -DETH_BUILD_COMPILER="${ETH_BUILD_COMPILER}"
-        -DETH_BUILD_PLATFORM="${ETH_BUILD_PLATFORM}"
-        -DETH_BUILD_NUMBER="${BUILD_NUMBER}"
-        -DETH_VERSION_SUFFIX="${VERSION_SUFFIX}"
+        -DFISCO_BCOS_BUILD_TYPE="${_cmake_build_type}"
+        -DFISCO_BCOS_BUILD_OS="${ETH_BUILD_OS}"
+        -DFISCO_BCOS_BUILD_COMPILER="${ETH_BUILD_COMPILER}"
+        -DFISCO_BCOS_BUILD_PLATFORM="${ETH_BUILD_PLATFORM}"
+        -DFISCO_BCOS_BUILD_NUMBER="${FISCO_BCOS_BUILD_NUMBER}"
+        -DFISCO_BCOS_VERSION_SUFFIX="${VERSION_SUFFIX}"
         -DPROJECT_VERSION="${PROJECT_VERSION}"
         -P "${ETH_SCRIPTS_DIR}/buildinfo.cmake"
         )

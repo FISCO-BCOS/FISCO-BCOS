@@ -100,7 +100,9 @@ public:
         knownLatestHash(_genesisHash),
         m_protocolId(_protocolId),
         m_downloadingBlockQueue(_blockChain, _protocolId)
-    {}
+    {
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+    }
 
     SyncMasterStatus(h256 const& _genesisHash)
       : genesisHash(_genesisHash),
@@ -143,6 +145,7 @@ public:
 
 private:
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
     mutable SharedMutex x_peerStatus;
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
     DownloadingBlockQueue m_downloadingBlockQueue;

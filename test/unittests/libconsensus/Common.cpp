@@ -34,7 +34,7 @@ void checkSignAndCommitReq()
 {
     KeyPair key_pair = KeyPair::create();
     h256 block_hash = sha3("key_pair");
-    PrepareReq prepare_req(key_pair, 1000, u256(1), u256(134), block_hash);
+    PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
     KeyPair key_pair2 = KeyPair::create();
     T checked_req(prepare_req, key_pair2, prepare_req.idx);
     BOOST_CHECK(prepare_req.sig != checked_req.sig && prepare_req.sig2 != checked_req.sig2);
@@ -59,9 +59,8 @@ BOOST_AUTO_TEST_CASE(testPBFTMsg)
     /// test encode
     h256 block_hash = sha3("block_hash");
     KeyPair key_pair = KeyPair::create();
-    PBFTMsg faked_pbft_msg(key_pair, 1000, u256(1), u256(134), block_hash);
-    checkPBFTMsg(
-        faked_pbft_msg, key_pair, 1000, u256(1), u256(134), faked_pbft_msg.timestamp, block_hash);
+    PBFTMsg faked_pbft_msg(key_pair, 1000, 1, 134, block_hash);
+    checkPBFTMsg(faked_pbft_msg, key_pair, 1000, 1, 134, faked_pbft_msg.timestamp, block_hash);
     /// test encode
     bytes faked_pbft_data;
     faked_pbft_msg.encode(faked_pbft_data);
@@ -69,8 +68,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsg)
     /// test decode
     PBFTMsg decoded_pbft_msg;
     BOOST_REQUIRE_NO_THROW(decoded_pbft_msg.decode(ref(faked_pbft_data)));
-    checkPBFTMsg(
-        decoded_pbft_msg, key_pair, 1000, u256(1), u256(134), faked_pbft_msg.timestamp, block_hash);
+    checkPBFTMsg(decoded_pbft_msg, key_pair, 1000, 1, 134, faked_pbft_msg.timestamp, block_hash);
     /// test exception case of decode
     std::string invalid_str = "faked_pbft_msg";
     bytes invalid_data(invalid_str.begin(), invalid_str.end());
@@ -86,9 +84,8 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
 {
     KeyPair key_pair = KeyPair::create();
     h256 block_hash = sha3("key_pair");
-    PrepareReq prepare_req(key_pair, 1000, u256(1), u256(134), block_hash);
-    checkPBFTMsg(
-        prepare_req, key_pair, 1000, u256(1), u256(134), prepare_req.timestamp, block_hash);
+    PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
+    checkPBFTMsg(prepare_req, key_pair, 1000, 1, 134, prepare_req.timestamp, block_hash);
     FakeBlock fake_block(5);
     prepare_req.block = fake_block.m_blockData;
 
@@ -100,8 +97,7 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     PrepareReq decode_prepare;
     decode_prepare.decode(ref(prepare_req_data));
     BOOST_REQUIRE_NO_THROW(decode_prepare.decode(ref(prepare_req_data)));
-    checkPBFTMsg(
-        decode_prepare, key_pair, 1000, u256(1), u256(134), prepare_req.timestamp, block_hash);
+    checkPBFTMsg(decode_prepare, key_pair, 1000, 1, 134, prepare_req.timestamp, block_hash);
     BOOST_CHECK(decode_prepare.block == fake_block.m_blockData);
     /// test exception case
     prepare_req_data[0] += 1;
@@ -109,22 +105,22 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
 
     /// test construct from given prepare req
     KeyPair key_pair2 = KeyPair::create();
-    PrepareReq constructed_prepare(decode_prepare, key_pair2, u256(2), u256(135));
-    checkPBFTMsg(constructed_prepare, key_pair2, 1000, u256(2), u256(135),
-        constructed_prepare.timestamp, block_hash);
+    PrepareReq constructed_prepare(decode_prepare, key_pair2, 2, 135);
+    checkPBFTMsg(
+        constructed_prepare, key_pair2, 1000, 2, 135, constructed_prepare.timestamp, block_hash);
     BOOST_CHECK(constructed_prepare.timestamp >= decode_prepare.timestamp);
     BOOST_CHECK(decode_prepare.block == constructed_prepare.block);
 
     /// test construct prepare from given block
-    PrepareReq block_populated_prepare(fake_block.m_block, key_pair2, u256(2), u256(135));
-    checkPBFTMsg(block_populated_prepare, key_pair2, fake_block.m_block.blockHeader().number(),
-        u256(2), u256(135), block_populated_prepare.timestamp, fake_block.m_block.header().hash());
+    PrepareReq block_populated_prepare(fake_block.m_block, key_pair2, 2, 135);
+    checkPBFTMsg(block_populated_prepare, key_pair2, fake_block.m_block.blockHeader().number(), 2,
+        135, block_populated_prepare.timestamp, fake_block.m_block.header().hash());
     BOOST_CHECK(block_populated_prepare.timestamp >= constructed_prepare.timestamp);
     /// test encode && decode
     block_populated_prepare.encode(prepare_req_data);
     PrepareReq tmp_req;
     BOOST_REQUIRE_NO_THROW(tmp_req.decode(ref(prepare_req_data)));
-    checkPBFTMsg(tmp_req, key_pair2, fake_block.m_block.blockHeader().number(), u256(2), u256(135),
+    checkPBFTMsg(tmp_req, key_pair2, fake_block.m_block.blockHeader().number(), 2, 135,
         block_populated_prepare.timestamp, fake_block.m_block.header().hash());
     Block tmp_block;
     BOOST_REQUIRE_NO_THROW(tmp_block.decode(ref(tmp_req.block)));
@@ -137,7 +133,7 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     sealing.p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
 
     PrepareReq new_req(block_populated_prepare, sealing, key_pair2);
-    checkPBFTMsg(new_req, key_pair2, fake_block.m_block.blockHeader().number(), u256(2), u256(135),
+    checkPBFTMsg(new_req, key_pair2, fake_block.m_block.blockHeader().number(), 2, 135,
         new_req.timestamp, fake_block.m_block.header().hash());
     BOOST_CHECK(new_req.timestamp >= tmp_req.timestamp);
     bytes encodedData;
@@ -158,9 +154,9 @@ BOOST_AUTO_TEST_CASE(testViewChange)
     ViewChangeReq empty_view;
     checkPBFTMsg(empty_view);
     KeyPair key_pair = KeyPair::create();
-    ViewChangeReq viewChange_req(key_pair, 100, u256(1000), u256(1), sha3("test_view"));
-    checkPBFTMsg(viewChange_req, key_pair, 100, u256(1000), u256(1), viewChange_req.timestamp,
-        sha3("test_view"));
+    ViewChangeReq viewChange_req(key_pair, 100, 1000, 1, sha3("test_view"));
+    checkPBFTMsg(
+        viewChange_req, key_pair, 100, 1000, 1, viewChange_req.timestamp, sha3("test_view"));
     bytes req_data;
     BOOST_REQUIRE_NO_THROW(viewChange_req.encode(req_data));
     ViewChangeReq tmp_req;
@@ -176,7 +172,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
 {
     KeyPair key_pair = KeyPair::create();
     h256 block_hash = sha3("key_pair");
-    PrepareReq prepare_req(key_pair, 1000, u256(1), u256(134), block_hash);
+    PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     PBFTMsgPacket packet;
@@ -195,7 +191,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
     packet_data[1] += 1;
     BOOST_CHECK_THROW(tmp_packet.decode(ref(packet_data));, std::exception);
     /// set other field
-    tmp_packet.setOtherField(u256(12), key_pair.pub(), "");
+    tmp_packet.setOtherField(12, key_pair.pub(), "");
     BOOST_CHECK(tmp_packet != packet);
     BOOST_CHECK(tmp_packet.timestamp >= packet.timestamp);
 }

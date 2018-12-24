@@ -160,25 +160,34 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 
     for (unsigned i = 0; i < itemCount; ++i)
     {
-        Transaction tx;
-        tx.decode(rlps[i]);
+        try
+        {
+            Transaction tx;
+            tx.decode(rlps[i]);
 
-        auto importResult = m_txPool->import(tx);
-        if (ImportResult::Success == importResult)
-            successCnt++;
-        else if (ImportResult::AlreadyKnown == importResult)
-            SYNCLOG(TRACE) << "[Tx] Import peer transaction into txPool DUPLICATED from peer "
-                              "[reason/txHash/peer]: "
-                           << int(importResult) << "/" << _packet.nodeId << "/" << move(tx.sha3())
-                           << endl;
-        else
-            SYNCLOG(TRACE) << "[Tx] Import peer transaction into txPool FAILED from peer "
-                              "[reason/txHash/peer]: "
-                           << int(importResult) << "/" << _packet.nodeId << "/" << move(tx.sha3())
-                           << endl;
+            auto importResult = m_txPool->import(tx);
+            if (ImportResult::Success == importResult)
+                successCnt++;
+            else if (ImportResult::AlreadyKnown == importResult)
+                SYNCLOG(TRACE) << "[Tx] Import peer transaction into txPool DUPLICATED from peer "
+                                  "[reason/txHash/peer]: "
+                               << int(importResult) << "/" << _packet.nodeId << "/"
+                               << move(tx.sha3()) << endl;
+            else
+                SYNCLOG(TRACE) << "[Tx] Import peer transaction into txPool FAILED from peer "
+                                  "[reason/txHash/peer]: "
+                               << int(importResult) << "/" << _packet.nodeId << "/"
+                               << move(tx.sha3()) << endl;
 
 
-        m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
+            m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
+        }
+        catch (std::exception& e)
+        {
+            SYNCLOG(WARNING) << "[Tx] Invalid transaction RLP recieved [reason/rlp] " << e.what()
+                             << "/" << toHex(rlps[i].toBytes()) << endl;
+            continue;
+        }
     }
     SYNCLOG(DEBUG) << "[Tx] Import peer transactions [import/rcv/txPool]: " << successCnt << "/"
                    << itemCount << "/" << m_txPool->pendingSize() << " from " << _packet.nodeId

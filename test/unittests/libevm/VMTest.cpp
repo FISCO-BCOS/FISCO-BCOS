@@ -15,6 +15,7 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/Exceptions.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/EVMC.h>
@@ -57,13 +58,16 @@ class Create2TestFixture : public TestOutputHelperFixture
 {
 public:
     explicit Create2TestFixture(VMFace* _vm)
-      : vm{_vm},
-        mptState(std::make_shared<MPTState>(
+      : mptState(std::make_shared<MPTState>(
             u256(0), MPTState::openDB("./", h256("0x2234")), BaseState::Empty)),
-
-        state(mptState)
+        state(mptState),
+        vm{_vm}
     {
         state->addBalance(address, 1 * ether);
+        blockverifier::ExecutiveContext::Ptr executiveContext =
+            make_shared<blockverifier::ExecutiveContext>();
+        executiveContext->setMemoryTableFactory(make_shared<storage::MemoryTableFactory>());
+        envInfo.setPrecompiledEngine(executiveContext);
     }
 
     void testCreate2worksInConstantinople()
@@ -152,14 +156,17 @@ class ExtcodehashTestFixture : public TestOutputHelperFixture
 {
 public:
     explicit ExtcodehashTestFixture(VMFace* _vm)
-      : vm{_vm},
-        mptState(std::make_shared<MPTState>(
+      : mptState(std::make_shared<MPTState>(
             u256(0), MPTState::openDB("./", h256("0x2234")), BaseState::Empty)),
-
-        state(mptState)
+        state(mptState),
+        vm{_vm}
     {
         state->addBalance(address, 1 * ether);
         state->setCode(extAddress, bytes{extCode});
+        blockverifier::ExecutiveContext::Ptr executiveContext =
+            make_shared<blockverifier::ExecutiveContext>();
+        executiveContext->setMemoryTableFactory(make_shared<storage::MemoryTableFactory>());
+        envInfo.setPrecompiledEngine(executiveContext);
     }
 
     void testExtcodehashWorksInConstantinople()

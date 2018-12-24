@@ -235,7 +235,9 @@ public:
         return CommitResult::OK;
     }
 
-    void setGroupMark(std::string const& groupMark) override {}
+    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override {}
+    dev::h512s minerList() override { return dev::h512s(); };
+    dev::h512s observerList() override { return dev::h512s(); };
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
@@ -447,7 +449,7 @@ public:
     virtual NodeAccountType accountType() { return NodeAccountType::MinerAccount; };
     /// set the node account type
     virtual void setNodeAccountType(NodeAccountType const&){};
-    virtual u256 nodeIdx() const { return u256(0); };
+    virtual IDXTYPE nodeIdx() const { return 0; };
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const& block){};
 

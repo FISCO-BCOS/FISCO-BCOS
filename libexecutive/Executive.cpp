@@ -134,6 +134,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s->savepoint();
+    m_memoryTableFactorySavePoint =
+        m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
     if (m_envInfo.precompiledEngine() &&
         m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
@@ -155,7 +157,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
         size_t outputSize = result.size();
         m_output = owning_bytes_ref{std::move(result), 0, outputSize};
-        LOG(DEBUG) << "Precompiled result: " << result;
+        // result has been assigned to m_output
+        LOG(DEBUG) << "Precompiled result: " << toHex(m_output.takeBytes());
     }
     else
     {
@@ -205,6 +208,8 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     m_s->incNonce(_sender);
 
     m_savepoint = m_s->savepoint();
+    m_memoryTableFactorySavePoint =
+        m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
 
     m_isCreation = true;
 
@@ -380,4 +385,6 @@ void Executive::revert()
     // Set result address to the null one.
     m_newAddress = {};
     m_s->rollback(m_savepoint);
+    auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
+    memoryTableFactory->rollback(m_savepoint);
 }

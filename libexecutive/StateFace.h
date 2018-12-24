@@ -1,20 +1,19 @@
 /*
-    @CopyRight:
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /**
  * @state base interface for EVM
  *
@@ -108,7 +107,7 @@ public:
     /// @returns bytes() if no account exists at that address.
     /// @warning The reference to the code is only valid until the access to
     ///          other account. Do not keep it.
-    virtual bytes const code(Address const& _addr) const = 0;
+    virtual bytes const& code(Address const& _addr) const = 0;
 
     /// Get the code hash of an account.
     /// @returns EmptySHA3 if no account exists at that address or if there is no code associated

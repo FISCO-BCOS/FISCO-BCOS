@@ -110,7 +110,7 @@ void MPTState::kill(Address _a)
     m_state.kill(_a);
 }
 
-bytes const MPTState::code(Address const& _addr) const
+bytes const& MPTState::code(Address const& _addr) const
 {
     return m_state.code(_addr);
 }

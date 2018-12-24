@@ -1,19 +1,19 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
 /** @file Service.h
  *  @author monan
  *  @modify first draft
@@ -95,7 +95,14 @@ public:
     }
     virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> _groupID2NodeList) override
     {
+        RecursiveMutex(x_nodeList);
         m_groupID2NodeList = _groupID2NodeList;
+    }
+
+    virtual void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) override
+    {
+        RecursiveMutex(x_nodeList);
+        m_groupID2NodeList[_groupID] = _nodeList;
     }
 
     virtual uint32_t topicSeq() { return m_topicSeq; }
@@ -145,6 +152,7 @@ private:
     ///< key is the group that the node joins
     ///< value is the list of node members for the group
     ///< the data is currently statically loaded and not synchronized between nodes
+    RecursiveMutex x_nodeList;
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
 
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
