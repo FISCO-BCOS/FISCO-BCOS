@@ -41,7 +41,6 @@ namespace dev
 namespace blockverifier
 {
 class ExecutiveContext;
-class SystemConfigRecord;
 }  // namespace blockverifier
 namespace storage
 {
