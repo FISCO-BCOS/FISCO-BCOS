@@ -98,7 +98,14 @@ public:
     }
     virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> _groupID2NodeList) override
     {
+        RecursiveMutex(x_nodeList);
         m_groupID2NodeList = _groupID2NodeList;
+    }
+
+    virtual void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) override
+    {
+        RecursiveMutex(x_nodeList);
+        m_groupID2NodeList[_groupID] = _nodeList;
     }
 
     virtual uint32_t topicSeq() { return m_topicSeq; }
@@ -149,6 +156,7 @@ private:
     ///< key is the group that the node joins
     ///< value is the list of node members for the group
     ///< the data is currently statically loaded and not synchronized between nodes
+    RecursiveMutex x_nodeList;
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
 
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;

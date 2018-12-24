@@ -30,7 +30,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
-#include <libstorage/MinerPrecompiled.h>
+#include <libstorage/ConsensusPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
@@ -110,12 +110,13 @@ Json::Value Rpc::getMinerList(int _groupID)
     {
         RPC_LOG(INFO) << "[#getMinerList] [groupID]: " << _groupID << std::endl;
 
-        auto consensus = ledgerManager()->consensus(_groupID);
-        if (!consensus)
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (!blockchain)
+        {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-
-        auto miners = consensus->minerList();
+        }
+        auto miners = blockchain->minerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
         for (auto it = miners.begin(); it != miners.end(); ++it)
@@ -142,19 +143,18 @@ Json::Value Rpc::getObserverList(int _groupID)
     {
         RPC_LOG(INFO) << "[#getObserverList] [groupID]: " << _groupID << std::endl;
 
-        auto consensus = ledgerManager()->consensus(_groupID);
-        if (!consensus)
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        if (!blockchain)
+        {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-        auto miners = consensus->minerList();
-
-        auto _nodeList = service()->getNodeListByGroupID(_groupID);
+        }
+        auto _nodeList = blockchain->observerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
         for (auto it = _nodeList.begin(); it != _nodeList.end(); ++it)
         {
-            if (miners.end() == find(miners.begin(), miners.end(), *it))
-                response.append((*it).hex());
+            response.append((*it).hex());
         }
 
         return response;
