@@ -137,7 +137,11 @@ Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string
     tableEntry->setField("value_field", valueField);
     createTableCode =
         sysTable->insert(tableName, tableEntry, std::make_shared<AccessOptions>(_origin));
-
+    if (createTableCode == -1)
+    {
+        STORAGE_LOG(WARNING) << tableName << " checkAuthority of " << _origin.hex() << " failed!";
+        return nullptr;
+    }
     return openTable(tableName);
 }
 

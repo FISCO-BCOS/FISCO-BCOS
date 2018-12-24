@@ -54,7 +54,7 @@ public:
     void commit();
     void commitDB(h256 const& _blockHash, int64_t _blockNumber);
 
-    ssize_t getCreateTableCode() { return createTableCode; }
+    int getCreateTableCode() { return createTableCode; }
 
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
@@ -66,7 +66,7 @@ private:
     std::vector<Change> m_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;
-    ssize_t createTableCode;
+    int createTableCode;
 };
 
 }  // namespace storage

@@ -93,7 +93,7 @@ bytes AuthorityPrecompiled::call(
         entry->setField(SYS_AC_FIELD_ADDRESS, addr);
         entry->setField(SYS_AC_FIELD_ENABLENUM,
             boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-        ssize_t count = table->insert(tableName, entry, getOptions(origin));
+        int count = table->insert(tableName, entry, getOptions(origin));
         out = abi.abiIn("", u256(count));
         STORAGE_LOG(DEBUG) << "AuthorityPrecompiled add a record, tableName : " << tableName
                            << "address: " << addr;
@@ -128,7 +128,7 @@ bytes AuthorityPrecompiled::call(
         }
         else
         {
-            ssize_t count = table->remove(tableName, condition, getOptions(origin));
+            int count = table->remove(tableName, condition, getOptions(origin));
             out = abi.abiIn("", u256(count));
         }
 

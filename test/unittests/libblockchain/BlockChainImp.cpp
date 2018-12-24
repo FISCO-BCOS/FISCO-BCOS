@@ -116,13 +116,13 @@ public:
         return entries;
     }
 
-    virtual ssize_t insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr) override
+    virtual int insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr) override
     {
         m_fakeStorage[m_table].insert(std::make_pair(key, entry));
         return 0;
     }
 
-    virtual ssize_t update(
+    virtual int update(
         const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr)
     {
         entry->setField(

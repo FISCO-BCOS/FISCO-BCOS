@@ -36,11 +36,11 @@ public:
 
     virtual void init(const std::string& tableName);
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
-    virtual ssize_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+    virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
-    virtual ssize_t insert(const std::string& key, Entry::Ptr entry,
+    virtual int insert(const std::string& key, Entry::Ptr entry,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
-    virtual ssize_t remove(const std::string& key, Condition::Ptr condition,
+    virtual int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
     virtual h256 hash();

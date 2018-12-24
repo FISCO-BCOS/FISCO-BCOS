@@ -81,7 +81,7 @@ bytes TablePrecompiled::call(
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
 
-        ssize_t count = m_table->insert(key, entry, getOptions(origin));
+        int count = m_table->insert(key, entry, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;
@@ -119,7 +119,7 @@ bytes TablePrecompiled::call(
                 context->getPrecompiled(conditionAddress));
         auto condition = conditionPrecompiled->getCondition();
 
-        ssize_t count = m_table->remove(key, condition, getOptions(origin));
+        int count = m_table->remove(key, condition, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;
@@ -139,7 +139,7 @@ bytes TablePrecompiled::call(
         auto entry = entryPrecompiled->getEntry();
         auto condition = conditionPrecompiled->getCondition();
 
-        ssize_t count = m_table->update(key, entry, condition, getOptions(origin));
+        int count = m_table->update(key, entry, condition, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;

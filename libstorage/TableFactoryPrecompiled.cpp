@@ -92,7 +92,7 @@ bytes TableFactoryPrecompiled::call(
         tableName = storage::USER_TABLE_PREFIX + tableName;
         auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled, origin);
         // set createTableCode
-        ssize_t errorCode = m_memoryTableFactory->getCreateTableCode();
+        int errorCode = m_memoryTableFactory->getCreateTableCode();
         out = abi.abiIn("", u256(errorCode));
         break;
     }
