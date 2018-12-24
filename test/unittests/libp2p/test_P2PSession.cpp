@@ -30,27 +30,28 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
+using namespace dev::network;
 using namespace dev::p2p;
 
 namespace dev
 {
 namespace test
 {
-class MockSession : public Session
+class MockSession : public dev::network::Session
 {
 public:
     virtual ~MockSession() {}
 
     virtual void start() override {}
 
-    virtual void disconnect(DisconnectReason _reason) override {}
+    virtual void disconnect(dev::network::DisconnectReason _reason) override {}
 
     virtual bool isConnected() const override { return m_connected; }
 
     bool m_connected = false;
 };
 
-class MockService : public Service
+class MockService : public p2p::Service
 {
 public:
     virtual ~MockService() {}

@@ -60,7 +60,7 @@ public:
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
-    std::shared_ptr<Host> m_host;
+    std::shared_ptr<dev::network::Host> m_host;
     dev::GROUP_ID groupId = 1;
     dev::GROUP_ID invalidGroup = 2;
 };

@@ -57,7 +57,7 @@
 
 using namespace std;
 using namespace dev;
-using namespace dev::p2p;
+using namespace dev::network;
 using namespace dev::eth;
 using namespace dev::crypto;
 
