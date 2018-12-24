@@ -69,14 +69,16 @@ public:
 
     virtual u256 balance(Address const& _id) const override;
 
-    virtual void addBalance(Address const& _id, u256 const& _amount) override;
+    virtual void addBalance(
+        Address const& _id, u256 const& _amount, Address const& _origin = Address()) override;
 
     virtual void subBalance(Address const& _addr, u256 const& _value) override;
 
-    virtual void setBalance(Address const& _addr, u256 const& _value) override;
+    virtual void setBalance(
+        Address const& _addr, u256 const& _value, Address const& _origin = Address()) override;
 
-    virtual void transferBalance(
-        Address const& _from, Address const& _to, u256 const& _value) override;
+    virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value,
+        Address const& _origin = Address()) override;
 
     virtual h256 storageRoot(Address const& _contract) const override;
 
@@ -87,7 +89,8 @@ public:
 
     virtual void clearStorage(Address const& _contract) override;
 
-    virtual void createContract(Address const& _address) override;
+    virtual void createContract(
+        Address const& _address, Address const& _origin = Address()) override;
 
     virtual void setCode(Address const& _address, bytes&& _code) override;
 
@@ -102,9 +105,10 @@ public:
 
     virtual size_t codeSize(Address const& _contract) const override;
 
-    virtual void incNonce(Address const& _id) override;
+    virtual void incNonce(Address const& _id, Address const& _origin = Address()) override;
 
-    virtual void setNonce(Address const& _addr, u256 const& _newNonce) override;
+    virtual void setNonce(
+        Address const& _addr, u256 const& _newNonce, Address const& _origin = Address()) override;
 
     virtual u256 getNonce(Address const& _addr) const override;
 

@@ -63,7 +63,8 @@ public:
 
     /// Add some amount to balance.
     /// Will initialise the address if it has never been used.
-    virtual void addBalance(Address const& _address, u256 const& _amount) override;
+    virtual void addBalance(
+        Address const& _address, u256 const& _amount, Address const& _origin = Address()) override;
 
     /// Subtract the @p _value amount from the balance of @p _address account.
     /// @throws NotEnoughCash if the balance of the account is less than the
@@ -72,7 +73,8 @@ public:
 
     /// Set the balance of @p _address to @p _value.
     /// Will instantiate the address if it has never been used.
-    virtual void setBalance(Address const& _address, u256 const& _value) override;
+    virtual void setBalance(
+        Address const& _address, u256 const& _value, Address const& _origin = Address()) override;
 
     /**
      * @brief Transfers "the balance @a _value between two accounts.
@@ -80,8 +82,8 @@ public:
      * @param _to Account to which @a _value will be added.
      * @param _value Amount to be transferred.
      */
-    virtual void transferBalance(
-        Address const& _from, Address const& _to, u256 const& _value) override;
+    virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value,
+        Address const& _origin = Address()) override;
 
     /// Get the root of the storage of an account.
     virtual h256 storageRoot(Address const& _contract) const override;
@@ -98,7 +100,8 @@ public:
     virtual void clearStorage(Address const& _contract) override;
 
     /// Create a contract at the given address (with unset code and unchanged balance).
-    virtual void createContract(Address const& _address) override;
+    virtual void createContract(
+        Address const& _address, Address const& _origin = Address()) override;
 
     /// Sets the code of the account. Must only be called during / after contract creation.
     virtual void setCode(Address const& _address, bytes&& _code) override;
@@ -129,10 +132,11 @@ public:
     virtual size_t codeSize(Address const& _contract) const override;
 
     /// Increament the account nonce.
-    virtual void incNonce(Address const& _address) override;
+    virtual void incNonce(Address const& _address, Address const& _origin = Address()) override;
 
     /// Set the account nonce.
-    virtual void setNonce(Address const& _address, u256 const& _newNonce) override;
+    virtual void setNonce(Address const& _address, u256 const& _newNonce,
+        Address const& _origin = Address()) override;
 
     /// Get the account nonce -- the number of transactions it has sent.
     /// @returns 0 if the address has never been used.
@@ -177,7 +181,8 @@ public:
 
 private:
     mutable std::unordered_map<Address, bytes> m_cache;
-    void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256());
+    void createAccount(Address const& _origin, Address const& _address, u256 const& _nonce,
+        u256 const& _amount = u256());
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
     /// check authority by caller
     u256 m_accountStartNonce;

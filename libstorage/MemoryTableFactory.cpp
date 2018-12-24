@@ -115,8 +115,8 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     return memoryTable;
 }
 
-Table::Ptr MemoryTableFactory::createTable(
-    const string& tableName, const string& keyField, const std::string& valueField)
+Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string& keyField,
+    const std::string& valueField, Address const& _origin)
 {
     STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum
                        << " table:" << tableName;
@@ -135,7 +135,8 @@ Table::Ptr MemoryTableFactory::createTable(
     tableEntry->setField("table_name", tableName);
     tableEntry->setField("key_field", keyField);
     tableEntry->setField("value_field", valueField);
-    sysTable->insert(tableName, tableEntry);
+    createTableCode =
+        sysTable->insert(tableName, tableEntry, std::make_shared<AccessOptions>(_origin));
 
     return openTable(tableName);
 }

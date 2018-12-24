@@ -129,7 +129,7 @@ bytes AuthorityPrecompiled::call(
         else
         {
             ssize_t count = table->remove(tableName, condition, getOptions(origin));
-            out = abi.abiIn("", count);
+            out = abi.abiIn("", u256(count));
         }
 
         break;

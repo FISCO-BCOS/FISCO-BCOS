@@ -55,7 +55,8 @@ public:
 
     /// Add some amount to balance.
     /// Will initialise the address if it has never been used.
-    virtual void addBalance(Address const& _id, u256 const& _amount) = 0;
+    virtual void addBalance(
+        Address const& _id, u256 const& _amount, Address const& _origin = Address()) = 0;
 
     /// Subtract the @p _value amount from the balance of @p _addr account.
     /// @throws NotEnoughCash if the balance of the account is less than the
@@ -64,7 +65,8 @@ public:
 
     /// Set the balance of @p _addr to @p _value.
     /// Will instantiate the address if it has never been used.
-    virtual void setBalance(Address const& _addr, u256 const& _value) = 0;
+    virtual void setBalance(
+        Address const& _addr, u256 const& _value, Address const& _origin = Address()) = 0;
 
     /**
      * @brief Transfers "the balance @a _value between two accounts.
@@ -72,7 +74,8 @@ public:
      * @param _to Account to which @a _value will be added.
      * @param _value Amount to be transferred.
      */
-    virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value) = 0;
+    virtual void transferBalance(Address const& _from, Address const& _to, u256 const& _value,
+        Address const& _origin = Address()) = 0;
 
     /// Get the root of the storage of an account.
     virtual h256 storageRoot(Address const& _contract) const = 0;
@@ -89,7 +92,7 @@ public:
     virtual void clearStorage(Address const& _contract) = 0;
 
     /// Create a contract at the given address (with unset code and unchanged balance).
-    virtual void createContract(Address const& _address) = 0;
+    virtual void createContract(Address const& _address, Address const& _origin = Address()) = 0;
 
     /// Sets the code of the account. Must only be called during / after contract creation.
     virtual void setCode(Address const& _address, bytes&& _code) = 0;
@@ -119,10 +122,11 @@ public:
     virtual size_t codeSize(Address const& _contract) const = 0;
 
     /// Increament the account nonce.
-    virtual void incNonce(Address const& _id) = 0;
+    virtual void incNonce(Address const& _id, Address const& _origin = Address()) = 0;
 
     /// Set the account nonce.
-    virtual void setNonce(Address const& _addr, u256 const& _newNonce) = 0;
+    virtual void setNonce(
+        Address const& _addr, u256 const& _newNonce, Address const& _origin = Address()) = 0;
 
     /// Get the account nonce -- the number of transactions it has sent.
     /// @returns 0 if the address has never been used.

@@ -39,7 +39,7 @@ namespace blockverifier
 contract DBFactory {
     function openDB(string) public constant returns (DB);
     function openTable(string) public constant returns (DB);
-    function createTable(string, string, string) public constant returns (DB);
+    function createTable(string, string, string) public constant returns (int);
 }
 #endif
 

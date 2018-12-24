@@ -90,15 +90,10 @@ bytes TableFactoryPrecompiled::call(
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
-        auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled);
-        // tableName already exist
-        unsigned errorCode = 0;
-        if (!table == 0u)
-        {
-            STORAGE_LOG(ERROR) << "table:" << tableName << " conflict.";
-            errorCode = 1;
-        }
-        out = abi.abiIn("", errorCode);
+        auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled, origin);
+        // set createTableCode
+        ssize_t errorCode = m_memoryTableFactory->getCreateTableCode();
+        out = abi.abiIn("", u256(errorCode));
         break;
     }
     default:
