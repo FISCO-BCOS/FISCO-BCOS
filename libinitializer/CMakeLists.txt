@@ -4,8 +4,6 @@ file(GLOB HEADERS "*.h")
 add_library(initializer ${SRC_LIST} ${HEADERS})
 target_include_directories(initializer PUBLIC ${BOOST_INCLUDE_DIR})
 
-target_link_libraries(initializer Boost::program_options)
-
 target_link_libraries(initializer devcore)
 target_link_libraries(initializer network)
 target_link_libraries(initializer devcrypto)
@@ -19,6 +17,7 @@ target_link_libraries(initializer ledger)
 target_link_libraries(initializer channelserver)
 target_link_libraries(initializer rpc)
 target_link_libraries(initializer security)
-target_link_libraries(initializer JsonRpcCpp::Server ${MHD_LIBRARY})
+target_link_libraries(initializer JsonRpcCpp::Server)
+
 
 install(TARGETS initializer RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)

@@ -105,7 +105,7 @@ public:
         for (auto const& connector : m_connectors)
         {
             if (false == connector->StartListening())
-                return false;  //启动失败
+                return false;  // start failed
         }
 
         return true;

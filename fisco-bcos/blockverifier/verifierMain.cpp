@@ -58,7 +58,8 @@ int main(int argc, char* argv[])
 
     auto blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
     blockChain->setStateStorage(storage);
-    blockChain->setGroupMark("std");
+    dev::blockchain::GenesisBlockParam initParam = {"std", dev::h512s(), dev::h512s()};
+    blockChain->checkAndBuildGenesisBlock(initParam);
 
     auto stateFactory = std::make_shared<dev::storagestate::StorageStateFactory>(dev::u256(0));
 

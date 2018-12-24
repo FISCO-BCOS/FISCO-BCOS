@@ -31,31 +31,6 @@ namespace dev
 namespace txpool
 {
 /**
- * @brief : 1. obtain a transaction from the lower network
- *  2. verify the transaction, including repeated transaction && nonce check && block limit check
- *  3. insert the transaction to transaction queue (m_txsQueue)
- * @param pMessage : p2p handler returned by p2p module to obtain messages
- */
-void TxPool::enqueue(dev::p2p::NetworkException exception, std::shared_ptr<P2PSession> session,
-    P2PMessage::Ptr pMessage)
-{
-    if (exception.errorCode() != 0)
-        BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed()
-                              << errinfo_comment("obtain transaction from lower network failed"));
-    bytesConstRef tx_data = bytesConstRef(pMessage->buffer().get());
-    ImportResult result = import(tx_data);
-    if (result == ImportResult::TransactionNonceCheckFail)
-        BOOST_THROW_EXCEPTION(P2pEnqueueTransactionFailed()
-                              << errinfo_comment("nonce check failed when enqueue transaction"));
-    if (result == ImportResult::TransactionPoolIsFull)
-        BOOST_THROW_EXCEPTION(
-            P2pEnqueueTransactionFailed() << errinfo_comment("transaction pool is full"));
-    if (result == ImportResult::TxPoolNonceCheckFail)
-        BOOST_THROW_EXCEPTION(
-            P2pEnqueueTransactionFailed() << errinfo_comment("transaction nonce check failed"));
-}
-
-/**
  * @brief submit a transaction through RPC/web3sdk
  *
  * @param _t : transaction
@@ -64,7 +39,9 @@ void TxPool::enqueue(dev::p2p::NetworkException exception, std::shared_ptr<P2PSe
 std::pair<h256, Address> TxPool::submit(Transaction& _tx)
 {
     ImportResult ret = import(_tx);
-    if (ret == ImportResult::TransactionNonceCheckFail)
+    if (ImportResult::Success == ret)
+        return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
+    else if (ret == ImportResult::TransactionNonceCheckFail)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
@@ -82,7 +59,22 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
             TransactionRefused() << errinfo_comment(
                 "ImportResult::TxPoolNonceCheckFail, txHash: " + toHex(_tx.sha3())));
     }
-    return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
+    else if (ImportResult::AlreadyKnown == ret)
+    {
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "ImportResult::TransactionAlreadyKown, txHash: " + toHex(_tx.sha3())));
+    }
+    else if (ImportResult::AlreadyInChain == ret)
+    {
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "ImportResult::TransactionAlreadyInChain, txHash: " + toHex(_tx.sha3())));
+    }
+    else
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "ImportResult::TransactionSubmitFailed, txHash: " + toHex(_tx.sha3())));
 }
 
 /**

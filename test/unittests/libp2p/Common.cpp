@@ -21,8 +21,8 @@
  * @date 2018-09-10
  */
 
-#if 0
-#include "../../../libnetwork/Common.h"
+
+#include "libnetwork/Common.h"
 
 #include <libdevcore/Assertions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -108,40 +108,6 @@ BOOST_AUTO_TEST_CASE(testDisconnectReason)
     reasonOf(DisconnectReason(0x11));
     BOOST_CHECK_MESSAGE(true, "Unknown reason.");
 }
-/*
-BOOST_AUTO_TEST_CASE(testHostResolver)
-{
-    std::string host = "www.baidu.com";
-    BOOST_REQUIRE_NO_THROW(HostResolver::query(host));
-    host = "test";
-    BOOST_CHECK(HostResolver::query(host).to_string() == "0.0.0.0");
-    host = "0.0.0.0";
-    BOOST_CHECK(HostResolver::query(host).to_string() == host);
-    host = "127.0.0.1";
-    BOOST_CHECK(HostResolver::query(host).to_string() == host);
-}*/
-
-/// test NodeInfo
-BOOST_AUTO_TEST_CASE(testNodeInfo)
-{
-    /// test default constructor
-    NodeInfo node_info;
-    BOOST_CHECK(node_info.id == NodeID());
-    BOOST_CHECK(node_info.address == "");
-    BOOST_CHECK(node_info.port == 0);
-    BOOST_CHECK(node_info.version == "");
-    /// test copy constructor
-    NodeID tmp_node_id = KeyPair::create().pub();
-    NodeInfo node_info2(tmp_node_id, "127.0.0.1", 30303, "9.0");
-    BOOST_CHECK(node_info2.id == tmp_node_id);
-    BOOST_CHECK(node_info2.address == "127.0.0.1");
-    BOOST_CHECK(node_info2.port == 30303);
-    BOOST_CHECK(node_info2.version == "9.0");
-    /// test encode
-    node_info2.enode();
-    BOOST_CHECK_MESSAGE(true, "enode://" + node_info2.id.hex() + "@" + node_info2.address + ":" +
-                                  toString(node_info2.port));
-}
 
 BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
 {
@@ -154,7 +120,7 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     BOOST_CHECK(m_endpoint.host == "");
     BOOST_CHECK(bool(m_endpoint) == false);
     BOOST_CHECK(m_endpoint.isAllowed() == false);
-    BOOST_CHECK(m_endpoint.name() == "0.0.0.0:0:0");
+    BOOST_CHECK(m_endpoint.name() == "0.0.0.0:0");
     BOOST_CHECK(m_endpoint.isValid() == false);
     /// "0.0.0.0" not the public address
     m_endpoint.address = bi::address::from_string("0.0.0.0");
@@ -186,7 +152,7 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     /// operator ==
     BOOST_CHECK(m_endpoint2 == NodeIPEndpoint(bi::address::from_string("127.0.0.1"), port, port));
     /// operator !=
-    BOOST_CHECK(m_endpoint2 != m_endpoint);
+    // BOOST_CHECK(m_endpoint2 != m_endpoint);
     /// opearator <
     BOOST_CHECK(m_endpoint < m_endpoint2);
     /// test construct: NodeIPEndpoint(std::string _host, uint16_t _udp, uint16_t _tcp)
@@ -215,33 +181,6 @@ BOOST_AUTO_TEST_CASE(testPeerSessionInfo)
     BOOST_CHECK(peer_session_info.host == "www.baidu.com");
 }
 
-/// test NodeSpec
-BOOST_AUTO_TEST_CASE(testNodeSpec)
-{
-    std::string address = "127.0.0.1";
-    uint16_t port = 30303;
-    NodeID node_id = KeyPair::create().pub();
-    /// test default constructor
-    NodeSpec node_spec;
-    node_spec.setAddress(address);
-    node_spec.setTcpPort(port);
-    node_spec.setUdpPort(port);
-    node_spec.setNodeId(node_id);
-    BOOST_CHECK(node_spec.id() == node_id);
-    BOOST_CHECK(node_spec.nodeIPEndpoint() == NodeIPEndpoint(address, port, port));
-    BOOST_CHECK(node_spec.address() == address);
-    BOOST_CHECK(node_spec.tcpPort() == port);
-    BOOST_CHECK(node_spec.udpPort() == port);
-    std::string node_spec_str = node_spec.enode();
-    /// construct NodeSpec from string
-    NodeSpec node_spec2(node_spec_str);
-    BOOST_CHECK(node_spec2.id() == node_id);
-    BOOST_CHECK(node_spec2.nodeIPEndpoint() == NodeIPEndpoint(address, port, port));
-    BOOST_CHECK(node_spec2.address() == address);
-    BOOST_CHECK(node_spec2.tcpPort() == port);
-    BOOST_CHECK(node_spec2.udpPort() == port);
-}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
-#endif

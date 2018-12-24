@@ -58,13 +58,6 @@ type=LevelDB
 ;state type, now support mpt/storage
 type=${state_type}
 
-
-
-;genesis configuration
-[genesis]
-;used to mark the genesis block of this group
-;mark=${group_id}
-
 ;txpool limit
 [txPool]
 limit=1000
@@ -95,7 +88,7 @@ function generateNodeIdList()
         local prefix=$node_dir"/node_"${signleIp}
         for miner in ${miners[*]};do
                 if [ ! -f "${prefix}_${miner}/config.ini" ];then
-                    LOG_ERROR "${prefix}_${miner}/config.ini not exists!"
+                    LOG_ERROR "${prefix}_${miner}/config.ini doesn't exist!"
                     continue
                 fi
                 certDir=`cat ${prefix}_${miner}/config.ini | grep -w data_path | grep -v ";" | grep -v group | cut -d'=' -f2`
@@ -104,7 +97,7 @@ function generateNodeIdList()
                 fi
                 minerNodeId=`cat ${prefix}_${miner}/${certDir}/node.nodeid`
                 if [ ! -f "${prefix}_${miner}/${certDir}/node.nodeid" ];then
-                    LOG_ERROR "${prefix}_${miner}/${certDir}/node.nodeid not exists!"
+                    LOG_ERROR "${prefix}_${miner}/${certDir}/node.nodeid doesn't exist!"
                     continue
                 fi
                 nodeidList="${nodeidList}node.${i}=${minerNodeId}"$'\n'
@@ -132,15 +125,15 @@ function generateGroupConfig()
         # get nodeidList for specified machine
         for minerNode in ${miners[*]};do
             if [ ! -d "${prefix}_${minerNode}" ];then
-                LOG_ERROR "Directory ${prefix}_${minerNode} not exists!"
+                LOG_ERROR "Directory ${prefix}_${minerNode} doesn't exist!"
                 continue
             fi
             groupConfigPath=`cat ${prefix}_${minerNode}/config.ini | grep group_config.${group_id} | grep -v ";" | cut -d'=' -f2`
             if [ "${groupConfigPath}" == "" ];then
                 groupConfigPath=conf/
                 mkdir -p ${groupConfigPath}
-                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.ini"
-                groupConfigPath=${groupConfigPath}"/group."${groupId}".ini"
+                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.genesis"
+                groupConfigPath=${groupConfigPath}"/group."${groupId}".genesis"
             fi
             groupConfigPath=${prefix}_${minerNode}/${groupConfigPath}
             generate_group_ini "${nodeidList}" "${groupConfigPath}"

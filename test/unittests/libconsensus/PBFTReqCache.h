@@ -36,7 +36,7 @@ static PrepareReq FakePrepareReq(KeyPair& key_pair)
 {
     key_pair = KeyPair::create();
     h256 block_hash = sha3("key_pair");
-    PrepareReq req(key_pair, 1000, u256(1), u256(134), block_hash);
+    PrepareReq req(key_pair, 1000, 1, 134, block_hash);
     return req;
 }
 /// fake the Sign/Commit request
@@ -59,7 +59,7 @@ void FakeInvalidReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cache, B
         /// update height of req
         req.height -= (i + 1);
         reqCache.addReq(req, cache);
-        BOOST_CHECK(reqCache.getSizeFromCache(prepare_req.block_hash, cache) == u256(i + 1));
+        BOOST_CHECK(reqCache.getSizeFromCache(prepare_req.block_hash, cache) == i + 1);
     }
     /// fake invalid hash
     for (size_t i = 0; i < invalidHash; i++)
@@ -67,15 +67,14 @@ void FakeInvalidReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cache, B
         T req(prepare_req, KeyPair::create(), prepare_req.idx);
         req.block_hash = invalid_hash;
         reqCache.addReq(req, cache);
-        /// BOOST_CHECK(reqCache.getSizeFromCache(req.block_hash, cache) == u256(i + 1));
     }
     for (size_t i = 0; i < validNum; i++)
     {
         T req(prepare_req, KeyPair::create(), prepare_req.idx);
         req.height += 1;
         reqCache.addReq(req, cache);
-        BOOST_CHECK(reqCache.getSizeFromCache(prepare_req.block_hash, cache) ==
-                    u256(invalidHeightNum + i + 1));
+        BOOST_CHECK(
+            reqCache.getSizeFromCache(prepare_req.block_hash, cache) == invalidHeightNum + i + 1);
     }
 }
 

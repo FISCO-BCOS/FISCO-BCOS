@@ -54,7 +54,8 @@ void ConsensusEngineBase::stop()
     ENGINE_LOG(INFO) << "[#Stop ConsensusEngineBase]";
     m_startConsensusEngine = false;
     doneWorking();
-    stopWorking();
+    if (isWorking())
+        stopWorking();
 }
 
 /// update m_sealing and receiptRoot
@@ -73,31 +74,31 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     /// check the timestamp
     if (block.blockHeader().timestamp() > utcTime() && !m_allowFutureBlocks)
     {
-        ENGINE_LOG(WARNING) << "[#checkBlockValid] Future timestamp: [timestamp/utcTime/hash]:  "
-                            << block.blockHeader().timestamp() << "/" << utcTime() << "/"
-                            << block_hash << std::endl;
+        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Future timestamp: [timestamp/utcTime/hash]:  "
+                          << block.blockHeader().timestamp() << "/" << utcTime() << "/"
+                          << block_hash << std::endl;
         BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
     }
     /// check the block number
     if (block.blockHeader().number() <= m_blockChain->number())
     {
-        ENGINE_LOG(WARNING) << "[#checkBlockValid] Old height: [blockNumber/number/hash]:  "
-                            << block.blockHeader().number() << "/" << m_blockChain->number() << "/"
-                            << block_hash << std::endl;
+        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Old height: [blockNumber/number/hash]:  "
+                          << block.blockHeader().number() << "/" << m_blockChain->number() << "/"
+                          << block_hash << std::endl;
         BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
     }
     /// check existence of this block (Must non-exist)
     if (blockExists(block_hash))
     {
-        ENGINE_LOG(WARNING) << "[#checkBlockValid] Block already exist: [hash]:  " << block_hash
-                            << std::endl;
+        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Block already exist: [hash]:  " << block_hash
+                          << std::endl;
         BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
     }
     /// check the existence of the parent block (Must exist)
     if (!blockExists(block.blockHeader().parentHash()))
     {
-        ENGINE_LOG(WARNING) << "[#checkBlockValid] Parent doesn't exist: [hash]:  " << block_hash
-                            << std::endl;
+        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Parent doesn't exist: [hash]:  " << block_hash
+                          << std::endl;
         BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
     }
     if (block.blockHeader().number() > 1)
@@ -105,13 +106,57 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
         if (m_blockChain->numberHash(block.blockHeader().number() - 1) !=
             block.blockHeader().parentHash())
         {
-            ENGINE_LOG(WARNING) << "[#checkBlockValid] Invalid block for unconsistent parentHash: "
-                                   "[block.parentHash/parentHash]:  "
-                                << toHex(block.blockHeader().parentHash()) << "/"
-                                << toHex(m_blockChain->numberHash(block.blockHeader().number() - 1))
-                                << std::endl;
+            ENGINE_LOG(DEBUG) << "[#checkBlockValid] Invalid block for unconsistent parentHash: "
+                                 "[block.parentHash/parentHash]:  "
+                              << toHex(block.blockHeader().parentHash()) << "/"
+                              << toHex(m_blockChain->numberHash(block.blockHeader().number() - 1))
+                              << std::endl;
         }
     }
+}
+
+void ConsensusEngineBase::updateConsensusNodeList()
+{
+    try
+    {
+        {
+            WriteGuard l(m_minerListMutex);
+            m_minerList = m_blockChain->minerList();
+            /// to make sure the index of all miners are consistent
+            std::sort(m_minerList.begin(), m_minerList.end());
+        }
+
+        ReadGuard l(m_minerListMutex);
+        std::stringstream s2;
+        s2 << "[#updateConsensusNodeList] Miners:";
+        for (dev::h512 node : m_minerList)
+            s2 << node.abridged() << ",";
+        s2 << "Observers:";
+        dev::h512s observerList = m_blockChain->observerList();
+        for (dev::h512 node : observerList)
+            s2 << node.abridged() << ",";
+        ENGINE_LOG(TRACE) << s2.str();
+
+        if (m_lastNodeList != s2.str())
+        {
+            ENGINE_LOG(TRACE) << "[#updateConsensusNodeList] update P2P List done.";
+            updateNodeListInP2P();
+            m_lastNodeList = s2.str();
+        }
+    }
+    catch (std::exception& e)
+    {
+        ENGINE_LOG(ERROR)
+            << "[#updateConsensusNodeList] update consensus node list failed [EINFO]:  "
+            << boost::diagnostic_information(e);
+    }
+}
+
+void ConsensusEngineBase::updateNodeListInP2P()
+{
+    dev::h512s nodeList = m_blockChain->minerList() + m_blockChain->observerList();
+    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(m_protocolId);
+    m_service->setNodeListByGroupID(ret.first, nodeList);
 }
 
 }  // namespace consensus
