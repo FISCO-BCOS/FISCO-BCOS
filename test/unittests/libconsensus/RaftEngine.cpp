@@ -374,6 +374,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
         raftEngine->setTerm(10);
         raftEngine->setLastLeaderTerm(10);
         raftEngine->setState(RaftRole::EN_STATE_LEADER);
+        raftEngine->setUncommitedBlock(Block());
         memberHeartbeatLog.clear();
     };
 
@@ -433,6 +434,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
     }
 
     RaftVoteReq req;
+    req.lastBlockNumber = raftEngine->getBlockChain()->number();
 
     resetLeader();
     req.term = 10;
@@ -453,11 +455,9 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
         BOOST_CHECK_NO_THROW(flag = raftEngine->runAsLeaderImp(memberHeartbeatLog));
     }
 
-    /*
     BOOST_CHECK(flag == false);
     state = raftEngine->getState();
     BOOST_CHECK(state == RaftRole::EN_STATE_FOLLOWER);
-    */
 }
 
 BOOST_AUTO_TEST_CASE(testRunAsFollower)

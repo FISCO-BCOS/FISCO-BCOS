@@ -63,6 +63,8 @@ public:
 
     dev::eth::Block& getUncommitedBlock() { return m_uncommittedBlock; }
 
+    std::shared_ptr<dev::blockchain::BlockChainInterface> getBlockChain() { return m_blockChain; }
+
     dev::eth::BlockHeader getHighestBlock()
     {
         return dev::consensus::RaftEngine::getHighestBlock();
