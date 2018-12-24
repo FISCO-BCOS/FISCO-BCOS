@@ -67,12 +67,9 @@ public:
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
     virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
-    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override;
+    void setGroupMark(std::string const& groupMark) override;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
-
-    dev::h512s minerList() override;
-    dev::h512s observerList() override;
 
 private:
     void writeNumber(const dev::eth::Block& block,
@@ -92,13 +89,6 @@ private:
     const std::string c_genesisHash =
         "0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c";
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
-
-    dev::h512s getNodeListByType(int64_t num, std::string const& type);
-    mutable SharedMutex m_nodeListMutex;
-    dev::h512s m_minerList;
-    dev::h512s m_observerList;
-    int64_t m_cacheNumByMiner = -1;
-    int64_t m_cacheNumByObserver = -1;
 };
 }  // namespace blockchain
 }  // namespace dev
