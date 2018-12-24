@@ -20,7 +20,7 @@ public:
 
     void updateMinerList()
     {
-        if (m_highestBlockHeader.number() == m_lastObtainMinerNum)
+        if (m_highestBlock.number() == m_lastObtainMinerNum)
             return;
         m_lastObtainMinerNum = m_highestBlock.number();
     }
@@ -59,6 +59,15 @@ public:
 
     void setLastLeaderTerm(size_t _term) { m_lastLeaderTerm = _term; }
 
+    void setUncommitedBlock(dev::eth::Block const& _block) { m_uncommittedBlock = _block; }
+
+    dev::eth::Block& getUncommitedBlock() { return m_uncommittedBlock; }
+
+    dev::eth::BlockHeader getHighestBlock()
+    {
+        return dev::consensus::RaftEngine::getHighestBlock();
+    }
+
     dev::consensus::RaftRole getState() const { return dev::consensus::RaftEngine::getState(); }
 
     bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& memberHeartbeatLog)
@@ -91,6 +100,11 @@ public:
         dev::consensus::VoteState& vote)
     {
         return dev::consensus::RaftEngine::handleVoteResponse(_from, _node, _resp, vote);
+    }
+
+    void reportBlock(dev::eth::Block const& _block)
+    {
+        dev::consensus::RaftEngine::reportBlock(_block);
     }
 
     void workLoop() {}
