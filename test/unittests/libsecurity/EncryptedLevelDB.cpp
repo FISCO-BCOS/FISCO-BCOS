@@ -72,8 +72,8 @@ public:
             boost::filesystem::remove_all(_name);
         }
         dev::db::BasicLevelDB* pleveldb = nullptr;
-        auto status =
-            EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), _name, &pleveldb, "", keycenter);
+        auto status = EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), _name, &pleveldb,
+            "85cf52964f7334c015545b394c1ffec9", keycenter);
         if (!status.ok())
         {
             ENCDBLOG(ERROR) << "Open DB Error" << endl;
