@@ -55,7 +55,7 @@ u256 MPTState::balance(Address const& _id) const
     return m_state.balance(_id);
 }
 
-void MPTState::addBalance(Address const& _id, u256 const& _amount, Address const& _origin)
+void MPTState::addBalance(Address const& _id, u256 const& _amount)
 {
     m_state.addBalance(_id, _amount);
 }
@@ -65,13 +65,12 @@ void MPTState::subBalance(Address const& _addr, u256 const& _value)
     m_state.subBalance(_addr, _value);
 }
 
-void MPTState::setBalance(Address const& _addr, u256 const& _value, Address const& _origin)
+void MPTState::setBalance(Address const& _addr, u256 const& _value)
 {
     m_state.setBalance(_addr, _value);
 }
 
-void MPTState::transferBalance(
-    Address const& _from, Address const& _to, u256 const& _value, Address const& _origin)
+void MPTState::transferBalance(Address const& _from, Address const& _to, u256 const& _value)
 {
     m_state.transferBalance(_from, _to, _value);
 }
@@ -96,7 +95,7 @@ void MPTState::clearStorage(Address const& _contract)
     m_state.clearStorage(_contract);
 }
 
-void MPTState::createContract(Address const& _address, Address const& _origin)
+void MPTState::createContract(Address const& _address)
 {
     m_state.createContract(_address);
 }
@@ -126,12 +125,12 @@ size_t MPTState::codeSize(Address const& _contract) const
     return m_state.codeSize(_contract);
 }
 
-void MPTState::incNonce(Address const& _id, Address const& _origin)
+void MPTState::incNonce(Address const& _id)
 {
     m_state.incNonce(_id);
 }
 
-void MPTState::setNonce(Address const& _addr, u256 const& _newNonce, Address const& _origin)
+void MPTState::setNonce(Address const& _addr, u256 const& _newNonce)
 {
     m_state.setNonce(_addr, _newNonce);
 }

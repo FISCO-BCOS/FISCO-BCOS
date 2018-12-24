@@ -84,7 +84,7 @@ u256 StorageState::balance(Address const& _address) const
     return 0;
 }
 
-void StorageState::addBalance(Address const& _address, u256 const& _amount, Address const& _origin)
+void StorageState::addBalance(Address const& _address, u256 const& _amount)
 {
     auto table = getTable(_address);
     if (table)
@@ -102,7 +102,7 @@ void StorageState::addBalance(Address const& _address, u256 const& _amount, Addr
     }
     else
     {
-        createAccount(_origin, _address, requireAccountStartNonce(), _amount);
+        createAccount(_address, requireAccountStartNonce(), _amount);
     }
 }
 
@@ -130,7 +130,7 @@ void StorageState::subBalance(Address const& _address, u256 const& _amount)
     }
 }
 
-void StorageState::setBalance(Address const& _address, u256 const& _amount, Address const& _origin)
+void StorageState::setBalance(Address const& _address, u256 const& _amount)
 {
     auto table = getTable(_address);
     if (table)
@@ -148,15 +148,14 @@ void StorageState::setBalance(Address const& _address, u256 const& _amount, Addr
     }
     else
     {
-        createAccount(_origin, _address, requireAccountStartNonce(), _amount);
+        createAccount(_address, requireAccountStartNonce(), _amount);
     }
 }
 
-void StorageState::transferBalance(
-    Address const& _from, Address const& _to, u256 const& _value, Address const& _origin)
+void StorageState::transferBalance(Address const& _from, Address const& _to, u256 const& _value)
 {
     subBalance(_from, _value);
-    addBalance(_to, _value, _origin);
+    addBalance(_to, _value);
 }
 
 h256 StorageState::storageRoot(Address const& _address) const
@@ -286,12 +285,12 @@ size_t StorageState::codeSize(Address const& _address) const
     return code(_address).size();
 }
 
-void StorageState::createContract(Address const& _address, Address const& _origin)
+void StorageState::createContract(Address const& _address)
 {
-    createAccount(_origin, _address, requireAccountStartNonce());
+    createAccount(_address, requireAccountStartNonce());
 }
 
-void StorageState::incNonce(Address const& _address, Address const& _origin)
+void StorageState::incNonce(Address const& _address)
 {
     auto table = getTable(_address);
     if (table)
@@ -308,10 +307,10 @@ void StorageState::incNonce(Address const& _address, Address const& _origin)
         }
     }
     else
-        createAccount(_origin, _address, requireAccountStartNonce() + 1);
+        createAccount(_address, requireAccountStartNonce() + 1);
 }
 
-void StorageState::setNonce(Address const& _address, u256 const& _newNonce, Address const& _origin)
+void StorageState::setNonce(Address const& _address, u256 const& _newNonce)
 {
     auto table = getTable(_address);
     if (table)
@@ -321,7 +320,7 @@ void StorageState::setNonce(Address const& _address, u256 const& _newNonce, Addr
         table->update(ACCOUNT_NONCE, entry, table->newCondition());
     }
     else
-        createAccount(_origin, _address, _newNonce);
+        createAccount(_address, _newNonce);
 }
 
 u256 StorageState::getNonce(Address const& _address) const
@@ -401,11 +400,10 @@ bool StorageState::checkAuthority(Address const& _origin, Address const& _contra
         return true;
 }
 
-void StorageState::createAccount(
-    Address const& _origin, Address const& _address, u256 const& _nonce, u256 const& _amount)
+void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
-    auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false, _origin);
+    auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);
     if (!table)
     {
         return;

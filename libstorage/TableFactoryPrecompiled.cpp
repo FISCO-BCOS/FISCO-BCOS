@@ -90,7 +90,8 @@ bytes TableFactoryPrecompiled::call(
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
-        auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+        auto table =
+            m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
         // set createTableCode
         int errorCode = m_memoryTableFactory->getCreateTableCode();
         out = abi.abiIn("", u256(errorCode));
