@@ -99,6 +99,12 @@ string const SyncMaster::syncInfo() const
 
 void SyncMaster::start()
 {
+    if (!fp_isConsensusOk)
+    {
+        SYNCLOG(ERROR) << "Consensus verify handler is not set" << endl;
+        BOOST_THROW_EXCEPTION(SyncVerifyHandlerNotSet());
+    }
+
     startWorking();
 }
 
@@ -557,21 +563,34 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
     int64_t currentNumber = m_blockChain->number();
     if (currentNumber + 1 != _block->header().number())
     {
-        SYNCLOG(WARNING)
-            << "[Download] [BlockSync] Ignore illegal block [thisNumber/currentNumber]: "
-            << _block->header().number() << "/" << currentNumber << endl;
+        SYNCLOG(WARNING) << "[Download] [BlockSync] Ignore illegal block "
+                            "[reason/thisNumber/currentNumber]: number illegal/"
+                         << _block->header().number() << "/" << currentNumber << endl;
         return false;
     }
+
     if (m_blockChain->numberHash(currentNumber) != _block->header().parentHash())
     {
+        SYNCLOG(WARNING)
+            << "[Download] [BlockSync] Ignore illegal block "
+               "[reason/thisNumber/currentNumber/thisParentHash/currentHash]: parent hash illegal/"
+            << _block->header().number() << "/" << currentNumber << "/"
+            << _block->header().parentHash() << "/" << m_blockChain->numberHash(currentNumber)
+            << endl;
+        return false;
+    }
+
+    // check block minerlist sig
+    if (fp_isConsensusOk && !(*fp_isConsensusOk)(*_block))
+    {
         SYNCLOG(WARNING) << "[Download] [BlockSync] Ignore illegal block "
-                            "[thisNumber/currentNumber/thisParentHash/currentHash]: "
+                            "[reason/thisNumber/currentNumber/thisParentHash/currentHash]: "
+                            "consensus check failed/"
                          << _block->header().number() << "/" << currentNumber << "/"
                          << _block->header().parentHash() << "/"
                          << m_blockChain->numberHash(currentNumber) << endl;
         return false;
     }
 
-    // TODO check block minerlist sig
     return true;
 }

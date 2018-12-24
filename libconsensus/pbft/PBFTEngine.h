@@ -68,6 +68,10 @@ public:
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
         m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
+
+        /// register checkMinerList to blockSync for check MinerList
+        m_blockSync->registerConsensusVerifyHandler(
+            boost::bind(&PBFTEngine::checkBlockSign, this, _1));
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -130,7 +134,7 @@ protected:
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
     bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
-        std::string const& key, bytesConstRef data, unsigned const& ttl = 0);
+        std::string const& key, bytesConstRef data, unsigned const& ttl = 1);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -420,6 +424,8 @@ protected:
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
     void checkMinerList(dev::eth::Block const& block);
+    /// check block sign
+    bool checkBlockSign(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
 
     void changeViewForEmptyBlock();

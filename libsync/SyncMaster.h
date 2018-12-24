@@ -107,6 +107,12 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     };
 
+    virtual void registerConsensusVerifyHandler(
+        std::function<bool(dev::eth::Block const&)> _handler) override
+    {
+        fp_isConsensusOk.reset(&_handler);
+    };
+
     void noteNewTransactions() { m_newTransactions = true; }
 
     void noteNewBlocks()
@@ -182,6 +188,9 @@ private:
     // settings
     dev::eth::Handler<> m_tqReady;
     dev::eth::Handler<> m_blockSubmitted;
+
+    // verify handler to check downloading block
+    std::shared_ptr<std::function<bool(dev::eth::Block const&)>> fp_isConsensusOk = nullptr;
 
 public:
     void maintainTransactions();

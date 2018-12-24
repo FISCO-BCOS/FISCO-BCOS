@@ -335,6 +335,7 @@ bool PBFTEngine::broadcastViewChangeReq()
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
+/// set default ttl to 1 to in case of forward-broadcast
 bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
     std::string const& key, bytesConstRef data, unsigned const& ttl)
 {
@@ -483,6 +484,55 @@ void PBFTEngine::checkMinerList(Block const& block)
         BOOST_THROW_EXCEPTION(
             BlockMinerListWrong() << errinfo_comment("Wrong Miner List of Block"));
     }
+}
+
+/// check Block sign
+bool PBFTEngine::checkBlockSign(Block const& block)
+{
+    ReadGuard l(m_minerListMutex);
+    /// check sealer list(node list)
+    if (m_minerList != block.blockHeader().sealerList())
+    {
+        PBFTENGINE_LOG(ERROR)
+            << "[#checkBlockSign] Wrong miners: [myIdx/myNode/Cminers/CblockMiner/hash]:  "
+            << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << m_minerList.size() << "/"
+            << block.blockHeader().sealerList().size() << "/"
+            << block.blockHeader().hash().abridged();
+        return false;
+    }
+    /// check sealer(sealer must be a miner)
+    if (getMinerByIndex(block.blockHeader().sealer().convert_to<size_t>()) == NodeID())
+    {
+        LOG(ERROR) << "[#checkBlockSign] invalid sealer [sealer]: " << block.blockHeader().sealer();
+        return false;
+    }
+    /// check sign num
+    auto sig_list = block.sigList();
+    if (sig_list.size() < minValidNodes())
+    {
+        LOG(ERROR) << "[#checkBlockSign] insufficient sign items [signNum/minValidSign]"
+                   << sig_list.size() << "/" << minValidNodes();
+        return false;
+    }
+    /// check sign
+    for (auto sign : sig_list)
+    {
+        if (sign.first >= m_minerList.size())
+        {
+            LOG(ERROR) << "[#checkBlockSign] invalid idx [idx/minerSize]: " << sign.first << "/"
+                       << m_minerList.size();
+            return false;
+        }
+        if (!dev::verify(m_minerList[sign.first.convert_to<size_t>()], sign.second,
+                block.blockHeader().hash()))
+        {
+            LOG(ERROR) << "[#checkBlockSign] invalid sign [idx/pub/hash]: " << sign.first << "/"
+                       << m_minerList[sign.first.convert_to<size_t>()].abridged() << "/"
+                       << block.blockHeader().hash().abridged();
+            return false;
+        }
+    }  /// end of check sign
+    return true;
 }
 
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
