@@ -22,7 +22,7 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-#find_package(CURL REQUIRED)
+find_package(CURL REQUIRED)
 # find_package(MHD REQUIRED)
 set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_BUILD_TYPE=Release
@@ -42,8 +42,8 @@ set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                # Select jsoncpp include prefix: <json/...> or <jsoncpp/json/...>
                -DJSONCPP_INCLUDE_PREFIX=json
                -DJSONCPP_LIBRARY=${JSONCPP_LIBRARY}
-            #    -DCURL_INCLUDE_DIR=${CURL_INCLUDE_DIR}
-            #    -DCURL_LIBRARY=${CURL_LIBRARY}
+               -DCURL_INCLUDE_DIR=${CURL_INCLUDE_DIR}
+               -DCURL_LIBRARY=${CURL_LIBRARY}
                -DMHD_INCLUDE_DIR=${MHD_INCLUDE_DIR}
                -DMHD_LIBRARY=${MHD_LIBRARY}
                -DCMAKE_C_FLAGS=-Wa,-march=generic64
