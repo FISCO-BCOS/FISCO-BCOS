@@ -486,10 +486,15 @@ void PBFTEngine::checkMinerList(Block const& block)
     }
 }
 
-void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
+bool PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
     auto start_exec_time = utcTime();
     Block working_block(req.block);
+    std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit", m_consensusBlockNumber);
+    if (working_block.transactions().size() > boost::lexical_cast<uint64_t>(ret))
+    {
+        return false;
+    }
     PBFTENGINE_LOG(TRACE) << "[#execBlock] [myIdx/myNode/number/hash/idx]:  " << nodeIdx() << "/"
                           << m_keyPair.pub().abridged() << "/" << working_block.header().number()
                           << "/" << working_block.header().hash().abridged() << "/" << req.idx;
@@ -498,6 +503,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
+    return true;
 }
 
 /// check whether the block is empty
@@ -580,7 +586,10 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     Sealing workingSealing;
     try
     {
-        execBlock(workingSealing, prepareReq, oss);
+        if (execBlock(workingSealing, prepareReq, oss) == false)
+        {
+            return;
+        }
     }
     catch (std::exception& e)
     {

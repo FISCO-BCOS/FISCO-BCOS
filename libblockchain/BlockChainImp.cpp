@@ -169,15 +169,6 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 
 bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
 {
-    {
-        WriteGuard l(m_systemConfigMutex);
-        for (int i = 0; i < blockverifier::SystemConfigItem::SYSTEM_CONFIG_ITEM_COUNT; i++)
-        {
-            m_configValueList[i] = "";
-            m_cacheNumListByKey[i] = -1;
-        }
-    }
-
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr)
     {
@@ -366,30 +357,23 @@ dev::h512s BlockChainImp::observerList()
     return list;
 }
 
-std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
+std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t num)
 {
-    int64_t blockNumber = number();
-    int32_t keyIdx = getSystemConfigItemIndex(key);
+    int64_t blockNumber;
+    // -1 means that the parameter is invalid and to obtain current block height
+    blockNumber = (-1 == num) ? number() : num;
+
+    UpgradableGuard l(m_systemConfigMutex);
+    if (m_systemConfigRecord.find(key) != m_systemConfigRecord.end() &&
+        m_systemConfigRecord[key].curBlockNum == blockNumber)
+    {
+        // get value from cache
+        BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in cache:" << key << "/"
+                              << m_systemConfigRecord[key].value;
+        return m_systemConfigRecord[key].value;
+    }
+
     std::string ret;
-
-    // invalid config key
-    if (SystemConfigItem::SYSTEM_CONFIG_ITEM_INVALID == keyIdx)
-    {
-        BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigByKey] invalid config key.";
-        return ret;
-    }
-
-    // get value from cache
-    {
-        ReadGuard l(m_systemConfigMutex);
-        if (blockNumber == m_cacheNumListByKey[keyIdx])
-        {
-            BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in cache:" << key << "/"
-                                  << m_configValueList[keyIdx];
-            return m_configValueList[keyIdx];
-        }
-    }
-
     // get value from db
     try
     {
@@ -422,30 +406,13 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key)
 
     // update cache
     {
-        WriteGuard l(m_systemConfigMutex);
-        m_configValueList[keyIdx] = ret;
-        m_cacheNumListByKey[keyIdx] = blockNumber;
+        UpgradeGuard ul(l);
+        m_systemConfigRecord[key].value = ret;
+        m_systemConfigRecord[key].curBlockNum = blockNumber;
     }
 
     BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in db:" << key << "/" << ret;
     return ret;
-}
-
-int32_t BlockChainImp::getSystemConfigItemIndex(std::string const& key)
-{
-    if (SYSTEM_KEY_TX_COUNT_LIMIT == key)
-    {
-        return SystemConfigItem::SYSTEM_CONFIG_TX_COUNT_LIMIT;
-    }
-    else if (SYSTEM_KEY_TX_GAS_LIMIT == key)
-    {
-        return SystemConfigItem::SYSTEM_CONFIG_TX_GAS_LIMIT;
-    }
-    else
-    {
-        BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigItemIndex] key error:" << key;
-        return SystemConfigItem::SYSTEM_CONFIG_ITEM_INVALID;
-    }
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)

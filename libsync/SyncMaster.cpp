@@ -554,6 +554,13 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
         return false;
     }
 
+    // Check whether the number of transactions in block exceeds the limit
+    std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit", currentNumber + 1);
+    if (_block->transactions().size() > boost::lexical_cast<uint64_t>(ret))
+    {
+        return false;
+    }
+
     // TODO check block minerlist sig
     return true;
 }

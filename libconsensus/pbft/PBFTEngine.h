@@ -414,7 +414,7 @@ protected:
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
     void checkMinerList(dev::eth::Block const& block);
-    void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
+    bool execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
 
     void changeViewForEmptyBlock();
     virtual bool isDiskSpaceEnough(std::string const& path)

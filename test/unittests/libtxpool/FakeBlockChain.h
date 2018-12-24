@@ -187,7 +187,10 @@ public:
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override { return true; }
     dev::h512s minerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
-    std::string getSystemConfigByKey(std::string const& key) override { return ""; };
+    std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) override
+    {
+        return "300000000";
+    };
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;

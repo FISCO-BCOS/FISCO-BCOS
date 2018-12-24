@@ -41,7 +41,8 @@ namespace dev
 namespace blockverifier
 {
 class ExecutiveContext;
-}
+class SystemConfigRecord;
+}  // namespace blockverifier
 namespace storage
 {
 class MemoryTableFactory;
@@ -74,7 +75,7 @@ public:
 
     dev::h512s minerList() override;
     dev::h512s observerList() override;
-    std::string getSystemConfigByKey(std::string const& key) override;
+    std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
 
 private:
     void writeNumber(const dev::eth::Block& block,
@@ -102,10 +103,13 @@ private:
     int64_t m_cacheNumByMiner = -1;
     int64_t m_cacheNumByObserver = -1;
 
-    int32_t getSystemConfigItemIndex(std::string const& key);
+    struct SystemConfigRecord
+    {
+        std::string value;
+        int64_t curBlockNum = -1;  // at which block gets the configuration value
+    };
+    std::map<std::string, SystemConfigRecord> m_systemConfigRecord;
     mutable SharedMutex m_systemConfigMutex;
-    std::string m_configValueList[blockverifier::SystemConfigItem::SYSTEM_CONFIG_ITEM_COUNT];
-    int64_t m_cacheNumListByKey[blockverifier::SystemConfigItem::SYSTEM_CONFIG_ITEM_COUNT];
 };
 }  // namespace blockchain
 }  // namespace dev
