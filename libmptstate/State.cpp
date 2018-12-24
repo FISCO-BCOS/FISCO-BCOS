@@ -58,21 +58,20 @@ State::State(State const& _s)
 OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, WithExisting _we)
 {
     fs::path path = _basePath.empty() ? Defaults::get()->m_dbPath : _basePath;
+    path /= fs::path("state");
 
     if (_we == WithExisting::Kill)
     {
         LOG(DEBUG) << "statedb: Killing state database (WithExisting::Kill).";
-        fs::remove_all(path / fs::path("state"));
+        fs::remove_all(path);
     }
-
     fs::create_directories(path);
     DEV_IGNORE_EXCEPTIONS(fs::permissions(path, fs::owner_all));
 
     try
     {
-        // std::unique_ptr<db::DatabaseFace> db(new db::DBImpl(path / fs::path("state")));
-        std::shared_ptr<db::DatabaseFace> db =
-            std::make_shared<db::DBImpl>(path / fs::path("state"));
+        // std::unique_ptr<db::DatabaseFace> db(new db::DBImpl(path));
+        std::shared_ptr<db::DatabaseFace> db = std::make_shared<db::DBImpl>(path);
 
         LOG(TRACE) << "statedb Opened state DB.";
         return OverlayDB(db);
@@ -80,7 +79,7 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, Wit
     catch (boost::exception const& ex)
     {
         LOG(WARNING) << boost::diagnostic_information(ex);
-        if (fs::space(path / fs::path("state")).available < 1024)
+        if (fs::space(path).available < 1024)
         {
             LOG(WARNING) << "Not enough available space found on hard drive. Please free some up "
                             "and then re-run. Bailing.";
@@ -88,7 +87,7 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, Wit
         }
         else
         {
-            LOG(WARNING) << "Database " << (path / fs::path("state"))
+            LOG(WARNING) << "Database " << (path)
                          << "already open. You appear to have another instance of ethereum "
                             "running. Bailing.";
             BOOST_THROW_EXCEPTION(DatabaseAlreadyOpen());
