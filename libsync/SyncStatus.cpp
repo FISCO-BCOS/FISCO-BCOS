@@ -42,7 +42,7 @@ bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)
 {
     if (hasPeer(_info.nodeId))
     {
-        SYNCLOG(WARNING) << "Peer " << _info.nodeId << " is exist, no need to create.";
+        SYNCLOG(WARNING) << "Peer " << _info.nodeId.abridged() << " is exist, no need to create.";
         return false;
     }
 

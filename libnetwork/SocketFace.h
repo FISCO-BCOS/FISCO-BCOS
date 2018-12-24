@@ -23,9 +23,10 @@
 
 #pragma once
 #include "Common.h"
+#include <boost/beast.hpp>
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class SocketFace
 {
@@ -38,11 +39,12 @@ public:
     virtual bi::tcp::endpoint remoteEndpoint() = 0;
 
     virtual bi::tcp::socket& ref() = 0;
-
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() = 0;
+    virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() = 0;
+
     virtual const NodeIPEndpoint& nodeIPEndpoint() const = 0;
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
     virtual boost::asio::ip::tcp::endpoint remote_endpoint() = 0;
 };
-}  // namespace p2p
+}  // namespace network
 }  // namespace dev

@@ -102,6 +102,17 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         out = abi.abiIn("", ret);
         break;
     }
+    case 0x27314f79:
+    {  //"getBytes32(string)"
+        std::string str;
+        abi.abiOut(data, str);
+
+        std::string value = m_entry->getField(str);
+        dev::string32 s32 = dev::eth::toString32(value);
+        out = abi.abiIn("", s32);
+
+        break;
+    }
     default:
     {
         break;

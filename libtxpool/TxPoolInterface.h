@@ -30,7 +30,7 @@ namespace dev
 {
 namespace txpool
 {
-class TxPoolStatus;
+struct TxPoolStatus;
 class TxPoolInterface
 {
 public:

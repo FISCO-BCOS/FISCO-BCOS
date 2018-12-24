@@ -24,8 +24,8 @@
 #include "DBInitializer.h"
 #include "LedgerParam.h"
 #include <libdevcore/Common.h>
-#include <libsecurity/EncryptedLevelDB.h>
 #include <libmptstate/MPTStateFactory.h>
+#include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
@@ -73,7 +73,8 @@ void DBInitializer::initLevelDBStorage()
         {
             // Use disk encryption
             DBInitializer_LOG(DEBUG)
-                << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler" << std::endl;
+                << "[#initStorageDB] [#initLevelDBStorage]: open encrypted leveldb handler"
+                << std::endl;
             status = EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path,
                 &(pleveldb), g_BCOSConfig.diskEncryption.cipherDataKey);
         }
@@ -81,16 +82,16 @@ void DBInitializer::initLevelDBStorage()
         {
             // Not to use disk encryption
             DBInitializer_LOG(DEBUG)
-                << "[#initStorageDB] [#initLevelDBStorage]: open encrypted leveldb handler"
-                << std::endl;
+                << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler" << std::endl;
             status =
                 BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
         }
 
+
         if (!status.ok())
         {
             DBInitializer_LOG(ERROR) << "[#initStorageDB] [openLevelDBStorage failed]" << std::endl;
-            return;
+            throw std::runtime_error("open LevelDB failed");
         }
         DBInitializer_LOG(DEBUG) << "[#initStorageDB] [#initLevelDBStorage] [status]: "
                                  << status.ok() << std::endl;

@@ -93,6 +93,7 @@ size_t LevelDBStorage::commit(
     {
         STORAGE_LEVELDB_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash
                                   << " num:" << num;
+
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
 
         size_t total = 0;
