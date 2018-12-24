@@ -433,6 +433,7 @@ protected:
     {
         return boost::filesystem::space(path).available > 1024;
     }
+    void updateMinerList();
 
 protected:
     VIEWTYPE m_view = 0;
@@ -466,6 +467,8 @@ protected:
 
     std::function<void()> m_onViewChange;
 
+    /// the block number that update the miner list
+    int64_t m_lastObtainMinerNum = 0;
     bool m_emptyBlockViewChange = false;
 
     uint8_t maxTTL = MAXTTL;

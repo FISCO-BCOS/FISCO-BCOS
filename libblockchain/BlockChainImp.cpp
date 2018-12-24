@@ -26,9 +26,7 @@
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
-#include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libstorage/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/lexical_cast.hpp>
@@ -157,14 +155,14 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
     return nullptr;
 }
 
-void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam)
+void BlockChainImp::setGroupMark(std::string const& groupMark)
 {
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr)
     {
         block = std::make_shared<Block>();
         block->setEmptyBlock();
-        block->header().appendExtraDataArray(asBytes(initParam.groupMark));
+        block->header().appendExtraDataArray(asBytes(groupMark));
         shared_ptr<MemoryTableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH);
         if (tb)
@@ -172,30 +170,6 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
             Entry::Ptr entry = std::make_shared<Entry>();
             entry->setField(SYS_VALUE, block->blockHeader().hash().hex());
             tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
-        }
-
-        tb = mtb->openTable(SYS_MINERS);
-        if (tb)
-        {
-            for (dev::h512 node : initParam.minerList)
-            {
-                Entry::Ptr entry = std::make_shared<Entry>();
-                entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_MINER);
-                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
-                entry->setField(NODE_KEY_ENABLENUM, "0");
-                tb->insert(PRI_KEY, entry);
-            }
-
-            for (dev::h512 node : initParam.observerList)
-            {
-                Entry::Ptr entry = std::make_shared<Entry>();
-                entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
-                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
-                entry->setField(NODE_KEY_ENABLENUM, "0");
-                tb->insert(PRI_KEY, entry);
-            }
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK);
@@ -209,102 +183,23 @@ void BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam const& initParam
         }
 
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
-        BLOCKCHAIN_LOG(INFO) << "[#checkAndBuildGenesisBlock] Insert the 0th block";
+        BLOCKCHAIN_LOG(INFO) << "[#setGroupMark] Insert the 0th block";
     }
     else
     {
-        /// compare() return 0 means equal!
-        /// If not equal, only print warning, willnot kill process.
-        if (!initParam.groupMark.compare(asString(block->header().extraData(0))))
+        if (groupMark.compare(asString(block->header().extraData(0))) == 0)
         {
-            BLOCKCHAIN_LOG(INFO)
-                << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark is "
-                   "equal to file groupMark.";
+            BLOCKCHAIN_LOG(INFO) << "[#setGroupMark] Already have the 0th block [groupMark]: "
+                                 << "[" << asString(block->header().extraData(0)) << "]";
         }
         else
         {
             BLOCKCHAIN_LOG(WARNING)
-                << "[#checkAndBuildGenesisBlock] Already have the 0th block, 0th groupMark:"
-                << asString(block->header().extraData(0))
-                << " is not equal to file groupMark:" << initParam.groupMark << " !";
+                << "[#setGroupMark] Already have the 0th block, groupMark does not allow "
+                   "modification! [groupMark]: "
+                << "[" << asString(block->header().extraData(0)) << "]";
         }
     }
-}
-
-dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
-{
-    LOG(TRACE) << "BlockChainImp::getNodeListByType " << type << " at " << blockNumber;
-
-    dev::h512s list;
-    try
-    {
-        auto nodes = m_stateStorage->select(
-            numberHash(blockNumber), blockNumber, storage::SYS_MINERS, blockverifier::PRI_KEY);
-        if (!nodes)
-            return list;
-
-        for (size_t i = 0; i < nodes->size(); i++)
-        {
-            auto node = nodes->get(i);
-            if (!node)
-                return list;
-
-            if ((node->getField(blockverifier::NODE_TYPE) == type) &&
-                (boost::lexical_cast<int>(node->getField(blockverifier::NODE_KEY_ENABLENUM)) <=
-                    blockNumber))
-            {
-                h512 nodeID = h512(node->getField(blockverifier::NODE_KEY_NODEID));
-                list.push_back(nodeID);
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        LOG(ERROR) << "BlockChainImp::getNodeListByType failed [EINFO]: "
-                   << boost::diagnostic_information(e);
-    }
-
-    std::stringstream s;
-    s << "BlockChainImp::getNodeListByType " << type << ":";
-    for (dev::h512 node : list)
-        s << toJS(node) << ",";
-    LOG(TRACE) << s.str();
-
-    return list;
-}
-
-dev::h512s BlockChainImp::minerList()
-{
-    int64_t blockNumber = number();
-    UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByMiner == blockNumber)
-    {
-        LOG(TRACE) << "BlockChainImp::minerList by cache, size:" << m_minerList.size();
-        return m_minerList;
-    }
-    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_MINER);
-    UpgradeGuard ul(l);
-    m_cacheNumByMiner = blockNumber;
-    m_minerList = list;
-
-    return list;
-}
-
-dev::h512s BlockChainImp::observerList()
-{
-    int64_t blockNumber = number();
-    UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByObserver == blockNumber)
-    {
-        LOG(TRACE) << "BlockChainImp::observerList by cache, size:" << m_observerList.size();
-        return m_observerList;
-    }
-    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_OBSERVER);
-    UpgradeGuard ul(l);
-    m_cacheNumByObserver = blockNumber;
-    m_observerList = list;
-
-    return list;
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
