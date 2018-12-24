@@ -21,7 +21,7 @@
  */
 #pragma once
 #include <libdevcore/Common.h>
-#include <libdevcore/KeyCenter.h>
+#include <libsecurity/KeyCenter.h>
 
 namespace dev
 {

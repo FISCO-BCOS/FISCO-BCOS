@@ -17,7 +17,7 @@
 
 #include "LevelDB.h"
 #include "Assertions.h"
-#include <libdevcore/EncryptedLevelDB.h>
+#include <libsecurity/EncryptedLevelDB.h>
 
 namespace dev
 {
