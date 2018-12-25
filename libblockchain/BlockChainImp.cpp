@@ -274,13 +274,19 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
 
 dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
 {
-    BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::getNodeListByType " << type << " at " << blockNumber;
+    BLOCKCHAIN_LOG(TRACE) << "[#getNodeListByType] " << type << " at " << blockNumber;
 
     dev::h512s list;
     try
     {
-        auto nodes = m_stateStorage->select(
-            numberHash(blockNumber), blockNumber, storage::SYS_MINERS, blockverifier::PRI_KEY);
+        Table::Ptr tb = getMemoryTableFactory()->openTable(storage::SYS_MINERS);
+        if (!tb)
+        {
+            BLOCKCHAIN_LOG(ERROR) << "[#getNodeListByType] open table error";
+            return list;
+        }
+
+        auto nodes = tb->select(blockverifier::PRI_KEY, tb->newCondition());
         if (!nodes)
             return list;
 
@@ -301,12 +307,12 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     }
     catch (std::exception& e)
     {
-        BLOCKCHAIN_LOG(ERROR) << "BlockChainImp::getNodeListByType failed [EINFO]: "
+        BLOCKCHAIN_LOG(ERROR) << "[#getNodeListByType] failed [EINFO]: "
                               << boost::diagnostic_information(e);
     }
 
     std::stringstream s;
-    s << "BlockChainImp::getNodeListByType " << type << ":";
+    s << "[#getNodeListByType] " << type << ":";
     for (dev::h512 node : list)
         s << toJS(node) << ",";
     BLOCKCHAIN_LOG(TRACE) << s.str();
@@ -320,7 +326,7 @@ dev::h512s BlockChainImp::minerList()
     UpgradableGuard l(m_nodeListMutex);
     if (m_cacheNumByMiner == blockNumber)
     {
-        BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::minerList by cache, size:" << m_minerList.size();
+        BLOCKCHAIN_LOG(TRACE) << "[#minerList] by cache, size:" << m_minerList.size();
         return m_minerList;
     }
     dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_MINER);
@@ -337,8 +343,7 @@ dev::h512s BlockChainImp::observerList()
     UpgradableGuard l(m_nodeListMutex);
     if (m_cacheNumByObserver == blockNumber)
     {
-        BLOCKCHAIN_LOG(TRACE) << "BlockChainImp::observerList by cache, size:"
-                              << m_observerList.size();
+        BLOCKCHAIN_LOG(TRACE) << "[#observerList] by cache, size:" << m_observerList.size();
         return m_observerList;
     }
     dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_OBSERVER);
@@ -368,8 +373,13 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
     // get value from db
     try
     {
-        auto values =
-            m_stateStorage->select(numberHash(blockNumber), blockNumber, storage::SYS_CONFIG, key);
+        Table::Ptr tb = getMemoryTableFactory()->openTable(storage::SYS_CONFIG);
+        if (!tb)
+        {
+            BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigByKey] open table error.";
+            return ret;
+        }
+        auto values = tb->select(key, tb->newCondition());
         if (!values || values->size() != 1)
         {
             BLOCKCHAIN_LOG(ERROR) << "[#getSystemConfigByKey] select error.";

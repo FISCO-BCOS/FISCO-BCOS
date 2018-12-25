@@ -173,6 +173,13 @@ BOOST_AUTO_TEST_CASE(toString)
     BOOST_TEST(cnsPrecompiled->toString(context) == "CNS");
 }
 
+BOOST_AUTO_TEST_CASE(errFunc)
+{
+    eth::ContractABI abi;
+    bytes in = abi.abiIn("insert(string)", "test");
+    bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_CNSPrecompiled
