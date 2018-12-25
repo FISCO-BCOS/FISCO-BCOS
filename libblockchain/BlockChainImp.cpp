@@ -351,17 +351,15 @@ dev::h512s BlockChainImp::observerList()
 
 std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t num)
 {
-    int64_t blockNumber;
+    // Different keys can go into the function
     // -1 means that the parameter is invalid and to obtain current block height
-    blockNumber = (-1 == num) ? number() : num;
+    int64_t blockNumber = (-1 == num) ? number() : num;
 
     UpgradableGuard l(m_systemConfigMutex);
     auto it = m_systemConfigRecord.find(key);
     if (it != m_systemConfigRecord.end() && it->second.curBlockNum == blockNumber)
     {
         // get value from cache
-        BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in cache:" << key << "/"
-                              << it->second.value;
         return it->second.value;
     }
 
