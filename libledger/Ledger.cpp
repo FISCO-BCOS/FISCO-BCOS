@@ -27,6 +27,8 @@
 #include <libconfig/SystemConfigMgr.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
+#include <libconsensus/raft/RaftEngine.h>
+#include <libconsensus/raft/RaftSealer.h>
 #include <libdevcore/OverlayDB.h>
 #include <libdevcore/easylog.h>
 #include <libsync/SyncInterface.h>
@@ -129,6 +131,11 @@ void Ledger::initConsensusConfig(ptree const& pt)
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.maxTransNum", 1000);
     m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.maxTTL", MAXTTL);
+
+    m_param->mutableConsensusParam().minElectTime =
+        pt.get<uint64_t>("consensus.minElectTime", 1000);
+    m_param->mutableConsensusParam().maxElectTime =
+        pt.get<uint64_t>("consensus.maxElectTime", 2000);
 
     Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum/maxTTL]:  "
                       << m_param->mutableConsensusParam().consensusType << "/"
@@ -279,13 +286,52 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     return pbftSealer;
 }
 
+std::shared_ptr<Sealer> Ledger::createRaftSealer()
+{
+    Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer]";
+    if (!m_txPool || !m_blockChain || !m_sync || !m_blockVerifier || !m_dbInitializer)
+    {
+        Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer Failed]";
+        return nullptr;
+    }
+
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::Raft);
+    /// create consensus engine according to "consensusType"
+    Ledger_LOG(DEBUG) << "[#initLedger] [#createRaftSealer] [Protocol ID]:  " << protocol_id;
+    // auto intervalBlockTime = dev::config::SystemConfigMgr::c_intervalBlockTime;
+    // std::shared_ptr<Sealer> raftSealer = std::make_shared<RaftSealer>(m_service, m_txPool,
+    //    m_blockChain, m_sync, m_blockVerifier, m_keyPair, intervalBlockTime,
+    //    intervalBlockTime + 1000, protocol_id, m_param->mutableConsensusParam().minerList);
+    std::shared_ptr<Sealer> raftSealer =
+        std::make_shared<RaftSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
+            m_keyPair, m_param->mutableConsensusParam().minElectTime,
+            m_param->mutableConsensusParam().maxElectTime, protocol_id,
+            m_param->mutableConsensusParam().minerList);
+    /// set params for RaftEngine
+    std::shared_ptr<RaftEngine> raftEngine =
+        std::dynamic_pointer_cast<RaftEngine>(raftSealer->consensusEngine());
+    raftEngine->setStorage(m_dbInitializer->storage());
+    return raftSealer;
+}
+
 /// init consensus
 bool Ledger::consensusInitFactory()
 {
     Ledger_LOG(DEBUG) << "[#initLedger] [#consensusInitFactory] [type]:  "
                       << m_param->mutableConsensusParam().consensusType;
-    /// default create pbft consensus
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
+
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    {
+        /// create RaftSealer
+        m_sealer = createRaftSealer();
+        if (!m_sealer)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
         std::string error_msg =
             "Unsupported Consensus type: " + m_param->mutableConsensusParam().consensusType;
@@ -293,10 +339,13 @@ bool Ledger::consensusInitFactory()
                           << m_param->mutableConsensusParam().consensusType
                           << " use PBFT as default" << std::endl;
     }
-    /// create PBFTSealer default
+
+    /// create PBFTSealer
     m_sealer = createPBFTSealer();
     if (!m_sealer)
+    {
         return false;
+    }
     return true;
 }
 
