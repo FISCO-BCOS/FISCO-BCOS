@@ -48,7 +48,8 @@ public:
 
     virtual ~SystemConfigPrecompiled(){};
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 };
 
 }  // namespace blockverifier

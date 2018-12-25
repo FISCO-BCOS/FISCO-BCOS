@@ -29,9 +29,6 @@ namespace storage
 #define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << "[#STORAGE] [LEVELDB]"
 
 /// \brief Sign of the DB key is valid or not
-const char* const STATUS = "_status_";
-const char* const SYS_TABLES = "_sys_tables_";
-const char* const SYS_MINERS = "_sys_miners_";
 const std::string STATUS = "_status_";
 const std::string SYS_TABLES = "_sys_tables_";
 const std::string SYS_MINERS = "_sys_miners_";

@@ -44,7 +44,8 @@ public:
 
     std::string toString(ExecutiveContext::Ptr) override;
 
-    bytes call(ExecutiveContext::Ptr context, bytesConstRef param) override;
+    bytes call(ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address()) override;
 
 protected:
     std::shared_ptr<storage::Table> openTable(

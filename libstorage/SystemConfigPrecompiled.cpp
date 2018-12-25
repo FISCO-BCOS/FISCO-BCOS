@@ -29,7 +29,8 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
-bytes SystemConfigPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes SystemConfigPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call SystemConfig:" << toHex(param);
 

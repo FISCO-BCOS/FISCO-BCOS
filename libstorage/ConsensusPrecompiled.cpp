@@ -38,7 +38,8 @@ contract ConsensusSystemTable
 }
 */
 
-bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes ConsensusPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
 

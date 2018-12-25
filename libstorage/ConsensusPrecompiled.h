@@ -52,7 +52,8 @@ public:
 
     virtual ~ConsensusPrecompiled(){};
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
 private:
     void showConsensusTable(ExecutiveContext::Ptr context);

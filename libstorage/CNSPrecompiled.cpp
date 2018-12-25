@@ -43,7 +43,8 @@ Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::s
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes CNSPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CNS:" << toHex(param);
 
