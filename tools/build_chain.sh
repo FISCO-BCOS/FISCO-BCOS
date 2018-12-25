@@ -324,9 +324,9 @@ generate_config_ini()
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    listen_port=$(( port_start + 1 + index * 3 ))
-    ;rpc listen port
-    http_listen_port=$(( port_start + 2 + index * 3 ))
+    channel_listen_port=$(( port_start + 1 + index * 3 ))
+    ;jsonrpc listen port
+    jsonrpc_listen_port=$(( port_start + 2 + index * 3 ))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
@@ -388,6 +388,8 @@ generate_group_ini()
     consensusType=pbft
     ;the max number of transactions of a block
     maxTransNum=1000
+    ;the ttl of broadcasted pbft message
+    ;maxTTL=2
     ;the node id of leaders
     ${node_list}
 

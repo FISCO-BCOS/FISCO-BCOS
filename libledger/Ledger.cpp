@@ -128,13 +128,13 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.maxTransNum", 1000);
+    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.maxTTL", MAXTTL);
 
-    // m_param->mutableConsensusParam().intervalBlockTime =
-    ///    pt.get<unsigned>("consensus.intervalBlockTime", 1000);
-
-    Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum]:  "
+    Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum/maxTTL]:  "
                       << m_param->mutableConsensusParam().consensusType << "/"
-                      << m_param->mutableConsensusParam().maxTransactions << std::endl;
+                      << m_param->mutableConsensusParam().maxTransactions << "/"
+                      << std::to_string(m_param->mutableConsensusParam().maxTTL);
+
     try
     {
         for (auto it : pt.get_child("consensus"))
@@ -275,6 +275,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftEngine->setIntervalBlockTime(SystemConfigMgr::c_intervalBlockTime);
     pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(SystemConfigMgr::c_omitEmptyBlock);
+    pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     return pbftSealer;
 }
 

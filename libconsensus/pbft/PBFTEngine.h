@@ -68,6 +68,10 @@ public:
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
         m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
+
+        /// register checkMinerList to blockSync for check MinerList
+        m_blockSync->registerConsensusVerifyHandler(
+            boost::bind(&PBFTEngine::checkBlockSign, this, _1));
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -91,10 +95,10 @@ public:
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
-    uint64_t calculateMaxPackTxNum(uint64_t const maxTransactions)
+    /*uint64_t calculateMaxPackTxNum(uint64_t const maxTransactions)
     {
         return m_timeManager.calculateMaxPackTxNum(maxTransactions, m_view);
-    }
+    }*/
     /// broadcast prepare message
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
@@ -107,6 +111,8 @@ public:
     void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
     const std::string consensusStatus() const override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
+
+    void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
 
 protected:
     void workLoop() override;
@@ -123,11 +129,12 @@ protected:
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>());
+        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+        unsigned const& ttl = 0);
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
     bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
-        std::string const& key, bytesConstRef data);
+        std::string const& key, bytesConstRef data, unsigned const& ttl = 1);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -222,15 +229,18 @@ protected:
     }
 
     /// trans data into message
-    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
-        bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
+        PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
         dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
         packet.packet_id = packetType;
-
+        if (ttl == 0)
+            packet.ttl = maxTTL;
+        else
+            packet.ttl = ttl;
         packet.encode(*p_data);
         message->setBuffer(p_data);
         message->setProtocolID(protocolId);
@@ -238,9 +248,9 @@ protected:
     }
 
     inline dev::p2p::P2PMessage::Ptr transDataToMessage(
-        bytesConstRef data, PACKET_TYPE const& packetType)
+        bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl)
     {
-        return transDataToMessage(data, packetType, m_protocolId);
+        return transDataToMessage(data, packetType, m_protocolId, ttl);
     }
 
     /**
@@ -265,7 +275,7 @@ protected:
         peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
-            PBFTENGINE_LOG(DEBUG) << "[#isValidReq] Recv PBFT msg from unkown peer:  "
+            PBFTENGINE_LOG(TRACE) << "[#isValidReq] Recv PBFT msg from unkown peer:  "
                                   << session->nodeID();
             return false;
         }
@@ -300,7 +310,7 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            PBFTENGINE_LOG(DEBUG)
+            PBFTENGINE_LOG(TRACE)
                 << "[#checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
                 << m_reqCache->prepareCache().block_hash.abridged() << "/" << req.block_hash
                 << "  [INFO]:  " << oss.str();
@@ -318,20 +328,20 @@ protected:
         /// check the sealer of this request
         if (req.idx == m_idx)
         {
-            PBFTENGINE_LOG(DEBUG) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
+            PBFTENGINE_LOG(TRACE) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
             return CheckResult::INVALID;
         }
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            PBFTENGINE_LOG(DEBUG)
+            PBFTENGINE_LOG(TRACE)
                 << "[#checkReq] Recv req with unconsistent view: [prepView/view]:  "
                 << m_reqCache->prepareCache().view << "/" << req.view << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            PBFTENGINE_LOG(DEBUG) << "[#checkReq] invalid sign: [hash]:"
+            PBFTENGINE_LOG(TRACE) << "[#checkReq] invalid sign: [hash]:"
                                   << req.block_hash.abridged() << "  [INFO]: " << oss.str();
             return CheckResult::INVALID;
         }
@@ -414,6 +424,8 @@ protected:
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
     void checkMinerList(dev::eth::Block const& block);
+    /// check block sign
+    bool checkBlockSign(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
 
     void changeViewForEmptyBlock();
@@ -458,6 +470,8 @@ protected:
     /// the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
     bool m_emptyBlockViewChange = false;
+
+    uint8_t maxTTL = MAXTTL;
 };
 }  // namespace consensus
 }  // namespace dev
