@@ -182,3 +182,17 @@ h256 Transaction::sha3(IncludeSignature _sig) const
         m_hashWith = ret;
     return ret;
 }
+
+void Transaction::tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
+{
+    try
+    {
+        if (m_rpcCallback)
+            m_rpcCallback(pReceipt);
+    }
+    catch (std::exception& e)
+    {
+        // LOG(ERROR) << "callback RPC callback failed";
+        return;
+    }
+}
