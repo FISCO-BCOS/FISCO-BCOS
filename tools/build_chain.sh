@@ -967,18 +967,18 @@ for line in ${ip_array[*]};do
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
         node_dir="$output_dir/${ip}/node_${ip}_${i}"
-        [ -d "$node_dir" ] && echo "$node_dir exist! Please delete!" && exit 1
+        [ -d "${node_dir}" ] && echo "${node_dir} exist! Please delete!" && exit 1
         
         while :
         do
-            gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} $node_dir >$output_dir/${logfile} 2>&1
+            gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >$output_dir/${logfile} 2>&1
             mkdir -p ${conf_path}/
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
 
             #private key should not start with 00
             cd $output_dir
-            privateKey=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
+            privateKey=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
             len=${#privateKey}
             head2=${privateKey:0:2}
             if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
@@ -987,14 +987,14 @@ for line in ${ip_array[*]};do
             fi
 
             if [ -n "$guomi_mode" ]; then
-                gen_node_cert_gm "" ${output_dir}/gmcert/agency $node_dir >$output_dir/build.log 2>&1
+                gen_node_cert_gm "" ${output_dir}/gmcert/agency ${node_dir} >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
                 rm gmnode.json gmnode.ca
-                mv *.* ${gm_conf_path}/
+                mv ./* ${gm_conf_path}/
 
                 #private key should not start with 00
                 cd $output_dir
-                privateKey=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
+                privateKey=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
                 len=${#privateKey}
                 head2=${privateKey:0:2}
                 if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
@@ -1004,38 +1004,38 @@ for line in ${ip_array[*]};do
             fi
             break;
         done
-        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> $node_dir/${conf_path}/node.crt
-        cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
+        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> ${node_dir}/${conf_path}/node.crt
+        cat ${output_dir}/cert/ca.crt >> ${node_dir}/${conf_path}/node.crt
 
         if [ -n "$guomi_mode" ]; then
-            cat ${output_dir}/gmcert/agency/gmagency.crt >> $node_dir/${gm_conf_path}/gmnode.crt
-            cat ${output_dir}/gmcert/gmca.crt >> $node_dir/${gm_conf_path}/gmnode.crt
+            cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
+            cat ${output_dir}/gmcert/gmca.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
 
             #move origin conf to gm conf
-            rm $node_dir/${conf_path}/agency.crt
-            rm $node_dir/${conf_path}/node.nodeid
-            rm $node_dir/${conf_path}/node.serial
-            cp $node_dir/${conf_path} $node_dir/${gm_conf_path}/originCert -r
+            rm ${node_dir}/${conf_path}/agency.crt
+            rm ${node_dir}/${conf_path}/node.nodeid
+            rm ${node_dir}/${conf_path}/node.serial
+            cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/originCert -r
         fi
 
         # gen sdk files
-        mkdir -p $node_dir/sdk/
+        mkdir -p ${node_dir}/sdk/
         # read_password
-        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
-        cp ${output_dir}/cert/ca.crt $node_dir/sdk/
-        # gen_sdk_cert ${output_dir}/cert/agency $node_dir
-        # mv $node_dir/* $node_dir/sdk/
+        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${node_dir}/${conf_path}/node.crt" -inkey "${node_dir}/${conf_path}/node.key" -out "${node_dir}/sdk/keystore.p12"
+        cp ${output_dir}/cert/ca.crt ${node_dir}/sdk/
+        # gen_sdk_cert ${output_dir}/cert/agency ${node_dir}
+        # mv ${node_dir}/* ${node_dir}/sdk/
 
         if [ -n "$guomi_mode" ]; then
-            nodeid=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         else
-            nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         fi
 
         if [ -n "$guomi_mode" ]; then
             #remove original cert files
-            rm $node_dir/${conf_path} -rf
-            mv $node_dir/${gm_conf_path} $node_dir/${conf_path}
+            rm ${node_dir}/${conf_path} -rf
+            mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
         fi
 
 
@@ -1078,16 +1078,16 @@ for line in ${ip_array[*]};do
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
         node_dir="$output_dir/${ip}/node_${ip}_${i}"
-        generate_config_ini "$node_dir/config.ini" ${i} "${group_array[server_count]}"
+        generate_config_ini "${node_dir}/config.ini" ${i} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
-                generate_group_ini "$node_dir/${conf_path}/group.${j}.ini" "${groups[${j}]}"
+                generate_group_ini "${node_dir}/${conf_path}/group.${j}.ini" "${groups[${j}]}"
             done
         else
-            generate_group_ini "$node_dir/${conf_path}/group.1.ini" "${nodeid_list}"
+            generate_group_ini "${node_dir}/${conf_path}/group.1.ini" "${nodeid_list}"
         fi
-        generate_node_scripts "$node_dir"
+        generate_node_scripts "${node_dir}"
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$eth_path" "$output_dir/${ip}/fisco-bcos"

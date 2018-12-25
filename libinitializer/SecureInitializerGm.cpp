@@ -45,9 +45,9 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     std::string dataPath = pt.get<std::string>("secure.data_path", "./conf/");
     std::string originDataPath =
         pt.get<std::string>("secure.origin_data_path", dataPath + std::string("/originCert/"));
-    std::string key = originDataPath + pt.get<std::string>("secure.gmkey", "node.key");
-    std::string cert = originDataPath + pt.get<std::string>("secure.gmcert", "node.crt");
-    std::string caCert = originDataPath + pt.get<std::string>("secure.gmca_cert", "ca.crt");
+    std::string key = originDataPath + pt.get<std::string>("secure.originKey", "node.key");
+    std::string cert = originDataPath + pt.get<std::string>("secure.originCert", "node.crt");
+    std::string caCert = originDataPath + pt.get<std::string>("secure.originca_cert", "ca.crt");
     std::string caPath = originDataPath + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
     if (!key.empty())
@@ -95,7 +95,8 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] channelserver privatekey not exists!";
+        INITIALIZER_LOG(ERROR)
+            << "[#SecureInitializer::initConfig] channelserver privatekey not exists!";
         BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
     }
 
