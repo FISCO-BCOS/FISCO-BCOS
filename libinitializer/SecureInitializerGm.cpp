@@ -47,7 +47,7 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
         pt.get<std::string>("secure.origin_data_path", dataPath + std::string("/originCert/"));
     std::string key = originDataPath + pt.get<std::string>("secure.originKey", "node.key");
     std::string cert = originDataPath + pt.get<std::string>("secure.originCert", "node.crt");
-    std::string caCert = originDataPath + pt.get<std::string>("secure.originca_cert", "ca.crt");
+    std::string caCert = originDataPath + pt.get<std::string>("secure.originCaCert", "ca.crt");
     std::string caPath = originDataPath + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
     if (!key.empty())
@@ -172,7 +172,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string dataPath = pt.get<std::string>("secure.data_path", "./conf/");
     std::string key = dataPath + pt.get<std::string>("secure.key", "gmnode.key");
     std::string enKey = dataPath + pt.get<std::string>("secure.enkey", "gmennode.key");
-    std::string enCert = dataPath + pt.get<std::string>("secure.enCert", "gmennode.crt");
+    std::string enCert = dataPath + pt.get<std::string>("secure.encert", "gmennode.crt");
     std::string cert = dataPath + pt.get<std::string>("secure.cert", "gmnode.crt");
     std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "gmca.crt");
     std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
