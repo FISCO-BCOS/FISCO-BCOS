@@ -33,14 +33,6 @@ const char* const SYSTEM_INIT_VALUE_TX_COUNT_LIMIT = "1000";
 const char* const SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
 const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
 
-enum SystemConfigItem
-{
-    SYSTEM_CONFIG_ITEM_INVALID = -1,
-    SYSTEM_CONFIG_TX_COUNT_LIMIT = 0,
-    SYSTEM_CONFIG_TX_GAS_LIMIT,
-    SYSTEM_CONFIG_ITEM_COUNT  /// Must be the last.
-};
-
 /*
 contract SystemConfigTable
 {

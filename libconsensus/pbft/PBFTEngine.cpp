@@ -534,8 +534,9 @@ bool PBFTEngine::checkBlock(Block const& block)
     }  /// end of check sign
 
     /// Check whether the number of transactions in block exceeds the limit
-    std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit", currentNumber + 1);
-    if (_block->transactions().size() > boost::lexical_cast<uint64_t>(ret))
+    std::string ret =
+        m_blockChain->getSystemConfigByKey("tx_count_limit", block.blockHeader().number());
+    if (block.transactions().size() > boost::lexical_cast<uint64_t>(ret))
     {
         return false;
     }

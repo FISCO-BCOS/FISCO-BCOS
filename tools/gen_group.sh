@@ -142,8 +142,8 @@ function generateGroupConfig()
             if [ "${groupConfigPath}" == "" ];then
                 groupConfigPath=conf/
                 mkdir -p ${groupConfigPath}
-                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.ini"
-                groupConfigPath=${groupConfigPath}"/group."${groupId}".ini"
+                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.genesis"
+                groupConfigPath=${groupConfigPath}"/group."${groupId}".genesis"
             fi
             groupConfigPath=${prefix}_${minerNode}/${groupConfigPath}
             if [ ! -f "${groupConfigPath}" ];then

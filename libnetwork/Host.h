@@ -109,6 +109,9 @@ public:
     }
     bi::tcp::endpoint tcpClient() const { return m_tcpClient; }
 
+    virtual void setCRL(std::vector<std::string> const& crl) { m_crl = crl; }
+    virtual const std::vector<std::string>& crl() const { return m_crl; }
+
 private:
     /// called by 'startedWorking' to accept connections
     void startAccept(boost::system::error_code ec = boost::system::error_code());
@@ -167,6 +170,9 @@ private:
     bool m_run = false;
 
     std::shared_ptr<std::thread> m_hostThread;
+
+    // certificate rejected list of nodeID
+    std::vector<std::string> m_crl;
 };
 }  // namespace network
 
