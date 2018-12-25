@@ -173,6 +173,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string enKey = dataPath + pt.get<std::string>("secure.enkey", "ennode.key");
     std::string enCert = dataPath + pt.get<std::string>("secure.enCert", "ennode.crt");
     std::string cert = dataPath + pt.get<std::string>("secure.cert", "node.crt");
+    std::string enCert = dataPath + pt.get<std::string>("secure.enCert", "ennode.crt");
     std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "ca.crt");
     std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
