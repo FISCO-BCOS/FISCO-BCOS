@@ -43,6 +43,7 @@ struct ConsensusParam
     dev::h512s minerList = dev::h512s();
     dev::h512s observerList = dev::h512s();
     uint64_t maxTransactions;
+    uint8_t maxTTL;
     /// unsigned intervalBlockTime;
 };
 

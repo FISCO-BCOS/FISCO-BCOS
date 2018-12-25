@@ -72,7 +72,7 @@ protected:
     {
         return m_pbftEngine->reachBlockIntervalTime();
     }
-    uint64_t calculateMaxPackTxNum() override;
+    /// uint64_t calculateMaxPackTxNum() override;
 
 private:
     void setBlock();

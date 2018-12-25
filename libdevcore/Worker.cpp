@@ -67,9 +67,10 @@ void Worker::startWorking()
                     workLoop();
                     doneWorking();
                 }
-                catch (std::exception const& _e)
+                catch (std::exception const& e)
                 {
-                    LOG(WARNING) << "Exception thrown in Worker thread: " << _e.what();
+                    LOG(WARNING) << "Exception thrown in Worker thread: "
+                                 << boost::diagnostic_information(e);
                 }
 
                 {
