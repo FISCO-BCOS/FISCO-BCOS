@@ -63,11 +63,6 @@ public:
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const = 0;
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) = 0;
-
-    // verify handler to check downloading block
-    virtual void registerConsensusVerifyHandler(
-        std::function<bool(dev::eth::Block const&)> _handler)
-    {}
 };
 
 }  // namespace sync

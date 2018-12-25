@@ -99,12 +99,6 @@ string const SyncMaster::syncInfo() const
 
 void SyncMaster::start()
 {
-    if (!fp_isConsensusOk)
-    {
-        SYNCLOG(ERROR) << "Consensus verify handler is not set" << endl;
-        BOOST_THROW_EXCEPTION(SyncVerifyHandlerNotSet());
-    }
-
     startWorking();
 }
 
