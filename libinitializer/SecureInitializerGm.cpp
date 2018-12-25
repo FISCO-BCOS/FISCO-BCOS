@@ -172,6 +172,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string key = dataPath + pt.get<std::string>("secure.key", "node.key");
     std::string enKey = dataPath + pt.get<std::string>("secure.enkey", "ennode.key");
     std::string cert = dataPath + pt.get<std::string>("secure.cert", "node.crt");
+    std::string enCert = dataPath + pt.get<std::string>("secure.enCert", "ennode.crt");
     std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "ca.crt");
     std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
     bytes keyContent;
@@ -250,6 +251,8 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 
     boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+
+    sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
 
     if (SSL_CTX_use_enc_PrivateKey_file(
             sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
