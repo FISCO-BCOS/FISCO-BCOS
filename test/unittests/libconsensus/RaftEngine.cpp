@@ -357,6 +357,7 @@ BOOST_AUTO_TEST_CASE(testHandleVoteRequest)
     result = raftEngine->handleVoteRequest(u256(0), h512(0), req);
     BOOST_CHECK(result == false);
 
+    req.lastBlockNumber = 11;
     result = raftEngine->handleVoteRequest(u256(0), h512(0), req);
     BOOST_CHECK(result == true);
 }
