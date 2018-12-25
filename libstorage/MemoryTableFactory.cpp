@@ -19,8 +19,10 @@
  *  @date 20180921
  */
 #include "MemoryTableFactory.h"
+#include "CNSPrecompiled.h"
 #include "Common.h"
 #include "MemoryTable.h"
+#include "SystemConfigPrecompiled.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -39,6 +41,8 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_NUMBER_2_HASH);
     m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
     m_sysTables.push_back(SYS_HASH_2_BLOCK);
+    m_sysTables.push_back(SYS_CNS);
+    m_sysTables.push_back(SYS_CONFIG);
 }
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName)
@@ -279,6 +283,18 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     {
         tableInfo->key = "key";
         tableInfo->fields = std::vector<std::string>{"value"};
+    }
+    else if (tableName == SYS_CNS)
+    {
+        tableInfo->key = dev::SYS_CNS_FIELD_NAME;
+        tableInfo->fields = std::vector<std::string>{
+            dev::SYS_CNS_FIELD_VERSION, dev::SYS_CNS_FIELD_ADDRESS, dev::SYS_CNS_FIELD_ABI};
+    }
+    else if (tableName == SYS_CONFIG)
+    {
+        tableInfo->key = dev::blockverifier::SYSTEM_CONFIG_KEY;
+        tableInfo->fields = std::vector<std::string>{
+            dev::blockverifier::SYSTEM_CONFIG_VALUE, dev::blockverifier::SYSTEM_CONFIG_ENABLENUM};
     }
     return tableInfo;
 }

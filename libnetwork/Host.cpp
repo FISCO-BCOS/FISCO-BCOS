@@ -183,8 +183,17 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                     /// remove 04
                     nodeIDOut->erase(0, 2);
                 }
-                HOST_LOG(DEBUG) << "Get endpoint publickey:" << *nodeIDOut;
             }
+
+            /// check nodeID in crl, only filter by nodeID.
+            const std::vector<std::string>& crl = host->crl();
+            std::string nodeID = boost::to_upper_copy(*nodeIDOut);
+            if (find(crl.begin(), crl.end(), nodeID) != crl.end())
+            {
+                HOST_LOG(INFO) << "NodeID in certificate rejected list.";
+                return false;
+            }
+
             return preverified;
         }
         catch (std::exception& e)

@@ -34,6 +34,8 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 using namespace boost::property_tree;
 using namespace dev::blockverifier;
@@ -82,32 +84,50 @@ void Ledger::initConfig(std::string const& configPath)
 {
     try
     {
-        Ledger_LOG(INFO) << "[#initConfig] "
-                            "[initTxPoolConfig/initConsensusConfig/initSyncConfig/initDBConfig/"
-                            "initGenesisConfig]"
-                         << std::endl;
+        Ledger_LOG(INFO) << "[#initConfig] [initConsensusConfig/initDBConfig/initTxConfig]";
         ptree pt;
         /// read the configuration file for a specified group
         read_ini(configPath, pt);
-        /// init params related to txpool
-        initTxPoolConfig(pt);
         /// init params related to consensus
         initConsensusConfig(pt);
-        /// init params related to sync
-        initSyncConfig(pt);
         /// db params initialization
         initDBConfig(pt);
-        initGenesisConfig(pt);
+        /// init params related to tx
+        initTxConfig(pt);
     }
     catch (std::exception& e)
     {
-        std::string error_info = "init config failed for " + toString(m_groupId) +
+        std::string error_info = "init genesis config failed for " + toString(m_groupId) +
                                  " failed, error_msg: " + boost::diagnostic_information(e);
         LOG(ERROR) << error_info;
         Ledger_LOG(ERROR) << "[#initConfig Failed] [EINFO]:  " << boost::diagnostic_information(e)
                           << std::endl;
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
         exit(1);
+    }
+}
+
+void Ledger::initIniConfig(std::string const& iniConfigFileName)
+{
+    try
+    {
+        Ledger_LOG(INFO) << "[#initIniConfig] [initTxPoolConfig/initSyncConfig] fileName:"
+                         << iniConfigFileName;
+        ptree pt;
+        /// read the configuration file for a specified group
+        read_ini(iniConfigFileName, pt);
+        /// init params related to txpool
+        initTxPoolConfig(pt);
+        /// init params related to sync
+        initSyncConfig(pt);
+    }
+    catch (std::exception& e)
+    {
+        std::string error_info = "init ini config failed for " + toString(m_groupId) +
+                                 " failed, error_msg: " + boost::diagnostic_information(e);
+        LOG(ERROR) << error_info;
+        Ledger_LOG(ERROR) << "[#initConfig Failed] [EINFO]:  " << boost::diagnostic_information(e)
+                          << std::endl;
     }
 }
 
@@ -142,16 +162,21 @@ void Ledger::initConsensusConfig(ptree const& pt)
                       << m_param->mutableConsensusParam().maxTransactions << "/"
                       << std::to_string(m_param->mutableConsensusParam().maxTTL);
 
+    std::string nodeListMark;
     try
     {
         for (auto it : pt.get_child("consensus"))
         {
             if (it.first.find("node.") == 0)
             {
-                Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]:  " << it.first
-                                 << "  [node]: " << it.second.data() << std::endl;
-                h512 miner(it.second.data());
-                m_param->mutableConsensusParam().minerList.push_back(miner);
+                std::string data = it.second.data();
+                boost::to_lower(data);
+                Ledger_LOG(INFO) << "[#initConsensusConfig] [consensus_node_key]: " << it.first
+                                 << " [node]: " << data << std::endl;
+                // Uniform lowercase nodeID
+                dev::h512 nodeID(data);
+                m_param->mutableConsensusParam().minerList.push_back(nodeID);
+                nodeListMark += data;
             }
         }
     }
@@ -160,13 +185,15 @@ void Ledger::initConsensusConfig(ptree const& pt)
         Ledger_LOG(ERROR) << "[#initConsensusConfig]: Parse consensus section failed: "
                           << boost::diagnostic_information(e) << std::endl;
     }
+    m_param->mutableGenesisParam().nodeListMark = nodeListMark;
 }
 
 /// init sync related configurations
 /// 1. idleWaitMs: default is 30ms
 void Ledger::initSyncConfig(ptree const& pt)
 {
-    m_param->mutableSyncParam().idleWaitMs = pt.get<unsigned>("sync.idleWaitMs", 30);
+    m_param->mutableSyncParam().idleWaitMs =
+        pt.get<unsigned>("sync.idleWaitMs", SYNC_IDLE_WAIT_DEFAULT);
     Ledger_LOG(DEBUG) << "[#initSyncConfig] [idleWaitMs]:" << m_param->mutableSyncParam().idleWaitMs
                       << std::endl;
 }
@@ -190,12 +217,27 @@ void Ledger::initDBConfig(ptree const& pt)
                       << std::endl;
 }
 
-/// init genesis configuration
-void Ledger::initGenesisConfig(ptree const& pt)
+/// init tx related configurations
+/// 1. gasLimit: default is 300000000
+void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
 {
-    m_param->mutableGenesisParam().genesisMark =
-        pt.get<std::string>("genesis.mark", std::to_string(m_groupId));
-    Ledger_LOG(DEBUG) << "[#initGenesisConfig] [genesisMark]:  "
+    m_param->mutableTxParam().txGasLimit = pt.get<unsigned>("tx.gasLimit", 300000000);
+    Ledger_LOG(DEBUG) << "[#initTxConfig] [txGasLimit]:" << m_param->mutableTxParam().txGasLimit;
+}
+
+/// init mark of this group
+void Ledger::initMark()
+{
+    std::stringstream s;
+    s << int(m_groupId) << "-";
+    s << m_param->mutableGenesisParam().nodeListMark << "-";
+    s << m_param->mutableConsensusParam().consensusType << "-";
+    s << m_param->mutableStorageParam().type << "-";
+    s << m_param->mutableStateParam().type << "-";
+    s << m_param->mutableConsensusParam().maxTransactions << "-";
+    s << m_param->mutableTxParam().txGasLimit;
+    m_param->mutableGenesisParam().genesisMark = s.str();
+    Ledger_LOG(DEBUG) << "[#initMark] [genesisMark]:  "
                       << m_param->mutableGenesisParam().genesisMark << std::endl;
 }
 
@@ -249,7 +291,23 @@ bool Ledger::initBlockChain()
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     m_blockChain = blockChain;
-    m_blockChain->setGroupMark(m_param->mutableGenesisParam().genesisMark);
+    std::string consensusType = m_param->mutableConsensusParam().consensusType;
+    std::string storageType = m_param->mutableStorageParam().type;
+    std::string stateType = m_param->mutableStateParam().type;
+    GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
+        m_param->mutableConsensusParam().minerList, m_param->mutableConsensusParam().observerList,
+        consensusType, storageType, stateType, m_param->mutableConsensusParam().maxTransactions,
+        m_param->mutableTxParam().txGasLimit};
+    bool ret = m_blockChain->checkAndBuildGenesisBlock(initParam);
+    if (!ret)
+    {
+        /// It is a subsequent block without same extra data, so do reset.
+        Ledger_LOG(DEBUG)
+            << "[#initLedger] [#initBlockChain] The configuration item will be reset.";
+        m_param->mutableConsensusParam().consensusType = initParam.consensusType;
+        m_param->mutableStorageParam().type = initParam.storageType;
+        m_param->mutableStateParam().type = initParam.stateType;
+    }
     Ledger_LOG(DEBUG) << "[#initLedger] [#initBlockChain SUCC]";
     return true;
 }
@@ -275,7 +333,8 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     std::shared_ptr<Sealer> pbftSealer =
         std::make_shared<PBFTSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             protocol_id, m_param->baseDir(), m_keyPair, m_param->mutableConsensusParam().minerList);
-    pbftSealer->setMaxBlockTransactions(m_param->mutableConsensusParam().maxTransactions);
+    std::string ret = m_blockChain->getSystemConfigByKey(SYSTEM_KEY_TX_COUNT_LIMIT);
+    pbftSealer->setMaxBlockTransactions(boost::lexical_cast<uint64_t>(ret));
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =
         std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());

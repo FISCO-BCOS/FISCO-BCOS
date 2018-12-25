@@ -44,7 +44,7 @@ public:
     {
         m_service = std::make_shared<FakesService>();
         std::string configurationPath =
-            getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
+            getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
         m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
         m_ledgerManager->initSingleLedger<FakeLedger>(groupId, "", configurationPath);
 
@@ -66,6 +66,13 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(RpcTest, RpcTestFixure)
+
+BOOST_AUTO_TEST_CASE(testSystemConfig)
+{
+    std::string value = rpc->getSystemConfigByKey(groupId, "tx_gas_limit");
+    BOOST_CHECK(value == "300000000");
+    BOOST_CHECK_THROW(rpc->getSystemConfigByKey(invalidGroup, "tx_gas_limit"), JsonRpcException);
+}
 
 BOOST_AUTO_TEST_CASE(testConsensusPart)
 {

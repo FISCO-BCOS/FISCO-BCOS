@@ -147,7 +147,18 @@ public:
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
     }
-    void setGroupMark(std::string const& groupMark) override {}
+    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
+    {
+        m_initParam = initParam;
+        return true;
+    }
+    dev::h512s minerList() override { return m_initParam.minerList; };
+    dev::h512s observerList() override { return m_initParam.observerList; };
+    std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) override
+    {
+        return "300000000";
+    };
+
     void createTransaction()
     {
         bytes rlpBytes = fromHex(
@@ -235,6 +246,8 @@ public:
     std::vector<std::shared_ptr<Block>> m_blockChain;
     uint64_t m_blockNumber;
     uint64_t m_totalTransactionCount;
+
+    GenesisBlockParam m_initParam;
 };
 
 class MockBlockVerifier : public BlockVerifierInterface
@@ -412,7 +425,16 @@ public:
         return consensusInterface;
     }
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    void initBlockChain() { m_blockChain = std::make_shared<MockBlockChain>(); }
+    void initBlockChain()
+    {
+        m_blockChain = std::make_shared<MockBlockChain>();
+        dev::h512s minerList;
+        minerList.push_back(
+            dev::h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
+                      "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
+        GenesisBlockParam initParam = {"std", minerList, dev::h512s(), "", "", "", 1000, 300000000};
+        m_blockChain->checkAndBuildGenesisBlock(initParam);
+    }
     void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
     void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
     void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }

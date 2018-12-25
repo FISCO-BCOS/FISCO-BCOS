@@ -32,14 +32,16 @@ namespace dev
 namespace ledger
 {
 /// forward class declaration
+#define SYNC_TX_POOL_SIZE_DEFAULT 102400
 struct TxPoolParam
 {
-    uint64_t txPoolLimit;
+    uint64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
 };
 struct ConsensusParam
 {
     std::string consensusType;
     dev::h512s minerList = dev::h512s();
+    dev::h512s observerList = dev::h512s();
     uint64_t maxTransactions;
     uint8_t maxTTL;
     /// unsigned intervalBlockTime;
@@ -54,15 +56,17 @@ struct AMDBParam
     int maxRetry = 0;
 };
 
+#define SYNC_IDLE_WAIT_DEFAULT 30
 struct SyncParam
 {
     /// TODO: syncParam related
-    unsigned idleWaitMs;
+    unsigned idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
 };
 
 struct GenesisParam
 {
     std::string genesisMark;
+    std::string nodeListMark;
 };
 struct StorageParam
 {
@@ -72,6 +76,10 @@ struct StorageParam
 struct StateParam
 {
     std::string type;
+};
+struct TxParam
+{
+    uint64_t txGasLimit;
 };
 class LedgerParam : public LedgerParamInterface
 {
@@ -85,6 +93,7 @@ public:
     void setBaseDir(std::string const& baseDir) override { m_baseDir = baseDir; }
     StorageParam& mutableStorageParam() override { return m_storageParam; }
     StateParam& mutableStateParam() override { return m_stateParam; }
+    TxParam& mutableTxParam() override { return m_txParam; }
 
 private:
     TxPoolParam m_txPoolParam;
@@ -95,6 +104,7 @@ private:
     std::string m_baseDir;
     StorageParam m_storageParam;
     StateParam m_stateParam;
+    TxParam m_txParam;
 };
 }  // namespace ledger
 }  // namespace dev
