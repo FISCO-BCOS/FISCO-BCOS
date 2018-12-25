@@ -99,6 +99,7 @@ target_link_libraries(test-fisco-bcos sync)
 target_link_libraries(test-fisco-bcos initializer)
 target_link_libraries(test-fisco-bcos ledger)
 target_link_libraries(test-fisco-bcos rpc)
+target_link_libraries(test-fisco-bcos security)
 
 enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE TRUE)

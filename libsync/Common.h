@@ -41,6 +41,8 @@ namespace dev
 {
 namespace sync
 {
+DEV_SIMPLE_EXCEPTION(SyncVerifyHandlerNotSet);
+
 static unsigned const c_maxSendTransactions = 128;
 
 // Every c_downloadingRequestTimeout request:
@@ -66,9 +68,9 @@ using NodeIDs = std::vector<dev::p2p::NodeID>;
 using BlockPtr = std::shared_ptr<dev::eth::Block>;
 using BlockPtrVec = std::vector<BlockPtr>;
 
-#define SYNCLOG(_OBV)                                                                           \
-    LOG(_OBV) << " [#SYNC] [" << std::dec << m_protocolId << "] [" << std::to_string(m_groupId) \
-              << " ]"
+#define SYNCLOG(_OBV)                                               \
+    LOG(_OBV) << " [#SYNC] [PROTOCOL: " << std::dec << m_protocolId \
+              << "] [GROUP: " << std::to_string(m_groupId) << " ]"
 
 enum SyncPacketType : byte
 {

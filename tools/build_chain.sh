@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 ca_file= #CA key
 node_num=1 
@@ -23,6 +24,7 @@ logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
+bcos_bin_name=fisco-bcos
 
 help() {
     echo $1
@@ -94,12 +96,11 @@ echo "=============================================================="
 LOG_INFO "FISCO-BCOS Path   : $eth_path"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-[ ! -z $ip_param ] && LOG_INFO "IP List Param     : $ip_param"
 LOG_INFO "Start Port        : $port_start"
 LOG_INFO "Server IP         : ${ip_array[@]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
-LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
+[ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : $output_dir"
 LOG_INFO "CA Key Path       : $ca_file"
 echo "=============================================================="
@@ -176,7 +177,7 @@ gen_chain_cert() {
     chaindir=$path
     mkdir -p $chaindir
     openssl genrsa -out $chaindir/ca.key 2048
-    openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
+    openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fisco-bcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
     cp cert.cnf $chaindir
 
     if [ $? -eq 0 ]; then
@@ -189,7 +190,7 @@ gen_chain_cert() {
 gen_agency_cert() {
     chain="$2"
     agencypath="$3"
-    name=`getname "$agencypath"`
+    name=$(getname "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/ca.key"
@@ -199,7 +200,7 @@ gen_agency_cert() {
     mkdir -p $agencydir
 
     openssl genrsa -out $agencydir/agency.key 2048
-    openssl req -new -sha256 -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/agency.key -config $chain/cert.cnf -out $agencydir/agency.csr
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key $agencydir/agency.key -config $chain/cert.cnf -out $agencydir/agency.csr
     openssl x509 -req -days 3650 -sha256 -CA $chain/ca.crt -CAkey $chain/ca.key -CAcreateserial\
         -in $agencydir/agency.csr -out $agencydir/agency.crt  -extensions v4_req -extfile $chain/cert.cnf
     
@@ -219,7 +220,7 @@ gen_cert_secp256k1() {
     openssl ecparam -out $certpath/${type}.param -name secp256k1
     openssl genpkey -paramfile $certpath/${type}.param -out $certpath/${type}.key
     openssl pkey -in $certpath/${type}.key -pubout -out $certpath/${type}.pubkey
-    openssl req -new -sha256 -subj "/CN=${name}/O=fiscobcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
     openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $capath/agency.key -CA $capath/agency.crt\
         -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $capath/cert.cnf
     openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
@@ -233,9 +234,9 @@ gen_node_cert() {
     fi
 
     agpath="$2"
-    agency=`getname "$agpath"`
+    agency=$(getname "$agpath")
     ndpath="$3"
-    node=`getname "$ndpath"`
+    node=$(getname "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
@@ -250,8 +251,8 @@ gen_node_cert() {
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=`cat node.nodeid | head`
-    serial=`cat node.serial | head`
+    nodeid=$(cat node.nodeid | head)
+    serial=$(cat node.serial | head)
     cat >node.json <<EOF
 {
  "id":"$nodeid",
@@ -290,7 +291,7 @@ read_password() {
 gen_sdk_cert() {
     agency="$2"
     sdkpath="$3"
-    sdk=`getname "$sdkpath"`
+    sdk=$(getname "$sdkpath")
     dir_must_exists "$agency"
     file_must_exists "$agency/agency.key"
     dir_must_not_exists "$sdkpath"
@@ -314,20 +315,20 @@ generate_config_ini()
     local group_conf_list=
     if [ "${use_ip_param}" == "false" ];then
         for j in ${node_groups[@]};do
-        group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.ini
+        group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.genesis
     "
         done
     else
-        group_conf_list="group_config.1=${conf_path}/group.1.ini"
+        group_conf_list="group_config.1=${conf_path}/group.1.genesis"
     fi
     cat << EOF > ${output}
 [rpc]
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    listen_port=$(( port_start + 1 + index * 3 ))
-    ;rpc listen port
-    http_listen_port=$(( port_start + 2 + index * 3 ))
+    channel_listen_port=$(( port_start + 1 + index * 3 ))
+    ;jsonrpc listen port
+    jsonrpc_listen_port=$(( port_start + 2 + index * 3 ))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
@@ -335,11 +336,14 @@ generate_config_ini()
     listen_port=$(( port_start + index * 3 ))
     ;nodes to connect
     $ip_list
+;certificate rejected list		
+[CRL]		
+    ;crl.0=4d9752efbb1de1253d1d463a934d34230398e787b3112805728525ed5b9d2ba29e4ad92c6fcde5156ede8baa5aca372a209f94dc8f283c8a4fa63e3787c338a4
 
 ;group configurations
 ;if need add a new group, eg. group2, can add the following configuration:
-;group_config.2=conf/group.2.ini
-;group.2.ini can be populated from group.1.ini
+;group_config.2=conf/group.2.genesis
+;group.2.genesis can be populated from group.1.genesis
 ;WARNING: group 0 is forbided
 [group]
     group_data_path=data/
@@ -378,23 +382,22 @@ generate_config_ini()
 EOF
 }
 
-generate_group_ini()
+generate_group_genesis()
 {
     local output=$1
     local node_list=$2
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
-    ;only support PBFT now
+    ;consensus algorithm type, now support PBFT(consensusType=pbft) and Raft(consensusType=raft)
     consensusType=pbft
     ;the max number of transactions of a block
     maxTransNum=1000
+    ;the ttl of broadcasted pbft message
+    ;maxTTL=2
     ;the node id of leaders
     ${node_list}
 
-;sync period time
-[sync]
-    idleWaitMs=200
 [storage]
     ;storage db type, now support leveldb 
     type=${storage_type}
@@ -402,10 +405,19 @@ generate_group_ini()
     ;support mpt/storage
     type=${state_type}
 
-;genesis configuration
-[genesis]
-    ;used to mark the genesis block of this group
-    ;mark=${group_id}
+;tx gas limit
+[tx]
+    gasLimit=300000000
+EOF
+}
+
+function generate_group_ini()
+{
+    local output="${1}"
+    cat << EOF > ${output}
+;sync period time
+[sync]
+    idleWaitMs=200
 
 ;txpool limit
 [txPool]
@@ -434,9 +446,9 @@ stateOrProvinceName_default =GuangDong
 localityName = Locality Name (eg, city)
 localityName_default = ShenZhen
 organizationalUnitName = Organizational Unit Name (eg, section)
-organizationalUnitName_default = fiscobcos
-commonName =  Organizational  commonName (eg, fiscobcos)
-commonName_default = fiscobcos
+organizationalUnitName_default = fisco-bcos
+commonName =  Organizational  commonName (eg, fisco-bcos)
+commonName_default = fisco-bcos
 commonName_max = 64
 
 [ v3_req ]
@@ -465,13 +477,13 @@ generate_node_scripts()
     local output=$1
     generate_script_template "$output/start.sh"
     cat << EOF >> "$output/start.sh"
-fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
 nohup setsid \${fisco_bcos} -c config.ini&
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
-fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 kill \${weth_pid}
 EOF
@@ -559,7 +571,8 @@ parse_ip_config()
         ip_array[n]=`echo ${line} | cut -d ' ' -f 1`
         agency_array[n]=`echo ${line} | cut -d ' ' -f 2`
         group_array[n]=`echo ${line} | cut -d ' ' -f 3`
-        if [ -z ${ip_array[n]} -o -z ${agency_array[n]} -o -z ${group_array[n]} ];then
+        if [ -z "${ip_array[$n]}" -o -z "${agency_array[$n]}" -o -z "${group_array[$n]}" ];then
+            LOG_WARN "Please check ${config}, make sure there is no empty line!"
             return -1
         fi
         ((++n))
@@ -584,7 +597,7 @@ else
 fi
 
 if [ -z ${eth_path} ];then
-    eth_path=${output_dir}/fisco-bcos
+    eth_path=${output_dir}/${bcos_bin_name}
     Download=true
 fi
 
@@ -661,7 +674,7 @@ for line in ${ip_array[*]};do
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
             cd $output_dir
-            privateKey=`openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g'`
+            privateKey=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
             len=${#privateKey}
             head2=${privateKey:0:2}
             if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
@@ -687,14 +700,14 @@ for line in ${ip_array[*]};do
                 echo "groups_count[${j}]=${groups_count[${j}]}"  >> $output_dir/${logfile}
         groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=${nodeid}
     "
-                ((++groups_count[${j}]))
+                ((++groups_count[j]))
             done
         else
         nodeid_list=$"${nodeid_list}node.${count}=${nodeid}
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + ${i} * 3 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + i * 3 ))"
     "
         ((++count))
     done
@@ -722,16 +735,18 @@ for line in ${ip_array[*]};do
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
-                generate_group_ini "$node_dir/${conf_path}/group.${j}.ini" "${groups[${j}]}"
+                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${groups[${j}]}"
+                generate_group_ini "$node_dir/${conf_path}/group.${j}.ini"
             done
         else
-            generate_group_ini "$node_dir/${conf_path}/group.1.ini" "${nodeid_list}"
+            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "${nodeid_list}"
+            generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "$node_dir"
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
-    echo "cp \${1} \${SHELL_FOLDER}/$output_dir/${ip}/" >> "$output_dir/replace_all.sh"
+    echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 

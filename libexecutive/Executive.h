@@ -198,7 +198,7 @@ private:
     bool m_isCreation = false;
     Address m_newAddress;
     size_t m_savepoint = 0;
-    size_t m_memoryTableFactorySavePoint = 0;
+    size_t m_tableFactorySavepoint = 0;
 };
 
 }  // namespace executive

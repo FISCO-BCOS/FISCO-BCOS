@@ -47,8 +47,8 @@ int main(int argc, const char* argv[])
     auto initialize = std::make_shared<Initializer>();
     initialize->init(param.configPath());
     /// input the success info
-    std::cout << "start FISCO BCOS SUCCESS" << std::endl;
     version(false);
+    std::cout << "The FISCO-BCOS is running..." << std::endl;
     ExitHandler exitHandler;
     signal(SIGABRT, &ExitHandler::exitHandler);
     signal(SIGTERM, &ExitHandler::exitHandler);
@@ -59,4 +59,5 @@ int main(int argc, const char* argv[])
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         LogInitializer::logRotateByTime();
     }
+    return 0;
 }

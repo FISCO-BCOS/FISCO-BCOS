@@ -97,6 +97,8 @@ public:
         return m_memoryTableFactory;
     }
 
+    uint64_t txGasLimit() const { return m_txGasLimit; }
+    void setTxGasLimit(uint64_t _txGasLimit) { m_txGasLimit = _txGasLimit; }
 
 private:
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
@@ -105,6 +107,7 @@ private:
     std::shared_ptr<dev::executive::StateFace> m_stateFace;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    uint64_t m_txGasLimit = 300000000;
 };
 
 }  // namespace blockverifier

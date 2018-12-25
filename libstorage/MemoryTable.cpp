@@ -24,6 +24,7 @@
 #include <json/json.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
@@ -73,7 +74,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Table select failed for:" << e.what();
+        STORAGE_LOG(ERROR) << "Table select failed for:" << boost::diagnostic_information(e);
     }
 
     return std::make_shared<Entries>();
@@ -138,7 +139,7 @@ int dev::storage::MemoryTable::update(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
+        STORAGE_LOG(ERROR) << "Access MemoryTable failed for:" << boost::diagnostic_information(e);
     }
 
     return 0;
@@ -194,7 +195,7 @@ int dev::storage::MemoryTable::insert(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Access MemoryTable failed for:" << e.what();
+        STORAGE_LOG(ERROR) << "Access MemoryTable failed for:" << boost::diagnostic_information(e);
     }
 
     return 1;
@@ -410,7 +411,7 @@ bool dev::storage::MemoryTable::processCondition(Entry::Ptr entry, Condition::Pt
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << "Compare error:" << e.what();
+        STORAGE_LOG(ERROR) << "Compare error:" << boost::diagnostic_information(e);
 
         return false;
     }

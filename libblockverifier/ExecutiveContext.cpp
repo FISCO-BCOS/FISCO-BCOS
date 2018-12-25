@@ -56,7 +56,7 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
     catch (std::exception& e)
     {
         EXECUTIVECONTEXT_LOG(ERROR) << "[#call] Precompiled call error [errorMsg]: "
-                                    << "[" << e.what() << "]";
+                                    << "[" << boost::diagnostic_information(e) << "]";
 
         throw dev::eth::PrecompiledError();
     }

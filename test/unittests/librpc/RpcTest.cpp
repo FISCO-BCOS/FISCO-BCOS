@@ -44,7 +44,7 @@ public:
     {
         m_service = std::make_shared<FakesService>();
         std::string configurationPath =
-            getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
+            getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
         m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
         m_ledgerManager->initSingleLedger<FakeLedger>(groupId, "", configurationPath);
 
@@ -60,12 +60,19 @@ public:
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
-    std::shared_ptr<Host> m_host;
+    std::shared_ptr<dev::network::Host> m_host;
     dev::GROUP_ID groupId = 1;
     dev::GROUP_ID invalidGroup = 2;
 };
 
 BOOST_FIXTURE_TEST_SUITE(RpcTest, RpcTestFixure)
+
+BOOST_AUTO_TEST_CASE(testSystemConfig)
+{
+    std::string value = rpc->getSystemConfigByKey(groupId, "tx_gas_limit");
+    BOOST_CHECK(value == "300000000");
+    BOOST_CHECK_THROW(rpc->getSystemConfigByKey(invalidGroup, "tx_gas_limit"), JsonRpcException);
+}
 
 BOOST_AUTO_TEST_CASE(testConsensusPart)
 {
@@ -326,8 +333,8 @@ BOOST_AUTO_TEST_CASE(testGetCode)
 BOOST_AUTO_TEST_CASE(testGetTotalTransactionCount)
 {
     Json::Value response = rpc->getTotalTransactionCount(groupId);
-    BOOST_CHECK(response["count"].asString() == "0x0");
-    BOOST_CHECK(response["number"].asString() == "0x0");
+    BOOST_CHECK(response["txSum"].asString() == "0x0");
+    BOOST_CHECK(response["blockNumber"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getTotalTransactionCount(invalidGroup), JsonRpcException);
 }

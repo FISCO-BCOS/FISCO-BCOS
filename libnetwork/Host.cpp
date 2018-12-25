@@ -57,17 +57,9 @@
 
 using namespace std;
 using namespace dev;
-using namespace dev::p2p;
+using namespace dev::network;
 using namespace dev::eth;
 using namespace dev::crypto;
-namespace dev
-{
-namespace p2p
-{
-Host::~Host()
-{
-    stop();
-}
 
 /**
  * @brief: accept connection requests, maily include procedures:
@@ -191,8 +183,17 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                     /// remove 04
                     nodeIDOut->erase(0, 2);
                 }
-                HOST_LOG(DEBUG) << "Get endpoint publickey:" << *nodeIDOut;
             }
+
+            /// check nodeID in crl, only filter by nodeID.
+            const std::vector<std::string>& crl = host->crl();
+            std::string nodeID = boost::to_upper_copy(*nodeIDOut);
+            if (find(crl.begin(), crl.end(), nodeID) != crl.end())
+            {
+                HOST_LOG(INFO) << "NodeID in certificate rejected list.";
+                return false;
+            }
+
             return preverified;
         }
         catch (std::exception& e)
@@ -281,6 +282,7 @@ void Host::start()
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
         m_hostThread = std::make_shared<std::thread>([&] {
+            dev::pthread_setThreadName("io_service");
             while (haveNetwork())
             {
                 try
@@ -318,11 +320,41 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     }
     HOST_LOG(INFO) << "Attempting connection to node "
                    << "@" << _nodeIPEndpoint.name();
-    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
-    // socket.reset(socket);
-    socket->sslref().set_verify_mode(ba::ssl::verify_peer);
+    {
+        Guard l(x_pendingConns);
+        if (m_pendingConns.count(_nodeIPEndpoint.name()))
+        {
+            LOG(DEBUG) << "[#asyncConnect] " << _nodeIPEndpoint.name() << " is in the pending list";
+            return;
+        }
+    }
 
-    /// connect to the server
+    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
+
+    /// if async connect timeout, close the socket directly
+    auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
+        *(m_asioInterface->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
+    connect_timer->async_wait([=](const boost::system::error_code& error) {
+        /// return when cancel has been called
+        if (error == boost::asio::error::operation_aborted)
+        {
+            HOST_LOG(DEBUG) << "[#asyncConnect] asyncHandshake handler revoke this operation";
+            return;
+        }
+        /// connection timer error
+        if (error && error != boost::asio::error::operation_aborted)
+        {
+            HOST_LOG(ERROR) << "[#asyncConnect] connect timer failed [ECODE/EMSG]: "
+                            << error.value() << "/" << error.message();
+        }
+        if (socket->isConnected())
+        {
+            LOG(WARNING) << "[#asyncConnect] timeout, erase " << _nodeIPEndpoint.name();
+            erasePendingConns(_nodeIPEndpoint);
+            socket->close();
+        }
+    });
+    /// callback async connect
     m_asioInterface->asyncConnect(
         socket, _nodeIPEndpoint, [=](boost::system::error_code const& ec) {
             if (ec)
@@ -336,11 +368,11 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                     callback(NetworkException(ConnectError, "Connect failed"), NodeID(),
                         std::shared_ptr<SessionFace>());
                 });
-
                 return;
             }
             else
             {
+                insertPendingConns(_nodeIPEndpoint);
                 m_tcpClient = socket->remote_endpoint();
                 /// get the public key of the server during handshake
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
@@ -348,7 +380,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                 /// call handshakeClient after handshake succeed
                 m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
                     boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
-                        socket, endpointPublicKey, callback, _nodeIPEndpoint));
+                        socket, endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
             }
         });
 }
@@ -363,15 +395,19 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
     std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
-    NodeIPEndpoint _nodeIPEndpoint)
+    NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr)
 {
+    timerPtr->cancel();
+    erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
         HOST_LOG(WARNING) << "[#handshakeClient] Handshake failed: [eid/emsg/endpoint]: "
                           << error.value() << "/" << error.message() << "/"
                           << _nodeIPEndpoint.name();
-        socket->close();
-
+        if (socket->isConnected())
+        {
+            socket->close();
+        }
         return;
     }
 
@@ -386,24 +422,12 @@ void Host::handshakeClient(const boost::system::error_code& error,
 /// stop the network and worker thread
 void Host::stop()
 {
-    // called to force io_service to kill any remaining tasks it might have -
-    // such tasks may involve socket reads from Capabilities that maintain references
-    // to resources we're about to free.
-    {
-        // Although m_run is set by stop() or start(), it effects m_runTimer so x_runTimer is
-        // used instead of a mutex for m_run.
-        Guard l(x_runTimer);
-        // ignore if already stopped/stopping
-        if (!m_run)
-            return;
-        // signal run() to prepare for shutdown and reset m_timer
-        m_run = false;
-
-        m_asioInterface->stop();
-
-        m_hostThread->join();
-    }
+    // ignore if already stopped/stopping
+    if (!m_run)
+        return;
+    // signal run() to prepare for shutdown and reset m_timer
+    m_run = false;
+    m_asioInterface->stop();
+    m_hostThread->join();
+    m_threadPool->stop();
 }
-
-}  // namespace p2p
-}  // namespace dev

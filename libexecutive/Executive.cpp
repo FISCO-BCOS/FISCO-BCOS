@@ -37,7 +37,7 @@ using namespace dev::storage;
 
 u256 Executive::gasUsed() const
 {
-    return m_t.gas() - m_gas;
+    return m_envInfo.precompiledEngine()->txGasLimit() - m_gas;
 }
 
 void Executive::accrueSubState(SubState& _parentContext)
@@ -105,13 +105,16 @@ bool Executive::execute()
                << m_t.gasPrice() << ")";
     // m_s.subBalance(m_t.sender(), m_gasCost);
 
-    assert(m_t.gas() >= (u256)m_baseGasRequired);
+    uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
+    LOG(TRACE) << "Practical limitation of tx gas: " << txGasLimit;
+
+    assert(txGasLimit >= (u256)m_baseGasRequired);
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),
-            m_t.gas() - (u256)m_baseGasRequired, &m_t.data(), m_t.sender());
+            txGasLimit - (u256)m_baseGasRequired, &m_t.data(), m_t.sender());
     else
         return call(m_t.receiveAddress(), m_t.sender(), m_t.value(), m_t.gasPrice(),
-            bytesConstRef(&m_t.data()), m_t.gas() - (u256)m_baseGasRequired);
+            bytesConstRef(&m_t.data()), txGasLimit - (u256)m_baseGasRequired);
 }
 
 bool Executive::call(Address const& _receiveAddress, Address const& _senderAddress,
@@ -136,8 +139,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     m_savepoint = m_s->savepoint();
-    m_memoryTableFactorySavePoint =
-        m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
+    m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
     if (m_envInfo.precompiledEngine() &&
         m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
@@ -159,7 +161,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
         size_t outputSize = result.size();
         m_output = owning_bytes_ref{std::move(result), 0, outputSize};
-        LOG(DEBUG) << "Precompiled result: " << result;
+        LOG(DEBUG) << "Precompiled result: " << toHex(m_output.takeBytes());
     }
     else
     {
@@ -220,8 +222,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     m_s->incNonce(_sender);
 
     m_savepoint = m_s->savepoint();
-    m_memoryTableFactorySavePoint =
-        m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
+    m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
 
     m_isCreation = true;
 
@@ -404,5 +405,5 @@ void Executive::revert()
     m_newAddress = {};
     m_s->rollback(m_savepoint);
     auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
-    memoryTableFactory->rollback(m_savepoint);
+    memoryTableFactory->rollback(m_tableFactorySavepoint);
 }

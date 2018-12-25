@@ -19,6 +19,7 @@ coverage:
     patch:
       default:
         target: 10
+        enabled: no
     changes:
       default:
         enabled: no

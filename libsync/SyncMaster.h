@@ -88,23 +88,18 @@ public:
     virtual std::string const syncInfo() const override;
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
-    // virtual h256 latestBlockSent() override;
-
-    /// for rpc && sdk: broad cast transaction to all nodes
-    // virtual void broadCastTransactions() override;
-    /// for p2p: broad cast transaction to specified nodes
-    // virtual void sendTransactions(NodeList const& _nodes) override;
-
-    /// abort sync and reset all status of blockSyncs
-    // virtual void reset() override;
-    // virtual bool forceSync() override;
-
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
     {
         m_protocolId = _protocolId;
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+    };
+
+    virtual void registerConsensusVerifyHandler(
+        std::function<bool(dev::eth::Block const&)> _handler) override
+    {
+        fp_isConsensusOk = _handler;
     };
 
     void noteNewTransactions() { m_newTransactions = true; }
@@ -182,6 +177,9 @@ private:
     // settings
     dev::eth::Handler<> m_tqReady;
     dev::eth::Handler<> m_blockSubmitted;
+
+    // verify handler to check downloading block
+    std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
 
 public:
     void maintainTransactions();

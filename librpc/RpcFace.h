@@ -31,6 +31,10 @@ class RpcFace : public ServerInterface<RpcFace>
 public:
     RpcFace()
     {
+        this->bindAndAddMethod(jsonrpc::Procedure("getSystemConfigByKey",
+                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
+                                   jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::getSystemConfigByKeyI);
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockNumber", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getBlockNumberI);
@@ -119,6 +123,10 @@ public:
             &dev::rpc::RpcFace::getTotalTransactionCountI);
     }
 
+    inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getSystemConfigByKey(request[0u].asInt(), request[1u].asString());
+    }
     inline virtual void getBlockNumberI(const Json::Value& request, Json::Value& response)
     {
         response = this->getBlockNumber(request[0u].asInt());
@@ -217,6 +225,10 @@ public:
     {
         response = this->sendRawTransaction(request[0u].asInt(), request[1u].asString());
     }
+
+    // system config part
+    virtual std::string getSystemConfigByKey(int param1, const std::string& param2) = 0;
+
     // consensus part
     virtual std::string getBlockNumber(int param1) = 0;
     virtual std::string getPbftView(int param1) = 0;
