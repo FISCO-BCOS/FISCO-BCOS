@@ -81,6 +81,8 @@ struct TimeManager
             m_execTimePerTx = (m_execTimePerTx + execTime_per_tx) / 2;
             if (m_execTimePerTx >= (float)m_intervalBlockTime)
                 m_execTimePerTx = (float)m_intervalBlockTime;
+            /// for prediction
+            LOG(DEBUG) << "[#CONSENSUS] [txNum/execTimePerTx]: " << txNum << "/" << m_execTimePerTx;
         }
     }
 

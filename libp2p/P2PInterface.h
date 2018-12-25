@@ -71,7 +71,6 @@ public:
 
     virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
     virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
-    virtual void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) = 0;
 
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
 

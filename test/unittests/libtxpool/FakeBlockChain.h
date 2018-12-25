@@ -184,9 +184,7 @@ public:
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
-    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override {}
-    dev::h512s minerList() override { return dev::h512s(); };
-    dev::h512s observerList() override { return dev::h512s(); };
+    void setGroupMark(std::string const& groupMark) override {}
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;
