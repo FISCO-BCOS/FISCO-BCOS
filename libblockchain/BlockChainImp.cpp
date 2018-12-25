@@ -364,16 +364,17 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
     blockNumber = (-1 == num) ? number() : num;
 
     UpgradableGuard l(m_systemConfigMutex);
-    if (m_systemConfigRecord.find(key) != m_systemConfigRecord.end() &&
-        m_systemConfigRecord[key].curBlockNum == blockNumber)
+    auto it = m_systemConfigRecord.find(key);
+    if (it != m_systemConfigRecord.end() && it->second.curBlockNum == blockNumber)
     {
         // get value from cache
         BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in cache:" << key << "/"
-                              << m_systemConfigRecord[key].value;
-        return m_systemConfigRecord[key].value;
+                              << it->second.value;
+        return it->second.value;
     }
 
     std::string ret;
+    // cannot find the system config key or need to update the value with different block height
     // get value from db
     try
     {
@@ -407,8 +408,16 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
     // update cache
     {
         UpgradeGuard ul(l);
-        m_systemConfigRecord[key].value = ret;
-        m_systemConfigRecord[key].curBlockNum = blockNumber;
+        SystemConfigRecord systemConfigRecord(ret, blockNumber);
+        if (it != m_systemConfigRecord.end())
+        {
+            it->second = systemConfigRecord;
+        }
+        else
+        {
+            m_systemConfigRecord.insert(
+                std::pair<std::string, SystemConfigRecord>(key, systemConfigRecord));
+        }
     }
 
     BLOCKCHAIN_LOG(TRACE) << "[#getSystemConfigByKey] key/value in db:" << key << "/" << ret;

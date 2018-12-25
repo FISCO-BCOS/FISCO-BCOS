@@ -106,6 +106,8 @@ private:
     {
         std::string value;
         int64_t curBlockNum = -1;  // at which block gets the configuration value
+        SystemConfigRecord(std::string const& _value, int64_t _num)
+          : value(_value), curBlockNum(_num){};
     };
     std::map<std::string, SystemConfigRecord> m_systemConfigRecord;
     mutable SharedMutex m_systemConfigMutex;

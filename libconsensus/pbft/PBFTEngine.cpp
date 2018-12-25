@@ -486,15 +486,59 @@ void PBFTEngine::checkMinerList(Block const& block)
     }
 }
 
-bool PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
+/// check Block sign
+bool PBFTEngine::checkBlockSign(Block const& block)
+{
+    ReadGuard l(m_minerListMutex);
+    /// check sealer list(node list)
+    if (m_minerList != block.blockHeader().sealerList())
+    {
+        PBFTENGINE_LOG(ERROR)
+            << "[#checkBlockSign] Wrong miners: [myIdx/myNode/Cminers/CblockMiner/hash]:  "
+            << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << m_minerList.size() << "/"
+            << block.blockHeader().sealerList().size() << "/"
+            << block.blockHeader().hash().abridged();
+        return false;
+    }
+    /// check sealer(sealer must be a miner)
+    if (getMinerByIndex(block.blockHeader().sealer().convert_to<size_t>()) == NodeID())
+    {
+        LOG(ERROR) << "[#checkBlockSign] invalid sealer [sealer]: " << block.blockHeader().sealer();
+        return false;
+    }
+    /// check sign num
+    auto sig_list = block.sigList();
+    if (sig_list.size() < minValidNodes())
+    {
+        LOG(ERROR) << "[#checkBlockSign] insufficient sign items [signNum/minValidSign]"
+                   << sig_list.size() << "/" << minValidNodes();
+        return false;
+    }
+    /// check sign
+    for (auto sign : sig_list)
+    {
+        if (sign.first >= m_minerList.size())
+        {
+            LOG(ERROR) << "[#checkBlockSign] invalid idx [idx/minerSize]: " << sign.first << "/"
+                       << m_minerList.size();
+            return false;
+        }
+        if (!dev::verify(m_minerList[sign.first.convert_to<size_t>()], sign.second,
+                block.blockHeader().hash()))
+        {
+            LOG(ERROR) << "[#checkBlockSign] invalid sign [idx/pub/hash]: " << sign.first << "/"
+                       << m_minerList[sign.first.convert_to<size_t>()].abridged() << "/"
+                       << block.blockHeader().hash().abridged();
+            return false;
+        }
+    }  /// end of check sign
+    return true;
+}
+
+void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
     auto start_exec_time = utcTime();
     Block working_block(req.block);
-    std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit", m_consensusBlockNumber);
-    if (working_block.transactions().size() > boost::lexical_cast<uint64_t>(ret))
-    {
-        return false;
-    }
     PBFTENGINE_LOG(TRACE) << "[#execBlock] [myIdx/myNode/number/hash/idx]:  " << nodeIdx() << "/"
                           << m_keyPair.pub().abridged() << "/" << working_block.header().number()
                           << "/" << working_block.header().hash().abridged() << "/" << req.idx;
@@ -503,7 +547,6 @@ bool PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
-    return true;
 }
 
 /// check whether the block is empty
@@ -586,10 +629,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     Sealing workingSealing;
     try
     {
-        if (execBlock(workingSealing, prepareReq, oss) == false)
-        {
-            return;
-        }
+        execBlock(workingSealing, prepareReq, oss);
     }
     catch (std::exception& e)
     {

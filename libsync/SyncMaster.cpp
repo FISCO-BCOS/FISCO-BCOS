@@ -99,6 +99,12 @@ string const SyncMaster::syncInfo() const
 
 void SyncMaster::start()
 {
+    if (!fp_isConsensusOk)
+    {
+        SYNCLOG(ERROR) << "Consensus verify handler is not set" << endl;
+        BOOST_THROW_EXCEPTION(SyncVerifyHandlerNotSet());
+    }
+
     startWorking();
 }
 
@@ -551,13 +557,6 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
                          << _block->header().number() << "/" << currentNumber << "/"
                          << _block->header().parentHash() << "/"
                          << m_blockChain->numberHash(currentNumber) << endl;
-        return false;
-    }
-
-    // Check whether the number of transactions in block exceeds the limit
-    std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit", currentNumber + 1);
-    if (_block->transactions().size() > boost::lexical_cast<uint64_t>(ret))
-    {
         return false;
     }
 
