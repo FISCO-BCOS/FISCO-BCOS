@@ -159,7 +159,7 @@ void Session::onWrite(
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "Error:" << e.what();
+        SESSION_LOG(ERROR) << "Error:" << boost::diagnostic_information(e);
         drop(TCPError);
         return;
     }
@@ -234,7 +234,7 @@ void Session::write()
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "Error:" << e.what();
+        SESSION_LOG(ERROR) << "Error:" << boost::diagnostic_information(e);
         drop(TCPError);
         return;
     }

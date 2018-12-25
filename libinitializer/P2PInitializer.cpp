@@ -72,7 +72,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     INITIALIZER_LOG(ERROR)
                         << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]: "
-                        << it.second.data() << "/" << e.what();
+                        << it.second.data() << "/" << boost::diagnostic_information(e);
                     ERROR_OUTPUT
                         << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]:"
                         << it.second.data() << "/" << boost::diagnostic_information(e) << std::endl;

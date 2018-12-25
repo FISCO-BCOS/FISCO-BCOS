@@ -23,6 +23,7 @@ logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
+bcos_bin_name=fisco-bcos
 
 help() {
     echo $1
@@ -175,7 +176,7 @@ gen_chain_cert() {
     chaindir=$path
     mkdir -p $chaindir
     openssl genrsa -out $chaindir/ca.key 2048
-    openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
+    openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fisco-bcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
     cp cert.cnf $chaindir
 
     if [ $? -eq 0 ]; then
@@ -198,7 +199,7 @@ gen_agency_cert() {
     mkdir -p $agencydir
 
     openssl genrsa -out $agencydir/agency.key 2048
-    openssl req -new -sha256 -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/agency.key -config $chain/cert.cnf -out $agencydir/agency.csr
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key $agencydir/agency.key -config $chain/cert.cnf -out $agencydir/agency.csr
     openssl x509 -req -days 3650 -sha256 -CA $chain/ca.crt -CAkey $chain/ca.key -CAcreateserial\
         -in $agencydir/agency.csr -out $agencydir/agency.crt  -extensions v4_req -extfile $chain/cert.cnf
     
@@ -218,7 +219,7 @@ gen_cert_secp256k1() {
     openssl ecparam -out $certpath/${type}.param -name secp256k1
     openssl genpkey -paramfile $certpath/${type}.param -out $certpath/${type}.key
     openssl pkey -in $certpath/${type}.key -pubout -out $certpath/${type}.pubkey
-    openssl req -new -sha256 -subj "/CN=${name}/O=fiscobcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
     openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $capath/agency.key -CA $capath/agency.crt\
         -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $capath/cert.cnf
     openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
@@ -435,9 +436,9 @@ stateOrProvinceName_default =GuangDong
 localityName = Locality Name (eg, city)
 localityName_default = ShenZhen
 organizationalUnitName = Organizational Unit Name (eg, section)
-organizationalUnitName_default = fiscobcos
-commonName =  Organizational  commonName (eg, fiscobcos)
-commonName_default = fiscobcos
+organizationalUnitName_default = fisco-bcos
+commonName =  Organizational  commonName (eg, fisco-bcos)
+commonName_default = fisco-bcos
 commonName_max = 64
 
 [ v3_req ]
@@ -466,13 +467,13 @@ generate_node_scripts()
     local output=$1
     generate_script_template "$output/start.sh"
     cat << EOF >> "$output/start.sh"
-fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
 nohup setsid \${fisco_bcos} -c config.ini&
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
-fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 kill \${weth_pid}
 EOF
@@ -560,7 +561,8 @@ parse_ip_config()
         ip_array[n]=`echo ${line} | cut -d ' ' -f 1`
         agency_array[n]=`echo ${line} | cut -d ' ' -f 2`
         group_array[n]=`echo ${line} | cut -d ' ' -f 3`
-        if [ -z ${ip_array[n]} -o -z ${agency_array[n]} -o -z ${group_array[n]} ];then
+        if [ -z "${ip_array[$n]}" -o -z "${agency_array[$n]}" -o -z "${group_array[$n]}" ];then
+            LOG_WARN "Please check ${config}, make sure there is no empty line!"
             return -1
         fi
         ((++n))
@@ -585,7 +587,7 @@ else
 fi
 
 if [ -z ${eth_path} ];then
-    eth_path=${output_dir}/fisco-bcos
+    eth_path=${output_dir}/${bcos_bin_name}
     Download=true
 fi
 
