@@ -66,6 +66,7 @@ public:
             messageHandler) override
     {}
     bool actived() const override { return true; }
+    std::shared_ptr<SocketFace> socket() override { return nullptr; }
 
 private:
     NodeIPEndpoint m_endpoint;
