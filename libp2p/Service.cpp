@@ -97,8 +97,6 @@ void Service::heartBeat()
     {
         return;
     }
-
-    SERVICE_LOG(TRACE) << "Service onHeartBeat";
     std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes;
     std::unordered_map<NodeID, P2PSession::Ptr> sessions;
 
@@ -212,7 +210,6 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
     p2pSession->start();
     updateStaticNodes(session->socket(), nodeID);
-    it = m_sessions.find(nodeID);
     if (it != m_sessions.end())
     {
         it->second = p2pSession;
@@ -221,7 +218,6 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
     {
         m_sessions.insert(std::make_pair(nodeID, p2pSession));
     }
-
     SERVICE_LOG(INFO) << "Connection established to: " << nodeID << "@"
                       << session->nodeIPEndpoint().name();
 }
@@ -237,7 +233,10 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
                            << p2pSession->session()->nodeIPEndpoint().name();
 
         m_sessions.erase(it);
-
+        if (e.errorCode() == dev::network::P2PExceptionType::DuplicateSession)
+            return;
+        SERVICE_LOG(WARNING) << "[#onDisconnect] [errCode/errMsg]" << e.errorCode() << "/"
+                             << e.what();
         RecursiveGuard l(x_nodes);
         for (auto it : m_staticNodes)
         {
@@ -261,16 +260,13 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
                                << session->nodeIPEndpoint().name()
                                << " error, disconnect: " << e.errorCode() << ", " << e.what();
 
-            if (e.errorCode() != dev::network::P2PExceptionType::DuplicateSession)
-            {
-                p2pSession->stop(dev::network::UserReason);
-                onDisconnect(e, p2pSession);
-            }
 
+            p2pSession->stop(dev::network::UserReason);
+            onDisconnect(e, p2pSession);
             return;
         }
 
-        SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
+        /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
 
@@ -283,8 +279,6 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
 
         if (p2pMessage->isRequestPacket())
         {
-            SERVICE_LOG(TRACE) << "Request packet: " << p2pMessage->protocolID() << "-"
-                               << p2pMessage->packetType();
             CallbackFuncWithSession callback;
             {
                 RecursiveGuard lock(x_protocolID2Handler);
@@ -374,7 +368,6 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
 void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, dev::network::Options options)
 {
-    P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] nodeID: " << nodeID.hex();
     try
     {
         RecursiveGuard l(x_sessions);
@@ -387,10 +380,6 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             {
                 message->setSeq(m_p2pMessageFactory->newSeq());
             }
-
-            P2PMSG_LOG(DEBUG) << "[#asyncSendMessageByNodeID] seq: " << message->seq()
-                              << " nodeID: " << nodeID.hex();
-
             auto session = it->second;
             session->session()->asyncSendMessage(message, options,
                 [session, callback](
@@ -434,7 +423,6 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 
 P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr message)
 {
-    SERVICE_LOG(TRACE) << "Call Service::sendMessageByTopic";
     try
     {
         struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
@@ -464,7 +452,6 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
 
         callback->mutex.lock();
         callback->mutex.unlock();
-        SERVICE_LOG(TRACE) << "Service::sendMessageByNodeID mutex unlock.";
 
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
@@ -488,7 +475,6 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
 void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, dev::network::Options options)
 {
-    SERVICE_LOG(TRACE) << "Call Service::asyncSendMessageByTopic, topic=" << topic;
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     if (nodeIDsToSend.size() == 0)
     {
@@ -693,20 +679,14 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
 
     std::ostringstream oss;
     oss << "[#sessionInfosByProtocolID] Finding nodeID in GroupID " << int(ret.first) << ":";
-    RecursiveGuard l(x_nodeList);
     auto it = m_groupID2NodeList.find(int(ret.first));
-    if (it == m_groupID2NodeList.end())
+    if (it != m_groupID2NodeList.end())
     {
-        return infos;
-    }
-
-    try
-    {
-        RecursiveGuard l(x_sessions);
-        auto s = m_sessions;
-        for (auto const& i : s)
+        try
         {
-            if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
+            RecursiveGuard l(x_sessions);
+            auto s = m_sessions;
+            for (auto const& i : s)
             {
                 if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
                 {
@@ -718,10 +698,10 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
                 }
             }
         }
-    }
-    catch (std::exception& e)
-    {
-        SERVICE_LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
+        catch (std::exception& e)
+        {
+            SERVICE_LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
+        }
     }
 
     oss << "list size: " << infos.size();

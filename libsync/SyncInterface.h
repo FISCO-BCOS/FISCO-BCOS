@@ -49,20 +49,14 @@ public:
     virtual void noteSealingBlockNumber(int64_t _number) = 0;
 
     virtual bool isSyncing() const = 0;
-    /*    virtual h256 latestBlockSent() = 0;
-
-        /// for rpc && sdk: broad cast transaction to all nodes
-        virtual void broadCastTransactions() = 0;
-        /// for p2p: broad cast transaction to specified nodes
-        virtual void sendTransactions(NodeList const& _nodes) = 0;
-
-        /// abort sync and reset all status of blockSyncs
-        virtual void reset() = 0;
-        virtual bool forceSync() = 0;
-    */
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const = 0;
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) = 0;
+
+    // verify handler to check downloading block
+    virtual void registerConsensusVerifyHandler(
+        std::function<bool(dev::eth::Block const&)> _handler)
+    {}
 };
 
 }  // namespace sync

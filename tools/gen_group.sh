@@ -58,6 +58,13 @@ type=LevelDB
 ;state type, now support mpt/storage
 type=${state_type}
 
+
+
+;genesis configuration
+[genesis]
+;used to mark the genesis block of this group
+;mark=${group_id}
+
 ;txpool limit
 [txPool]
 limit=1000
@@ -132,11 +139,16 @@ function generateGroupConfig()
             if [ "${groupConfigPath}" == "" ];then
                 groupConfigPath=conf/
                 mkdir -p ${groupConfigPath}
-                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.genesis"
-                groupConfigPath=${groupConfigPath}"/group."${groupId}".genesis"
+                updateConfig "${prefix}_${minerNode}/config.ini" "    group_config.${groupId}=conf/group.${groupId}.ini"
+                groupConfigPath=${groupConfigPath}"/group."${groupId}".ini"
             fi
             groupConfigPath=${prefix}_${minerNode}/${groupConfigPath}
-            generate_group_ini "${nodeidList}" "${groupConfigPath}"
+            if [ ! -f "${groupConfigPath}" ];then
+                generate_group_ini "${nodeidList}" "${groupConfigPath}"
+            else
+                LOG_ERROR "${groupConfigPath} already exists, delete it from all nodes at first!"
+                exit 1 
+            fi
         done
     done
 }
@@ -150,6 +162,22 @@ function checkParam()
     if [ "${ip_miner}" == "" ];then
         LOG_ERROR "Must set Miner list"
         help
+    fi
+}
+
+function checkExists()
+{
+
+    local groupId="${1}"
+    local node_dir="${2}"
+    local ret=0
+    for configFile in $(ls $node_dir/*/node_*/conf/group.${group_id}.ini 2>err.log)
+    do
+        LOG_ERROR "${configFile} already exists, please delete it at first"
+        ret=1
+    done
+    if [ ${ret} -eq 1 ];then
+        exit 1
     fi
 }
 
@@ -167,6 +195,7 @@ while getopts "g:d:l:sh" option;do
 done
 prefix=${node_dir}"/node_${ip}"
 checkParam
+checkExists "${group_id}" "${node_dir}"
 generateGroupConfig "${group_id}" "${node_dir}" "${ip_miner}"
 LOG_INFO "generate config for group."${group_id}" succ!"
 }

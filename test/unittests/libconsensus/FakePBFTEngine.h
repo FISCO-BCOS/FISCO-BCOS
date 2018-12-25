@@ -53,7 +53,7 @@ public:
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _minerList)
     {}
-    void updateConsensusNodeList() override {}
+
     KeyPair const& keyPair() const { return m_keyPair; }
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
@@ -97,16 +97,17 @@ public:
         PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }
 
-    P2PMessage::Ptr transDataToMessage(
-        bytesConstRef data, PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
+    P2PMessage::Ptr transDataToMessage(bytesConstRef data, PACKET_TYPE const& packetType,
+        PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
-        return PBFTEngine::transDataToMessage(data, packetType, protocolId);
+        return PBFTEngine::transDataToMessage(data, packetType, protocolId, ttl);
     }
 
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>())
+        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+        unsigned const& ttl = 0)
     {
-        return PBFTEngine::broadcastMsg(packetType, key, data, filter);
+        return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl);
     }
 
     bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)
@@ -187,10 +188,10 @@ public:
             std::make_shared<FakeBlockverifier>(),
         std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5))
     {
-        m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
-            txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_minerList);
         /// fake minerList
         FakeMinerList(minerSize);
+        m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
+            txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_minerList);
         resetSessionInfo();
     }
 
@@ -215,7 +216,6 @@ public:
             KeyPair key_pair = KeyPair::create();
             m_minerList.push_back(key_pair.pub());
             m_secrets.push_back(key_pair.secret());
-            m_consensus->appendMiner(key_pair.pub());
         }
     }
     std::shared_ptr<T> consensus() { return m_consensus; }

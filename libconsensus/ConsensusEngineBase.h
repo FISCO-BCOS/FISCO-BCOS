@@ -215,9 +215,6 @@ protected:
     dev::blockverifier::ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
     virtual void checkBlockValid(dev::eth::Block const& block);
 
-    virtual void updateConsensusNodeList();
-    virtual void updateNodeListInP2P();
-
 private:
     bool blockExists(h256 const& blockHash)
     {
@@ -259,9 +256,6 @@ protected:
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;
     bool m_startConsensusEngine = false;
-
-    /// node list record when P2P last update
-    std::string m_lastNodeList;
 };
 }  // namespace consensus
 }  // namespace dev

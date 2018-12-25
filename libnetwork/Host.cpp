@@ -44,7 +44,6 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Rsa.h>
 #include <libethcore/CommonJS.h>
-#include <boost/algorithm/algorithm.hpp>
 #include <boost/algorithm/string.hpp>
 #include <chrono>
 #include <functional>
@@ -186,16 +185,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 }
                 HOST_LOG(DEBUG) << "Get endpoint publickey:" << *nodeIDOut;
             }
-
-            /// check nodeID in crl, only filter by nodeID.
-            const std::vector<std::string>& crl = host->crl();
-            std::string nodeID = boost::to_upper_copy(*nodeIDOut);
-            if (find(crl.begin(), crl.end(), nodeID) != crl.end())
-            {
-                HOST_LOG(INFO) << "NodeID in certificate rejected list.";
-                return false;
-            }
-
             return preverified;
         }
         catch (std::exception& e)
@@ -322,11 +311,41 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     }
     HOST_LOG(INFO) << "Attempting connection to node "
                    << "@" << _nodeIPEndpoint.name();
-    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
-    // socket.reset(socket);
-    socket->sslref().set_verify_mode(ba::ssl::verify_peer);
+    {
+        Guard l(x_pendingConns);
+        if (m_pendingConns.count(_nodeIPEndpoint.name()))
+        {
+            LOG(DEBUG) << "[#asyncConnect] " << _nodeIPEndpoint.name() << " is in the pending list";
+            return;
+        }
+    }
 
-    /// connect to the server
+    std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
+
+    /// if async connect timeout, close the socket directly
+    auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
+        *(m_asioInterface->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
+    connect_timer->async_wait([=](const boost::system::error_code& error) {
+        /// return when cancel has been called
+        if (error == boost::asio::error::operation_aborted)
+        {
+            HOST_LOG(DEBUG) << "[#asyncConnect] asyncHandshake handler revoke this operation";
+            return;
+        }
+        /// connection timer error
+        if (error && error != boost::asio::error::operation_aborted)
+        {
+            HOST_LOG(ERROR) << "[#asyncConnect] connect timer failed [ECODE/EMSG]: "
+                            << error.value() << "/" << error.message();
+        }
+        if (socket->isConnected())
+        {
+            LOG(WARNING) << "[#asyncConnect] timeout, erase " << _nodeIPEndpoint.name();
+            erasePendingConns(_nodeIPEndpoint);
+            socket->close();
+        }
+    });
+    /// callback async connect
     m_asioInterface->asyncConnect(
         socket, _nodeIPEndpoint, [=](boost::system::error_code const& ec) {
             if (ec)
@@ -340,11 +359,11 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                     callback(NetworkException(ConnectError, "Connect failed"), NodeID(),
                         std::shared_ptr<SessionFace>());
                 });
-
                 return;
             }
             else
             {
+                insertPendingConns(_nodeIPEndpoint);
                 m_tcpClient = socket->remote_endpoint();
                 /// get the public key of the server during handshake
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
@@ -352,7 +371,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                 /// call handshakeClient after handshake succeed
                 m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
                     boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
-                        socket, endpointPublicKey, callback, _nodeIPEndpoint));
+                        socket, endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
             }
         });
 }
@@ -367,15 +386,19 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
     std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
-    NodeIPEndpoint _nodeIPEndpoint)
+    NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr)
 {
+    timerPtr->cancel();
+    erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
         HOST_LOG(WARNING) << "[#handshakeClient] Handshake failed: [eid/emsg/endpoint]: "
                           << error.value() << "/" << error.message() << "/"
                           << _nodeIPEndpoint.name();
-        socket->close();
-
+        if (socket->isConnected())
+        {
+            socket->close();
+        }
         return;
     }
 

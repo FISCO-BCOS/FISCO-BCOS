@@ -134,10 +134,7 @@ public:
         return CommitResult::OK;
     }
 
-    void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) override {}
-
-    dev::h512s minerList() override { return dev::h512s(); };
-    dev::h512s observerList() override { return dev::h512s(); };
+    void setGroupMark(std::string const& groupMark) override {}
 
     dev::bytes getCode(dev::Address _address) override { return bytes(); }
 
