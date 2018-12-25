@@ -487,15 +487,15 @@ void PBFTEngine::checkMinerList(Block const& block)
 }
 
 /// check Block sign
-bool PBFTEngine::checkBlockSign(Block const& block)
+bool PBFTEngine::checkBlock(Block const& block)
 {
     ReadGuard l(m_minerListMutex);
     /// check sealer list(node list)
     if (m_minerList != block.blockHeader().sealerList())
     {
         PBFTENGINE_LOG(ERROR)
-            << "[#checkBlockSign] Wrong miners: [myIdx/myNode/Cminers/CblockMiner/hash]:  "
-            << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << m_minerList.size() << "/"
+            << "[#checkBlock] Wrong miners: [myIdx/myNode/Cminers/CblockMiner/hash]:  " << nodeIdx()
+            << "/" << m_keyPair.pub().abridged() << "/" << m_minerList.size() << "/"
             << block.blockHeader().sealerList().size() << "/"
             << block.blockHeader().hash().abridged();
         return false;
@@ -503,14 +503,14 @@ bool PBFTEngine::checkBlockSign(Block const& block)
     /// check sealer(sealer must be a miner)
     if (getMinerByIndex(block.blockHeader().sealer().convert_to<size_t>()) == NodeID())
     {
-        LOG(ERROR) << "[#checkBlockSign] invalid sealer [sealer]: " << block.blockHeader().sealer();
+        LOG(ERROR) << "[#checkBlock] invalid sealer [sealer]: " << block.blockHeader().sealer();
         return false;
     }
     /// check sign num
     auto sig_list = block.sigList();
     if (sig_list.size() < minValidNodes())
     {
-        LOG(ERROR) << "[#checkBlockSign] insufficient sign items [signNum/minValidSign]"
+        LOG(ERROR) << "[#checkBlock] insufficient sign items [signNum/minValidSign]"
                    << sig_list.size() << "/" << minValidNodes();
         return false;
     }
@@ -519,19 +519,27 @@ bool PBFTEngine::checkBlockSign(Block const& block)
     {
         if (sign.first >= m_minerList.size())
         {
-            LOG(ERROR) << "[#checkBlockSign] invalid idx [idx/minerSize]: " << sign.first << "/"
+            LOG(ERROR) << "[#checkBlock] invalid idx [idx/minerSize]: " << sign.first << "/"
                        << m_minerList.size();
             return false;
         }
         if (!dev::verify(m_minerList[sign.first.convert_to<size_t>()], sign.second,
                 block.blockHeader().hash()))
         {
-            LOG(ERROR) << "[#checkBlockSign] invalid sign [idx/pub/hash]: " << sign.first << "/"
+            LOG(ERROR) << "[#checkBlock] invalid sign [idx/pub/hash]: " << sign.first << "/"
                        << m_minerList[sign.first.convert_to<size_t>()].abridged() << "/"
                        << block.blockHeader().hash().abridged();
             return false;
         }
     }  /// end of check sign
+
+    /// Check whether the number of transactions in block exceeds the limit
+    std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit", currentNumber + 1);
+    if (_block->transactions().size() > boost::lexical_cast<uint64_t>(ret))
+    {
+        return false;
+    }
+
     return true;
 }
 
