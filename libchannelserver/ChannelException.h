@@ -36,7 +36,7 @@ public:
       : m_errorCode(_errorCode), m_msg(_msg){};
 
     virtual int errorCode() { return m_errorCode; };
-    virtual const char* what() const _GLIBCXX_USE_NOEXCEPT override { return m_msg.c_str(); };
+    virtual const char* what() const noexcept override { return m_msg.c_str(); };
 
     bool operator!() const { return m_errorCode == 0; }
 

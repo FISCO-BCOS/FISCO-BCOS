@@ -85,6 +85,7 @@ add_subdirectory(libsync)
 add_subdirectory(libledger)
 add_subdirectory(librpc)
 add_subdirectory(libinitializer)
+add_subdirectory(libsecurity)
 
 
 if (TESTS)

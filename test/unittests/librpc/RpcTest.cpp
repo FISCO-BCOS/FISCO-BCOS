@@ -60,7 +60,7 @@ public:
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
-    std::shared_ptr<Host> m_host;
+    std::shared_ptr<dev::network::Host> m_host;
     dev::GROUP_ID groupId = 1;
     dev::GROUP_ID invalidGroup = 2;
 };
@@ -333,8 +333,8 @@ BOOST_AUTO_TEST_CASE(testGetCode)
 BOOST_AUTO_TEST_CASE(testGetTotalTransactionCount)
 {
     Json::Value response = rpc->getTotalTransactionCount(groupId);
-    BOOST_CHECK(response["count"].asString() == "0x0");
-    BOOST_CHECK(response["number"].asString() == "0x0");
+    BOOST_CHECK(response["txSum"].asString() == "0x0");
+    BOOST_CHECK(response["blockNumber"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getTotalTransactionCount(invalidGroup), JsonRpcException);
 }

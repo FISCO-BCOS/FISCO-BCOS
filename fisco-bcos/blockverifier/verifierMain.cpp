@@ -25,6 +25,7 @@
 #include <libblockverifier/BlockVerifier.h>
 #include <libblockverifier/Common.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
+#include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
@@ -44,14 +45,14 @@ int main(int argc, char* argv[])
     leveldb::Options option;
     option.create_if_missing = true;
     option.max_open_files = 100;
-    leveldb::DB* dbPtr = NULL;
-    leveldb::Status s = leveldb::DB::Open(option, storagePath, &dbPtr);
+    dev::db::BasicLevelDB* dbPtr = NULL;
+    leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
     if (!s.ok())
     {
         LOG(ERROR) << "Open storage leveldb error: " << s.ToString();
     }
 
-    auto storageDB = std::shared_ptr<leveldb::DB>(dbPtr);
+    auto storageDB = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
     auto storage = std::make_shared<dev::storage::LevelDBStorage>();
     storage->setDB(storageDB);
 

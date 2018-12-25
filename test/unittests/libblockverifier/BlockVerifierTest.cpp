@@ -59,14 +59,14 @@ struct BlockVerifierFixture
         option.create_if_missing = true;
         option.max_open_files = 100;
 
-        leveldb::DB* dbPtr = NULL;
-        leveldb::Status s = leveldb::DB::Open(option, storagePath, &dbPtr);
+        dev::db::BasicLevelDB* dbPtr = NULL;
+        leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
         if (!s.ok())
         {
             LOG(ERROR) << "Open storage leveldb error: " << s.ToString();
         }
 
-        m_db = std::shared_ptr<leveldb::DB>(dbPtr);
+        m_db = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
 
         m_levelDBStorage = std::make_shared<LevelDBStorage>();
         m_levelDBStorage->setDB(m_db);
@@ -103,7 +103,7 @@ struct BlockVerifierFixture
     std::shared_ptr<ExecutiveContextFactory> m_executiveContextFactory;
     std::shared_ptr<FakeBlock> m_fakeBlock;
     dev::storage::LevelDBStorage::Ptr m_levelDBStorage;
-    std::shared_ptr<leveldb::DB> m_db;
+    std::shared_ptr<dev::db::BasicLevelDB> m_db;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 };
