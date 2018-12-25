@@ -327,8 +327,8 @@ gen_chain_cert_gm() {
     mkdir -p $chaindir
 
     generate_gmsm2_param "gmsm2.param"
-	$OPENSSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/ca.key
-	$OPENSSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/ca.key -extensions v3_ca -out $chaindir/ca.crt
+	$OPENSSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
+	$OPENSSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
     ls $chaindir
 
@@ -348,20 +348,20 @@ gen_agency_cert_gm() {
     name=$(getname "$agencypath")
 
     dir_must_exists "$chain"
-    file_must_exists "$chain/ca.key"
+    file_must_exists "$chain/gmca.key"
     check_name agency "$name"
     agencydir=$agencypath
     dir_must_not_exists "$agencydir"
     mkdir -p $agencydir
 
-    $OPENSSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/agency.key
-    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/agency.key -config $chain/gmcert.cnf -out $agencydir/agency.csr
-    $OPENSSL_CMD x509 -req -CA $chain/ca.crt -CAkey $chain/ca.key -days 3650 -CAcreateserial -in $agencydir/agency.csr -out $agencydir/agency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
+    $OPENSSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
+    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
+    $OPENSSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
 
-    cp $chain/ca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
-    cp $chain/ca.crt $agencydir/ca-agency.crt
-    more $agencydir/agency.crt | cat >>$agencydir/ca-agency.crt
-    rm -f $agencydir/agency.csr
+    cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
+    cp $chain/gmca.crt $agencydir/ca-agency.crt
+    more $agencydir/gmagency.crt | cat >>$agencydir/ca-agency.crt
+    rm -f $agencydir/gmagency.csr
 
     echo "build $name agency cert successful!"
 }
@@ -373,11 +373,11 @@ gen_node_cert_with_extensions_gm() {
     type="$4"
     extensions="$5"
 
-    $OPENSSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/${type}.key
-    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/${type}.key -config $capath/gmcert.cnf -out $certpath/${type}.csr
-    $OPENSSL_CMD x509 -req -CA $capath/agency.crt -CAkey $capath/agency.key -days 3650 -CAcreateserial -in $certpath/${type}.csr -out $certpath/${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
+    $OPENSSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
+    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
+    $OPENSSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
-    rm -f $certpath/${type}.csr
+    rm -f $certpath/gm${type}.csr
 }
 
 gen_node_cert_gm() {
@@ -391,7 +391,7 @@ gen_node_cert_gm() {
     ndpath="$3"
     node=$(getname "$ndpath")
     dir_must_exists "$agpath"
-    file_must_exists "$agpath/agency.key"
+    file_must_exists "$agpath/gmagency.key"
     check_name agency "$agency"
 
     mkdir -p $ndpath
@@ -402,23 +402,23 @@ gen_node_cert_gm() {
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req
     #nodeid is pubkey
-    $OPENSSL_CMD ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/node.nodeid
+    $OPENSSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
 
     #serial
     if [ "" != "$($OPENSSL_CMD version | grep 1.0.2)" ];
     then
-        $OPENSSL_CMD x509  -text -in $ndpath/node.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/node.serial
+        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
     else
-        $OPENSSL_CMD x509  -text -in $ndpath/node.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/node.serial
+        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
     fi
 
 
-    cp $agpath/ca.crt $agpath/agency.crt $ndpath
+    cp $agpath/gmca.crt $agpath/gmagency.crt $ndpath
 
     cd $ndpath
-    nodeid=$(head node.nodeid)
-    serial=$(head node.serial)
-    cat >node.json <<EOF
+    nodeid=$(head gmnode.nodeid)
+    serial=$(head gmnode.serial)
+    cat >gmnode.json <<EOF
 {
  "id":"$nodeid",
  "name":"$node",
@@ -426,7 +426,7 @@ gen_node_cert_gm() {
  "caHash":"$serial"
 }
 EOF
-    cat >node.ca <<EOF
+    cat >gmnode.ca <<EOF
 {
  "serial":"$serial",
  "pubkey":"$nodeid",
@@ -478,6 +478,10 @@ generate_config_ini()
     local index=${2}
     local node_groups=(${3//,/ })
     local group_conf_list=
+    local prefix=""
+    if [ -n "$guomi_mode" ]; then
+        prefix="gm"
+    fi
     if [ "${use_ip_param}" == "false" ];then
         for j in ${node_groups[@]};do
         group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.ini
@@ -516,11 +520,11 @@ generate_config_ini()
     ;directory the certificates located in
     data_path=${conf_path}/
     ;the node private key file
-    key=node.key
+    key=${prefix}node.key
     ;the node certificate file
-    cert=node.crt
+    cert=${prefix}node.crt
     ;the ca certificate file
-    ca_cert=ca.crt
+    ca_cert=${prefix}ca.crt
 
 ;log configurations
 [log]
@@ -985,12 +989,12 @@ for line in ${ip_array[*]};do
             if [ -n "$guomi_mode" ]; then
                 gen_node_cert_gm "" ${output_dir}/gmcert/agency $node_dir >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
-                rm node.json node.ca
+                rm gmnode.json gmnode.ca
                 mv *.* ${gm_conf_path}/
 
                 #private key should not start with 00
                 cd $output_dir
-                privateKey=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
+                privateKey=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
                 len=${#privateKey}
                 head2=${privateKey:0:2}
                 if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
@@ -1004,11 +1008,14 @@ for line in ${ip_array[*]};do
         cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
 
         if [ -n "$guomi_mode" ]; then
-            cat ${output_dir}/gmcert/agency/agency.crt >> $node_dir/${gm_conf_path}/node.crt
-            cat ${output_dir}/gmcert/ca.crt >> $node_dir/${gm_conf_path}/node.crt
+            cat ${output_dir}/gmcert/agency/gmagency.crt >> $node_dir/${gm_conf_path}/gmnode.crt
+            cat ${output_dir}/gmcert/gmca.crt >> $node_dir/${gm_conf_path}/gmnode.crt
 
             #move origin conf to gm conf
-            cp $node_dir/${conf_path} $node_dir/${gm_conf_path}/oricert -r
+            rm $node_dir/${conf_path}/agency.crt
+            rm $node_dir/${conf_path}/node.nodeid
+            rm $node_dir/${conf_path}/node.serial
+            cp $node_dir/${conf_path} $node_dir/${gm_conf_path}/originCert -r
         fi
 
         # gen sdk files
@@ -1020,7 +1027,7 @@ for line in ${ip_array[*]};do
         # mv $node_dir/* $node_dir/sdk/
 
         if [ -n "$guomi_mode" ]; then
-            nodeid=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid=$($OPENSSL_CMD ec -in "$node_dir/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         else
             nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         fi
@@ -1028,6 +1035,7 @@ for line in ${ip_array[*]};do
         if [ -n "$guomi_mode" ]; then
             #remove original cert files
             rm $node_dir/${conf_path} -rf
+            mv $node_dir/${gm_conf_path} $node_dir/${conf_path}
         fi
 
 
@@ -1053,10 +1061,6 @@ for line in ${ip_array[*]};do
 done 
 cd ..
 
-if [ -n "$guomi_mode" ]; then
-    # redirect config files to gm dir
-    conf_path=${gm_conf_path} 
-fi
 
 echo "=============================================================="
 echo "Generating configurations..."
