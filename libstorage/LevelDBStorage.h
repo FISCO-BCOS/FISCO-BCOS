@@ -25,8 +25,10 @@
 #include "Table.h"
 #include <json/json.h>
 #include <leveldb/db.h>
+#include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
+
 namespace dev
 {
 namespace storage
@@ -44,10 +46,10 @@ public:
         h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash) override;
     virtual bool onlyDirty() override;
 
-    void setDB(std::shared_ptr<leveldb::DB> db);
+    void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 
 private:
-    std::shared_ptr<leveldb::DB> m_db;
+    std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
 };
 

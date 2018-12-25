@@ -17,6 +17,8 @@
 
 #include "libstorage/LevelDBStorage.h"
 #include <leveldb/db.h>
+#include <libdevcore/BasicLevelDB.h>
+#include <libdevcore/LevelDB.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -118,10 +120,11 @@ struct MockWriteBatch
     int Count() { return DecodeFixed32(rep_.data() + 8); }
 };
 
-class MockLevelDB : public leveldb::DB
+class MockLevelDB : public dev::db::BasicLevelDB
 {
 public:
-    MockLevelDB() {}
+    MockLevelDB() : BasicLevelDB(dev::db::LevelDB::defaultDBOptions(), "test_LevelDBStateStorage")
+    {}
     virtual ~MockLevelDB() {}
 
     virtual Status Put(const WriteOptions& options, const Slice& key, const Slice& value)
@@ -167,24 +170,10 @@ public:
         return Status::OK();
     }
 
-    virtual Iterator* NewIterator(const ReadOptions& options) { return nullptr; }
-
-    virtual const Snapshot* GetSnapshot() { return nullptr; }
-
-    virtual void ReleaseSnapshot(const Snapshot* snapshot) {}
-
-    virtual bool GetProperty(const Slice& property, std::string* value) { return true; }
-
-    virtual void GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {}
-
-    virtual void CompactRange(const Slice* begin, const Slice* end) {}
-
     virtual Status Get(const leveldb::ReadOptions&, const leveldb::Slice&, leveldb::Value*)
     {
         return Status::OK();
     };
-    virtual void SuspendCompactions(){};
-    virtual void ResumeCompactions(){};
 
 private:
     // No copying allowed

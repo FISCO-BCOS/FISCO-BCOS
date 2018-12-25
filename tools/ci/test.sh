@@ -11,4 +11,4 @@
 #!/bin/sh
 
 current_dir=`pwd`/../../
-${current_dir}/build/test/test-fisco-bcos -- --testpath=${current_dir}/test/data/ 
+${current_dir}/build/bin/test-fisco-bcos -- --testpath=${current_dir}/test/data/ 

@@ -59,6 +59,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #pragma warning(pop)
 #pragma GCC diagnostic pop
+#include "GlobalConfigure.h"
 #include "secure_vector.h"
 #include "vector_ref.h"
 

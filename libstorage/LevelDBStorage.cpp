@@ -18,13 +18,13 @@
  *  @author ancelmo
  *  @date 20180921
  */
-#include "LevelDBStorage.h"
 
 #include "LevelDBStorage.h"
 #include "Table.h"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/easylog.h>
+#include <memory>
 
 using namespace dev;
 using namespace dev::storage;
@@ -93,7 +93,8 @@ size_t LevelDBStorage::commit(
     {
         STORAGE_LEVELDB_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash
                                   << " num:" << num;
-        leveldb::WriteBatch batch;
+
+        std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
 
         size_t total = 0;
         for (auto it : datas)
@@ -122,7 +123,7 @@ size_t LevelDBStorage::commit(
                 std::stringstream ssOut;
                 ssOut << entry;
 
-                batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+                batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
                 STORAGE_LEVELDB_LOG(TRACE)
                     << "leveldb commit key:" << entryKey << " data size:" << ssOut.tellp();
@@ -132,7 +133,7 @@ size_t LevelDBStorage::commit(
         leveldb::WriteOptions writeOptions;
         writeOptions.sync = false;
         WriteGuard l(m_remoteDBMutex);
-        auto s = m_db->Write(writeOptions, &batch);
+        auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
         if (!s.ok())
         {
             STORAGE_LEVELDB_LOG(ERROR) << "Commit leveldb failed: " << s.ToString();
@@ -157,7 +158,7 @@ bool LevelDBStorage::onlyDirty()
     return false;
 }
 
-void LevelDBStorage::setDB(std::shared_ptr<leveldb::DB> db)
+void LevelDBStorage::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
 {
     m_db = db;
 }

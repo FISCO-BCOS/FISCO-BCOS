@@ -25,6 +25,7 @@
 #include "LedgerParamInterface.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/OverlayDB.h>
+#include <libdevcore/BasicLevelDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
