@@ -39,6 +39,7 @@ using namespace dev::test;
 using namespace dev::consensus;
 using namespace dev::eth;
 using namespace dev::p2p;
+using namespace dev::network;
 
 namespace dev
 {
@@ -53,7 +54,7 @@ public:
     }
     NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     void start() override {}
-    void disconnect(DisconnectReason _reason) override {}
+    void disconnect(dev::network::DisconnectReason _reason) override {}
 
     bool isConnected() const override { return true; }
 
@@ -79,13 +80,13 @@ public:
     };
     virtual ~FakeSession(){};
 
-    virtual bool actived() override { return m_run; }
+    bool actived() override { return m_run; }
 
-    virtual void start() override { m_run = true; }
+    void start() override { m_run = true; }
 
-    virtual void stop(DisconnectReason reason) { m_run = false; }
+    virtual void stop(dev::network::DisconnectReason reason) { m_run = false; }
 
-    virtual NodeID nodeID() override { return m_id; }
+    NodeID nodeID() override { return m_id; }
 
     SessionFace::Ptr session() override { return m_session; }
 
