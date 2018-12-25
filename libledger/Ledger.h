@@ -144,6 +144,8 @@ protected:
 private:
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
+    /// create RaftConsensus
+    std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
     /// init configurations
     void initCommonConfig(boost::property_tree::ptree const& pt);
     void initTxPoolConfig(boost::property_tree::ptree const& pt);

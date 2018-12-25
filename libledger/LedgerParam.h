@@ -45,6 +45,8 @@ struct ConsensusParam
     uint64_t maxTransactions;
     uint8_t maxTTL;
     /// unsigned intervalBlockTime;
+    uint64_t minElectTime;
+    uint64_t maxElectTime;
 };
 
 struct AMDBParam

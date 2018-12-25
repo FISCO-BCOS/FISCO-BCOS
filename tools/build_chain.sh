@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 ca_file= #CA key
 node_num=1 
@@ -388,7 +389,7 @@ generate_group_genesis()
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
-    ;only support PBFT now
+    ;consensus algorithm type, now support PBFT(consensusType=pbft) and Raft(consensusType=raft)
     consensusType=pbft
     ;the max number of transactions of a block
     maxTransNum=1000
