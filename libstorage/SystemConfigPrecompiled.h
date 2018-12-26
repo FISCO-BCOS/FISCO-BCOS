@@ -45,10 +45,11 @@ class SystemConfigPrecompiled : public CRUDPrecompiled
 {
 public:
     typedef std::shared_ptr<SystemConfigPrecompiled> Ptr;
-
+    SystemConfigPrecompiled();
     virtual ~SystemConfigPrecompiled(){};
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 };
 
 }  // namespace blockverifier

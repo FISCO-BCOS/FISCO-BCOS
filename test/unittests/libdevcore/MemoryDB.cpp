@@ -21,8 +21,8 @@
  * @date 2018-08-24
  */
 
+#include "libdevcrypto/Hash.h"
 #include <libdevcore/MemoryDB.h>
-#include <libdevcore/SHA3.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

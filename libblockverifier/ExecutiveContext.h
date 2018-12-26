@@ -55,7 +55,7 @@ public:
 
     virtual ~ExecutiveContext(){};
 
-    virtual bytes call(Address address, bytesConstRef param);
+    virtual bytes call(Address const& origin, Address address, bytesConstRef param);
 
     virtual Address registerPrecompiled(Precompiled::Ptr p);
 

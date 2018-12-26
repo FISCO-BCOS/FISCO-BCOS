@@ -23,7 +23,7 @@
  */
 
 #include "StorageState.h"
-#include "libdevcore/SHA3.h"
+#include "libdevcrypto/Hash.h"
 #include "libethcore/Exceptions.h"
 #include "libstorage/MemoryTableFactory.h"
 
@@ -391,11 +391,23 @@ void StorageState::clear()
     m_cache.clear();
 }
 
+bool StorageState::checkAuthority(Address const& _origin, Address const& _contract) const
+{
+    auto table = getTable(_contract);
+    if (table)
+        return table->checkAuthority(_origin);
+    else
+        return true;
+}
+
 void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
-    auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE);
-
+    auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);
+    if (!table)
+    {
+        return;
+    }
     auto entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_BALANCE);
     entry->setField(STORAGE_VALUE, _amount.str());

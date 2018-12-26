@@ -20,18 +20,38 @@
  */
 #include "EntryPrecompiled.h"
 #include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::storage;
 
+const char* const ENTRYIES_METENTRYIY_METHOD_GETI_STR = "getInt(string)";
+const char* const ENTRYIY_METHOD_SET_STR_INT = "set(string,int256)";
+const char* const ENTRYIY_METHOD_SET_STR_STR = "set(string,string)";
+const char* const ENTRYIY_METHOD_GETA_STR = "getAddress(string)";
+const char* const ENTRYIY_METHOD_GETB_STR = "getBytes64(string)";
+const char* const ENTRYIY_METHOD_GETB_STR32 = "getBytes32(string)";
+
+EntryPrecompiled::EntryPrecompiled()
+{
+    name2Selector[ENTRYIES_METENTRYIY_METHOD_GETI_STR] =
+        getFuncSelector(ENTRYIES_METENTRYIY_METHOD_GETI_STR);
+    name2Selector[ENTRYIY_METHOD_SET_STR_INT] = getFuncSelector(ENTRYIY_METHOD_SET_STR_INT);
+    name2Selector[ENTRYIY_METHOD_SET_STR_STR] = getFuncSelector(ENTRYIY_METHOD_SET_STR_STR);
+    name2Selector[ENTRYIY_METHOD_GETA_STR] = getFuncSelector(ENTRYIY_METHOD_GETA_STR);
+    name2Selector[ENTRYIY_METHOD_GETB_STR] = getFuncSelector(ENTRYIY_METHOD_GETB_STR);
+    name2Selector[ENTRYIY_METHOD_GETB_STR32] = getFuncSelector(ENTRYIY_METHOD_GETB_STR32);
+}
 
 std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
     return "Entry";
 }
 
-bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
+bytes EntryPrecompiled::call(
+    std::shared_ptr<ExecutiveContext> context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "call Entry:";
 
@@ -45,9 +65,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
     bytes out;
 
-    switch (func)
-    {
-    case 0xfda69fae:
+    if (func == name2Selector[ENTRYIES_METENTRYIY_METHOD_GETI_STR])
     {  // getInt(string)
         std::string str;
         abi.abiOut(data, str);
@@ -56,30 +74,24 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
 
         u256 num = boost::lexical_cast<u256>(value);
         out = abi.abiIn("", num);
-
-        break;
     }
-    case 0x2ef8ba74:
+    else if (func == name2Selector[ENTRYIY_METHOD_SET_STR_INT])
     {  // set(string,int256)
         std::string str;
         u256 value;
         abi.abiOut(data, str, value);
 
         m_entry->setField(str, boost::lexical_cast<std::string>(value));
-
-        break;
     }
-    case 0xe942b516:
+    else if (func == name2Selector[ENTRYIY_METHOD_SET_STR_STR])
     {  // set(string,string)
         std::string str;
         std::string value;
         abi.abiOut(data, str, value);
 
         m_entry->setField(str, value);
-
-        break;
     }
-    case 0xbf40fac1:
+    else if (func == name2Selector[ENTRYIY_METHOD_GETA_STR])
     {  // getAddress(string)
         std::string str;
         abi.abiOut(data, str);
@@ -87,10 +99,9 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         std::string value = m_entry->getField(str);
         Address ret = Address(value);
         out = abi.abiIn("", ret);
-        break;
     }
-    case 0xd52decd4:
-    {  //"getBytes64(string)"
+    else if (func == name2Selector[ENTRYIY_METHOD_GETB_STR])
+    {  // getBytes64(string)
         std::string str;
         abi.abiOut(data, str);
 
@@ -100,9 +111,8 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
             ret[i] = i < value.size() ? value[i] : 0;
 
         out = abi.abiIn("", ret);
-        break;
     }
-    case 0x27314f79:
+    else if (func == name2Selector[ENTRYIY_METHOD_GETB_STR32])
     {  //"getBytes32(string)"
         std::string str;
         abi.abiOut(data, str);
@@ -110,14 +120,6 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         std::string value = m_entry->getField(str);
         dev::string32 s32 = dev::eth::toString32(value);
         out = abi.abiIn("", s32);
-
-        break;
     }
-    default:
-    {
-        break;
-    }
-    }
-
     return out;
 }

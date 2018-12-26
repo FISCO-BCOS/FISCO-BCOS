@@ -148,6 +148,17 @@ public:
 
     TransactionPtr createTransaction(int64_t _currentBlockNumber)
     {
+#ifdef FISCO_GM
+        const bytes c_txBytes = fromHex(
+            "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff8609"
+            "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce00000000000000"
+            "0000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf"
+            "671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01"
+            "b86a37b840c7ca78e7ab80ee4be6d3936ba8e899d8fe12c12114502956ebe8c8629d36d88481dec9973574"
+            "2ea523c88cf3becba1cc4375bc9e225143fe1e8e43abc8a7c493a0ba3ce8383b7c91528bede9cf890b4b1e"
+            "9b99c1d8e56d6f8292c827470a606827a0ed511490a1666791b2bd7fc4f499eb5ff18fb97ba68ff9aee206"
+            "8fd63b88e817");
+#else
         const bytes c_txBytes = fromHex(
             "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc"
             "6c0f5760baca823f2d5582d03f85174876e7ff"
@@ -161,6 +172,7 @@ public:
             "dda4efdb54f626367fc68e1735a8047f0f1c4f84"
             "0255ca1ea0512500bc29f4cfe18ee1c88683006d73"
             "e56c934100b8abf4d2334560e1d2f75e");
+#endif
         const u256 c_maxBlockLimit = u256(1000);
         Secret sec = KeyPair::create().secret();
         TransactionPtr txPtr =

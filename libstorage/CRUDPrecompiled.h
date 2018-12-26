@@ -34,13 +34,14 @@ class CRUDPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<CRUDPrecompiled> Ptr;
-
+    CRUDPrecompiled();
     virtual ~CRUDPrecompiled(){};
 
 
     virtual std::string toString(ExecutiveContext::Ptr);
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
 protected:
     std::shared_ptr<storage::Table> openTable(

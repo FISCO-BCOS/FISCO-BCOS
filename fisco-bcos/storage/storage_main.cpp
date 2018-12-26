@@ -133,7 +133,7 @@ int main(int argc, const char* argv[])
         cout << "createTable " << p << " || params num : " << p.size() << endl;
         if (p.size() == 3u)
         {
-            auto table = memoryTableFactory->createTable(p[0], p[1], p[2]);
+            auto table = memoryTableFactory->createTable(p[0], p[1], p[2], true);
             if (table)
             {
                 cout << "KeyField:[" << p[1] << "]" << endl;

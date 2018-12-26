@@ -24,7 +24,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
-#include <libdevcore/SHA3.h>
+#include <libdevcrypto/Hash.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMSchedule.h>

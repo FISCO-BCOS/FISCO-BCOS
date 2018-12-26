@@ -20,6 +20,7 @@
  */
 #include "ExecutiveContextFactory.h"
 #include <libdevcore/Common.h>
+#include <libstorage/AuthorityPrecompiled.h>
 #include <libstorage/CNSPrecompiled.h>
 #include <libstorage/CRUDPrecompiled.h>
 #include <libstorage/ConsensusPrecompiled.h>
@@ -53,6 +54,8 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1003), std::make_shared<dev::blockverifier::ConsensusPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1004), std::make_shared<dev::blockverifier::CNSPrecompiled>());
+    context->setAddress2Precompiled(
+        Address(0x1005), std::make_shared<dev::blockverifier::AuthorityPrecompiled>());
     context->setMemoryTableFactory(memoryTableFactory);
 
     context->setBlockInfo(blockInfo);
