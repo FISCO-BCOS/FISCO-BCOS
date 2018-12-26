@@ -77,7 +77,7 @@ string const SyncMaster::syncInfo() const
         json_spirit::Pair("latestHash", toHex(m_blockChain->numberHash(currentNumber))));
     syncInfo.push_back(json_spirit::Pair("knownHighestNumber", m_syncStatus->knownHighestNumber));
     syncInfo.push_back(json_spirit::Pair("knownLatestHash", toHex(m_syncStatus->knownLatestHash)));
-    syncInfo.push_back(json_spirit::Pair("txPoolSize", m_txPool->pendingSize()));
+    syncInfo.push_back(json_spirit::Pair("txPoolSize", std::to_string(m_txPool->pendingSize())));
 
     json_spirit::Array peersInfo;
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {

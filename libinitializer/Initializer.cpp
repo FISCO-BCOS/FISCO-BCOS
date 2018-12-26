@@ -61,6 +61,6 @@ void Initializer::init(std::string const& _path)
                                << boost::diagnostic_information(e);
         ERROR_OUTPUT << "[#Initializer] INIT Failed, [ERROR INFO]: "
                      << boost::diagnostic_information(e) << std::endl;
-        exit(1);
+        BOOST_THROW_EXCEPTION(e);
     }
 }
