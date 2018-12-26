@@ -25,9 +25,9 @@
 #include <jsonrpccpp/client/connectors/httpclient.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcrypto/Hash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
+#include <libdevcrypto/Hash.h>
 
 using namespace std;
 using namespace dev;

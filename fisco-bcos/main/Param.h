@@ -49,7 +49,7 @@ private:
 
 static void version(bool shouldExit = true)
 {
-#if FISCO_GM
+#ifdef FISCO_GM
     std::cout << "FISCO-BCOS gm version " << dev::Version << std::endl;
 #else
     std::cout << "FISCO-BCOS Version : " << dev::Version << std::endl;

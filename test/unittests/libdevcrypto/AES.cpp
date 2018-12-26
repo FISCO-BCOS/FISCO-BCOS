@@ -35,7 +35,7 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(AES, TestOutputHelperFixture)
-// #if FISCO_GM
+// #ifdef FISCO_GM
 BOOST_AUTO_TEST_CASE(GM_testAESen)
 {
     bytes seed_true = fromHex("01234567012345670123456701234564");

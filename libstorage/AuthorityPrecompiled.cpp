@@ -74,7 +74,6 @@ bytes AuthorityPrecompiled::call(
     bytes out;
 
 
-
     if (func == name2Selector[AUP_METHOD_INS])
     {
         // insert(string tableName,string addr)

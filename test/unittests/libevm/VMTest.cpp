@@ -212,7 +212,7 @@ public:
             addressWithEmptyCode.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-#if FISCO_GM
+#ifdef FISCO_GM
         BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
             "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
 #else
@@ -254,7 +254,7 @@ public:
             addressPrecompile.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-#if FISCO_GM
+#ifdef FISCO_GM
         BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
             "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
 #else

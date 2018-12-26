@@ -42,7 +42,7 @@ using Public = h512;
 
 /// A signature: 65 bytes: r: [0, 32), s: [32, 64), v: 64.
 /// @NOTE This is not endian-specific; it's just a bunch of bytes.
-#if FISCO_GM
+#ifdef FISCO_GM
 using Signature = h1024;
 using VType = h512;
 using NumberVType = u512;

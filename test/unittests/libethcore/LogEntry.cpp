@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(BloomTest)
     LogEntry le = LogEntry(address, topics, data);
     LogBloom bl = le.bloom();
     std::cout << "LogBloom: " << bl.hex() << std::endl;
-#if FISCO_GM
+#ifdef FISCO_GM
     std::string compareLb(
         "000000000000000000000000000080000000000000000000000000000000040000000000000000000000000000"
         "0000"

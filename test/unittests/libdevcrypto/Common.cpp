@@ -32,7 +32,7 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(DevcryptoCommonTest, TestOutputHelperFixture)
 /// test toPublic && toAddress
-#if FISCO_GM
+#ifdef FISCO_GM
 BOOST_AUTO_TEST_CASE(GM_testCommonTrans)
 {
     BOOST_CHECK(Secret::size == 32);
@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(GM_testSigAndVerify)
 BOOST_AUTO_TEST_CASE(GM_testSigecRocer)
 {
     std::pair<bool, bytes> KeyPair;
-#if FISCO_GM
+#ifdef FISCO_GM
     bytes rlpBytes = fromHex(
         "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff8609"
         "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce00000000000000"

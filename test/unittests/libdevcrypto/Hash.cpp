@@ -34,7 +34,7 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
 // test sha3
-#if FISCO_GM
+#ifdef FISCO_GM
 BOOST_AUTO_TEST_CASE(GM_testEmptySHA3)
 {
     std::string ts = EmptySHA3.hex();

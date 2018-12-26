@@ -43,7 +43,7 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
     BOOST_CHECK(msg.block_hash == _blockHash);
     if (msg.sig != Signature())
     {
-#if FISCO_GM
+#ifdef FISCO_GM
         bool result = dev::verify(dev::toPublic(_keyPair.secret()), msg.sig, msg.block_hash);
         BOOST_CHECK_EQUAL(result, true);
 #else
@@ -52,7 +52,7 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
     }
     if (msg.sig2 != Signature())
     {
-#if FISCO_GM
+#ifdef FISCO_GM
         bool result1 =
             dev::verify(dev::toPublic(_keyPair.secret()), msg.sig2, msg.fieldsWithoutBlock());
         BOOST_CHECK_EQUAL(result1, true);
