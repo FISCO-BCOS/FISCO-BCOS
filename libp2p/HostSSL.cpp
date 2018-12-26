@@ -434,7 +434,9 @@ void HostSSL::sslHandshakeClient(const boost::system::error_code& error, std::sh
 {
 	if (error)
 	{
-		m_pendingPeerConns.erase(_nodeIPEndpoint.name());
+		erasePeedingPeerConn(_nodeIPEndpoint);
+		socket->ref().close();
+
 		LOG(WARNING) << "HostSSL::sslHandshakeClient Err:" << error.message();
 		return ;
 	}
@@ -514,10 +516,14 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 	auto self = std::weak_ptr<HostSSL>(std::dynamic_pointer_cast<HostSSL>(shared_from_this()));
 	connectTimer->async_wait(
 			[socket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
-				if (error && error != boost::asio::error::operation_aborted)
+				if (error)
 				{
-					LOG(WARNING) << "shutdown timer error: " << error.message();
-					return;
+					if(error != boost::asio::error::operation_aborted ) {
+						LOG(WARNING) << "shutdown timer error: " << error.message();
+					}
+					else {
+						return;
+					}
 				}
 
 				if(socket->ref().is_open()) {
@@ -623,7 +629,7 @@ void HostSSL::startedWorking()
 	else
 	{
 		LOG(ERROR) << "p2p.start.notice id:" << id().abridged() << "TCP Listen port is invalid or unavailable.";
-		LOG(ERROR) << "P2pPort Bind Fail！" << "\n";
+		LOG(ERROR) << "P2pPort Bind Fail锛�" << "\n";
 		exit(-1);
 	}
 
