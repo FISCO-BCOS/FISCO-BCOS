@@ -49,7 +49,7 @@ static unsigned const c_maxSendTransactions = 128;
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
 static int64_t const c_maxRequestBlocks = 32;
 static size_t const c_maxRequestShards = 4;
-static uint64_t const c_downloadingRequestTimeout = 1000;  // ms
+static uint64_t const c_downloadingRequestTimeout = 10000;  // ms
 
 static size_t const c_maxDownloadingBlockQueueSize = 4096;
 static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 8;

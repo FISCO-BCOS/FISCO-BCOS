@@ -349,6 +349,10 @@ void SyncMaster::maintainPeersStatus()
             packet.encode(from, size);
             m_service->asyncSendMessageByNodeID(
                 _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+
+            // update
+            m_maxRequestBlock = max(m_maxRequestBlock, to);
+
             SYNCLOG(DEBUG) << "[Download] [Request] Request blocks [from, to] : [" << from << ", "
                            << to << "] to " << _p->nodeId.abridged() << endl;
 
@@ -430,8 +434,13 @@ bool SyncMaster::maintainDownloadingQueue()
         topBlock = bq.top();
     }
 
-    // has download finished ?
+
     currentNumber = m_blockChain->number();
+    // has this request turn finished ?
+    if (currentNumber >= m_maxRequestBlock)
+        m_lastDownloadingRequestTime = 0;  // reset it to trigger request immediately
+
+    // has download finished ?
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
         h256 const& latestHash =
