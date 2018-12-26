@@ -69,12 +69,12 @@ bytes SystemConfigPrecompiled::call(
         {
             if (entries->size() == 0u)
             {
-                count = table->insert(configKey, entry);
+                count = table->insert(configKey, entry, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled insert config key successfully.";
             }
             else
             {
-                count = table->update(configKey, entry, condition);
+                count = table->update(configKey, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled update config key successfully.";
             }
         }

@@ -87,13 +87,13 @@ bytes ConsensusPrecompiled::call(
             if (entries->size() == 0u)
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                table->insert(PRI_KEY, entry);
+                table->insert(PRI_KEY, entry, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new miner node, nodeID : " << nodeID;
                 count = 1;
             }
             else
             {
-                table->update(PRI_KEY, entry, condition);
+                table->update(PRI_KEY, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled change to miner, nodeID : " << nodeID;
                 count = entries->size();
             }
@@ -138,7 +138,7 @@ bytes ConsensusPrecompiled::call(
             if (entries->size() == 0u)
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                table->insert(PRI_KEY, entry);
+                table->insert(PRI_KEY, entry, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new observer node, nodeID : " << nodeID;
                 count = 1;
             }
@@ -149,7 +149,7 @@ bytes ConsensusPrecompiled::call(
                     break;
                 }
 
-                table->update(PRI_KEY, entry, condition);
+                table->update(PRI_KEY, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG)
                     << "ConsensusPrecompiled change to observer, nodeID : " << nodeID;
                 count = entries->size();
@@ -188,7 +188,7 @@ bytes ConsensusPrecompiled::call(
 
         auto condition = table->newCondition();
         condition->EQ(NODE_KEY_NODEID, nodeID);
-        count = table->remove(PRI_KEY, condition);
+        count = table->remove(PRI_KEY, condition, getOptions(origin));
         if (0 == count)
         {
             STORAGE_LOG(DEBUG) << "ConsensusPrecompiled remove none node:" << nodeID;

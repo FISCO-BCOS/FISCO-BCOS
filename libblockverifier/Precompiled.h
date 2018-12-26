@@ -57,7 +57,7 @@ public:
 
     virtual bytesConstRef getParamData(bytesConstRef param) { return param.cropped(4); }
 
-    virtual dev::storage::AccessOptions::Ptr getOptions(Address origin)
+    virtual dev::storage::AccessOptions::Ptr getOptions(Address const& origin)
     {
         return std::make_shared<dev::storage::AccessOptions>(origin);
     }
