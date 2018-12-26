@@ -21,7 +21,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/SHA3.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
 #include <boost/optional.hpp>
@@ -217,19 +216,7 @@ public:
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
     void setRpcCallback(RPCCallback callBack) { m_rpcCallback = callBack; }
-    void tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
-    {
-        try
-        {
-            if (m_rpcCallback)
-                m_rpcCallback(pReceipt);
-        }
-        catch (std::exception& e)
-        {
-            LOG(ERROR) << "callback RPC callback failed";
-            return;
-        }
-    }
+    void tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const;
 
 protected:
     /// Type of transaction.

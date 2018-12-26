@@ -47,7 +47,7 @@ private:
     boost::program_options::variables_map m_vmMap;
 };
 
-void version(bool shouldExit = true)
+void version()
 {
     std::cout << "FISCO-BCOS Version : " << dev::Version << std::endl;
     std::cout << "Build Time         : " << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << std::endl;
