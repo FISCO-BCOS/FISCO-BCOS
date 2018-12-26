@@ -167,8 +167,6 @@ void ChannelSession::startRead()
     {
         if (_actived)
         {
-            CHANNEL_LOG(TRACE) << "Start read:" << bufferLength;
-
             std::lock_guard<std::recursive_mutex> lock(_mutex);
 
             auto session = shared_from_this();
@@ -234,12 +232,10 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
                 ssize_t result =
                     message->decode(_recvProtocolBuffer.data(), _recvProtocolBuffer.size());
-                CHANNEL_LOG(TRACE) << "Parse result: " << result;
-
 
                 if (result > 0)
                 {
-                    CHANNEL_LOG(TRACE) << "Decode success: " << result;
+                    // CHANNEL_LOG(TRACE) << "Decode success: " << result;
 
                     onMessage(ChannelException(0, ""), message);
 

@@ -26,9 +26,9 @@
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/SHA3.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
+#include <libdevcrypto/Hash.h>
 #include <iostream>
 #include <string>
 

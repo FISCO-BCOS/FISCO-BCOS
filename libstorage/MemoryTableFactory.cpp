@@ -22,6 +22,7 @@
 #include "CNSPrecompiled.h"
 #include "Common.h"
 #include "MemoryTable.h"
+#include "SystemConfigPrecompiled.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -36,14 +37,16 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 {
     m_sysTables.push_back(SYS_MINERS);
     m_sysTables.push_back(SYS_TABLES);
+    m_sysTables.push_back(SYS_ACCESS_TABLE);
     m_sysTables.push_back(SYS_CURRENT_STATE);
     m_sysTables.push_back(SYS_NUMBER_2_HASH);
     m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
     m_sysTables.push_back(SYS_HASH_2_BLOCK);
     m_sysTables.push_back(SYS_CNS);
+    m_sysTables.push_back(SYS_CONFIG);
 }
 
-Table::Ptr MemoryTableFactory::openTable(const string& tableName)
+Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
 {
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
@@ -76,10 +79,35 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     tableInfo->fields.emplace_back(tableInfo->key);
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
+
     MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
+
+    // authority flag
+    if (authorityFlag)
+    {
+        // set authorized address to memoryTable
+        if (tableName != string(SYS_ACCESS_TABLE))
+        {
+            setAuthorizedAddress(tableInfo);
+        }
+        else
+        {
+            memoryTable->setTableInfo(tableInfo);
+            auto tableEntries = memoryTable->select(tableInfo->name, memoryTable->newCondition());
+            for (size_t i = 0; i < tableEntries->size(); ++i)
+            {
+                auto entry = tableEntries->get(i);
+                if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+                {
+                    tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+                }
+            }
+        }
+    }
+
     memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
                                  vector<Change::Record>& _records) {
@@ -91,13 +119,13 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     return memoryTable;
 }
 
-Table::Ptr MemoryTableFactory::createTable(
-    const string& tableName, const string& keyField, const std::string& valueField)
+Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string& keyField,
+    const std::string& valueField, bool authorigytFlag, Address const& _origin)
 {
     STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum
                        << " table:" << tableName;
 
-    auto sysTable = openTable(SYS_TABLES);
+    auto sysTable = openTable(SYS_TABLES, authorigytFlag);
 
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
@@ -111,8 +139,13 @@ Table::Ptr MemoryTableFactory::createTable(
     tableEntry->setField("table_name", tableName);
     tableEntry->setField("key_field", keyField);
     tableEntry->setField("value_field", valueField);
-    sysTable->insert(tableName, tableEntry);
-
+    createTableCode =
+        sysTable->insert(tableName, tableEntry, std::make_shared<AccessOptions>(_origin));
+    if (createTableCode == -1)
+    {
+        STORAGE_LOG(WARNING) << tableName << " checkAuthority of " << _origin.hex() << " failed!";
+        return nullptr;
+    }
     return openTable(tableName);
 }
 
@@ -262,6 +295,11 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = "table_name";
         tableInfo->fields = vector<string>{"key_field", "value_field"};
     }
+    else if (tableName == SYS_ACCESS_TABLE)
+    {
+        tableInfo->key = "table_name";
+        tableInfo->fields = vector<string>{"address", "enable_num"};
+    }
     else if (tableName == SYS_CURRENT_STATE)
     {
         tableInfo->key = "key";
@@ -288,5 +326,28 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->fields = std::vector<std::string>{
             dev::SYS_CNS_FIELD_VERSION, dev::SYS_CNS_FIELD_ADDRESS, dev::SYS_CNS_FIELD_ABI};
     }
+    else if (tableName == SYS_CONFIG)
+    {
+        tableInfo->key = dev::blockverifier::SYSTEM_CONFIG_KEY;
+        tableInfo->fields = std::vector<std::string>{
+            dev::blockverifier::SYSTEM_CONFIG_VALUE, dev::blockverifier::SYSTEM_CONFIG_ENABLENUM};
+    }
     return tableInfo;
+}
+
+void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
+{
+    Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    if (accessTable)
+    {
+        auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());
+        for (size_t i = 0; i < tableEntries->size(); ++i)
+        {
+            auto entry = tableEntries->get(i);
+            if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
+            {
+                _tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
+            }
+        }
+    }
 }

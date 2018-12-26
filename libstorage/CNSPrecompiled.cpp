@@ -29,6 +29,18 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
+const char* const CNS_METHOD_INS_STR4 = "insert(string,string,string,string)";
+const char* const CNS_METHOD_SLT_STR = "selectByName(string)";
+const char* const CNS_METHOD_SLT_STR2 = "selectByNameAndVersion(string,string)";
+
+CNSPrecompiled::CNSPrecompiled()
+{
+    name2Selector[CNS_METHOD_INS_STR4] = getFuncSelector(CNS_METHOD_INS_STR4);
+    name2Selector[CNS_METHOD_SLT_STR] = getFuncSelector(CNS_METHOD_SLT_STR);
+    name2Selector[CNS_METHOD_SLT_STR2] = getFuncSelector(CNS_METHOD_SLT_STR2);
+}
+
+
 std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
 {
     return "CNS";
@@ -43,7 +55,8 @@ Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::s
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes CNSPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CNS:" << toHex(param);
 
@@ -56,22 +69,13 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
     dev::eth::ContractABI abi;
     bytes out;
 
-    switch (func)
-    {
-    case 0xa216464b:
+    if (func == name2Selector[CNS_METHOD_INS_STR4])
     {
         // insert(string,string,string,string)
         // insert(name, version, address, abi), 4 fields in table, the key of table is name field
         std::string contractName, contractVersion, contractAddress, contractAbi;
         abi.abiOut(data, contractName, contractVersion, contractAddress, contractAbi);
         Table::Ptr table = openTable(context, SYS_CNS);
-
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         // check exist or not
         bool exist = false;
@@ -94,33 +98,26 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         {
             STORAGE_LOG(WARNING) << "CNS entry with same name and version has existed.";
             out = abi.abiIn("", u256(0));
-            break;
         }
-
-        // do insert
-        auto entry = table->newEntry();
-        entry->setField(SYS_CNS_FIELD_NAME, contractName);
-        entry->setField(SYS_CNS_FIELD_VERSION, contractVersion);
-        entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
-        entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
-        size_t count = table->insert(contractName, entry);
-        out = abi.abiIn("", u256(count));
-
-        break;
+        else
+        {
+            // do insert
+            auto entry = table->newEntry();
+            entry->setField(SYS_CNS_FIELD_NAME, contractName);
+            entry->setField(SYS_CNS_FIELD_VERSION, contractVersion);
+            entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
+            entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
+            size_t count = table->insert(contractName, entry, getOptions(origin));
+            out = abi.abiIn("", u256(count));
+        }
     }
-    case 0x819a3d62:
+    else if (func == name2Selector[CNS_METHOD_SLT_STR])
     {
         // selectByName(string) returns(string)
         // Cursor is not considered.
         std::string contractName;
         abi.abiOut(data, contractName);
         Table::Ptr table = openTable(context, SYS_CNS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
@@ -145,21 +142,13 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         json_spirit::Value value(CNSInfos);
         std::string str = json_spirit::write_string(value, true);
         out = abi.abiIn("", str);
-
-        break;
     }
-    case 0x897f0251:
+    else if (func == name2Selector[CNS_METHOD_SLT_STR2])
     {
         // selectByNameAndVersion(string,string) returns(string)
         std::string contractName, contractVersion;
         abi.abiOut(data, contractName, contractVersion);
         Table::Ptr table = openTable(context, SYS_CNS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
@@ -168,8 +157,6 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
             for (size_t i = 0; i < entries->size(); i++)
             {
                 auto entry = entries->get(i);
-                if (!entry)
-                    continue;
                 if (contractVersion == entry->getField(SYS_CNS_FIELD_VERSION))
                 {
                     json_spirit::Object CNSInfo;
@@ -189,14 +176,10 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         json_spirit::Value value(CNSInfos);
         std::string str = json_spirit::write_string(value, true);
         out = abi.abiIn("", str);
-
-        break;
     }
-    default:
+    else
     {
         STORAGE_LOG(ERROR) << "error func:" << std::hex << func;
-        break;
-    }
     }
 
     return out;

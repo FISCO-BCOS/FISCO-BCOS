@@ -42,11 +42,18 @@ enum class CommitResult
     ERROR_PARENT_HASH = -2,
     ERROR_COMMITTING = -3
 };
+// Configuration item written to the table of genesis block,
+// groupMark/consensusType/storageType/stateType excluded.
 struct GenesisBlockParam
 {
-    std::string groupMark;
-    dev::h512s minerList;
-    dev::h512s observerList;
+    std::string groupMark;      // Data written to extra data of genesis block.
+    dev::h512s minerList;       // miner nodes for consensus/syns modules
+    dev::h512s observerList;    // observer nodes for syns module
+    std::string consensusType;  // the type of consensus, now pbft
+    std::string storageType;    // the type of storage, now LevelDB
+    std::string stateType;      // the type of state, now mpt/storage
+    uint64_t txCountLimit;      // the maximum number of transactions recorded in a block
+    uint64_t txGasLimit;        // the maximum gas required to execute a transaction
 };
 class BlockChainInterface
 {
@@ -68,11 +75,15 @@ public:
     virtual dev::bytes getCode(dev::Address _address) = 0;
 
 
-    /// set group mark to genesis block
-    virtual void checkAndBuildGenesisBlock(GenesisBlockParam const& initParam) = 0;
+    /// If it is a genesis block, function returns true.
+    /// If it is a subsequent block with same extra data, function returns true.
+    /// Returns an error in the rest of the cases.
+    virtual bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) = 0;
     /// get miner or observer nodes
     virtual dev::h512s minerList() = 0;
     virtual dev::h512s observerList() = 0;
+    /// get system config
+    virtual std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) = 0;
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>

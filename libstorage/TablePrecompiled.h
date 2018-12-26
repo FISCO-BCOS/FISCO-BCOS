@@ -51,13 +51,14 @@ class TablePrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<TablePrecompiled> Ptr;
-
+    TablePrecompiled();
     virtual ~TablePrecompiled(){};
 
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) override;
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param) override;
+    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address()) override;
 
     dev::storage::Table::Ptr getTable() { return m_table; }
     void setTable(dev::storage::Table::Ptr table) { m_table = table; }

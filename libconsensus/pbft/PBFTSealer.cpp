@@ -80,10 +80,10 @@ bool PBFTSealer::shouldSeal()
     return Sealer::shouldSeal() && m_pbftEngine->shouldSeal();
 }
 
-uint64_t PBFTSealer::calculateMaxPackTxNum()
+/*uint64_t PBFTSealer::calculateMaxPackTxNum()
 {
     return m_pbftEngine->calculateMaxPackTxNum(m_maxBlockTransactions);
-}
+}*/
 
 void PBFTSealer::start()
 {

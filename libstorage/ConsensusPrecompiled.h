@@ -28,7 +28,7 @@ namespace blockverifier
 #if 0
 contract Miner {
     function add(string) public constant returns();
-    function cancel(string) public returns();
+    function remove(string) public returns();
 }
 {
     "b0c8f9dc": "add(string)",
@@ -49,10 +49,11 @@ class ConsensusPrecompiled : public CRUDPrecompiled
 {
 public:
     typedef std::shared_ptr<ConsensusPrecompiled> Ptr;
-
+    ConsensusPrecompiled();
     virtual ~ConsensusPrecompiled(){};
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param);
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
 private:
     void showConsensusTable(ExecutiveContext::Ptr context);

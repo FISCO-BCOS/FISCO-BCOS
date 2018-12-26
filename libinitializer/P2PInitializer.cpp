@@ -74,7 +74,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     INITIALIZER_LOG(ERROR)
                         << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]: "
-                        << it.second.data() << "/" << e.what();
+                        << it.second.data() << "/" << boost::diagnostic_information(e);
                     ERROR_OUTPUT
                         << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]:"
                         << it.second.data() << "/" << boost::diagnostic_information(e) << std::endl;
@@ -110,7 +110,6 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         }
 
         auto asioInterface = std::make_shared<dev::network::ASIOInterface>();
-
         asioInterface->setIOService(std::make_shared<ba::io_service>());
         asioInterface->setSSLContext(m_SSLContext);
         asioInterface->setType(dev::network::ASIOInterface::SSL);

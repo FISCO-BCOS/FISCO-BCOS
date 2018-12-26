@@ -1,23 +1,24 @@
 /*
-    This file is part of cpp-ethereum.
+    This file is part of FISCO-BCOS.
 
-    cpp-ethereum is free software: you can redistribute it and/or modify
+    FISCO-BCOS is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    cpp-ethereum is distributed in the hope that it will be useful,
+    FISCO-BCOS is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file Common.cpp
  * @author Alex Leverington <nessence@gmail.com>
  * @author Gav Wood <i@gavwood.com>
- * @date 2014
+ * @author Asherli
+ * @date 2018
  */
 
 #include "Common.h"
@@ -25,19 +26,87 @@
 #include "CryptoPP.h"
 #include "ECDHE.h"
 #include "Exceptions.h"
+#include "Hash.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/SHA3.h>
+#include <libethcore/Exceptions.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
+
+
+static const u256 c_secp256k1n(
+    "115792089237316195423570985008687907852837564279074904382605163141518161494337");
+
+SignatureStruct::SignatureStruct(Signature const& _s)
+{
+    *(Signature*)this = _s;
+}
+
+
+SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
+SignatureStruct::SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v)
+{
+    r = _r;
+    s = _s;
+    v = _v;
+}
+
+pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
+{
+    struct
+    {
+        h256 hash;
+        h256 v;
+        h256 r;
+        h256 s;
+    } in;
+
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+
+    h256 ret;
+    u256 v = (u256)in.v;
+    if (v >= 27 && v <= 28)
+    {
+        SignatureStruct sig(in.r, in.s, (byte)((int)v - 27));
+        if (sig.isValid())
+        {
+            try
+            {
+                if (Public rec = recover(sig, in.hash))
+                {
+                    ret = dev::sha3(rec);
+                    memset(ret.data(), 0, 12);
+                    return {true, ret.asBytes()};
+                }
+            }
+            catch (...)
+            {
+            }
+        }
+    }
+    return {true, {}};
+}
+
+void SignatureStruct::encode(RLPStream& _s) const noexcept
+{
+    _s << (VType)(v + VBase) << (u256)r << (u256)s;
+}
+
+
+void SignatureStruct::check() const noexcept
+{
+    if (s > c_secp256k1n / 2)
+        BOOST_THROW_EXCEPTION(eth::InvalidSignature());
+}
+
 
 namespace
 {
@@ -52,6 +121,7 @@ secp256k1_context const* getCtx()
         &secp256k1_context_destroy};
     return s_ctx.get();
 }
+
 
 }  // namespace
 
@@ -208,7 +278,7 @@ bytes dev::encryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _pl
     }
     catch (CryptoPP::Exception& _e)
     {
-        cerr << _e.what() << endl;
+        cerr << boost::diagnostic_information(_e) << endl;
         return bytes();
     }
 }
@@ -228,7 +298,7 @@ bytesSec dev::decryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef 
     }
     catch (CryptoPP::Exception& _e)
     {
-        cerr << _e.what() << endl;
+        cerr << boost::diagnostic_information(_e) << endl;
         return bytesSec();
     }
 }
@@ -259,8 +329,6 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
     return Public{&serializedPubkey[1], Public::ConstructFromPointer};
 }
 
-static const u256 c_secp256k1n(
-    "115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
 Signature dev::sign(Secret const& _k, h256 const& _hash)
 {
@@ -292,13 +360,6 @@ bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
     return _p == recover(_s, _hash);
 }
 
-
-KeyPair::KeyPair(Secret const& _sec) : m_secret(_sec), m_public(toPublic(_sec))
-{
-    // Assign address only if the secret key is valid.
-    if (m_public)
-        m_address = toAddress(m_public);
-}
 
 KeyPair KeyPair::create()
 {

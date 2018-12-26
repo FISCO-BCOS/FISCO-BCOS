@@ -38,9 +38,10 @@ public:
     MemoryTableFactory();
     virtual ~MemoryTableFactory() {}
 
-    Table::Ptr openTable(const std::string& table) override;
+    Table::Ptr openTable(const std::string& table, bool authorityFlag = true) override;
     Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField) override;
+        const std::string& valueField, bool authorigytFlag,
+        Address const& _origin = Address()) override;
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
     virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
@@ -54,8 +55,11 @@ public:
     void commit();
     void commitDB(h256 const& _blockHash, int64_t _blockNumber);
 
+    int getCreateTableCode() { return createTableCode; }
+
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
+    void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
@@ -63,6 +67,7 @@ private:
     std::vector<Change> m_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;
+    int createTableCode;
 };
 
 }  // namespace storage

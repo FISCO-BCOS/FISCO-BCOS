@@ -39,7 +39,7 @@ namespace blockverifier
 contract DBFactory {
     function openDB(string) public constant returns (DB);
     function openTable(string) public constant returns (DB);
-    function createTable(string, string, string) public constant returns (DB);
+    function createTable(string, string, string) public constant returns (int);
 }
 #endif
 
@@ -47,12 +47,13 @@ class TableFactoryPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<TableFactoryPrecompiled> Ptr;
-
+    TableFactoryPrecompiled();
     virtual ~TableFactoryPrecompiled(){};
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param);
+    virtual bytes call(
+        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
     void setMemoryTableFactory(dev::storage::MemoryTableFactory::Ptr memoryTableFactory)
     {

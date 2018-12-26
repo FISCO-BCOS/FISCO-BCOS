@@ -137,7 +137,7 @@ void DBInitializer::createExecutiveContext()
 /// create stateFactory
 void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
 {
-    DBInitializer_LOG(DEBUG) << "[#createStateFactory]" << std::endl;
+    DBInitializer_LOG(DEBUG) << "[#createStateFactory] type:" << m_param->mutableStateParam().type;
     if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == 0)
         createMptState(genesisHash);
     else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") ==

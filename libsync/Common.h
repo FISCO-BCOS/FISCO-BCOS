@@ -41,6 +41,8 @@ namespace dev
 {
 namespace sync
 {
+DEV_SIMPLE_EXCEPTION(SyncVerifyHandlerNotSet);
+
 static unsigned const c_maxSendTransactions = 128;
 
 // Every c_downloadingRequestTimeout request:

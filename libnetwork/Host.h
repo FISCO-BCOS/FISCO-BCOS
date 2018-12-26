@@ -132,13 +132,30 @@ private:
     void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string>& endpointPublicKey,
         std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
-        NodeIPEndpoint _nodeIPEndpoint);
+        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
+
+    void erasePendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
+    {
+        Guard l(x_pendingConns);
+        if (m_pendingConns.count(_nodeIPEndpoint.name()))
+            m_pendingConns.erase(_nodeIPEndpoint.name());
+    }
+
+    void insertPendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
+    {
+        Guard l(x_pendingConns);
+        if (!m_pendingConns.count(_nodeIPEndpoint.name()))
+            m_pendingConns.insert(_nodeIPEndpoint.name());
+    }
 
     std::shared_ptr<dev::ThreadPool> m_threadPool;
 
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<SessionFactory> m_sessionFactory;
+    int m_connectTimeThre = 50000;
+    std::set<std::string> m_pendingConns;
+    Mutex x_pendingConns;
 
     MessageFactory::Ptr m_messageFactory;
 
