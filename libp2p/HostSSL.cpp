@@ -629,7 +629,7 @@ void HostSSL::startedWorking()
 	else
 	{
 		LOG(ERROR) << "p2p.start.notice id:" << id().abridged() << "TCP Listen port is invalid or unavailable.";
-		LOG(ERROR) << "P2pPort Bind Fail锛�" << "\n";
+		LOG(ERROR) << "P2pPort Bind Fail" << "\n";
 		exit(-1);
 	}
 
