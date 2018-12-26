@@ -17,7 +17,6 @@
 #include "StateFace.h"
 
 #include <libdevcore/CommonIO.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LastBlockHashesFace.h>
@@ -25,6 +24,7 @@
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/easylog.h>
 #include <boost/timer.hpp>
 #include <numeric>
 
@@ -159,7 +159,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         auto result = m_envInfo.precompiledEngine()->call(_p.codeAddress, _p.data);
         size_t outputSize = result.size();
         m_output = owning_bytes_ref{std::move(result), 0, outputSize};
-        LOG(DEBUG) << "Precompiled result: " << toHex(m_output.takeBytes());
+        // LOG(DEBUG) << "Precompiled result: " << toHex(m_output.takeBytes());
     }
     else
     {

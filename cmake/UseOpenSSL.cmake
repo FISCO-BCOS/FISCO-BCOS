@@ -1,4 +1,7 @@
 function(eth_apply TARGET REQUIRED)
+    if (APPLE)
+        set(OPENSSL_ROOT_DIR /usr/local/opt/openssl)
+    endif()
     find_package (OpenSSL)
     set(OPENSSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
     eth_show_dependency(OPENSSL OpenSSL)

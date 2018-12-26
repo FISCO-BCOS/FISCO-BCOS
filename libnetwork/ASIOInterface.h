@@ -96,9 +96,6 @@ public:
 
     virtual void stop()
     {
-        // reset ioservice (cancels all timers)
-        m_ioService->reset();
-
         // shutdown acceptor
         if (m_acceptor->is_open())
         {
