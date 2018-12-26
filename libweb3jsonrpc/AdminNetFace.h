@@ -14,21 +14,26 @@ namespace dev {
             public:
                 AdminNetFace()
                 {
+#if 0
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_net_start", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN, "param1",jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_net_startI);
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_net_stop", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN, "param1",jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_net_stopI);
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_net_connect", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN, "param1",jsonrpc::JSON_STRING,"param2",jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_net_connectI);
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_net_peers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_ARRAY, "param1",jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_net_peersI);
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_net_nodeInfo", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_net_nodeInfoI);
+#endif
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_nodeInfo", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,  NULL), &dev::rpc::AdminNetFace::admin_nodeInfoI);
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_peers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,  NULL), &dev::rpc::AdminNetFace::admin_peersI);
+#if 0
                     this->bindAndAddMethod(jsonrpc::Procedure("admin_addPeer", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN, "param1",jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_addPeerI);
 					this->bindAndAddMethod(jsonrpc::Procedure("admin_NodePubKeyInfos", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL), &dev::rpc::AdminNetFace::admin_NodePubKeyInfosI);
 					this->bindAndAddMethod(jsonrpc::Procedure("admin_ConfNodePubKeyInfos", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL), &dev::rpc::AdminNetFace::admin_ConfNodePubKeyInfosI);
 					this->bindAndAddMethod(jsonrpc::Procedure("admin_addNodePubKeyInfo", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN, "param1", jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_addNodePubKeyInfoI);
 					this->bindAndAddMethod(jsonrpc::Procedure("admin_delNodePubKeyInfo", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_BOOLEAN, "param1", jsonrpc::JSON_STRING, NULL), &dev::rpc::AdminNetFace::admin_delNodePubKeyInfoI);
+#endif
 					
 				}
 
+#if 0
                 inline virtual void admin_net_startI(const Json::Value &request, Json::Value &response)
                 {
                     response = this->admin_net_start(request[0u].asString());
@@ -49,6 +54,7 @@ namespace dev {
                 {
                     response = this->admin_net_nodeInfo(request[0u].asString());
                 }
+#endif
                 inline virtual void admin_nodeInfoI(const Json::Value &request, Json::Value &response)
                 {
                     (void)request;
@@ -59,6 +65,7 @@ namespace dev {
                     (void)request;
                     response = this->admin_peers();
                 }
+#if 0
                 inline virtual void admin_addPeerI(const Json::Value &request, Json::Value &response)
                 {
                     response = this->admin_addPeer(request[0u].asString());
@@ -81,22 +88,24 @@ namespace dev {
 					(void)request;
 					response = this->admin_ConfNodePubKeyInfos();
 				}
+#endif
 
-				
-
-
+#if 0
                 virtual bool admin_net_start(const std::string& param1) = 0;
                 virtual bool admin_net_stop(const std::string& param1) = 0;
                 virtual bool admin_net_connect(const std::string& param1, const std::string& param2) = 0;
                 virtual Json::Value admin_net_peers(const std::string& param1) = 0;
                 virtual Json::Value admin_net_nodeInfo(const std::string& param1) = 0;
+#endif
                 virtual Json::Value admin_nodeInfo() = 0;
                 virtual Json::Value admin_peers() = 0;
+#if 0
 				virtual bool admin_addPeer(const std::string& param1) = 0;
 				virtual bool admin_addNodePubKeyInfo(const std::string& param1) = 0;
 				virtual bool admin_delNodePubKeyInfo(const std::string& param1) = 0;
 				virtual Json::Value admin_NodePubKeyInfos() = 0;
 				virtual Json::Value admin_ConfNodePubKeyInfos() = 0;
+#endif
         };
 
     }
