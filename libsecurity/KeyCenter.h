@@ -26,6 +26,11 @@
 
 namespace dev
 {
+class KeyCenterClient
+{
+public:
+}
+
 class KeyCenter
 {
 public:
@@ -35,13 +40,14 @@ public:
 
     virtual const dev::bytes getDataKey(const std::string& _cipherDataKey);
     virtual const std::string generateCipherDataKey();
-    void setUrl(const std::string& _url = "");
-    const std::string url() { return m_url; }
+    void setIpPort(const std::string& _ip = "", int _port);
+    const std::string url() { return m_ip + ":" + to_string(m_port); }
 
     static KeyCenter& instance();
 
 private:
-    std::string m_url;
+    std::string m_ip;
+    int m_port;
 
     // Query cache
     std::string m_lastQueryCipherDataKey;

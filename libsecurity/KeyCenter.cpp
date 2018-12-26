@@ -88,10 +88,11 @@ const std::string KeyCenter::generateCipherDataKey()
     return ret;
 }
 
-void KeyCenter::setUrl(const std::string& _url)
+void KeyCenter::setIpPort(const std::string& _ip, int _port)
 {
     m_url = _url;
-    LOG(DEBUG) << "[KeyCenter] Instance url: " << m_url << endl;
+    m_port = _port;
+    LOG(DEBUG) << "[KeyCenter] Instance url: " << m_url << ":" << m_port << endl;
 }
 
 KeyCenter& KeyCenter::instance()

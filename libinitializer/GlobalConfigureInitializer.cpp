@@ -29,11 +29,13 @@ using namespace dev::initializer;
 
 void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
 {
-    g_BCOSConfig.diskEncryption.enable = _pt.get<bool>("diskencryption.enable", false);
-    g_BCOSConfig.diskEncryption.keyCenterUrl =
-        _pt.get<std::string>("diskencryption.keyCenterUrl", "");
+    g_BCOSConfig.diskEncryption.enable = _pt.get<bool>("disk_encryption.enable", false);
+    g_BCOSConfig.diskEncryption.keyCenterIP =
+        _pt.get<std::string>("disk_encryption.keycenter_ip", "");
+    g_BCOSConfig.diskEncryption.keyCenterPort =
+        _pt.get<std::int>("disk_encryption.keycenter_port", "");
     g_BCOSConfig.diskEncryption.cipherDataKey =
-        _pt.get<std::string>("diskencryption.cipherDataKey", "");
+        _pt.get<std::string>("disk_encryption.cipher_data_key", "");
 
     INITIALIZER_LOG(DEBUG) << "[#initDiskEncryptionConfig] [enable/url/key]:  "
                            << g_BCOSConfig.diskEncryption.enable << "/"
