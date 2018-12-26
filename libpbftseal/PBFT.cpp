@@ -235,10 +235,12 @@ bool PBFT::shouldSeal(Interface*)
 		if (auto h = m_host.lock()) {
 			h512 node_id = h512(0);
 			if (NodeConnManagerSingleton::GetInstance().getPublicKey(ret.second, node_id) && !h->isConnected(node_id)) {
-				LOG(WARNING) << "getLeader ret:<" << ret.first << "," << ret.second << ">" << ", need viewchange for disconnected";
-				m_last_consensus_time = 0;
+				LOG(WARNING) << "getLeader ret:<" << ret.first << "," << ret.second << ">, idx=" << " node is not connected";
+				m_leader_failed = true;
+				// Do not trigger viewchange for this situation.
+				/* m_last_consensus_time = 0;
 				m_last_sign_time = 0;  // set m_last_consensus_time and m_last_sign_time to zero can guarantee "fastviewchange" to work (两个都设置为0，才能保证快速切换)
-				m_signalled.notify_all();
+				m_signalled.notify_all(); */
 			}
 		}
 		return false;
@@ -1078,7 +1080,7 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, s
 
 		std::map<u256, u256> idx_view_map;
 		for (auto it = m_recv_view_change_req.begin(); it != m_recv_view_change_req.end(); ++it) {
-			if (it->first > m_to_view) {
+			if (it->first > m_to_view + 1) { // Only need to chase the next next view
 				for (auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
 					auto found = idx_view_map.find(it2->first) != idx_view_map.end();
 					if (it2->second.height >= m_highest_block.number()
