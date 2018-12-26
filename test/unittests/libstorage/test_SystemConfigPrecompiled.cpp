@@ -82,6 +82,13 @@ BOOST_AUTO_TEST_CASE(TestAddConfig)
     BOOST_TEST(boost::lexical_cast<uint64_t>(ret) == value2);
 }
 
+BOOST_AUTO_TEST_CASE(errFunc)
+{
+    eth::ContractABI abi;
+    bytes in = abi.abiIn("insert(string)", "test");
+    bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_SystemConfigPrecompiled
