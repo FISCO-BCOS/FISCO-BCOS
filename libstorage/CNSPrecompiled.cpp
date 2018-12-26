@@ -67,13 +67,6 @@ bytes CNSPrecompiled::call(
         abi.abiOut(data, contractName, contractVersion, contractAddress, contractAbi);
         Table::Ptr table = openTable(context, SYS_CNS);
 
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
-
         // check exist or not
         bool exist = false;
         auto entries = table->select(contractName, table->newCondition());
@@ -116,12 +109,6 @@ bytes CNSPrecompiled::call(
         std::string contractName;
         abi.abiOut(data, contractName);
         Table::Ptr table = openTable(context, SYS_CNS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
@@ -155,12 +142,6 @@ bytes CNSPrecompiled::call(
         std::string contractName, contractVersion;
         abi.abiOut(data, contractName, contractVersion);
         Table::Ptr table = openTable(context, SYS_CNS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
@@ -169,8 +150,6 @@ bytes CNSPrecompiled::call(
             for (size_t i = 0; i < entries->size(); i++)
             {
                 auto entry = entries->get(i);
-                if (!entry)
-                    continue;
                 if (contractVersion == entry->getField(SYS_CNS_FIELD_VERSION))
                 {
                     json_spirit::Object CNSInfo;

@@ -152,6 +152,17 @@ BOOST_AUTO_TEST_CASE(queryByName)
     BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
     BOOST_TEST(retJson.get_array().size() == 0);
 }
+
+BOOST_AUTO_TEST_CASE(error_func)
+{
+    // insert
+    eth::ContractABI abi;
+    std::string tableName = "t_test";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string)", tableName, addr);
+    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+}
+
 BOOST_AUTO_TEST_CASE(toString)
 {
     BOOST_TEST(authorityPrecompiled->toString(context) == "Authority");

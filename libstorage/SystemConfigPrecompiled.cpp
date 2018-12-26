@@ -56,11 +56,6 @@ bytes SystemConfigPrecompiled::call(
         STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled params:" << configKey << ", " << configValue;
 
         storage::Table::Ptr table = openTable(context, SYS_CONFIG);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "SystemConfigPrecompiled open SYS_CONFIG table failed.";
-            break;
-        }
 
         auto condition = table->newCondition();
         auto entries = table->select(configKey, condition);

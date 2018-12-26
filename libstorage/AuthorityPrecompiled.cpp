@@ -70,13 +70,6 @@ bytes AuthorityPrecompiled::call(
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_ACCESS_TABLE table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
-
         auto condition = table->newCondition();
         condition->EQ(SYS_AC_FIELD_ADDRESS, addr);
         auto entries = table->select(tableName, condition);
@@ -109,13 +102,6 @@ bytes AuthorityPrecompiled::call(
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_ACCESS_TABLE table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
-
         bool exist = false;
         auto condition = table->newCondition();
         condition->EQ(SYS_AC_FIELD_ADDRESS, addr);
@@ -143,13 +129,6 @@ bytes AuthorityPrecompiled::call(
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_ACCESS_TABLE table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
-
         auto condition = table->newCondition();
         auto entries = table->select(tableName, condition);
         json_spirit::Array AuthorityInfos;
@@ -158,11 +137,6 @@ bytes AuthorityPrecompiled::call(
             for (size_t i = 0; i < entries->size(); i++)
             {
                 auto entry = entries->get(i);
-                if (!entry)
-                {
-                    continue;
-                }
-
                 json_spirit::Object AuthorityInfo;
                 AuthorityInfo.push_back(json_spirit::Pair(SYS_AC_FIELD_TABLE_NAME, tableName));
                 AuthorityInfo.push_back(

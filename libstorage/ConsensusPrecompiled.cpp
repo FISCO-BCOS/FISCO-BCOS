@@ -72,11 +72,6 @@ bytes ConsensusPrecompiled::call(
         }
 
         storage::Table::Ptr table = openTable(context, SYS_MINERS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
-            break;
-        }
 
         auto condition = table->newCondition();
         condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -128,11 +123,6 @@ bytes ConsensusPrecompiled::call(
         }
 
         storage::Table::Ptr table = openTable(context, SYS_MINERS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
-            break;
-        }
 
         auto condition = table->newCondition();
         condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -190,11 +180,6 @@ bytes ConsensusPrecompiled::call(
         }
 
         storage::Table::Ptr table = openTable(context, SYS_MINERS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
-            break;
-        }
 
         if (checkIsLastMiner(table, nodeID))
         {
@@ -241,8 +226,6 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
         for (size_t i = 0; i < entries->size(); i++)
         {
             auto entry = entries->get(i);
-            if (!entry)
-                continue;
             std::string name = entry->getField(PRI_COLUMN);
             std::string nodeID = entry->getField(NODE_KEY_NODEID);
             std::string type = entry->getField(NODE_TYPE);
