@@ -502,7 +502,7 @@ block_limit()
         exit 1
     fi
     blockNumber=\`echo \${result}| cut -d \" -f 10\`
-    printf "%04x" \$((\$blockNumber+100))
+    printf "%04x" \$((\$blockNumber+0x100))
 }
 
 send_a_tx()
