@@ -990,7 +990,7 @@ for line in ${ip_array[*]};do
                 gen_node_cert_gm "" ${output_dir}/gmcert/agency ${node_dir} >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
                 rm gmnode.json gmnode.ca
-                mv ./* ${gm_conf_path}/
+                mv ./*.* ${gm_conf_path}/
 
                 #private key should not start with 00
                 cd $output_dir
@@ -1015,7 +1015,7 @@ for line in ${ip_array[*]};do
             rm ${node_dir}/${conf_path}/agency.crt
             rm ${node_dir}/${conf_path}/node.nodeid
             rm ${node_dir}/${conf_path}/node.serial
-            cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/originCert -r
+            cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
         fi
 
         # gen sdk files
