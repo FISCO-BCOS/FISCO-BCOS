@@ -86,9 +86,10 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
     Json::Value res;
     try
     {
-        std::string query_json =
-            "{\"jsonrpc\":\"2.0\",\"method\":\"encDataKey\",\"params\":[\"123456\"],"
-            "\"id\":83}";
+        /*
+        query is:
+            {"jsonrpc":"2.0","method":"encDataKey","params":["123456"],"id":83}
+        */
 
         Json::Value queryJson;
         queryJson["id"] = 83;
