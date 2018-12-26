@@ -17,6 +17,7 @@
 
 #include "LevelDB.h"
 #include "Assertions.h"
+#include <libsecurity/EncryptedLevelDB.h>
 
 namespace dev
 {
@@ -24,11 +25,6 @@ namespace db
 {
 namespace
 {
-inline leveldb::Slice toLDBSlice(Slice _slice)
-{
-    return leveldb::Slice(_slice.data(), _slice.size());
-}
-
 DatabaseStatus toDatabaseStatus(leveldb::Status const& _status)
 {
     if (_status.ok())
@@ -57,29 +53,6 @@ void checkStatus(leveldb::Status const& _status, boost::filesystem::path const& 
     BOOST_THROW_EXCEPTION(ex);
 }
 
-class LevelDBWriteBatch : public WriteBatchFace
-{
-public:
-    void insert(Slice _key, Slice _value) override;
-    void kill(Slice _key) override;
-
-    leveldb::WriteBatch const& writeBatch() const { return m_writeBatch; }
-    leveldb::WriteBatch& writeBatch() { return m_writeBatch; }
-
-private:
-    leveldb::WriteBatch m_writeBatch;
-};
-
-void LevelDBWriteBatch::insert(Slice _key, Slice _value)
-{
-    m_writeBatch.Put(toLDBSlice(_key), toLDBSlice(_value));
-}
-
-void LevelDBWriteBatch::kill(Slice _key)
-{
-    m_writeBatch.Delete(toLDBSlice(_key));
-}
-
 }  // namespace
 
 leveldb::ReadOptions LevelDB::defaultReadOptions()
@@ -104,8 +77,19 @@ LevelDB::LevelDB(boost::filesystem::path const& _path, leveldb::ReadOptions _rea
     leveldb::WriteOptions _writeOptions, leveldb::Options _dbOptions)
   : m_db(nullptr), m_readOptions(std::move(_readOptions)), m_writeOptions(std::move(_writeOptions))
 {
-    auto db = static_cast<leveldb::DB*>(nullptr);
-    auto const status = leveldb::DB::Open(_dbOptions, _path.string(), &db);
+    auto db = static_cast<BasicLevelDB*>(nullptr);
+    leveldb::Status status;
+
+    LOG(DEBUG) << "[ENCDB] [enable/url/key]:  " << g_BCOSConfig.diskEncryption.enable << "/"
+               << g_BCOSConfig.diskEncryption.keyCenterUrl << "/"
+               << g_BCOSConfig.diskEncryption.cipherDataKey << "/" << std::endl;
+
+
+    if (g_BCOSConfig.diskEncryption.enable)
+        status = EncryptedLevelDB::Open(
+            _dbOptions, _path.string(), &db, g_BCOSConfig.diskEncryption.cipherDataKey);
+    else
+        status = BasicLevelDB::Open(_dbOptions, _path.string(), &db);
     checkStatus(status, _path);
 
     assert(db);
@@ -153,7 +137,7 @@ void LevelDB::kill(Slice _key)
 
 std::unique_ptr<WriteBatchFace> LevelDB::createWriteBatch() const
 {
-    return std::unique_ptr<WriteBatchFace>(new LevelDBWriteBatch());
+    return m_db->createWriteBatch();
 }
 
 void LevelDB::commit(std::unique_ptr<WriteBatchFace> _batch)

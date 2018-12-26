@@ -128,6 +128,8 @@ public:
 
     virtual void clear() override;
 
+    virtual bool checkAuthority(Address const& _origin, Address const& _contract) const override;
+
     State& getState();
 
 private:

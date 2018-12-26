@@ -68,7 +68,7 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
     NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-    SessionInfo info(node_id, m_endpoint, std::set<std::string>());
+    P2PSessionInfo info(node_id, m_endpoint, std::set<std::string>());
     size_t origin_size =
         service->sessionInfosByProtocolID(fake_pbft.consensus()->protocolId()).size();
     service->appendSessionInfo(info);
@@ -85,11 +85,11 @@ static std::shared_ptr<FakeSession> FakeSessionFunc(Public node_id)
 /// fake message
 template <typename T>
 P2PMessage::Ptr FakeReqMessage(std::shared_ptr<FakePBFTEngine> pbft, T const& req,
-    PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId)
+    PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl = 0)
 {
     bytes data;
     req.encode(data);
-    return pbft->transDataToMessage(ref(data), packetType, protocolId);
+    return pbft->transDataToMessage(ref(data), packetType, protocolId, ttl);
 }
 
 /// check the data received from the network
@@ -217,7 +217,6 @@ static inline void checkResetConfig(FakeConsensus<FakePBFTEngine>& fake_pbft, bo
     }
     else
     {
-        BOOST_CHECK(fake_pbft.consensus()->nodeIdx() >= 0);
         BOOST_CHECK(fake_pbft.consensus()->nodeIdx() == MAXIDX);
         BOOST_CHECK(fake_pbft.consensus()->cfgErr() == true);
     }

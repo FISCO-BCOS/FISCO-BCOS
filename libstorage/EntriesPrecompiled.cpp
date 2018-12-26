@@ -42,7 +42,7 @@ std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<Exe
 }
 
 bytes dev::blockverifier::EntriesPrecompiled::call(
-    std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "call Entries:" << toHex(param);
 

@@ -44,7 +44,7 @@
 
 namespace dev
 {
-namespace p2p
+namespace network
 {
 class Host : public std::enable_shared_from_this<Host>
 {
@@ -109,6 +109,9 @@ public:
     }
     bi::tcp::endpoint tcpClient() const { return m_tcpClient; }
 
+    virtual void setCRL(std::vector<std::string> const& crl) { m_crl = crl; }
+    virtual const std::vector<std::string>& crl() const { return m_crl; }
+
 private:
     /// called by 'startedWorking' to accept connections
     void startAccept(boost::system::error_code ec = boost::system::error_code());
@@ -129,13 +132,30 @@ private:
     void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string>& endpointPublicKey,
         std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
-        NodeIPEndpoint _nodeIPEndpoint);
+        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
+
+    void erasePendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
+    {
+        Guard l(x_pendingConns);
+        if (m_pendingConns.count(_nodeIPEndpoint.name()))
+            m_pendingConns.erase(_nodeIPEndpoint.name());
+    }
+
+    void insertPendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
+    {
+        Guard l(x_pendingConns);
+        if (!m_pendingConns.count(_nodeIPEndpoint.name()))
+            m_pendingConns.insert(_nodeIPEndpoint.name());
+    }
 
     std::shared_ptr<dev::ThreadPool> m_threadPool;
 
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<SessionFactory> m_sessionFactory;
+    int m_connectTimeThre = 50000;
+    std::set<std::string> m_pendingConns;
+    Mutex x_pendingConns;
 
     MessageFactory::Ptr m_messageFactory;
 
@@ -150,7 +170,10 @@ private:
     bool m_run = false;
 
     std::shared_ptr<std::thread> m_hostThread;
+
+    // certificate rejected list of nodeID
+    std::vector<std::string> m_crl;
 };
-}  // namespace p2p
+}  // namespace network
 
 }  // namespace dev

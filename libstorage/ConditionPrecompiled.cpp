@@ -59,7 +59,8 @@ std::string ConditionPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
     return "Condition";
 }
 
-bytes ConditionPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
+bytes ConditionPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "call Condition:" << toHex(param);
 

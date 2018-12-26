@@ -18,6 +18,7 @@
 #pragma once
 
 #include "Common.h"
+#include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
 #include <map>
 #include <memory>
@@ -34,6 +35,15 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::string name;
     std::string key;
     std::vector<std::string> fields;
+    std::vector<Address> authorizedAddress;
+};
+
+struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
+{
+    typedef std::shared_ptr<AccessOptions> Ptr;
+    AccessOptions() = default;
+    AccessOptions(Address _origin) { origin = _origin; }
+    Address origin;
 };
 
 class Entry : public std::enable_shared_from_this<Entry>
@@ -165,9 +175,12 @@ public:
     virtual ~Table() {}
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
-    virtual size_t update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition) = 0;
-    virtual size_t insert(const std::string& key, Entry::Ptr entry) = 0;
-    virtual size_t remove(const std::string& key, Condition::Ptr condition) = 0;
+    virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual int insert(const std::string& key, Entry::Ptr entry,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual int remove(const std::string& key, Condition::Ptr condition,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
 
     virtual Entry::Ptr newEntry();
     virtual Condition::Ptr newCondition();
@@ -180,6 +193,7 @@ public:
     virtual h256 hash() = 0;
     virtual void clear() = 0;
     virtual std::map<std::string, Entries::Ptr>* data() { return NULL; }
+    virtual bool checkAuthority(Address const& _origin) const = 0;
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
@@ -194,9 +208,9 @@ public:
 
     virtual ~StateDBFactory() {}
 
-    virtual Table::Ptr openTable(const std::string& table) = 0;
+    virtual Table::Ptr openTable(const std::string& table, bool authorityFlag = true) = 0;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField) = 0;
+        const std::string& valueField, bool authorigytFlag, Address const& _origin = Address()) = 0;
 };
 
 }  // namespace storage

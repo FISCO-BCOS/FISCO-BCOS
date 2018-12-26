@@ -24,6 +24,7 @@ target_link_libraries(initializer consensus)
 target_link_libraries(initializer ledger)
 target_link_libraries(initializer channelserver)
 target_link_libraries(initializer rpc)
+target_link_libraries(initializer security)
 target_link_libraries(initializer JsonRpcCpp::Server)
 
 

@@ -20,13 +20,19 @@
  */
 #pragma once
 
+#include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Hash.h>
+#include <libstorage/Table.h>
 #include <memory>
 #include <unordered_map>
 
 namespace dev
 {
+namespace storage
+{
+class Table;
+}
 namespace blockverifier
 {
 class ExecutiveContext;
@@ -39,7 +45,8 @@ public:
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) { return ""; }
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param) = 0;
+    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address()) = 0;
 
     virtual uint32_t getParamFunc(bytesConstRef param)
     {
@@ -60,6 +67,10 @@ public:
 
 protected:
     std::unordered_map<std::string, uint32_t> name2Selector;
+    virtual dev::storage::AccessOptions::Ptr getOptions(Address const& origin)
+    {
+        return std::make_shared<dev::storage::AccessOptions>(origin);
+    }
 };
 
 }  // namespace blockverifier

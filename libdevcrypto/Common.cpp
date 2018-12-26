@@ -278,7 +278,7 @@ bytes dev::encryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _pl
     }
     catch (CryptoPP::Exception& _e)
     {
-        cerr << _e.what() << endl;
+        cerr << boost::diagnostic_information(_e) << endl;
         return bytes();
     }
 }
@@ -298,7 +298,7 @@ bytesSec dev::decryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef 
     }
     catch (CryptoPP::Exception& _e)
     {
-        cerr << _e.what() << endl;
+        cerr << boost::diagnostic_information(_e) << endl;
         return bytesSec();
     }
 }

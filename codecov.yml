@@ -10,7 +10,7 @@ coverage:
   status:
     project:
       app:
-        target: 73
+        target: 70
         threshold: 0.05
         paths: "!test/"
       default:

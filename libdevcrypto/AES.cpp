@@ -30,6 +30,8 @@
 #include <stdlib.h>
 #include <string>
 
+
+using namespace std;
 using namespace dev;
 using namespace dev::crypto;
 using namespace std;

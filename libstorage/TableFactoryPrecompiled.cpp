@@ -48,7 +48,8 @@ std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
     return "TableFactory";
 }
 
-bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
+bytes TableFactoryPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "this: " << this << " call TableFactory:" << toHex(param);
 
@@ -67,6 +68,7 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         abi.abiOut(data, tableName);
 
         STORAGE_LOG(DEBUG) << "DBFactory open table:" << tableName;
+        tableName = storage::USER_TABLE_PREFIX + tableName;
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
         if (table)
@@ -94,17 +96,13 @@ bytes TableFactoryPrecompiled::call(std::shared_ptr<ExecutiveContext> context, b
         for (auto& str : fieldNameList)
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
-        auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled);
-        // tableName already exist
-        unsigned errorCode = 0;
-        if (!table == 0u)
-        {
-            STORAGE_LOG(ERROR) << "table:" << tableName << " conflict.";
-            errorCode = 1;
-        }
-        out = abi.abiIn("", errorCode);
+        tableName = storage::USER_TABLE_PREFIX + tableName;
+        auto table =
+            m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+        // set createTableCode
+        int errorCode = m_memoryTableFactory->getCreateTableCode();
+        out = abi.abiIn("", u256(errorCode));
     }
-
     return out;
 }
 

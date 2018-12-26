@@ -62,10 +62,6 @@ public:
     explicit operator bool() const { return bool(m_blockHeader); }
 
     ///-----encode functions
-    /*void encode(bytes& _out, bytesConstRef _header,
-        std::vector<std::pair<u256, Signature>> const& sig_list) const;
-    void encode(bytes& _out, bytesConstRef _header) const { encode(_out, _header, m_sigList); }*/
-    /// void encode(bytes& _out, std::vector<std::pair<u256, Signature>> const& sig_list) const;
     void encode(bytes& _out) const;
 
     ///-----decode functions

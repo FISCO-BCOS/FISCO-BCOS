@@ -30,10 +30,10 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
-#include <boost/property_tree/ptree.hpp>
-
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/property_tree/ptree.hpp>
 #define Ledger_LOG(LEVEL) LOG(LEVEL) << "[#LEDGER] [GROUPID:" << std::to_string(m_groupId) << "]"
 
 namespace dev
@@ -74,11 +74,20 @@ public:
         m_param->setBaseDir(prefix);
         assert(m_service);
         if (m_configFileName == "")
-            m_configFileName = "./config.group" + std::to_string(_groupId) + m_postfix;
+            m_configFileName = "./group." + std::to_string(_groupId) + m_postfixGenesis;
 
         Ledger_LOG(INFO) << "[#LedgerConstructor] [configPath/baseDir]:  " << m_configFileName
                          << "/" << m_param->baseDir() << std::endl;
+        /// The file group.X.genesis is required, otherwise the program terminates.
+        /// load genesis config of group
         initConfig(m_configFileName);
+        /// The file group.X.ini is available by default.
+        /// In this case, the configuration item uses the default value.
+        /// load ini config of group for TxPool/Sync modules
+        std::string iniConfigFileName = m_configFileName;
+        boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+        initIniConfig(iniConfigFileName);
+        initMark();
     }
 
     /// start all modules(sync, consensus)
@@ -121,6 +130,7 @@ public:
     std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
 protected:
+    /// load genesis config of group
     void initConfig(std::string const& configPath) override;
     virtual bool initTxPool();
     /// init blockverifier related
@@ -134,13 +144,18 @@ protected:
 private:
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
+    /// create RaftConsensus
+    std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
     /// init configurations
     void initCommonConfig(boost::property_tree::ptree const& pt);
     void initTxPoolConfig(boost::property_tree::ptree const& pt);
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initDBConfig(boost::property_tree::ptree const& pt);
-    void initGenesisConfig(boost::property_tree::ptree const& pt);
+    void initTxConfig(boost::property_tree::ptree const& pt);
+    void initMark();
+    /// load ini config of group
+    void initIniConfig(std::string const& iniConfigFileName);
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
@@ -149,7 +164,8 @@ protected:
     dev::GROUP_ID m_groupId;
     dev::KeyPair m_keyPair;
     std::string m_configFileName = "config";
-    std::string m_postfix = ".ini";
+    std::string m_postfixGenesis = ".genesis";
+    std::string m_postfixIni = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;

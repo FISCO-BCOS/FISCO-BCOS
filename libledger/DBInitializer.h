@@ -24,6 +24,7 @@
 #pragma once
 #include "LedgerParamInterface.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
+#include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/MemoryTableFactory.h>

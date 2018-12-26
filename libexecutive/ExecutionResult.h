@@ -62,7 +62,8 @@ enum class TransactionException
     PrecompiledError,
     RevertInstruction,
     InvalidZeroSignatureFormat,
-    AddressAlreadyUsed
+    AddressAlreadyUsed,
+    PermissionDenied
 };
 
 enum class CodeDeposit

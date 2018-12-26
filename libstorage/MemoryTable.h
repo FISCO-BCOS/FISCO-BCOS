@@ -36,10 +36,12 @@ public:
 
     virtual void init(const std::string& tableName);
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
-    virtual size_t update(
-        const std::string& key, Entry::Ptr entry, Condition::Ptr condition) override;
-    virtual size_t insert(const std::string& key, Entry::Ptr entry) override;
-    virtual size_t remove(const std::string& key, Condition::Ptr condition) override;
+    virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+    virtual int insert(const std::string& key, Entry::Ptr entry,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+    virtual int remove(const std::string& key, Condition::Ptr condition,
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
     virtual h256 hash();
     virtual void clear();
@@ -49,6 +51,8 @@ public:
     void setBlockHash(h256 blockHash);
     void setBlockNum(int blockNum);
     void setTableInfo(TableInfo::Ptr tableInfo);
+
+    bool checkAuthority(Address const& _origin) const override;
 
 private:
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);

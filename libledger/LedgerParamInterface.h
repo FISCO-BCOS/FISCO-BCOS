@@ -41,6 +41,7 @@ struct GenesisParam;
 struct AMDBParam;
 struct StorageParam;
 struct StateParam;
+struct TxParam;
 class LedgerParamInterface
 {
 public:
@@ -55,6 +56,7 @@ public:
     virtual void setBaseDir(std::string const& baseDir) = 0;
     virtual StorageParam& mutableStorageParam() = 0;
     virtual StateParam& mutableStateParam() = 0;
+    virtual TxParam& mutableTxParam() = 0;
 };
 }  // namespace ledger
 }  // namespace dev

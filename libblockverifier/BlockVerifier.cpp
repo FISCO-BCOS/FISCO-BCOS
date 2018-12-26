@@ -48,7 +48,10 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     catch (exception& e)
     {
         BLOCKVERIFIER_LOG(ERROR) << "[#executeBlock] Error during initExecutiveContext [errorMsg]: "
-                                 << e.what();
+                                 << boost::diagnostic_information(e);
+
+        BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
+                              << errinfo_comment("Error during initExecutiveContext"));
     }
 
     unsigned i = 0;
@@ -93,7 +96,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     {
         BLOCKVERIFIER_LOG(ERROR)
             << "[#executeTransaction] Error during execute initExecutiveContext [errorMsg]: "
-            << e.what();
+            << boost::diagnostic_information(e);
     }
 
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);

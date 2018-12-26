@@ -178,6 +178,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
     prepare_req.encode(prepare_data);
     PBFTMsgPacket packet;
     packet.packet_id = PrepareReqPacket;
+    packet.ttl = 10;
     packet.data = prepare_data;
     /// test encode and decode
     bytes packet_data;
@@ -186,10 +187,11 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
     tmp_packet.decode(ref(packet_data));
     BOOST_CHECK(tmp_packet.data == packet.data);
     BOOST_CHECK(tmp_packet.packet_id == packet.packet_id);
+    BOOST_CHECK(tmp_packet.ttl == 10);
     BOOST_CHECK(tmp_packet == packet);
     /// test exception case
     packet_data[1] += 1;
-    BOOST_CHECK_THROW(tmp_packet.decode(ref(packet_data));, std::exception);
+    BOOST_CHECK_THROW(tmp_packet.decode(ref(packet_data)), std::exception);
     /// set other field
     tmp_packet.setOtherField(12, key_pair.pub(), "");
     BOOST_CHECK(tmp_packet != packet);
