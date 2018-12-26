@@ -49,7 +49,7 @@ class ConsensusPrecompiled : public CRUDPrecompiled
 {
 public:
     typedef std::shared_ptr<ConsensusPrecompiled> Ptr;
-
+    ConsensusPrecompiled();
     virtual ~ConsensusPrecompiled(){};
 
     virtual bytes call(

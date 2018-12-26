@@ -55,6 +55,7 @@ include(ProjectCryptopp)
 include(ProjectSecp256k1)
 include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
+include(ProjectTASSL)
 include(ProjectBoost)
 
 #Global include path for all libs.

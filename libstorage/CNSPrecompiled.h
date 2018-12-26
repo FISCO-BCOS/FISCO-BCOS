@@ -39,7 +39,7 @@ class CNSPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<CNSPrecompiled> Ptr;
-
+    CNSPrecompiled();
     virtual ~CNSPrecompiled(){};
 
     std::string toString(ExecutiveContext::Ptr) override;

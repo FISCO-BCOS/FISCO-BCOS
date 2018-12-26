@@ -26,6 +26,15 @@ Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 bcos_bin_name=fisco-bcos
 
+guomi_mode=
+gm_conf_path="gmconf/"
+CUR_DIR=$(pwd)
+TASSL_INSTALL_DIR="${HOME}/TASSL"
+OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
+
+TASSL_DOWNLOAD_URL=" https://github.com/jntass"
+TASSL_PKG_DIR="TASSL"
+
 help() {
     echo $1
     cat << EOF
@@ -41,6 +50,7 @@ Usage:
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -z <Generate tar packet>            Default no
+    -g <Generate guomi nodes>           Default no
     -h Help
 e.g 
     build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
@@ -63,7 +73,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:P:t:iszhT" option;do
+while getopts "f:l:o:p:e:P:t:iszhgT" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -85,6 +95,7 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
     t) CertConfig=$OPTARG;;
     T) debug_log="true";;
     z) make_tar="yes";;
+    g) guomi_mode="yes";;
     h) help;;
     esac
 done
@@ -103,6 +114,7 @@ LOG_INFO "RPC listen IP     : ${listen_ip}"
 [ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : $output_dir"
 LOG_INFO "CA Key Path       : $ca_file"
+[ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
 echo "=============================================================="
 LOG_INFO "All completed. Files in $output_dir"
 }
@@ -124,6 +136,27 @@ check_env() {
         exit $EXIT_CODE
     }
 }
+
+# TASSL env
+check_and_install_tassl()
+{
+    if [ ! -f "${TASSL_INSTALL_DIR}/bin/openssl" ];then
+        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR}
+
+        cd ${TASSL_PKG_DIR}
+        local shell_list=$(find . -name '*.sh')
+        chmod a+x ${shell_list}
+        chmod a+x ./util/pod2mantest        
+
+        bash config --prefix=${TASSL_INSTALL_DIR} no-shared && make -j2 && make install
+
+        cd ${CUR_DIR}
+        rm -rf ${TASSL_PKG_DIR}
+    fi
+
+    OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
+}
+
 
 getname() {
     local name="$1"
@@ -240,10 +273,11 @@ gen_node_cert() {
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
-    dir_must_not_exists "$ndpath"
+    dir_must_not_exists "$ndpath"	
     check_name node "$node"
 
     mkdir -p $ndpath
+
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
@@ -262,6 +296,139 @@ gen_node_cert() {
 }
 EOF
     cat >node.ca <<EOF
+{
+ "serial":"$serial",
+ "pubkey":"$nodeid",
+ "name":"$node"
+}
+EOF
+
+    echo "build $node node cert successful!"
+}
+
+
+generate_gmsm2_param()
+{
+    local output=$1
+    cat << EOF > ${output} 
+-----BEGIN EC PARAMETERS-----
+BggqgRzPVQGCLQ==
+-----END EC PARAMETERS-----
+
+EOF
+}
+
+gen_chain_cert_gm() {
+    path="$2"
+    name=$(getname "$path")
+    echo "$path --- $name"
+    dir_must_not_exists "$path"
+    check_name chain "$name"
+
+    chaindir=$path
+    mkdir -p $chaindir
+
+    generate_gmsm2_param "gmsm2.param"
+	$OPENSSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
+	$OPENSSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
+
+    ls $chaindir
+
+    cp gmcert.cnf gmsm2.param $chaindir
+
+    if $(cp gmcert.cnf gmsm2.param $chaindir)
+    then
+        echo "build chain ca succussful!"
+    else
+        echo "please input at least Common Name!"
+    fi
+}
+
+gen_agency_cert_gm() {
+    chain="$2"
+    agencypath="$3"
+    name=$(getname "$agencypath")
+
+    dir_must_exists "$chain"
+    file_must_exists "$chain/gmca.key"
+    check_name agency "$name"
+    agencydir=$agencypath
+    dir_must_not_exists "$agencydir"
+    mkdir -p $agencydir
+
+    $OPENSSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
+    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
+    $OPENSSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
+
+    cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
+    cp $chain/gmca.crt $agencydir/ca-agency.crt
+    more $agencydir/gmagency.crt | cat >>$agencydir/ca-agency.crt
+    rm -f $agencydir/gmagency.csr
+
+    echo "build $name agency cert successful!"
+}
+
+gen_node_cert_with_extensions_gm() {
+    capath="$1"
+    certpath="$2"
+    name="$3"
+    type="$4"
+    extensions="$5"
+
+    $OPENSSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
+    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
+    $OPENSSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
+
+    rm -f $certpath/gm${type}.csr
+}
+
+gen_node_cert_gm() {
+    if [ "" = "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
+        echo "openssl don't support secp256k1, please upgrade openssl!"
+        exit $EXIT_CODE
+    fi
+
+    agpath="$2"
+    agency=$(getname "$agpath")
+    ndpath="$3"
+    node=$(getname "$ndpath")
+    dir_must_exists "$agpath"
+    file_must_exists "$agpath/gmagency.key"
+    check_name agency "$agency"
+
+    mkdir -p $ndpath
+    dir_must_exists "$ndpath"
+    check_name node "$node"
+
+    mkdir -p $ndpath
+    gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req
+    gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req
+    #nodeid is pubkey
+    $OPENSSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
+
+    #serial
+    if [ "" != "$($OPENSSL_CMD version | grep 1.0.2)" ];
+    then
+        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+    else
+        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+    fi
+
+
+    cp $agpath/gmca.crt $agpath/gmagency.crt $ndpath
+
+    cd $ndpath
+    nodeid=$(head gmnode.nodeid)
+    serial=$(head gmnode.serial)
+    cat >gmnode.json <<EOF
+{
+ "id":"$nodeid",
+ "name":"$node",
+ "agency":"$agency",
+ "caHash":"$serial"
+}
+EOF
+    cat >gmnode.ca <<EOF
 {
  "serial":"$serial",
  "pubkey":"$nodeid",
@@ -313,6 +480,10 @@ generate_config_ini()
     local index=${2}
     local node_groups=(${3//,/ })
     local group_conf_list=
+    local prefix=""
+    if [ -n "$guomi_mode" ]; then
+        prefix="gm"
+    fi
     if [ "${use_ip_param}" == "false" ];then
         for j in ${node_groups[@]};do
         group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.genesis
@@ -354,11 +525,11 @@ generate_config_ini()
     ;directory the certificates located in
     data_path=${conf_path}/
     ;the node private key file
-    key=node.key
+    key=${prefix}node.key
     ;the node certificate file
-    cert=node.crt
+    cert=${prefix}node.crt
     ;the ca certificate file
-    ca_cert=ca.crt
+    ca_cert=${prefix}ca.crt
 
 ;log configurations
 [log]
@@ -472,6 +643,136 @@ EOF
     chmod +x ${filepath}
 }
 
+generate_cert_conf_gm()
+{
+    local output=$1
+    cat << EOF > ${output} 
+HOME			= .
+RANDFILE		= $ENV::HOME/.rnd
+oid_section		= new_oids
+
+[ new_oids ]
+tsa_policy1 = 1.2.3.4.1
+tsa_policy2 = 1.2.3.4.5.6
+tsa_policy3 = 1.2.3.4.5.7
+
+####################################################################
+[ ca ]
+default_ca	= CA_default		# The default ca section
+
+####################################################################
+[ CA_default ]
+
+dir		= ./demoCA		# Where everything is kept
+certs		= $dir/certs		# Where the issued certs are kept
+crl_dir		= $dir/crl		# Where the issued crl are kept
+database	= $dir/index.txt	# database index file.
+#unique_subject	= no			# Set to 'no' to allow creation of
+					# several ctificates with same subject.
+new_certs_dir	= $dir/newcerts		# default place for new certs.
+
+certificate	= $dir/cacert.pem 	# The CA certificate
+serial		= $dir/serial 		# The current serial number
+crlnumber	= $dir/crlnumber	# the current crl number
+					# must be commented out to leave a V1 CRL
+crl		= $dir/crl.pem 		# The current CRL
+private_key	= $dir/private/cakey.pem # The private key
+RANDFILE	= $dir/private/.rand	# private random number file
+
+x509_extensions	= usr_cert		# The extentions to add to the cert
+
+name_opt 	= ca_default		# Subject Name options
+cert_opt 	= ca_default		# Certificate field options
+
+default_days	= 365			# how long to certify for
+default_crl_days= 30			# how long before next CRL
+default_md	= default		# use public key default MD
+preserve	= no			# keep passed DN ordering
+
+policy		= policy_match
+
+[ policy_match ]
+countryName		= match
+stateOrProvinceName	= match
+organizationName	= match
+organizationalUnitName	= optional
+commonName		= supplied
+emailAddress		= optional
+
+[ policy_anything ]
+countryName		= optional
+stateOrProvinceName	= optional
+localityName		= optional
+organizationName	= optional
+organizationalUnitName	= optional
+commonName		= supplied
+emailAddress		= optional
+
+####################################################################
+[ req ]
+default_bits		= 2048
+default_md		= sm3
+default_keyfile 	= privkey.pem
+distinguished_name	= req_distinguished_name
+x509_extensions	= v3_ca	# The extentions to add to the self signed cert
+
+string_mask = utf8only
+
+# req_extensions = v3_req # The extensions to add to a certificate request
+
+[ req_distinguished_name ]
+countryName = CN
+countryName_default = CN
+stateOrProvinceName = State or Province Name (full name)
+stateOrProvinceName_default =GuangDong
+localityName = Locality Name (eg, city)
+localityName_default = ShenZhen
+organizationalUnitName = Organizational Unit Name (eg, section)
+organizationalUnitName_default = webank
+commonName =  Organizational  commonName (eg, webank)
+commonName_default =  webank
+commonName_max = 64
+
+[ usr_cert ]
+
+basicConstraints=CA:FALSE
+
+nsComment			= "OpenSSL Generated Certificate"
+
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer
+
+
+[ v3_req ]
+
+# Extensions to add to a certificate request
+
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature
+
+
+[ v3enc_req ]
+
+# Extensions to add to a certificate request
+
+basicConstraints = CA:FALSE
+keyUsage = keyAgreement, keyEncipherment, dataEncipherment
+
+[ v3_agency_root ]
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign
+
+[ v3_ca ]
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign
+
+EOF
+}
+
 generate_node_scripts()
 {
     local output=$1
@@ -581,7 +882,6 @@ parse_ip_config()
 
 main()
 {
-
 output_dir="`pwd`/${output_dir}"
 [ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
 if [ "${use_ip_param}" == "true" ];then
@@ -641,6 +941,22 @@ if [ ! -e "$ca_file" ]; then
     ca_file="$output_dir/cert/ca.key"
 fi
 
+echo "guomi mode " $guomi_mode
+
+if [ -n "$guomi_mode" ]; then
+    check_and_install_tassl
+
+    generate_cert_conf_gm "gmcert.cnf"
+
+    echo "Generating Guomi CA key..."
+    dir_must_not_exists $output_dir/gmchain
+    gen_chain_cert_gm "" $output_dir/gmchain >$output_dir/build.log 2>&1 || fail_message "openssl error!"  #生成secp256k1算法的CA密钥
+    mv $output_dir/gmchain $output_dir/gmcert
+    gen_agency_cert_gm "" $output_dir/gmcert $output_dir/gmcert/agency >$output_dir/build.log 2>&1
+    ca_file="$output_dir/gmcert/ca.key"    
+fi
+
+
 echo "=============================================================="
 echo "Generating keys ..."
 nodeid_list=""
@@ -665,34 +981,78 @@ for line in ${ip_array[*]};do
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
         node_dir="$output_dir/${ip}/node_${ip}_${i}"
-        [ -d "$node_dir" ] && echo "$node_dir exist! Please delete!" && exit 1
+        [ -d "${node_dir}" ] && echo "${node_dir} exist! Please delete!" && exit 1
         
         while :
         do
-            gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} $node_dir >$output_dir/${logfile} 2>&1
+            gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >$output_dir/${logfile} 2>&1
             mkdir -p ${conf_path}/
             rm node.json node.param node.private node.ca node.pubkey
             mv *.* ${conf_path}/
+
+            #private key should not start with 00
             cd $output_dir
-            privateKey=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
+            privateKey=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
             len=${#privateKey}
             head2=${privateKey:0:2}
-            if [ "64" == "${len}" ] && [ "00" != "$head2" ];then
-                break;
+            if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
+                rm -rf ${node_dir}
+                continue;
             fi
-            rm -rf ${node_dir}
-        done
-        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> $node_dir/${conf_path}/node.crt
-        cat ${output_dir}/cert/ca.crt >> $node_dir/${conf_path}/node.crt
-        # gen sdk files
-        mkdir -p $node_dir/sdk/
-        # read_password
-        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "$node_dir/${conf_path}/node.crt" -inkey "$node_dir/${conf_path}/node.key" -out "$node_dir/sdk/keystore.p12"
-        cp ${output_dir}/cert/ca.crt $node_dir/sdk/
-        # gen_sdk_cert ${output_dir}/cert/agency $node_dir
-        # mv $node_dir/* $node_dir/sdk/
 
-        nodeid=$(openssl ec -in "$node_dir/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            if [ -n "$guomi_mode" ]; then
+                gen_node_cert_gm "" ${output_dir}/gmcert/agency ${node_dir} >$output_dir/build.log 2>&1
+                mkdir -p ${gm_conf_path}/
+                rm gmnode.json gmnode.ca
+                mv ./*.* ${gm_conf_path}/
+
+                #private key should not start with 00
+                cd $output_dir
+                privateKey=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
+                len=${#privateKey}
+                head2=${privateKey:0:2}
+                if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
+                    rm -rf ${node_dir}
+                    continue;
+                fi
+            fi
+            break;
+        done
+        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> ${node_dir}/${conf_path}/node.crt
+        cat ${output_dir}/cert/ca.crt >> ${node_dir}/${conf_path}/node.crt
+
+        if [ -n "$guomi_mode" ]; then
+            cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
+            cat ${output_dir}/gmcert/gmca.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
+
+            #move origin conf to gm conf
+            rm ${node_dir}/${conf_path}/agency.crt
+            rm ${node_dir}/${conf_path}/node.nodeid
+            rm ${node_dir}/${conf_path}/node.serial
+            cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
+        fi
+
+        # gen sdk files
+        mkdir -p ${node_dir}/sdk/
+        # read_password
+        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${node_dir}/${conf_path}/node.crt" -inkey "${node_dir}/${conf_path}/node.key" -out "${node_dir}/sdk/keystore.p12"
+        cp ${output_dir}/cert/ca.crt ${node_dir}/sdk/
+        # gen_sdk_cert ${output_dir}/cert/agency ${node_dir}
+        # mv ${node_dir}/* ${node_dir}/sdk/
+
+        if [ -n "$guomi_mode" ]; then
+            nodeid=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+        else
+            nodeid=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+        fi
+
+        if [ -n "$guomi_mode" ]; then
+            #remove original cert files
+            rm ${node_dir:?}/${conf_path} -rf
+            mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
+        fi
+
+
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })
             for j in ${node_groups[@]};do
@@ -715,6 +1075,7 @@ for line in ${ip_array[*]};do
 done 
 cd ..
 
+
 echo "=============================================================="
 echo "Generating configurations..."
 generate_script_template "$output_dir/replace_all.sh"
@@ -731,7 +1092,7 @@ for line in ${ip_array[*]};do
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
         node_dir="$output_dir/${ip}/node_${ip}_${i}"
-        generate_config_ini "$node_dir/config.ini" ${i} "${group_array[server_count]}"
+        generate_config_ini "${node_dir}/config.ini" ${i} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
@@ -742,7 +1103,7 @@ for line in ${ip_array[*]};do
             generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "${nodeid_list}"
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
-        generate_node_scripts "$node_dir"
+        generate_node_scripts "${node_dir}"
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$eth_path" "$output_dir/${ip}/fisco-bcos"

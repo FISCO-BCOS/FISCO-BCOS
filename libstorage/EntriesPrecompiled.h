@@ -42,7 +42,7 @@ class EntriesPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<EntriesPrecompiled> Ptr;
-
+    EntriesPrecompiled();
     virtual ~EntriesPrecompiled(){};
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);

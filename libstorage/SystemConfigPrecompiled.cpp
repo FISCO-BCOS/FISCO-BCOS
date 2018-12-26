@@ -29,6 +29,14 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
+
+const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
+
+SystemConfigPrecompiled::SystemConfigPrecompiled()
+{
+    name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR);
+}
+
 bytes SystemConfigPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
@@ -44,9 +52,8 @@ bytes SystemConfigPrecompiled::call(
     bytes out;
     u256 count = 0;
 
-    switch (func)
-    {
-    case 0xbd291aef:
+
+    if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
         std::string configKey, configValue;
@@ -85,14 +92,10 @@ bytes SystemConfigPrecompiled::call(
 
         out = abi.abiIn("", count);
         STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled setValueByKey result:" << toHex(out);
-
-        break;
     }
-    default:
+    else
     {
         STORAGE_LOG(ERROR) << "SystemConfigPrecompiled error func:" << std::hex << func;
-        break;
-    }
     }
     return out;
 }
