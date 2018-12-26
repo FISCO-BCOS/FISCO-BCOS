@@ -1048,7 +1048,7 @@ for line in ${ip_array[*]};do
 
         if [ -n "$guomi_mode" ]; then
             #remove original cert files
-            rm ${node_dir}/${conf_path} -rf
+            rm ${node_dir:?}/${conf_path} -rf
             mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
         fi
 
