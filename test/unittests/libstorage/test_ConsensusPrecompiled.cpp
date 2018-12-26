@@ -235,6 +235,13 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastMiner)
     BOOST_TEST(count == 0u);
 }
 
+BOOST_AUTO_TEST_CASE(errFunc)
+{
+    eth::ContractABI abi;
+    bytes in = abi.abiIn("add(string)", "test");
+    bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_ConsensusPrecompiled

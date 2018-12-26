@@ -186,6 +186,8 @@ struct EmptyFixture
         m_blockChainImp->setStateFactory(m_storageStateFactory);
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setState(std::make_shared<MockState>());
+        GenesisBlockParam initParam;
+        m_blockChainImp->checkAndBuildGenesisBlock(initParam);
     }
 
     std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory;
@@ -217,7 +219,8 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().first, 0);
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().second, 0);
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
-    BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0), h256(""));
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
+        h256("0xcd1eb2555fe7812ab17f47acd1043c2674312b05ad6e1bd4f8b1951b62fe7d21"));
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix)),
@@ -306,6 +309,14 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 2);
     BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().first, 30);
     BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().second, 2);
+}
+
+BOOST_AUTO_TEST_CASE(query)
+{
+    dev::h512s minerList = m_blockChainImp->minerList();
+    BOOST_CHECK_EQUAL(minerList.size(), 0);
+    dev::h512s observerList = m_blockChainImp->observerList();
+    BOOST_CHECK_EQUAL(observerList.size(), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
