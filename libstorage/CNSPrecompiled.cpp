@@ -43,7 +43,8 @@ Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::s
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
-bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes CNSPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CNS:" << toHex(param);
 
@@ -65,13 +66,6 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         std::string contractName, contractVersion, contractAddress, contractAbi;
         abi.abiOut(data, contractName, contractVersion, contractAddress, contractAbi);
         Table::Ptr table = openTable(context, SYS_CNS);
-
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         // check exist or not
         bool exist = false;
@@ -103,7 +97,7 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         entry->setField(SYS_CNS_FIELD_VERSION, contractVersion);
         entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
         entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
-        size_t count = table->insert(contractName, entry);
+        size_t count = table->insert(contractName, entry, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;
@@ -115,12 +109,6 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         std::string contractName;
         abi.abiOut(data, contractName);
         Table::Ptr table = openTable(context, SYS_CNS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
@@ -154,12 +142,6 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
         std::string contractName, contractVersion;
         abi.abiOut(data, contractName, contractVersion);
         Table::Ptr table = openTable(context, SYS_CNS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "open SYS_CNS table failed.";
-            out = abi.abiIn("", u256(0));
-            break;
-        }
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
@@ -168,8 +150,6 @@ bytes CNSPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
             for (size_t i = 0; i < entries->size(); i++)
             {
                 auto entry = entries->get(i);
-                if (!entry)
-                    continue;
                 if (contractVersion == entry->getField(SYS_CNS_FIELD_VERSION))
                 {
                     json_spirit::Object CNSInfo;

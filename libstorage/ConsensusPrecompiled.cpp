@@ -38,7 +38,8 @@ contract ConsensusSystemTable
 }
 */
 
-bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes ConsensusPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
 
@@ -71,11 +72,6 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         }
 
         storage::Table::Ptr table = openTable(context, SYS_MINERS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
-            break;
-        }
 
         auto condition = table->newCondition();
         condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -91,13 +87,13 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
             if (entries->size() == 0u)
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                table->insert(PRI_KEY, entry);
+                table->insert(PRI_KEY, entry, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new miner node, nodeID : " << nodeID;
                 count = 1;
             }
             else
             {
-                table->update(PRI_KEY, entry, condition);
+                table->update(PRI_KEY, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled change to miner, nodeID : " << nodeID;
                 count = entries->size();
             }
@@ -127,11 +123,6 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         }
 
         storage::Table::Ptr table = openTable(context, SYS_MINERS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
-            break;
-        }
 
         auto condition = table->newCondition();
         condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -147,7 +138,7 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
             if (entries->size() == 0u)
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                table->insert(PRI_KEY, entry);
+                table->insert(PRI_KEY, entry, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new observer node, nodeID : " << nodeID;
                 count = 1;
             }
@@ -158,7 +149,7 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
                     break;
                 }
 
-                table->update(PRI_KEY, entry, condition);
+                table->update(PRI_KEY, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG)
                     << "ConsensusPrecompiled change to observer, nodeID : " << nodeID;
                 count = entries->size();
@@ -189,11 +180,6 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
         }
 
         storage::Table::Ptr table = openTable(context, SYS_MINERS);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
-            break;
-        }
 
         if (checkIsLastMiner(table, nodeID))
         {
@@ -202,7 +188,7 @@ bytes ConsensusPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef pa
 
         auto condition = table->newCondition();
         condition->EQ(NODE_KEY_NODEID, nodeID);
-        count = table->remove(PRI_KEY, condition);
+        count = table->remove(PRI_KEY, condition, getOptions(origin));
         if (0 == count)
         {
             STORAGE_LOG(DEBUG) << "ConsensusPrecompiled remove none node:" << nodeID;
@@ -240,8 +226,6 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
         for (size_t i = 0; i < entries->size(); i++)
         {
             auto entry = entries->get(i);
-            if (!entry)
-                continue;
             std::string name = entry->getField(PRI_COLUMN);
             std::string nodeID = entry->getField(NODE_KEY_NODEID);
             std::string type = entry->getField(NODE_TYPE);

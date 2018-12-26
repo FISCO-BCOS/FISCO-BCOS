@@ -29,7 +29,8 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
-bytes SystemConfigPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param)
+bytes SystemConfigPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(TRACE) << "this: " << this << " call SystemConfig:" << toHex(param);
 
@@ -55,11 +56,6 @@ bytes SystemConfigPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
         STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled params:" << configKey << ", " << configValue;
 
         storage::Table::Ptr table = openTable(context, SYS_CONFIG);
-        if (!table)
-        {
-            STORAGE_LOG(WARNING) << "SystemConfigPrecompiled open SYS_CONFIG table failed.";
-            break;
-        }
 
         auto condition = table->newCondition();
         auto entries = table->select(configKey, condition);
@@ -73,12 +69,12 @@ bytes SystemConfigPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
         {
             if (entries->size() == 0u)
             {
-                count = table->insert(configKey, entry);
+                count = table->insert(configKey, entry, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled insert config key successfully.";
             }
             else
             {
-                count = table->update(configKey, entry, condition);
+                count = table->update(configKey, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled update config key successfully.";
             }
         }

@@ -35,7 +35,8 @@ std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)
     return "Table";
 }
 
-bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param)
+bytes TablePrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     STORAGE_LOG(DEBUG) << "call Table";
 
@@ -80,7 +81,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
 
-        size_t count = m_table->insert(key, entry);
+        int count = m_table->insert(key, entry, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;
@@ -118,7 +119,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
                 context->getPrecompiled(conditionAddress));
         auto condition = conditionPrecompiled->getCondition();
 
-        size_t count = m_table->remove(key, condition);
+        int count = m_table->remove(key, condition, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;
@@ -138,7 +139,7 @@ bytes TablePrecompiled::call(std::shared_ptr<ExecutiveContext> context, bytesCon
         auto entry = entryPrecompiled->getEntry();
         auto condition = conditionPrecompiled->getCondition();
 
-        size_t count = m_table->update(key, entry, condition);
+        int count = m_table->update(key, entry, condition, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;
