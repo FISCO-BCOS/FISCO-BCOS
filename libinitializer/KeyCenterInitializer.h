@@ -33,7 +33,7 @@ public:
     static void init()
     {
         g_keyCenter.setIpPort(
-            g_BCOSConfig.diskEncryption.keyCenterIP, g.diskEncryption.keyCenterPort);
+            g_BCOSConfig.diskEncryption.keyCenterIP, g_BCOSConfig.diskEncryption.keyCenterPort);
     }
 };
 

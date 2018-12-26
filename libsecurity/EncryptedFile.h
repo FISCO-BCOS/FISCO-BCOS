@@ -21,6 +21,7 @@
  */
 
 #pragma once
+#include "Common.h"
 #include "KeyCenter.h"
 #include <libdevcore/Common.h>
 #include <libdevcrypto/AES.h>
