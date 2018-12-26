@@ -153,7 +153,7 @@ private:
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
 
-    int64_t m_maxRequestBlock = 0;
+    int64_t m_maxRequestNumber = 0;
     uint64_t m_lastDownloadingRequestTime = 0;
     int64_t m_currentSealingNumber = 0;
 
