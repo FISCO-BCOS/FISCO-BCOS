@@ -199,9 +199,7 @@ void SyncMaster::maintainTransactions()
     {
         auto const& t = ts[i];
         NodeIDs peers;
-
-        // Send received txs to 0% peers and send new txs to 100% peers
-        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t.sha3()) ? 0 : 100;
+        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t.sha3()) ? 25 : 100;
 
         peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
             bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
