@@ -96,10 +96,12 @@ void Session::asyncSendMessage(
 
     addSeqCallback(message->seq(), handler);
 
-    auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer);
+    bytes buffer;
+    message->encode(buffer);
+    message.reset();
+    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>(std::move(buffer));
 
-    send(buffer);
+    send(p_buffer);
 }
 
 bool Session::actived() const

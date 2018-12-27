@@ -150,13 +150,13 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
     h256 tx_hash = trans.sha3();
     if (m_known.count(tx_hash))
     {
-        TXPOOL_LOG(WARNING) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(DEBUG) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
         return ImportResult::AlreadyKnown;
     }
     /// the transaction has been dropped before
     if (m_dropped.count(tx_hash) && _drop_policy == IfDropped::Ignore)
     {
-        TXPOOL_LOG(WARNING) << "[#Verify] already dropped tx: " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(DEBUG) << "[#Verify] already dropped tx: " << tx_hash.abridged() << std::endl;
         return ImportResult::AlreadyInChain;
     }
     /// check nonce
@@ -179,8 +179,6 @@ bool TxPool::isBlockLimitOrNonceOk(Transaction const& _tx, bool _needInsert) con
 {
     if (_tx.nonce() == Invalid256 || (!m_txNonceCheck->ok(_tx, _needInsert)))
     {
-        TXPOOL_LOG(ERROR) << "[#Verify] [#InvalidNonce] invalid Nonce: [nonce/tx]:  " << _tx.nonce()
-                          << "/" << _tx.sha3() << std::endl;
         return false;
     }
     return true;
@@ -219,7 +217,7 @@ bool TxPool::insert(Transaction const& _tx)
     h256 tx_hash = _tx.sha3();
     if (m_txsHash.count(tx_hash))
     {
-        TXPOOL_LOG(WARNING) << "[#Insert] Already known tx:  " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(DEBUG) << "[#Insert] Already known tx:  " << tx_hash.abridged() << std::endl;
         return false;
     }
     m_known.insert(tx_hash);

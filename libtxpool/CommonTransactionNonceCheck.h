@@ -38,7 +38,7 @@ class CommonTransactionNonceCheck
 public:
     CommonTransactionNonceCheck(dev::PROTOCOL_ID const& protocolId) : m_protocolId(protocolId)
     {
-        m_groupId = dev::eth::getGroupAndProtocol(m_groupId).first;
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
     virtual void delCache(std::string const& key);
     virtual void delCache(dev::eth::Transactions const& _transcations);

@@ -450,9 +450,6 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
             std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         asyncSendMessageByTopic(topic, message, fp, dev::network::Options());
 
-        callback->mutex.lock();
-        callback->mutex.unlock();
-
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {

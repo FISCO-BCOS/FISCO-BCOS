@@ -469,13 +469,6 @@ void PBFTEngine::checkMinerList(Block const& block)
     ReadGuard l(m_minerListMutex);
     if (m_minerList != block.blockHeader().sealerList())
     {
-#if DEBUG
-        std::string miners;
-        for (auto miner : m_minerList)
-            miners += miner + " ";
-        LOG(DEBUG) << "Miner list = " << miners;
-        PBFTENGINE_LOG(DEBUG) << "[checkMinerList] [miners]: " << miners << std::endl;
-#endif
         PBFTENGINE_LOG(ERROR)
             << "[#checkMinerList] Wrong miners: [myIdx/myNode/Cminers/CblockMiner/hash]:  "
             << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << m_minerList.size() << "/"
@@ -490,6 +483,9 @@ void PBFTEngine::checkMinerList(Block const& block)
 bool PBFTEngine::checkBlockSign(Block const& block)
 {
     ReadGuard l(m_minerListMutex);
+    /// ignore the genesis block
+    if (block.blockHeader().number() == 0)
+        return true;
     /// check sealer list(node list)
     if (m_minerList != block.blockHeader().sealerList())
     {
