@@ -47,7 +47,7 @@ std::shared_ptr<Block> BlockCache::add(Block& _block)
 {
     BLOCKCHAIN_LOG(TRACE) << "[#add] Add block to block cache, [blockHash]: "
                           << _block.header().hash();
-                          
+
     {
         WriteGuard guard(m_sharedMutex);
         if (m_blockCache.size() > c_blockCacheSize)
