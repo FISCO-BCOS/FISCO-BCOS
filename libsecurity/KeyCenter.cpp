@@ -122,16 +122,15 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
 
         // Receive the HTTP response
         int rspSize = http::read(m_socket, buffer, rsp);
-
-        LOG(DEBUG) << "[KeyCenter] [callMethod] keycenter respond [code/string]: "
-                   << rsp.result_int() << "/" << rsp.body() << endl;
-
         if (rspSize <= 0)
         {
             LOG(ERROR) << "[KeyCenter] [callMethod] http respond nothing. respond size: " << rspSize
                        << endl;
             throw;
         }
+
+        LOG(DEBUG) << "[KeyCenter] [callMethod] keycenter respond [code/string]: "
+                   << rsp.result_int() << "/" << rsp.body() << endl;
 
         if (rsp.result_int() != 200)
         {
