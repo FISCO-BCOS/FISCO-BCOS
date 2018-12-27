@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file MinerPrecompiled.h
+/** @file AuthorityPrecompiled.h
  *  @author caryliao
  *  @date 20181205
  */
@@ -161,14 +161,15 @@ bytes AuthorityPrecompiled::call(
     return out;
 }
 
-void AuthorityPrecompiled::addPrefixToUserTable(std::string& tableName)
+void AuthorityPrecompiled::addPrefixToUserTable(std::string& table_name)
 {
-    if (tableName == SYS_ACCESS_TABLE || tableName == SYS_MINERS || tableName == SYS_TABLES)
+    if (table_name == SYS_ACCESS_TABLE || table_name == SYS_MINERS || table_name == SYS_TABLES ||
+        table_name == SYS_CNS || table_name == SYS_CONFIG)
     {
         return;
     }
     else
     {
-        tableName = USER_TABLE_PREFIX + tableName;
+        table_name = USER_TABLE_PREFIX + table_name;
     }
 }

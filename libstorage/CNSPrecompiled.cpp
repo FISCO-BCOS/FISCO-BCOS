@@ -97,7 +97,7 @@ bytes CNSPrecompiled::call(
         entry->setField(SYS_CNS_FIELD_VERSION, contractVersion);
         entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
         entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
-        size_t count = table->insert(contractName, entry, getOptions(origin));
+        int count = table->insert(contractName, entry, getOptions(origin));
         out = abi.abiIn("", u256(count));
 
         break;
