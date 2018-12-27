@@ -47,7 +47,7 @@ class LastBlockHashesFace;
 
 namespace executive
 {
-class ExecutionResult;
+struct ExecutionResult;
 }
 
 namespace blockverifier

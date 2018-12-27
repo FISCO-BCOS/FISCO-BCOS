@@ -302,7 +302,8 @@ private:
         {
             json_spirit::Object entry;
             entry.push_back(json_spirit::Pair(key + "_key", dev::toJS(i.first)));
-            entry.push_back(json_spirit::Pair(key + "_collectedSize", i.second.size()));
+            entry.push_back(
+                json_spirit::Pair(key + "_collectedSize", std::to_string(i.second.size())));
             cacheJsonArray.push_back(entry);
         }
     }

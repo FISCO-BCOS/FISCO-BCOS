@@ -47,19 +47,17 @@ private:
     boost::program_options::variables_map m_vmMap;
 };
 
-static void version(bool shouldExit = true)
+void version()
 {
     std::cout << "FISCO-BCOS Version : " << dev::Version << std::endl;
+    std::cout << "Build Time         : " << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << std::endl;
     std::cout << "Build Type         : " << DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM) << "/"
               << DEV_QUOTED(FISCO_BCOS_BUILD_TYPE) << std::endl;
     std::cout << "Git Branch         : " << DEV_QUOTED(FISCO_BCOS_BUILD_BRANCH) << std::endl;
     std::cout << "Git Commit Hash    : " << DEV_QUOTED(FISCO_BCOS_COMMIT_HASH) << std::endl;
-    std::cout << "Build Time         : " << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << std::endl;
-    if (shouldExit)
-        exit(0);
 }
 
-static MainParams initCommandLine(int argc, const char* argv[])
+MainParams initCommandLine(int argc, const char* argv[])
 {
     boost::program_options::options_description main_options("Main for lab-bcos");
     main_options.add_options()("help,h", "help of lab-bcos")("version,v", "version of lab-bcos")(

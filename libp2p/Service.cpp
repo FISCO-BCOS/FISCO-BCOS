@@ -84,7 +84,6 @@ void Service::stop()
             }
         }
 
-        m_timer->cancel();
         /// clear sessions
         RecursiveGuard l(x_sessions);
         m_sessions.clear();
