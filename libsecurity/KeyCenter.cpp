@@ -47,14 +47,16 @@ KeyCenterHttpClient::KeyCenterHttpClient(const string& _ip, int _port)
 
 KeyCenterHttpClient::~KeyCenterHttpClient()
 {
-    if (!hasConnected)
-        close();
+    close();
 }
 
 void KeyCenterHttpClient::connect()
 {
+    WriteGuard(x_clinetSocket);
     try
     {
+        if (m_socket.is_open())
+            return;
         // These objects perform our I/O
         tcp::resolver resolver{m_ioc};
         // Look up the domain name
@@ -69,11 +71,13 @@ void KeyCenterHttpClient::connect()
         LOG(ERROR) << "[KeyCenter] Init keycenter failed for " << e.what() << endl;
         BOOST_THROW_EXCEPTION(KeyCenterInitError());
     }
-    hasConnected = true;
 }
 
 void KeyCenterHttpClient::close()
 {
+    WriteGuard(x_clinetSocket);
+    if (!m_socket.is_open())
+        return;
     // Gracefully close the socket
     beast::error_code ec;
     m_socket.shutdown(tcp::socket::shutdown_both, ec);
@@ -83,18 +87,12 @@ void KeyCenterHttpClient::close()
         LOG(ERROR) << "[KeyCenter] Close keycenter failed. error_code " << ec << endl;
         BOOST_THROW_EXCEPTION(KeyCenterCloseError());
     }
-    hasConnected = false;
 }
 
 Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _params)
 {
-    connect();
-
     if (!m_socket.is_open())
-    {
-        LOG(ERROR) << "[KeyCenter] socket is not opened when callMethod" << endl;
-        BOOST_THROW_EXCEPTION(KeyCenterConnectionError());
-    }
+        connect();  // Jump out immediately if has connected
 
     Json::Value res;
     try
@@ -161,8 +159,6 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError());
     }
 
-    close();
-    // Never goes here
     return res;
 }
 
@@ -179,15 +175,20 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         return m_lastRcvDataKey;
     }
 
-    KeyCenterHttpClient node(m_ip, m_port);
 
     string dataKeyBytesStr;
     try
     {
+        // connect
+        KeyCenterHttpClient kcclient(m_ip, m_port);
+        kcclient.connect();
+
+        // send and receive
         Json::Value params(Json::arrayValue);
         params.append(_cipherDataKey);
-        Json::Value rsp = node.callMethod("decDataKey", params);
+        Json::Value rsp = kcclient.callMethod("decDataKey", params);
 
+        // parse respond
         int error = rsp["error"].asInt();
         dataKeyBytesStr = rsp["dataKey"].asString();
         string info = rsp["info"].asString();
@@ -196,10 +197,14 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
             LOG(DEBUG) << "[KeyCenter] Get datakey exception. keycentr info: " << info << endl;
             BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(info));
         }
+
         // update query cache
         m_lastQueryCipherDataKey = _cipherDataKey;
         bytes readableDataKey = fromHex(dataKeyBytesStr);
         m_lastRcvDataKey = uniformDataKey(readableDataKey);
+
+        // close
+        kcclient.close();
     }
     catch (exception& e)
     {

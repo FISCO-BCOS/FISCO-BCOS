@@ -22,6 +22,7 @@
 #pragma once
 #include "Common.h"
 #include <libdevcore/Common.h>
+#include <libdevcore/Guards.h>
 #include <libethcore/CommonJS.h>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -44,6 +45,8 @@ class KeyCenterHttpClient
 public:
     KeyCenterHttpClient(const std::string& _ip, int _port);
     ~KeyCenterHttpClient();
+    void connect();
+    void close();
     Json::Value callMethod(const std::string& _method, Json::Value _params);
 
 private:
@@ -51,11 +54,7 @@ private:
     int m_port;
     boost::asio::io_context m_ioc;
     boost::asio::ip::tcp::socket m_socket;
-    bool hasConnected = false;
-
-private:
-    void connect();
-    void close();
+    mutable SharedMutex x_clinetSocket;
 };
 
 class KeyCenter
