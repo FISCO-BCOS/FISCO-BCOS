@@ -145,10 +145,11 @@ protected:
     void updateMinerList();
 
     void runAsLeader();
-    bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& memberHeartbeatLog);
+    bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& _memberHeartbeatLog);
     void runAsFollower();
     bool runAsFollowerImp();
     void runAsCandidate();
+    bool runAsCandidateImp(dev::consensus::VoteState& _voteState);
 
     virtual bool checkHeartbeatTimeout();
     virtual bool checkElectTimeout();

@@ -553,6 +553,101 @@ void RaftEngine::runAsLeader()
     }
 }
 
+bool RaftEngine::runAsCandidateImp(VoteState& _voteState)
+{
+    if (checkElectTimeout())
+    {
+        RAFTENGINE_LOG(INFO) << "[#runAsCandidate] VoteState: [vote]: " << _voteState.vote
+                             << ", [unVote]: " << _voteState.unVote
+                             << ", [lastTermErr]: " << _voteState.lastTermErr
+                             << ", [firstVote]: " << _voteState.firstVote
+                             << ", [discardedVote]: " << _voteState.discardedVote;
+        if (isMajorityVote(_voteState.totalVoteCount()))
+        {
+            RAFTENGINE_LOG(INFO) << "[#runAsCandidate] Candidate campaign leader time out";
+            switchToCandidate();
+        }
+        else
+        {
+            // not receive enough vote
+            RAFTENGINE_LOG(INFO)
+                << "[#runAsCandidate] Not enough vote received,  recover term from " << m_term
+                << " to " << m_term - 1;
+            increaseElectTime();
+            m_term--;  // recover to previous term
+            RAFTENGINE_LOG(INFO) << "[#runAsCandidate] Switch to Follower";
+            switchToFollower(InvalidIndex);
+        }
+        return false;
+    }
+
+    std::pair<bool, RaftMsgPacket> ret = m_msgQueue.tryPop(5);
+    if (!ret.first)
+    {
+        return true;
+    }
+    else
+    {
+        switch (ret.second.packetType)
+        {
+        case RaftPacketType::RaftVoteReqPacket:
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve vote req packet";
+
+            RaftVoteReq req;
+            req.populate(RLP(ref(ret.second.data))[0]);
+            if (handleVoteRequest(ret.second.nodeIdx, ret.second.nodeId, req))
+            {
+                switchToFollower(InvalidIndex);
+                return false;
+            }
+            return true;
+        }
+        case RaftVoteRespPacket:
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve vote resp packet";
+
+            RaftVoteResp resp;
+            resp.populate(RLP(ref(ret.second.data))[0]);
+            RAFTENGINE_LOG(INFO) << "[#runAsCandidate] Receieve response [term]: " << resp.term
+                                 << ", [voteFlag]: " << resp.voteFlag
+                                 << ", [from]: " << ret.second.nodeIdx
+                                 << ", [node]: " << ret.second.nodeId.hex().substr(0, 5);
+            HandleVoteResult handleRet =
+                handleVoteResponse(ret.second.nodeIdx, ret.second.nodeId, resp, _voteState);
+            if (handleRet == TO_LEADER)
+            {
+                switchToLeader();
+                return false;
+            }
+            else if (handleRet == TO_FOLLOWER)
+            {
+                switchToFollower(InvalidIndex);
+                return false;
+            }
+            return true;
+        }
+        case RaftHeartBeatPacket:
+        {
+            RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve heartbeat packet";
+
+            RaftHeartBeat hb;
+            hb.populate(RLP(ref(ret.second.data))[0]);
+            if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
+            {
+                switchToFollower(hb.leader);
+                return false;
+            }
+            return true;
+        }
+        default:
+        {
+            return true;
+        }
+        }
+    }
+}
+
 void RaftEngine::runAsCandidate()
 {
     if (m_state != EN_STATE_CANDIDATE)
@@ -576,98 +671,8 @@ void RaftEngine::runAsCandidate()
         return;
     }
 
-    while (true)
+    while (runAsCandidateImp(voteState))
     {
-        if (checkElectTimeout())
-        {
-            RAFTENGINE_LOG(INFO) << "[#runAsCandidate] VoteState: [vote]: " << voteState.vote
-                                 << ", [unVote]: " << voteState.unVote
-                                 << ", [lastTermErr]: " << voteState.lastTermErr
-                                 << ", [firstVote]: " << voteState.firstVote
-                                 << ", [discardedVote]: " << voteState.discardedVote;
-            if (isMajorityVote(voteState.totalVoteCount()))
-            {
-                RAFTENGINE_LOG(INFO) << "[#runAsCandidate] Candidate campaign leader time out";
-                switchToCandidate();
-            }
-            else
-            {
-                // not receive enough vote
-                RAFTENGINE_LOG(INFO)
-                    << "[#runAsCandidate] Not enough vote received,  recover term from " << m_term
-                    << " to " << m_term - 1;
-                increaseElectTime();
-                m_term--;  // recover to previous term
-                RAFTENGINE_LOG(INFO) << "[#runAsCandidate] Switch to Follower";
-                switchToFollower(InvalidIndex);
-            }
-            return;
-        }
-        std::pair<bool, RaftMsgPacket> ret = m_msgQueue.tryPop(5);
-        if (!ret.first)
-        {
-            continue;
-        }
-        else
-        {
-            switch (ret.second.packetType)
-            {
-            case RaftPacketType::RaftVoteReqPacket:
-            {
-                RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve vote req packet";
-
-                RaftVoteReq req;
-                req.populate(RLP(ref(ret.second.data))[0]);
-                if (handleVoteRequest(ret.second.nodeIdx, ret.second.nodeId, req))
-                {
-                    switchToFollower(InvalidIndex);
-                    return;
-                }
-                break;
-            }
-            case RaftVoteRespPacket:
-            {
-                RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve vote resp packet";
-
-                RaftVoteResp resp;
-                resp.populate(RLP(ref(ret.second.data))[0]);
-                RAFTENGINE_LOG(INFO)
-                    << "[#runAsCandidate] Receieve response [term]: " << resp.term
-                    << ", [voteFlag]: " << resp.voteFlag << ", [from]: " << ret.second.nodeIdx
-                    << ", [node]: " << ret.second.nodeId.hex().substr(0, 5);
-                HandleVoteResult handleRet =
-                    handleVoteResponse(ret.second.nodeIdx, ret.second.nodeId, resp, voteState);
-                if (handleRet == TO_LEADER)
-                {
-                    switchToLeader();
-                    return;
-                }
-                else if (handleRet == TO_FOLLOWER)
-                {
-                    switchToFollower(InvalidIndex);
-                    return;
-                }
-                break;
-            }
-            case RaftHeartBeatPacket:
-            {
-                RAFTENGINE_LOG(DEBUG) << "[#runAsCandidate] Receieve heartbeat packet";
-
-                RaftHeartBeat hb;
-                hb.populate(RLP(ref(ret.second.data))[0]);
-                if (handleHeartbeat(ret.second.nodeIdx, ret.second.nodeId, hb))
-                {
-                    switchToFollower(hb.leader);
-                    return;
-                }
-                break;
-            }
-            default:
-            {
-                break;
-            }
-            }
-        }
     }
 }
 
@@ -1301,17 +1306,19 @@ void RaftEngine::increaseElectTime()
 
 bool RaftEngine::shouldSeal()
 {
-    if (getState() != RaftRole::EN_STATE_LEADER)
-    {
-        RAFTENGINE_LOG(TRACE) << "[#shouldSeal] I'm not the leader, shouldSeal return false";
-        return false;
-    }
-
     {
         Guard guard(m_mutex);
-        if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount ||
-            m_state != EN_STATE_LEADER)
+        if (m_state != EN_STATE_LEADER)
         {
+            RAFTENGINE_LOG(TRACE) << "I'm not the leader, shouldSeal return false";
+            return false;
+        }
+
+        if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
+        {
+            RAFTENGINE_LOG(TRACE) << "[#shouldSeal] My state is not well, shouldSeal return false"
+                                  << " [cfgError]:" << m_cfgErr
+                                  << ",[accountType]:" << m_accountType;
             return false;
         }
 
