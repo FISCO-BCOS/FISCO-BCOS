@@ -101,9 +101,10 @@ std::string Rpc::getPbftView(int _groupID)
 
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
+        {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-
+        }
         std::string status = consensus->consensusStatus();
         Json::Reader reader;
         Json::Value statusJson;
@@ -134,8 +135,10 @@ Json::Value Rpc::getMinerList(int _groupID)
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
+        {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        }
 
         auto miners = blockchain->minerList();
 
@@ -168,7 +171,7 @@ Json::Value Rpc::getObserverList(int _groupID)
         if (!blockchain)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-        
+
         auto observers = blockchain->observerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
