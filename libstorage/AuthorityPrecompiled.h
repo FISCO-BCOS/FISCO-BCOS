@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file MinerPrecompiled.h
+/** @file AuthorityPrecompiled.h
  *  @author caryliao
  *  @date 20181204
  */
