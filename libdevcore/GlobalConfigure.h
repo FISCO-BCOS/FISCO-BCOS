@@ -38,7 +38,8 @@ public:
     struct DiskEncryption
     {
         bool enable = false;
-        std::string keyCenterUrl;
+        std::string keyCenterIP;
+        int keyCenterPort;
         std::string cipherDataKey;
     } diskEncryption;
 };

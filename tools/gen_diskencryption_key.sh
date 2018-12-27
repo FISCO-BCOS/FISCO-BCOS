@@ -12,13 +12,14 @@ LOG_INFO()
 }
 
 set -e
-[ ! -n "$2" ] && LOG_WARN "Usage: sh $0 <URL 127.0.0.1:31443> <datakey>" && exit;
+[ ! -n "$3" ] && LOG_WARN "Usage: sh $0 <IP 127.0.0.1> <port 31443> <datakey>" && exit;
 
-cypherDataKey=$(curl -X POST --data '{"jsonrpc":"2.0","method":"encDataKey","params":["'$2'"],"id":83}' $1 |jq .result.dataKey  |sed 's/\"//g')
+cypherDataKey=$(curl -X POST --data '{"jsonrpc":"2.0","method":"encDataKey","params":["'$3'"],"id":83}' $1:$2 |jq .result.dataKey  |sed 's/\"//g')
 [ -z "$cypherDataKey" ] && echo "Generate failed." && exit;
 echo "CiherDataKey generated: $cypherDataKey"
 LOG_INFO "Append these into config.ini to enable disk encryption:"
-echo "[diskencryption]
+echo "[disk_encryption]
 enable=true
-keyCenterUrl=$1
-cipherDataKey=$cypherDataKey"
+keycenter_ip=$1
+keycenter_port=$2
+cipher_data_key=$cypherDataKey"
