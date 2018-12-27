@@ -16,7 +16,6 @@
 
 #include "ExecutionResult.h"
 #include <json/json.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>

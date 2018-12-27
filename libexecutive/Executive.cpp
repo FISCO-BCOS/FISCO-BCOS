@@ -17,7 +17,6 @@
 #include "StateFace.h"
 
 #include <libdevcore/CommonIO.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LastBlockHashesFace.h>
@@ -26,6 +25,7 @@
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/easylog.h>
 #include <boost/timer.hpp>
 #include <numeric>
 

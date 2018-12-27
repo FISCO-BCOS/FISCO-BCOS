@@ -221,7 +221,7 @@ int dev::storage::MemoryTable::remove(
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
 
-            STORAGE_LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
+            // STORAGE_LOG(DEBUG) << "AMOPDB selects:" << entries->size() << " record(s)";
 
             m_cache.insert(std::make_pair(key, entries));
         }
