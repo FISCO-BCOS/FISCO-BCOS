@@ -27,7 +27,7 @@ namespace dev
 {
 namespace sync
 {
-class SyncStatus;
+struct SyncStatus;
 class SyncInterface
 {
 public:
