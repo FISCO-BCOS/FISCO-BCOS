@@ -206,9 +206,11 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
             continue;
         }
     }
+
+    auto pengdingSize = m_txPool->pendingSize();
     SYNCLOG(DEBUG) << "[Tx] Import peer transactions [import/rcv/txPool]: " << successCnt << "/"
-                   << itemCount << "/" << m_txPool->pendingSize() << " from "
-                   << _packet.nodeId.abridged() << endl;
+                   << itemCount << "/" << pengdingSize << " from " << _packet.nodeId.abridged()
+                   << endl;
 }
 
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
