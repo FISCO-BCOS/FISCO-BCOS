@@ -45,9 +45,17 @@ int main(int argc, const char* argv[])
     MainParams param = initCommandLine(argc, argv);
     /// callback initializer to init all ledgers
     auto initialize = std::make_shared<Initializer>();
-    initialize->init(param.configPath());
+    try
+    {
+        initialize->init(param.configPath());
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << boost::diagnostic_information(e) << std::endl;
+        return -1;
+    }
     /// input the success info
-    version(false);
+    version();
     std::cout << "The FISCO-BCOS is running..." << std::endl;
     ExitHandler exitHandler;
     signal(SIGABRT, &ExitHandler::exitHandler);
