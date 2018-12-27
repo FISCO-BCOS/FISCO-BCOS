@@ -189,61 +189,6 @@ BOOST_AUTO_TEST_CASE(testVoteState)
     BOOST_CHECK(voteState.totalVoteCount() == 15);
 }
 
-BOOST_AUTO_TEST_CASE(testMsgEncodeAndDecode)
-{
-    auto fakeSession = std::make_shared<FakeSession>(fakeMinerList[fakeMinerList.size() - 1]);
-
-    auto voteReqMsg = raftEngine->generateVoteReq();
-    raftEngine->onRecvRaftMessage(NetworkException(0, ""), fakeSession, voteReqMsg);
-    std::pair<bool, RaftMsgPacket> ret = raftEngine->msgQueue().tryPop(5);
-    BOOST_CHECK(ret.first == true);
-    BOOST_CHECK(ret.second.packetType == RaftPacketType::RaftVoteReqPacket);
-
-    RaftVoteReq req;
-    BOOST_CHECK_NO_THROW(req.populate(RLP(ref(ret.second.data))[0]));
-    BOOST_CHECK(req.idx == raftEngine->getNodeIdx());
-    BOOST_CHECK(req.term == raftEngine->getTerm());
-    BOOST_CHECK(req.height == raftEngine->getHighestBlock().number());
-    BOOST_CHECK(req.blockHash == raftEngine->getHighestBlock().hash());
-    BOOST_CHECK(req.candidate == raftEngine->getNodeIdx());
-    BOOST_CHECK(req.lastLeaderTerm == raftEngine->getLastLeaderTerm());
-
-    auto heartbeatMsg = raftEngine->generateHeartbeat();
-    raftEngine->onRecvRaftMessage(NetworkException(0, ""), fakeSession, heartbeatMsg);
-    ret = raftEngine->msgQueue().tryPop(5);
-    BOOST_CHECK(ret.first == true);
-    BOOST_CHECK(ret.second.packetType == RaftPacketType::RaftHeartBeatPacket);
-
-    RaftHeartBeat hb;
-    BOOST_CHECK_NO_THROW(hb.populate(RLP(ref(ret.second.data))[0]));
-    BOOST_CHECK(hb.idx == raftEngine->getNodeIdx());
-    BOOST_CHECK(hb.term == raftEngine->getTerm());
-    BOOST_CHECK(hb.height == raftEngine->getHighestBlock().number());
-    BOOST_CHECK(hb.blockHash == raftEngine->getHighestBlock().hash());
-    BOOST_CHECK(hb.leader == raftEngine->getNodeIdx());
-    BOOST_CHECK(hb.uncommitedBlockNumber == 0);
-    BOOST_CHECK(hb.hasData() == false);
-
-    raftEngine->setUncommitedBlock(fakeBlock.m_block);
-    heartbeatMsg = raftEngine->generateHeartbeat();
-    raftEngine->onRecvRaftMessage(NetworkException(0, ""), fakeSession, heartbeatMsg);
-    ret = raftEngine->msgQueue().tryPop(5);
-    BOOST_CHECK(ret.first == true);
-    BOOST_CHECK(ret.second.packetType == RaftPacketType::RaftHeartBeatPacket);
-
-    bytes code;
-    fakeBlock.m_block.encode(code);
-    BOOST_CHECK_NO_THROW(hb.populate(RLP(ref(ret.second.data))[0]));
-    BOOST_CHECK(hb.idx == raftEngine->getNodeIdx());
-    BOOST_CHECK(hb.term == raftEngine->getTerm());
-    BOOST_CHECK(hb.height == raftEngine->getHighestBlock().number());
-    BOOST_CHECK(hb.blockHash == raftEngine->getHighestBlock().hash());
-    BOOST_CHECK(hb.leader == raftEngine->getNodeIdx());
-    BOOST_CHECK(hb.uncommitedBlockNumber == 5);
-    BOOST_CHECK(hb.hasData() == 1);
-    BOOST_CHECK(hb.uncommitedBlock == code);
-}
-
 BOOST_AUTO_TEST_CASE(testHandleHeartbeatMsg)
 {
     RaftHeartBeat hb;
@@ -384,6 +329,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
     };
 
     resetLeader();
+
     raftEngine->heartbeatTimeout = true;
     raftEngine->setState(RaftRole::EN_STATE_LEADER);
     BOOST_CHECK_NO_THROW(flag = raftEngine->runAsLeaderImp(memberHeartbeatLog));
@@ -391,8 +337,9 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
     state = raftEngine->getState();
     BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
 
-    RaftHeartBeat hb;
     resetLeader();
+
+    RaftHeartBeat hb;
     hb.term = 0;
     raftEngine->msgQueue().push(transDataToPacket(hb, RaftPacketType::RaftHeartBeatPacket));
     BOOST_CHECK_NO_THROW(flag = raftEngine->runAsLeaderImp(memberHeartbeatLog));
@@ -403,6 +350,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
     BOOST_CHECK(raftEngine->getLastLeaderTerm() == 10);
 
     resetLeader();
+
     hb.term = 11;
     raftEngine->msgQueue().push(transDataToPacket(hb, RaftPacketType::RaftHeartBeatPacket));
     BOOST_CHECK_NO_THROW(flag = raftEngine->runAsLeaderImp(memberHeartbeatLog));
@@ -411,6 +359,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
     BOOST_CHECK(state == RaftRole::EN_STATE_FOLLOWER);
 
     resetLeader();
+
     RaftHeartBeatResp resp;
     resp.term = 11;
     raftEngine->msgQueue().push(transDataToPacket(resp, RaftPacketType::RaftHeartBeatRespPacket));
@@ -420,6 +369,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
     BOOST_CHECK(state == RaftRole::EN_STATE_LEADER);
 
     resetLeader();
+
     resp.term = 10;
     unsigned repeatTime = 2;
     unsigned msgNum = fakeMinerList.size() * repeatTime;
@@ -442,6 +392,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
     req.lastBlockNumber = raftEngine->getBlockChain()->number();
 
     resetLeader();
+
     req.term = 10;
     req.lastLeaderTerm = 10;
     raftEngine->msgQueue().push(transDataToPacket(req, RaftPacketType::RaftVoteReqPacket));
@@ -467,10 +418,189 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
 
 BOOST_AUTO_TEST_CASE(testRunAsFollower)
 {
+    bool flag = false;
+
     raftEngine->setState(RaftRole::EN_STATE_LEADER);
-    BOOST_CHECK_NO_THROW(raftEngine->runAsFollower());
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsFollowerImp());
     auto state = raftEngine->getState();
+    BOOST_CHECK(flag == false);
     BOOST_CHECK(state == RaftRole::EN_STATE_LEADER);
+
+    auto resetFollower = [this]() {
+        raftEngine->electTimeout = false;
+        raftEngine->setTerm(10);
+        raftEngine->setLastLeaderTerm(10);
+        raftEngine->setState(RaftRole::EN_STATE_FOLLOWER);
+    };
+
+    resetFollower();
+
+    raftEngine->electTimeout = true;
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsFollowerImp());
+    state = raftEngine->getState();
+    BOOST_CHECK(flag == false);
+    BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
+
+    resetFollower();
+
+    RaftVoteReq req;
+    req.lastBlockNumber = raftEngine->getBlockChain()->number();
+    req.term = 10;
+    req.lastLeaderTerm = 10;
+    raftEngine->msgQueue().push(transDataToPacket(req, RaftPacketType::RaftVoteReqPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsFollowerImp());
+    BOOST_CHECK(flag == true);
+
+    resetFollower();
+    req.lastBlockNumber = raftEngine->getBlockChain()->number();
+    req.term = 11;
+    req.lastLeaderTerm = 11;
+    raftEngine->msgQueue().push(transDataToPacket(req, RaftPacketType::RaftVoteReqPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsFollowerImp());
+    BOOST_CHECK(flag == true);
+    raftEngine->msgQueue().push(transDataToPacket(req, RaftPacketType::RaftVoteReqPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsFollowerImp());
+    BOOST_CHECK(flag == false);
+
+    resetFollower();
+
+    RaftHeartBeatResp resp;
+    raftEngine->msgQueue().push(transDataToPacket(resp, RaftPacketType::RaftHeartBeatRespPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsFollowerImp());
+    BOOST_CHECK(flag == true);
+
+    resetFollower();
+
+    RaftHeartBeat hb;
+    hb.term = 10;
+    raftEngine->msgQueue().push(transDataToPacket(hb, RaftPacketType::RaftHeartBeatPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsFollowerImp());
+    BOOST_CHECK(flag == true);
+}
+
+BOOST_AUTO_TEST_CASE(testRunAsCandidate)
+{
+    auto flag = false;
+    VoteState voteState;
+
+    auto resetCandidate = [this, &voteState]() {
+        raftEngine->electTimeout = false;
+        raftEngine->setTerm(10);
+        raftEngine->setLastLeaderTerm(10);
+        raftEngine->setState(RaftRole::EN_STATE_CANDIDATE);
+        voteState.vote = 1;  // vote self
+        raftEngine->setVote(raftEngine->getIdx());
+        raftEngine->setFirstVote(raftEngine->getIdx());
+    };
+
+    resetCandidate();
+
+    raftEngine->electTimeout = true;
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == false);
+    auto state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_FOLLOWER);
+
+    resetCandidate();
+
+    voteState.vote = fakeMinerList.size();
+    raftEngine->electTimeout = true;
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == false);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
+
+    resetCandidate();
+
+    RaftVoteReq req;
+    req.lastBlockNumber = raftEngine->getBlockChain()->number();
+    req.term = 10;
+    req.lastLeaderTerm = 10;
+    raftEngine->msgQueue().push(transDataToPacket(req, RaftPacketType::RaftVoteReqPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == true);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
+
+    resetCandidate();
+
+    req.term = 11;
+    raftEngine->msgQueue().push(transDataToPacket(req, RaftPacketType::RaftVoteReqPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == false);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_FOLLOWER);
+
+    resetCandidate();
+
+    RaftVoteResp resp;
+    resp.idx = 0;
+    resp.term = 10;
+    resp.height = raftEngine->getHighestBlock().number();
+    resp.blockHash = raftEngine->getHighestBlock().hash();
+    resp.voteFlag = VOTE_RESP_REJECT;
+    resp.lastLeaderTerm = 10;
+
+    voteState.vote = 0;
+    raftEngine->msgQueue().push(transDataToPacket(resp, RaftPacketType::RaftVoteRespPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == true);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
+
+    resetCandidate();
+
+    resp.term = 11;
+    resp.voteFlag = VOTE_RESP_LEADER_REJECT;
+    raftEngine->msgQueue().push(transDataToPacket(resp, RaftPacketType::RaftVoteRespPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == false);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_FOLLOWER);
+
+    resetCandidate();
+
+    resp.term = 10;
+    resp.voteFlag = VOTE_RESP_GRANTED;
+    voteState.vote = fakeMinerList.size();
+    raftEngine->msgQueue().push(transDataToPacket(resp, RaftPacketType::RaftVoteRespPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == false);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_LEADER);
+
+    resetCandidate();
+
+    RaftHeartBeat hb;
+    hb.term = 9;
+    raftEngine->msgQueue().push(transDataToPacket(hb, RaftPacketType::RaftHeartBeatPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == true);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
+
+    resetCandidate();
+    hb.term = 11;
+    raftEngine->msgQueue().push(transDataToPacket(hb, RaftPacketType::RaftHeartBeatPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == false);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_FOLLOWER);
+
+    resetCandidate();
+
+    RaftHeartBeatResp hbResp;
+    raftEngine->msgQueue().push(transDataToPacket(hbResp, RaftPacketType::RaftHeartBeatRespPacket));
+    BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
+    BOOST_CHECK(flag == true);
+    state = raftEngine->getState();
+    BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
+}
+
+BOOST_AUTO_TEST_CASE(testShouldSeal)
+{
+    raftEngine->setState(RaftRole::EN_STATE_FOLLOWER);
+    BOOST_CHECK(raftEngine->shouldSeal() == false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
