@@ -21,7 +21,7 @@
  */
 
 #pragma once
-
+#include "Common.h"
 #include "KeyCenter.h"
 #include <leveldb/db.h>
 #include <leveldb/slice.h>

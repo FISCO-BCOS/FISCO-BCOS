@@ -91,13 +91,7 @@ DEV_SIMPLE_EXCEPTION(ConnectionToSelfException);
 DEV_SIMPLE_EXCEPTION(InitLedgerConfigFailed);
 DEV_SIMPLE_EXCEPTION(InvalidConsensusType);
 DEV_SIMPLE_EXCEPTION(OpenLevelDBFailed);
-DEV_SIMPLE_EXCEPTION(KeyCenterAlreadyInit);
-DEV_SIMPLE_EXCEPTION(KeyCenterDataKeyError);
-DEV_SIMPLE_EXCEPTION(KeyCenterConnectionError);
-DEV_SIMPLE_EXCEPTION(EncryptedFileError);
 DEV_SIMPLE_EXCEPTION(LevelDBNotOpened);
-DEV_SIMPLE_EXCEPTION(EncryptedLevelDBEncryptFailed);
-DEV_SIMPLE_EXCEPTION(EncryptedLevelDBDecryptFailed);
 /**
  * @brief : error information to be added to exceptions
  */

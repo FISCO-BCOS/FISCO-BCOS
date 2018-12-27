@@ -30,7 +30,11 @@ namespace initializer
 class KeyCenterInitializer
 {
 public:
-    static void init() { g_keyCenter.setUrl(g_BCOSConfig.diskEncryption.keyCenterUrl); }
+    static void init()
+    {
+        g_keyCenter.setIpPort(
+            g_BCOSConfig.diskEncryption.keyCenterIP, g_BCOSConfig.diskEncryption.keyCenterPort);
+    }
 };
 
 }  // namespace initializer

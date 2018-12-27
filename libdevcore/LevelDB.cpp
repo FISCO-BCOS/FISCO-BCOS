@@ -81,7 +81,8 @@ LevelDB::LevelDB(boost::filesystem::path const& _path, leveldb::ReadOptions _rea
     leveldb::Status status;
 
     LOG(DEBUG) << "[ENCDB] [enable/url/key]:  " << g_BCOSConfig.diskEncryption.enable << "/"
-               << g_BCOSConfig.diskEncryption.keyCenterUrl << "/"
+               << g_BCOSConfig.diskEncryption.keyCenterIP << ":"
+               << g_BCOSConfig.diskEncryption.keyCenterPort << "/"
                << g_BCOSConfig.diskEncryption.cipherDataKey << "/" << std::endl;
 
 
