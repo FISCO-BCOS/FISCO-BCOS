@@ -39,7 +39,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
-
+#include <unordered_set>
 
 namespace dev
 {
@@ -64,10 +64,13 @@ public:
         m_minElectTimeout(_minElectTime),
         m_maxElectTimeout(_maxElectTime),
         m_uncommittedBlock(dev::eth::Block()),
+        m_uncommittedBlockNumber(0),
         m_waitingForCommitting(false)
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
+        m_blockSync->registerConsensusVerifyHandler(
+            [](dev::eth::Block const& block) { return true; });
     }
 
     raft::NodeIndex getNodeIdx() const
@@ -105,7 +108,6 @@ public:
     bool shouldSeal();
     bool commit(dev::eth::Block const& _block);
     bool reachBlockIntervalTime();
-
 
 protected:
     void initRaftEnv();
@@ -145,6 +147,7 @@ protected:
     void runAsLeader();
     bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& memberHeartbeatLog);
     void runAsFollower();
+    bool runAsFollowerImp();
     void runAsCandidate();
 
     virtual bool checkHeartbeatTimeout();
@@ -238,6 +241,7 @@ protected:
     std::condition_variable m_commitCV;
     bool m_commitReady;
     bool m_waitingForCommitting;
+    std::unordered_map<h256, std::unordered_set<dev::Public>> m_commitFingerPrint;
 
 private:
     static typename raft::NodeIndex InvalidIndex;

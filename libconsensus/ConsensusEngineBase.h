@@ -55,6 +55,7 @@ public:
         m_blockChain(_blockChain),
         m_blockSync(_blockSync),
         m_blockVerifier(_blockVerifier),
+        m_consensusBlockNumber(0),
         m_protocolId(_protocolId),
         m_minerList(_minerList)
     {
