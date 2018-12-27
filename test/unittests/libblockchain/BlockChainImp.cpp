@@ -241,6 +241,17 @@ BOOST_AUTO_TEST_CASE(getCode)
     BOOST_CHECK_EQUAL(code.size(), 0);
 }
 
+BOOST_AUTO_TEST_CASE(setGroupMark)
+{
+    EmptyFixture empty;
+
+    auto bptr = empty.m_blockChainImp->getBlockByNumber(0);
+    BOOST_CHECK(bptr == nullptr);
+    empty.m_blockChainImp->setGroupMark("1");
+    bptr = empty.m_blockChainImp->getBlockByNumber(0);
+    BOOST_CHECK(bptr != nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(getBlockByHash)
 {
     std::shared_ptr<dev::eth::Block> bptr =

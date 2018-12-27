@@ -31,8 +31,13 @@
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <boost/thread/shared_mutex.hpp>
+#include <deque>
+#include <map>
 #include <memory>
+#include <mutex>
 
+#define BLOCKCACHE_LOG(LEVEL) LOG(LEVEL) << "[#BLOCKCACHE]"
 #define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << "[#BLOCKCHAIN]"
 
 namespace dev
@@ -48,6 +53,23 @@ class MemoryTableFactory;
 
 namespace blockchain
 {
+class BlockChainImp;
+
+class BlockCache
+{
+public:
+    BlockCache(){};
+    std::shared_ptr<dev::eth::Block> add(dev::eth::Block& _block);
+    std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> get(h256 const& _hash);
+
+private:
+    mutable boost::shared_mutex m_sharedMutex;
+    mutable std::map<dev::h256, std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> >
+        m_blockCache;
+    mutable std::deque<dev::h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
+    const unsigned c_blockCacheSize = 10;            // m_blockCache size, default set 10
+};
+
 class BlockChainImp : public BlockChainInterface
 {
 public:
@@ -72,6 +94,8 @@ public:
     dev::bytes getCode(dev::Address _address) override;
 
 private:
+    std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
+    std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
     void writeNumber(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeTotalTransactionCount(const dev::eth::Block& block,
@@ -89,6 +113,7 @@ private:
     const std::string c_genesisHash =
         "0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c";
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
+    BlockCache m_blockCache;
 };
 }  // namespace blockchain
 }  // namespace dev
