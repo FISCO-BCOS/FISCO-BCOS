@@ -63,7 +63,7 @@ class ConditionPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<ConditionPrecompiled> Ptr;
-
+    ConditionPrecompiled();
     virtual ~ConditionPrecompiled(){};
 
 

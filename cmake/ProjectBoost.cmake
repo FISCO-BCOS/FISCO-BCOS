@@ -44,7 +44,6 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
 set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
-set(CMAKE_ARGS -DOPENSSL_INCLUDE_DIRS=${OPENSSL_INCLUDE_DIRS})
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
@@ -76,6 +75,9 @@ ExternalProject_Add(boost
     # INSTALL_COMMAND ${BOOST_INSTALL_COMMAND}
     BUILD_BYPRODUCTS ${BOOST_BUILD_FILES}
 )
+if (BUILD_GM)
+    add_dependencies(boost tassl)
+endif()
 
 ExternalProject_Get_Property(boost SOURCE_DIR)
 set(BOOST_INCLUDE_DIR ${SOURCE_DIR})

@@ -38,6 +38,17 @@ contract ConsensusSystemTable
 }
 */
 
+const char* const CSS_METHOD_ADD_MINER = "addMiner(string)";
+const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
+const char* const CSS_METHOD_REMOVE = "remove(string)";
+
+ConsensusPrecompiled::ConsensusPrecompiled()
+{
+    name2Selector[CSS_METHOD_ADD_MINER] = getFuncSelector(CSS_METHOD_ADD_MINER);
+    name2Selector[CSS_METHOD_ADD_SER] = getFuncSelector(CSS_METHOD_ADD_SER);
+    name2Selector[CSS_METHOD_REMOVE] = getFuncSelector(CSS_METHOD_REMOVE);
+}
+
 bytes ConsensusPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
@@ -55,9 +66,8 @@ bytes ConsensusPrecompiled::call(
 
     showConsensusTable(context);
 
-    switch (func)
-    {
-    case 0x6b1b37c5:
+
+    if (func == name2Selector[CSS_METHOD_ADD_MINER])
     {
         // addMiner(string)
         std::string nodeID;
@@ -68,23 +78,21 @@ bytes ConsensusPrecompiled::call(
         if (nodeID.size() != 128u)
         {
             STORAGE_LOG(DEBUG) << "ConsensusPrecompiled nodeID length error. " << nodeID;
-            break;
         }
-
-        storage::Table::Ptr table = openTable(context, SYS_MINERS);
-
-        auto condition = table->newCondition();
-        condition->EQ(NODE_KEY_NODEID, nodeID);
-        auto entries = table->select(PRI_KEY, condition);
-        auto entry = table->newEntry();
-        entry->setField(NODE_TYPE, NODE_TYPE_MINER);
-        entry->setField(PRI_COLUMN, PRI_KEY);
-        entry->setField(
-            NODE_KEY_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-
-        if (entries.get())
+        else
         {
-            if (entries->size() == 0u)
+            storage::Table::Ptr table = openTable(context, SYS_MINERS);
+
+            auto condition = table->newCondition();
+            condition->EQ(NODE_KEY_NODEID, nodeID);
+            auto entries = table->select(PRI_KEY, condition);
+            auto entry = table->newEntry();
+            entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+            entry->setField(PRI_COLUMN, PRI_KEY);
+            entry->setField(NODE_KEY_ENABLENUM,
+                boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+
+            if (entries.get())
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 count = table->insert(PRI_KEY, entry, getOptions(origin));
@@ -95,18 +103,12 @@ bytes ConsensusPrecompiled::call(
                 count = table->update(PRI_KEY, entry, condition, getOptions(origin));
                 STORAGE_LOG(DEBUG) << "ConsensusPrecompiled change to miner, nodeID : " << nodeID;
             }
-        }
-        else
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled select SYS_MINERS table failed.";
-        }
 
-        out = abi.abiIn("", count);
-        STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addMiner result:" << toHex(out);
-
-        break;
+            out = abi.abiIn("", count);
+            STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addMiner result:" << toHex(out);
+        }
     }
-    case 0x2800efc0:
+    else if (func == name2Selector[CSS_METHOD_ADD_SER])
     {
         // addObserver(string)
         std::string nodeID;
@@ -117,23 +119,21 @@ bytes ConsensusPrecompiled::call(
         if (nodeID.size() != 128u)
         {
             STORAGE_LOG(DEBUG) << "ConsensusPrecompiled nodeID length error. " << nodeID;
-            break;
         }
-
-        storage::Table::Ptr table = openTable(context, SYS_MINERS);
-
-        auto condition = table->newCondition();
-        condition->EQ(NODE_KEY_NODEID, nodeID);
-        auto entries = table->select(PRI_KEY, condition);
-        auto entry = table->newEntry();
-        entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
-        entry->setField(PRI_COLUMN, PRI_KEY);
-        entry->setField(
-            NODE_KEY_ENABLENUM, boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-
-        if (entries.get())
+        else
         {
-            if (entries->size() == 0u)
+            storage::Table::Ptr table = openTable(context, SYS_MINERS);
+
+            auto condition = table->newCondition();
+            condition->EQ(NODE_KEY_NODEID, nodeID);
+            auto entries = table->select(PRI_KEY, condition);
+            auto entry = table->newEntry();
+            entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
+            entry->setField(PRI_COLUMN, PRI_KEY);
+            entry->setField(NODE_KEY_ENABLENUM,
+                boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+
+            if (entries.get())
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 count = table->insert(PRI_KEY, entry, getOptions(origin));
@@ -150,18 +150,12 @@ bytes ConsensusPrecompiled::call(
                 STORAGE_LOG(DEBUG)
                     << "ConsensusPrecompiled change to observer, nodeID : " << nodeID;
             }
-        }
-        else
-        {
-            STORAGE_LOG(WARNING) << "ConsensusPrecompiled select SYS_MINERS table failed.";
-        }
 
-        out = abi.abiIn("", count);
-        STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addObserver result:" << toHex(out);
-
-        break;
+            out = abi.abiIn("", count);
+            STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addObserver result:" << toHex(out);
+        }
     }
-    case 0x80599e4b:
+    else if (func == name2Selector[CSS_METHOD_REMOVE])
     {
         // remove(string)
         std::string nodeID;
@@ -172,29 +166,25 @@ bytes ConsensusPrecompiled::call(
         if (nodeID.size() != 128u)
         {
             STORAGE_LOG(DEBUG) << "ConsensusPrecompiled nodeID length error. " << nodeID;
-            break;
         }
-
-        storage::Table::Ptr table = openTable(context, SYS_MINERS);
-
-        if (checkIsLastMiner(table, nodeID))
+        else
         {
-            break;
+            storage::Table::Ptr table = openTable(context, SYS_MINERS);
+
+            if (!checkIsLastMiner(table, nodeID))
+            {
+                auto condition = table->newCondition();
+                condition->EQ(NODE_KEY_NODEID, nodeID);
+                count = table->remove(PRI_KEY, condition, getOptions(origin));
+                STORAGE_LOG(DEBUG) << "ConsensusPrecompiled remove one node: " << nodeID;
+
+                out = abi.abiIn("", count);
+            }
         }
-
-        auto condition = table->newCondition();
-        condition->EQ(NODE_KEY_NODEID, nodeID);
-        count = table->remove(PRI_KEY, condition, getOptions(origin));
-        STORAGE_LOG(DEBUG) << "ConsensusPrecompiled remove one node: " << nodeID;
-
-        out = abi.abiIn("", count);
-        break;
     }
-    default:
+    else
     {
         STORAGE_LOG(ERROR) << "ConsensusPrecompiled error func:" << std::hex << func;
-        break;
-    }
     }
     return out;
 }

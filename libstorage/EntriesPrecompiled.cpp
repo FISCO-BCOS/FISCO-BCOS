@@ -25,7 +25,16 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::storage;
 
+const char* const ENTRYIES_METHOD_GET_INT = " get(int256)";
+const char* const ENTRYIES_METHOD_SIZE = "size()";
+
+EntriesPrecompiled::EntriesPrecompiled()
+{
+    name2Selector[ENTRYIES_METHOD_GET_INT] = getFuncSelector(ENTRYIES_METHOD_GET_INT);
+    name2Selector[ENTRYIES_METHOD_SIZE] = getFuncSelector(ENTRYIES_METHOD_SIZE);
+}
 
 std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 {
@@ -46,9 +55,7 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
 
     bytes out;
 
-    switch (func)
-    {
-    case 0x846719e0:
+    if (func == name2Selector[ENTRYIES_METHOD_GET_INT])
     {  // get(int256)
         u256 num;
         abi.abiOut(data, num);
@@ -59,22 +66,12 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
         Address address = context->registerPrecompiled(entryPrecompiled);
 
         out = abi.abiIn("", address);
-
-        break;
     }
-    case 0x949d225d:
+    else if (func == name2Selector[ENTRYIES_METHOD_SIZE])
     {  // size()
         u256 c = m_entries->size();
 
         out = abi.abiIn("", c);
-
-        break;
     }
-    default:
-    {
-        break;
-    }
-    }
-
     return out;
 }

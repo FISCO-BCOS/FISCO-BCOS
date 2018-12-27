@@ -49,7 +49,11 @@ private:
 
 static void version(bool shouldExit = true)
 {
+#ifdef FISCO_GM
+    std::cout << "FISCO-BCOS gm version " << dev::Version << std::endl;
+#else
     std::cout << "FISCO-BCOS Version : " << dev::Version << std::endl;
+#endif
     std::cout << "Build Type         : " << DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM) << "/"
               << DEV_QUOTED(FISCO_BCOS_BUILD_TYPE) << std::endl;
     std::cout << "Git Branch         : " << DEV_QUOTED(FISCO_BCOS_BUILD_BRANCH) << std::endl;

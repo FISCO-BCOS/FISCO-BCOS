@@ -20,7 +20,8 @@
  */
 
 #include "TrieCommon.h"
-#include "SHA3.h"
+#include <libdevcrypto/Hash.h>
+
 
 namespace dev
 {

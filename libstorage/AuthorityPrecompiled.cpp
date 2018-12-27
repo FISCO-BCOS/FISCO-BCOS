@@ -30,6 +30,20 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
+
+const char* const AUP_METHOD_INS = "insert(string,string)";
+const char* const AUP_METHOD_REM = "remove(string,string)";
+const char* const AUP_METHOD_QUE = "queryByName(string)";
+
+
+AuthorityPrecompiled::AuthorityPrecompiled()
+{
+    name2Selector[AUP_METHOD_INS] = getFuncSelector(AUP_METHOD_INS);
+    name2Selector[AUP_METHOD_REM] = getFuncSelector(AUP_METHOD_REM);
+    name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
+}
+
+
 std::string AuthorityPrecompiled::toString(ExecutiveContext::Ptr)
 {
     return "Authority";
@@ -59,11 +73,10 @@ bytes AuthorityPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    switch (func)
+
+    if (func == name2Selector[AUP_METHOD_INS])
     {
-    // insert(string tableName,string addr)
-    case 0x06e63ff8:
-    {
+        // insert(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
@@ -71,7 +84,7 @@ bytes AuthorityPrecompiled::call(
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         auto condition = table->newCondition();
-        condition->EQ(SYS_AC_FIELD_ADDRESS, addr);
+        condition->EQ(SYS_AC_ADDRESS, addr);
         auto entries = table->select(tableName, condition);
         if (entries->size() != 0u)
         {
@@ -79,23 +92,23 @@ bytes AuthorityPrecompiled::call(
                 << "Authority entry with the same tableName and address has existed,  tableName : "
                 << tableName << "address: " << addr;
             out = abi.abiIn("", u256(0));
-            break;
         }
-        auto entry = table->newEntry();
-        entry->setField(SYS_AC_FIELD_TABLE_NAME, tableName);
-        entry->setField(SYS_AC_FIELD_ADDRESS, addr);
-        entry->setField(SYS_AC_FIELD_ENABLENUM,
-            boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-        int count = table->insert(tableName, entry, getOptions(origin));
-        out = abi.abiIn("", u256(count));
-        STORAGE_LOG(DEBUG) << "AuthorityPrecompiled add a record, tableName : " << tableName
-                           << "address: " << addr;
-
-        break;
+        else
+        {
+            auto entry = table->newEntry();
+            entry->setField(SYS_AC_TABLE_NAME, tableName);
+            entry->setField(SYS_AC_ADDRESS, addr);
+            entry->setField(SYS_AC_ENABLENUM,
+                boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+            int count = table->insert(tableName, entry, getOptions(origin));
+            out = abi.abiIn("", u256(count));
+            STORAGE_LOG(DEBUG) << "AuthorityPrecompiled add a record, tableName : " << tableName
+                               << "address: " << addr;
+        }
     }
-    // remove(string tableName,string addr)
-    case 0x44590a7e:
+    else if (func == name2Selector[AUP_METHOD_REM])
     {
+        // remove(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
@@ -104,7 +117,7 @@ bytes AuthorityPrecompiled::call(
 
         bool exist = false;
         auto condition = table->newCondition();
-        condition->EQ(SYS_AC_FIELD_ADDRESS, addr);
+        condition->EQ(SYS_AC_ADDRESS, addr);
         auto entries = table->select(tableName, condition);
         if (entries->size() == 0u)
         {
@@ -117,12 +130,10 @@ bytes AuthorityPrecompiled::call(
             int count = table->remove(tableName, condition, getOptions(origin));
             out = abi.abiIn("", u256(count));
         }
-
-        break;
     }
-    // queryByName(string table_name)
-    case 0x20586031:
+    else if (func == name2Selector[AUP_METHOD_QUE])
     {
+        // queryByName(string table_name)
         std::string tableName;
         abi.abiOut(data, tableName);
         addPrefixToUserTable(tableName);
@@ -138,11 +149,11 @@ bytes AuthorityPrecompiled::call(
             {
                 auto entry = entries->get(i);
                 json_spirit::Object AuthorityInfo;
-                AuthorityInfo.push_back(json_spirit::Pair(SYS_AC_FIELD_TABLE_NAME, tableName));
+                AuthorityInfo.push_back(json_spirit::Pair(SYS_AC_TABLE_NAME, tableName));
                 AuthorityInfo.push_back(
-                    json_spirit::Pair(SYS_AC_FIELD_ADDRESS, entry->getField(SYS_AC_FIELD_ADDRESS)));
-                AuthorityInfo.push_back(json_spirit::Pair(
-                    SYS_AC_FIELD_ENABLENUM, entry->getField(SYS_AC_FIELD_ENABLENUM)));
+                    json_spirit::Pair(SYS_AC_ADDRESS, entry->getField(SYS_AC_ADDRESS)));
+                AuthorityInfo.push_back(
+                    json_spirit::Pair(SYS_AC_ENABLENUM, entry->getField(SYS_AC_ENABLENUM)));
                 AuthorityInfos.push_back(AuthorityInfo);
             }
         }
@@ -150,13 +161,10 @@ bytes AuthorityPrecompiled::call(
         std::string str = json_spirit::write_string(value, true);
 
         out = abi.abiIn("", str);
-        break;
     }
-    default:
+    else
     {
         STORAGE_LOG(ERROR) << "error func:" << std::hex << func;
-        break;
-    }
     }
     return out;
 }

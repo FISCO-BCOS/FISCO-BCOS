@@ -39,15 +39,15 @@ contract Authority {
 #endif
 
 /// _sys_table_access_ table fields
-const char* const SYS_AC_FIELD_TABLE_NAME = "table_name";
-const char* const SYS_AC_FIELD_ADDRESS = "address";
-const char* const SYS_AC_FIELD_ENABLENUM = "enable_num";
+const std::string SYS_AC_TABLE_NAME = "table_name";
+const std::string SYS_AC_ADDRESS = "address";
+const std::string SYS_AC_ENABLENUM = "enable_num";
 
 class AuthorityPrecompiled : public Precompiled
 {
 public:
     typedef std::shared_ptr<AuthorityPrecompiled> Ptr;
-
+    AuthorityPrecompiled();
     virtual ~AuthorityPrecompiled(){};
 
     virtual std::string toString(ExecutiveContext::Ptr);

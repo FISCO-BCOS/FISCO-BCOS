@@ -29,6 +29,18 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
+const char* const CNS_METHOD_INS_STR4 = "insert(string,string,string,string)";
+const char* const CNS_METHOD_SLT_STR = "selectByName(string)";
+const char* const CNS_METHOD_SLT_STR2 = "selectByNameAndVersion(string,string)";
+
+CNSPrecompiled::CNSPrecompiled()
+{
+    name2Selector[CNS_METHOD_INS_STR4] = getFuncSelector(CNS_METHOD_INS_STR4);
+    name2Selector[CNS_METHOD_SLT_STR] = getFuncSelector(CNS_METHOD_SLT_STR);
+    name2Selector[CNS_METHOD_SLT_STR2] = getFuncSelector(CNS_METHOD_SLT_STR2);
+}
+
+
 std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
 {
     return "CNS";
@@ -57,9 +69,7 @@ bytes CNSPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    switch (func)
-    {
-    case 0xa216464b:
+    if (func == name2Selector[CNS_METHOD_INS_STR4])
     {
         // insert(string,string,string,string)
         // insert(name, version, address, abi), 4 fields in table, the key of table is name field
@@ -88,21 +98,20 @@ bytes CNSPrecompiled::call(
         {
             STORAGE_LOG(WARNING) << "CNS entry with same name and version has existed.";
             out = abi.abiIn("", u256(0));
-            break;
         }
-
-        // do insert
-        auto entry = table->newEntry();
-        entry->setField(SYS_CNS_FIELD_NAME, contractName);
-        entry->setField(SYS_CNS_FIELD_VERSION, contractVersion);
-        entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
-        entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
-        int count = table->insert(contractName, entry, getOptions(origin));
-        out = abi.abiIn("", u256(count));
-
-        break;
+        else
+        {
+            // do insert
+            auto entry = table->newEntry();
+            entry->setField(SYS_CNS_FIELD_NAME, contractName);
+            entry->setField(SYS_CNS_FIELD_VERSION, contractVersion);
+            entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
+            entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
+            int count = table->insert(contractName, entry, getOptions(origin));
+            out = abi.abiIn("", u256(count));
+        }
     }
-    case 0x819a3d62:
+    else if (func == name2Selector[CNS_METHOD_SLT_STR])
     {
         // selectByName(string) returns(string)
         // Cursor is not considered.
@@ -133,10 +142,8 @@ bytes CNSPrecompiled::call(
         json_spirit::Value value(CNSInfos);
         std::string str = json_spirit::write_string(value, true);
         out = abi.abiIn("", str);
-
-        break;
     }
-    case 0x897f0251:
+    else if (func == name2Selector[CNS_METHOD_SLT_STR2])
     {
         // selectByNameAndVersion(string,string) returns(string)
         std::string contractName, contractVersion;
@@ -169,14 +176,10 @@ bytes CNSPrecompiled::call(
         json_spirit::Value value(CNSInfos);
         std::string str = json_spirit::write_string(value, true);
         out = abi.abiIn("", str);
-
-        break;
     }
-    default:
+    else
     {
         STORAGE_LOG(ERROR) << "error func:" << std::hex << func;
-        break;
-    }
     }
 
     return out;

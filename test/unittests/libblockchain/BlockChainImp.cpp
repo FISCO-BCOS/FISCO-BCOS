@@ -219,8 +219,13 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().first, 0);
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().second, 0);
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
+#ifdef FISCO_GM
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
+        h256("1017fb86b218c0eb089f6a5bbc3fea962d0cd86bc0ee7ed6a5c1f8643815d664"));
+#else
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
         h256("0xcd1eb2555fe7812ab17f47acd1043c2674312b05ad6e1bd4f8b1951b62fe7d21"));
+#endif
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix)),

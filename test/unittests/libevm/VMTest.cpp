@@ -212,9 +212,13 @@ public:
             addressWithEmptyCode.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-
+#ifdef FISCO_GM
+        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+            "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
+#else
         BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
             "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+#endif
     }
 
     void testExtCodeHashOfNonExistentAccount()
@@ -250,9 +254,13 @@ public:
             addressPrecompile.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-
+#ifdef FISCO_GM
+        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+            "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
+#else
         BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
             "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+#endif
     }
 
     void testExtcodehashIgnoresHigh12Bytes()

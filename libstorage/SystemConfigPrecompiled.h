@@ -45,7 +45,7 @@ class SystemConfigPrecompiled : public CRUDPrecompiled
 {
 public:
     typedef std::shared_ptr<SystemConfigPrecompiled> Ptr;
-
+    SystemConfigPrecompiled();
     virtual ~SystemConfigPrecompiled(){};
 
     virtual bytes call(
