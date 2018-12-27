@@ -50,6 +50,9 @@ public:
 
     virtual bytes call(
         ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+
+private:
+    bool checkValueValid(std::string const& key, std::string const& value);
 };
 
 }  // namespace blockverifier

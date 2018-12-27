@@ -52,7 +52,6 @@ bytes SystemConfigPrecompiled::call(
     bytes out;
     u256 count = 0;
 
-
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
@@ -71,6 +70,15 @@ bytes SystemConfigPrecompiled::call(
         entry->setField(SYSTEM_CONFIG_VALUE, configValue);
         entry->setField(SYSTEM_CONFIG_ENABLENUM,
             boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+
+        if (!checkValueValid(configKey, configValue))
+        {
+            // The transaction returns 0, indicating that the system config setting failed.
+            // TODO: Different values returned indicate different reasons for failure.
+            out = abi.abiIn("", 0);
+            STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled set invalid value";
+            return out;
+        }
 
         if (entries.get())
         {
@@ -98,4 +106,17 @@ bytes SystemConfigPrecompiled::call(
         STORAGE_LOG(ERROR) << "SystemConfigPrecompiled error func:" << std::hex << func;
     }
     return out;
+}
+
+bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::string const& value)
+{
+    if (SYSTEM_KEY_TX_COUNT_LIMIT == key)
+    {
+        return (boost::lexical_cast<uint64_t>(value) >= 1);
+    }
+    else if (SYSTEM_KEY_TX_GAS_LIMIT == key)
+    {
+        return (boost::lexical_cast<uint64_t>(value) >= 100000);
+    }
+    return true;
 }
