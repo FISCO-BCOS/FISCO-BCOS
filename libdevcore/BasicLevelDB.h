@@ -55,7 +55,7 @@ class BasicLevelDB
 public:
     BasicLevelDB() {}
     BasicLevelDB(const leveldb::Options& _options, const std::string& _name);
-    ~BasicLevelDB(){};
+    virtual ~BasicLevelDB(){};
 
     static leveldb::Status Open(
         const leveldb::Options& _options, const std::string& _name, BasicLevelDB** _dbptr);

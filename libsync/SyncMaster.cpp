@@ -40,7 +40,8 @@ void SyncMaster::printSyncInfo()
     SYNCLOG(TRACE) << "            Block hash:   "
                    << m_blockChain->numberHash(m_blockChain->number()) << endl;
     SYNCLOG(TRACE) << "            Genesis hash: " << m_syncStatus->genesisHash << endl;
-    SYNCLOG(TRACE) << "            TxPool size:  " << m_txPool->pendingSize() << endl;
+    auto pendingSize = m_txPool->pendingSize();
+    SYNCLOG(TRACE) << "            TxPool size:  " << pendingSize << endl;
     SYNCLOG(TRACE) << "            Peers size:   " << m_syncStatus->peers().size() << endl;
     SYNCLOG(TRACE) << "[Peer Info] --------------------------------------------" << endl;
     SYNCLOG(TRACE) << "    Host: " << m_nodeId.abridged() << endl;
@@ -192,8 +193,10 @@ void SyncMaster::maintainTransactions()
             return unsent;
         });
 
-    SYNCLOG(TRACE) << "[Tx] Transaction " << ts.size() << " of " << m_txPool->pendingSize()
-                   << " need to broadcast" << endl;
+    auto txSize = ts.size();
+    auto pendingSize = m_txPool->pendingSize();
+    SYNCLOG(TRACE) << "[Tx] Transaction " << txSize << " of " << pendingSize << " need to broadcast"
+                   << endl;
 
     for (size_t i = 0; i < ts.size(); ++i)
     {
