@@ -52,11 +52,7 @@ using namespace dev::eth;
 using namespace dev::crypto;
 
 /// Interval at which HostSSL::run will call keepAlivePeers to ping peers.
-std::chrono::seconds const c_keepAliveIntervalSSL = std::chrono::seconds(20);
-std::chrono::seconds const c_reconnectNodesIntervalSSL = std::chrono::seconds(60);
-std::chrono::seconds const c_AnnouncementConnectNodesIntervalSSL = std::chrono::seconds(60);
-const size_t c_maxAnnouncementSize = 100;
-
+std::chrono::seconds const c_keepAliveIntervalSSL = std::chrono::seconds(1);
 std::chrono::milliseconds const c_keepAliveTimeOutSSL = std::chrono::milliseconds(10000);
 
 void HostSSL::doneWorking()
@@ -598,7 +594,7 @@ void HostSSL::run(boost::system::error_code const&)
 	});
 
 	keepAlivePeers();
-	reconnectAllNodes();
+	//reconnectAllNodes();
 
 	auto runcb = [this](boost::system::error_code const & error) { run(error); };
 	m_timer->expires_from_now(boost::posix_time::milliseconds(c_timerInterval));
@@ -652,8 +648,13 @@ void HostSSL::keepAlivePeers()
 {
 	auto now = chrono::steady_clock::now();
 
-	if ( (now - c_keepAliveIntervalSSL < m_lastPing) && (!m_reconnectnow) )
+	if ( now - c_keepAliveIntervalSSL < m_lastPing && m_lastPing != std::chrono::steady_clock::time_point())
 		return;
+
+	bool pingNow = false;
+	if(now - m_lastPing > c_keepAliveTimeOutSSL) {
+		pingNow = true;
+	}
 
 	RecursiveGuard l(x_sessions);
 	for (auto it = m_sessions.begin(); it != m_sessions.end();) {
@@ -661,28 +662,29 @@ void HostSSL::keepAlivePeers()
 		{
 			if( p->isConnected() )
 			{
-				if (now - c_keepAliveTimeOutSSL > m_lastPing && p->lastReceived() < m_lastPing)
-				{
-					LOG(WARNING) << "HostSSL::keepAlivePeers  timeout disconnect " << p->id().abridged();
+				if ((p->lastReceived() < now) && now - p->lastReceived() > c_keepAliveTimeOutSSL ) {
+					LOG(WARNING)<< "HostSSL::keepAlivePeers  timeout disconnect " << p->id().abridged();
 					p->disconnect(PingTimeout);
+				} else if(pingNow) {
+					p->ping();
 				}
-				else
-					p->ping(); 
-
-				++it;
 			}
-			else
+
+			//else
+			if(! p->isConnected())
 			{
 				if (m_peers.count(p->info().nodeIPEndpoint.name() ) )
 					m_peers.erase(p->info().nodeIPEndpoint.name());
 				LOG(WARNING) << "HostSSL::keepAlivePeers m_peers erase " << p->id().abridged() << "," << p->info().nodeIPEndpoint.name();
 				it = m_sessions.erase(it);
 			}
+			else {
+				++it;
+			}
 		}
 		else {
 			LOG(WARNING) << "HostSSL::keepAlivePeers erase Session " << it->first;
 			it = m_sessions.erase(it);
-			
 		}
 	}
 	
@@ -698,60 +700,20 @@ void HostSSL::keepAlivePeers()
 	}
 
 	m_lastPing = chrono::steady_clock::now();
+
+	reconnectAllNodes();
 }
 
 void HostSSL::reconnectAllNodes()
 {
-	Guard rl(x_reconnectnow);
-	if ( (chrono::steady_clock::now() - c_reconnectNodesIntervalSSL < m_lastReconnect) && (!m_reconnectnow) )
-		return;
-
-	
 	std::map<std::string, NodeIPEndpoint> mConnectParams;
 	NodeConnManagerSingleton::GetInstance().getAllConnect(mConnectParams);
 	std::map<std::string, NodeIPEndpoint> mMergeConnectParams;//merge 
 	
-	/* /// commented by wheatli, there is a bug in this section, it will not merge the session peers when the config list is empty
-	RecursiveGuard l(x_sessions);
-	for (auto stNode : mConnectParams)
-	{
-		bool hasPeer = false;
-		for (auto const& p : m_peers)
-		{
-			if( !mMergeConnectParams.count(p.second->endpoint.name()))
-				mMergeConnectParams[p.second->endpoint.name()] = p.second->endpoint;
-			
-			if( !p.second->endpoint.host.empty() )
-				mMergeConnectParams[p.second->endpoint.name()].host = p.second->endpoint.host;
-			
-			//LOG(TRACE) << "HostSSL::reconnectAllNodes m_peers " << p.second->endpoint.name() << "," << p.second->endpoint.host;
-			if (p.second->endpoint == stNode.second )
-			{
-				if( !havePeerSession(p.second->id) )
-				{
-					LOG(TRACE) << "HostSSL::reconnectAllNodes try to reconnect " << p.second->id.abridged() <<":" << stNode.second.name();
-					connect(p.second->endpoint);
-				}	
-				hasPeer = true;
-				break;
-			}
-		}
-	
-		if( !hasPeer && ( m_tcpPublic != stNode.second) && (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) != stNode.second) )
-		{
-			LOG(TRACE) << "HostSSL::reconnectAllNodes try to connect " << stNode.second.name();
-			connect(stNode.second);
-		}
-		if( !mMergeConnectParams.count(stNode.second.name()))
-			mMergeConnectParams[stNode.second.name()] = stNode.second;
-		
-	}//for */
-
 	for (auto stNode : mConnectParams) {
 		mMergeConnectParams[stNode.second.name()] = stNode.second;
 	}
 	
-	RecursiveGuard l(x_sessions);
 	std::set<std::string> sessionSet;
 	for (auto const& p : m_peers) {
 		if( !mMergeConnectParams.count(p.second->endpoint.name()))
@@ -769,13 +731,12 @@ void HostSSL::reconnectAllNodes()
 		bool hasPeer = sessionSet.count(stNode.first);
 		if( !hasPeer && ( m_tcpPublic != stNode.second) && (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) != stNode.second) )
 		{
-			LOG(TRACE) << "HostSSL::reconnectAllNodes try to reconnect " << stNode.first;
+			LOG(INFO) << "HostSSL::reconnectAllNodes try to reconnect " << stNode.first;
 			connect(stNode.second);
 		}
 	}
 
 	m_lastReconnect = chrono::steady_clock::now();
-	m_reconnectnow = false;
 }
 
 void HostSSL::disconnectLatePeers()
