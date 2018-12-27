@@ -350,7 +350,7 @@ void SyncMaster::maintainPeersStatus()
             m_service->asyncSendMessageByNodeID(
                 _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
             SYNCLOG(DEBUG) << "[Download] [Request] Request blocks [from, to] : [" << from << ", "
-                           << to << "] to " << _p->nodeId << endl;
+                           << to << "] to " << _p->nodeId.abridged() << endl;
 
             ++shard;  // shard move
 
