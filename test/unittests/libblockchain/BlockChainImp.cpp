@@ -250,7 +250,6 @@ BOOST_AUTO_TEST_CASE(setGroupMark)
     empty.m_blockChainImp->setGroupMark("1");
     bptr = empty.m_blockChainImp->getBlockByNumber(0);
     BOOST_CHECK(bptr != nullptr);
-
 }
 
 BOOST_AUTO_TEST_CASE(getBlockByHash)
