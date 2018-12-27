@@ -94,14 +94,19 @@ bytes ConsensusPrecompiled::call(
 
             if (entries.get())
             {
-                entry->setField(NODE_KEY_NODEID, nodeID);
-                count = table->insert(PRI_KEY, entry, getOptions(origin));
-                STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new miner node, nodeID : " << nodeID;
-            }
-            else
-            {
-                count = table->update(PRI_KEY, entry, condition, getOptions(origin));
-                STORAGE_LOG(DEBUG) << "ConsensusPrecompiled change to miner, nodeID : " << nodeID;
+                if (entries->size() == 0u)
+                {
+                    entry->setField(NODE_KEY_NODEID, nodeID);
+                    count = table->insert(PRI_KEY, entry, getOptions(origin));
+                    STORAGE_LOG(DEBUG)
+                        << "ConsensusPrecompiled new miner node, nodeID : " << nodeID;
+                }
+                else
+                {
+                    count = table->update(PRI_KEY, entry, condition, getOptions(origin));
+                    STORAGE_LOG(DEBUG)
+                        << "ConsensusPrecompiled change to miner, nodeID : " << nodeID;
+                }
             }
 
             out = abi.abiIn("", count);
@@ -135,20 +140,23 @@ bytes ConsensusPrecompiled::call(
 
             if (entries.get())
             {
-                entry->setField(NODE_KEY_NODEID, nodeID);
-                count = table->insert(PRI_KEY, entry, getOptions(origin));
-                STORAGE_LOG(DEBUG) << "ConsensusPrecompiled new observer node, nodeID : " << nodeID;
+                if (entries->size() == 0u)
+                {
+                    entry->setField(NODE_KEY_NODEID, nodeID);
+                    count = table->insert(PRI_KEY, entry, getOptions(origin));
+                    STORAGE_LOG(DEBUG)
+                        << "ConsensusPrecompiled new observer node, nodeID : " << nodeID;
+                }
+                else if (!checkIsLastMiner(table, nodeID))
+                {
+                    count = table->update(PRI_KEY, entry, condition, getOptions(origin));
+                    STORAGE_LOG(DEBUG)
+                        << "ConsensusPrecompiled change to observer, nodeID : " << nodeID;
+                }
             }
             else
             {
-                if (checkIsLastMiner(table, nodeID))
-                {
-                    break;
-                }
-
-                count = table->update(PRI_KEY, entry, condition, getOptions(origin));
-                STORAGE_LOG(DEBUG)
-                    << "ConsensusPrecompiled change to observer, nodeID : " << nodeID;
+                STORAGE_LOG(WARNING) << "ConsensusPrecompiled select SYS_MINERS table failed.";
             }
 
             out = abi.abiIn("", count);
