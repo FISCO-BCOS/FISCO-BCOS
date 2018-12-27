@@ -67,7 +67,7 @@ private:
     mutable std::map<dev::h256, std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> >
         m_blockCache;
     mutable std::deque<dev::h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
-    const unsigned c_blockCacheSize = 1024;          // m_blockCache size, default set 1024
+    const unsigned c_blockCacheSize = 10;            // m_blockCache size, default set 10
 };
 
 class BlockChainImp : public BlockChainInterface

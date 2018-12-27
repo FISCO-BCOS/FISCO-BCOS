@@ -47,12 +47,12 @@ std::shared_ptr<Block> BlockCache::add(Block& _block)
 {
     BLOCKCHAIN_LOG(TRACE) << "[#add] Add block to block cache, [blockHash]: "
                           << _block.header().hash();
-
+                          
     {
         WriteGuard guard(m_sharedMutex);
         if (m_blockCache.size() > c_blockCacheSize)
         {
-            BLOCKCACHE_LOG(INFO) << "[#add] Block cache full, start to remove old item...";
+            BLOCKCACHE_LOG(TRACE) << "[#add] Block cache full, start to remove old item...";
 
             auto firstHash = m_blockCacheFIFO.front();
             m_blockCacheFIFO.pop_front();
