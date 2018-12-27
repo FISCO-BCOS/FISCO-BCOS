@@ -43,13 +43,22 @@ using tcp = net::ip::tcp;        // from <boost/asio/ip/tcp.hpp>
 
 KeyCenterHttpClient::KeyCenterHttpClient(const string& _ip, int _port)
   : m_ip(_ip), m_port(_port), m_ioc(), m_socket(m_ioc)
+{}
+
+KeyCenterHttpClient::~KeyCenterHttpClient()
+{
+    if (!hasConnected)
+        close();
+}
+
+void KeyCenterHttpClient::connect()
 {
     try
     {
         // These objects perform our I/O
         tcp::resolver resolver{m_ioc};
         // Look up the domain name
-        auto const results = resolver.resolve(_ip, to_string(_port).c_str());
+        auto const results = resolver.resolve(m_ip, to_string(m_port).c_str());
 
         // Make the connection on the IP address we get from a lookup
         // TODO Add timeout in connect and read write
@@ -60,9 +69,10 @@ KeyCenterHttpClient::KeyCenterHttpClient(const string& _ip, int _port)
         LOG(ERROR) << "[KeyCenter] Init keycenter failed for " << e.what() << endl;
         BOOST_THROW_EXCEPTION(KeyCenterInitError());
     }
+    hasConnected = true;
 }
 
-KeyCenterHttpClient::~KeyCenterHttpClient()
+void KeyCenterHttpClient::close()
 {
     // Gracefully close the socket
     beast::error_code ec;
@@ -73,10 +83,13 @@ KeyCenterHttpClient::~KeyCenterHttpClient()
         LOG(ERROR) << "[KeyCenter] Close keycenter failed. error_code " << ec << endl;
         BOOST_THROW_EXCEPTION(KeyCenterCloseError());
     }
+    hasConnected = false;
 }
 
 Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _params)
 {
+    connect();
+
     if (!m_socket.is_open())
     {
         LOG(ERROR) << "[KeyCenter] socket is not opened when callMethod" << endl;
@@ -122,12 +135,6 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
 
         // Receive the HTTP response
         int rspSize = http::read(m_socket, buffer, rsp);
-        if (rspSize <= 0)
-        {
-            LOG(ERROR) << "[KeyCenter] [callMethod] http respond nothing. respond size: " << rspSize
-                       << endl;
-            throw;
-        }
 
         LOG(DEBUG) << "[KeyCenter] [callMethod] keycenter respond [code/string]: "
                    << rsp.result_int() << "/" << rsp.body() << endl;
@@ -154,6 +161,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError());
     }
 
+    close();
     // Never goes here
     return res;
 }
@@ -195,6 +203,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     }
     catch (exception& e)
     {
+        clearCache();
         LOG(DEBUG) << "[KeyCenter] Get datakey exception for: " << e.what() << endl;
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }

@@ -50,7 +50,12 @@ private:
     std::string m_ip;
     int m_port;
     boost::asio::io_context m_ioc;
-    boost::asio::ip::tcp::socket m_socket{m_ioc};
+    boost::asio::ip::tcp::socket m_socket;
+    bool hasConnected = false;
+
+private:
+    void connect();
+    void close();
 };
 
 class KeyCenter
@@ -66,6 +71,12 @@ public:
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }
 
     static KeyCenter& instance();
+
+    void clearCache()
+    {
+        m_lastQueryCipherDataKey.clear();
+        m_lastRcvDataKey.clear();
+    }
 
 private:
     std::string m_ip;
