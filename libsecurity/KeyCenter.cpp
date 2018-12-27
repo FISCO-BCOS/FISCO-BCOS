@@ -111,7 +111,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         Json::FastWriter fastWriter;
         std::string queryJsonStr = fastWriter.write(queryJson);
         std::string url = m_ip + ":" + to_string(m_port);
-        std::cout << queryJsonStr << " length: " << queryJsonStr.length() << std::endl;
+        // std::cout << queryJsonStr << " length: " << queryJsonStr.length() << std::endl;
 
         http::request<http::string_body> req{http::verb::post, "/", 11};
         req.set(http::field::host, url.c_str());
