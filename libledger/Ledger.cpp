@@ -162,7 +162,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
                       << m_param->mutableConsensusParam().maxTransactions << "/"
                       << std::to_string(m_param->mutableConsensusParam().maxTTL);
 
-    std::string nodeListMark;
+    std::stringstream nodeListMark;
     try
     {
         for (auto it : pt.get_child("consensus"))
@@ -176,7 +176,8 @@ void Ledger::initConsensusConfig(ptree const& pt)
                 // Uniform lowercase nodeID
                 dev::h512 nodeID(data);
                 m_param->mutableConsensusParam().minerList.push_back(nodeID);
-                nodeListMark += data;
+                // The full output node ID is required.
+                nodeListMark << data << ",";
             }
         }
     }
@@ -185,7 +186,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
         Ledger_LOG(ERROR) << "[#initConsensusConfig]: Parse consensus section failed: "
                           << boost::diagnostic_information(e) << std::endl;
     }
-    m_param->mutableGenesisParam().nodeListMark = nodeListMark;
+    m_param->mutableGenesisParam().nodeListMark = nodeListMark.str();
 }
 
 /// init sync related configurations

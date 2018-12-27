@@ -677,30 +677,27 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     P2PSessionInfos infos;
 
     std::ostringstream oss;
-    oss << "[#sessionInfosByProtocolID] Finding nodeID in GroupID " << int(ret.first) << ":";
+    oss << "[#sessionInfosByProtocolID] Finding nodeID in GroupID[" << int(ret.first) << "],";
     RecursiveGuard l(x_nodeList);
     auto it = m_groupID2NodeList.find(int(ret.first));
     if (it == m_groupID2NodeList.end())
     {
         return infos;
     }
-
+    oss << "nodeList size:" << it->second.size() << ",";
     try
     {
         RecursiveGuard l(x_sessions);
-        auto s = m_sessions;
-        for (auto const& i : s)
+        oss << "sessions size:" << m_sessions.size() << ",";
+        for (auto const& i : m_sessions)
         {
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
-                if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
-                {
-                    auto nodeIPEndpoint = i.second->session()->nodeIPEndpoint();
-                    oss << i.first.abridged() << "[" << nodeIPEndpoint.address << ":"
-                        << nodeIPEndpoint.tcpPort << "],";
-                    infos.push_back(P2PSessionInfo(
-                        i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
-                }
+                auto nodeIPEndpoint = i.second->session()->nodeIPEndpoint();
+                oss << i.first.abridged() << "[" << nodeIPEndpoint.address << ":"
+                    << nodeIPEndpoint.tcpPort << "],";
+                infos.push_back(P2PSessionInfo(
+                    i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
             }
         }
     }

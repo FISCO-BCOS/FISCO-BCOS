@@ -120,7 +120,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 void PBFTEngine::resetConfig()
 {
     m_idx = MAXIDX;
-    updateMinerList();
+    updateConsensusNodeList();
     {
         ReadGuard l(m_minerListMutex);
         for (size_t i = 0; i < m_minerList.size(); i++)
@@ -1233,71 +1233,6 @@ const std::string PBFTEngine::consensusStatus() const
     json_spirit::Value value(status);
     std::string status_str = json_spirit::write_string(value, true);
     return status_str;
-}
-void PBFTEngine::updateMinerList()
-{
-    if (m_storage == nullptr)
-        return;
-    if (m_highestBlock.number() == m_lastObtainMinerNum)
-        return;
-    try
-    {
-        UpgradableGuard l(m_minerListMutex);
-        auto miner_list = m_minerList;
-        int64_t curBlockNum = m_highestBlock.number();
-        /// get node from storage DB
-        auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
-        /// obtain miner list
-        if (!nodes)
-            return;
-        for (size_t i = 0; i < nodes->size(); i++)
-        {
-            auto node = nodes->get(i);
-            if (!node)
-                return;
-            if ((node->getField("type") == "miner") &&
-                (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
-            {
-                h512 nodeID = h512(node->getField("node_id"));
-                if (find(miner_list.begin(), miner_list.end(), nodeID) == miner_list.end())
-                {
-                    miner_list.push_back(nodeID);
-                    PBFTENGINE_LOG(INFO) << "[#updateMinerList] Add nodeID [idx/nodeID]: " << i
-                                         << "/" << nodeID.abridged();
-                }
-            }
-        }
-        /// remove observe nodes
-        for (size_t i = 0; i < nodes->size(); i++)
-        {
-            auto node = nodes->get(i);
-            if (!node)
-                return;
-            if ((node->getField("type") == "observer") &&
-                (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
-            {
-                h512 nodeID = h512(node->getField("node_id"));
-                auto it = find(miner_list.begin(), miner_list.end(), nodeID);
-                if (it != miner_list.end())
-                {
-                    miner_list.erase(it);
-                    PBFTENGINE_LOG(INFO)
-                        << "[#updateMinerList] erase nodeID [nodeID/idx]:  " << nodeID.abridged()
-                        << "/" << i;
-                }
-            }
-        }
-        UpgradeGuard ul(l);
-        m_minerList = miner_list;
-        /// to make sure the index of all miners are consistent
-        std::sort(m_minerList.begin(), m_minerList.end());
-        m_lastObtainMinerNum = m_highestBlock.number();
-    }
-    catch (std::exception& e)
-    {
-        PBFTENGINE_LOG(ERROR) << "[#updateMinerList] update minerList failed [EINFO]:  "
-                              << boost::diagnostic_information(e);
-    }
 }
 }  // namespace consensus
 }  // namespace dev
