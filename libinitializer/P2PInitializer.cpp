@@ -32,12 +32,11 @@ using namespace dev::initializer;
 
 void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
+    INITIALIZER_LOG(DEBUG) << "[#P2PInitializer::initConfig]";
+    std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
+    int listenPort = _pt.get<int>("p2p.listen_port", 30300);
     try
     {
-        INITIALIZER_LOG(DEBUG) << "[#P2PInitializer::initConfig]";
-        std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
-        int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-
         std::map<NodeIPEndpoint, NodeID> nodes;
         for (auto it : _pt.get_child("p2p"))
         {
