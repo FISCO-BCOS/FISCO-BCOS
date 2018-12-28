@@ -167,6 +167,18 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
 
 int64_t BlockChainImp::number()
 {
+    UpgradableGuard ul(m_blockNumberMutex);
+    if (m_blockNumber == -1)
+    {
+        int64_t num = obtainNumber();
+        UpgradeGuard l(ul);
+        m_blockNumber = num;
+    }
+    return m_blockNumber;
+}
+
+int64_t BlockChainImp::obtainNumber()
+{
     int64_t num = 0;
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
     if (tb)
@@ -433,6 +445,10 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
         auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
         auto entry = tb->newEntry();
         entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
+        {
+            WriteGuard l(m_blockNumberMutex);
+            m_blockNumber = block.blockHeader().number();
+        }
         if (entries->size() > 0)
         {
             tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());

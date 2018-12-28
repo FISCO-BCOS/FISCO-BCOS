@@ -96,6 +96,7 @@ public:
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
+    int64_t obtainNumber();
     void writeNumber(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeTotalTransactionCount(const dev::eth::Block& block,
@@ -114,6 +115,10 @@ private:
         "0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c";
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     BlockCache m_blockCache;
+
+    /// cache the block number
+    mutable SharedMutex m_blockNumberMutex;
+    int64_t m_blockNumber = -1;
 };
 }  // namespace blockchain
 }  // namespace dev
