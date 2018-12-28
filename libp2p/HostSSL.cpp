@@ -514,7 +514,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 		connectTimer->async_wait(
 				[socket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
 					try {
-						LOG(TRACE) << "enter connectTimer: " << error.error_code();
+						LOG(TRACE) << "enter connectTimer: " << error.value();
 						if (error)
 						{
 							if(error != boost::asio::error::operation_aborted ) {
