@@ -547,7 +547,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 			else
 			{
 				//socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket, NodeID(), _nodeIPEndpoint)) );
-				socket->sslref().async_handshake(ba::ssl::stream_base::client, host->getStrand()->wrap([self, socket, _nodeIPEndpoint, connectTimer] (boost::system::error_code const & ec) {
+				socket->sslref().async_handshake(ba::ssl::stream_base::client, host->getStrand()->wrap([self, socket, _nodeIPEndpoint, connectTimer] (const boost::system::error_code& ec) {
 					connectTimer->cancel();
 
 					auto host = self.lock();
