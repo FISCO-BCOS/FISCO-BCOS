@@ -288,6 +288,31 @@ struct RaftHeartBeat : public RaftMsg
 
 struct RaftHeartBeatResp : public RaftMsg
 {
+    h256 uncommitedBlockHash;
+
+    virtual void streamRLPFields(RLPStream& _s) const
+    {
+        RaftMsg::streamRLPFields(_s);
+        _s << uncommitedBlockHash;
+    }
+
+    virtual void populate(RLP const& _rlp)
+    {
+        RaftMsg::populate(_rlp);
+        int field = 0;
+        try
+        {
+            uncommitedBlockHash = _rlp[field = 4].toHash<dev::h256>();
+        }
+        catch (Exception const& _e)
+        {
+            RAFT_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
+
+            _e << dev::eth::errinfo_name("invalid msg format")
+               << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
+            throw;
+        }
+    }
 };
 }  // namespace consensus
 }  // namespace dev
