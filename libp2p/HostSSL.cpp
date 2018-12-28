@@ -294,6 +294,8 @@ void HostSSL::sslHandshakeServer(const boost::system::error_code& error, std::sh
 		LOG(WARNING) << "HostSSL::async_handshake err:" << error.message();
 
 		socket->ref().close();
+
+		runAcceptor();
 		return;
 	}
 
@@ -316,6 +318,7 @@ void HostSSL::sslHandshakeServer(const boost::system::error_code& error, std::sh
 	}
 	if (!success)
 		socket->ref().close();
+
 	runAcceptor(); 
 }
 
