@@ -46,7 +46,7 @@ public:
     virtual void insertCache(dev::eth::Transaction const& _transcation);
     virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
 
-    dev::u256 CommonTransactionNonceCheck::generateKey(Transaction const& _t) { return _t.nonce(); }
+    dev::u256 generateKey(dev::eth::Transaction const& _t) { return _t.nonce(); }
 
 protected:
     dev::PROTOCOL_ID m_protocolId;

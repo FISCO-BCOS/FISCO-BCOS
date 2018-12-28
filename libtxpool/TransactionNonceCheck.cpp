@@ -88,7 +88,13 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             {
                 for (unsigned i = prestartblk; i < m_startblk; i++)
                 {
-                    h256 blockhash = m_blockChain->numberHash(i);
+                    std::vector<u256> nonce_vec;
+                    m_blockChain->getNonces(nonce_vec, i);
+                    for (auto nonce : nonce_vec)
+                    {
+                        m_cache.erase(nonce);
+                    }  // for
+                    /*h256 blockhash = m_blockChain->numberHash(i);
 
                     Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
                     for (unsigned j = 0; j < trans.size(); j++)
@@ -97,12 +103,18 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                         auto iter = m_cache.find(key);
                         if (iter != m_cache.end())
                             m_cache.erase(iter);
-                    }  // for
-                }      // for
+                    }  // for*/
+                }  // for
             }
             for (unsigned i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
             {
-                h256 blockhash = m_blockChain->numberHash(i);
+                std::vector<u256> nonce_vec;
+                m_blockChain->getNonces(nonce_vec, i);
+                for (auto nonce : nonce_vec)
+                {
+                    m_cache.insert(nonce);
+                }
+                /*h256 blockhash = m_blockChain->numberHash(i);
 
                 Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
                 for (unsigned j = 0; j < trans.size(); j++)
@@ -111,8 +123,8 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                     auto iter = m_cache.find(key);
                     if (iter == m_cache.end())
                         m_cache.insert(key);
-                }  // for
-            }      // for
+                }  // for*/
+            }  // for
             NONCECHECKER_LOG(TRACE) << "[#updateCache] [cacheSize/costTime]:  " << m_cache.size()
                                     << "/" << (timer.elapsed() * 1000) << std::endl;
         }

@@ -44,7 +44,7 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
     return false;
 }
 
-///void CommonTransactionNonceCheck::delCache(std::string const& key)
+/// void CommonTransactionNonceCheck::delCache(std::string const& key)
 void CommonTransactionNonceCheck::delCache(dev::u256 const& key)
 {
     DEV_WRITE_GUARDED(m_lock)

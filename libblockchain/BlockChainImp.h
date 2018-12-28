@@ -93,6 +93,8 @@ public:
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
 
+    void getNonces(std::vector<u256>& _nonceVector, int64_t _blockNumber);
+
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
@@ -109,6 +111,7 @@ private:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
     const std::string c_genesisHash =

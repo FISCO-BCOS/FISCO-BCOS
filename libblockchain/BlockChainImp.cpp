@@ -194,6 +194,23 @@ int64_t BlockChainImp::obtainNumber()
     return num;
 }
 
+void BlockChainImp::getNonces(std::vector<u256>& _nonceVector, int64_t _blockNumber)
+{
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    if (tb)
+    {
+        auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            std::string nonce_vector_str = entry->getField(SYS_VALUE);
+            bytes ret = fromHex(nonce_vector_str);
+            RLP rlp(ret);
+            _nonceVector = rlp.toVector<u256>();
+        }
+    }
+}
+
 std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
 {
     int64_t count = 0;
@@ -342,7 +359,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
             assert(pblock != nullptr);
-            std::vector<Transaction> txs = pblock->transactions();
+            const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
                 return txs[lexical_cast<uint>(txIndex)];
@@ -367,7 +384,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
             strblockhash = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblockhash));
-            std::vector<Transaction> txs = pblock->transactions();
+            const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
                 return LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], pblock->headerHash(),
@@ -488,16 +505,26 @@ void BlockChainImp::writeTotalTransactionCount(
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
-    if (tb)
+    Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    if (tb && tb_nonces)
     {
-        std::vector<Transaction> txs = block.transactions();
+        const std::vector<Transaction>& txs = block.transactions();
+        std::vector<u256> nonce_vector(txs.size());
         for (uint i = 0; i < txs.size(); i++)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
             entry->setField("index", lexical_cast<std::string>(i));
             tb->insert(txs[i].sha3().hex(), entry);
+            nonce_vector[i] = txs[i].nonce();
         }
+
+        /// insert tb2Nonces
+        RLPStream rs;
+        rs.appendVector(nonce_vector);
+        Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
+        entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
+        tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
     }
 }
 
