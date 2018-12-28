@@ -676,26 +676,21 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     std::pair<GROUP_ID, MODULE_ID> ret = dev::eth::getGroupAndProtocol(_protocolID);
     P2PSessionInfos infos;
 
-    std::ostringstream oss;
-    oss << "[#sessionInfosByProtocolID] Finding nodeID in GroupID[" << int(ret.first) << "],";
     RecursiveGuard l(x_nodeList);
     auto it = m_groupID2NodeList.find(int(ret.first));
     if (it == m_groupID2NodeList.end())
     {
+        SERVICE_LOG(WARNING) << "[#sessionInfosByProtocolID] cannot find GroupID "
+                             << int(ret.first);
         return infos;
     }
-    oss << "nodeList size:" << it->second.size() << ",";
     try
     {
         RecursiveGuard l(x_sessions);
-        oss << "sessions size:" << m_sessions.size() << ",";
         for (auto const& i : m_sessions)
         {
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
-                auto nodeIPEndpoint = i.second->session()->nodeIPEndpoint();
-                oss << i.first.abridged() << "[" << nodeIPEndpoint.address << ":"
-                    << nodeIPEndpoint.tcpPort << "],";
                 infos.push_back(P2PSessionInfo(
                     i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
             }
@@ -703,11 +698,12 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "Service::sessionInfosByProtocolID error:" << e.what();
+        SERVICE_LOG(ERROR) << "[#sessionInfosByProtocolID] error:" << e.what();
     }
 
-    oss << "list size: " << infos.size();
-    P2PMSG_LOG(DEBUG) << oss.str();
+    // P2PMSG_LOG(DEBUG) << "[#sessionInfosByProtocolID] Finding nodeID in GroupID[" <<
+    // int(ret.first) << "], consensus nodes size:" << it->second.size() << ", " <<
+    // printSessionInfos(infos);
     return infos;
 }
 
@@ -754,4 +750,16 @@ bool Service::isConnected(NodeID nodeID)
     }
 
     return true;
+}
+
+std::string Service::printSessionInfos(P2PSessionInfos const& sessionInfos) const
+{
+    std::ostringstream oss;
+    oss << "return list size:" << sessionInfos.size();
+    for (auto const& it : sessionInfos)
+    {
+        oss << ", node " << it.nodeID.abridged() << " on " << it.nodeIPEndpoint.address << ":"
+            << it.nodeIPEndpoint.tcpPort;
+    }
+    return oss.str();
 }

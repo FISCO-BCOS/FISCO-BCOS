@@ -61,6 +61,15 @@ bytes SystemConfigPrecompiled::call(
         boost::to_lower(configKey);
         STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled params:" << configKey << ", " << configValue;
 
+        if (!checkValueValid(configKey, configValue))
+        {
+            // The transaction returns 0, indicating that the system config setting failed.
+            // TODO: Different values returned indicate different reasons for failure.
+            out = abi.abiIn("", 0);
+            STORAGE_LOG(WARNING) << "SystemConfigPrecompiled set invalid value";
+            return out;
+        }
+
         storage::Table::Ptr table = openTable(context, SYS_CONFIG);
 
         auto condition = table->newCondition();
@@ -70,15 +79,6 @@ bytes SystemConfigPrecompiled::call(
         entry->setField(SYSTEM_CONFIG_VALUE, configValue);
         entry->setField(SYSTEM_CONFIG_ENABLENUM,
             boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-
-        if (!checkValueValid(configKey, configValue))
-        {
-            // The transaction returns 0, indicating that the system config setting failed.
-            // TODO: Different values returned indicate different reasons for failure.
-            out = abi.abiIn("", 0);
-            STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled set invalid value";
-            return out;
-        }
 
         if (entries.get())
         {
