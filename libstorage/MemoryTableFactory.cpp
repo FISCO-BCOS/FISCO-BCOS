@@ -39,6 +39,7 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_NUMBER_2_HASH);
     m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
     m_sysTables.push_back(SYS_HASH_2_BLOCK);
+    m_sysTables.push_back(SYS_BLOCK_2_NONCES);
 }
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName)
