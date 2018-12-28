@@ -358,7 +358,9 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
 {
     // Different keys can go into the function
     // -1 means that the parameter is invalid and to obtain current block height
-    int64_t blockNumber = (-1 == num) ? number() : num;
+    // The param was reset at height number(), and takes effect in next block.
+    // So we query the status of number() + 1.
+    int64_t blockNumber = (-1 == num) ? number() + 1 : num;
 
     UpgradableGuard l(m_systemConfigMutex);
     auto it = m_systemConfigRecord.find(key);
