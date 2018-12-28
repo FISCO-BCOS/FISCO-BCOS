@@ -582,6 +582,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         writeTotalTransactionCount(block, context);
         writeTxToBlock(block, context);
         writeBlockInfo(block, context);
+        m_blockCache.add(block);
         context->dbCommit(block);
         commitMutex.unlock();
         m_onReady();
