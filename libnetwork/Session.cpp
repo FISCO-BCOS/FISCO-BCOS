@@ -65,8 +65,7 @@ Session::~Session()
     }
 }
 
-void Session::asyncSendMessage(
-    Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc())
+void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback)
 {
     auto server = m_server.lock();
     if (!actived())
