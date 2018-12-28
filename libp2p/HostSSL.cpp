@@ -336,7 +336,9 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std:
 	if (isExpire)
 	{
 		LOG(WARNING) << "Verify Certificate Expire Data Error!";
-		socket->ref().close();
+		if(socket->ref().is_open()) {
+			socket->ref().close();
+		}
 		return false;
 	}
 
@@ -345,7 +347,9 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std:
 		if ( true == NodeConnManagerSingleton::GetInstance().checkCertOut(serialNumber) )
 		{
 			LOG(WARNING) << "Verify Certificate: Has Out! ("<<serialNumber<<")";
-			socket->ref().close();
+			if(socket->ref().is_open()) {
+				socket->ref().close();
+			}
 			return false;
 		}
 	}
