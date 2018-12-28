@@ -449,119 +449,129 @@ void HostSSL::sslHandshakeClient(const boost::system::error_code& error, std::sh
 
 void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 {
-	if (!m_run)
-		return;
-
-	if (((!m_netPrefs.listenIPAddress.empty()
-			&& _nodeIPEndpoint.address
-					== boost::asio::ip::address::from_string(
-							m_netPrefs.listenIPAddress))
-			|| (!m_netPrefs.publicIPAddress.empty()
-					&& _nodeIPEndpoint.address
-							== boost::asio::ip::address::from_string(
-									m_netPrefs.publicIPAddress))
-			|| m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end()
-			|| _nodeIPEndpoint.address == m_tcpPublic.address()
-			|| _nodeIPEndpoint.address == m_tcpClient.address())
-			&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
-		LOG(TRACE)<< "Ignore connect self" << _nodeIPEndpoint.name();
-
-		return;
-	}
-
-	if( m_tcpPublic == _nodeIPEndpoint)
-	{
-		LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
-		return;
-	}
-	if (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) == _nodeIPEndpoint)
-	{
-		LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
-		return;
-	}
-	if( m_peers.count(_nodeIPEndpoint.name() ) )
-	{
-		LOG(TRACE) <<"Don't Repeat Connect ("<<_nodeIPEndpoint.name() <<")";
-		if( !_nodeIPEndpoint.host.empty() )
-			m_peers[_nodeIPEndpoint.name()]->endpoint.host = _nodeIPEndpoint.host;
-		return;
-	}
-	if( _nodeIPEndpoint.address.to_string().empty() )
-	{
-		LOG(TRACE) <<"Target Node Ip Is Empty  ("<<_nodeIPEndpoint.name()<<")";
-		return;
-	}
-	
-	{
-		Guard l(x_pendingNodeConns);
-		if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
+	try {
+		if (!m_run)
 			return;
-		m_pendingPeerConns.insert(_nodeIPEndpoint.name());
-	}
 
-	LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name() << "," <<  _nodeIPEndpoint.host;
-	std::shared_ptr<RLPXSocketSSL> socket;
-	socket.reset(new RLPXSocketSSL(m_ioService,_nodeIPEndpoint));
+		if (((!m_netPrefs.listenIPAddress.empty()
+				&& _nodeIPEndpoint.address
+						== boost::asio::ip::address::from_string(
+								m_netPrefs.listenIPAddress))
+				|| (!m_netPrefs.publicIPAddress.empty()
+						&& _nodeIPEndpoint.address
+								== boost::asio::ip::address::from_string(
+										m_netPrefs.publicIPAddress))
+				|| m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end()
+				|| _nodeIPEndpoint.address == m_tcpPublic.address()
+				|| _nodeIPEndpoint.address == m_tcpClient.address())
+				&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
+			LOG(TRACE)<< "Ignore connect self" << _nodeIPEndpoint.name();
 
-	m_tcpClient = socket->remoteEndpoint();
-	socket->sslref().set_verify_mode(ba::ssl::verify_peer);
-	socket->sslref().set_verify_depth(3);
-	socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
+			return;
+		}
+	
+		if( m_tcpPublic == _nodeIPEndpoint)
+		{
+			LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
+			return;
+		}
+		if (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) == _nodeIPEndpoint)
+		{
+			LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
+			return;
+		}
+		if( m_peers.count(_nodeIPEndpoint.name() ) )
+		{
+			LOG(TRACE) <<"Don't Repeat Connect ("<<_nodeIPEndpoint.name() <<")";
+			if( !_nodeIPEndpoint.host.empty() )
+				m_peers[_nodeIPEndpoint.name()]->endpoint.host = _nodeIPEndpoint.host;
+			return;
+		}
+		if( _nodeIPEndpoint.address.to_string().empty() )
+		{
+			LOG(TRACE) <<"Target Node Ip Is Empty  ("<<_nodeIPEndpoint.name()<<")";
+			return;
+		}
 
-	auto connectTimer = std::make_shared<boost::asio::deadline_timer>(m_ioService, boost::posix_time::milliseconds(30000));
-	auto self = std::weak_ptr<HostSSL>(std::dynamic_pointer_cast<HostSSL>(shared_from_this()));
-	connectTimer->async_wait(
-			[socket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
-				if (error)
+		{
+			Guard l(x_pendingNodeConns);
+			if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
+				return;
+			m_pendingPeerConns.insert(_nodeIPEndpoint.name());
+		}
+
+		LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name() << "," <<  _nodeIPEndpoint.host;
+		std::shared_ptr<RLPXSocketSSL> socket;
+		socket.reset(new RLPXSocketSSL(m_ioService,_nodeIPEndpoint));
+
+		m_tcpClient = socket->remoteEndpoint();
+		socket->sslref().set_verify_mode(ba::ssl::verify_peer);
+		socket->sslref().set_verify_depth(3);
+		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
+
+		auto connectTimer = std::make_shared<boost::asio::deadline_timer>(m_ioService, boost::posix_time::milliseconds(30000));
+		auto self = std::weak_ptr<HostSSL>(std::dynamic_pointer_cast<HostSSL>(shared_from_this()));
+		connectTimer->async_wait(
+				[socket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
+					try {
+						LOG(TRACE) << "enter connectTimer: " << error.error_code();
+						if (error)
+						{
+							if(error != boost::asio::error::operation_aborted ) {
+								LOG(WARNING) << "shutdown timer error: " << error.message();
+							}
+							else {
+								return;
+							}
+						}
+
+						if(socket->ref().is_open()) {
+							LOG(WARNING) << "connection timeout, force close";
+							socket->ref().close();
+						}
+
+						auto host = self.lock();
+						if(host) {
+							host->erasePeedingPeerConn(_nodeIPEndpoint);
+						}
+					}
+					catch (std::exception &e) {
+						LOG(WARNING) << "connectTimer error: " << e.what();
+					}
+				});
+
+		socket->ref().async_connect(_nodeIPEndpoint, m_strand.wrap([ self, socket, _nodeIPEndpoint, connectTimer ](boost::system::error_code const & ec)
+		{
+			auto host = self.lock();
+			if(host) {
+				if (ec)
 				{
-					if(error != boost::asio::error::operation_aborted ) {
-						LOG(WARNING) << "shutdown timer error: " << error.message();
-					}
-					else {
-						return;
-					}
-				}
+					LOG(WARNING) << "Connection refused to node" << host->id().abridged() <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
 
-				if(socket->ref().is_open()) {
-					LOG(WARNING) << "connection timeout, force close";
-					socket->ref().close();
-				}
-
-				auto host = self.lock();
-				if(host) {
+					connectTimer->cancel();
 					host->erasePeedingPeerConn(_nodeIPEndpoint);
 				}
-			});
+				else
+				{
+					LOG(TRACE) << "connect done, start ssl handshake: " << _nodeIPEndpoint.name();
+					//socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket, NodeID(), _nodeIPEndpoint)) );
+					socket->sslref().async_handshake(ba::ssl::stream_base::client, [self, socket, _nodeIPEndpoint, connectTimer] (boost::system::error_code const & ec) {
+						LOG(TRACE) << "ssl handshake done: " << _nodeIPEndpoint.name();
+						connectTimer->cancel();
 
-	socket->ref().async_connect(_nodeIPEndpoint, m_strand.wrap([ self, socket, _nodeIPEndpoint, connectTimer ](boost::system::error_code const & ec)
-	{
-		auto host = self.lock();
-		if(host) {
-
-			if (ec)
-			{
-				LOG(WARNING) << "Connection refused to node" << host->id().abridged() <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
-
-				connectTimer->cancel();
-				host->erasePeedingPeerConn(_nodeIPEndpoint);
+						auto host = self.lock();
+						if(host) {
+							auto nodeIDEndpoint = _nodeIPEndpoint;
+							host->sslHandshakeClient(ec, socket, NodeID(), nodeIDEndpoint);
+						}
+					} );
+				}
 			}
-			else
-			{
-				LOG(TRACE) << "connect done, start ssl handshake: " << _nodeIPEndpoint.name();
-				//socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket, NodeID(), _nodeIPEndpoint)) );
-				socket->sslref().async_handshake(ba::ssl::stream_base::client, host->getStrand()->wrap([self, socket, _nodeIPEndpoint, connectTimer] (const boost::system::error_code& ec) {
-					LOG(TRACE) << "ssl handshake done: " << _nodeIPEndpoint.name();
-					connectTimer->cancel();
+		}));
+	}
+	catch (std::exception &e) {
 
-					auto host = self.lock();
-					if(host) {
-						auto nodeIDEndpoint = _nodeIPEndpoint;
-						host->sslHandshakeClient(ec, socket, NodeID(), nodeIDEndpoint);
-					}
-				}) );
-			}
-		}
-	}));
+	}
 }
 
 PeerSessionInfos HostSSL::peerSessionInfo() const
