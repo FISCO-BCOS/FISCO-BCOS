@@ -339,7 +339,7 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std:
 		if(socket->ref().is_open()) {
 			socket->ref().close();
 		}
-		return false;
+		return preverified;
 	}
 
 	if (certType == 1)
@@ -350,7 +350,7 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std:
 			if(socket->ref().is_open()) {
 				socket->ref().close();
 			}
-			return false;
+			return preverified;
 		}
 	}
 	return preverified;
