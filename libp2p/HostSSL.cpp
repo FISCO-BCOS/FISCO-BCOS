@@ -579,7 +579,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 		}));
 	}
 	catch (std::exception &e) {
-
+		LOG(ERROR) << "connect error:" << e.what();
 	}
 }
 
