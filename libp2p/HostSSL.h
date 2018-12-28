@@ -113,7 +113,7 @@ namespace dev
 		private:
 			void sslHandshakeServer(const boost::system::error_code& error,std::shared_ptr<RLPXSocketSSL> socket);
 			void sslHandshakeClient(const boost::system::error_code& error,std::shared_ptr<RLPXSocketSSL> socket,NodeID id, NodeIPEndpoint& _nodeIPEndpoint);
-			bool sslVerifyCert(bool preverified,ba::ssl::verify_context& ctx);
+			bool sslVerifyCert(bool preverified,ba::ssl::verify_context& ctx, std::shared_ptr<RLPXSocketSSL> socket);
 
 
 			unsigned peerSlots(PeerSlotType _type) { return _type == Egress ? m_idealPeerCount : m_idealPeerCount * m_stretchPeers; }
