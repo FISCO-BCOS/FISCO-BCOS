@@ -23,6 +23,7 @@
 #pragma once
 
 #include "BlockChainInterface.h"
+#include <libdevcore/Exceptions.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
@@ -49,6 +50,8 @@ class MemoryTableFactory;
 
 namespace blockchain
 {
+DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
+
 class BlockChainImp : public BlockChainInterface
 {
 public:
