@@ -537,6 +537,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 	{
 		auto host = self.lock();
 		if(host) {
+
 			if (ec)
 			{
 				LOG(WARNING) << "Connection refused to node" << host->id().abridged() <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
@@ -546,8 +547,10 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 			}
 			else
 			{
+				LOG(TRACE) << "connect done, start ssl handshake: " << _nodeIPEndpoint.name();
 				//socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket, NodeID(), _nodeIPEndpoint)) );
 				socket->sslref().async_handshake(ba::ssl::stream_base::client, host->getStrand()->wrap([self, socket, _nodeIPEndpoint, connectTimer] (const boost::system::error_code& ec) {
+					LOG(TRACE) << "ssl handshake done: " << _nodeIPEndpoint.name();
 					connectTimer->cancel();
 
 					auto host = self.lock();
