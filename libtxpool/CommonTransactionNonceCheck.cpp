@@ -28,7 +28,7 @@ namespace txpool
 {
 bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans, bool needInsert)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    UpgradableGuard l(m_lock);
     {
         auto key = this->generateKey(_trans);
         auto iter = m_cache.find(key);
@@ -36,6 +36,7 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
             return false;
         if (needInsert)
         {
+            UpgradeGuard ul(l);
             m_cache.insert(key);
         }
         return true;
@@ -44,28 +45,42 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
     return false;
 }
 
-/// void CommonTransactionNonceCheck::delCache(std::string const& key)
 void CommonTransactionNonceCheck::delCache(dev::u256 const& key)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    UpgradableGuard l(m_lock);
     {
         auto iter = m_cache.find(key);
         if (iter != m_cache.end())
+        {
+            UpgradeGuard ul(l);
             m_cache.erase(iter);
+        }
     }
 }
 
 void CommonTransactionNonceCheck::delCache(Transactions const& _transcations)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    UpgradableGuard l(m_lock);
     {
+        std::vector<u256> delList;
         for (unsigned i = 0; i < _transcations.size(); i++)
         {
             auto key = this->generateKey(_transcations[i]);
             auto iter = m_cache.find(key);
             if (iter != m_cache.end())
-                m_cache.erase(iter);
-        }  // for
+            {
+                delList.push_back(key);
+            }
+        }
+
+        if (delList.size() > 0)
+        {
+            UpgradeGuard ul(l);
+            for (auto key : delList)
+            {
+                m_cache.erase(key);
+            }
+        }
     }
 }
 
