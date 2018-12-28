@@ -59,9 +59,10 @@ private:
 
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    unsigned m_startblk;
-    unsigned m_endblk;
+    int64_t m_startblk;
+    int64_t m_endblk;
     unsigned m_maxBlockLimit = 1000;
+    int64_t m_blockNumber;
 };
 }  // namespace txpool
 }  // namespace dev
