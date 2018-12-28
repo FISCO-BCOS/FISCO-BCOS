@@ -93,7 +93,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                     Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
                     for (unsigned j = 0; j < trans.size(); j++)
                     {
-                        std::string key = this->generateKey(trans[j]);
+                        auto key = this->generateKey(trans[j]);
                         auto iter = m_cache.find(key);
                         if (iter != m_cache.end())
                             m_cache.erase(iter);
@@ -107,7 +107,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
                 for (unsigned j = 0; j < trans.size(); j++)
                 {
-                    std::string key = this->generateKey(trans[j]);
+                    auto key = this->generateKey(trans[j]);
                     auto iter = m_cache.find(key);
                     if (iter == m_cache.end())
                         m_cache.insert(key);

@@ -26,19 +26,11 @@ namespace dev
 {
 namespace txpool
 {
-std::string CommonTransactionNonceCheck::generateKey(Transaction const& _t)
-{
-    Address account = _t.from();
-    std::string key = toHex(account.ref());
-    key += "_" + toString(_t.nonce());
-    return key;
-}
-
 bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans, bool needInsert)
 {
     DEV_WRITE_GUARDED(m_lock)
     {
-        std::string key = this->generateKey(_trans);
+        auto key = this->generateKey(_trans);
         auto iter = m_cache.find(key);
         if (iter != m_cache.end())
             return false;
@@ -52,7 +44,8 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
     return false;
 }
 
-void CommonTransactionNonceCheck::delCache(std::string const& key)
+///void CommonTransactionNonceCheck::delCache(std::string const& key)
+void CommonTransactionNonceCheck::delCache(dev::u256 const& key)
 {
     DEV_WRITE_GUARDED(m_lock)
     {
@@ -68,7 +61,7 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transcations)
     {
         for (unsigned i = 0; i < _transcations.size(); i++)
         {
-            std::string key = this->generateKey(_transcations[i]);
+            auto key = this->generateKey(_transcations[i]);
             auto iter = m_cache.find(key);
             if (iter != m_cache.end())
                 m_cache.erase(iter);
@@ -80,7 +73,7 @@ void CommonTransactionNonceCheck::insertCache(dev::eth::Transaction const& _tran
 {
     DEV_WRITE_GUARDED(m_lock)
     {
-        std::string key = this->generateKey(_transcation);
+        auto key = this->generateKey(_transcation);
         m_cache.insert(key);
     }
 }
