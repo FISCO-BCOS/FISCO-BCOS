@@ -500,7 +500,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 			m_pendingPeerConns.insert(_nodeIPEndpoint.name());
 		}
 
-		LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name() << "," <<  _nodeIPEndpoint.host;
+		LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name();
 		std::shared_ptr<RLPXSocketSSL> socket;
 		socket.reset(new RLPXSocketSSL(m_ioService,_nodeIPEndpoint));
 
