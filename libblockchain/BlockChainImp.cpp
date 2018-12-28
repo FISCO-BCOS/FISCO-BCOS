@@ -43,6 +43,56 @@ using namespace dev::blockverifier;
 using namespace dev::executive;
 using boost::lexical_cast;
 
+std::shared_ptr<Block> BlockCache::add(Block& _block)
+{
+    BLOCKCHAIN_LOG(TRACE) << "[#add] Add block to block cache, [blockHash]: "
+                          << _block.header().hash();
+
+    {
+        WriteGuard guard(m_sharedMutex);
+        if (m_blockCache.size() > c_blockCacheSize)
+        {
+            BLOCKCACHE_LOG(TRACE) << "[#add] Block cache full, start to remove old item...";
+
+            auto firstHash = m_blockCacheFIFO.front();
+            m_blockCacheFIFO.pop_front();
+            m_blockCache.erase(firstHash);
+            // in case something unexcept error
+            if (m_blockCache.size() > c_blockCacheSize)
+            {
+                // meet error, cache and cacheFIFO not sync, clear the cache
+                m_blockCache.clear();
+                m_blockCacheFIFO.clear();
+            }
+        }
+
+        auto blockHash = _block.header().hash();
+        auto block = std::make_shared<Block>(_block);
+        m_blockCache.insert(std::make_pair(blockHash, std::make_pair(block, blockHash)));
+        // add hashindex to the blockCache queue, use to remove first element when the cache is full
+        m_blockCacheFIFO.push_back(blockHash);
+
+        return block;
+    }
+}
+
+std::pair<std::shared_ptr<Block>, h256> BlockCache::get(h256 const& _hash)
+{
+    BLOCKCHAIN_LOG(TRACE) << "[#add] Read block from block cache, [blockHash]: " << _hash;
+    {
+        ReadGuard guard(m_sharedMutex);
+
+        auto it = m_blockCache.find(_hash);
+        if (it == m_blockCache.end())
+        {
+            return std::make_pair(nullptr, h256(0));
+        }
+
+        return it->second;
+    }
+
+    return std::make_pair(nullptr, h256(0));  // just make compiler happy
+}
 
 void BlockChainImp::setStateStorage(Storage::Ptr stateStorage)
 {
@@ -60,6 +110,59 @@ shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
         std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
     return memoryTableFactory;
+}
+
+std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
+{
+    string blockHash = "";
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
+    if (tb)
+    {
+        auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            h256 blockHash = h256((entry->getField(SYS_VALUE)));
+            return getBlock(blockHash);
+        }
+    }
+
+    BLOCKCHAIN_LOG(TRACE) << "[#getBlock] Can't find block [height]: " << _i;
+    return nullptr;
+}
+
+std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
+{
+    auto cachedBlock = m_blockCache.get(_blockHash);
+    if (bool(cachedBlock.first))
+    {
+        BLOCKCHAIN_LOG(TRACE) << "[#getBlock] Cache hit, read from cache";
+        return cachedBlock.first;
+    }
+    else
+    {
+        BLOCKCHAIN_LOG(TRACE) << "[#getBlock] Cache missed, read from storage";
+
+        string strBlock = "";
+        Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
+        if (tb)
+        {
+            auto entries = tb->select(_blockHash.hex(), tb->newCondition());
+            if (entries->size() > 0)
+            {
+                auto entry = entries->get(0);
+                strBlock = entry->getField(SYS_VALUE);
+                auto block = Block(fromHex(strBlock.c_str()));
+
+                BLOCKCHAIN_LOG(TRACE) << "[#getBlock] Write to cache";
+                auto blockPtr = m_blockCache.add(block);
+                return blockPtr;
+            }
+        }
+
+        BLOCKCHAIN_LOG(WARNING) << "[#getBlock] Can't find the block, [blockHash]: " << _blockHash;
+        return nullptr;
+    }
 }
 
 int64_t BlockChainImp::number()
@@ -139,20 +242,16 @@ h256 BlockChainImp::numberHash(int64_t _i)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
 {
-    string strblock = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
-    if (tb)
+    auto block = getBlock(_blockHash);
+    if (bool(block))
     {
-        auto entries = tb->select(_blockHash.hex(), tb->newCondition());
-        if (entries->size() > 0)
-        {
-            auto entry = entries->get(0);
-            strblock = entry->getField(SYS_VALUE);
-            return std::make_shared<Block>(fromHex(strblock.c_str()));
-        }
+        return block;
     }
-    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByHash] Can't find block, return nullptr";
-    return nullptr;
+    else
+    {
+        BLOCKCHAIN_LOG(TRACE) << "[#getBlockByHash] Can't find block, return nullptr";
+        return nullptr;
+    }
 }
 
 void BlockChainImp::setGroupMark(std::string const& groupMark)
@@ -204,21 +303,16 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
-    string numberHash = "";
-    string strblock = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
-    if (tb)
+    auto block = getBlock(_i);
+    if (bool(block))
     {
-        auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
-        if (entries->size() > 0)
-        {
-            auto entry = entries->get(0);
-            numberHash = entry->getField(SYS_VALUE);
-            return getBlockByHash(h256(numberHash));
-        }
+        return block;
     }
-    BLOCKCHAIN_LOG(TRACE) << "[#getBlockByNumber] Can't find block, return nullptr";
-    return nullptr;
+    else
+    {
+        BLOCKCHAIN_LOG(TRACE) << "[#getBlockByNumber] Can't find block, return nullptr";
+        return nullptr;
+    }
 }
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
@@ -235,6 +329,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
+            assert(pblock != nullptr);
             std::vector<Transaction> txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
