@@ -320,7 +320,7 @@ void HostSSL::sslHandshakeServer(const boost::system::error_code& error, std::sh
 }
 
 
-bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
+bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std::shared_ptr<RLPXSocketSSL> socket)
 {
 	ParseCert parseCert;
 	parseCert.ParseInfo(ctx);
@@ -336,6 +336,7 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
 	if (isExpire)
 	{
 		LOG(WARNING) << "Verify Certificate Expire Data Error!";
+		socket->ref().close();
 		return false;
 	}
 
@@ -344,6 +345,7 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
 		if ( true == NodeConnManagerSingleton::GetInstance().checkCertOut(serialNumber) )
 		{
 			LOG(WARNING) << "Verify Certificate: Has Out! ("<<serialNumber<<")";
+			socket->ref().close();
 			return false;
 		}
 	}
@@ -363,7 +365,7 @@ void HostSSL::runAcceptor()
 		std::shared_ptr<RLPXSocketSSL> socket;
 		socket.reset(new RLPXSocketSSL(m_ioService,NodeIPEndpoint()));
 			
-		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
+		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2, socket));
 	
 		m_tcp4Acceptor.async_accept(socket->ref(), m_strand.wrap([ = ](boost::system::error_code ec)
 		{
@@ -507,7 +509,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 		m_tcpClient = socket->remoteEndpoint();
 		socket->sslref().set_verify_mode(ba::ssl::verify_peer);
 		socket->sslref().set_verify_depth(3);
-		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
+		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2, socket));
 
 		auto connectTimer = std::make_shared<boost::asio::deadline_timer>(m_ioService, boost::posix_time::milliseconds(30000));
 		auto self = std::weak_ptr<HostSSL>(std::dynamic_pointer_cast<HostSSL>(shared_from_this()));
