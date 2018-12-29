@@ -49,9 +49,11 @@ static unsigned const c_maxSendTransactions = 128;
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
 static int64_t const c_maxRequestBlocks = 32;
 static size_t const c_maxRequestShards = 4;
-static uint64_t const c_downloadingRequestTimeout = 500;  // ms
+static uint64_t const c_downloadingRequestTimeout =
+    c_maxRequestBlocks * 1000;  // ms: assume that we have 1s timeout for each block
 
-static size_t const c_maxDownloadingBlockQueueSize = 4096;
+static size_t const c_maxDownloadingBlockQueueSize =
+    c_maxRequestBlocks * 128;  // maybe less than 128 is ok
 static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxRequestShards * 8;
 
 static size_t const c_maxReceivedDownloadRequestPerPeer = 8;
@@ -68,8 +70,8 @@ using NodeIDs = std::vector<dev::p2p::NodeID>;
 using BlockPtr = std::shared_ptr<dev::eth::Block>;
 using BlockPtrVec = std::vector<BlockPtr>;
 
-#define SYNCLOG(_OBV)                                               \
-    LOG(_OBV) << " [#SYNC] [PROTOCOL: " << std::dec << m_protocolId \
+#define SYNCLOG(_OBV)                                              \
+    LOG(_OBV) << "[#SYNC] [PROTOCOL: " << std::dec << m_protocolId \
               << "] [GROUP: " << std::to_string(m_groupId) << " ]"
 
 enum SyncPacketType : byte

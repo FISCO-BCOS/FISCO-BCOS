@@ -305,9 +305,10 @@ void SyncMaster::maintainPeersStatus()
     uint64_t currentTime = utcTime();
     if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
     {
-        SYNCLOG(TRACE) << "[Download] No need to download when not timeout "
-                          "[currentNumber/maxPeerNumber]: "
-                       << currentNumber << "/" << maxPeerNumber << endl;
+        SYNCLOG(TRACE) << "[Download] Waiting for peers' blocks "
+                          "[currentNumber/maxRequestNumber/maxPeerNumber]: "
+                       << currentNumber << "/" << m_maxRequestNumber << "/" << maxPeerNumber
+                       << endl;
         return;  // no need to sync
     }
     m_lastDownloadingRequestTime = currentTime;
@@ -335,6 +336,8 @@ void SyncMaster::maintainPeersStatus()
     size_t shardNumber =
         (maxRequestNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
     size_t shard = 0;
+
+    m_maxRequestNumber = 0;  // each request turn has new m_maxRequestNumber
     while (shard < shardNumber && shard < c_maxRequestShards)
     {
         bool thisTurnFound = false;
@@ -352,8 +355,12 @@ void SyncMaster::maintainPeersStatus()
             packet.encode(from, size);
             m_service->asyncSendMessageByNodeID(
                 _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+
+            // update max request number
+            m_maxRequestNumber = max(m_maxRequestNumber, to);
+
             SYNCLOG(DEBUG) << "[Download] [Request] Request blocks [from, to] : [" << from << ", "
-                           << to << "] to " << _p->nodeId << endl;
+                           << to << "] to " << _p->nodeId.abridged() << endl;
 
             ++shard;  // shard move
 
@@ -433,8 +440,13 @@ bool SyncMaster::maintainDownloadingQueue()
         topBlock = bq.top();
     }
 
-    // has download finished ?
+
     currentNumber = m_blockChain->number();
+    // has this request turn finished ?
+    if (currentNumber >= m_maxRequestNumber)
+        m_lastDownloadingRequestTime = 0;  // reset it to trigger request immediately
+
+    // has download finished ?
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
         h256 const& latestHash =
