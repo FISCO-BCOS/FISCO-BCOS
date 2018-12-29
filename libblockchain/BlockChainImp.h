@@ -93,7 +93,7 @@ public:
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
 
-    void getNonces(std::vector<u256>& _nonceVector, int64_t _blockNumber);
+    void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber);
 
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);

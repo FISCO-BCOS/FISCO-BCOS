@@ -73,6 +73,7 @@ static const u256 wei = exp10<0>();
 
 using Nonce = h64;
 using BlockNumber = int64_t;
+using NonceKeyType = std::string;
 enum class BlockPolarity
 {
     Unknown,

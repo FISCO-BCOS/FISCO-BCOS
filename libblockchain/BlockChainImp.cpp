@@ -194,7 +194,8 @@ int64_t BlockChainImp::obtainNumber()
     return num;
 }
 
-void BlockChainImp::getNonces(std::vector<u256>& _nonceVector, int64_t _blockNumber)
+void BlockChainImp::getNonces(
+    std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
 {
     if (_blockNumber > number())
     {
@@ -211,7 +212,7 @@ void BlockChainImp::getNonces(std::vector<u256>& _nonceVector, int64_t _blockNum
             std::string nonce_vector_str = entry->getField(SYS_VALUE);
             bytes ret = fromHex(nonce_vector_str);
             RLP rlp(ret);
-            _nonceVector = rlp.toVector<u256>();
+            _nonceVector = rlp.toVector<dev::eth::NonceKeyType>();
         }
     }
 }
@@ -514,14 +515,14 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
     if (tb && tb_nonces)
     {
         const std::vector<Transaction>& txs = block.transactions();
-        std::vector<u256> nonce_vector(txs.size());
+        std::vector<dev::eth::NonceKeyType> nonce_vector(txs.size());
         for (uint i = 0; i < txs.size(); i++)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
             entry->setField("index", lexical_cast<std::string>(i));
             tb->insert(txs[i].sha3().hex(), entry);
-            nonce_vector[i] = txs[i].nonce();
+            nonce_vector[i] = lexical_cast<dev::eth::NonceKeyType>(txs[i].nonce());
         }
 
         /// insert tb2Nonces

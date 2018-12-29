@@ -45,7 +45,7 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
     return false;
 }
 
-void CommonTransactionNonceCheck::delCache(dev::u256 const& key)
+void CommonTransactionNonceCheck::delCache(dev::eth::NonceKeyType const& key)
 {
     UpgradableGuard l(m_lock);
     {
@@ -62,7 +62,7 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transcations)
 {
     UpgradableGuard l(m_lock);
     {
-        std::vector<u256> delList;
+        std::vector<dev::eth::NonceKeyType> delList;
         for (unsigned i = 0; i < _transcations.size(); i++)
         {
             auto key = this->generateKey(_transcations[i]);

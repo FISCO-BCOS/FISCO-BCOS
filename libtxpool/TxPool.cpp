@@ -313,7 +313,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
     uint64_t txCnt = 0;
     Transactions ret;
     std::vector<dev::h256> invalidBlockLimitTxs;
-    std::vector<dev::u256> nonceKeyCache;
+    std::vector<dev::eth::NonceKeyType> nonceKeyCache;
     for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
         /// check block limit and nonce again when obtain transactions

@@ -89,7 +89,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             {
                 for (auto i = prestartblk; i < m_startblk; i++)
                 {
-                    std::vector<u256> nonce_vec;
+                    std::vector<dev::eth::NonceKeyType> nonce_vec;
                     m_blockChain->getNonces(nonce_vec, i);
                     for (auto nonce : nonce_vec)
                     {
@@ -99,7 +99,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             }
             for (auto i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
             {
-                std::vector<u256> nonce_vec;
+                std::vector<dev::eth::NonceKeyType> nonce_vec;
                 m_blockChain->getNonces(nonce_vec, i);
                 for (auto nonce : nonce_vec)
                 {

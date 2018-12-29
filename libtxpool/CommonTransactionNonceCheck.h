@@ -41,18 +41,21 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
-    virtual void delCache(dev::u256 const& key);
+    virtual void delCache(dev::eth::NonceKeyType const& key);
     virtual void delCache(dev::eth::Transactions const& _transcations);
     virtual void insertCache(dev::eth::Transaction const& _transcation);
     virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
 
-    dev::u256 generateKey(dev::eth::Transaction const& _t) { return _t.nonce(); }
+    dev::eth::NonceKeyType generateKey(dev::eth::Transaction const& _t)
+    {
+        return boost::lexical_cast<dev::eth::NonceKeyType>(_t.nonce());
+    }
 
 protected:
     dev::PROTOCOL_ID m_protocolId;
     dev::GROUP_ID m_groupId;
     mutable SharedMutex m_lock;
-    std::set<u256> m_cache;
+    std::set<dev::eth::NonceKeyType> m_cache;
 };
 }  // namespace txpool
 }  // namespace dev
