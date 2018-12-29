@@ -35,6 +35,8 @@ public:
         return dev::consensus::RaftEngine::generateHeartbeat();
     }
 
+    dev::consensus::IDXTYPE getIdx() { return m_idx; }
+
     dev::consensus::RaftMsgQueue& msgQueue() { return m_msgQueue; }
 
     void onRecvRaftMessage(dev::p2p::NetworkException _exception,
@@ -57,6 +59,13 @@ public:
 
     void setTerm(size_t _term) { m_term = _term; }
 
+    void setVote(dev::consensus::raft::NodeIndex _vote)
+    {
+        dev::consensus::RaftEngine::setVote(_vote);
+    }
+
+    void setFirstVote(dev::consensus::raft::NodeIndex _firstVote) { m_firstVote = _firstVote; }
+
     void setLastLeaderTerm(size_t _term) { m_lastLeaderTerm = _term; }
 
     void setUncommitedBlock(dev::eth::Block const& _block) { m_uncommittedBlock = _block; }
@@ -77,12 +86,23 @@ public:
         return dev::consensus::RaftEngine::runAsLeaderImp(memberHeartbeatLog);
     }
 
-    void runAsFollower() { dev::consensus::RaftEngine::runAsFollower(); }
+    bool runAsFollowerImp() { return dev::consensus::RaftEngine::runAsFollowerImp(); }
+
+    bool runAsCandidateImp(dev::consensus::VoteState _voteState)
+    {
+        return dev::consensus::RaftEngine::runAsCandidateImp(_voteState);
+    }
 
     bool checkHeartbeatTimeout() override
     {
         dev::consensus::RaftEngine::checkHeartbeatTimeout();
         return heartbeatTimeout;
+    }
+
+    bool checkElectTimeout() override
+    {
+        dev::consensus::RaftEngine::checkElectTimeout();
+        return electTimeout;
     }
 
     bool handleHeartbeat(
@@ -112,6 +132,7 @@ public:
     void workLoop() {}
 
     bool heartbeatTimeout = false;
+    bool electTimeout = false;
 };
 }  // namespace test
 }  // namespace dev
