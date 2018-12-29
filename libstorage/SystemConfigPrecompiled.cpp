@@ -112,11 +112,11 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
 {
     if (SYSTEM_KEY_TX_COUNT_LIMIT == key)
     {
-        return (boost::lexical_cast<uint64_t>(value) >= 1);
+        return (boost::lexical_cast<uint64_t>(value) >= TX_COUNT_LIMIT_MIN);
     }
     else if (SYSTEM_KEY_TX_GAS_LIMIT == key)
     {
-        return (boost::lexical_cast<uint64_t>(value) >= 100000);
+        return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
     }
     return true;
 }
