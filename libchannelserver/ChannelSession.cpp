@@ -123,11 +123,8 @@ void ChannelSession::asyncSendMessage(Message::Ptr request,
             _responseCallbacks.insert(std::make_pair(request->seq(), responseCallback));
         }
 
-        /// std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
-        bytes buffer;
-        request->encode(buffer);
-        std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>(std::move(buffer));
-
+        std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
+        request->encode(*p_buffer);
         writeBuffer(p_buffer);
     }
     catch (std::exception& e)

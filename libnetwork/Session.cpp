@@ -94,12 +94,9 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
     }
 
     addSeqCallback(message->seq(), handler);
-
-    bytes buffer;
-    message->encode(buffer);
+    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
+    message->encode(*p_buffer);
     message.reset();
-    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>(std::move(buffer));
-
     send(p_buffer);
 }
 
