@@ -281,5 +281,10 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = "key";
         tableInfo->fields = std::vector<std::string>{"value"};
     }
+    else if (tableName == SYS_BLOCK_2_NONCES)
+    {
+        tableInfo->key = "blknumber";
+        tableInfo->fields = std::vector<std::string>{SYS_VALUE};
+    }
     return tableInfo;
 }
