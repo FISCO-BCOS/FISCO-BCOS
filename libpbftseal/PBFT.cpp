@@ -283,11 +283,16 @@ void PBFT::reHandlePrepareReq(PrepareReq const& _req) {
 }
 
 std::pair<bool, u256> PBFT::getLeader() const {
-	if (m_cfg_err || m_leader_failed || m_highest_block.number() == Invalid256) {
-		return std::make_pair(false, Invalid256);
+	u256 leader = Invalid256;
+	if (m_highest_block.number() != Invalid256 && m_node_num != 0) {
+		leader = (m_view + m_highest_block.number()) % m_node_num;
 	}
 
-	return std::make_pair(true, (m_view + m_highest_block.number()) % m_node_num);
+	if (m_cfg_err || m_leader_failed || leader == Invalid256) {
+		return std::make_pair(false, leader);
+	}
+
+	return std::make_pair(true, leader);
 }
 
 void PBFT::reportBlock(BlockHeader const & _b, u256 const &) {
@@ -800,7 +805,8 @@ void PBFT::handlePrepareMsg(u256 const & _from, PrepareReq const & _req, bool _s
 	}
 
 	auto leader = getLeader();
-	if (!leader.first || _req.idx != leader.second) {
+	//if (!leader.first || _req.idx != leader.second) {
+	if (_req.idx != leader.second) { // Accept the leader's packet tranfered by others even if it is disconnected
 		LOG(WARNING) << oss.str()  << "Recv an illegal prepare, err leader";
 		return;
 	}
