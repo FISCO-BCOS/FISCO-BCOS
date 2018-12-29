@@ -72,6 +72,7 @@ protected:
     {
         return m_pbftEngine->reachBlockIntervalTime();
     }
+
 private:
     void setBlock();
 
