@@ -412,6 +412,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     block.decode(ref(req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
+    req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
     fake_pbft.consensus()->mutableConsensusNumber() = req.height;
     BOOST_CHECK(fake_pbft.m_secrets.size() > req.idx);
     Secret sec = fake_pbft.m_secrets[req.idx];
