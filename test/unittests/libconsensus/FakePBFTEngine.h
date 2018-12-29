@@ -53,7 +53,7 @@ public:
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _minerList)
     {}
-
+    void updateConsensusNodeList() override {}
     KeyPair const& keyPair() const { return m_keyPair; }
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
@@ -188,10 +188,10 @@ public:
             std::make_shared<FakeBlockverifier>(),
         std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5))
     {
-        /// fake minerList
-        FakeMinerList(minerSize);
         m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
             txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_minerList);
+        /// fake minerList
+        FakeMinerList(minerSize);
         resetSessionInfo();
     }
 
@@ -216,6 +216,7 @@ public:
             KeyPair key_pair = KeyPair::create();
             m_minerList.push_back(key_pair.pub());
             m_secrets.push_back(key_pair.secret());
+            m_consensus->appendMiner(key_pair.pub());
         }
     }
     std::shared_ptr<T> consensus() { return m_consensus; }

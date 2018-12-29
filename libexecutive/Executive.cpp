@@ -90,10 +90,13 @@ void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction con
 {
     eth::EVMSchedule const& schedule = DefaultSchedule;
 
+    uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
+    // The gas limit is dynamic, not fixed.
     // Pre calculate the gas needed for execution
-    if ((_ir & ImportRequirements::TransactionBasic) && _t.baseGasRequired(schedule) > _t.gas())
+    if ((_ir & ImportRequirements::TransactionBasic) &&
+        _t.baseGasRequired(schedule) > (bigint)txGasLimit)
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
-                                  (bigint)(_t.baseGasRequired(schedule)), (bigint)_t.gas()));
+                                  (bigint)(_t.baseGasRequired(schedule)), (bigint)txGasLimit));
 }
 
 bool Executive::execute()

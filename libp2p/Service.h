@@ -172,6 +172,8 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
     bool m_run = false;
+
+    std::string printSessionInfos(P2PSessionInfos const& sessionInfos) const;
 };
 
 }  // namespace p2p
