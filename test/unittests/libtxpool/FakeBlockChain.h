@@ -132,7 +132,14 @@ public:
     }
 
     int64_t number() { return m_blockNumber - 1; }
-
+    void getNonces(std::vector<u256>& _nonceVector, int64_t _blockNumber)
+    {
+        auto pBlock = getBlockByNumber(_blockNumber);
+        for (auto trans : pBlock->transactions())
+        {
+            _nonceVector.push_back(trans.nonce());
+        }
+    }
     std::pair<int64_t, int64_t> totalTransactionCount()
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
