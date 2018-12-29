@@ -666,6 +666,10 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
             tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
         }
     }
+    else
+    {
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_CURRENT_STATE));
+    }
 }
 
 void BlockChainImp::writeTotalTransactionCount(
@@ -691,6 +695,10 @@ void BlockChainImp::writeTotalTransactionCount(
             tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
         }
     }
+    else
+    {
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_CURRENT_STATE));
+    }
 }
 
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
@@ -707,6 +715,10 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
             tb->insert(txs[i].sha3().hex(), entry);
         }
     }
+    else
+    {
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_TX_HASH_2_BLOCK));
+    }
 }
 
 void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<ExecutiveContext> context)
@@ -717,6 +729,10 @@ void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<Executi
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField(SYS_VALUE, block.blockHeader().hash().hex());
         tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_NUMBER_2_HASH));
     }
 }
 
@@ -730,6 +746,10 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         block.encode(out);
         entry->setField(SYS_VALUE, toHexPrefixed(out));
         tb->insert(block.blockHeader().hash().hex(), entry);
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_HASH_2_BLOCK));
     }
 }
 
@@ -759,14 +779,24 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     }
     if (commitMutex.try_lock())
     {
-        writeNumber(block, context);
-        writeTotalTransactionCount(block, context);
-        writeTxToBlock(block, context);
-        writeBlockInfo(block, context);
-        context->dbCommit(block);
-        commitMutex.unlock();
-        m_onReady();
-        return CommitResult::OK;
+        try
+        {
+            writeNumber(block, context);
+            writeTotalTransactionCount(block, context);
+            writeTxToBlock(block, context);
+            writeBlockInfo(block, context);
+            context->dbCommit(block);
+            commitMutex.unlock();
+            m_onReady();
+            return CommitResult::OK;
+        }
+        catch (OpenSysTableFailed)
+        {
+            commitMutex.unlock();
+            BLOCKCHAIN_LOG(FATAL)
+                << "[#commitBlock] System meets error when try to write block to storage";
+            throw;
+        }
     }
     else
     {

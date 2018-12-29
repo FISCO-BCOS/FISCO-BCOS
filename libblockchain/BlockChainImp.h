@@ -23,6 +23,7 @@
 #pragma once
 
 #include "BlockChainInterface.h"
+#include <libdevcore/Exceptions.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
@@ -70,6 +71,7 @@ private:
     mutable std::deque<dev::h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
     const unsigned c_blockCacheSize = 10;            // m_blockCache size, default set 10
 };
+DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 
 class BlockChainImp : public BlockChainInterface
 {
