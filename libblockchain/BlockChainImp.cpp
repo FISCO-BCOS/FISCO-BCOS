@@ -196,6 +196,11 @@ int64_t BlockChainImp::obtainNumber()
 
 void BlockChainImp::getNonces(std::vector<u256>& _nonceVector, int64_t _blockNumber)
 {
+    if (_blockNumber > number())
+    {
+        LOG(TRACE) << "Invalid number = " << _blockNumber << ", m_blockNumber = " << m_blockNumber;
+        return;
+    }
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
     if (tb)
     {

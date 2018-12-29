@@ -68,10 +68,7 @@ public:
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
-    virtual bool reachBlockIntervalTime() override
-    {
-        return m_pbftEngine->reachBlockIntervalTime();
-    }
+    bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
 
 private:
     void setBlock();
