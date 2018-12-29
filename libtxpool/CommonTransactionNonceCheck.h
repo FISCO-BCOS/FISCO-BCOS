@@ -38,20 +38,21 @@ class CommonTransactionNonceCheck
 public:
     CommonTransactionNonceCheck(dev::PROTOCOL_ID const& protocolId) : m_protocolId(protocolId)
     {
-        m_groupId = dev::eth::getGroupAndProtocol(m_groupId).first;
+        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
-    virtual void delCache(std::string const& key);
+
+    virtual void delCache(dev::eth::NonceKeyType const& key);
     virtual void delCache(dev::eth::Transactions const& _transcations);
     virtual void insertCache(dev::eth::Transaction const& _transcation);
     virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
 
-    std::string generateKey(dev::eth::Transaction const& _t);
+    dev::eth::NonceKeyType generateKey(dev::eth::Transaction const& _t) { return _t.nonce(); }
 
 protected:
     dev::PROTOCOL_ID m_protocolId;
     dev::GROUP_ID m_groupId;
     mutable SharedMutex m_lock;
-    std::set<std::string> m_cache;
+    std::set<dev::eth::NonceKeyType> m_cache;
 };
 }  // namespace txpool
 }  // namespace dev

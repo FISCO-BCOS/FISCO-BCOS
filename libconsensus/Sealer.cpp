@@ -70,14 +70,20 @@ void Sealer::reportNewBlock()
     bool t = true;
     if (m_syncBlock.compare_exchange_strong(t, false))
     {
+        std::shared_ptr<dev::eth::Block> p_block =
+            m_blockChain->getBlockByNumber(m_blockChain->number());
+        if (!p_block)
+        {
+            LOG(ERROR) << "[#reportNewBlock] empty block";
+            return;
+        }
+        m_consensusEngine->reportBlock(*p_block);
         DEV_WRITE_GUARDED(x_sealing)
         {
-            m_consensusEngine->reportBlock(
-                *(m_blockChain->getBlockByNumber(m_blockChain->number())));
             if (shouldResetSealing())
             {
                 SEAL_LOG(DEBUG) << "[#reportNewBlock] Reset sealing: [number]:  "
-                                << m_blockChain->number() << std::endl;
+                                << m_blockChain->number();
                 resetSealingBlock();
             }
         }

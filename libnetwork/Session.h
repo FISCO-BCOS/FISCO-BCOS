@@ -56,8 +56,8 @@ public:
 
     virtual bool isConnected() const override;
 
-    virtual void asyncSendMessage(
-        Message::Ptr message, Options options, CallbackFunc callback) override;
+    virtual void asyncSendMessage(Message::Ptr message, Options options = Options(),
+        CallbackFunc callback = CallbackFunc()) override;
     // virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }

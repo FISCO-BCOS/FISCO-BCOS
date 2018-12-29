@@ -85,7 +85,7 @@ size_t dev::storage::MemoryTable::update(
 {
     try
     {
-        STORAGE_LOG(DEBUG) << "Update MemoryTable: " << key;
+        STORAGE_LOG(TRACE) << "Update MemoryTable: " << key;
 
         Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -143,7 +143,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
 {
     try
     {
-        STORAGE_LOG(DEBUG) << "Insert MemoryTable: " << key;
+        /// STORAGE_LOG(DEBUG) << "Insert MemoryTable: " << key;
 
         Entries::Ptr entries = std::make_shared<Entries>();
         Condition::Ptr condition = std::make_shared<Condition>();
@@ -190,7 +190,7 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
 
 size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr condition)
 {
-    STORAGE_LOG(DEBUG) << "Remove MemoryTable data" << key;
+    STORAGE_LOG(TRACE) << "Remove MemoryTable data" << key;
 
     Entries::Ptr entries = std::make_shared<Entries>();
 

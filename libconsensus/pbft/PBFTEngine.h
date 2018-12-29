@@ -95,10 +95,6 @@ public:
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
-    /*uint64_t calculateMaxPackTxNum(uint64_t const maxTransactions)
-    {
-        return m_timeManager.calculateMaxPackTxNum(maxTransactions, m_view);
-    }*/
     /// broadcast prepare message
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
@@ -233,7 +229,8 @@ protected:
         PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
         dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
-        std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
+        // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
+        bytes ret_data;
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
         packet.packet_id = packetType;
@@ -241,7 +238,8 @@ protected:
             packet.ttl = maxTTL;
         else
             packet.ttl = ttl;
-        packet.encode(*p_data);
+        packet.encode(ret_data);
+        std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
         message->setBuffer(p_data);
         message->setProtocolID(protocolId);
         return message;

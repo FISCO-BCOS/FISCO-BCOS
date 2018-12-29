@@ -167,6 +167,18 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
 
 int64_t BlockChainImp::number()
 {
+    UpgradableGuard ul(m_blockNumberMutex);
+    if (m_blockNumber == -1)
+    {
+        int64_t num = obtainNumber();
+        UpgradeGuard l(ul);
+        m_blockNumber = num;
+    }
+    return m_blockNumber;
+}
+
+int64_t BlockChainImp::obtainNumber()
+{
     int64_t num = 0;
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
     if (tb)
@@ -180,6 +192,29 @@ int64_t BlockChainImp::number()
         }
     }
     return num;
+}
+
+void BlockChainImp::getNonces(
+    std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
+{
+    if (_blockNumber > number())
+    {
+        LOG(TRACE) << "Invalid number = " << _blockNumber << ", m_blockNumber = " << m_blockNumber;
+        return;
+    }
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    if (tb)
+    {
+        auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            std::string nonce_vector_str = entry->getField(SYS_VALUE);
+            bytes ret = fromHex(nonce_vector_str);
+            RLP rlp(ret);
+            _nonceVector = rlp.toVector<dev::eth::NonceKeyType>();
+        }
+    }
 }
 
 std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
@@ -330,7 +365,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
             assert(pblock != nullptr);
-            std::vector<Transaction> txs = pblock->transactions();
+            const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
                 return txs[lexical_cast<uint>(txIndex)];
@@ -355,7 +390,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
             strblockhash = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblockhash));
-            std::vector<Transaction> txs = pblock->transactions();
+            const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
                 return LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], pblock->headerHash(),
@@ -433,6 +468,10 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
         auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
         auto entry = tb->newEntry();
         entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
+        {
+            WriteGuard l(m_blockNumberMutex);
+            m_blockNumber = block.blockHeader().number();
+        }
         if (entries->size() > 0)
         {
             tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());
@@ -472,16 +511,26 @@ void BlockChainImp::writeTotalTransactionCount(
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK);
-    if (tb)
+    Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    if (tb && tb_nonces)
     {
-        std::vector<Transaction> txs = block.transactions();
+        const std::vector<Transaction>& txs = block.transactions();
+        std::vector<dev::eth::NonceKeyType> nonce_vector(txs.size());
         for (uint i = 0; i < txs.size(); i++)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
             entry->setField("index", lexical_cast<std::string>(i));
             tb->insert(txs[i].sha3().hex(), entry);
+            nonce_vector[i] = txs[i].nonce();
         }
+
+        /// insert tb2Nonces
+        RLPStream rs;
+        rs.appendVector(nonce_vector);
+        Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
+        entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
+        tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
     }
 }
 
@@ -539,6 +588,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         writeTotalTransactionCount(block, context);
         writeTxToBlock(block, context);
         writeBlockInfo(block, context);
+        m_blockCache.add(block);
         context->dbCommit(block);
         commitMutex.unlock();
         m_onReady();
