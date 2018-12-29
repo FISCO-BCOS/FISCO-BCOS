@@ -67,8 +67,8 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
             execute(envInfo, tr, OnOpFunc(), executiveContext);
         block.appendTransactionReceipt(resultReceipt.second);
+        executiveContext->getState()->commit();
     }
-    executiveContext->getState()->commit();
     block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())

@@ -127,12 +127,12 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTEngine>& fake_pbft, Pre
     if (shouldFake)
     {
         prepareReq = FakePrepareReq(key_pair);
-        /// prepareReq.height = highest.number() + 1;
         Block block;
         fake_pbft.consensus()->resetBlock(block);
         block.encode(prepareReq.block);  /// encode block
         prepareReq.block_hash = block.header().hash();
         prepareReq.height = block.header().number();
+        prepareReq.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
     }
     fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
     if (shouldAdd)

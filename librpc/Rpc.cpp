@@ -382,7 +382,7 @@ Json::Value Rpc::getBlockByHash(
         response["gasLimit"] = toJS(block->header().gasLimit());
         response["gasUsed"] = toJS(block->header().gasUsed());
         response["timestamp"] = toJS(block->header().timestamp());
-        auto transactions = block->transactions();
+        const Transactions& transactions = block->transactions();
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions.size(); i++)
         {
@@ -443,7 +443,7 @@ Json::Value Rpc::getBlockByNumber(
         response["gasLimit"] = toJS(block->header().gasLimit());
         response["gasUsed"] = toJS(block->header().gasUsed());
         response["timestamp"] = toJS(block->header().timestamp());
-        auto transactions = block->transactions();
+        const Transactions& transactions = block->transactions();
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions.size(); i++)
         {
@@ -560,7 +560,7 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
 
-        auto transactions = block->transactions();
+        const Transactions& transactions = block->transactions();
         unsigned int txIndex = jsToInt(_transactionIndex);
         if (txIndex >= transactions.size())
             BOOST_THROW_EXCEPTION(JsonRpcException(
@@ -615,7 +615,7 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
-        Transactions transactions = block->transactions();
+        const Transactions& transactions = block->transactions();
         unsigned int txIndex = jsToInt(_transactionIndex);
         if (txIndex >= transactions.size())
             BOOST_THROW_EXCEPTION(JsonRpcException(

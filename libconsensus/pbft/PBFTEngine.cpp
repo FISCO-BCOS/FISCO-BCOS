@@ -809,8 +809,8 @@ void PBFTEngine::reportBlock(Block const& block)
         resetConfig();
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
-        PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "
-                             << m_highestBlock.number() << ", idx= " << m_highestBlock.sealer()
+        PBFTENGINE_LOG(INFO) << "^^^^Report: number= " << m_highestBlock.number()
+                             << ", idx= " << m_highestBlock.sealer()
                              << " , hash= " << m_highestBlock.hash().abridged()
                              << ", next= " << m_consensusBlockNumber
                              << " , txNum=" << block.getTransactionSize()

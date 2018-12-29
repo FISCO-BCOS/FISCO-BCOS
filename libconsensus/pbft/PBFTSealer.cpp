@@ -42,7 +42,7 @@ namespace consensus
 void PBFTSealer::handleBlock()
 {
     setBlock();
-    PBFTSEALER_LOG(INFO) << "+++++++++++++++++++++++++++ [#Generating seal on]:  "
+    PBFTSEALER_LOG(INFO) << "++++ [#Generating seal on]:  "
                          << "[myIdx/blockNumber/txNum/hash]:  " << m_pbftEngine->nodeIdx() << "/"
                          << m_sealing.block.header().number() << "/"
                          << m_sealing.block.getTransactionSize() << "/"
