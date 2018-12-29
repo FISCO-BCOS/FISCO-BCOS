@@ -46,10 +46,7 @@ public:
     virtual void insertCache(dev::eth::Transaction const& _transcation);
     virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
 
-    dev::eth::NonceKeyType generateKey(dev::eth::Transaction const& _t)
-    {
-        return boost::lexical_cast<dev::eth::NonceKeyType>(_t.nonce());
-    }
+    dev::eth::NonceKeyType generateKey(dev::eth::Transaction const& _t) { return _t.nonce(); }
 
 protected:
     dev::PROTOCOL_ID m_protocolId;

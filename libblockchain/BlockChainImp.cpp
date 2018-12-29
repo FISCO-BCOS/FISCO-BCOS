@@ -522,7 +522,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
             entry->setField("index", lexical_cast<std::string>(i));
             tb->insert(txs[i].sha3().hex(), entry);
-            nonce_vector[i] = lexical_cast<dev::eth::NonceKeyType>(txs[i].nonce());
+            nonce_vector[i] = txs[i].nonce();
         }
 
         /// insert tb2Nonces
