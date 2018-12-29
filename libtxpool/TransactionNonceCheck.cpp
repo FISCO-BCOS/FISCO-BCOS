@@ -94,8 +94,8 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                     for (auto nonce : nonce_vec)
                     {
                         m_cache.erase(nonce);
-                    }  // for
-                }  // for
+                    }
+                }
             }
             for (auto i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
             {
