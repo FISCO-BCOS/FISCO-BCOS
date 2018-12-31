@@ -36,6 +36,7 @@ const std::string SYS_CURRENT_STATE = "_sys_current_state_";
 const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
 const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_current_transaction_count";
 const std::string SYS_VALUE = "value";
+const std::string SYS_KEY = "key";
 const std::string SYS_TX_HASH_2_BLOCK = "_sys_tx_hash_2_block_";
 const std::string SYS_NUMBER_2_HASH = "_sys_number_2_hash_";
 const std::string SYS_HASH_2_BLOCK = "_sys_hash_2_block_";

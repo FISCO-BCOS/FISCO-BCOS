@@ -26,12 +26,9 @@ file(GLOB HEADERS "*.h")
 
 add_executable(mini-evm ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(mini-evm devcore)
-target_link_libraries(mini-evm devcrypto)
-target_link_libraries(mini-evm ethcore)
 target_link_libraries(mini-evm evm)
 target_link_libraries(mini-evm executivecontext)
 target_link_libraries(mini-evm mptstate)
-target_link_libraries(mini-evm security)
+target_link_libraries(mini-evm security ethcore devcrypto devcore)
 
 endif()

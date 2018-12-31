@@ -9,7 +9,6 @@ endif()
 
 add_library(initializer ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(initializer PUBLIC ledger Boost::program_options)
-target_link_libraries(initializer INTERFACE security rpc channelserver)
+target_link_libraries(initializer PUBLIC security rpc channelserver ledger Boost::program_options)
 
 install(TARGETS initializer RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)

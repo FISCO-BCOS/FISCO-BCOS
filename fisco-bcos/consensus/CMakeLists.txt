@@ -26,16 +26,6 @@ file(GLOB HEADERS "*.h")
 
 add_executable(mini-consensus ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(mini-consensus devcore)
-target_link_libraries(mini-consensus devcrypto)
-target_link_libraries(mini-consensus ethcore)
-target_link_libraries(mini-consensus network)
-target_link_libraries(mini-consensus blockverifier)
-target_link_libraries(mini-consensus sync)
-target_link_libraries(mini-consensus txpool)
-target_link_libraries(mini-consensus blockchain)
-target_link_libraries(mini-consensus consensus)
-target_link_libraries(mini-consensus ledger)
 target_link_libraries(mini-consensus initializer)
 
 endif()
