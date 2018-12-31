@@ -26,8 +26,6 @@ file(GLOB HEADERS "*.h")
 
 add_executable(mini-consensus ${SRC_LIST} ${HEADERS})
 
-target_include_directories(mini-consensus PRIVATE ${BOOST_INCLUDE_DIR})
-
 target_link_libraries(mini-consensus devcore)
 target_link_libraries(mini-consensus devcrypto)
 target_link_libraries(mini-consensus ethcore)

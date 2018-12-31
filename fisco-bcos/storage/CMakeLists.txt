@@ -27,4 +27,4 @@ file(GLOB HEADERS "*.h")
 add_executable(mini-storage ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-storage PRIVATE ..)
-target_link_libraries(mini-storage devcore storage initializer)
+target_link_libraries(mini-storage initializer devcore storage)

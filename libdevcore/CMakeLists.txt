@@ -3,10 +3,8 @@ file(GLOB HEADERS "*.h")
 
 add_library(devcore ${SRC_LIST} ${HEADERS})
 
-add_dependencies(devcore BuildInfo.h)
-
 find_package(LevelDB)
 target_include_directories(devcore SYSTEM PUBLIC ${LEVELDB_INCLUDE_DIRS})
-target_link_libraries(devcore security Boost::Filesystem Boost::Thread ${LEVELDB_LIBRARIES})
-add_dependencies(devcore Boost::Thread)
+target_link_libraries(devcore PUBLIC ${LEVELDB_LIBRARIES} Boost::Filesystem Boost::Thread)
 
+add_dependencies(devcore BuildInfo.h)

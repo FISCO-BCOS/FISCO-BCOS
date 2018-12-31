@@ -6,6 +6,5 @@ file(GLOB HEADERS "*.h")
 
 add_library(rpc ${SRC_LIST} ${HEADERS})
 target_include_directories(rpc PRIVATE ..)
-target_link_libraries(rpc ledger p2p JsonRpcCpp::Server)
-
-install(TARGETS rpc RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+target_link_libraries(rpc INTERFACE ledger p2p)
+target_link_libraries(rpc PUBLIC JsonRpcCpp::Server network)

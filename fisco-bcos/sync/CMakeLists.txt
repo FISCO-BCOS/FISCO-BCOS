@@ -26,8 +26,6 @@ file(GLOB HEADERS "*.h")
 
 add_executable(mini-sync ${SRC_LIST} ${HEADERS})
 
-target_include_directories(mini-sync PRIVATE ${BOOST_INCLUDE_DIR})
-
 target_link_libraries(mini-sync devcore)
 target_link_libraries(mini-sync devcrypto)
 target_link_libraries(mini-sync ethcore)

@@ -6,6 +6,5 @@ file(GLOB HEADERS "*.h")
 
 add_library(sync ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(sync devcore ethcore network blockchain txpool)
-
-install(TARGETS sync RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+target_link_libraries(sync INTERFACE ethcore blockchain txpool)
+target_link_libraries(sync PUBLIC devcore network)

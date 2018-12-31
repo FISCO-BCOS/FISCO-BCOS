@@ -6,7 +6,6 @@ file(GLOB HEADERS "*.h")
 
 add_library(blockverifier ${SRC_LIST} ${HEADERS})
 
-target_include_directories(blockverifier PRIVATE ${BOOST_INCLUDE_DIR})
-
 target_include_directories(blockverifier PRIVATE ..)
-target_link_libraries(blockverifier storage executivecontext evmc z dl)
+target_link_libraries(blockverifier INTERFACE executivecontext evmc)
+target_link_libraries(blockverifier PUBLIC storage z dl)

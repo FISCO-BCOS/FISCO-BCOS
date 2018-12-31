@@ -4,7 +4,8 @@ add_library(evm ${sources})
 
 target_link_libraries(
     evm
-    PUBLIC ethcore devcore evmc::evmc Boost::program_options
+    PUBLIC devcore evmc::evmc Boost::program_options
+    INTERFACE ethcore
     PRIVATE interpreter ${JSONCPP_LIBRARY}  evmc::loader
 )
 

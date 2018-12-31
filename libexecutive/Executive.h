@@ -15,7 +15,6 @@
 #pragma once
 
 #include "ExecutionResult.h"
-#include <json/json.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
