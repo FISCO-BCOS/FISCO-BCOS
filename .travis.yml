@@ -50,7 +50,8 @@ addons:
     - cmake
     - libssl-dev
     - libleveldb-dev
-    - ninja-build
+    - libsnappy-dev
+    # - ninja-build
     - openssl
 install: |
     if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
