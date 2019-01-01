@@ -100,7 +100,7 @@ int main(int argc, const char* argv[])
     // init log
     boost::property_tree::ptree pt;
     auto logInitializer = std::make_shared<LogInitializer>();
-    logInitializer->initEasylogging(pt);
+    logInitializer->initLog(pt);
     /// init params
     auto params = initCommandLine(argc, argv);
     auto storagePath = params["path"].as<string>();
