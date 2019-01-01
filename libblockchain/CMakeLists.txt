@@ -1,6 +1,6 @@
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
-aux_source_directory(. SRC_LIST)
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 add_library(blockchain ${SRC_LIST} ${HEADERS})
-target_link_libraries(blockchain PUBLIC ethcore storage)
+target_link_libraries(blockchain PRIVATE ethcore storage)

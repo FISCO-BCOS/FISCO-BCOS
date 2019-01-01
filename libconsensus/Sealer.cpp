@@ -112,7 +112,6 @@ void Sealer::doWork(bool wait)
             }
             else
                 m_syncTxPool = false;
-            bool t = true;
             /// load transaction from transaction queue
             if (m_syncTxPool == true && !reachBlockIntervalTime())
                 loadTransactions(max_blockCanSeal - tx_num);

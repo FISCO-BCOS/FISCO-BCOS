@@ -16,7 +16,6 @@
 //
 
 #include "easylogging++.h"
-
 #if defined(AUTO_INITIALIZE_EASYLOGGINGPP)
 INITIALIZE_EASYLOGGINGPP
 #endif

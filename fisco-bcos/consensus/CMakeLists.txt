@@ -18,14 +18,10 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-if(TESTS)
 
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(mini-consensus ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(mini-consensus initializer)
-
-endif()
+target_link_libraries(mini-consensus PUBLIC initializer)

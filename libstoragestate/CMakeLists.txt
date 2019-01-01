@@ -1,6 +1,6 @@
-file(GLOB sources "*.cpp" "*.h")
+file(GLOB SRC_LIST "*.cpp")
+file(GLOB HEADERS "*.h")
 
-add_library(storagestate ${sources})
+add_library(storagestate ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(storagestate PRIVATE storage ethcore)
-# target_link_libraries(storagestate PUBLIC )
+target_link_libraries(storagestate PUBLIC storage devcrypto)

@@ -18,13 +18,10 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(mini-storage ${SRC_LIST} ${HEADERS})
 
-target_include_directories(mini-storage PRIVATE ..)
-target_link_libraries(mini-storage initializer)
+target_link_libraries(mini-storage PUBLIC initializer)

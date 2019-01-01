@@ -1,7 +1,7 @@
 
-file(GLOB sources "*.cpp" "*.h")
+file(GLOB SRC_LIST "*.cpp")
+file(GLOB HEADERS "*.h")
 
-add_library(storage ${sources})
-
-target_link_libraries(storage INTERFACE blockverifier)
-target_link_libraries(storage PUBLIC JsonCpp ethcore)
+add_library(storage ${SRC_LIST} ${HEADERS})
+target_link_libraries(storage PRIVATE blockverifier ethcore)
+target_link_libraries(storage PUBLIC devcore JsonCpp)

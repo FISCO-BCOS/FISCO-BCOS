@@ -19,8 +19,7 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(fisco-bcos ${SRC_LIST} ${HEADERS})

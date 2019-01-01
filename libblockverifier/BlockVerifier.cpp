@@ -54,7 +54,6 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
                               << errinfo_comment("Error during initExecutiveContext"));
     }
 
-    unsigned i = 0;
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
     for (Transaction const& tr : block.transactions())

@@ -18,14 +18,9 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-if(TESTS)
-
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(mini-evm ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(mini-evm initializer)
-
-endif()
+target_link_libraries(mini-evm PUBLIC initializer)
