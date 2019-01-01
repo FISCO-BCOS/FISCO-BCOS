@@ -32,37 +32,30 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <string>
-
+using namespace dev;
 #define EVMC_LOG(DES) LOG(DES) << "[EVM_DEMO]"
 
-using namespace boost::property_tree;
-using namespace dev;
-using namespace dev::eth;
 struct Input
 {
     std::string inputCall;
-    bytes codeData;
-    Address addr;
+    dev::bytes codeData;
+    dev::Address addr;
 };
 class EvmParams
 {
 public:
-    EvmParams(ptree const& pt)
+    EvmParams(boost::property_tree::ptree const& pt)
     {
-        m_transValue = pt.get<u256>("evm.transValue", u256(0));
-        m_gas = pt.get<u256>("evm.gas", u256(50000000000));
-        m_gasPrice = pt.get<u256>("evm.gasPrice", u256(0));
-        m_gasLimit = pt.get<u256>("evm.gasLimit", u256(100000000000));
+        m_transValue = pt.get<dev::u256>("evm.transValue", dev::u256(0));
+        m_gas = pt.get<dev::u256>("evm.gas", dev::u256(50000000000));
+        m_gasPrice = pt.get<dev::u256>("evm.gasPrice", dev::u256(0));
+        m_gasLimit = pt.get<dev::u256>("evm.gasLimit", dev::u256(100000000000));
         m_blockNumber = pt.get<int64_t>("evm.blockNumber", 0);
-        EVMC_LOG(DEBUG) << " [EvmParams.transValue]: " << m_transValue << std::endl;
-        EVMC_LOG(DEBUG) << " [EvmParams.gas]: " << m_gas << std::endl;
-        EVMC_LOG(DEBUG) << " [EvmParams.gasLimit]: " << m_gasLimit << std::endl;
-        EVMC_LOG(DEBUG) << " [EvmParams.blockNumber]: " << m_blockNumber << std::endl;
         ParseCodes(pt);
         ParseInput(pt);
     }
     /// parse params for deploy
-    void ParseCodes(ptree const& pt)
+    void ParseCodes(boost::property_tree::ptree const& pt)
     {
         try
         {
@@ -80,7 +73,7 @@ public:
     }
 
     /// parse params for input
-    void ParseInput(ptree const& pt)
+    void ParseInput(boost::property_tree::ptree const& pt)
     {
         try
         {
@@ -114,11 +107,11 @@ public:
                         if (m_input.size() < boost::lexical_cast<size_t>(s[1]))
                         {
                             Input input;
-                            input.addr = Address(it.second.data());
+                            input.addr = dev::Address(it.second.data());
                             m_input.push_back(input);
                         }
                         else
-                            m_input[index].addr = Address(it.second.data());
+                            m_input[index].addr = dev::Address(it.second.data());
                         continue;
                     }
                     std::string code_key = "code." + s[1];
@@ -150,22 +143,22 @@ public:
     }
 
     /// get interfaces
-    u256 const& transValue() const { return m_transValue; }
-    u256 const& gas() const { return m_gas; }
-    u256 const& gasLimit() const { return m_gasLimit; }
-    u256 const& gasPrice() const { return m_gasPrice; }
-    std::vector<bytes> const& code() { return m_code; }
+    dev::u256 const& transValue() const { return m_transValue; }
+    dev::u256 const& gas() const { return m_gas; }
+    dev::u256 const& gasLimit() const { return m_gasLimit; }
+    dev::u256 const& gasPrice() const { return m_gasPrice; }
+    std::vector<dev::bytes> const& code() { return m_code; }
     int64_t const& blockNumber() const { return m_blockNumber; }
-    std::vector<bytes> const& code() const { return m_code; }
+    std::vector<dev::bytes> const& code() const { return m_code; }
     std::vector<Input>& input() { return m_input; }
 
 private:
-    u256 m_transValue;
-    u256 m_gas;
-    u256 m_gasLimit;
-    u256 m_gasPrice;
+    dev::u256 m_transValue;
+    dev::u256 m_gas;
+    dev::u256 m_gasLimit;
+    dev::u256 m_gasPrice;
     /// transaction code
-    std::vector<bytes> m_code;
+    std::vector<dev::bytes> m_code;
     std::vector<Input> m_input;
     int64_t m_blockNumber;
 };
