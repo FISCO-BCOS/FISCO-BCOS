@@ -2,5 +2,4 @@ file(GLOB sources "*.cpp" "*.h")
 
 add_library(executivecontext ${sources})
 
-target_link_libraries(executivecontext INTERFACE evm)
-target_link_libraries(executivecontext PUBLIC storage)
+target_link_libraries(executivecontext PUBLIC evm ethcore storage)

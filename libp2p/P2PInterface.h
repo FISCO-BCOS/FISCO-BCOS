@@ -20,8 +20,6 @@
  */
 
 #pragma once
-#include "P2PMessage.h"
-#include "P2PSession.h"
 #include <libdevcore/FixedHash.h>
 #include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
@@ -29,33 +27,42 @@
 
 #define CallbackFuncWithSession                                                               \
     std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>, \
-        dev::p2p::P2PMessage::Ptr)>
+        std::shared_ptr<dev::p2p::P2PMessage>)>
 
 namespace dev
 {
 namespace p2p
 {
+class P2PMessage;
+class P2PMessageFactory;
+class P2PSession;
+
 class P2PInterface
 {
 public:
     virtual ~P2PInterface(){};
 
-    virtual P2PMessage::Ptr sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message) = 0;
+    virtual std::shared_ptr<P2PMessage> sendMessageByNodeID(
+        NodeID nodeID, std::shared_ptr<P2PMessage> message) = 0;
 
-    virtual void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
+    virtual void asyncSendMessageByNodeID(NodeID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback,
         dev::network::Options options = dev::network::Options()) = 0;
 
-    virtual P2PMessage::Ptr sendMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
+    virtual std::shared_ptr<P2PMessage> sendMessageByTopic(
+        std::string topic, std::shared_ptr<P2PMessage> message) = 0;
 
-    virtual void asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
+    virtual void asyncSendMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, dev::network::Options options) = 0;
 
-    virtual void asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message) = 0;
+    virtual void asyncMulticastMessageByTopic(
+        std::string topic, std::shared_ptr<P2PMessage> message) = 0;
 
-    virtual void asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message) = 0;
+    virtual void asyncMulticastMessageByNodeIDList(
+        NodeIDs nodeIDs, std::shared_ptr<P2PMessage> message) = 0;
 
-    virtual void asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Options options) = 0;
+    virtual void asyncBroadcastMessage(
+        std::shared_ptr<P2PMessage> message, dev::network::Options options) = 0;
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;

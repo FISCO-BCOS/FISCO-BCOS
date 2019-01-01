@@ -23,7 +23,7 @@
 
 #include "P2PMessage.h"
 #include <libnetwork/Common.h>
-#include <libnetwork/Session.h>
+#include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
 #include <memory>
 

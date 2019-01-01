@@ -5,7 +5,6 @@ aux_source_directory(. SRC_LIST)
 file(GLOB HEADERS "*.h")
 
 add_library(p2p ${SRC_LIST} ${HEADERS})
-# target_include_directories(p2p PUBLIC ${BOOST_INCLUDE_DIR})
 
 target_link_libraries(p2p PUBLIC network devcore)
 

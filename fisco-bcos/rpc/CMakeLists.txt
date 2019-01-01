@@ -29,10 +29,6 @@ file(GLOB HEADERS "*.h")
 add_executable(mini-rpc ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-rpc PRIVATE ..)
-target_link_libraries(mini-rpc Boost::System)
-# target_link_libraries(mini-rpc Boost::UnitTestFramework)
-target_link_libraries(mini-rpc rpc)
-target_link_libraries(mini-rpc ledger)
-target_link_libraries(mini-rpc p2p)
+target_link_libraries(mini-rpc initializer)
 
 endif()

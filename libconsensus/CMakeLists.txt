@@ -9,5 +9,4 @@ aux_source_directory(./raft SRC_LIST)
 include_directories(./raft)
 
 add_library(consensus ${SRC_LIST} ${HEADERS})
-target_link_libraries(consensus INTERFACE executivecontext blockchain txpool sync)
-target_link_libraries(consensus PUBLIC network storage)
+target_link_libraries(consensus PUBLIC sync blockverifier p2p)
