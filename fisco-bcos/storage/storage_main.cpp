@@ -18,7 +18,7 @@
  * @author: xingqiangbai
  * @date 2018-11-14
  */
-#include "libinitializer/LogInitializer.h"
+#include "libinitializer/Initializer.h"
 #include "libstorage/MemoryTableFactory.h"
 #include <leveldb/db.h>
 #include <libdevcore/Common.h>
