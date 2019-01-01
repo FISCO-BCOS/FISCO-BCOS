@@ -141,7 +141,7 @@ public:
 
     IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::Block const& block) {}
+    virtual void reportBlock(dev::eth::Block const& block) override {}
 
 protected:
     virtual void resetConfig() { m_nodeNum = m_minerList.size(); }

@@ -100,7 +100,7 @@ struct RaftMsgPacket
         packetType(RaftPacketType::RaftVoteReqPacket),
         timestamp(utcTime())
     {}
-
+    virtual ~RaftMsgPacket() = default;
     virtual void encode(bytes& _encodeBytes) const
     {
         RLPStream tmp;

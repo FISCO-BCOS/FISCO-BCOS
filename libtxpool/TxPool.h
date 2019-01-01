@@ -121,7 +121,7 @@ public:
     TxPoolStatus status() const override;
 
     /// protocol id used when register handler to p2p module
-    virtual PROTOCOL_ID const& getProtocolId() const { return m_protocolId; }
+    virtual PROTOCOL_ID const& getProtocolId() const override { return m_protocolId; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
     /// Set transaction is known by a node

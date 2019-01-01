@@ -60,9 +60,9 @@ public:
     }
     ~Socket() { close(); }
 
-    virtual bool isConnected() const { return m_wsSocket->lowest_layer().is_open(); }
+    virtual bool isConnected() const override { return m_wsSocket->lowest_layer().is_open(); }
 
-    virtual void close()
+    virtual void close() override
     {
         try
         {
@@ -76,7 +76,7 @@ public:
         }
     }
 
-    virtual bi::tcp::endpoint remoteEndpoint()
+    virtual bi::tcp::endpoint remoteEndpoint() override
     {
         boost::system::error_code ec;
         return m_wsSocket->lowest_layer().remote_endpoint(ec);
@@ -89,12 +89,15 @@ public:
         return *m_wsSocket;
     }
 
-    virtual const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
-    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint)
+    virtual const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
+    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
     {
         m_nodeIPEndpoint = _nodeIPEndpoint;
     }
-    virtual boost::asio::ip::tcp::endpoint remote_endpoint() { return ref().remote_endpoint(); }
+    virtual boost::asio::ip::tcp::endpoint remote_endpoint() override
+    {
+        return ref().remote_endpoint();
+    }
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;

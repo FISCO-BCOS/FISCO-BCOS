@@ -46,7 +46,7 @@ class StorageState : public dev::executive::StateFace
 public:
     explicit StorageState(u256 const& _accountStartNonce)
       : m_accountStartNonce(_accountStartNonce), m_memoryTableFactory(nullptr){};
-
+    virtual ~StorageState() = default;
     /// Check if the address is in use.
     virtual bool addressInUse(Address const& _address) const override;
 

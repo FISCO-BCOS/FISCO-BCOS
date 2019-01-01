@@ -45,7 +45,7 @@ public:
     {
         assert(m_service);
     }
-
+    virtual ~LedgerManager() = default;
     /**
      * @brief : init a single ledger with the given params
      *
