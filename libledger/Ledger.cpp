@@ -133,7 +133,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
 
 void Ledger::initTxPoolConfig(ptree const& pt)
 {
-    m_param->mutableTxPoolParam().txPoolLimit = pt.get<uint64_t>("txPool.limit", 102400);
+    m_param->mutableTxPoolParam().txPoolLimit = pt.get<uint64_t>("tx_pool.limit", 102400);
     Ledger_LOG(DEBUG) << "[#initTxPoolConfig] [limit]:  "
                       << m_param->mutableTxPoolParam().txPoolLimit << std::endl;
 }
@@ -146,16 +146,16 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().consensusType =
-        pt.get<std::string>("consensus.consensusType", "pbft");
+        pt.get<std::string>("consensus.consensus_type", "pbft");
 
     m_param->mutableConsensusParam().maxTransactions =
-        pt.get<uint64_t>("consensus.maxTransNum", 1000);
-    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.maxTTL", MAXTTL);
+        pt.get<uint64_t>("consensus.max_trans_num", 1000);
+    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
 
     m_param->mutableConsensusParam().minElectTime =
-        pt.get<uint64_t>("consensus.minElectTime", 1000);
+        pt.get<uint64_t>("consensus.min_elect_time", 1000);
     m_param->mutableConsensusParam().maxElectTime =
-        pt.get<uint64_t>("consensus.maxElectTime", 2000);
+        pt.get<uint64_t>("consensus.max_elect_time", 2000);
 
     Ledger_LOG(DEBUG) << "[#initConsensusConfig] [type/maxTxNum/maxTTL]:  "
                       << m_param->mutableConsensusParam().consensusType << "/"
@@ -194,7 +194,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 void Ledger::initSyncConfig(ptree const& pt)
 {
     m_param->mutableSyncParam().idleWaitMs =
-        pt.get<unsigned>("sync.idleWaitMs", SYNC_IDLE_WAIT_DEFAULT);
+        pt.get<unsigned>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
     Ledger_LOG(DEBUG) << "[#initSyncConfig] [idleWaitMs]:" << m_param->mutableSyncParam().idleWaitMs
                       << std::endl;
 }
@@ -222,7 +222,7 @@ void Ledger::initDBConfig(ptree const& pt)
 /// 1. gasLimit: default is 300000000
 void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
 {
-    m_param->mutableTxParam().txGasLimit = pt.get<unsigned>("tx.gasLimit", 300000000);
+    m_param->mutableTxParam().txGasLimit = pt.get<unsigned>("tx.gas_limit", 300000000);
     Ledger_LOG(DEBUG) << "[#initTxConfig] [txGasLimit]:" << m_param->mutableTxParam().txGasLimit;
 }
 

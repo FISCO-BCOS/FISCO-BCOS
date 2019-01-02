@@ -85,9 +85,9 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         std::vector<std::string> crl;
         /// CRL means certificate rejected list, CRL optional in config.ini
-        if (_pt.get_child_optional("CRL"))
+        if (_pt.get_child_optional("crl"))
         {
-            for (auto it : _pt.get_child("CRL"))
+            for (auto it : _pt.get_child("crl"))
             {
                 if (it.first.find("crl.") == 0)
                 {
