@@ -63,7 +63,7 @@ public:
     using Ptr = std::shared_ptr<KeyCenter>;
 
     KeyCenter(){};
-
+    virtual ~KeyCenter(){};
     virtual const dev::bytes getDataKey(const std::string& _cipherDataKey);
     virtual const std::string generateCipherDataKey();
     void setIpPort(const std::string& _ip, int _port);

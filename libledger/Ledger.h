@@ -126,7 +126,7 @@ public:
         return m_sealer->consensusEngine();
     }
     std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    virtual dev::GROUP_ID const& groupId() const { return m_groupId; }
+    virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
     std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
 protected:

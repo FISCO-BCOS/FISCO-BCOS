@@ -38,11 +38,14 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # and that are easy to avoid.  Also enable some extra warning flags that are not
     # enabled by -Wall.   Finally, treat at warnings-as-errors, which forces developers
     # to fix warnings as they arise, so they don't accumulate "to be fixed later".
+    add_compile_options(-Werror)
     add_compile_options(-Wall)
-    add_compile_options(-Wno-unused-variable)
-    add_compile_options(-Wno-missing-field-initializers)
-    add_compile_options(-Wno-unused-parameter)
+    add_compile_options(-pedantic)
     add_compile_options(-Wextra)
+    add_compile_options(-Wno-unused-parameter)
+    add_compile_options(-Wno-unused-variable)
+    # add_compile_options(-Wno-unused-function)
+    # add_compile_options(-Wno-missing-field-initializers)
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
     # for easy log

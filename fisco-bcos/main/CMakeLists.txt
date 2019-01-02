@@ -19,12 +19,10 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(fisco-bcos ${SRC_LIST} ${HEADERS})
 target_include_directories(fisco-bcos PRIVATE ..)
-target_include_directories(fisco-bcos PRIVATE ${BOOST_INCLUDE_DIR})
-target_link_libraries(fisco-bcos initializer)
+target_link_libraries(fisco-bcos PUBLIC initializer)
 install(TARGETS fisco-bcos DESTINATION bin)

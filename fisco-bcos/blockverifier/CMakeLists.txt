@@ -18,20 +18,10 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-if(TESTS)
 
-aux_source_directory(. SRC_LIST)
+
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
-add_executable(test_verifier ${SRC_LIST} ${HEADERS})
-target_include_directories(test_verifier PRIVATE ${BOOST_INCLUDE_DIR})
-target_link_libraries(test_verifier devcrypto)
-target_link_libraries(test_verifier ethcore)
-target_link_libraries(test_verifier blockverifier)
-target_link_libraries(test_verifier executivecontext)
-target_link_libraries(test_verifier evm)
-target_link_libraries(test_verifier mptstate)
-target_link_libraries(test_verifier storagestate)
-target_link_libraries(test_verifier blockchain)
-target_link_libraries(test_verifier devcore)
+add_executable(mini-verifier ${SRC_LIST} ${HEADERS})
+target_link_libraries(mini-verifier PUBLIC initializer)
  
-endif()

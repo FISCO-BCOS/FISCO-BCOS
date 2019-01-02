@@ -47,4 +47,5 @@ deps/**
 .vs/
 .vscode/
 
-
+# macOS
+.DS_Store

@@ -8,5 +8,4 @@ endif()
 
 add_library(devcrypto ${SRC_LIST} ${HEADERS})
 eth_use(devcrypto OPTIONAL OpenSSL)
-target_link_libraries(devcrypto devcore Secp256k1 Cryptopp dl)
-target_include_directories(devcrypto PUBLIC ${BOOST_INCLUDE_DIR})
+target_link_libraries(devcrypto PUBLIC Secp256k1 Cryptopp devcore)

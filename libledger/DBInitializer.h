@@ -42,7 +42,7 @@ public:
     /// create storage DB(must be storage)
     ///  must be open before init
     virtual void initStorageDB();
-
+    virtual ~DBInitializer() = default;
     virtual void initStateDB(dev::h256 const& genesisHash)
     {
         if (!m_param)

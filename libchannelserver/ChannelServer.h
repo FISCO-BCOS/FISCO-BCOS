@@ -47,7 +47,7 @@ class ChannelServer : public std::enable_shared_from_this<ChannelServer>
 {
 public:
     typedef std::shared_ptr<ChannelServer> Ptr;
-
+    virtual ~ChannelServer() = default;
     virtual void run();
 
     void onAccept(const boost::system::error_code& error, ChannelSession::Ptr session);

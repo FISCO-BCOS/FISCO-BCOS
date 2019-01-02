@@ -3,10 +3,11 @@ file(GLOB HEADERS "*.h")
 
 add_library(devcore ${SRC_LIST} ${HEADERS})
 
-add_dependencies(devcore BuildInfo.h)
-
 find_package(LevelDB)
 target_include_directories(devcore SYSTEM PUBLIC ${LEVELDB_INCLUDE_DIRS})
-target_link_libraries(devcore security Boost::Filesystem Boost::Thread ${LEVELDB_LIBRARIES})
-add_dependencies(devcore Boost::Thread)
-
+target_include_directories(devcore SYSTEM BEFORE PUBLIC ${BOOST_INCLUDE_DIR})
+# set_source_files_properties(${SRC_LIST} ${HEADERS} PROPERTIES COMPILE_FLAGS -Wno-unused-function)
+target_compile_options(devcore BEFORE PRIVATE -Wno-error -Wno-unused-variable -Wno-unused-function -Wno-uninitialized -Wno-all)
+target_link_libraries(devcore PUBLIC ${LEVELDB_LIBRARIES} Boost::Filesystem Boost::Thread)
+target_link_libraries(devcore PRIVATE security)
+add_dependencies(devcore BuildInfo.h)

@@ -1,11 +1,11 @@
-file(GLOB sources "*.cpp" "*.h")
+file(GLOB SRC_LIST "*.cpp")
+file(GLOB HEADERS "*.h")
 
-add_library(evm ${sources})
+add_library(evm ${SRC_LIST} ${HEADERS})
 
 target_link_libraries(
     evm
-    PUBLIC ethcore devcore evmc::evmc Boost::program_options
-    PRIVATE interpreter ${JSONCPP_LIBRARY}  evmc::loader
+    PRIVATE interpreter evmc::loader ethcore evmc::evmc Boost::program_options devcore 
 )
 
 if(EVM_OPTIMIZE)

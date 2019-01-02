@@ -98,13 +98,13 @@ public:
     }
     virtual void setGroupID2NodeList(std::map<GROUP_ID, h512s> _groupID2NodeList) override
     {
-        RecursiveMutex(x_nodeList);
+        RecursiveGuard l(x_nodeList);
         m_groupID2NodeList = _groupID2NodeList;
     }
 
     virtual void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) override
     {
-        RecursiveMutex(x_nodeList);
+        RecursiveGuard l(x_nodeList);
         m_groupID2NodeList[_groupID] = _nodeList;
     }
 
@@ -114,7 +114,7 @@ public:
     virtual std::shared_ptr<std::vector<std::string>> topics() override { return m_topics; }
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
     {
-        RecursiveMutex(x_topics);
+        RecursiveGuard l(x_topics);
         m_topics = _topics;
         ++m_topicSeq;
     }

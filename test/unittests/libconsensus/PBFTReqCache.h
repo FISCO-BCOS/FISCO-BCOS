@@ -79,4 +79,4 @@ void FakeInvalidReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cache, B
 }
 
 }  // namespace test
-};  // namespace dev
+}  // namespace dev
