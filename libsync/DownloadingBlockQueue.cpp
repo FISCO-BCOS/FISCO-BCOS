@@ -136,9 +136,9 @@ void DownloadingBlockQueue::flushBufferToQueue()
         if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to control
                                                                 // insert
         {
-            SYNCLOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                           << LOG_DESCRIPTION("DownloadingBlockQueueBuffer is full")
-                           << LOG_KV("queueSize", m_blocks.size());
+            SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
+                            << LOG_DESCRIPTION("DownloadingBlockQueueBuffer is full")
+                            << LOG_KV("queueSize", m_blocks.size());
 
             break;
         }
