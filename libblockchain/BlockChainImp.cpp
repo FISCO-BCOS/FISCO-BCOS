@@ -127,7 +127,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
         }
     }
 
-    BLOCKCHAIN_LOG(WARNING) << "[#getBlock] Can't find block [height]: " << _i;
+    BLOCKCHAIN_LOG(TRACE) << "[#getBlock] Can't find block [height]: " << _i;
     return nullptr;
 }
 
