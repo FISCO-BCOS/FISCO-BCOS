@@ -507,7 +507,7 @@ generate_config_ini()
     ;nodes to connect
     $ip_list
 ;certificate rejected list		
-[CRL]		
+[crl]		
     ;crl.0=4d9752efbb1de1253d1d463a934d34230398e787b3112805728525ed5b9d2ba29e4ad92c6fcde5156ede8baa5aca372a209f94dc8f283c8a4fa63e3787c338a4
 
 ;group configurations
@@ -559,12 +559,12 @@ generate_group_genesis()
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
-    ;consensus algorithm type, now support PBFT(consensusType=pbft) and Raft(consensusType=raft)
-    consensusType=pbft
+    ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
+    consensus_type=pbft
     ;the max number of transactions of a block
-    maxTransNum=1000
+    max_trans_num=1000
     ;the ttl of broadcasted pbft message
-    ;maxTTL=2
+    ;max_ttl=2
     ;the node id of leaders
     ${node_list}
 
@@ -577,7 +577,7 @@ generate_group_genesis()
 
 ;tx gas limit
 [tx]
-    gasLimit=300000000
+    gas_limit=300000000
 EOF
 }
 
@@ -587,10 +587,10 @@ function generate_group_ini()
     cat << EOF > ${output}
 ;sync period time
 [sync]
-    idleWaitMs=200
+    idle_wait_ms=200
 
 ;txpool limit
-[txPool]
+[tx_pool]
     limit=1000
 EOF
 }
