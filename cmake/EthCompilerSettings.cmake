@@ -89,6 +89,8 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
             message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.7 or greater.")
         endif ()
 
+		set(CMAKE_C_FLAGS "-std=c99")
+
 		# Strong stack protection was only added in GCC 4.9.
 		# Use it if we have the option to do so.
 		# See https://lwn.net/Articles/584225/
