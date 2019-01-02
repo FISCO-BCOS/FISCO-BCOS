@@ -32,7 +32,6 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <string>
-using namespace dev;
 #define EVMC_LOG(DES) LOG(DES) << "[EVM_DEMO]"
 
 struct Input
@@ -62,7 +61,7 @@ public:
             for (auto it : pt.get_child("deploy"))
             {
                 if (it.first.find("code.") == 0)
-                    m_code.push_back(fromHex(it.second.data()));
+                    m_code.push_back(dev::fromHex(it.second.data()));
             }
         }
         catch (std::exception& e)
@@ -120,11 +119,11 @@ public:
                         if (m_input.size() < boost::lexical_cast<size_t>(s[1]))
                         {
                             Input input;
-                            input.codeData = fromHex(it.second.data());
+                            input.codeData = dev::fromHex(it.second.data());
                             m_input.push_back(input);
                         }
                         else
-                            m_input[index].codeData = fromHex(it.second.data());
+                            m_input[index].codeData = dev::fromHex(it.second.data());
                     }
                 }
                 catch (std::exception& e)
