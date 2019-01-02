@@ -19,7 +19,6 @@
  *  @date 20181205
  */
 #include "AuthorityPrecompiled.h"
-#include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
@@ -115,7 +114,6 @@ bytes AuthorityPrecompiled::call(
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
-        bool exist = false;
         auto condition = table->newCondition();
         condition->EQ(SYS_AC_ADDRESS, addr);
         auto entries = table->select(tableName, condition);

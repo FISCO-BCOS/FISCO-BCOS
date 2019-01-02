@@ -208,7 +208,7 @@ struct MemoryTableFactoryFixture : EmptyFixture
     std::shared_ptr<FakeBlock> m_fakeBlock;
 };
 
-BOOST_FIXTURE_TEST_SUITE(BlockChainImpl, MemoryTableFactoryFixture);
+BOOST_FIXTURE_TEST_SUITE(BlockChainImpl, MemoryTableFactoryFixture)
 
 BOOST_AUTO_TEST_CASE(emptyChain)
 {

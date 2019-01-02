@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-set -x
 
 ca_file= #CA key
 node_num=1 

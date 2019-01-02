@@ -108,7 +108,7 @@ struct BlockVerifierFixture
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 };
 
-BOOST_FIXTURE_TEST_SUITE(BlockVerifierTest, BlockVerifierFixture);
+BOOST_FIXTURE_TEST_SUITE(BlockVerifierTest, BlockVerifierFixture)
 
 
 BOOST_AUTO_TEST_CASE(executeBlock)

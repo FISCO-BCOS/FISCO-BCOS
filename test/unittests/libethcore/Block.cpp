@@ -33,7 +33,7 @@ namespace dev
 {
 namespace test
 {
-BOOST_FIXTURE_TEST_SUITE(BlockTest, TestOutputHelperFixture);
+BOOST_FIXTURE_TEST_SUITE(BlockTest, TestOutputHelperFixture)
 void checkBlock(Block& m_block, FakeBlock const& fake_block, size_t trans_size, size_t sig_size)
 {
     BOOST_CHECK(m_block.blockHeader() == fake_block.m_blockHeader);

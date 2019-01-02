@@ -119,7 +119,7 @@ protected:
     void collectGarbage();
     void checkTimeout();
     bool getNodeIDByIndex(h512& nodeId, const IDXTYPE& idx) const;
-    inline void checkBlockValid(dev::eth::Block const& block)
+    inline void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
         checkMinerList(block);

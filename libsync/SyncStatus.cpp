@@ -131,6 +131,7 @@ void SyncMasterStatus::foreachPeerRandom(
     }
 }
 
+// TODO: return reference
 NodeIDs SyncMasterStatus::randomSelection(
     unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
 {
@@ -156,9 +157,9 @@ NodeIDs SyncMasterStatus::randomSelection(
         chosen.push_back(std::move(allowed[n]));
         allowed.erase(allowed.begin() + n);
     }
-    return move(chosen);
+    return chosen;
 }
-
+// TODO: return reference
 NodeIDs SyncMasterStatus::randomSelectionSize(
     size_t _maxChosenSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
 {
@@ -182,5 +183,5 @@ NodeIDs SyncMasterStatus::randomSelectionSize(
         chosen.push_back(std::move(allowed[n]));
         allowed.erase(allowed.begin() + n);
     }
-    return move(chosen);
+    return chosen;
 }

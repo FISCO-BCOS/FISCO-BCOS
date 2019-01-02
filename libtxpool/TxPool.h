@@ -31,7 +31,6 @@
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libp2p/P2PInterface.h>
-#include <libp2p/Service.h>
 using namespace dev::eth;
 using namespace dev::p2p;
 
@@ -122,7 +121,7 @@ public:
     TxPoolStatus status() const override;
 
     /// protocol id used when register handler to p2p module
-    virtual PROTOCOL_ID const& getProtocolId() const { return m_protocolId; }
+    virtual PROTOCOL_ID const& getProtocolId() const override { return m_protocolId; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
     /// Set transaction is known by a node

@@ -18,26 +18,10 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-if(TESTS)
 
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(mini-consensus ${SRC_LIST} ${HEADERS})
 
-target_include_directories(mini-consensus PRIVATE ${BOOST_INCLUDE_DIR})
-
-target_link_libraries(mini-consensus devcore)
-target_link_libraries(mini-consensus devcrypto)
-target_link_libraries(mini-consensus ethcore)
-target_link_libraries(mini-consensus network)
-target_link_libraries(mini-consensus blockverifier)
-target_link_libraries(mini-consensus sync)
-target_link_libraries(mini-consensus txpool)
-target_link_libraries(mini-consensus blockchain)
-target_link_libraries(mini-consensus consensus)
-target_link_libraries(mini-consensus ledger)
-target_link_libraries(mini-consensus initializer)
-
-endif()
+target_link_libraries(mini-consensus PUBLIC initializer)

@@ -50,7 +50,7 @@ public:
 
     /// Copy state object.
     MPTState(MPTState const& _s) : m_state(_s.m_state) {}
-
+    virtual ~MPTState() = default;
     /// Copy state object.
     MPTState& operator=(MPTState const& _s)
     {

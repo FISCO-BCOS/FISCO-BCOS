@@ -104,7 +104,6 @@ void go(unsigned _depth, Executive& _e, OnOpFunc const& _onOp)
 void generateCallResult(
     evmc_result* o_result, evmc_status_code status, u256 gas, owning_bytes_ref&& output)
 {
-    evmc_result result;
     o_result->status_code = status;
     o_result->gas_left = static_cast<int64_t>(gas);
 

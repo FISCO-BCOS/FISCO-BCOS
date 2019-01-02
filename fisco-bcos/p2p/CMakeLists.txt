@@ -18,20 +18,10 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-if(TESTS)
 
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(mini-p2p ${SRC_LIST} ${HEADERS})
 
-target_include_directories(mini-p2p PRIVATE ${BOOST_INCLUDE_DIR})
-
-target_link_libraries(mini-p2p devcore)
-target_link_libraries(mini-p2p devcrypto)
-target_link_libraries(mini-p2p ethcore)
-target_link_libraries(mini-p2p network)
-target_link_libraries(mini-p2p initializer)
-
-endif()
+target_link_libraries(mini-p2p PUBLIC initializer)
