@@ -30,11 +30,13 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
 
-#define RAFT_LOG(LEVEL) LOG(LEVEL) << "[#LIBCONSENSUS][#RAFTENGINE] "
-#define RAFTENGINE_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS][#RAFTENGINE][PROTOCOL=" << m_protocolId << "]"
-#define RAFTSEALER_LOG(LEVEL) \
-    LOG(LEVEL) << "[#LIBCONSENSUS][#RAFTSEALER][PROTOCOL=" << m_raftEngine->protocolId() << "]"
+#define RAFTMSG_LOG(LEVEL) LOG(LEVEL) << "[#LIBCONSENSUS][#RAFTMSG]"
+#define RAFTENGINE_LOG(LEVEL)             \
+    LOG(LEVEL) << "[" << m_groupId << "]" \
+               << "[#LIBCONSENSUS][#RAFTENGINE]"
+#define RAFTSEALER_LOG(LEVEL)                           \
+    LOG(LEVEL) << "[" << m_raftEngine->groupId() << "]" \
+               << "[#LIBCONSENSUS][#RAFTSEALER]"
 
 namespace dev
 {
@@ -125,7 +127,7 @@ struct RaftMsgPacket
         }
         catch (Exception const& e)
         {
-            RAFT_LOG(DEBUG) << "[#RaftMsgPacket::populate] invalid msg format";
+            RAFTMSG_LOG(DEBUG) << "[#RaftMsgPacket::populate] invalid msg format";
 
             e << dev::eth::errinfo_name("invalid msg format");
             throw;
@@ -163,7 +165,7 @@ struct RaftMsg
         }
         catch (Exception const& _e)
         {
-            RAFT_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
+            RAFTMSG_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
 
             _e << dev::eth::errinfo_name("invalid msg format")
                << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
@@ -196,7 +198,7 @@ struct RaftVoteReq : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            RAFT_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
+            RAFTMSG_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
 
             _e << dev::eth::errinfo_name("invalid msg format")
                << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
@@ -242,7 +244,7 @@ struct RaftVoteResp : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            RAFT_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
+            RAFTMSG_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
 
             _e << dev::eth::errinfo_name("invalid msg format")
                << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
@@ -277,7 +279,7 @@ struct RaftHeartBeat : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            RAFT_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
+            RAFTMSG_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
 
             _e << dev::eth::errinfo_name("invalid msg format")
                << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
@@ -306,7 +308,7 @@ struct RaftHeartBeatResp : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            RAFT_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
+            RAFTMSG_LOG(DEBUG) << "[#populate] invalid msg format, [field]=" << field;
 
             _e << dev::eth::errinfo_name("invalid msg format")
                << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
