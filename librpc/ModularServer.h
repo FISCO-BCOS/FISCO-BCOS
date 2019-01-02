@@ -34,8 +34,8 @@
 #include <tuple>
 #include <vector>
 
-using namespace jsonrpc;
-
+namespace dev
+{
 template <class I>
 using AbstractMethodPointer = void (I::*)(Json::Value const& _parameter, Json::Value& _result);
 template <class I>
@@ -189,9 +189,9 @@ public:
             {
                 (m_interface.get()->*(pointer->second))(_input, _output);
             }
-            catch (JsonRpcException& e)
+            catch (jsonrpc::JsonRpcException& e)
             {
-                BOOST_THROW_EXCEPTION(JsonRpcException(e.GetCode(), e.GetMessage()));
+                BOOST_THROW_EXCEPTION(jsonrpc::JsonRpcException(e.GetCode(), e.GetMessage()));
             }
         }
         else
@@ -213,3 +213,4 @@ private:
     std::map<std::string, MethodPointer> m_methods;
     std::map<std::string, NotificationPointer> m_notifications;
 };
+}  // namespace dev

@@ -28,7 +28,7 @@ using namespace leveldb;
 namespace leveldb
 {
 class Value;
-};
+}
 
 namespace test_LevelDBStateStorage
 {
@@ -202,7 +202,7 @@ struct LevelDBFixture
     dev::storage::LevelDBStorage::Ptr levelDB;
 };
 
-BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture);
+BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture)
 
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
@@ -260,6 +260,6 @@ BOOST_AUTO_TEST_CASE(exception)
     BOOST_CHECK_THROW(levelDB->select(h, num, table, key), boost::exception);
 }
 
-BOOST_AUTO_TEST_SUITE_END();
+BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_LevelDBStateStorage

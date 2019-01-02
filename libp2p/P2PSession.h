@@ -23,7 +23,7 @@
 
 #include "P2PMessage.h"
 #include <libnetwork/Common.h>
-#include <libnetwork/Session.h>
+#include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
 #include <memory>
 
@@ -79,12 +79,10 @@ private:
     uint32_t m_topicSeq = 0;
     std::shared_ptr<std::set<std::string> > m_topics;
     std::weak_ptr<Service> m_service;
-    uint32_t failTimes = 0;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
 
     const uint32_t HEARTBEAT_INTERVEL = 5000;
-    const uint32_t MAX_IDLE = HEARTBEAT_INTERVEL * 10;
 };
 
 }  // namespace p2p

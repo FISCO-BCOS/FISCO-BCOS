@@ -27,7 +27,12 @@
 #include "CommonData.h"
 #include "CommonIO.h"
 #include "FixedHash.h"
+#pragma warning(push)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 #include "easylogging++.h"
+#pragma warning(pop)
+#pragma GCC diagnostic pop
 #include "vector_ref.h"
 #include <chrono>
 #include <ctime>

@@ -43,8 +43,8 @@ public:
     virtual int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
-    virtual h256 hash();
-    virtual void clear();
+    virtual h256 hash() override;
+    virtual void clear() override;
     virtual std::map<std::string, Entries::Ptr>* data() override;
 
     void setStateStorage(Storage::Ptr amopDB);

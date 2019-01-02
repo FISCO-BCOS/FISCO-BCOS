@@ -179,8 +179,8 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
 /// test PeerSessionInfo
 BOOST_AUTO_TEST_CASE(testPeerSessionInfo)
 {
-    NodeID node_id = KeyPair::create().pub();
 #if 0
+    NodeID node_id = KeyPair::create().pub();
     dev::p2p::P2pSessionInfo peer_session_info = {
         node_id, "www.baidu.com", std::chrono::steady_clock::duration(), 0};
     BOOST_CHECK(peer_session_info.id == node_id);

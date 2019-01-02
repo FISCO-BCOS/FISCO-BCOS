@@ -39,10 +39,7 @@ class MPTStateFactory : public dev::executive::StateFactoryInterface
 public:
     MPTStateFactory(u256 const& _accountStartNonce, boost::filesystem::path const& _basePath,
         h256 const& _genesisHash, WithExisting _we)
-      : m_accountStartNonce(_accountStartNonce),
-        m_basePath(_basePath),
-        m_genesisHash(_genesisHash),
-        m_we(_we)
+      : m_accountStartNonce(_accountStartNonce), m_basePath(_basePath), m_genesisHash(_genesisHash)
     {
         m_db = MPTState::openDB(m_basePath, m_genesisHash, _we);
     };
@@ -52,10 +49,9 @@ public:
 
 private:
     dev::OverlayDB m_db;
-    u256 m_accountStartNonce;  //
+    u256 m_accountStartNonce;
     boost::filesystem::path m_basePath;
     h256 m_genesisHash;
-    WithExisting m_we;
 };
 
 }  // namespace mptstate

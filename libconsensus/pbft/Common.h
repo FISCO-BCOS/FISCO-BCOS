@@ -73,7 +73,7 @@ struct PBFTMsgPacket
     PBFTMsgPacket()
       : node_idx(0), node_id(h512(0)), packet_id(0), ttl(MAXTTL), timestamp(u256(utcTime()))
     {}
-
+    virtual ~PBFTMsgPacket() = default;
     bool operator==(PBFTMsgPacket const& msg)
     {
         return node_idx == msg.node_idx && node_id == msg.node_id && packet_id == msg.packet_id &&

@@ -67,7 +67,7 @@ public:
     virtual std::weak_ptr<Host> host() { return m_server; }
     virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
 
-    virtual std::shared_ptr<SocketFace> socket() { return m_socket; }
+    virtual std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
 
     virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }

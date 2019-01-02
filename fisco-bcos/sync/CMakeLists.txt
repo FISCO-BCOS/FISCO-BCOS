@@ -18,26 +18,10 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
-if(TESTS)
 
-aux_source_directory(. SRC_LIST)
-
+file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_executable(mini-sync ${SRC_LIST} ${HEADERS})
 
-target_include_directories(mini-sync PRIVATE ${BOOST_INCLUDE_DIR})
-
-target_link_libraries(mini-sync devcore)
-target_link_libraries(mini-sync devcrypto)
-target_link_libraries(mini-sync ethcore)
-target_link_libraries(mini-sync p2p)
-target_link_libraries(mini-sync blockverifier)
-target_link_libraries(mini-sync sync)
-target_link_libraries(mini-sync txpool)
-target_link_libraries(mini-sync blockchain)
-target_link_libraries(mini-sync consensus)
-target_link_libraries(mini-sync ledger)
 target_link_libraries(mini-sync initializer)
-
-endif()

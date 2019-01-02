@@ -1,5 +1,6 @@
-file(GLOB sources "*.cpp" "*.h")
+file(GLOB SRC_LIST "*.cpp")
+file(GLOB HEADERS "*.h")
 
-add_library(mptstate ${sources})
+add_library(mptstate ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(mptstate PUBLIC ethcore devcore)
+target_link_libraries(mptstate PRIVATE ethcore)

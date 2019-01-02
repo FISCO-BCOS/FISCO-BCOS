@@ -23,6 +23,7 @@
  */
 #pragma once
 #include <libblockchain/BlockChainInterface.h>
+#include <libp2p/Service.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>

@@ -40,6 +40,7 @@ public:
     {
         m_groupId = dev::eth::getGroupAndProtocol(m_groupId).first;
     }
+    virtual ~CommonTransactionNonceCheck() = default;
     virtual void delCache(std::string const& key);
     virtual void delCache(dev::eth::Transactions const& _transcations);
     virtual void insertCache(dev::eth::Transaction const& _transcation);

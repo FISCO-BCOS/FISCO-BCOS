@@ -33,7 +33,7 @@ OverlayDB MPTState::openDB(
     boost::filesystem::path const& _path, h256 const& _genesisHash, WithExisting _we)
 {
     return State::openDB(_path, _genesisHash, _we);
-};
+}
 
 bool MPTState::addressInUse(Address const& _address) const
 {

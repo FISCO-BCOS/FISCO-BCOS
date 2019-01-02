@@ -181,7 +181,7 @@ protected:
     void clearFirstVoteCache();
 
     void execBlock(Sealing& _sealing, dev::eth::Block const& _block);
-    void checkBlockValid(dev::eth::Block const& _block);
+    void checkBlockValid(dev::eth::Block const& _block) override;
     void checkMinerList(dev::eth::Block const& _block);
     bool checkAndExecute(dev::eth::Block const& _block);
     void checkAndSave(Sealing& _sealing);

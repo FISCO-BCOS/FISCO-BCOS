@@ -132,7 +132,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         http::response<http::string_body> rsp;
 
         // Receive the HTTP response
-        int rspSize = http::read(m_socket, buffer, rsp);
+        http::read(m_socket, buffer, rsp);
 
         LOG(DEBUG) << "[KeyCenter] [callMethod] keycenter respond [code/string]: "
                    << rsp.result_int() << "/" << rsp.body() << endl;
@@ -214,7 +214,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     }
 
     return m_lastRcvDataKey;
-};
+}
 
 const std::string KeyCenter::generateCipherDataKey()
 {

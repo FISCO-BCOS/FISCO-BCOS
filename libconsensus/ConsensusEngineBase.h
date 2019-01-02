@@ -30,7 +30,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
-#include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
@@ -142,7 +141,7 @@ public:
 
     IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::Block const& block) {}
+    virtual void reportBlock(dev::eth::Block const& block) override {}
 
 protected:
     virtual void resetConfig() { m_nodeNum = m_minerList.size(); }
