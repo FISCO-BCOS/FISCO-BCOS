@@ -127,7 +127,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
         }
     }
 
-    BLOCKCHAIN_LOG(TRACE) << "[#getBlock] Can't find block [height]: " << _i;
+    BLOCKCHAIN_LOG(WARNING) << "[#getBlock] Can't find block [height]: " << _i;
     return nullptr;
 }
 
@@ -560,8 +560,8 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
 
 void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    writeNumber2Hash(block, context);
     writeHash2Block(block, context);
+    writeNumber2Hash(block, context);
 }
 
 CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
@@ -584,10 +584,10 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     }
     if (commitMutex.try_lock())
     {
+        writeBlockInfo(block, context);
         writeNumber(block, context);
         writeTotalTransactionCount(block, context);
         writeTxToBlock(block, context);
-        writeBlockInfo(block, context);
         m_blockCache.add(block);
         context->dbCommit(block);
         commitMutex.unlock();
