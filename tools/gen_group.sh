@@ -40,9 +40,9 @@ function generate_group_genesis()
 ;consensus configuration
 [consensus]
 ;consensus type: only support PBFT now
-consensusType=pbft
+consensus_type=pbft
 ;the max number of transactions of a block
-maxTransNum=1000
+max_trans_num=1000
 ;the node id of leaders
 $nodeid_list
 
@@ -56,7 +56,7 @@ type=${state_type}
 
 ;tx gas limit
 [tx]
-    gasLimit=300000000
+    gas_limit=300000000
 EOF
 }
 
@@ -66,10 +66,10 @@ function generate_group_ini()
     cat << EOF > ${output}
 ;sync period time
 [sync]
-    idleWaitMs=200
+    idle_wait_ms=200
 
 ;txpool limit
-[txPool]
+[tx_pool]
     limit=1000
 EOF
 }
