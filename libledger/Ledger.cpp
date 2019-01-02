@@ -150,7 +150,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.max_trans_num", 1000);
-    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.max_ttl", MAXTTL);
+    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
 
     m_param->mutableConsensusParam().minElectTime =
         pt.get<uint64_t>("consensus.min_elect_time", 1000);

@@ -564,7 +564,7 @@ generate_group_genesis()
     ;the max number of transactions of a block
     max_trans_num=1000
     ;the ttl of broadcasted pbft message
-    ;max_ttl=2
+    ;ttl=2
     ;the node id of leaders
     ${node_list}
 
