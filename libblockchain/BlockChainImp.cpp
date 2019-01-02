@@ -468,10 +468,6 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
         auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
         auto entry = tb->newEntry();
         entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
-        {
-            WriteGuard l(m_blockNumberMutex);
-            m_blockNumber = block.blockHeader().number();
-        }
         if (entries->size() > 0)
         {
             tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());
@@ -585,12 +581,17 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     if (commitMutex.try_lock())
     {
         writeBlockInfo(block, context);
+
         writeNumber(block, context);
         writeTotalTransactionCount(block, context);
         writeTxToBlock(block, context);
-        m_blockCache.add(block);
         context->dbCommit(block);
         commitMutex.unlock();
+        m_blockCache.add(block);
+        {
+            WriteGuard l(m_blockNumberMutex);
+            m_blockNumber = block.blockHeader().number();
+        }
         m_onReady();
         return CommitResult::OK;
     }
