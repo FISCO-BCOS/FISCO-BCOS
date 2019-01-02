@@ -32,32 +32,35 @@ using namespace dev::txpool;
 void SyncMsgEngine::messageHandler(
     NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
-    SYNCLOG(TRACE) << "[Rcv] [Packet] Receive packet from: " << _session->nodeID().abridged()
-                   << std::endl;
+    SYNC_LOG(TRACE) << LOG_BADAGE("Rcv") << LOG_BADAGE("Packet")
+                    << LOG_DESCRIPTION("Receive packet from")
+                    << LOG_KV("peer", _session->nodeID().abridged());
+
     if (!checkSession(_session) || !checkMessage(_msg))
     {
-        SYNCLOG(WARNING) << "[Rcv] [Packet] Reject packet: [reason]: session or msg illegal"
-                         << endl;
-        _session->stop(dev::network::LocalIdentity);
+        SYNC_LOG(WARNING) << LOG_BADAGE("Rcv") << LOG_BADAGE("Packet")
+                          << LOG_DESCRIPTION("Reject packet: [reason]: session or msg illegal");
         return;
     }
 
     SyncMsgPacket packet;
     if (!packet.decode(_session, _msg))
     {
-        SYNCLOG(WARNING)
-            << "[Rcv] [Packet] Reject packet: [reason/nodeId/size/message]: decode failed/"
-            << _session->nodeID().abridged() << "/" << _msg->buffer()->size() << "/"
-            << toHex(*_msg->buffer()) << endl;
+        SYNC_LOG(WARNING) << LOG_BADAGE("Rcv") << LOG_BADAGE("Packet")
+                          << LOG_DESCRIPTION("Reject packet") << LOG_KV("reason", "decode failed")
+                          << LOG_KV("nodeId", _session->nodeID().abridged())
+                          << LOG_KV("size", _msg->buffer()->size())
+                          << LOG_KV("message", toHex(*_msg->buffer()));
         _session->stop(dev::network::BadProtocol);
         return;
     }
 
     bool ok = interpret(packet);
     if (!ok)
-        SYNCLOG(WARNING)
-            << "[Rcv] [Packet] Reject packet: [reason/packetType]: illegal packet type/"
-            << int(packet.packetType) << endl;
+        SYNC_LOG(WARNING) << LOG_BADAGE("Rcv") << LOG_BADAGE("Packet")
+                          << LOG_DESCRIPTION("Reject packet")
+                          << LOG_KV("reason", "illegal packet type")
+                          << LOG_KV("packetType", int(packet.packetType));
 }
 
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
@@ -80,7 +83,9 @@ bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
 
 bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
-    SYNCLOG(TRACE) << "[Rcv] [Packet] interpret packet type: " << int(_packet.packetType) << endl;
+    SYNC_LOG(TRACE) << LOG_BADAGE("Rcv") << LOG_BADAGE("Packet")
+                    << LOG_DESCRIPTION("interpret packet type")
+                    << LOG_KV("type", int(_packet.packetType));
     try
     {
         switch (_packet.packetType)
@@ -103,7 +108,8 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
     }
     catch (std::exception& e)
     {
-        SYNCLOG(WARNING) << "[Rcv] [Packet] Interpret error for " << e.what() << endl;
+        SYNC_LOG(WARNING) << LOG_BADAGE("Rcv") << LOG_BADAGE("Packet")
+                          << LOG_DESCRIPTION("Interpret error for") << LOG_KV("reason", e.what());
         return false;
     }
     return true;
@@ -117,8 +123,9 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
     if (rlps.itemCount() != 3)
     {
-        SYNCLOG(TRACE) << "[Status] Receive invalid status packet format. From"
-                       << _packet.nodeId.abridged() << endl;
+        SYNC_LOG(TRACE) << LOG_BADAGE("Status")
+                        << LOG_DESCRIPTION("Receive invalid status packet format")
+                        << LOG_KV("peer", _packet.nodeId.abridged());
         return;
     }
 
@@ -127,9 +134,11 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
     if (info.genesisHash != m_genesisHash)
     {
-        SYNCLOG(TRACE) << "[Status] Receive invalid status packet with different genesis hash. "
-                          "[from/genesisHash] "
-                       << _packet.nodeId.abridged() << "/" << info.genesisHash << endl;
+        SYNC_LOG(TRACE) << LOG_BADAGE("Status")
+                        << LOG_DESCRIPTION(
+                               "Receive invalid status packet with different genesis hash")
+                        << LOG_KV("peer", _packet.nodeId.abridged())
+                        << LOG_KV("genesisHash", info.genesisHash);
         return;
     }
 
@@ -143,18 +152,20 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
     if (status == nullptr)
     {
-        SYNCLOG(DEBUG) << "[Status] Receive status from new peer "
-                          "[peerNodeId/peerNumber/genesisHash/latestHash]"
-                       << info.nodeId.abridged() << "/" << info.number << "/" << info.genesisHash
-                       << "/" << info.latestHash << endl;
+        SYNC_LOG(DEBUG) << LOG_BADAGE("Status") << LOG_DESCRIPTION("Receive status from new peer")
+                        << LOG_KV("peer", info.nodeId.abridged())
+                        << LOG_KV("peerNumber", info.number)
+                        << LOG_KV("genesisHash", info.genesisHash)
+                        << LOG_KV("latestHash", info.latestHash);
         m_syncStatus->newSyncPeerStatus(info);
     }
     else
     {
-        SYNCLOG(DEBUG)
-            << "[Status] Receive status from peer [peerNodeId/peerNumber/genesisHash/latestHash]"
-            << info.nodeId.abridged() << "/" << info.number << "/" << info.genesisHash << "/"
-            << info.latestHash << endl;
+        SYNC_LOG(DEBUG) << LOG_BADAGE("Status") << LOG_DESCRIPTION("Receive status from peer")
+                        << LOG_KV("peerNodeId", info.nodeId.abridged())
+                        << LOG_KV("peerNumber", info.number)
+                        << LOG_KV("genesisHash", info.genesisHash)
+                        << LOG_KV("latestHash", info.latestHash);
         status->update(info);
     }
 }
@@ -163,8 +174,9 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 {
     if (m_syncStatus->state == SyncState::Downloading)
     {
-        SYNCLOG(TRACE) << "[Tx] Drop peer transactions when dowloading blocks [fromNodeId]: "
-                       << _packet.nodeId.abridged() << endl;
+        SYNC_LOG(TRACE) << LOG_BADAGE("Tx")
+                        << LOG_DESCRIPTION("Drop peer transactions when dowloading blocks")
+                        << LOG_KV("fromNodeId", _packet.nodeId.abridged());
         return;
     }
 
@@ -185,41 +197,48 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                 successCnt++;
             else if (ImportResult::AlreadyKnown == importResult)
             {
-                SYNCLOG(TRACE) << "[Tx] Import peer transaction into txPool DUPLICATED from peer "
-                                  "[reason/txHash/peer]: "
-                               << int(importResult) << "/" << _packet.nodeId.abridged() << "/"
-                               << move(tx.sha3()) << endl;
+                SYNC_LOG(TRACE) << LOG_BADAGE("Tx")
+                                << LOG_DESCRIPTION(
+                                       "Import peer transaction into txPool DUPLICATED from peer")
+                                << LOG_KV("reason", int(importResult))
+                                << LOG_KV("txHash", _packet.nodeId.abridged())
+                                << LOG_KV("peer", move(tx.sha3()));
             }
             else
             {
-                SYNCLOG(TRACE) << "[Tx] Import peer transaction into txPool FAILED from peer "
-                                  "[reason/txHash/peer]: "
-                               << int(importResult) << "/" << _packet.nodeId.abridged() << "/"
-                               << move(tx.sha3()) << endl;
+                SYNC_LOG(TRACE) << LOG_BADAGE("Tx")
+                                << LOG_DESCRIPTION(
+                                       "Import peer transaction into txPool FAILED from peer")
+                                << LOG_KV("reason", int(importResult))
+                                << LOG_KV("txHash", _packet.nodeId.abridged())
+                                << LOG_KV("peer", move(tx.sha3()));
             }
 
             m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
         }
         catch (std::exception& e)
         {
-            SYNCLOG(WARNING) << "[Tx] Invalid transaction RLP recieved [reason/rlp] " << e.what()
-                             << "/" << toHex(rlps[i].toBytes()) << endl;
+            SYNC_LOG(WARNING) << LOG_BADAGE("Tx")
+                              << LOG_DESCRIPTION("Invalid transaction RLP recieved")
+                              << LOG_KV("reason", e.what())
+                              << LOG_KV("rlp", toHex(rlps[i].toBytes()));
             continue;
         }
     }
 
     auto pengdingSize = m_txPool->pendingSize();
-    SYNCLOG(DEBUG) << "[Tx] Import peer transactions [import/rcv/txPool]: " << successCnt << "/"
-                   << itemCount << "/" << pengdingSize << " from " << _packet.nodeId.abridged()
-                   << endl;
+    SYNC_LOG(DEBUG) << LOG_BADAGE("Tx") << LOG_DESCRIPTION("Import peer transactions")
+                    << LOG_KV("import", successCnt) << LOG_KV("rcv", itemCount)
+                    << LOG_KV("txPool", pengdingSize) << LOG_KV("peer", _packet.nodeId.abridged());
 }
 
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 {
     RLP const& rlps = _packet.rlp();
 
-    SYNCLOG(DEBUG) << "[Download] [BlockSync] Receive peer block packet [packetSize]: "
-                   << rlps.data().size() << "B" << endl;
+    SYNC_LOG(DEBUG) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
+                    << LOG_DESCRIPTION("Receive peer block packet")
+                    << LOG_KV("packetSize(B)", rlps.data().size());
 
     m_syncStatus->bq().push(rlps);
 }
@@ -230,8 +249,9 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 
     if (rlp.itemCount() != 2)
     {
-        SYNCLOG(TRACE) << "[Download] [Request] Receive invalid request blocks packet format. From"
-                       << _packet.nodeId.abridged() << endl;
+        SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
+                        << LOG_DESCRIPTION("Receive invalid request blocks packet format")
+                        << LOG_KV("peer", _packet.nodeId.abridged());
         return;
     }
 
@@ -239,9 +259,10 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     int64_t from = rlp[0].toInt<int64_t>();
     unsigned size = rlp[1].toInt<unsigned>();
 
-    SYNCLOG(TRACE) << "[Download] [Request] Receive block request from "
-                   << _packet.nodeId.abridged() << " req[" << from << ", " << from + size - 1 << "]"
-                   << endl;
+    SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
+                    << LOG_DESCRIPTION("Receive block request")
+                    << LOG_KV("peer", _packet.nodeId.abridged()) << LOG_KV("from", from)
+                    << LOG_KV("to", from + size - 1);
 
     auto peerStatus = m_syncStatus->peerStatus(_packet.nodeId);
     if (peerStatus != nullptr && peerStatus)
@@ -279,9 +300,10 @@ void DownloadBlocksContainer::clearBatchAndSend()
 
     auto msg = retPacket.toMessage(m_protocolId);
     m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
-    SYNCLOG(TRACE) << "[Download] [Request] [BlockSync] Send block packet to "
-                   << m_nodeId.abridged() << " [blocks/bytes]: " << m_blockRLPsBatch.size() << "/ "
-                   << msg->buffer()->size() << "B]" << endl;
+    SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request") << LOG_BADAGE("BlockSync")
+                    << LOG_DESCRIPTION("Send block packet") << LOG_KV("peer", m_nodeId.abridged())
+                    << LOG_KV("blocks", m_blockRLPsBatch.size())
+                    << LOG_KV("bytes(V)", msg->buffer()->size());
 
     m_blockRLPsBatch.clear();
     m_currentBatchSize = 0;
@@ -294,6 +316,7 @@ void DownloadBlocksContainer::sendBigBlock(bytes const& _blockRLP)
 
     auto msg = retPacket.toMessage(m_protocolId);
     m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
-    SYNCLOG(TRACE) << "[Rcv] [Send] [Download] Block back to " << m_nodeId.abridged()
-                   << " [blocks/bytes]: " << 1 << "/ " << msg->buffer()->size() << "B]" << endl;
+    SYNC_LOG(TRACE) << LOG_BADAGE("Rcv") << LOG_BADAGE("Send") << LOG_BADAGE("Download")
+                    << LOG_DESCRIPTION("Block back") << LOG_KV("peer", m_nodeId.abridged())
+                    << LOG_KV("blocks", 1) << LOG_KV("bytes(B)", msg->buffer()->size());
 }

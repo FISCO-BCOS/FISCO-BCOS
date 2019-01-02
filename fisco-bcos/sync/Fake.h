@@ -114,10 +114,12 @@ public:
         m_txPool->dropBlockTrans(*block);
         m_totalTxCommit += txs.size();
 
-        SYNCLOG(TRACE) << "[Commit] Conencus block commit "
-                          "[blockNumber/txNumber/totalTxCommitThisNode/blockHash/parentHash]: "
-                       << currentNumber + 1 << "/" << txs.size() << "/" << m_totalTxCommit << "/"
-                       << block->headerHash() << "/" << parentHash << std::endl;
+        SYNC_LOG(TRACE) << LOG_BADAGE("Commit") << LOG_DESCRIPTION("Conencus block commit: ")
+                        << LOG_KV("blockNumber", currentNumber + 1)
+                        << LOG_KV("txNumber", txs.size())
+                        << LOG_KV("totalTxCommitThisNode", m_totalTxCommit)
+                        << LOG_KV("blockHash", block->headerHash())
+                        << LOG_KV("parentHash", parentHash);
     }
 
 private:
