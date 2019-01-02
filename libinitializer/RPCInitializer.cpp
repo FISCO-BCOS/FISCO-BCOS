@@ -80,8 +80,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     {
         INITIALIZER_LOG(ERROR) << "[#RPCInitializer] init RPC/channelserver failed, [EINFO]: "
                                << boost::diagnostic_information(e);
-        ERROR_OUTPUT << "Init rpc/channelserver failed, EINFO: " << boost::diagnostic_information(e)
-                     << std::endl;
+        ERROR_OUTPUT << "Init rpc/channelserver failed! Please check port: " << listenPort
+                     << " is unused! ERROR: " << boost::diagnostic_information(e) << std::endl;
         exit(1);
     }
 }

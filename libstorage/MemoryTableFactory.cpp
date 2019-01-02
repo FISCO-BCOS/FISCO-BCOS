@@ -44,6 +44,7 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_HASH_2_BLOCK);
     m_sysTables.push_back(SYS_CNS);
     m_sysTables.push_back(SYS_CONFIG);
+    m_sysTables.push_back(SYS_BLOCK_2_NONCES);
 }
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
@@ -331,6 +332,10 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = dev::blockverifier::SYSTEM_CONFIG_KEY;
         tableInfo->fields = std::vector<std::string>{
             dev::blockverifier::SYSTEM_CONFIG_VALUE, dev::blockverifier::SYSTEM_CONFIG_ENABLENUM};
+    else if (tableName == SYS_BLOCK_2_NONCES)
+    {
+        tableInfo->key = "number";
+        tableInfo->fields = std::vector<std::string>{SYS_VALUE};
     }
     return tableInfo;
 }

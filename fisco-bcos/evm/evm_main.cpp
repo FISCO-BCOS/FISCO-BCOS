@@ -36,7 +36,7 @@ using namespace dev::eth;
 using namespace dev::executive;
 using namespace dev::mptstate;
 using namespace dev::blockchain;
-
+using namespace boost::property_tree;
 static void FakeBlockHeader(BlockHeader& header, EvmParams const& param)
 {
     header.setGasLimit(param.gasLimit());
