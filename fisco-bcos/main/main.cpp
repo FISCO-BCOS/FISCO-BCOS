@@ -24,7 +24,6 @@
 #include "Param.h"
 #include <libdevcore/easylog.h>
 #include <libinitializer/Initializer.h>
-#include <libinitializer/LogInitializer.h>
 #include <clocale>
 INITIALIZE_EASYLOGGINGPP
 using namespace dev::initializer;

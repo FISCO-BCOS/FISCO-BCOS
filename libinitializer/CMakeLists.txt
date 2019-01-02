@@ -1,6 +1,18 @@
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
+if (EASYLOG)
+set(REMOVE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/BoostLogInitializer.h)
+list(REMOVE_ITEM HEADERS ${REMOVE_HEADERS})
+set(REMOVE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/BoostLogInitializer.cpp)
+list(REMOVE_ITEM SRC_LIST ${REMOVE_SOURCES})
+else()
+set(REMOVE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/EasyLogInitializer.h)
+list(REMOVE_ITEM HEADERS ${REMOVE_HEADERS})
+set(REMOVE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/EasyLogInitializer.cpp)
+list(REMOVE_ITEM SRC_LIST ${REMOVE_SOURCES})
+endif()
+
 add_library(initializer ${SRC_LIST} ${HEADERS})
 target_include_directories(initializer PUBLIC ${BOOST_INCLUDE_DIR})
 

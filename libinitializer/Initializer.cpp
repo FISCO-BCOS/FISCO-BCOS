@@ -33,7 +33,7 @@ void Initializer::init(std::string const& _path)
         boost::property_tree::read_ini(_path, pt);
         /// init log
         m_logInitializer = std::make_shared<LogInitializer>();
-        m_logInitializer->initEasylogging(pt);
+        m_logInitializer->initLog(pt);
         /// init certificates
         m_secureInitializer = std::make_shared<SecureInitializer>();
         m_secureInitializer->initConfig(pt);

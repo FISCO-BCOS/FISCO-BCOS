@@ -25,7 +25,11 @@
 #include "Common.h"
 #include "InitializerInterface.h"
 #include "LedgerInitializer.h"
-#include "LogInitializer.h"
+#ifndef FISCO_EASYLOG
+#include "BoostLogInitializer.h"
+#else
+#include "EasyLogInitializer.h"
+#endif
 #include "P2PInitializer.h"
 #include "RPCInitializer.h"
 #include "SecureInitializer.h"

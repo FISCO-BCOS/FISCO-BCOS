@@ -18,7 +18,7 @@
  * @author: xingqiangbai
  * @date 2018-11-14
  */
-#include "libinitializer/LogInitializer.h"
+#include "libinitializer/Initializer.h"
 #include "libstorage/MemoryTableFactory.h"
 #include <leveldb/db.h>
 #include <libdevcore/Common.h>
@@ -100,7 +100,7 @@ int main(int argc, const char* argv[])
     // init log
     boost::property_tree::ptree pt;
     auto logInitializer = std::make_shared<LogInitializer>();
-    logInitializer->initEasylogging(pt);
+    logInitializer->initLog(pt);
     /// init params
     auto params = initCommandLine(argc, argv);
     auto storagePath = params["path"].as<string>();
