@@ -19,6 +19,9 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 file(GLOB_RECURSE sources "*.cpp" "*.h" "*.sol")
+if(NOT EASYLOG)
+    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libdevcore/easylogging++.cpp)
+endif()
 set(TEST_ARGS "--testpath=${CMAKE_SOURCE_DIR}/test/data")
 set(excludeCases "GM_")
 foreach(file ${sources})
