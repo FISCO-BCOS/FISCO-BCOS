@@ -380,7 +380,7 @@ bool Ledger::consensusInitFactory()
     Ledger_LOG(DEBUG) << "[#initLedger] [#consensusInitFactory] [type]:  "
                       << m_param->mutableConsensusParam().consensusType;
 
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") != 0)
     {
         /// create RaftSealer
         m_sealer = createRaftSealer();
@@ -391,7 +391,7 @@ bool Ledger::consensusInitFactory()
         return true;
     }
 
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
     {
         std::string error_msg =
             "Unsupported Consensus type: " + m_param->mutableConsensusParam().consensusType;

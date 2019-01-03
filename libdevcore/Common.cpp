@@ -25,13 +25,10 @@
 #include "Exceptions.h"
 #include "easylog.h"
 
-#include "include/BuildInfo.h"
-
 using namespace std;
 
 namespace dev
 {
-char const* Version = FISCO_BCOS_PROJECT_VERSION;
 bytes const NullBytes;
 std::string const EmptyString;
 

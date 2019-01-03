@@ -73,7 +73,7 @@ public:
     void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override
     {
         return m_sessionInfos;
     }
@@ -103,7 +103,7 @@ public:
     }
 
     void setConnected() { m_connected = true; }
-    bool isConnected(NodeID const& nodeId) const { return m_connected; }
+    bool isConnected(NodeID nodeId) override { return m_connected; }
 
 private:
     P2PSessionInfos m_sessionInfos;
@@ -176,7 +176,7 @@ public:
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
     }
-    dev::h256 numberHash(int64_t _i) { return blockHash; }
+    dev::h256 numberHash(int64_t _i) override { return blockHash; }
 
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
@@ -409,12 +409,11 @@ public:
     bool isSyncing() const override { return m_isSyncing; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
-    void noteSealingBlockNumber(int64_t _number){};
+    void noteSealingBlockNumber(int64_t _number) override{};
 
 private:
     SyncStatus m_syncStatus;
     bool m_isSyncing;
-    bool m_forceSync;
     Block m_latestSentBlock;
     PROTOCOL_ID m_protocolId;
 };

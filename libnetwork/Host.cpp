@@ -74,17 +74,18 @@ void Host::startAccept(boost::system::error_code boost_error)
     /// accept the connection
     if (m_run)
     {
-        HOST_LOG(INFO) << "Listening on local port " << m_listenPort << " (public: " << m_listenHost
-                       << "), P2P Start Accept";
+        HOST_LOG(INFO) << LOG_DESC("P2P Start Accept") << LOG_KV("Host", m_listenHost) << ":"
+                       << m_listenPort;
         auto socket = m_asioInterface->newSocket(NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
         /// define callback after accept connections
         m_asioInterface->asyncAccept(socket,
             [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
-                auto remoteEndpoint = socket->remote_endpoint();
-                HOST_LOG(INFO) << "P2P Recv Connect: " << remoteEndpoint.address().to_string()
-                               << ":" << remoteEndpoint.port();
+                auto endpoint = socket->remote_endpoint();
+                HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect Try")
+                                << LOG_KV("From", endpoint.address().to_string()) << ":"
+                                << endpoint.port();
                 /// network acception failed
                 if (ec || !m_run)
                 {
@@ -93,12 +94,12 @@ void Host::startAccept(boost::system::error_code boost_error)
                 }
 
                 /// if the connected peer over the limitation, drop socket
-                auto endpoint = socket->remoteEndpoint();
                 socket->setNodeIPEndpoint(
                     NodeIPEndpoint(endpoint.address(), endpoint.port(), endpoint.port()));
-                HOST_LOG(DEBUG) << "client port:" << endpoint.port()
-                                << "|ip:" << endpoint.address().to_string();
 
+                HOST_LOG(INFO) << LOG_DESC("P2P Recv Connect")
+                               << LOG_KV("From", endpoint.address().to_string()) << ":"
+                               << endpoint.port();
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
@@ -129,7 +130,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
             {
-                HOST_LOG(ERROR) << "Get cert failed";
+                HOST_LOG(ERROR) << LOG_DESC("Get cert failed");
                 return preverified;
             }
 
@@ -138,34 +139,34 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                HOST_LOG(ERROR) << "Get ca casic failed";
+                HOST_LOG(ERROR) << LOG_DESC("Get ca casic failed");
                 return preverified;
             }
             /// ignore ca
             if (basic->ca)
             {
                 // ca or agency certificate
-                HOST_LOG(TRACE) << "Ignore CA certificate";
+                HOST_LOG(TRACE) << LOG_DESC("Ignore CA certificate");
                 return preverified;
             }
             EVP_PKEY* evpPublicKey = X509_get_pubkey(cert);
             if (!evpPublicKey)
             {
-                HOST_LOG(ERROR) << "Get evpPublicKey failed";
+                HOST_LOG(ERROR) << LOG_DESC("Get evpPublicKey failed");
                 return preverified;
             }
 
             ec_key_st* ecPublicKey = EVP_PKEY_get1_EC_KEY(evpPublicKey);
             if (!ecPublicKey)
             {
-                HOST_LOG(ERROR) << "Get ecPublicKey failed";
+                HOST_LOG(ERROR) << LOG_DESC("Get ecPublicKey failed");
                 return preverified;
             }
             /// get public key of the certificate
             const EC_POINT* ecPoint = EC_KEY_get0_public_key(ecPublicKey);
             if (!ecPoint)
             {
-                HOST_LOG(ERROR) << "Get ecPoint failed";
+                HOST_LOG(ERROR) << LOG_DESC("Get ecPoint failed");
                 return preverified;
             }
 
@@ -189,7 +190,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
             if (find(crl.begin(), crl.end(), nodeID) != crl.end())
             {
-                HOST_LOG(INFO) << "NodeID in certificate rejected list.";
+                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate rejected list.");
                 return false;
             }
 
@@ -197,7 +198,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
         }
         catch (std::exception& e)
         {
-            HOST_LOG(ERROR) << "Cert verify failed: " << boost::diagnostic_information(e);
+            HOST_LOG(ERROR) << LOG_DESC("Cert verify failed:") << boost::diagnostic_information(e);
             return preverified;
         }
     };
@@ -216,9 +217,10 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(WARNING) << "[#handshakeServer] Handshake failed: [eid/emsg/endpoint]: "
-                          << error.value() << "/" << error.message() << "/"
-                          << socket->nodeIPEndpoint().name();
+        HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
+                          << LOG_KV("errorValue", error.value())
+                          << LOG_KV("message", error.message())
+                          << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
         socket->close();
 
         return;
@@ -260,12 +262,12 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
         }
         else
         {
-            HOST_LOG(WARNING) << "No connectionHandler, new connection may lost";
+            HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
         }
     });
-    HOST_LOG(INFO) << "[#startPeerSession] [remoteEndpoint/nodeID]: "
-                   << socket->remote_endpoint().address().to_string() << ":"
-                   << socket->remote_endpoint().port() << "/" << nodeID;
+    HOST_LOG(INFO) << LOG_DESC("startPeerSession")
+                   << LOG_KV("remoteEndpoint", socket->remote_endpoint().address().to_string())
+                   << ":" << socket->remote_endpoint().port() << LOG_KV("nodeID", nodeID);
 }
 
 /**

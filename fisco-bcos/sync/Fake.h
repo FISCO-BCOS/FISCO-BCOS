@@ -171,7 +171,7 @@ private:
         Secret sec = KeyPair::create().secret();
         for (size_t i = 0; i < _size; i++)
         {
-            block_hash = sha3(toString("block " + i));
+            block_hash = sha3(toString("block " + std::to_string(i)));
             sig = sign(sec, block_hash);
             retList.push_back(std::make_pair(u256(block_hash), sig));
         }
