@@ -77,26 +77,6 @@ public:
     void encodeAMOPBuffer(std::string const& topic);
     virtual ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
 
-    void printMsgWithPrefix(std::string const& strPrefix)
-    {
-        std::stringstream strMsg;
-        strMsg << strPrefix << "Message(" << m_length << "," << m_protocolID << "," << m_packetType
-               << "," << m_seq << ",";
-        if (dev::eth::ProtocolID::Topic != abs(m_protocolID))
-        {
-            strMsg << std::string((const char*)m_buffer->data(), m_buffer->size());
-        }
-        else
-        {
-            std::string topic;
-            std::shared_ptr<bytes> temp = std::make_shared<bytes>();
-            decodeAMOPBuffer(temp, topic);
-            strMsg << topic << "," << std::string((const char*)temp->data(), temp->size());
-        }
-        strMsg << ")";
-        P2PMSG_LOG(TRACE) << strMsg.str();
-    }
-
 private:
     uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
     PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when

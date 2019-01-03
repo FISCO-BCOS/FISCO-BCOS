@@ -296,8 +296,8 @@ void Host::start()
                 }
                 catch (std::exception& e)
                 {
-                    HOST_LOG(WARNING)
-                        << "Exception in Network Thread:" << boost::diagnostic_information(e);
+                    HOST_LOG(WARNING) << LOG_DESC("Exception in Host Thread:")
+                                      << boost::diagnostic_information(e);
                 }
 
                 asioInterface()->reset();
@@ -319,13 +319,13 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     {
         return;
     }
-    HOST_LOG(INFO) << "Attempting connection to node "
-                   << "@" << _nodeIPEndpoint.name();
+    HOST_LOG(INFO) << LOG_DESC("Attempting connection to node")
+                   << LOG_KV("name", _nodeIPEndpoint.name());
     {
         Guard l(x_pendingConns);
         if (m_pendingConns.count(_nodeIPEndpoint.name()))
         {
-            LOG(DEBUG) << "[#asyncConnect] " << _nodeIPEndpoint.name() << " is in the pending list";
+            LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list" << LOG_KV("name", _nodeIPEndpoint.name()) ;
             return;
         }
     }
@@ -339,18 +339,20 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         /// return when cancel has been called
         if (error == boost::asio::error::operation_aborted)
         {
-            HOST_LOG(DEBUG) << "[#asyncConnect] asyncHandshake handler revoke this operation";
+            HOST_LOG(DEBUG) << LOG_DESC("AsyncConnect handshake handler revoke this operation");
             return;
         }
         /// connection timer error
         if (error && error != boost::asio::error::operation_aborted)
         {
-            HOST_LOG(ERROR) << "[#asyncConnect] connect timer failed [ECODE/EMSG]: "
-                            << error.value() << "/" << error.message();
+            HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
+                            << LOG_KV("errorValue", error.value())
+                            << LOG_KV("message", error.message());
         }
         if (socket->isConnected())
         {
-            LOG(WARNING) << "[#asyncConnect] timeout, erase " << _nodeIPEndpoint.name();
+            LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
+                         << LOG_KV("name", _nodeIPEndpoint.name());
             erasePendingConns(_nodeIPEndpoint);
             socket->close();
         }
@@ -360,12 +362,12 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         socket, _nodeIPEndpoint, [=](boost::system::error_code const& ec) {
             if (ec)
             {
-                HOST_LOG(ERROR) << "Connection refused to node"
-                                << "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
+                HOST_LOG(ERROR) << LOG_DESC("Connection refused by node")
+                                << LOG_KV("name", _nodeIPEndpoint.name())
+                                << LOG_KV("message", error.message());
                 socket->close();
 
                 m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
-                    HOST_LOG(ERROR) << "Connect to " << _nodeIPEndpoint.name() << " error";
                     callback(NetworkException(ConnectError, "Connect failed"), NodeID(),
                         std::shared_ptr<SessionFace>());
                 });
@@ -402,9 +404,11 @@ void Host::handshakeClient(const boost::system::error_code& error,
     erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
-        HOST_LOG(WARNING) << "[#handshakeClient] Handshake failed: [eid/emsg/endpoint]: "
-                          << error.value() << "/" << error.message() << "/"
-                          << _nodeIPEndpoint.name();
+        HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed"
+                            << LOG_KV("name", _nodeIPEndpoint.name())
+        << LOG_KV("errorValue", error.value())
+                            << LOG_KV("message", error.message());
+                        
         if (socket->isConnected())
         {
             socket->close();

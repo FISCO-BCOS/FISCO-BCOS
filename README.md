@@ -2,7 +2,7 @@
 
 **FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Two major camps of blockchain technology - public and consortium chains, to better serve the general public, open consortium chain is the perfect choice for enterprises to unlock the potential of collaborative businesses model. FISCO BCOS is born to support open consortium chain applications, by supporting multiple chains, and cross-chain communication.
 
-[![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)  [![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/lab-bcos/badge)](https://www.codefactor.io/repository/github/fisco-bcos/lab-bcos) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/lab-bcos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/lab-bcos&amp;utm_campaign=Badge_Grade) [![](https://img.shields.io/github/issues-pr/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/pulls) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/lab-bcos/total.svg)](https://github.com/FISCO-BCOS/lab-bcos) 
+[![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)  [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![](https://img.shields.io/github/issues-pr/FISCO-BCOS/FISCO-BCOS.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS/pulls) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/FISCO-BCOS.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS/issues) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS) 
 
 ## Quick Start
 
@@ -11,7 +11,7 @@
 Run [`build_chain.sh`](tools/build_chain.sh) to generate a blockchain with some nodes. For example, we build a blockchain with 4 nodes belongs to `127.0.0.1`.
 
 ```bash
-curl -LO https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/tools/build_chain.sh
+curl -LO https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/dev/tools/build_chain.sh
 bash build_chain.sh -l "127.0.0.1:4"
 ```
 
@@ -24,41 +24,12 @@ bash start_all.sh
 
 More senarios, read XXX.
 
-### Deploy a smart contract
-
-Read XXX to deploy your smart contracts and use them.
-
-## Building from source
-
-- Get source code
-
-```bash
-git clone https://github.com/FISCO-BCOS/lab-bcos.git
-```
-
-- Install dependencies
-
-```bash
-# Ubuntu
-sudo apt install cmake libssl-dev libleveldb-dev openssl
-# CentOS
-sudo yum install cmake3 gcc-c++ openssl-devel leveldb-devel openssl
-```
-
-- Build
-
-```bash
-cd lab-bcos
-$ mkdir build && cd build
-$ cmake -DTESTS=ON  ..
-$ make -j$(nproc)
-```
 
 ## Developing & Contributing
 
 * Star our Github. 
 * Pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
-* [Ask questions](https://github.com/FISCO-BCOS/lab-bcos/issues) and [submit bugs](https://github.com/FISCO-BCOS/lab-bcos/issues).
+* [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues) and [submit bugs](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
 * Discuss in [WeChat group](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
 ## Further Reading
@@ -96,6 +67,6 @@ Financial Blockchain Shenzhen Consortium (FISCO) has attracted more than 100 mem
 
 ## License
 
-[![](https://img.shields.io/github/license/FISCO-BCOS/lab-bcos.svg)](LICENSE)
+[![](https://img.shields.io/github/license/FISCO-BCOS/FISCO-BCOS.svg)](LICENSE)
 
 All contributions are made under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.en.html). See [LICENSE](LICENSE).
