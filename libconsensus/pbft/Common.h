@@ -37,7 +37,7 @@
 
 #define PBFTReqCache_LOG(LEVEL)                                                                 \
     LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "] [p:" << std::to_string(m_protocolId) \
-               << "[CONSENSUS]"
+               << "][CONSENSUS]"
 namespace dev
 {
 namespace consensus
