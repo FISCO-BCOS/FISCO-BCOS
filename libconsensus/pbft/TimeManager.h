@@ -68,7 +68,6 @@ struct TimeManager
         auto now = utcTime();
         auto last = std::max(m_lastConsensusTime, m_lastSignTime);
         auto interval = (uint64_t)(m_viewTimeout * std::pow(1.5, m_changeCycle));
-        /// LOG(DEBUG) << "##### interval:"<< interval << " , real-time:"<<(now-last);
         return (now - last >= interval);
     }
 
@@ -82,7 +81,8 @@ struct TimeManager
             if (m_execTimePerTx >= (float)m_intervalBlockTime)
                 m_execTimePerTx = (float)m_intervalBlockTime;
             /// for prediction
-            LOG(DEBUG) << "[#CONSENSUS] [txNum/execTimePerTx]: " << txNum << "/" << m_execTimePerTx;
+            LOG(DEBUG) << LOG_DESC("CONSENSUS:") << LOG_KV("tx", txNum)
+                       << LOG_KV("execTimePerTx", m_execTimePerTx);
         }
     }
 

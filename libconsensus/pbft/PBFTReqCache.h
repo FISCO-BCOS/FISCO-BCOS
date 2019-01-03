@@ -102,8 +102,9 @@ public:
     inline void addRawPrepare(PrepareReq const& req)
     {
         m_rawPrepareCache = req;
-        PBFTReqCache_LOG(DEBUG) << "[addRawPrepare] [height/idx/hash]:" << req.height << "/"
-                                << req.idx << "/" << req.block_hash.abridged();
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare:") << LOG_KV("height", req.height)
+                                << LOG_KV("idx", req.idx)
+                                << LOG_KV("hash", req.block_hash.abridged());
         m_prepareCache = PrepareReq();
     }
 
@@ -162,8 +163,9 @@ public:
         if (m_futurePrepareCache.block_hash != req.block_hash)
         {
             m_futurePrepareCache = req;
-            PBFTReqCache_LOG(INFO) << "[addFuturePrepareCache] [height/idx/hash]: " << req.height
-                                   << "/" << req.idx << "/" << req.block_hash.abridged();
+            PBFTReqCache_LOG(INFO)
+                << LOG_DESC("addFuturePrepareCache:") << LOG_KV("height", req.height)
+                << LOG_KV("idx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
         }
     }
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
