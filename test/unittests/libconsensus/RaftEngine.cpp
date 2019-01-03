@@ -135,6 +135,7 @@ public:
             KeyPair keyPair = KeyPair::create();
             fakeMinerList.push_back(keyPair.pub());
         }
+        std::sort(fakeMinerList.begin(), fakeMinerList.end());
 
         raftEngine = make_shared<FakeRaftEngine>(fakeService, fakeTxPool, fakeBlockChain, fakeSync,
             fakeBlockVerifier, fakeKeyPair, 1000, 2000, ProtocolID::Raft, fakeMinerList);

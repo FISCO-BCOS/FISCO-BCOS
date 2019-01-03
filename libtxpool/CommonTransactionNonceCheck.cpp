@@ -26,24 +26,17 @@ namespace dev
 {
 namespace txpool
 {
-std::string CommonTransactionNonceCheck::generateKey(Transaction const& _t)
-{
-    Address account = _t.from();
-    std::string key = toHex(account.ref());
-    key += "_" + toString(_t.nonce());
-    return key;
-}
-
 bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans, bool needInsert)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    UpgradableGuard l(m_lock);
     {
-        std::string key = this->generateKey(_trans);
+        auto key = this->generateKey(_trans);
         auto iter = m_cache.find(key);
         if (iter != m_cache.end())
             return false;
         if (needInsert)
         {
+            UpgradeGuard ul(l);
             m_cache.insert(key);
         }
         return true;
@@ -52,27 +45,42 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
     return false;
 }
 
-void CommonTransactionNonceCheck::delCache(std::string const& key)
+void CommonTransactionNonceCheck::delCache(dev::eth::NonceKeyType const& key)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    UpgradableGuard l(m_lock);
     {
         auto iter = m_cache.find(key);
         if (iter != m_cache.end())
+        {
+            UpgradeGuard ul(l);
             m_cache.erase(iter);
+        }
     }
 }
 
 void CommonTransactionNonceCheck::delCache(Transactions const& _transcations)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    UpgradableGuard l(m_lock);
     {
+        std::vector<dev::eth::NonceKeyType> delList;
         for (unsigned i = 0; i < _transcations.size(); i++)
         {
-            std::string key = this->generateKey(_transcations[i]);
+            auto key = this->generateKey(_transcations[i]);
             auto iter = m_cache.find(key);
             if (iter != m_cache.end())
-                m_cache.erase(iter);
-        }  // for
+            {
+                delList.push_back(key);
+            }
+        }
+
+        if (delList.size() > 0)
+        {
+            UpgradeGuard ul(l);
+            for (auto key : delList)
+            {
+                m_cache.erase(key);
+            }
+        }
     }
 }
 
@@ -80,7 +88,7 @@ void CommonTransactionNonceCheck::insertCache(dev::eth::Transaction const& _tran
 {
     DEV_WRITE_GUARDED(m_lock)
     {
-        std::string key = this->generateKey(_transcation);
+        auto key = this->generateKey(_transcation);
         m_cache.insert(key);
     }
 }
