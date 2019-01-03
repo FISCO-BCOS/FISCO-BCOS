@@ -39,6 +39,7 @@ void SyncMsgEngine::messageHandler(
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                           << LOG_DESC("Reject packet: [reason]: session or msg illegal");
+        _session->stop(dev::network::LocalIdentity);
         return;
     }
 
