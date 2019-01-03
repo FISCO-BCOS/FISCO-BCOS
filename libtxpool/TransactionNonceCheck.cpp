@@ -42,10 +42,11 @@ bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
     if (_tx.blockLimit() == Invalid256 || u256(m_blockChain->number()) >= _tx.blockLimit() ||
         _tx.blockLimit() > (u256(m_blockChain->number()) + m_maxBlockLimit))
     {
-        NONCECHECKER_LOG(ERROR) << "[#Verify] [#InvalidBlockLimit] invalid blockLimit: "
-                                   "[blkLimit/maxBlkLimit/number/tx]:  "
-                                << _tx.blockLimit() << "/" << m_maxBlockLimit << "/"
-                                << m_blockChain->number() << "/" << _tx.sha3() << std::endl;
+        NONCECHECKER_LOG(WARNING) << LOG_DESC("InvalidBlockLimit")
+                                  << LOG_KV("blkLimit", _tx.blockLimit())
+                                  << LOG_KV("maxBlkLimit", m_maxBlockLimit)
+                                  << LOG_KV("curBlk", m_blockChain->number())
+                                  << LOG_KV("tx", _tx.sha3());
         return false;
     }
     return true;
@@ -76,9 +77,9 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 m_startblk = 0;
 
             NONCECHECKER_LOG(TRACE)
-                << "[#updateCache] [rebuild/startBlk/endBlk/prestartBlk/preEndBlk]:  " << _rebuild
-                << "/" << m_startblk << "/" << m_endblk << "/" << prestartblk << "/" << preendblk
-                << std::endl;
+                << LOG_DESC("updateCache") << LOG_KV("rebuild", _rebuild)
+                << LOG_KV("startBlk", m_startblk) << LOG_KV("endBlk", m_endblk)
+                << LOG_KV("prestartBlk", prestartblk) << LOG_KV("preEndBlk", preendblk);
             if (_rebuild)
             {
                 m_cache.clear();
@@ -113,15 +114,16 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                         m_cache.insert(key);
                 }  // for
             }      // for
-            NONCECHECKER_LOG(TRACE) << "[#updateCache] [cacheSize/costTime]:  " << m_cache.size()
-                                    << "/" << (timer.elapsed() * 1000) << std::endl;
+            NONCECHECKER_LOG(TRACE)
+                << LOG_DESC("updateCache") << LOG_KV("cacheSize", m_cache.size())
+                << LOG_KV("costTime", timer.elapsed() * 1000);
         }
         catch (...)
         {
             // should not happen as exceptions
             NONCECHECKER_LOG(WARNING)
-                << "[#updateCache] update nonce cache failed: [EINFO]:  "
-                << boost::current_exception_diagnostic_information() << std::endl;
+                << LOG_DESC("updateCache: update nonce cache failed")
+                << LOG_KV("EINFO", boost::current_exception_diagnostic_information());
         }
     }
 }  // fun
