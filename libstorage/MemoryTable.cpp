@@ -156,7 +156,7 @@ int dev::storage::MemoryTable::insert(
                                  << options->origin.hex() << " failed! key:" << key;
             return -1;
         }
-        STORAGE_LOG(DEBUG) << "Insert MemoryTable: " << key;
+        /// STORAGE_LOG(DEBUG) << "Insert MemoryTable: " << key;
 
         Entries::Ptr entries = std::make_shared<Entries>();
         Condition::Ptr condition = std::make_shared<Condition>();
