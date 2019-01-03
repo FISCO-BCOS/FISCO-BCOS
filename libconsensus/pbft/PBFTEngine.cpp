@@ -69,7 +69,7 @@ bool PBFTEngine::shouldSeal()
     if (!ret.first)
         return false;
     /// fast view change
-    if (ret.second != m_idx)
+    if (ret.second != nodeIdx())
     {
         /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
         /// is not connect to leader.
@@ -105,7 +105,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
                          << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                          << req.block_hash.abridged() << "/" << req.height;
     m_broadCastCache->clearAll();
-    PrepareReq prepare_req(req, m_keyPair, m_view, m_idx);
+    PrepareReq prepare_req(req, m_keyPair, m_view, nodeIdx());
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast prepare message
@@ -119,7 +119,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
 void PBFTEngine::resetConfig()
 {
-    m_idx = MAXIDX;
+    auto node_idx = MAXIDX;
     updateMinerList();
     {
         ReadGuard l(m_minerListMutex);
@@ -128,14 +128,18 @@ void PBFTEngine::resetConfig()
             if (m_minerList[i] == m_keyPair.pub())
             {
                 m_accountType = NodeAccountType::MinerAccount;
-                m_idx = i;
+                node_idx = i;
                 break;
             }
         }
         m_nodeNum = m_minerList.size();
     }
     m_f = (m_nodeNum - 1) / 3;
-    m_cfgErr = (m_idx == MAXIDX);
+    m_cfgErr = (node_idx == MAXIDX);
+    {
+        WriteGuard l(m_idxMutex);
+        m_idx = node_idx;
+    }
 }
 
 /// init pbftMsgBackup
@@ -217,7 +221,7 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 bool PBFTEngine::generatePrepare(Block const& block)
 {
     Guard l(m_mutex);
-    PrepareReq prepare_req(block, m_keyPair, m_view, m_idx);
+    PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     /// broadcast the generated preparePacket
@@ -248,7 +252,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
  */
 bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
 {
-    SignReq sign_req(req, m_keyPair, m_idx);
+    SignReq sign_req(req, m_keyPair, nodeIdx());
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
     bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
@@ -288,7 +292,7 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
  */
 bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 {
-    CommitReq commit_req(req, m_keyPair, m_idx);
+    CommitReq commit_req(req, m_keyPair, nodeIdx());
     bytes commit_req_data;
     commit_req.encode(commit_req_data);
     bool succ = broadcastMsg(CommitReqPacket, commit_req.uniqueKey(), ref(commit_req_data));
@@ -301,7 +305,8 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 /// send view change message to the given node
 void PBFTEngine::sendViewChangeMsg(dev::network::NodeID const& nodeId)
 {
-    ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
+    ViewChangeReq req(
+        m_keyPair, m_highestBlock.number(), m_toView, nodeIdx(), m_highestBlock.hash());
     PBFTENGINE_LOG(DEBUG) << "[#sendViewChangeMsg] send viewchange to started node "
                              "[view/toView/myIdx/myNode/PeernodeID/hash/higNumber]"
                           << m_view << "/" << m_toView << "/" << nodeIdx() << "/"
@@ -315,7 +320,8 @@ void PBFTEngine::sendViewChangeMsg(dev::network::NodeID const& nodeId)
 
 bool PBFTEngine::broadcastViewChangeReq()
 {
-    ViewChangeReq req(m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
+    ViewChangeReq req(
+        m_keyPair, m_highestBlock.number(), m_toView, nodeIdx(), m_highestBlock.hash());
     PBFTENGINE_LOG(DEBUG)
         << "[#broadcastViewChangeReq] [myIdx/myNode/hash/higNumber/view/toView]:  " << nodeIdx()
         << "/" << m_keyPair.pub().abridged() << "/" << req.block_hash.abridged() << "/"
@@ -572,7 +578,7 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
 void PBFTEngine::onRecvPBFTMessage(
     NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
 {
-    if (m_idx == MAXIDX)
+    if (nodeIdx() == MAXIDX)
     {
         PBFTENGINE_LOG(TRACE)
             << "[#workLoop: I'm an observer, drop the PBFT message packets directly";
@@ -980,7 +986,7 @@ bool PBFTEngine::isValidViewChangeReq(
         PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Duplicated: [INFO]  " << oss.str();
         return false;
     }
-    if (req.idx == m_idx)
+    if (req.idx == nodeIdx())
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Own Req: [INFO]  " << oss.str();
         return false;
