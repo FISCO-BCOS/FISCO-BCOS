@@ -83,6 +83,7 @@ public:
 protected:
     std::shared_ptr<leveldb::DB> m_db;
     leveldb::Status m_openStatus;
+    std::string name;
 };
 
 #define DBErrorExit DBErrorExitHandler()
