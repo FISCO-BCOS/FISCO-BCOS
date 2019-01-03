@@ -111,8 +111,8 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 
                 if (m_topicSeq != topicSeq)
                 {
-                    SESSION_LOG(TRACE) << LOG_DESC("Remote seq not equal to local seq," <<topicSeq<<"!="
-                                       << m_topicSeq << ", update";
+                    SESSION_LOG(TRACE) << LOG_DESC("Remote seq not equal to local seq update")
+                                       << topicSeq << "!=" << m_topicSeq;
 
                     auto requestTopics = std::dynamic_pointer_cast<P2PMessage>(
                         service->p2pMessageFactory()->buildMessage());
@@ -130,52 +130,52 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     option.timeout = 5 * 1000;  // 5 seconds timeout
                     m_session->asyncSendMessage(requestTopics, option,
                         [self](NetworkException e, dev::network::Message::Ptr response) {
-                        try
-                        {
-                            if (e.errorCode())
+                            try
                             {
-                                SESSION_LOG(ERROR) << LOG_DESC("Error while requesting topic")
-                                                   << LOG_KV("errorCode", e.errorCode())
-                                                   << LOG_KV("message", e.what());
-                                return;
-                            }
-
-                            std::vector<std::string> topics;
-
-                            auto p2pResponse = std::dynamic_pointer_cast<P2PMessage>(response);
-                            std::string s((const char*)p2pResponse->buffer()->data(),
-                                p2pResponse->buffer()->size());
-
-                            auto session = self.lock();
-                            if (session)
-                            {
-                                SESSION_LOG(INFO)
-                                    << LOG_DESC("Received topic") << LOG_KV("topic", s)
-                                    << LOG_KV("from", session->nodeID().hex());
-                                boost::split(topics, s, boost::is_any_of("\t"));
-
-                                uint32_t topicSeq = 0;
-                                auto topicList = std::make_shared<std::set<std::string> >();
-                                for (uint32_t i = 0; i < topics.size(); ++i)
+                                if (e.errorCode())
                                 {
-                                    if (i == 0)
-                                    {
-                                        topicSeq = boost::lexical_cast<uint32_t>(topics[i]);
-                                    }
-                                    else
-                                    {
-                                        topicList->insert(topics[i]);
-                                    }
+                                    SESSION_LOG(ERROR) << LOG_DESC("Error while requesting topic")
+                                                       << LOG_KV("errorCode", e.errorCode())
+                                                       << LOG_KV("message", e.what());
+                                    return;
                                 }
 
-                                session->setTopics(topicSeq, topicList);
+                                std::vector<std::string> topics;
+
+                                auto p2pResponse = std::dynamic_pointer_cast<P2PMessage>(response);
+                                std::string s((const char*)p2pResponse->buffer()->data(),
+                                    p2pResponse->buffer()->size());
+
+                                auto session = self.lock();
+                                if (session)
+                                {
+                                    SESSION_LOG(INFO)
+                                        << LOG_DESC("Received topic") << LOG_KV("topic", s)
+                                        << LOG_KV("from", session->nodeID().hex());
+                                    boost::split(topics, s, boost::is_any_of("\t"));
+
+                                    uint32_t topicSeq = 0;
+                                    auto topicList = std::make_shared<std::set<std::string> >();
+                                    for (uint32_t i = 0; i < topics.size(); ++i)
+                                    {
+                                        if (i == 0)
+                                        {
+                                            topicSeq = boost::lexical_cast<uint32_t>(topics[i]);
+                                        }
+                                        else
+                                        {
+                                            topicList->insert(topics[i]);
+                                        }
+                                    }
+
+                                    session->setTopics(topicSeq, topicList);
+                                }
                             }
-                        }
-                        catch (std::exception& e)
-                        {
-                            SESSION_LOG(ERROR)
-                                << "Parse topics error: " << boost::diagnostic_information(e);
-                        }
+                            catch (std::exception& e)
+                            {
+                                SESSION_LOG(ERROR)
+                                    << "Parse topics error: " << boost::diagnostic_information(e);
+                            }
                         });
                 }
                 break;

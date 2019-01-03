@@ -325,7 +325,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         Guard l(x_pendingConns);
         if (m_pendingConns.count(_nodeIPEndpoint.name()))
         {
-            LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list" << LOG_KV("name", _nodeIPEndpoint.name()) ;
+            LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
+                       << LOG_KV("name", _nodeIPEndpoint.name());
             return;
         }
     }
@@ -364,7 +365,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             {
                 HOST_LOG(ERROR) << LOG_DESC("Connection refused by node")
                                 << LOG_KV("name", _nodeIPEndpoint.name())
-                                << LOG_KV("message", error.message());
+                                << LOG_KV("message", ec.message());
                 socket->close();
 
                 m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
@@ -404,11 +405,11 @@ void Host::handshakeClient(const boost::system::error_code& error,
     erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed"
-                            << LOG_KV("name", _nodeIPEndpoint.name())
-        << LOG_KV("errorValue", error.value())
-                            << LOG_KV("message", error.message());
-                        
+        HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
+                          << LOG_KV("name", _nodeIPEndpoint.name())
+                          << LOG_KV("errorValue", error.value())
+                          << LOG_KV("message", error.message());
+
         if (socket->isConnected())
         {
             socket->close();
