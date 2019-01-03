@@ -102,13 +102,16 @@ public:
         fp_isConsensusOk = _handler;
     };
 
-    void noteNewTransactions() { m_newTransactions = true; }
+    void noteNewTransactions()
+    {
+        m_newTransactions = true;
+        m_signalled.notify_all();
+    }
 
     void noteNewBlocks()
     {
         m_newBlocks = true;
-        // for test
-        // m_signalled.notify_all();  // awake doWork
+        m_signalled.notify_all();  // awake doWork
     }
 
     void noteDownloadingBegin()

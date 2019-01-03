@@ -39,21 +39,14 @@
 #include <libsync/SyncStatus.h>
 #include <unistd.h>
 #include <ctime>
-
-using namespace dev;
-using namespace dev::blockchain;
-using namespace dev::eth;
-using namespace dev::sync;
-using namespace dev::blockverifier;
-using namespace dev::initializer;
-class FakeConcensus : public Worker
+class FakeConcensus : public dev::Worker
 {
     // FakeConcensus, only do: fetch tx from txPool and commit newBlock into blockchain
 public:
     using BlockHeaderPtr = std::shared_ptr<dev::eth::BlockHeader>;
     using BlockPtr = std::shared_ptr<dev::eth::Block>;
     using TxPtr = std::shared_ptr<dev::eth::Transaction>;
-    using SigList = std::vector<std::pair<u256, Signature>>;
+    using SigList = std::vector<std::pair<dev::u256, dev::Signature>>;
 
 public:
     FakeConcensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
@@ -61,7 +54,7 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _sync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         unsigned _idleWaitMs = 30)
-      : Worker("FakeConcensusForSync", 0),
+      : dev::Worker("FakeConcensusForSync", 0),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_sync(_sync),
@@ -82,14 +75,14 @@ public:
     /// doWork every idleWaitMs
     virtual void doWork() override
     {
-        if (m_sync->status().state != SyncState::Idle)
+        if (m_sync->status().state != dev::sync::SyncState::Idle)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
             return;
         }
 
         // seal
-        Transactions const& txs = m_txPool->pendingList();
+        dev::eth::Transactions const& txs = m_txPool->pendingList();
 
         if (0 == txs.size())
         {
@@ -98,13 +91,14 @@ public:
         }
 
         int64_t currentNumber = m_blockChain->number();
-        h256 const& parentHash = m_blockChain->numberHash(currentNumber);
+        dev::h256 const& parentHash = m_blockChain->numberHash(currentNumber);
 
         m_sync->noteSealingBlockNumber(currentNumber + 1);
 
         BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
-        BlockInfo parentBlockInfo;
-        ExecutiveContext::Ptr exeCtx = m_blockVerifier->executeBlock(*block, parentBlockInfo);
+        dev::blockverifier::BlockInfo parentBlockInfo;
+        dev::blockverifier::ExecutiveContext::Ptr exeCtx =
+            m_blockVerifier->executeBlock(*block, parentBlockInfo);
 
         // consensus process waiting time simulation
         std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
@@ -128,11 +122,11 @@ private:
     {
         // Generate block header
         BlockHeaderPtr header = newBlockHeader(_parentHash, _currentNumner);
-        bytes blockHeaderBytes;
+        dev::bytes blockHeaderBytes;
         header->encode(blockHeaderBytes);
 
         // Generate block
-        BlockPtr block = std::make_shared<Block>();
+        BlockPtr block = std::make_shared<dev::eth::Block>();
         block->setSigList(sigList(_txs.size()));
         block->setTransactions(_txs);
 
@@ -144,21 +138,22 @@ private:
 
     BlockHeaderPtr newBlockHeader(dev::h256 _parentHash, int64_t _currentNumner)
     {
-        BlockHeaderPtr blockHeader = std::make_shared<BlockHeader>();
+        BlockHeaderPtr blockHeader = std::make_shared<dev::eth::BlockHeader>();
         blockHeader->setParentHash(_parentHash);
-        blockHeader->setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
-        blockHeader->setLogBloom(LogBloom(0));
+        blockHeader->setRoots(
+            dev::sha3("transactionRoot"), dev::sha3("receiptRoot"), dev::sha3("stateRoot"));
+        blockHeader->setLogBloom(dev::eth::LogBloom(0));
         blockHeader->setNumber(_currentNumner);
-        blockHeader->setGasLimit(u256(3000000));
-        blockHeader->setGasUsed(u256(100000));
+        blockHeader->setGasLimit(dev::u256(3000000));
+        blockHeader->setGasUsed(dev::u256(100000));
         uint64_t current_time = 100000;  // utcTime();
         blockHeader->setTimestamp(current_time);
-        blockHeader->appendExtraDataArray(jsToBytes("0x1020"));
-        blockHeader->setSealer(u256(12));
-        std::vector<h512> sealer_list;
+        blockHeader->appendExtraDataArray(dev::jsToBytes("0x1020"));
+        blockHeader->setSealer(dev::u256(12));
+        std::vector<dev::h512> sealer_list;
         for (unsigned int i = 0; i < 10; i++)
         {
-            sealer_list.push_back(toPublic(Secret(h256(i))));
+            sealer_list.push_back(dev::toPublic(dev::Secret(dev::h256(i))));
         }
         blockHeader->setSealerList(sealer_list);
         return blockHeader;
@@ -168,14 +163,14 @@ private:
     {
         SigList retList;
         /// set sig list
-        Signature sig;
-        h256 block_hash;
-        Secret sec = KeyPair::create().secret();
+        dev::Signature sig;
+        dev::h256 block_hash;
+        dev::Secret sec = dev::KeyPair::create().secret();
         for (size_t i = 0; i < _size; i++)
         {
-            block_hash = sha3(toString("block " + i));
-            sig = sign(sec, block_hash);
-            retList.push_back(std::make_pair(u256(block_hash), sig));
+            block_hash = dev::sha3(dev::toString("block " + i));
+            sig = dev::sign(sec, block_hash);
+            retList.push_back(std::make_pair(dev::u256(block_hash), sig));
         }
         return retList;
     }
@@ -191,12 +186,12 @@ private:
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
 
     size_t m_totalTxCommit;
-    PROTOCOL_ID m_protocolId;
-    GROUP_ID m_groupId;
+    dev::PROTOCOL_ID m_protocolId;
+    dev::GROUP_ID m_groupId;
     unsigned m_blockGenerationInterval;
 };
 
-class FakeInitializer : public InitializerInterface
+class FakeInitializer : public dev::initializer::InitializerInterface
 {
 public:
     typedef std::shared_ptr<FakeInitializer> Ptr;
@@ -206,20 +201,20 @@ public:
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_path, pt);
 
-        m_secureInitializer = std::make_shared<SecureInitializer>();
+        m_secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
         m_secureInitializer->initConfig(pt);
 
-        m_p2pInitializer = std::make_shared<P2PInitializer>();
+        m_p2pInitializer = std::make_shared<dev::initializer::P2PInitializer>();
         m_p2pInitializer->setSSLContext(m_secureInitializer->SSLContext());
         m_p2pInitializer->setKeyPair(m_secureInitializer->keyPair());
         m_p2pInitializer->initConfig(pt);
     }
 
 public:
-    SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
-    P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
+    dev::initializer::SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
+    dev::initializer::P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
 
 private:
-    P2PInitializer::Ptr m_p2pInitializer;
-    SecureInitializer::Ptr m_secureInitializer;
+    dev::initializer::P2PInitializer::Ptr m_p2pInitializer;
+    dev::initializer::SecureInitializer::Ptr m_secureInitializer;
 };

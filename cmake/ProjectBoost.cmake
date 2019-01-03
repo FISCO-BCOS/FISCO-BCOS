@@ -68,6 +68,7 @@ ExternalProject_Add(boost
         --with-thread
         --with-serialization
         --with-program_options
+        --with-log
         -j${CORES}
     LOG_BUILD 1
     LOG_INSTALL 1
@@ -127,5 +128,10 @@ add_library(Boost::program_options STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::program_options PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_program_options${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::program_options PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 add_dependencies(Boost::program_options boost)
+
+add_library(Boost::log STATIC IMPORTED GLOBAL)
+set_property(TARGET Boost::log PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_log${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::log PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+add_dependencies(Boost::log boost)
 
 unset(SOURCE_DIR)

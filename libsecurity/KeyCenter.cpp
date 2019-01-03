@@ -52,7 +52,7 @@ KeyCenterHttpClient::~KeyCenterHttpClient()
 
 void KeyCenterHttpClient::connect()
 {
-    WriteGuard(x_clinetSocket);
+    WriteGuard l(x_clinetSocket);
     try
     {
         if (m_socket.is_open())
@@ -75,7 +75,7 @@ void KeyCenterHttpClient::connect()
 
 void KeyCenterHttpClient::close()
 {
-    WriteGuard(x_clinetSocket);
+    WriteGuard l(x_clinetSocket);
     if (!m_socket.is_open())
         return;
     // Gracefully close the socket
