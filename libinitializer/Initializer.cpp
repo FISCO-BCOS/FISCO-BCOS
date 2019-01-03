@@ -34,7 +34,7 @@ void Initializer::init(std::string const& _path)
 
         /// init log
         m_logInitializer = std::make_shared<LogInitializer>();
-        m_logInitializer->initEasylogging(pt);
+        m_logInitializer->initLog(pt);
 
         /// init global config
         m_globalConfigureInitializer->initConfig(pt);

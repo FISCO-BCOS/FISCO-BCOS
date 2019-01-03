@@ -222,7 +222,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
                           << LOG_KV("message", error.message())
                           << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
         socket->close();
-
+        startAccept();
         return;
     }
 

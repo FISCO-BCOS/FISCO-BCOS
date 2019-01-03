@@ -55,7 +55,11 @@ public:
     virtual void setSeq(uint32_t _seq) { m_seq = _seq; }
 
     virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
-    virtual void setBuffer(std::shared_ptr<bytes> _buffer) { m_buffer = _buffer; }
+    virtual void setBuffer(std::shared_ptr<bytes> _buffer)
+    {
+        m_buffer.reset();
+        m_buffer = _buffer;
+    }
 
     virtual bool isRequestPacket() override { return (m_protocolID > 0); }
     virtual PROTOCOL_ID getResponceProtocolID()
