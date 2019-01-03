@@ -322,8 +322,6 @@ BOOST_AUTO_TEST_CASE(query)
     BOOST_CHECK_EQUAL(minerList.size(), 0);
     dev::h512s observerList = m_blockChainImp->observerList();
     BOOST_CHECK_EQUAL(observerList.size(), 0);
-    std::string ret = m_blockChainImp->getSystemConfigByKey("tx_count_limit", -1);
-    BOOST_CHECK_EQUAL(boost::lexical_cast<uint64_t>(ret), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
