@@ -272,8 +272,9 @@ protected:
         peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
-            PBFTENGINE_LOG(TRACE) << LOG_DESC("isValidReq: Recv PBFT msg from unkown peer:" +
-                                              session->nodeID().abridged()) return false;
+            PBFTENGINE_LOG(TRACE) << LOG_DESC(
+                "isValidReq: Recv PBFT msg from unkown peer:" + session->nodeID().abridged());
+            return false;
         }
         /// check whether this node is in the miner list
         h512 node_id;
@@ -310,9 +311,9 @@ protected:
                                   << LOG_KV("prepHash",
                                          m_reqCache->prepareCache().block_hash.abridged())
                                   << LOG_KV("hash", req.block_hash.abridged())
-                                  << LOG_KV("INFO", oss.str())
-                /// is future ?
-                bool is_future = isFutureBlock(req);
+                                  << LOG_KV("INFO", oss.str());
+            /// is future ?
+            bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
             {
                 PBFTENGINE_LOG(INFO)
@@ -405,7 +406,7 @@ protected:
             {
                 PBFTENGINE_LOG(WARNING)
                     << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
-                    << LOG_KV("idx", req.idx()) << LOG_KV("leader", leader.second)
+                    << LOG_KV("idx", req.idx) << LOG_KV("leader", leader.second)
                     << LOG_KV("leaderFailed", m_leaderFailed) << LOG_KV("view", m_view)
                     << LOG_KV("highSealer", m_highestBlock.sealer())
                     << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("myIdx", nodeIdx());

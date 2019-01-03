@@ -454,8 +454,8 @@ bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) 
 
     if (isFutureBlock(req))
     {
-        PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock")
-                             << LOG_KV("EINFO", oss.str()) m_reqCache->addFuturePrepareCache(req);
+        PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
+        m_reqCache->addFuturePrepareCache(req);
         return false;
     }
     if (!isValidLeader(req))
@@ -768,7 +768,7 @@ void PBFTEngine::checkAndSave()
         if (m_reqCache->prepareCache().view != m_view)
         {
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndSave: InvalidView")
-                                  << LOG_KV("prepView", _reqCache->prepareCache().view)
+                                  << LOG_KV("prepView", m_reqCache->prepareCache().view)
                                   << LOG_KV("view", m_view)
                                   << LOG_KV("prepHeight", m_reqCache->prepareCache().height)
                                   << LOG_KV(
@@ -1013,7 +1013,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
             m_signalled.notify_all();
         }
     }
-    PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ " + oss.str())
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ " + oss.str());
 }
 
 bool PBFTEngine::isValidViewChangeReq(
@@ -1210,7 +1210,7 @@ void PBFTEngine::workLoop()
                 PBFTENGINE_LOG(TRACE)
                     << LOG_DESC("workLoop: handleMsg")
                     << LOG_KV("type", std::to_string(ret.second.packet_id))
-                    << LOG_KV("idx", et.second.node_idx) << LOG_KV("myIdx", nodeIdx())
+                    << LOG_KV("idx", ret.second.node_idx) << LOG_KV("myIdx", nodeIdx())
                     << LOG_KV("myNode", m_keyPair.pub().abridged());
                 handleMsg(ret.second);
             }

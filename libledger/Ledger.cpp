@@ -210,7 +210,7 @@ void Ledger::initDBConfig(ptree const& pt)
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "mpt");
 
-    Ledger_LOG(DEBUG) << LOG_BADGE(initDBConfig)
+    Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)
                       << LOG_KV("baseDir", m_param->baseDir());
@@ -376,11 +376,8 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
 /// init consensus
 bool Ledger::consensusInitFactory()
 {
-    Ledger_LOG(DEBUG)
-        << LOG_BADGE("initLedger")
-        << LOG_BADGE("consensusInitFactory") if (dev::stringCmpIgnoreCase(
-                                                     m_param->mutableConsensusParam().consensusType,
-                                                     "raft") == 0)
+    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
         /// create RaftSealer
         m_sealer = createRaftSealer();
