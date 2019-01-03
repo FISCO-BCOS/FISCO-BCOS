@@ -19,6 +19,7 @@ eth_path=
 pkcs12_passwd=""
 make_tar=
 debug_log="false"
+log_level="INFO"
 logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
@@ -82,7 +83,9 @@ while getopts "f:l:o:p:e:P:t:iszhT" option;do
     ;;
     s) state_type=storage;;
     t) CertConfig=$OPTARG;;
-    T) debug_log="true";;
+    T) debug_log="true"
+    log_level=DEBUG
+    ;;
     z) make_tar="yes";;
     h) help;;
     esac
@@ -375,6 +378,9 @@ generate_config_ini()
     DEBUG-ENABLED=${debug_log}
     TRACE-ENABLED=false
     VERBOSE-ENABLED=false
+    ;log level for boost log
+    Level=${log_level}
+    MaxLogFileSize=1677721600
 EOF
 }
 
