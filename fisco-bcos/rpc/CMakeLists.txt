@@ -1,6 +1,6 @@
 #------------------------------------------------------------------------------
 # Link libraries into main.cpp to generate executable binrary fisco-bcos
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # This file is part of FISCO-BCOS.
 #
 # FISCO-BCOS is free software: you can redistribute it and/or modify
@@ -18,11 +18,22 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+if(TESTS)
 
-file(GLOB SRC_LIST "*.cpp")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
+
+aux_source_directory(. SRC_LIST)
+
 file(GLOB HEADERS "*.h")
 
 add_executable(mini-rpc ${SRC_LIST} ${HEADERS})
 
 target_include_directories(mini-rpc PRIVATE ..)
-target_link_libraries(mini-rpc PUBLIC initializer)
+target_link_libraries(mini-rpc Boost::System)
+target_link_libraries(mini-rpc Boost::UnitTestFramework)
+target_link_libraries(mini-rpc rpc)
+target_link_libraries(mini-rpc ledger)
+target_link_libraries(mini-rpc p2p)
+target_link_libraries(mini-rpc initializer)
+
+endif()

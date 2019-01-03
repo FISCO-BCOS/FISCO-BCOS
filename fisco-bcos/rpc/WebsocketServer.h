@@ -14,13 +14,16 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @file RpcTest.cpp
+ * @file WebsoketServer.h
  * @author: caryliao
  * @date 2018-11-14
  */
-#include "FakeModule.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
+#include <libinitializer/Initializer.h>
+#include <libinitializer/LedgerInitializer.h>
+#include <libinitializer/P2PInitializer.h>
+#include <libinitializer/SecureInitializer.h>
 #include <librpc/Rpc.h>
 #include <boost/asio/bind_executor.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -34,14 +37,14 @@
 #include <map>
 #include <string>
 
+
 using tcp = boost::asio::ip::tcp;
 namespace websocket = boost::beast::websocket;
 using namespace dev;
 using namespace dev::rpc;
 using namespace dev::ledger;
-using namespace dev::demo;
-using namespace dev::rpc;
 using namespace jsonrpc;
+using namespace dev::initializer;
 
 // Report a failure
 void fail(boost::system::error_code ec, char const* what)
@@ -128,13 +131,19 @@ public:
     // Take ownership of the socket
     explicit session(tcp::socket socket) : m_ws(std::move(socket)), m_strand(m_ws.get_executor())
     {
-        auto m_service = std::make_shared<MockService>();
-        std::string configurationPath = "";
-        KeyPair m_keyPair = KeyPair::create();
-        auto m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
-        m_ledgerManager->initSingleLedger<FakeLedger>(1, "", configurationPath);
+        auto initialize = std::make_shared<Initializer>();
+        initialize->init("./config.ini");
 
-        m_rpcFace = std::make_shared<Rpc>(m_ledgerManager, m_service);
+        auto secureInitializer = initialize->secureInitializer();
+        KeyPair key_pair = secureInitializer->keyPair();
+        auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
+
+        auto p2pInitializer = initialize->p2pInitializer();
+        auto p2pService = p2pInitializer->p2pService();
+
+        auto rpc = new Rpc(ledgerManager, p2pService);
+
+        m_rpcFace = std::make_shared<Rpc>(ledgerManager, p2pService);
 
         setMapRpc();
     }
