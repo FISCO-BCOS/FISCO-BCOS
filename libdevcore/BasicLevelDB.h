@@ -27,6 +27,7 @@
 #include <leveldb/status.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/easylog.h>
+#include <csignal>
 #include <memory>
 #include <string>
 
