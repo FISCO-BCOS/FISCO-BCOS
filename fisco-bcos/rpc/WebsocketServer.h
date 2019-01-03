@@ -40,11 +40,6 @@
 
 using tcp = boost::asio::ip::tcp;
 namespace websocket = boost::beast::websocket;
-// using namespace dev;
-// using namespace dev::rpc;
-// using namespace dev::ledger;
-// using namespace jsonrpc;
-// using namespace dev::initializer;
 
 // Report a failure
 void fail(boost::system::error_code ec, char const* what)
