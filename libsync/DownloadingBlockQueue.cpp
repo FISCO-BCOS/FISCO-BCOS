@@ -35,8 +35,8 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
     WriteGuard l(x_buffer);
     if (m_buffer->size() >= c_maxDownloadingBlockQueueBufferSize)
     {
-        SYNC_LOG(WARNING) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                          << LOG_DESCRIPTION("DownloadingBlockQueueBuffer is full")
+        SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                          << LOG_DESC("DownloadingBlockQueueBuffer is full")
                           << LOG_KV("queueSize", m_buffer->size());
         return;
     }
@@ -51,8 +51,8 @@ void DownloadingBlockQueue::push(BlockPtrVec _blocks)
     for (BlockPtr block : _blocks)
     {
         rlpStream.append(block->rlp());
-        // SYNC_LOG(TRACE) << LOG_BADAGE("Rcv") << LOG_BADAGE("Download")
-        //                << LOG_DESCRIPTION("DownloadingBlockQueueBuffer push")
+        // SYNC_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Download")
+        //                << LOG_DESC("DownloadingBlockQueueBuffer push")
         //                << LOG_KV("number", block->header().number())
         //                << LOG_KV("hash", block->headerHash());
     }
@@ -136,15 +136,15 @@ void DownloadingBlockQueue::flushBufferToQueue()
         if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to control
                                                                 // insert
         {
-            SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                            << LOG_DESCRIPTION("DownloadingBlockQueueBuffer is full")
+            SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                            << LOG_DESC("DownloadingBlockQueueBuffer is full")
                             << LOG_KV("queueSize", m_blocks.size());
 
             break;
         }
 
-        SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                        << LOG_DESCRIPTION("Decoding block buffer")
+        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                        << LOG_DESC("Decoding block buffer")
                         << LOG_KV("blocksShardSize", blocksShard->blocksBytes.size());
 
 
@@ -164,17 +164,16 @@ void DownloadingBlockQueue::flushBufferToQueue()
             }
             catch (std::exception& e)
             {
-                SYNC_LOG(WARNING) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                                  << LOG_DESCRIPTION("Invalid block RLP")
-                                  << LOG_KV("reason", e.what())
+                SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                  << LOG_DESC("Invalid block RLP") << LOG_KV("reason", e.what())
                                   << LOG_KV("RLPDataSize", rlps.data().size());
                 continue;
             }
         }
 
-        SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                        << LOG_DESCRIPTION("Flush buffer to block queue")
-                        << LOG_KV("import", successCnt) << LOG_KV("rcv", itemCount)
+        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                        << LOG_DESC("Flush buffer to block queue") << LOG_KV("import", successCnt)
+                        << LOG_KV("rcv", itemCount)
                         << LOG_KV("downloadBlockQueue", m_blocks.size());
     }
 }

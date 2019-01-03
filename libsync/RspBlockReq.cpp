@@ -32,8 +32,8 @@ void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
     Guard l(x_push);
     if (!x_canPush.try_lock())
     {
-        SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                        << LOG_DESCRIPTION("Drop request when responding blocks")
+        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                        << LOG_DESC("Drop request when responding blocks")
                         << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
                         << LOG_KV("nodeId", m_nodeId.abridged());
         return;
@@ -41,8 +41,8 @@ void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
 
     if (m_reqQueue.size() >= c_maxReceivedDownloadRequestPerPeer)
     {
-        SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                        << LOG_DESCRIPTION("Drop request for reqQueue full")
+        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                        << LOG_DESC("Drop request for reqQueue full")
                         << LOG_KV("reqQueueSize", m_reqQueue.size())
                         << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
                         << LOG_KV("nodeId", m_nodeId.abridged());
@@ -53,10 +53,9 @@ void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
 
     m_reqQueue.push(DownloadRequest(_fromNumber, _size));
 
-    SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                    << LOG_DESCRIPTION("Push request in reqQueue req")
-                    << LOG_KV("from", _fromNumber) << LOG_KV("to", _fromNumber + _size - 1)
-                    << LOG_KV("peer", m_nodeId.abridged());
+    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                    << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
+                    << LOG_KV("to", _fromNumber + _size - 1) << LOG_KV("peer", m_nodeId.abridged());
 
     x_canPush.unlock();
 }
@@ -88,8 +87,8 @@ DownloadRequest DownloadRequestQueue::topAndPop()
         m_reqQueue.pop();
     }
 
-    SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                    << LOG_DESCRIPTION("Pop reqQueue top req") << LOG_KV("from", fromNumber)
+    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                    << LOG_DESC("Pop reqQueue top req") << LOG_KV("from", fromNumber)
                     << LOG_KV("to", fromNumber + size - 1);
     return DownloadRequest(fromNumber, size);
 }

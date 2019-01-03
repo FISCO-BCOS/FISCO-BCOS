@@ -73,9 +73,6 @@ using BlockPtrVec = std::vector<BlockPtr>;
 #define SYNC_LOG(_OBV)                                     \
     LOG(_OBV) << "[g:" << std::to_string(m_groupId) << "]" \
               << "[p:" << std::dec << m_protocolId << "][SYNC]"
-#define LOG_BADAGE(_NAME) "[" << _NAME << "]"
-#define LOG_DESCRIPTION(_DESCRIPTION) _DESCRIPTION << " "
-#define LOG_KV(_K, _V) _K << "=" << _V << ","
 
 enum SyncPacketType : byte
 {

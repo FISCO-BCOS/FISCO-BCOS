@@ -102,7 +102,7 @@ void SyncMaster::start()
 {
     if (!fp_isConsensusOk)
     {
-        SYNC_LOG(ERROR) << LOG_DESCRIPTION("Consensus verify handler is not set");
+        SYNC_LOG(ERROR) << LOG_DESC("Consensus verify handler is not set");
         BOOST_THROW_EXCEPTION(SyncVerifyHandlerNotSet());
     }
 
@@ -196,7 +196,7 @@ void SyncMaster::maintainTransactions()
     auto txSize = ts.size();
     auto pendingSize = m_txPool->pendingSize();
 
-    SYNC_LOG(TRACE) << LOG_BADAGE("Tx") << LOG_DESCRIPTION("Transaction need to send ")
+    SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
 
     for (size_t i = 0; i < ts.size(); ++i)
@@ -236,7 +236,7 @@ void SyncMaster::maintainTransactions()
         auto msg = packet.toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
 
-        SYNC_LOG(DEBUG) << LOG_BADAGE("Tx") << LOG_DESCRIPTION("Send transaction to peer")
+        SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
                         << LOG_KV("txNum", int(txsSize))
                         << LOG_KV("toNodeId", _p->nodeId.abridged())
                         << LOG_KV("messageSize(B)", msg->buffer()->size());
@@ -257,8 +257,8 @@ void SyncMaster::maintainBlocks()
         m_service->asyncSendMessageByNodeID(
             _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
 
-        SYNC_LOG(DEBUG) << LOG_BADAGE("Status")
-                        << LOG_DESCRIPTION("Send current status when maintainBlocks")
+        SYNC_LOG(DEBUG) << LOG_BADGE("Status")
+                        << LOG_DESC("Send current status when maintainBlocks")
                         << LOG_KV("number", int(number)) << LOG_KV("genesisHash", m_genesisHash)
                         << LOG_KV("currentHash", currentHash)
                         << LOG_KV("peer", _p->nodeId.abridged());
@@ -297,7 +297,7 @@ void SyncMaster::maintainPeersStatus()
         {
             // mining : maxPeerNumber - currentNumber == 1
             // no need: maxPeerNumber - currentNumber <= 0
-            SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_DESCRIPTION("No need to download")
+            SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_DESC("No need to download")
                             << LOG_KV("currentNumber", currentNumber)
                             << LOG_KV("currentSealingNumber", m_currentSealingNumber)
                             << LOG_KV("maxPeerNumber", maxPeerNumber);
@@ -310,7 +310,7 @@ void SyncMaster::maintainPeersStatus()
     uint64_t currentTime = utcTime();
     if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
     {
-        SYNC_LOG(DEBUG) << LOG_BADAGE("Download") << LOG_DESCRIPTION("Waiting for peers' blocks")
+        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
                         << LOG_KV("currentNumber", currentNumber)
                         << LOG_KV("maxRequestNumber", m_maxRequestNumber)
                         << LOG_KV("maxPeerNumber", maxPeerNumber);
@@ -331,8 +331,8 @@ void SyncMaster::maintainPeersStatus()
     }
     if (currentNumber >= maxRequestNumber)
     {
-        SYNC_LOG(TRACE) << LOG_BADAGE("Download")
-                        << LOG_DESCRIPTION("No need to sync when blocks are already in queue")
+        SYNC_LOG(TRACE) << LOG_BADGE("Download")
+                        << LOG_DESC("No need to sync when blocks are already in queue")
                         << LOG_KV("currentNumber", currentNumber)
                         << LOG_KV("maxRequestNumber", maxRequestNumber);
         return;  // no need to send request block packet
@@ -365,9 +365,9 @@ void SyncMaster::maintainPeersStatus()
             // update max request number
             m_maxRequestNumber = max(m_maxRequestNumber, to);
 
-            SYNC_LOG(DEBUG) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                            << LOG_DESCRIPTION("Request blocks") << LOG_KV("frm", from)
-                            << LOG_KV("to", to) << LOG_KV("peer", _p->nodeId.abridged());
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                            << LOG_DESC("Request blocks") << LOG_KV("frm", from) << LOG_KV("to", to)
+                            << LOG_KV("peer", _p->nodeId.abridged());
 
             ++shard;  // shard move
 
@@ -379,8 +379,8 @@ void SyncMaster::maintainPeersStatus()
             int64_t from = currentNumber + shard * c_maxRequestBlocks;
             int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
 
-            SYNC_LOG(ERROR) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                            << LOG_DESCRIPTION("Couldn't find any peers to request blocks")
+            SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                            << LOG_DESC("Couldn't find any peers to request blocks")
                             << LOG_KV("from", from) << LOG_KV("to", to);
             break;
         }
@@ -413,16 +413,16 @@ bool SyncMaster::maintainDownloadingQueue()
                 if (ret == CommitResult::OK)
                 {
                     m_txPool->dropBlockTrans(*topBlock);
-                    SYNC_LOG(ERROR) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                                    << LOG_DESCRIPTION("Download block commit")
+                    SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                    << LOG_DESC("Download block commit")
                                     << LOG_KV("number", topBlock->header().number())
                                     << LOG_KV("txs", topBlock->transactions().size())
                                     << LOG_KV("hash", topBlock->headerHash());
                 }
                 else
                 {
-                    SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                                    << LOG_DESCRIPTION("Block commit failed")
+                    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                    << LOG_DESC("Block commit failed")
                                     << LOG_KV("number", topBlock->header().number())
                                     << LOG_KV("txs", topBlock->transactions().size())
                                     << LOG_KV("hash", topBlock->headerHash());
@@ -430,8 +430,8 @@ bool SyncMaster::maintainDownloadingQueue()
             }
             else
             {
-                SYNC_LOG(ERROR) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                                << LOG_DESCRIPTION("Block of queue top is not new block")
+                SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                << LOG_DESC("Block of queue top is not new block")
                                 << LOG_KV("number", topBlock->header().number())
                                 << LOG_KV("txs", topBlock->transactions().size())
                                 << LOG_KV("hash", topBlock->headerHash());
@@ -439,8 +439,8 @@ bool SyncMaster::maintainDownloadingQueue()
         }
         catch (exception& e)
         {
-            SYNC_LOG(ERROR) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                            << LOG_DESCRIPTION("Block of queue top is not a valid block")
+            SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                            << LOG_DESC("Block of queue top is not a valid block")
                             << LOG_KV("number", topBlock->header().number())
                             << LOG_KV("txs", topBlock->transactions().size())
                             << LOG_KV("hash", topBlock->headerHash());
@@ -461,14 +461,14 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         h256 const& latestHash =
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
-        SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                        << LOG_DESCRIPTION("Download finish") << LOG_KV("latestHash", latestHash)
+        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                        << LOG_DESC("Download finish") << LOG_KV("latestHash", latestHash)
                         << LOG_KV("expectedHash", m_syncStatus->knownLatestHash);
 
         if (m_syncStatus->knownLatestHash != latestHash)
             SYNC_LOG(FATAL)
-                << LOG_BADAGE("Download")
-                << LOG_DESCRIPTION(
+                << LOG_BADGE("Download")
+                << LOG_DESC(
                        "State error: This node's version is not compatable with others! All data "
                        "should be cleared of this node before restart");
 
@@ -505,8 +505,7 @@ void SyncMaster::maintainPeersConnection()
 
             m_service->asyncSendMessageByNodeID(session.nodeID, packet.toMessage(m_protocolId),
                 CallbackFuncWithSession(), Options());
-            SYNC_LOG(ERROR) << LOG_BADAGE("Status")
-                            << LOG_DESCRIPTION("Send current status to new peer")
+            SYNC_LOG(ERROR) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
                             << LOG_KV("number", int(currentNumber))
                             << LOG_KV("genesisHash", m_genesisHash)
                             << LOG_KV("currentHash", currentHash)
@@ -550,8 +549,8 @@ void SyncMaster::maintainBlockRequest()
                 shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
                 if (!block)
                 {
-                    SYNC_LOG(TRACE) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                                    << LOG_DESCRIPTION("Get block for node failed")
+                    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                                    << LOG_DESC("Get block for node failed")
                                     << LOG_KV("reason", "block is null") << LOG_KV("number", number)
                                     << LOG_KV("nodeId", _p->nodeId.abridged());
                     break;
@@ -559,8 +558,8 @@ void SyncMaster::maintainBlockRequest()
                 else if (block->header().number() != number)
                 {
                     SYNC_LOG(TRACE)
-                        << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                        << LOG_DESCRIPTION("Get block for node failed")
+                        << LOG_BADGE("Download") << LOG_BADGE("Request")
+                        << LOG_DESC("Get block for node failed")
                         << LOG_KV("reason", "number incorrect") << LOG_KV("number", number)
                         << LOG_KV("nodeId", _p->nodeId.abridged());
                     break;
@@ -570,8 +569,8 @@ void SyncMaster::maintainBlockRequest()
             }
 
             if (req.fromNumber < number)
-                SYNC_LOG(DEBUG) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                                << LOG_BADAGE("BlockSync") << LOG_DESCRIPTION("Send blocks")
+                SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                                << LOG_BADGE("BlockSync") << LOG_DESC("Send blocks")
                                 << LOG_KV("from", req.fromNumber) << LOG_KV("to", number - 1)
                                 << LOG_KV("peer", _p->nodeId.abridged());
 
@@ -579,8 +578,8 @@ void SyncMaster::maintainBlockRequest()
             {
                 // write back the rest request range
                 reqQueue.enablePush();
-                SYNC_LOG(ERROR) << LOG_BADAGE("Download") << LOG_BADAGE("Request")
-                                << LOG_DESCRIPTION("Push unsent requests back to reqQueue")
+                SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                                << LOG_DESC("Push unsent requests back to reqQueue")
                                 << LOG_KV("from", number) << LOG_KV("to", numberLimit - 1)
                                 << LOG_KV("peer", _p->nodeId.abridged());
                 reqQueue.push(number, numberLimit - number);
@@ -601,9 +600,8 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
     int64_t currentNumber = m_blockChain->number();
     if (currentNumber + 1 != _block->header().number())
     {
-        SYNC_LOG(WARNING) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                          << LOG_DESCRIPTION("Ignore illegal block")
-                          << LOG_KV("reason", "number illegal")
+        SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                          << LOG_DESC("Ignore illegal block") << LOG_KV("reason", "number illegal")
                           << LOG_KV("thisNumber", _block->header().number())
                           << LOG_KV("currentNumber", currentNumber);
         return false;
@@ -611,8 +609,8 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
 
     if (m_blockChain->numberHash(currentNumber) != _block->header().parentHash())
     {
-        SYNC_LOG(WARNING) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                          << LOG_DESCRIPTION("Ignore illegal block")
+        SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                          << LOG_DESC("Ignore illegal block")
                           << LOG_KV("reason", "parent hash illegal")
                           << LOG_KV("thisNumber", _block->header().number())
                           << LOG_KV("currentNumber", currentNumber)
@@ -624,8 +622,8 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
     // check block minerlist sig
     if (fp_isConsensusOk && !(fp_isConsensusOk)(*_block))
     {
-        SYNC_LOG(ERROR) << LOG_BADAGE("Download") << LOG_BADAGE("BlockSync")
-                        << LOG_DESCRIPTION("Ignore illegal block")
+        SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                        << LOG_DESC("Ignore illegal block")
                         << LOG_KV("reason", "consensus check failed")
                         << LOG_KV("thisNumber", _block->header().number())
                         << LOG_KV("currentNumber", currentNumber)

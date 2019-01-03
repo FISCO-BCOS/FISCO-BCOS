@@ -42,8 +42,8 @@ bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)
 {
     if (hasPeer(_info.nodeId))
     {
-        SYNC_LOG(WARNING) << LOG_BADAGE("Status")
-                          << LOG_DESCRIPTION("Peer status is exist, no need to create");
+        SYNC_LOG(WARNING) << LOG_BADGE("Status")
+                          << LOG_DESC("Peer status is exist, no need to create");
         return false;
     }
 
@@ -56,7 +56,7 @@ bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)
     }
     catch (Exception const& e)
     {
-        SYNC_LOG(ERROR) << LOG_BADAGE("Status") << LOG_DESCRIPTION("Create SyncPeer failed!");
+        SYNC_LOG(ERROR) << LOG_BADGE("Status") << LOG_DESC("Create SyncPeer failed!");
         BOOST_THROW_EXCEPTION(InvalidSyncPeerCreation() << errinfo_comment(e.what()));
     }
     return true;
@@ -85,7 +85,7 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
     auto peer = m_peersStatus.find(_id);
     if (peer == m_peersStatus.end())
     {
-        SYNC_LOG(WARNING) << LOG_BADAGE("Status") << LOG_DESCRIPTION("Peer data not found")
+        SYNC_LOG(WARNING) << LOG_BADGE("Status") << LOG_DESC("Peer data not found")
                           << LOG_KV("nodeId", _id);
         return nullptr;
     }
