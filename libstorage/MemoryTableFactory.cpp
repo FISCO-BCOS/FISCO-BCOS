@@ -332,6 +332,7 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
         tableInfo->key = dev::blockverifier::SYSTEM_CONFIG_KEY;
         tableInfo->fields = std::vector<std::string>{
             dev::blockverifier::SYSTEM_CONFIG_VALUE, dev::blockverifier::SYSTEM_CONFIG_ENABLENUM};
+    }
     else if (tableName == SYS_BLOCK_2_NONCES)
     {
         tableInfo->key = "number";
