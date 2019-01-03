@@ -76,7 +76,8 @@ public:
             "85cf52964f7334c015545b394c1ffec9", keycenter);
         if (!status.ok())
         {
-            ENCDB_LOG(ERROR) << "Open DB Error" << endl;
+            LOG(ERROR) << "[g:" << _name << "]"
+                       << "Open DB Error" << endl;
             throw;
         }
         return shared_ptr<BasicLevelDB>(pleveldb);

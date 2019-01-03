@@ -34,18 +34,21 @@ namespace dev
 {
 namespace db
 {
-#define ENCDB_LOG(_OBV)               \
-    LOG(_OBV) << "[g:" << name << "]" \
-              << "[p:null][ENCDB]
+#define ENCDB_LOG(_OBV)                 \
+    LOG(_OBV) << "[g:" << m_name << "]" \
+              << "[p:null][ENCDB]"
 
 class EncryptedLevelDBWriteBatch : public LevelDBWriteBatch
 {
 public:
-    EncryptedLevelDBWriteBatch(const dev::bytes& _dataKey) : m_dataKey(_dataKey) {}
+    EncryptedLevelDBWriteBatch(const dev::bytes& _dataKey, const std::string& _name = "")
+      : m_dataKey(_dataKey), m_name(_name)
+    {}
     void insertSlice(leveldb::Slice _key, leveldb::Slice _value) override;
 
 private:
     dev::bytes m_dataKey;
+    std::string m_name;
 };
 
 class EncryptedLevelDB : public BasicLevelDB

@@ -48,7 +48,8 @@ void LevelDBWriteBatch::kill(Slice _key)
     m_writeBatch.Delete(toLDBSlice(_key));
 }
 
-BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& _name) : name(_name)
+BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& _name)
+  : m_name(_name)
 {
     // Basic leveldb initralization(No encryption)
     auto db = static_cast<leveldb::DB*>(nullptr);
@@ -78,8 +79,6 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
 leveldb::Status BasicLevelDB::Open(
     const leveldb::Options& _options, const std::string& _name, BasicLevelDB** _dbptr)
 {
-    name = _name;
-
     *_dbptr = new BasicLevelDB(_options, _name);
     leveldb::Status status = (*_dbptr)->OpenStatus();
 
