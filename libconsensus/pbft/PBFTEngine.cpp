@@ -367,7 +367,7 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
         {
             m_service->asyncSendMessageByNodeID(
                 session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
-            PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg: ") << LOG_KV("packetType", packetType)
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg") << LOG_KV("packetType", packetType)
                                   << LOG_KV("dstNodeId", nodeId.abridged())
                                   << LOG_KV("remote_endpoint", session.nodeIPEndpoint.name())
                                   << LOG_KV("myIdx", nodeIdx())
@@ -498,6 +498,9 @@ void PBFTEngine::checkMinerList(Block const& block)
 bool PBFTEngine::checkBlock(Block const& block)
 {
     ReadGuard l(m_minerListMutex);
+    /// ignore the genesis block
+    if (block.blockHeader().number() == 0)
+        return true;
     /// check sealer list(node list)
     if (m_minerList != block.blockHeader().sealerList())
     {
@@ -562,7 +565,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
 {
     auto start_exec_time = utcTime();
     Block working_block(req.block);
-    PBFTENGINE_LOG(TRACE) << LOG_DESC("execBlock:")
+    PBFTENGINE_LOG(TRACE) << LOG_DESC("execBlock")
                           << LOG_KV("blkNum", working_block.header().number())
                           << LOG_KV("idx", req.idx)
                           << LOG_KV("hash", working_block.header().hash().abridged())
@@ -580,7 +583,7 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
 {
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("needOmit:")
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("needOmit")
                               << LOG_KV("blkNum", sealing.block.blockHeader().number())
                               << LOG_KV("hash", sealing.block.blockHeader().hash().abridged())
                               << LOG_KV("myIdx", nodeIdx())
@@ -777,17 +780,18 @@ void PBFTEngine::checkAndSave()
         /// add sign-list into the block header
         if (m_reqCache->prepareCache().height > m_highestBlock.number())
         {
-            Block block(m_reqCache->prepareCache().block);
-            m_reqCache->generateAndSetSigList(block, minValidNodes());
+            /// Block block(m_reqCache->prepareCache().block);
+            std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
+            m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
             /// callback block chain to commit block
-            CommitResult ret = m_blockChain->commitBlock(
-                block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            CommitResult ret = m_blockChain->commitBlock((*p_block),
+                std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
             /// drop handled transactions
             if (ret == CommitResult::OK)
             {
-                dropHandledTransactions(block);
+                dropHandledTransactions(*p_block);
                 PBFTENGINE_LOG(DEBUG)
-                    << LOG_DESC("CommitBlock Succ:")
+                    << LOG_DESC("CommitBlock Succ")
                     << LOG_KV("blkNum", m_reqCache->prepareCache().height)
                     << LOG_KV("idx", m_reqCache->prepareCache().idx)
                     << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
@@ -796,7 +800,7 @@ void PBFTEngine::checkAndSave()
             else
             {
                 PBFTENGINE_LOG(ERROR)
-                    << LOG_DESC("CommitBlock Failed:")
+                    << LOG_DESC("CommitBlock Failed")
                     << LOG_KV("blkNum", m_reqCache->prepareCache().height)
                     << LOG_KV("highNum", m_highestBlock.number())
                     << LOG_KV("idx", m_reqCache->prepareCache().idx)
@@ -804,7 +808,7 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
                 /// note blocksync to sync
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-                m_txPool->handleBadBlock(block);
+                m_txPool->handleBadBlock(*p_block);
             }
             /// clear caches to in case of repeated commit
             m_reqCache->clearAllExceptCommitCache();
@@ -813,7 +817,7 @@ void PBFTEngine::checkAndSave()
         else
         {
             PBFTENGINE_LOG(WARNING)
-                << LOG_DESC("checkAndSave: Consensus Failed, Block already exists:")
+                << LOG_DESC("checkAndSave: Consensus Failed, Block already exists")
                 << LOG_KV("blkNum", m_reqCache->prepareCache().height)
                 << LOG_KV("highNum", m_highestBlock.number())
                 << LOG_KV("blkHash", m_reqCache->prepareCache().block_hash.abridged())
@@ -932,7 +936,7 @@ void PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
     if (!valid)
         return;
     std::ostringstream oss;
-    oss << LOG_DESC("handleCommitMsg:") << LOG_KV("blkNum", commit_req.height)
+    oss << LOG_DESC("handleCommitMsg") << LOG_KV("blkNum", commit_req.height)
         << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("idx", commit_req.idx)
         << LOG_KV("Cview", commit_req.view) << LOG_KV("view", m_view)
         << LOG_KV("from", pbftMsg.node_id.abridged()) << LOG_KV("fromIp", pbftMsg.endpoint)
@@ -960,7 +964,7 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistCommit(req))
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: Duplicated:")
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: Duplicated")
                               << LOG_KV("INFO", oss.str());
         return false;
     }
@@ -1003,13 +1007,13 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         {
             m_timeManager.changeView();
             m_toView = min_view - 1;
-            PBFTENGINE_LOG(INFO) << LOG_DESC("Tigger fast-viewchange:") << LOG_KV("view", m_view)
+            PBFTENGINE_LOG(INFO) << LOG_DESC("Tigger fast-viewchange") << LOG_KV("view", m_view)
                                  << LOG_KV("toView", m_toView) << LOG_KV("minView", min_view)
                                  << LOG_KV("INFO", oss.str());
             m_signalled.notify_all();
         }
     }
-    PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ: " + oss.str())
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ " + oss.str())
 }
 
 bool PBFTEngine::isValidViewChangeReq(
@@ -1017,13 +1021,13 @@ bool PBFTEngine::isValidViewChangeReq(
 {
     if (m_reqCache->isExistViewChange(req))
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: Duplicated:")
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: Duplicated")
                               << LOG_KV("INFO", oss.str());
         return false;
     }
     if (req.idx == m_idx)
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: own req:")
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: own req")
                               << LOG_KV("INFO", oss.str());
         return false;
     }
@@ -1040,14 +1044,14 @@ bool PBFTEngine::isValidViewChangeReq(
     if ((req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash()) ||
         (m_blockChain->getBlockByHash(req.block_hash) == nullptr))
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq, invalid hash:")
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq, invalid hash")
                               << LOG_KV("highHash", m_highestBlock.hash().abridged())
                               << LOG_KV("INFO", oss.str());
         return false;
     }
     if (!checkSign(req))
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: invalid sign:")
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: invalid sign")
                               << LOG_KV("INFO", oss.str());
         return false;
     }
@@ -1169,7 +1173,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     }
     default:
     {
-        PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleMsg:  Err pbft message: ")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleMsg:  Err pbft message")
                               << LOG_KV("from", pbftMsg.node_idx) << LOG_KV("myIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         return;
@@ -1204,7 +1208,7 @@ void PBFTEngine::workLoop()
             if (ret.first)
             {
                 PBFTENGINE_LOG(TRACE)
-                    << LOG_DESC("workLoop: handleMsg:")
+                    << LOG_DESC("workLoop: handleMsg")
                     << LOG_KV("type", std::to_string(ret.second.packet_id))
                     << LOG_KV("idx", et.second.node_idx) << LOG_KV("myIdx", nodeIdx())
                     << LOG_KV("myNode", m_keyPair.pub().abridged());
@@ -1234,7 +1238,7 @@ void PBFTEngine::handleFutureBlock()
     PrepareReq future_req = m_reqCache->futurePrepareCache();
     if (future_req.height == m_consensusBlockNumber && future_req.view == m_view)
     {
-        PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock:")
+        PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock")
                              << LOG_KV("blkNum", m_reqCache->futurePrepareCache().height)
                              << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("view", m_view)
                              << LOG_KV("conNum", m_consensusBlockNumber)

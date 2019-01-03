@@ -39,14 +39,13 @@ void TransactionNonceCheck::init()
 }
 bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
 {
-    if (_tx.blockLimit() == Invalid256 || u256(m_blockChain->number()) >= _tx.blockLimit() ||
-        _tx.blockLimit() > (u256(m_blockChain->number()) + m_maxBlockLimit))
+    if (_tx.blockLimit() == Invalid256 || m_blockNumber >= _tx.blockLimit() ||
+        _tx.blockLimit() > (m_blockNumber + m_maxBlockLimit))
     {
         NONCECHECKER_LOG(WARNING) << LOG_DESC("InvalidBlockLimit")
                                   << LOG_KV("blkLimit", _tx.blockLimit())
                                   << LOG_KV("maxBlkLimit", m_maxBlockLimit)
-                                  << LOG_KV("curBlk", m_blockChain->number())
-                                  << LOG_KV("tx", _tx.sha3());
+                                  << LOG_KV("curBlk", m_blockNumber) << LOG_KV("tx", _tx.sha3());
         return false;
     }
     return true;
@@ -66,9 +65,10 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
         try
         {
             Timer timer;
-            unsigned lastnumber = m_blockChain->number();
-            unsigned prestartblk = m_startblk;
-            unsigned preendblk = m_endblk;
+            m_blockNumber = m_blockChain->number();
+            int64_t lastnumber = m_blockNumber;
+            int64_t prestartblk = m_startblk;
+            int64_t preendblk = m_endblk;
 
             m_endblk = lastnumber;
             if (lastnumber > m_maxBlockLimit)
@@ -87,33 +87,25 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             }
             else
             {
-                for (unsigned i = prestartblk; i < m_startblk; i++)
+                for (auto i = prestartblk; i < m_startblk; i++)
                 {
-                    h256 blockhash = m_blockChain->numberHash(i);
-
-                    Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
-                    for (unsigned j = 0; j < trans.size(); j++)
+                    std::vector<dev::eth::NonceKeyType> nonce_vec;
+                    m_blockChain->getNonces(nonce_vec, i);
+                    for (auto nonce : nonce_vec)
                     {
-                        std::string key = this->generateKey(trans[j]);
-                        auto iter = m_cache.find(key);
-                        if (iter != m_cache.end())
-                            m_cache.erase(iter);
-                    }  // for
-                }      // for
+                        m_cache.erase(nonce);
+                    }
+                }
             }
-            for (unsigned i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
+            for (auto i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
             {
-                h256 blockhash = m_blockChain->numberHash(i);
-
-                Transactions trans = m_blockChain->getBlockByHash(blockhash)->transactions();
-                for (unsigned j = 0; j < trans.size(); j++)
+                std::vector<dev::eth::NonceKeyType> nonce_vec;
+                m_blockChain->getNonces(nonce_vec, i);
+                for (auto nonce : nonce_vec)
                 {
-                    std::string key = this->generateKey(trans[j]);
-                    auto iter = m_cache.find(key);
-                    if (iter == m_cache.end())
-                        m_cache.insert(key);
-                }  // for
-            }      // for
+                    m_cache.insert(nonce);
+                }
+            }  // for
             NONCECHECKER_LOG(TRACE)
                 << LOG_DESC("updateCache") << LOG_KV("cacheSize", m_cache.size())
                 << LOG_KV("costTime", timer.elapsed() * 1000);

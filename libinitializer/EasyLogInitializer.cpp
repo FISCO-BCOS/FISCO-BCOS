@@ -20,9 +20,9 @@
  * @author: yujiechen
  * @date 2018-11-07
  */
-#include "LogInitializer.h"
-
+#include "EasyLogInitializer.h"
 using namespace dev::initializer;
+
 const std::chrono::seconds LogInitializer::wakeUpDelta = std::chrono::seconds(20);
 std::chrono::system_clock::time_point LogInitializer::nextWakeUp = std::chrono::system_clock::now();
 static std::map<std::string, unsigned int> s_mlogIndex;
@@ -44,7 +44,7 @@ static void inline rolloutHandler(const char* filename, std::size_t)
 }
 
 /// set easylog with default setting
-void LogInitializer::initEasylogging(boost::property_tree::ptree const& pt)
+void LogInitializer::initLog(boost::property_tree::ptree const& pt)
 {
     // Enables support for multiple loggers
     el::Loggers::addFlag(el::LoggingFlag::MultiLoggerSupport);

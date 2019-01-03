@@ -102,7 +102,7 @@ public:
     inline void addRawPrepare(PrepareReq const& req)
     {
         m_rawPrepareCache = req;
-        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare:") << LOG_KV("height", req.height)
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
                                 << LOG_KV("idx", req.idx)
                                 << LOG_KV("hash", req.block_hash.abridged());
         m_prepareCache = PrepareReq();
@@ -164,7 +164,7 @@ public:
         {
             m_futurePrepareCache = req;
             PBFTReqCache_LOG(INFO)
-                << LOG_DESC("addFuturePrepareCache:") << LOG_KV("height", req.height)
+                << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req.height)
                 << LOG_KV("idx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
         }
     }

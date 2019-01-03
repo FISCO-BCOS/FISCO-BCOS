@@ -33,7 +33,7 @@ class LogInitializer
 public:
     typedef std::shared_ptr<LogInitializer> Ptr;
     LogInitializer() {}
-    void initEasylogging(boost::property_tree::ptree const& _pt);
+    void initLog(boost::property_tree::ptree const& _pt);
     static void inline logRotateByTime()
     {
         if (std::chrono::system_clock::now() <= nextWakeUp)

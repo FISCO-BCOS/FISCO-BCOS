@@ -99,10 +99,12 @@ public:
     dev::h512s minerList() override;
     dev::h512s observerList() override;
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
+    void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber);
 
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
+    int64_t obtainNumber();
     void writeNumber(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeTotalTransactionCount(const dev::eth::Block& block,
@@ -115,6 +117,7 @@ private:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
     const std::string c_genesisHash =
@@ -138,6 +141,10 @@ private:
     std::map<std::string, SystemConfigRecord> m_systemConfigRecord;
     mutable SharedMutex m_systemConfigMutex;
     BlockCache m_blockCache;
+
+    /// cache the block number
+    mutable SharedMutex m_blockNumberMutex;
+    int64_t m_blockNumber = -1;
 };
 }  // namespace blockchain
 }  // namespace dev

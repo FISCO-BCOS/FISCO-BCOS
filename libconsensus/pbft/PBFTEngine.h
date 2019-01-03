@@ -94,10 +94,6 @@ public:
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
-    /*uint64_t calculateMaxPackTxNum(uint64_t const maxTransactions)
-    {
-        return m_timeManager.calculateMaxPackTxNum(maxTransactions, m_view);
-    }*/
     /// broadcast prepare message
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
@@ -232,7 +228,8 @@ protected:
         PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
         dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
-        std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
+        // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
+        bytes ret_data;
         PBFTMsgPacket packet;
         packet.data = data.toBytes();
         packet.packet_id = packetType;
@@ -240,7 +237,8 @@ protected:
             packet.ttl = maxTTL;
         else
             packet.ttl = ttl;
-        packet.encode(*p_data);
+        packet.encode(ret_data);
+        std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
         message->setBuffer(p_data);
         message->setProtocolID(protocolId);
         return message;
@@ -308,8 +306,7 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            PBFTENGINE_LOG(TRACE) << LOG_DESC(
-                                         "checkReq: sign or commit Not exist in prepare cache:")
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
                                   << LOG_KV("prepHash",
                                          m_reqCache->prepareCache().block_hash.abridged())
                                   << LOG_KV("hash", req.block_hash.abridged())
@@ -329,21 +326,21 @@ protected:
         /// check the sealer of this request
         if (req.idx == m_idx)
         {
-            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv own req:")
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv own req")
                                   << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv req with unconsistent view:")
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv req with unconsistent view")
                                   << LOG_KV("prepView", m_reqCache->prepareCache().view)
                                   << LOG_KV("view", req.view) << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq:  invalid sign: ")
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq:  invalid sign")
                                   << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
@@ -374,7 +371,7 @@ protected:
         if (req.height > m_consensusBlockNumber ||
             (req.height == m_consensusBlockNumber && req.view > m_view))
         {
-            PBFTENGINE_LOG(DEBUG) << LOG_DESC("FutureBlock:") << LOG_KV("height", req.height)
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("FutureBlock") << LOG_KV("height", req.height)
                                   << LOG_KV("consNum", m_consensusBlockNumber)
                                   << LOG_KV("reqView", req.view) << LOG_KV("view", m_view);
             return true;
@@ -388,7 +385,7 @@ protected:
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
         {
             PBFTENGINE_LOG(DEBUG)
-                << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit:")
+                << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
                 << LOG_KV("height", req.height)
                 << LOG_KV("cacheHeight", m_reqCache->committedPrepareCache().height)
                 << LOG_KV("hash", req.block_hash.abridged())
@@ -407,7 +404,7 @@ protected:
             if (!m_emptyBlockViewChange)
             {
                 PBFTENGINE_LOG(WARNING)
-                    << LOG_DESC("InvalidPrepare: Get leader failed:") << LOG_KV("cfgErr", m_cfgErr)
+                    << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
                     << LOG_KV("idx", req.idx()) << LOG_KV("leader", leader.second)
                     << LOG_KV("leaderFailed", m_leaderFailed) << LOG_KV("view", m_view)
                     << LOG_KV("highSealer", m_highestBlock.sealer())

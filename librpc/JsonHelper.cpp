@@ -23,7 +23,6 @@
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
-#include <libethcore/SealEngine.h>
 #include <libethcore/Transaction.h>
 
 using namespace std;

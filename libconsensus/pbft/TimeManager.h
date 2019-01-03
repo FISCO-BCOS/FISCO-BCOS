@@ -81,7 +81,7 @@ struct TimeManager
             if (m_execTimePerTx >= (float)m_intervalBlockTime)
                 m_execTimePerTx = (float)m_intervalBlockTime;
             /// for prediction
-            LOG(DEBUG) << LOG_DESC("CONSENSUS:") << LOG_KV("tx", txNum)
+            LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_KV("tx", txNum)
                        << LOG_KV("execTimePerTx", m_execTimePerTx);
         }
     }
