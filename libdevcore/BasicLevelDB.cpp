@@ -48,7 +48,7 @@ void LevelDBWriteBatch::kill(Slice _key)
     m_writeBatch.Delete(toLDBSlice(_key));
 }
 
-BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& _name)
+BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& _name) : name(_name)
 {
     // Basic leveldb initralization(No encryption)
     auto db = static_cast<leveldb::DB*>(nullptr);
@@ -56,7 +56,7 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
 
     if (!m_openStatus.ok() || !db)
     {
-        LOG(ERROR) << "Database open error" << endl;
+        cerr << "Database open error" << endl;
         raise(SIGTERM);
     }
     m_db.reset(db);
@@ -69,7 +69,7 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
             m_db->Get(leveldb::ReadOptions(), leveldb::Slice(c_cipherDataKeyName), &key);
         if (!key.empty())
         {
-            LOG(ERROR) << "[ENCDB] Database is encrypted" << endl;
+            cerr << "[ENCDB] Database is encrypted" << endl;
             raise(SIGTERM);
         }
     }
@@ -78,6 +78,8 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
 leveldb::Status BasicLevelDB::Open(
     const leveldb::Options& _options, const std::string& _name, BasicLevelDB** _dbptr)
 {
+    name = _name;
+
     *_dbptr = new BasicLevelDB(_options, _name);
     leveldb::Status status = (*_dbptr)->OpenStatus();
 
