@@ -469,13 +469,6 @@ void PBFTEngine::checkMinerList(Block const& block)
     ReadGuard l(m_minerListMutex);
     if (m_minerList != block.blockHeader().sealerList())
     {
-#if DEBUG
-        std::string miners;
-        for (auto miner : m_minerList)
-            miners += miner + " ";
-        LOG(DEBUG) << "Miner list = " << miners;
-        PBFTENGINE_LOG(DEBUG) << "[checkMinerList] [miners]: " << miners << std::endl;
-#endif
         PBFTENGINE_LOG(ERROR)
             << "[#checkMinerList] Wrong miners: [myIdx/myNode/Cminers/CblockMiner/hash]:  "
             << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << m_minerList.size() << "/"
@@ -490,6 +483,9 @@ void PBFTEngine::checkMinerList(Block const& block)
 bool PBFTEngine::checkBlock(Block const& block)
 {
     ReadGuard l(m_minerListMutex);
+    /// ignore the genesis block
+    if (block.blockHeader().number() == 0)
+        return true;
     /// check sealer list(node list)
     if (m_minerList != block.blockHeader().sealerList())
     {
@@ -752,15 +748,16 @@ void PBFTEngine::checkAndSave()
         /// add sign-list into the block header
         if (m_reqCache->prepareCache().height > m_highestBlock.number())
         {
-            Block block(m_reqCache->prepareCache().block);
-            m_reqCache->generateAndSetSigList(block, minValidNodes());
+            /// Block block(m_reqCache->prepareCache().block);
+            std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
+            m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
             /// callback block chain to commit block
-            CommitResult ret = m_blockChain->commitBlock(
-                block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            CommitResult ret = m_blockChain->commitBlock((*p_block),
+                std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
             /// drop handled transactions
             if (ret == CommitResult::OK)
             {
-                dropHandledTransactions(block);
+                dropHandledTransactions(*p_block);
                 PBFTENGINE_LOG(DEBUG)
                     << "[#CommitBlock Succ:] [myIdx/myNode/idx/nodeId/number/hash]:  " << nodeIdx()
                     << "/" << m_keyPair.pub().abridged() << "/" << m_reqCache->prepareCache().idx
@@ -772,10 +769,11 @@ void PBFTEngine::checkAndSave()
                 PBFTENGINE_LOG(ERROR)
                     << "[#commitBlock Failed] [myIdx/myNode/highNum/SNum/Shash]:  " << nodeIdx()
                     << "/" << m_keyPair.pub().abridged() << "/" << m_highestBlock.number() << "/"
-                    << block.blockHeader().number() << "/" << block.blockHeader().hash().abridged();
+                    << p_block->blockHeader().number() << "/"
+                    << p_block->blockHeader().hash().abridged();
                 /// note blocksync to sync
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-                m_txPool->handleBadBlock(block);
+                m_txPool->handleBadBlock(*p_block);
             }
             /// clear caches to in case of repeated commit
             m_reqCache->clearAllExceptCommitCache();
@@ -820,8 +818,8 @@ void PBFTEngine::reportBlock(Block const& block)
         resetConfig();
         m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
-        PBFTENGINE_LOG(INFO) << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Report: number= "
-                             << m_highestBlock.number() << ", idx= " << m_highestBlock.sealer()
+        PBFTENGINE_LOG(INFO) << "^^^^Report: number= " << m_highestBlock.number()
+                             << ", idx= " << m_highestBlock.sealer()
                              << " , hash= " << m_highestBlock.hash().abridged()
                              << ", next= " << m_consensusBlockNumber
                              << " , txNum=" << block.getTransactionSize()

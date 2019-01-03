@@ -23,6 +23,7 @@
 
 #include "BasicLevelDB.h"
 #include <libdevcore/easylog.h>
+#include <csignal>
 
 using namespace dev;
 using namespace dev::db;

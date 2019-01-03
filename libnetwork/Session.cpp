@@ -65,8 +65,7 @@ Session::~Session()
     }
 }
 
-void Session::asyncSendMessage(
-    Message::Ptr message, Options options = Options(), CallbackFunc callback = CallbackFunc())
+void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback)
 {
     auto server = m_server.lock();
     if (!actived())
@@ -95,11 +94,10 @@ void Session::asyncSendMessage(
     }
 
     addSeqCallback(message->seq(), handler);
-
-    auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer);
-
-    send(buffer);
+    std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
+    message->encode(*p_buffer);
+    message.reset();
+    send(p_buffer);
 }
 
 bool Session::actived() const
