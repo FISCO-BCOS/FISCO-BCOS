@@ -160,7 +160,7 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
-    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+    dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
     dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
     {
         return LocalisedTransaction();
@@ -190,7 +190,7 @@ public:
         return CommitResult::OK;
     }
 
-    dev::bytes getCode(dev::Address _address) override { return bytes(); }
+    dev::bytes getCode(dev::Address) override { return bytes(); }
 
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override { return true; }
     dev::h512s minerList() override { return dev::h512s(); };
