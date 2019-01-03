@@ -18,7 +18,6 @@
  * @author: caryliao
  * @date 2018-11-2
  */
-#include "FakeModule.h"
 #include "WebsocketServer.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
@@ -30,7 +29,7 @@ INITIALIZE_EASYLOGGINGPP
 using namespace dev;
 using namespace dev::rpc;
 using namespace dev::ledger;
-using namespace dev::demo;
+using namespace dev::initializer;
 
 
 using tcp = boost::asio::ip::tcp;
@@ -38,7 +37,9 @@ namespace websocket = boost::beast::websocket;
 
 int main(int argc, const char* argv[])
 {
-    auto const address = boost::asio::ip::make_address("127.0.0.1");
+#if 0
+	/// websocket demo
+	auto const address = boost::asio::ip::make_address("127.0.0.1");
     auto const port = static_cast<unsigned short>(std::atoi("30302"));
     auto const threads = 1;
     // The io_context is required for all I/O
@@ -53,16 +54,22 @@ int main(int argc, const char* argv[])
         v.emplace_back([&ioc] { ioc.run(); });
     ioc.run();
 
+#endif
 
-#if 0
+#if 1
 
-    auto m_service = std::make_shared<MockService>();
-    std::string configurationPath = "";
-    KeyPair m_keyPair = KeyPair::create();
-    auto m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
-    m_ledgerManager->initSingleLedger<FakeLedger>(1, "", configurationPath);
+    /// http demo
+    auto initialize = std::make_shared<Initializer>();
+    initialize->init("./config.ini");
 
-    auto rpc = new Rpc(m_ledgerManager, m_service);
+    auto secureInitializer = initialize->secureInitializer();
+    KeyPair key_pair = secureInitializer->keyPair();
+    auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
+
+    auto p2pInitializer = initialize->p2pInitializer();
+    auto p2pService = p2pInitializer->p2pService();
+
+    auto rpc = new Rpc(ledgerManager, p2pService);
 
     ModularServer<>* jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpc);
     std::string listenIP = "127.0.0.1";
