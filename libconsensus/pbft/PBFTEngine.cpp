@@ -26,6 +26,7 @@
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
+#include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/Storage.h>
 using namespace dev::eth;
 using namespace dev::db;
@@ -33,6 +34,7 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 using namespace dev::p2p;
 using namespace dev::storage;
+
 namespace dev
 {
 namespace consensus
@@ -151,7 +153,20 @@ void PBFTEngine::initBackupDB()
     {
         boost::filesystem::create_directories(path_handler);
     }
-    m_backupDB = std::make_shared<LevelDB>(path);
+
+    db::BasicLevelDB* basicDB = NULL;
+    leveldb::Status status;
+
+    if (g_BCOSConfig.diskEncryption.enable)
+        status = EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(),
+            &basicDB, g_BCOSConfig.diskEncryption.cipherDataKey);
+    else
+        status = BasicLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB);
+
+    LevelDB::checkStatus(status, path_handler);
+
+    m_backupDB = std::make_shared<LevelDB>(basicDB);
+
     if (!isDiskSpaceEnough(path))
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC(
