@@ -289,7 +289,8 @@ bool Ledger::initBlockChain()
                           << std::endl;
         return false;
     }
-    std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockChain);
+    std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>(protocol_id);
     blockChain->setStateStorage(m_dbInitializer->storage());
     m_blockChain = blockChain;
     std::string consensusType = m_param->mutableConsensusParam().consensusType;

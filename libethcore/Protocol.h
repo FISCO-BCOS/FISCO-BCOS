@@ -42,6 +42,7 @@ enum ProtocolID
     BlockSync = 9,
     TxPool = 10,
     Raft = 11,
+    BlockChain = 12
 };
 
 enum ExtraIndex
