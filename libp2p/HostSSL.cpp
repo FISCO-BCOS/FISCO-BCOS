@@ -126,7 +126,8 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 	auto protocolVersion = _rlp[0].toInt<unsigned>();
 	auto clientVersion = _rlp[1].toString();
 	auto caps = _rlp[2].toVector<CapDesc>();
-	auto listenPort = _rlp[3].toInt<unsigned short>();
+	//auto listenPort = _rlp[3].toInt<unsigned short>();
+	auto listenPort = _s->remoteEndpoint().port();
 	auto pub = _rlp[4].toHash<Public>();
 	LOG(INFO) << "HostSSL::startPeerSession! " << pub.abridged() ;
 	Public  _id=pub;
@@ -146,7 +147,7 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 
 	NodeIPEndpoint _nodeIPEndpoint;
 	_nodeIPEndpoint.address = _s->remoteEndpoint().address();
-	_nodeIPEndpoint.tcpPort=_s->remoteEndpoint().port();
+	_nodeIPEndpoint.tcpPort=listenPort;
 	_nodeIPEndpoint.udpPort=listenPort;
 	_nodeIPEndpoint.host=_s->nodeIPEndpoint().host;
 
@@ -451,6 +452,7 @@ void HostSSL::sslHandshakeClient(const boost::system::error_code& error, std::sh
 		Guard l(x_connecting);
 		m_connecting.push_back(handshake);
 	}
+
 	handshake->start();
 
 	erasePeedingPeerConn(_nodeIPEndpoint);
@@ -472,9 +474,9 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 										m_netPrefs.publicIPAddress))
 				|| m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end()
 				|| _nodeIPEndpoint.address == m_tcpPublic.address()
-				|| _nodeIPEndpoint.address == m_tcpClient.address())
+				)
 				&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
-			LOG(TRACE)<< "Ignore connect self" << _nodeIPEndpoint.name();
+				LOG(TRACE)<< "Ignore connect self: " << _nodeIPEndpoint.name();
 
 			return;
 		}
@@ -507,6 +509,24 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 			if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
 				return;
 			m_pendingPeerConns.insert(_nodeIPEndpoint.name());
+		}
+
+		//if nodeIPEndpoint connected
+		{
+			DEV_RECURSIVE_GUARDED(x_sessions);
+			auto it = m_peers.find(_nodeIPEndpoint.name());
+
+			if(it != m_peers.end() && it->second->address() != NodeID()) {
+				it->second->id;
+				auto sIt = m_sessions.find(it->second->address()); //address in peer means nodeid
+				if(sIt != m_sessions.end()) {
+					auto session = sIt->second.lock();
+					if(session && session->isConnected()) {
+						LOG(TRACE) << "NodeIPEndpoint: " << _nodeIPEndpoint.name() << " nodeID: " << it->second->address().hex() << " already connected, ignore";
+						return;
+					}
+				}
+			}
 		}
 
 		LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name();
