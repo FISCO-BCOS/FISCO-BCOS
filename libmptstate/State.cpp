@@ -23,9 +23,10 @@
 
 #include "Defaults.h"
 #include <libdevcore/Assertions.h>
-#include <libdevcore/DBImpl.h>
+#include <libdevcore/LevelDB.h>
 #include <libdevcore/TrieHash.h>
 #include <libdevcore/easylog.h>
+#include <libsecurity/EncryptedLevelDB.h>
 #include <boost/filesystem.hpp>
 #include <boost/timer.hpp>
 
@@ -34,6 +35,7 @@ using namespace dev;
 using namespace dev::eth;
 using namespace dev::mptstate;
 namespace fs = boost::filesystem;
+namespace devdb = dev::db;
 
 State::State(u256 const& _accountStartNonce, OverlayDB const& _db, BaseState _bs)
   : m_db(_db), m_state(&m_db), m_accountStartNonce(_accountStartNonce)
@@ -70,11 +72,28 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, Wit
 
     try
     {
-        // std::unique_ptr<db::DatabaseFace> db(new db::DBImpl(path));
-        std::shared_ptr<db::DatabaseFace> db = std::make_shared<db::DBImpl>(path);
+        db::BasicLevelDB* basicDB = NULL;
+        leveldb::Status status;
+
+        LOG(DEBUG) << "[ENCDB] [enable/url/key]:  " << g_BCOSConfig.diskEncryption.enable << "/"
+                   << g_BCOSConfig.diskEncryption.keyCenterIP << ":"
+                   << g_BCOSConfig.diskEncryption.keyCenterPort << "/"
+                   << g_BCOSConfig.diskEncryption.cipherDataKey << "/" << std::endl;
+
+
+        if (g_BCOSConfig.diskEncryption.enable)
+            status = devdb::EncryptedLevelDB::Open(devdb::LevelDB::defaultDBOptions(),
+                path.string(), &basicDB, g_BCOSConfig.diskEncryption.cipherDataKey);
+        else
+            status = devdb::BasicLevelDB::Open(
+                devdb::LevelDB::defaultDBOptions(), path.string(), &basicDB);
+
+        devdb::LevelDB::checkStatus(status, path);
+
+        std::shared_ptr<db::DatabaseFace> dbFace = std::make_shared<devdb::LevelDB>(basicDB);
 
         LOG(TRACE) << "statedb Opened state DB.";
-        return OverlayDB(db);
+        return OverlayDB(dbFace);
     }
     catch (boost::exception const& ex)
     {

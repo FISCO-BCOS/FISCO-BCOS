@@ -17,15 +17,12 @@
 
 #include "LevelDB.h"
 #include "Assertions.h"
-#include <libsecurity/EncryptedLevelDB.h>
 
 namespace dev
 {
 namespace db
 {
-namespace
-{
-DatabaseStatus toDatabaseStatus(leveldb::Status const& _status)
+DatabaseStatus LevelDB::toDatabaseStatus(leveldb::Status const& _status)
 {
     if (_status.ok())
         return DatabaseStatus::Ok;
@@ -39,7 +36,7 @@ DatabaseStatus toDatabaseStatus(leveldb::Status const& _status)
         return DatabaseStatus::Unknown;
 }
 
-void checkStatus(leveldb::Status const& _status, boost::filesystem::path const& _path = {})
+void LevelDB::checkStatus(leveldb::Status const& _status, boost::filesystem::path const& _path)
 {
     if (_status.ok())
         return;
@@ -52,8 +49,6 @@ void checkStatus(leveldb::Status const& _status, boost::filesystem::path const& 
 
     BOOST_THROW_EXCEPTION(ex);
 }
-
-}  // namespace
 
 leveldb::ReadOptions LevelDB::defaultReadOptions()
 {
@@ -80,22 +75,18 @@ LevelDB::LevelDB(boost::filesystem::path const& _path, leveldb::ReadOptions _rea
     auto db = static_cast<BasicLevelDB*>(nullptr);
     leveldb::Status status;
 
-    LOG(DEBUG) << "[ENCDB] [enable/url/key]:  " << g_BCOSConfig.diskEncryption.enable << "/"
-               << g_BCOSConfig.diskEncryption.keyCenterIP << ":"
-               << g_BCOSConfig.diskEncryption.keyCenterPort << "/"
-               << g_BCOSConfig.diskEncryption.cipherDataKey << "/" << std::endl;
-
-
-    if (g_BCOSConfig.diskEncryption.enable)
-        status = EncryptedLevelDB::Open(
-            _dbOptions, _path.string(), &db, g_BCOSConfig.diskEncryption.cipherDataKey);
-    else
-        status = BasicLevelDB::Open(_dbOptions, _path.string(), &db);
+    // Create non encrypted db by default
+    status = BasicLevelDB::Open(_dbOptions, _path.string(), &db);
     checkStatus(status, _path);
 
     assert(db);
     m_db.reset(db);
 }
+
+LevelDB::LevelDB(
+    BasicLevelDB* _db, leveldb::ReadOptions _readOptions, leveldb::WriteOptions _writeOptions)
+  : m_db(_db), m_readOptions(std::move(_readOptions)), m_writeOptions(std::move(_writeOptions))
+{}
 
 std::string LevelDB::lookup(Slice _key) const
 {
