@@ -54,8 +54,8 @@ void P2PSession::stop(dev::network::DisconnectReason reason)
 
 void P2PSession::heartBeat()
 {
-    SESSION_LOG(TRACE) << "P2PSession onHeartBeat: " << m_nodeID << "@"
-                       << m_session->nodeIPEndpoint().name();
+    SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat") << LOG_KV("m_nodeID", m_nodeID)
+                       << LOG_KV("name", m_session->nodeIPEndpoint().name());
     auto service = m_service.lock();
     if (service && service->actived())
     {
@@ -81,7 +81,7 @@ void P2PSession::heartBeat()
         m_timer->async_wait([self](boost::system::error_code e) {
             if (e)
             {
-                SESSION_LOG(TRACE) << "Timer canceled: " << e;
+                SESSION_LOG(TRACE) << "Timer canceled: " << e.message();
                 return;
             }
 
@@ -111,8 +111,8 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 
                 if (m_topicSeq != topicSeq)
                 {
-                    SESSION_LOG(TRACE) << "Remote seq: " << topicSeq
-                                       << " not equal to local seq: " << m_topicSeq << ", update";
+                    SESSION_LOG(TRACE) << LOG_DESC("Remote seq not equal to local seq update")
+                                       << topicSeq << "!=" << m_topicSeq;
 
                     auto requestTopics = std::dynamic_pointer_cast<P2PMessage>(
                         service->p2pMessageFactory()->buildMessage());
@@ -134,9 +134,9 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                             {
                                 if (e.errorCode())
                                 {
-                                    SESSION_LOG(ERROR)
-                                        << "Error while requesting topic: " << e.errorCode() << " "
-                                        << e.what();
+                                    SESSION_LOG(ERROR) << LOG_DESC("Error while requesting topic")
+                                                       << LOG_KV("errorCode", e.errorCode())
+                                                       << LOG_KV("message", e.what());
                                     return;
                                 }
 
@@ -149,8 +149,9 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                 auto session = self.lock();
                                 if (session)
                                 {
-                                    SESSION_LOG(INFO) << "Received topic: [" << s << "] from "
-                                                      << session->nodeID().hex();
+                                    SESSION_LOG(INFO)
+                                        << LOG_DESC("Received topic") << LOG_KV("topic", s)
+                                        << LOG_KV("from", session->nodeID().hex());
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
@@ -215,7 +216,8 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
             }
             default:
             {
-                SESSION_LOG(ERROR) << "Unknown topic packet type: " << message->packetType();
+                SESSION_LOG(ERROR) << LOG_DESC("Unknown topic packet type")
+                                   << LOG_KV("type", message->packetType());
                 break;
             }
             }
