@@ -101,8 +101,8 @@ class DBErrorExitHandler
 
 inline void errorExit(std::stringstream& _exitInfo)
 {
-    LOG(ERROR) << _exitInfo;
-    std::cerr << _exitInfo;
+    LOG(ERROR) << _exitInfo.str();
+    std::cerr << _exitInfo.str();
     raise(SIGTERM);
 }
 
