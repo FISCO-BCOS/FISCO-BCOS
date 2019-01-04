@@ -34,7 +34,7 @@ using namespace dev::initializer;
 
 void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    INITIALIZER_LOG(DEBUG) << "[#P2PInitializer::initConfig]";
+    INITIALIZER_LOG(DEBUG) << "[P2PInitializer::initConfig]";
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
     try
@@ -44,9 +44,8 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         {
             if (it.first.find("node.") == 0)
             {
-                INITIALIZER_LOG(TRACE)
-                    << "[#P2PInitializer::initConfig] add staticNode: " << it.first << "/"
-                    << it.second.data();
+                INITIALIZER_LOG(TRACE) << "P2PInitializer::initConfig add staticNode" << it.first
+                                       << LOG_KV("data", it.second.data());
 
                 std::vector<std::string> s;
                 try
@@ -55,12 +54,10 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         s, it.second.data(), boost::is_any_of(":"), boost::token_compress_on);
                     if (s.size() != 2)
                     {
-                        INITIALIZER_LOG(ERROR)
-                            << "[#P2PInitializer::initConfig] parse address faield: [data]: "
-                            << it.second.data();
-                        ERROR_OUTPUT
-                            << "[#P2PInitializer::initConfig] parse address faield, [data]: "
-                            << it.second.data() << std::endl;
+                        INITIALIZER_LOG(ERROR) << "P2PInitializer::initConfig parse address faield"
+                                               << LOG_KV("data", it.second.data());
+                        ERROR_OUTPUT << "P2PInitializer::initConfig parse address faield"
+                                     << LOG_KV("data", it.second.data()) << std::endl;
                         exit(1);
                     }
                     NodeIPEndpoint endpoint;
@@ -71,12 +68,12 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 }
                 catch (std::exception& e)
                 {
-                    INITIALIZER_LOG(ERROR)
-                        << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]: "
-                        << it.second.data() << "/" << boost::diagnostic_information(e);
-                    ERROR_OUTPUT
-                        << "[#P2PInitializer::initConfig] parse address faield: [data/EINFO]:"
-                        << it.second.data() << "/" << boost::diagnostic_information(e) << std::endl;
+                    INITIALIZER_LOG(ERROR) << "P2PInitializer::initConfig parse address faield"
+                                           << LOG_KV("data", it.second.data())
+                                           << LOG_KV("what", boost::diagnostic_information(e));
+                    ERROR_OUTPUT << "P2PInitializer::initConfig parse address faield"
+                                 << LOG_KV("data", it.second.data())
+                                 << LOG_KV("what", boost::diagnostic_information(e)) << std::endl;
                     exit(1);
                 }
             }
@@ -94,15 +91,16 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     {
                         std::string nodeID = boost::to_upper_copy(it.second.data());
                         INITIALIZER_LOG(TRACE)
-                            << "[#P2PInitializer::initConfig] get certificate rejected by nodeID: "
-                            << nodeID;
+                            << "P2PInitializer::initConfig get certificate rejected by nodeID"
+                            << LOG_KV("nodeID", nodeID);
                         crl.push_back(nodeID);
                     }
                     catch (std::exception& e)
                     {
                         INITIALIZER_LOG(ERROR)
-                            << "[#P2PInitializer::initConfig] get crl faield: [data/EINFO]: "
-                            << e.what();
+                            << "P2PInitializer::initConfig get certificate rejected by nodeID"
+                            << LOG_KV("nodeID", nodeID)
+                            << LOG_KV("what", boost::diagnostic_information(e));
                     }
                 }
             }
