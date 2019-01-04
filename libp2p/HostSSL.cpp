@@ -126,7 +126,8 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 	auto protocolVersion = _rlp[0].toInt<unsigned>();
 	auto clientVersion = _rlp[1].toString();
 	auto caps = _rlp[2].toVector<CapDesc>();
-	auto listenPort = _rlp[3].toInt<unsigned short>();
+	//auto listenPort = _rlp[3].toInt<unsigned short>();
+	auto listenPort = _s->remoteEndpoint().port();
 	auto pub = _rlp[4].toHash<Public>();
 	LOG(INFO) << "HostSSL::startPeerSession! " << pub.abridged() ;
 	Public  _id=pub;
@@ -153,6 +154,14 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 	shared_ptr<Peer> p;
 	DEV_RECURSIVE_GUARDED(x_sessions)
 	{
+		auto it = m_node2ID.find(_nodeIPEndpoint);
+		if(it == m_node2ID.end()) {
+			m_node2ID.insert(std::make_pair(_nodeIPEndpoint, _id));
+		}
+		else {
+			it->second = _id;
+		}
+
 		if (m_peers.count(_nodeIPEndpoint.name()))
 			p = m_peers[_nodeIPEndpoint.name()];
 		else
@@ -451,6 +460,7 @@ void HostSSL::sslHandshakeClient(const boost::system::error_code& error, std::sh
 		Guard l(x_connecting);
 		m_connecting.push_back(handshake);
 	}
+
 	handshake->start();
 
 	erasePeedingPeerConn(_nodeIPEndpoint);
@@ -472,9 +482,14 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 										m_netPrefs.publicIPAddress))
 				|| m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end()
 				|| _nodeIPEndpoint.address == m_tcpPublic.address()
-				|| _nodeIPEndpoint.address == m_tcpClient.address())
+				)
 				&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
-			LOG(TRACE)<< "Ignore connect self" << _nodeIPEndpoint.name();
+			if(_nodeIPEndpoint.address == m_tcpClient.address()) {
+				LOG(TRACE)<< "Ignore connect incoming: " << _nodeIPEndpoint.name();
+			}
+			else {
+				LOG(TRACE)<< "Ignore connect self: " << _nodeIPEndpoint.name();
+			}
 
 			return;
 		}
@@ -507,6 +522,25 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 			if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
 				return;
 			m_pendingPeerConns.insert(_nodeIPEndpoint.name());
+		}
+
+		//if nodeIPEndpoint connected
+		{
+			DEV_RECURSIVE_GUARDED(x_sessions);
+			auto it = m_node2ID.find(_nodeIPEndpoint);
+
+			if(it != m_node2ID.end() && it->second != NodeID()) {
+				auto sIt = m_sessions.find(it->second);
+				if(sIt != m_sessions.end()) {
+					auto session = sIt->second.lock();
+					if(session) {
+						if(session->isConnected()) {
+							LOG(TRACE) << "NodeIPEndpoint: " << _nodeIPEndpoint.name() << " nodeID: " << it->second.hex() << " already connected, ignore";
+							return;
+						}
+					}
+				}
+			}
 		}
 
 		LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name();
@@ -707,6 +741,8 @@ void HostSSL::keepAlivePeers()
 		else {
 			LOG(WARNING) << "HostSSL::keepAlivePeers erase Session " << it->first;
 			it = m_sessions.erase(it);
+
+			m_node2ID.erase(p->info().nodeIPEndpoint);
 		}
 	}
 	
