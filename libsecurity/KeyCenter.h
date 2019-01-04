@@ -40,6 +40,10 @@ class Value;
 
 namespace dev
 {
+#define KC_LOG(_OBV)        \
+    LOG(_OBV) << "[g:null]" \
+              << "[p:null][KeyCenter]"
+
 class KeyCenterHttpClient
 {
 public:

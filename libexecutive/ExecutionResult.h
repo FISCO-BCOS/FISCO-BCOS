@@ -36,7 +36,7 @@ struct VMException;
 
 namespace executive
 {
-enum class TransactionException
+enum class TransactionException : int
 {
     None = 0,
     Unknown,

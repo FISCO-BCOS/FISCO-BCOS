@@ -88,6 +88,7 @@ public:
     h256 genesisHash;
     h256 latestHash;
     DownloadRequestQueue reqQueue;
+    bool isMiner = false;
 };
 
 class SyncMasterStatus
