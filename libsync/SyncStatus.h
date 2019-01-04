@@ -55,14 +55,16 @@ class SyncPeerStatus
 public:
     SyncPeerStatus(PROTOCOL_ID _protocolId, NodeID const& _nodeId, int64_t _number,
         h256 const& _genesisHash, h256 const& _latestHash)
-      : nodeId(_nodeId),
+      : m_protocolId(_protocolId),
+        nodeId(_nodeId),
         number(_number),
         genesisHash(_genesisHash),
         latestHash(_latestHash),
         reqQueue(_nodeId)
     {}
     SyncPeerStatus(const SyncPeerInfo& _info, PROTOCOL_ID _protocolId)
-      : nodeId(_info.nodeId),
+      : m_protocolId(_protocolId),
+        nodeId(_info.nodeId),
         number(_info.number),
         genesisHash(_info.genesisHash),
         latestHash(_info.latestHash),
@@ -77,6 +79,8 @@ public:
         latestHash = _info.latestHash;
     }
 
+private:
+    PROTOCOL_ID m_protocolId;
 
 public:
     NodeID nodeId;

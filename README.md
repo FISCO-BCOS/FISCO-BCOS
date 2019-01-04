@@ -1,3 +1,5 @@
+English / [中文](docs/README_CN.md)
+
 ![](docs/images/FISCO_BCOS_Logo.svg)
 
 **FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Two major camps of blockchain technology - public and consortium chains, to better serve the general public, open consortium chain is the perfect choice for enterprises to unlock the potential of collaborative businesses model. FISCO BCOS is born to support open consortium chain applications, by supporting multiple chains, and cross-chain communication.
@@ -30,13 +32,13 @@ Read XXX to deploy your smart contracts and use them.
 
 ## Building from source
 
-- Get source code
+Get source code
 
 ```bash
 git clone https://github.com/FISCO-BCOS/lab-bcos.git
 ```
 
-- Install dependencies
+Install dependencies
 
 ```bash
 # Ubuntu
@@ -45,7 +47,7 @@ sudo apt install cmake libssl-dev libleveldb-dev openssl
 sudo yum install cmake3 gcc-c++ openssl-devel leveldb-devel openssl
 ```
 
-- Build
+Build
 
 ```bash
 cd lab-bcos
