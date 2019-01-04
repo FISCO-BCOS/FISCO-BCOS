@@ -82,6 +82,7 @@ bytes ConsensusPrecompiled::call(
         {
             STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+            out = abi.abiIn("", getOutJson(-41, "invalid nodeID"));
         }
         else
         {
@@ -151,6 +152,7 @@ bytes ConsensusPrecompiled::call(
         {
             STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+            out = abi.abiIn("", getOutJson(-41, "invalid nodeID"));
         }
         else
         {
@@ -217,6 +219,7 @@ bytes ConsensusPrecompiled::call(
         {
             STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+            out = abi.abiIn("", getOutJson(-41, "invalid nodeID"));
         }
         else
         {
