@@ -55,7 +55,7 @@ void RaftSealer::handleBlock()
     resetSealingHeader(m_sealing.block.header());
     m_sealing.block.calTransactionRoot();
 
-    RAFTSEALER_LOG(INFO) << LOG_DESC("[#handleBlock]Generating seal")
+    RAFTSEALER_LOG(INFO) << LOG_DESC("[#handleBlock]++++ Generating seal")
                          << LOG_KV("blockNumber", m_sealing.block.header().number())
                          << LOG_KV("txNum", m_sealing.block.getTransactionSize())
                          << LOG_KV("hash", m_sealing.block.header().hash());
