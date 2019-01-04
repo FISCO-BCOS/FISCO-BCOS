@@ -574,7 +574,8 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << LOG_DESC("asyncMulticastMessageByTopic") << LOG_KV("what", e.what());
+        P2PMSG_LOG(WARNING) << LOG_DESC("asyncMulticastMessageByTopic")
+                            << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -593,7 +594,7 @@ void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr
     catch (std::exception& e)
     {
         P2PMSG_LOG(WARNING) << LOG_DESC("asyncMulticastMessageByNodeIDList")
-                            << LOG_KV("what", e.what());
+                            << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -616,7 +617,9 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Optio
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage") << LOG_KV("what", e.what());
+        P2PMSG_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage")
+                            << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
 }
 
@@ -673,7 +676,9 @@ P2PSessionInfos Service::sessionInfos()
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << LOG_DESC("sessionInfos") << LOG_KV("what", e.what());
+        P2PMSG_LOG(WARNING) << LOG_DESC("sessionInfos")
+                            << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
     return infos;
 }
@@ -705,7 +710,9 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << LOG_DESC("sessionInfosByProtocolID") << LOG_KV("what", e.what());
+        SERVICE_LOG(ERROR) << LOG_DESC("sessionInfosByProtocolID")
+                           << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
     return infos;
 }
@@ -730,7 +737,9 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << LOG_DESC("getPeersByTopic") << LOG_KV("what", e.what());
+        P2PMSG_LOG(WARNING) << LOG_DESC("getPeersByTopic")
+                            << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
     P2PMSG_LOG(DEBUG) << LOG_DESC("getPeersByTopic") << LOG_KV("topic", topic)
                       << LOG_KV("peersSize", nodeList.size());
