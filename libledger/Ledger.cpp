@@ -392,13 +392,11 @@ bool Ledger::consensusInitFactory()
         return true;
     }
 
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
     {
-        std::string error_msg =
-            "Unsupported Consensus type: " + m_param->mutableConsensusParam().consensusType;
-        Ledger_LOG(ERROR) << "[#initLedger] [#UnsupportConsensusType]:  "
-                          << m_param->mutableConsensusParam().consensusType
-                          << " use PBFT as default" << std::endl;
+        Ledger_LOG(ERROR) << LOG_DESC("UnsupportConsensusType use PBFT as default")
+                          << LOG_KV(
+                                 "ConsensusType", m_param->mutableConsensusParam().consensusType);
     }
 
     /// create PBFTSealer

@@ -110,7 +110,8 @@ public:
     dev::PROTOCOL_ID protocolID() const { return m_protocolID; }
     dev::GROUP_ID groupID() const { return m_groupID; }
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
-    void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber);
+    void getNonces(
+        std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override;
 
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);

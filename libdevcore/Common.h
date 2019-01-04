@@ -80,8 +80,6 @@ namespace dev
 {
 using namespace boost::multiprecision::literals;
 
-extern char const* Version;
-
 extern std::string const EmptyString;
 
 //------ Common Type Definitions--------------
