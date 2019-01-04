@@ -28,6 +28,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
+#include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libevm/ExtVMFace.h>
@@ -58,7 +59,13 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier(){};
+    BlockVerifier(dev::PROTOCOL_ID _protocolID) : m_protocolID(_protocolID)
+    {
+        if (m_protocolID == 0)
+            BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
+                                  << errinfo_comment("Protocol id must be larger than 0"));
+        m_groupID = dev::eth::getGroupAndProtocol(m_protocolID).first;
+    };
 
     virtual ~BlockVerifier(){};
 
@@ -72,7 +79,6 @@ public:
         dev::eth::OnOpFunc const& _onOp,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext);
 
-
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
     {
         m_executiveContextFactory = executiveContextFactory;
@@ -83,9 +89,14 @@ public:
         m_pNumberHash = _pNumberHash;
     }
 
+    dev::PROTOCOL_ID protocolID() const { return m_protocolID; }
+    dev::GROUP_ID groupID() const { return m_groupID; }
+
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
+    dev::PROTOCOL_ID m_protocolID;
+    dev::GROUP_ID m_groupID;
 };
 
 }  // namespace blockverifier

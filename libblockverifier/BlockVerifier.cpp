@@ -34,10 +34,12 @@ using namespace dev::executive;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
-    BLOCKVERIFIER_LOG(INFO) << "[#executeBlock] [txNum/num/parentHash/parentNum/parentStateRoot]:"
-                            << "[ " << block.transactions().size() << "/ "
-                            << block.blockHeader().number() << "/ " << parentBlockInfo.hash << "/ "
-                            << parentBlockInfo.number << "/ " << parentBlockInfo.stateRoot;
+    BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[#executeBlock]Executing block")
+                            << LOG_KV("txNum", block.transactions().size())
+                            << LOG_KV("num", block.blockHeader().number())
+                            << LOG_KV("parentHash", parentBlockInfo.hash)
+                            << LOG_KV("parentNum", arentBlockInfo.number)
+                            << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
 
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
@@ -47,8 +49,8 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     }
     catch (exception& e)
     {
-        BLOCKVERIFIER_LOG(ERROR) << "[#executeBlock] Error during initExecutiveContext [errorMsg]: "
-                                 << boost::diagnostic_information(e);
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[#executeBlock] Error during initExecutiveContext")
+                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
                               << errinfo_comment("Error during initExecutiveContext"));
@@ -94,8 +96,8 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     catch (exception& e)
     {
         BLOCKVERIFIER_LOG(ERROR)
-            << "[#executeTransaction] Error during execute initExecutiveContext [errorMsg]: "
-            << boost::diagnostic_information(e);
+            << LOG_DESC("[#executeTransaction] Error during execute initExecutiveContext")
+            << LOG_KV("errorMsg", boost::diagnostic_information(e));
     }
 
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);

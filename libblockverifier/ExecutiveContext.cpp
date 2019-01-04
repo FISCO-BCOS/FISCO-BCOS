@@ -36,9 +36,9 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
     try
     {
         EXECUTIVECONTEXT_LOG(TRACE)
-            << "[#call] PrecompiledEngine call [blockHash/number/address/param]: "
-            << "[" << m_blockInfo.hash << "/" << m_blockInfo.number << "/" << address << "/"
-            << toHex(param) << "]";
+            << LOG_DESC("[#call]PrecompiledEngine call") << LOG_KV("blockHash", m_blockInfo.hash)
+            << LOG_KV("number", m_blockInfo.number) << LOG_KV("address", address)
+            << LOG_KV("param", toHex(param));
 
         auto p = getPrecompiled(address);
 
@@ -49,14 +49,14 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
         }
         else
         {
-            EXECUTIVECONTEXT_LOG(DEBUG) << "[#call] Can't find address [address]: "
-                                        << "[" << address << "]";
+            EXECUTIVECONTEXT_LOG(DEBUG)
+                << LOG_DESC("[#call]Can't find address") << LOG_KV("address", address);
         }
     }
     catch (std::exception& e)
     {
-        EXECUTIVECONTEXT_LOG(ERROR) << "[#call] Precompiled call error [errorMsg]: "
-                                    << "[" << boost::diagnostic_information(e) << "]";
+        EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#call]Precompiled call error")
+                                    << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         throw dev::eth::PrecompiledError();
     }
@@ -76,7 +76,7 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
-    LOG(TRACE) << "PrecompiledEngine isPrecompiled:" << m_blockInfo.hash << " " << address;
+    EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("PrecompiledEngine isPrecompiled:" << m_blockInfo.hash << " " << address;
 
     auto p = getPrecompiled(address);
 
@@ -90,7 +90,8 @@ bool ExecutiveContext::isPrecompiled(Address address) const
 
 Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
 {
-    LOG(TRACE) << "PrecompiledEngine getPrecompiled:" << m_blockInfo.hash << " " << address;
+    LOG(TRACE) << LOG_DESC("[#getPrecompiled]")
+    LOG_KV("") << m_blockInfo.hash << " " << address;
 
     LOG(TRACE) << "address size:" << m_address2Precompiled.size();
     auto itPrecompiled = m_address2Precompiled.find(address);
