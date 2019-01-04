@@ -9,4 +9,4 @@ aux_source_directory(./raft SRC_LIST)
 include_directories(./raft)
 
 add_library(consensus ${SRC_LIST} ${HEADERS})
-target_link_libraries(consensus PUBLIC sync blockverifier p2p)
+target_link_libraries(consensus PUBLIC sync blockverifier p2p security)

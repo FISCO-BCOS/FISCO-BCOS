@@ -3,4 +3,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(mptstate ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(mptstate PRIVATE ethcore)
+target_link_libraries(mptstate PRIVATE ethcore security)
