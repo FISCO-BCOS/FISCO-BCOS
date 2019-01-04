@@ -27,16 +27,17 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
-#define PBFTENGINE_LOG(LEVEL)                                                         \
-    LOG(LEVEL) << "[#CONSENSUS][#PBFTENGINE] [PROTOCOL: " << std::dec << m_protocolId \
-               << "] [GROUP: " << std::to_string(m_groupId) << "]"
-#define PBFTSEALER_LOG(LEVEL)                                          \
-    LOG(LEVEL) << "[#CONSENSUS] [#PBFTSEALER] [PROTOCOL: " << std::dec \
-               << m_pbftEngine->protocolId()                           \
-               << "] [GROUP: " << std::to_string(m_pbftEngine->groupId()) << "]"
-#define PBFTReqCache_LOG(LEVEL)                                                          \
-    LOG(LEVEL) << "[#CONSENSUS] [#PBFTREQCACHE] [PROTOCOL: " << std::dec << m_protocolId \
-               << "] [GROUP:" << std::to_string(m_groupId) << "]"
+#define PBFTENGINE_LOG(LEVEL)                                                                  \
+    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][p:" << std::to_string(m_protocolId) \
+               << "][CONSENSUS][PBFT]"
+
+#define PBFTSEALER_LOG(LEVEL)                                      \
+    LOG(LEVEL) << "[g:" << std::to_string(m_pbftEngine->groupId()) \
+               << "][p:" << std::to_string(m_pbftEngine->protocolId()) << "][CONSENSUS][SEALER]"
+
+#define PBFTReqCache_LOG(LEVEL)                                                                 \
+    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "] [p:" << std::to_string(m_protocolId) \
+               << "][CONSENSUS]"
 namespace dev
 {
 namespace consensus

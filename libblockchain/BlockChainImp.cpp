@@ -163,8 +163,8 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
             }
         }
 
-        BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[#getBlock]Can't find the block")
-                                << LOG_KV("blockHash", _blockHash);
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                              << LOG_KV("blockHash", _blockHash);
         return nullptr;
     }
 }

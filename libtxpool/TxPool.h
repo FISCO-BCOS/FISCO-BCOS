@@ -34,9 +34,9 @@
 using namespace dev::eth;
 using namespace dev::p2p;
 
-#define TXPOOL_LOG(LEVEL)                                             \
-    LOG(LEVEL) << "[#TXPOOL] [PROTOCOL: " << std::dec << m_protocolId \
-               << "] [ GROUP:" << std::to_string(m_groupId) << "]"
+#define TXPOOL_LOG(LEVEL)                                                                      \
+    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][p:" << std::to_string(m_protocolId) \
+               << "][TXPOOL]"
 
 namespace dev
 {
@@ -166,7 +166,7 @@ private:
     {
         if (!m_commonNonceCheck->isNonceOk(tx, true))
         {
-            TXPOOL_LOG(WARNING) << "[#txPoolNonceCheck] check TxPool Nonce Failed" << std::endl;
+            TXPOOL_LOG(WARNING) << LOG_DESC("txPoolNonceCheck: check TxPool Nonce failed");
             return false;
         }
         return true;

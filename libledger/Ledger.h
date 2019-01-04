@@ -34,7 +34,7 @@
 #include <libp2p/Service.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
-#define Ledger_LOG(LEVEL) LOG(LEVEL) << "[#LEDGER] [GROUPID:" << std::to_string(m_groupId) << "]"
+#define Ledger_LOG(LEVEL) LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][LEDGER]"
 
 namespace dev
 {
@@ -76,8 +76,8 @@ public:
         if (m_configFileName == "")
             m_configFileName = "./group." + std::to_string(_groupId) + m_postfixGenesis;
 
-        Ledger_LOG(INFO) << "[#LedgerConstructor] [configPath/baseDir]:  " << m_configFileName
-                         << "/" << m_param->baseDir() << std::endl;
+        Ledger_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", m_configFileName)
+                         << LOG_KV("baseDir", m_param->baseDir());
         /// The file group.X.genesis is required, otherwise the program terminates.
         /// load genesis config of group
         initConfig(m_configFileName);
@@ -94,7 +94,7 @@ public:
     void startAll() override
     {
         assert(m_sync && m_sealer);
-        Ledger_LOG(INFO) << "[#startAll...]" << std::endl;
+        Ledger_LOG(INFO) << LOG_DESC("startAll...");
         m_sync->start();
         m_sealer->start();
     }
@@ -103,7 +103,7 @@ public:
     void stopAll() override
     {
         assert(m_sync && m_sealer);
-        Ledger_LOG(INFO) << "[#stopAll...]" << std::endl;
+        Ledger_LOG(INFO) << LOG_DESC("stopAll...") << std::endl;
         m_sealer->stop();
         m_sync->stop();
     }

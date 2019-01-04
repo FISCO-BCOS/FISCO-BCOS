@@ -98,8 +98,8 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
     }
     catch (std::exception& e)
     {
-        TXPOOL_LOG(ERROR) << "[#import] import transaction failed, [EINFO]:  "
-                          << boost::diagnostic_information(e) << std::endl;
+        TXPOOL_LOG(ERROR) << LOG_DESC("import transaction failed")
+                          << LOG_KV("EINFO", boost::diagnostic_information(e));
         return ImportResult::Malformed;
     }
     return import(tx, _ik);
@@ -150,13 +150,15 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
     h256 tx_hash = trans.sha3();
     if (m_known.count(tx_hash))
     {
-        TXPOOL_LOG(DEBUG) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(TRACE) << LOG_DESC("Verify: already known tx")
+                          << LOG_KV("hash", tx_hash.abridged());
         return ImportResult::AlreadyKnown;
     }
     /// the transaction has been dropped before
     if (m_dropped.count(tx_hash) && _drop_policy == IfDropped::Ignore)
     {
-        TXPOOL_LOG(DEBUG) << "[#Verify] already dropped tx: " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(TRACE) << LOG_DESC("Verify: already dropped tx: ")
+                          << LOG_KV("hash", tx_hash.abridged());
         return ImportResult::AlreadyInChain;
     }
     /// check nonce
@@ -217,7 +219,8 @@ bool TxPool::insert(Transaction const& _tx)
     h256 tx_hash = _tx.sha3();
     if (m_txsHash.count(tx_hash))
     {
-        TXPOOL_LOG(DEBUG) << "[#Insert] Already known tx:  " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(TRACE) << LOG_DESC("Insert: already known tx: ")
+                          << LOG_KV("hash", tx_hash.abridged());
         return false;
     }
     m_known.insert(tx_hash);

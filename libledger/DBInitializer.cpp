@@ -44,12 +44,12 @@ namespace ledger
 {
 void DBInitializer::initStorageDB()
 {
-    DBInitializer_LOG(DEBUG) << "[#initStorageDB]" << std::endl;
+    DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
     /// TODO: implement AMOP storage
     if (dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB") != 0)
     {
-        DBInitializer_LOG(ERROR) << "Unsupported dbType, current version only supports levelDB"
-                                 << std::endl;
+        DBInitializer_LOG(ERROR) << LOG_DESC(
+            "Unsupported dbType, current version only supports levelDB");
     }
     initLevelDBStorage();
 }
@@ -57,7 +57,7 @@ void DBInitializer::initStorageDB()
 /// init the storage with leveldb
 void DBInitializer::initLevelDBStorage()
 {
-    DBInitializer_LOG(INFO) << "[#initStorageDB] [#initLevelDBStorage] ..." << std::endl;
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage");
     /// open and init the levelDB
     leveldb::Options ldb_option;
     dev::db::BasicLevelDB* pleveldb = nullptr;
@@ -73,8 +73,8 @@ void DBInitializer::initLevelDBStorage()
         {
             // Use disk encryption
             DBInitializer_LOG(DEBUG)
-                << "[#initStorageDB] [#initLevelDBStorage]: open encrypted leveldb handler"
-                << std::endl;
+                << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage")
+                << LOG_DESC("open encrypted leveldb handler");
             status = EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path,
                 &(pleveldb), g_BCOSConfig.diskEncryption.cipherDataKey);
         }
@@ -82,7 +82,8 @@ void DBInitializer::initLevelDBStorage()
         {
             // Not to use disk encryption
             DBInitializer_LOG(DEBUG)
-                << "[#initStorageDB] [#initLevelDBStorage]: open leveldb handler" << std::endl;
+                << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage")
+                << LOG_DESC("open leveldb handler");
             status =
                 BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
         }
@@ -90,11 +91,12 @@ void DBInitializer::initLevelDBStorage()
 
         if (!status.ok())
         {
-            DBInitializer_LOG(ERROR) << "[#initStorageDB] [openLevelDBStorage failed]" << std::endl;
+            DBInitializer_LOG(ERROR)
+                << LOG_BADGE("initStorageDB") << LOG_DESC("openLevelDBStorage failed");
             throw std::runtime_error("open LevelDB failed");
         }
-        DBInitializer_LOG(DEBUG) << "[#initStorageDB] [#initLevelDBStorage] [status]: "
-                                 << status.ok() << std::endl;
+        DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage")
+                                 << LOG_KV("status", status.ok());
         std::shared_ptr<LevelDBStorage> leveldb_storage = std::make_shared<LevelDBStorage>();
         assert(leveldb_storage);
         std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
@@ -104,8 +106,9 @@ void DBInitializer::initLevelDBStorage()
     }
     catch (std::exception& e)
     {
-        DBInitializer_LOG(ERROR) << "[#initLevelDBStorage] initLevelDBStorage failed, [EINFO]: "
-                                 << boost::diagnostic_information(e);
+        DBInitializer_LOG(ERROR) << LOG_BADGE("initLevelDBStorage")
+                                 << LOG_DESC("initLevelDBStorage failed")
+                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
     }
 }
@@ -113,7 +116,7 @@ void DBInitializer::initLevelDBStorage()
 /// TODO: init AMOP Storage
 void DBInitializer::initAMOPStorage()
 {
-    DBInitializer_LOG(INFO) << "[#initAMOPStorage/Unimplemented] ..." << std::endl;
+    DBInitializer_LOG(INFO) << LOG_DESC("[#initAMOPStorage/Unimplemented] ...");
 }
 
 /// create ExecutiveContextFactory
@@ -121,23 +124,24 @@ void DBInitializer::createExecutiveContext()
 {
     if (!m_storage || !m_stateFactory)
     {
-        DBInitializer_LOG(ERROR)
-            << "[#createExecutiveContext Failed for storage has not been initialized]" << std::endl;
+        DBInitializer_LOG(ERROR) << LOG_DESC(
+            "createExecutiveContext Failed for storage has not been initialized");
         return;
     }
-    DBInitializer_LOG(DEBUG) << "[#createExecutiveContext]" << std::endl;
+    DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext...");
     m_executiveContextFac = std::make_shared<ExecutiveContextFactory>();
     /// storage
     m_executiveContextFac->setStateStorage(m_storage);
     // mpt or storage
     m_executiveContextFac->setStateFactory(m_stateFactory);
-    DBInitializer_LOG(DEBUG) << "[#createExecutiveContext SUCC]" << std::endl;
+    DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext SUCC");
 }
 
 /// create stateFactory
 void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
 {
-    DBInitializer_LOG(DEBUG) << "[#createStateFactory] type:" << m_param->mutableStateParam().type;
+    DBInitializer_LOG(DEBUG) << LOG_BADGE("createStateFactory")
+                             << LOG_KV("type", m_param->mutableStateParam().type);
     if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == 0)
         createMptState(genesisHash);
     else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") ==
@@ -146,29 +150,28 @@ void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
     else
     {
         DBInitializer_LOG(WARNING)
-            << "[#createStateFactory] only support storage and mpt now, create storage by default"
-            << std::endl;
+            << LOG_BADGE("createStateFactory")
+            << LOG_DESC("only support storage and mpt now, create storage by default");
         createStorageState();
     }
-    DBInitializer_LOG(DEBUG) << "[#createStateFactory SUCC]" << std::endl;
+    DBInitializer_LOG(DEBUG) << LOG_BADGE("createStateFactory SUCC");
 }
 
 /// TOCHECK: create the stateStorage with AMDB
 void DBInitializer::createStorageState()
 {
-    DBInitializer_LOG(DEBUG) << "[#createStateFactory] [#createStorageState]" << std::endl;
     m_stateFactory = std::make_shared<StorageStateFactory>(u256(0x0));
-    DBInitializer_LOG(DEBUG) << "[#createStateFactory] [#createStorageState SUCC]" << std::endl;
+    DBInitializer_LOG(DEBUG) << LOG_BADGE("createStateFactory")
+                             << LOG_DESC("createStorageState SUCC");
 }
 
 /// create the mptState
 void DBInitializer::createMptState(dev::h256 const& genesisHash)
 {
-    DBInitializer_LOG(DEBUG) << "[#createStateFactory] [#createMptState]" << std::endl;
-
+    DBInitializer_LOG(DEBUG) << LOG_BADGE("createStateFactory") << LOG_BADGE("createMptState");
     m_stateFactory = std::make_shared<MPTStateFactory>(
         u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
-    DBInitializer_LOG(DEBUG) << "[#createStateFactory] [#createMptState SUCC]" << std::endl;
+    DBInitializer_LOG(DEBUG) << LOG_BADGE("createStateFactory") << LOG_DESC("createMptState SUCC");
 }
 
 }  // namespace ledger

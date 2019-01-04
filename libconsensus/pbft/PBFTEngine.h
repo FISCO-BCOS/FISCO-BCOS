@@ -63,7 +63,7 @@ public:
         m_keyPair(_key_pair),
         m_baseDir(_baseDir)
     {
-        PBFTENGINE_LOG(INFO) << "[Register handler for PBFTEngine, protocol id]:  " << m_protocolId;
+        PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
@@ -272,8 +272,8 @@ protected:
         peerIndex = getIndexByMiner(session->nodeID());
         if (peerIndex < 0)
         {
-            PBFTENGINE_LOG(TRACE) << "[#isValidReq] Recv PBFT msg from unkown peer:  "
-                                  << session->nodeID();
+            PBFTENGINE_LOG(TRACE) << LOG_DESC(
+                "isValidReq: Recv PBFT msg from unkown peer:" + session->nodeID().abridged());
             return false;
         }
         /// check whether this node is in the miner list
@@ -307,17 +307,19 @@ protected:
     {
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
-            PBFTENGINE_LOG(TRACE)
-                << "[#checkReq] sign or commit Not exist in prepare cache: [prepHash/hash]:"
-                << m_reqCache->prepareCache().block_hash.abridged() << "/" << req.block_hash
-                << "  [INFO]:  " << oss.str();
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
+                                  << LOG_KV("prepHash",
+                                         m_reqCache->prepareCache().block_hash.abridged())
+                                  << LOG_KV("hash", req.block_hash.abridged())
+                                  << LOG_KV("INFO", oss.str());
             /// is future ?
             bool is_future = isFutureBlock(req);
             if (is_future && checkSign(req))
             {
-                PBFTENGINE_LOG(INFO) << "[#checkReq] Recv future request: [prepHash]:"
-                                     << m_reqCache->prepareCache().block_hash.abridged()
-                                     << "  [INFO]:  " << oss.str();
+                PBFTENGINE_LOG(INFO)
+                    << LOG_DESC("checkReq: Recv future request:")
+                    << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())
+                    << LOG_KV("INFO", oss.str());
                 return CheckResult::FUTURE;
             }
             return CheckResult::INVALID;
@@ -325,21 +327,22 @@ protected:
         /// check the sealer of this request
         if (req.idx == nodeIdx())
         {
-            PBFTENGINE_LOG(TRACE) << "[#checkReq] Recv own req  [INFO]:  " << oss.str();
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv own req")
+                                  << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
         /// check view
         if (m_reqCache->prepareCache().view != req.view)
         {
-            PBFTENGINE_LOG(TRACE)
-                << "[#checkReq] Recv req with unconsistent view: [prepView/view]:  "
-                << m_reqCache->prepareCache().view << "/" << req.view << "  [INFO]: " << oss.str();
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv req with unconsistent view")
+                                  << LOG_KV("prepView", m_reqCache->prepareCache().view)
+                                  << LOG_KV("view", req.view) << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
         {
-            PBFTENGINE_LOG(TRACE) << "[#checkReq] invalid sign: [hash]:"
-                                  << req.block_hash.abridged() << "  [INFO]: " << oss.str();
+            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq:  invalid sign")
+                                  << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
         return CheckResult::VALID;
@@ -369,9 +372,9 @@ protected:
         if (req.height > m_consensusBlockNumber ||
             (req.height == m_consensusBlockNumber && req.view > m_view))
         {
-            PBFTENGINE_LOG(DEBUG) << "[#FutureBlock] [height/consNum/reqView/Cview]:  "
-                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
-                                  << "/" << m_view << std::endl;
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("FutureBlock") << LOG_KV("height", req.height)
+                                  << LOG_KV("consNum", m_consensusBlockNumber)
+                                  << LOG_KV("reqView", req.view) << LOG_KV("view", m_view);
             return true;
         }
         return false;
@@ -382,12 +385,12 @@ protected:
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
         {
-            PBFTENGINE_LOG(DEBUG) << "[#isHashSavedAfterCommit] hasn't been cached after commit:  "
-                                     "[height/cacheHeight/hash/cachHash]:  "
-                                  << req.height << "/" << m_reqCache->committedPrepareCache().height
-                                  << "/" << req.block_hash.abridged() << "/"
-                                  << m_reqCache->committedPrepareCache().block_hash.abridged()
-                                  << std::endl;
+            PBFTENGINE_LOG(DEBUG)
+                << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
+                << LOG_KV("height", req.height)
+                << LOG_KV("cacheHeight", m_reqCache->committedPrepareCache().height)
+                << LOG_KV("hash", req.block_hash.abridged())
+                << LOG_KV("cacheHash", m_reqCache->committedPrepareCache().block_hash.abridged());
             return false;
         }
         return true;
@@ -400,12 +403,14 @@ protected:
         if (!leader.first || req.idx != leader.second)
         {
             if (!m_emptyBlockViewChange)
+            {
                 PBFTENGINE_LOG(WARNING)
-                    << "[#InvalidPrepare] Get leader failed: "
-                       "[cfgErr/idx/req.idx/leader/m_leaderFailed/view/highSealer/highNumber]:  "
-                    << m_cfgErr << "/" << nodeIdx() << "/" << req.idx << "/" << leader.second << "/"
-                    << m_leaderFailed << "/" << m_highestBlock.sealer() << "/"
-                    << m_highestBlock.number();
+                    << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
+                    << LOG_KV("idx", req.idx) << LOG_KV("leader", leader.second)
+                    << LOG_KV("leaderFailed", m_leaderFailed) << LOG_KV("view", m_view)
+                    << LOG_KV("highSealer", m_highestBlock.sealer())
+                    << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("myIdx", nodeIdx());
+            }
             return false;
         }
 

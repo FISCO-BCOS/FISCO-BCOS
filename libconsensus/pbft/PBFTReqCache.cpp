@@ -33,7 +33,7 @@ namespace consensus
  */
 void PBFTReqCache::delCache(h256 const& hash)
 {
-    PBFTReqCache_LOG(DEBUG) << "[delCache] [hash]: " << hash.abridged();
+    PBFTReqCache_LOG(DEBUG) << LOG_DESC("delCache") << LOG_KV("hash", hash.abridged());
     /// delete from sign cache
     auto psign = m_signCache.find(hash);
     if (psign != m_signCache.end())
