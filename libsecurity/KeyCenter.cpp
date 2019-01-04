@@ -242,7 +242,14 @@ KeyCenter& KeyCenter::instance()
 
 dev::bytes KeyCenter::uniformDataKey(const dev::bytes& _readableDataKey)
 {
+#ifdef FISCO_GM
+    // Uniform datakey to a fix size 128(guimi) bytes by hashing it
+    // Because we has no limit to _readableDataKey size
+    bytes oneTurn = sha3(ref(_readableDataKey)).asBytes();
+    return oneTurn + oneTurn + oneTurn + oneTurn;
+#else
     // Uniform datakey to a fix size 32 bytes by hashing it
     // Because we has no limit to _readableDataKey size
     return sha3(ref(_readableDataKey)).asBytes();
+#endif
 }
