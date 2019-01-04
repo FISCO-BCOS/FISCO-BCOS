@@ -164,7 +164,7 @@ private:
     void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction const& tx)
     {
-        if (!m_commonNonceCheck->isNonceOk(tx, true))
+        if (!m_commonNonceCheck->isNonceOk(tx))
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("txPoolNonceCheck: check TxPool Nonce failed");
             return false;
