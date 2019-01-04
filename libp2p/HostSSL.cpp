@@ -533,11 +533,9 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 				auto sIt = m_sessions.find(it->second);
 				if(sIt != m_sessions.end()) {
 					auto session = sIt->second.lock();
-					if(session) {
-						if(session->isConnected()) {
-							LOG(TRACE) << "NodeIPEndpoint: " << _nodeIPEndpoint.name() << " nodeID: " << it->second.hex() << " already connected, ignore";
-							return;
-						}
+					if(session && session->isConnected()) {
+						LOG(TRACE) << "NodeIPEndpoint: " << _nodeIPEndpoint.name() << " nodeID: " << it->second.hex() << " already connected, ignore";
+						return;
 					}
 				}
 			}
