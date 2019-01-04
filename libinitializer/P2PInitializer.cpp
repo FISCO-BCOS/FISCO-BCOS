@@ -99,7 +99,6 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     {
                         INITIALIZER_LOG(ERROR)
                             << "P2PInitializer::initConfig get certificate rejected by nodeID"
-                            << LOG_KV("nodeID", nodeID)
                             << LOG_KV("what", boost::diagnostic_information(e));
                     }
                 }
