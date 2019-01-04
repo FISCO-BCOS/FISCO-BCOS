@@ -62,7 +62,6 @@ bool Ledger::initLedger()
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
-    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId);
     m_dbInitializer->initStateDB(genesisHash);
     if (!m_dbInitializer->stateFactory())
     {
