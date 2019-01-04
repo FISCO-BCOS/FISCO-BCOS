@@ -78,15 +78,16 @@ void EncryptedLevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice
     try
     {
         enData = encryptValue(m_dataKey, _value);
-        // ENCDBLOG(TRACE) << "[ENC] Write batch insert [k/encv/v]: " << ascii2hex(_key.data(),
-        // _key.size()) << "/"
-        //                << ascii2hex(enData) << "/" << ascii2hex(_value.data(), _value.size()) <<
-        //                endl;
+        // ENCDB_LOG(TRACE)<< LOG_BADGE("ENC")<< LOG_DESC("Write batch insert")<<
+        // LOG_KV("k",ascii2hex(_key.data(), _key.size()))<< LOG_KV("encv",ascii2hex(enData))<<
+        // LOG_KV("v", ascii2hex(_value.data(), _value.size()));
     }
     catch (Exception& e)
     {
-        ENCDBLOG(ERROR) << "[insertSlice] Encrypt ERROR! [k/v]: " << _key.ToString() << "/ "
-                        << _value.ToString() << endl;
+        ENCDB_LOG(ERROR) << LOG_BADGE("insertSlice") << LOG_DESC("Encrypt ERROR!")
+                         << LOG_KV(_key.ToString(), _value.ToString());
+
+
         BOOST_THROW_EXCEPTION(EncryptedLevelDBEncryptFailed()
                               << errinfo_comment("EncryptedLevelDB batch encrypt error"));
     }
@@ -97,6 +98,8 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     const std::string& _cipherDataKey, std::shared_ptr<dev::KeyCenter> _keyCenter)
   : BasicLevelDB(), m_cipherDataKey(_cipherDataKey), m_keyCenter(_keyCenter)
 {
+    m_name = _name;
+
     if (!m_keyCenter)
         m_keyCenter.reset(&(g_keyCenter));
 
@@ -119,34 +122,64 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     switch (type)
     {
     case OpenDBStatus::FirstCreation:
+    {
         if (m_cipherDataKey.empty())
-            ENCDBLOG(FATAL) << "[Open] Database key ERROR! Please set cipherDataKey when enable "
-                               "disk encryption!"
-                            << endl;
+        {
+            std::stringstream exitInfo;
+            exitInfo
+                << LOG_BADGE("Open")
+                << LOG_DESC(
+                       " Database key ERROR! Please set cipherDataKey when enable disk encryption!")
+                << LOG_KV("name", _name) << endl;
+            errorExit(exitInfo);
+        }
         setCipherDataKey(m_cipherDataKey);
-        ENCDBLOG(DEBUG)
-            << "[open] First creation encrypted DB [name/db/keyCenterUrl/cipherDataKey]: " << _name
-            << "/" << m_db << "/" << m_keyCenter->url() << "/" << m_cipherDataKey << endl;
+        ENCDB_LOG(DEBUG) << LOG_BADGE("open") << LOG_DESC("First creation encrypted DB")
+                         << LOG_KV("name", _name) << LOG_KV("db", m_db)
+                         << LOG_KV("keyCenterUrl", m_keyCenter->url())
+                         << LOG_KV("cipherDataKey", m_cipherDataKey);
         break;
+    }
     case OpenDBStatus::Encrypted:
-        ENCDBLOG(DEBUG)
-            << "[open] Encrypted leveldb open success [name/db/keyCenterUrl/cipherDataKey]: "
-            << _name << "/" << m_db << "/" << m_keyCenter->url() << "/" << m_cipherDataKey << endl;
+    {
+        ENCDB_LOG(DEBUG) << LOG_BADGE("open") << LOG_DESC(" Encrypted leveldb open success")
+                         << LOG_KV("name", _name) << LOG_KV("db", m_db)
+                         << LOG_KV("keyCenterUrl", m_keyCenter->url())
+                         << LOG_KV("cipherDataKey", m_cipherDataKey);
         break;
+    }
 
     case OpenDBStatus::NoEncrypted:
-        ENCDBLOG(FATAL) << "[Open] Database type ERROR! This DB is not EncryptedLevelDB" << endl;
+    {
+        std::stringstream exitInfo;
+        exitInfo << LOG_BADGE("Open")
+                 << LOG_DESC("Database type ERROR! This DB is not EncryptedLevelDB")
+                 << LOG_KV("db", _name) << endl;
+        errorExit(exitInfo);
         break;
+    }
 
     case OpenDBStatus::CipherKeyError:
-        ENCDBLOG(FATAL)
-            << "[Open] Configure CipherDataKey ERROR! Configure CipherDataKey is not the "
-               "key of the database [database/configure]: "
-            << getKeyOfDatabase() << "/" << _cipherDataKey << endl;  // log and exit
+    {
+        std::stringstream exitInfo;
+        exitInfo
+            << LOG_BADGE("Open")
+            << LOG_DESC(
+                   "Configure CipherDataKey ERROR! Configure CipherDataKey is not the key of the "
+                   "database")
+            << LOG_KV("name", _name) << LOG_KV("database", getKeyOfDatabase())
+            << LOG_KV("configure", _cipherDataKey) << endl;
+        errorExit(exitInfo);
         break;
+    }
 
     default:
-        ENCDBLOG(FATAL) << "[Open] Unknown Open encrypted DB TYPE" << endl;
+    {
+        std::stringstream exitInfo;
+        exitInfo << LOG_BADGE("Open") << LOG_DESC("Unknown Open encrypted DB TYPE")
+                 << LOG_KV("name", _name) << endl;
+        errorExit(exitInfo);
+    }
     }
 
     // Decrypt cipher key from keycenter
@@ -188,15 +221,15 @@ leveldb::Status EncryptedLevelDB::Get(
         try
         {
             *_value = decryptValue(m_dataKey, encValue);
-            // ENCDBLOG(TRACE) << "[DEC] Get [k/encv/v]: " << ascii2hex(_key.data(), _key.size()) <<
-            // "/"
-            // << ascii2hex(encValue)
-            //                << "/" << *_value << endl;
+
+            // ENCDB_LOG(TRACE)<< LOG_BADGE("DEC")<< LOG_DESC("Get")<< LOG_KV("k",
+            // ascii2hex(_key.data(), _key.size()))<< LOG_KV("encv",ascii2hex(encValue))<<
+            // LOG_KV("v", *_value);
         }
         catch (Exception& e)
         {
-            ENCDBLOG(ERROR) << "[Get] Decrypt ERROR! [k/encv]: " << _key.ToString() << "/ "
-                            << encValue << endl;
+            ENCDB_LOG(ERROR) << LOG_BADGE("Get") << LOG_DESC("Decrypt ERROR!")
+                             << LOG_KV(_key.ToString(), encValue);
             BOOST_THROW_EXCEPTION(EncryptedLevelDBDecryptFailed()
                                   << errinfo_comment("EncryptedLevelDB decrypt error"));
         }
@@ -213,14 +246,14 @@ leveldb::Status EncryptedLevelDB::Put(
     try
     {
         enData = encryptValue(m_dataKey, _value);
-        // ENCDBLOG(TRACE) << "[ENC] Put [k/encv/v]: " << ascii2hex(_key.data(), _key.size()) << "/"
-        // << ascii2hex(enData)
-        //                << "/" << ascii2hex(_value.data(), _value.size()) << endl;
+        // ENCDB_LOG(TRACE)<< LOG_BADGE("ENC")<< LOG_DESC("Put")<<
+        // LOG_KV("k",ascii2hex(_key.data(), _key.size()))<< LOG_KV("encv",ascii2hex(enData))<<
+        // LOG_KV("v", ascii2hex(_value.data(), _value.size()));
     }
     catch (Exception& e)
     {
-        ENCDBLOG(ERROR) << "[Put] Encrypt ERROR! [k/v]: " << _key.ToString() << "/ "
-                        << _value.ToString() << endl;
+        ENCDB_LOG(ERROR) << LOG_BADGE("Put") << LOG_DESC(" Encrypt ERROR!")
+                         << LOG_KV(_key.ToString(), _value.ToString());
         BOOST_THROW_EXCEPTION(
             EncryptedLevelDBEncryptFailed() << errinfo_comment("EncryptedLevelDB encrypt error"));
     }
@@ -229,14 +262,14 @@ leveldb::Status EncryptedLevelDB::Put(
 
 std::unique_ptr<LevelDBWriteBatch> EncryptedLevelDB::createWriteBatch() const
 {
-    return std::unique_ptr<LevelDBWriteBatch>(new EncryptedLevelDBWriteBatch(m_dataKey));
+    return std::unique_ptr<LevelDBWriteBatch>(new EncryptedLevelDBWriteBatch(m_dataKey, m_name));
 }
 
 string EncryptedLevelDB::getKeyOfDatabase()
 {
     if (!m_db)
     {
-        ENCDBLOG(ERROR) << "[key] getKeyOfDatabase() db not opened" << endl;
+        ENCDB_LOG(ERROR) << LOG_BADGE("key") << LOG_DESC(" getKeyOfDatabase() db not opened");
         return string("");
     }
 
@@ -252,24 +285,36 @@ void EncryptedLevelDB::setCipherDataKey(string _cipherDataKey)
 {
     if (!m_db)
     {
-        ENCDBLOG(ERROR) << "[key] getKeyOfDatabase() db not opened" << endl;
+        ENCDB_LOG(ERROR) << LOG_BADGE("key") << LOG_DESC("getKeyOfDatabase() db not opened");
         return;
     }
     string oldKey = getKeyOfDatabase();
     if (!oldKey.empty() && oldKey != _cipherDataKey)
-        ENCDBLOG(FATAL)
-            << "[key] Configure CipherDataKey ERROR! Configure CipherDataKey is not the "
-               "key of the database [database/configure]: "
-            << oldKey << "/" << _cipherDataKey << endl;  // log and exit
+    {
+        std::stringstream exitInfo;
+        exitInfo
+            << LOG_BADGE("key")
+            << LOG_DESC(
+                   "Configure CipherDataKey ERROR! Configure CipherDataKey is not the key of the "
+                   "database")
+            << LOG_KV("name", m_name) << LOG_KV("oldKey", oldKey)
+            << LOG_KV("keyToSet", _cipherDataKey) << endl;
+        errorExit(exitInfo);
+    }
 
     auto status = m_db->Put(leveldb::WriteOptions(), leveldb::Slice(c_cipherDataKeyName),
         leveldb::Slice(_cipherDataKey));
 
     if (!status.ok())
-        ENCDBLOG(FATAL) << "[Key] Configure CipherDataKey ERROR! Write key failed."
-                        << endl;  // log and exit
+    {
+        std::stringstream exitInfo;
+        exitInfo << LOG_BADGE("key") << LOG_DESC("Configure CipherDataKey ERROR! Write key failed.")
+                 << LOG_KV("name", m_name) << endl;
+        errorExit(exitInfo);
+    }
     else
-        ENCDBLOG(DEBUG) << "[key] Configure CipherDataKey: " << _cipherDataKey << endl;
+        ENCDB_LOG(DEBUG) << LOG_BADGE("key") << LOG_DESC("Configure CipherDataKey")
+                         << LOG_KV("key", _cipherDataKey);
 }
 
 EncryptedLevelDB::OpenDBStatus EncryptedLevelDB::checkOpenDBStatus()
