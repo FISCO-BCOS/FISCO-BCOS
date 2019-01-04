@@ -147,7 +147,7 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 
 	NodeIPEndpoint _nodeIPEndpoint;
 	_nodeIPEndpoint.address = _s->remoteEndpoint().address();
-	_nodeIPEndpoint.tcpPort=_s->remoteEndpoint().port();
+	_nodeIPEndpoint.tcpPort=listenPort;
 	_nodeIPEndpoint.udpPort=listenPort;
 	_nodeIPEndpoint.host=_s->nodeIPEndpoint().host;
 
@@ -484,12 +484,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 				|| _nodeIPEndpoint.address == m_tcpPublic.address()
 				)
 				&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
-			if(_nodeIPEndpoint.address == m_tcpClient.address()) {
-				LOG(TRACE)<< "Ignore connect incoming: " << _nodeIPEndpoint.name();
-			}
-			else {
 				LOG(TRACE)<< "Ignore connect self: " << _nodeIPEndpoint.name();
-			}
 
 			return;
 		}
