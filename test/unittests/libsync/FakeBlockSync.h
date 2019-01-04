@@ -49,7 +49,6 @@ public:
 private:
     SyncStatus m_syncStatus;
     bool m_isSyncing;
-    bool m_forceSync;
     Block m_latestSentBlock;
     PROTOCOL_ID m_protocolId;
     std::string m_syncInfo;

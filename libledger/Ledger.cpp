@@ -388,7 +388,7 @@ bool Ledger::consensusInitFactory()
         return true;
     }
 
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
                           << LOG_KV("UnsupportConsensusType",
