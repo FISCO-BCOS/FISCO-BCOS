@@ -45,13 +45,10 @@ public:
     void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override
-    {
-        return m_sessionInfos;
-    }
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) override { return m_sessionInfos; }
 
-    void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, dev::p2p::Options options = dev::p2p::Options()) override
+    void asyncSendMessageByNodeID(
+        NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession, dev::p2p::Options) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
@@ -132,7 +129,7 @@ public:
         }
     }
 
-    int64_t number() { return m_blockNumber - 1; }
+    int64_t number() override { return m_blockNumber - 1; }
     void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
     {
         auto pBlock = getBlockByNumber(_blockNumber);
@@ -141,7 +138,7 @@ public:
             _nonceVector.push_back(boost::lexical_cast<dev::eth::NonceKeyType>(trans.nonce()));
         }
     }
-    std::pair<int64_t, int64_t> totalTransactionCount()
+    std::pair<int64_t, int64_t> totalTransactionCount() override
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
@@ -155,30 +152,29 @@ public:
         return nullptr;
     }
 
-    virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i)
+    std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
     {
         return getBlockByHash(numberHash(_i));
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
-    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
         return LocalisedTransaction();
     }
-    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
+    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
     {
         return TransactionReceipt();
     }
 
-    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
-        dev::h256 const& _txHash) override
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(dev::h256 const&) override
     {
         return LocalisedTransactionReceipt(
             TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
-    virtual CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>)
+    CommitResult commitBlock(
+        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
         block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
         block.header().setNumber(m_blockNumber);
@@ -192,13 +188,10 @@ public:
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
 
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override { return true; }
+    bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
     dev::h512s minerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
-    std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) override
-    {
-        return "300000000";
-    };
+    std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;
@@ -226,7 +219,7 @@ public:
         m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain, 1024000, protocol);
     }
 
-    void setSessionData(std::string const& data_content)
+    void setSessionData(std::string const&)
     {
 #if 0
         for (auto session : m_host->sessions())
