@@ -137,9 +137,6 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     checkPBFTMsg(new_req, key_pair2, fake_block.m_block.blockHeader().number(), 2, 135,
         new_req.timestamp, fake_block.m_block.header().hash());
     BOOST_CHECK(new_req.timestamp >= tmp_req.timestamp);
-    bytes encodedData;
-    fake_block.m_block.encode(encodedData);
-    BOOST_CHECK(new_req.block == encodedData);
 }
 
 /// test SignReq and CommitReq
