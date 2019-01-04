@@ -27,7 +27,3 @@ comment:
 flags:
   alltests:
     joined: false
-ignore:
-    - "fisco-bcos/"
-    - "tools/"
-    - "test/"
