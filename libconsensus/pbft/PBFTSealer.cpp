@@ -75,16 +75,8 @@ void PBFTSealer::setBlock()
  */
 bool PBFTSealer::shouldSeal()
 {
-    /// LOG(DEBUG)<<"#### Sealer::shouldSeal():"<<Sealer::shouldSeal();
-    /// LOG(DEBUG)<<"#### m_pbftEngine->shouldSeal:"<<m_pbftEngine->shouldSeal();
     return Sealer::shouldSeal() && m_pbftEngine->shouldSeal();
 }
-
-/*uint64_t PBFTSealer::calculateMaxPackTxNum()
-{
-    return m_pbftEngine->calculateMaxPackTxNum(m_maxBlockTransactions);
-}*/
-
 void PBFTSealer::start()
 {
     m_pbftEngine->start();

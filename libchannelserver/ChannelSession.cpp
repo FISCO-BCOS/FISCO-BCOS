@@ -220,8 +220,6 @@ void ChannelSession::onRead(const boost::system::error_code& error, size_t bytes
 
         if (!error)
         {
-            CHANNEL_LOG(TRACE) << "Read: " << bytesTransferred;
-
             _recvProtocolBuffer.insert(
                 _recvProtocolBuffer.end(), _recvBuffer, _recvBuffer + bytesTransferred);
 
@@ -365,11 +363,7 @@ void ChannelSession::onWrite(
 
         updateIdleTimer();
 
-        if (!error)
-        {
-            CHANNEL_LOG(TRACE) << "Write: " << bytesTransferred;
-        }
-        else
+        if (error)
         {
             CHANNEL_LOG(ERROR) << "Write error: " << error.message();
 
