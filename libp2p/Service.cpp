@@ -343,10 +343,10 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
         CallbackFuncWithSession fp = std::bind(&SessionCallback::onResponse, callback,
             std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         asyncSendMessageByNodeID(nodeID, message, fp, dev::network::Options());
-
-        // callback->mutex.lock();
-        // callback->mutex.unlock();
-        // P2PMSG_LOG(DEBUG) << "[#sendMessageByNodeID] mutex unlock.";
+        // lock to wait for async send
+        callback->mutex.lock();
+        callback->mutex.unlock();
+        P2PMSG_LOG(DEBUG) << LOG_DESC("sendMessageByNodeID mutex unlock");
 
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
