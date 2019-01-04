@@ -168,7 +168,7 @@ private:
         dev::Secret sec = dev::KeyPair::create().secret();
         for (size_t i = 0; i < _size; i++)
         {
-            block_hash = dev::sha3(dev::toString("block " + std::to_string(i)));
+            block_hash = dev::sha3("block " + std::to_string(i));
             sig = dev::sign(sec, block_hash);
             retList.push_back(std::make_pair(dev::u256(block_hash), sig));
         }
