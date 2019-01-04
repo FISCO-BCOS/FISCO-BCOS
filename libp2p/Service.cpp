@@ -111,28 +111,30 @@ void Service::heartBeat()
         if ((it.first.address == m_host->tcpClient().address() &&
                 it.first.tcpPort == m_host->listenPort()))
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost()
-                               << std::endl;
+            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself")
+                               << LOG_KV("address", m_host->listenHost());
             continue;
         }
         /// exclude myself
         if (it.second == id())
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [nodeId]: " << it.second << std::endl;
+            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself")
+                               << LOG_KV("nodeID", it.second);
             continue;
         }
         if (it.second != NodeID() && isConnected(it.second))
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore connected [nodeId]: " << it.second
-                               << std::endl;
+            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore connected")
+                               << LOG_KV("nodeID", it.second);
             continue;
         }
         if (it.first.address.to_string().empty())
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address" << std::endl;
+            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore invalid address");
             continue;
         }
-        SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [endpoint]" << it.first.name();
+        SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
+                           << LOG_KV("endpoint", it.first.name());
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
@@ -155,7 +157,7 @@ void Service::heartBeat()
 
 /// update the staticNodes
 void Service::updateStaticNodes(
-    std::shared_ptr<dev::network::SocketFace> const& _s, dev::network::NodeID const& nodeId)
+    std::shared_ptr<dev::network::SocketFace> const& _s, dev::network::NodeID const& nodeID)
 {
     /// update the staticNodes
     dev::network::NodeIPEndpoint endpoint(_s->remoteEndpoint().address().to_v4(),
@@ -165,9 +167,9 @@ void Service::updateStaticNodes(
     /// modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
     {
-        SERVICE_LOG(DEBUG) << "[#startPeerSession-updateStaticNodes] [nodeId/endpoint]:  "
-                           << toHex(nodeId) << "/" << endpoint.name() << std::endl;
-        it->second = nodeId;
+        SERVICE_LOG(DEBUG) << LOG_DESC("startPeerSession-updateStaticNodes")
+                           << LOG_KV("nodeID", nodeID) << LOG_KV("endpoint", endpoint.name());
+        it->second = nodeID;
     }
 }
 
@@ -176,12 +178,13 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
 {
     if (e.errorCode())
     {
-        SERVICE_LOG(ERROR) << "Connect error: " << boost::diagnostic_information(e);
+        SERVICE_LOG(ERROR) << LOG_DESC("Connect error") << LOG_KV("errorCode", e.errorCode())
+                           << LOG_KV("what", boost::diagnostic_information(e));
 
         return;
     }
 
-    SERVICE_LOG(TRACE) << "Service onConnect: " << nodeID;
+    SERVICE_LOG(TRACE) << LOG_DESC("Service onConnect") << LOG_KV("nodeID", nodeID);
 
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
@@ -217,8 +220,8 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
     {
         m_sessions.insert(std::make_pair(nodeID, p2pSession));
     }
-    SERVICE_LOG(INFO) << "Connection established to: " << nodeID << "@"
-                      << session->nodeIPEndpoint().name();
+    SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("nodeID", nodeID)
+                      << LOG_KV("endpoint", session->nodeIPEndpoint().name());
 }
 
 void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession)
@@ -227,15 +230,15 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
     auto it = m_sessions.find(p2pSession->nodeID());
     if (it != m_sessions.end() && it->second == p2pSession)
     {
-        SERVICE_LOG(TRACE) << "Service onDisconnect: " << p2pSession->nodeID()
-                           << " remove from m_sessions at"
-                           << p2pSession->session()->nodeIPEndpoint().name();
+        SERVICE_LOG(TRACE) << "Service onDisconnect and remove from m_sessions"
+                           << LOG_KV("nodeID", p2pSession->nodeID())
+                           << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint().name());
 
         m_sessions.erase(it);
         if (e.errorCode() == dev::network::P2PExceptionType::DuplicateSession)
             return;
-        SERVICE_LOG(WARNING) << "[#onDisconnect] [errCode/errMsg]" << e.errorCode() << "/"
-                             << e.what();
+        SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
+                             << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
         for (auto it : m_staticNodes)
         {
@@ -255,10 +258,10 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
     {
         if (e.errorCode())
         {
-            SERVICE_LOG(ERROR) << "P2PSession " << p2pSession->nodeID() << "@"
-                               << session->nodeIPEndpoint().name()
-                               << " error, disconnect: " << e.errorCode() << ", " << e.what();
-
+            SERVICE_LOG(ERROR) << LOG_DESC("disconnect error P2PSession")
+                               << LOG_KV("nodeID", p2pSession->nodeID())
+                               << LOG_KV("endpoint", session->nodeIPEndpoint().name())
+                               << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
 
             p2pSession->stop(dev::network::UserReason);
             onDisconnect(e, p2pSession);
@@ -296,24 +299,24 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             }
             else
             {
-                SERVICE_LOG(DEBUG) << "Request protocolID not found" << message->seq();
+                SERVICE_LOG(DEBUG) << LOG_DESC("Request protocolID not found")
+                                   << LOG_KV("messageSeq", message->seq());
             }
         }
         else
         {
-            SERVICE_LOG(WARNING) << "Response packet not found seq: " << p2pMessage->seq()
-                                 << " response, may be timeout";
+            SERVICE_LOG(WARNING) << LOG_DESC("Response packet not found may be timeout")
+                                 << LOG_KV("messageSeq", p2pMessage->seq());
         }
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "onMessage error: " << boost::diagnostic_information(e);
+        SERVICE_LOG(ERROR) << "onMessage error" << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
 P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message)
 {
-    // P2PMSG_LOG(DEBUG) << "[#sendMessageByNodeID] [nodeID]: " << nodeID;
     try
     {
         struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
@@ -340,16 +343,17 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
         CallbackFuncWithSession fp = std::bind(&SessionCallback::onResponse, callback,
             std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
         asyncSendMessageByNodeID(nodeID, message, fp, dev::network::Options());
-
+        // lock to wait for async send
         callback->mutex.lock();
         callback->mutex.unlock();
-        P2PMSG_LOG(DEBUG) << "[#sendMessageByNodeID] mutex unlock.";
+        P2PMSG_LOG(DEBUG) << LOG_DESC("sendMessageByNodeID mutex unlock");
 
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID error:" << error.errorCode() << " "
-                               << error.what();
+            SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+                               << LOG_KV("errorCode", error.errorCode())
+                               << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
 
@@ -357,7 +361,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "ERROR:" << boost::diagnostic_information(e);
+        SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+                           << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
 
@@ -408,7 +413,8 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 #endif
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "ERROR:" << boost::diagnostic_information(e);
+        SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID"
+                           << LOG_KV("what", boost::diagnostic_information(e));
 
         if (callback)
         {
@@ -452,8 +458,9 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
         dev::network::NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID error:" << error.errorCode() << " "
-                               << error.what();
+            SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
+                               << LOG_KV("errorCode", error.errorCode())
+                               << LOG_KV("what", error.what());
             BOOST_THROW_EXCEPTION(error);
         }
 
@@ -461,7 +468,8 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "ERROR:" << boost::diagnostic_information(e);
+        SERVICE_LOG(ERROR) << "sendMessageByTopic error"
+                           << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
 
@@ -474,7 +482,7 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     if (nodeIDsToSend.size() == 0)
     {
-        SERVICE_LOG(WARNING) << "[#asyncSendMessageByTopic] no topic to be sent.";
+        SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByTopic no topic to be sent");
 
         m_host->threadPool()->enqueue([callback]() {
             dev::network::NetworkException e(TOPIC_NOT_FOUND, "No topic to be sent");
@@ -494,13 +502,13 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
             {
                 if (e.errorCode() != 0)
                 {
-                    SERVICE_LOG(WARNING)
-                        << "Send topics message to " << m_current << "error once: " << e.what();
+                    SERVICE_LOG(WARNING) << LOG_DESC("Send topics message error")
+                                         << LOG_KV("to", m_current) << LOG_KV("what", e.what());
                 }
 
                 if (m_nodeIDs.empty())
                 {
-                    SERVICE_LOG(WARNING) << "Send topics message all failed";
+                    SERVICE_LOG(WARNING) << LOG_DESC("Send topics message all failed");
                     m_callback(dev::network::NetworkException(
                                    e.errorCode(), "Send topics message all failed"),
                         session, P2PMessage::Ptr());
@@ -554,7 +562,8 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
 void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message)
 {
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
-    P2PMSG_LOG(DEBUG) << "[#asyncMulticastMessageByTopic] [node size]: " << nodeIDsToSend.size();
+    P2PMSG_LOG(DEBUG) << LOG_DESC("asyncMulticastMessageByTopic")
+                      << LOG_KV("nodes", nodeIDsToSend.size());
     try
     {
         for (auto nodeID : nodeIDsToSend)
@@ -565,7 +574,8 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << "[#asyncMulticastMessageByTopic] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << LOG_DESC("asyncMulticastMessageByTopic")
+                            << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -583,13 +593,14 @@ void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << "[#asyncMulticastMessageByNodeIDList] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << LOG_DESC("asyncMulticastMessageByNodeIDList")
+                            << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
 void Service::asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Options options)
 {
-    P2PMSG_LOG(DEBUG) << "[#asyncMulticastMessageByNodeIDList]";
+    P2PMSG_LOG(DEBUG) << "asyncMulticastMessageByNodeIDList";
     try
     {
         std::unordered_map<NodeID, P2PSession::Ptr> sessions;
@@ -606,7 +617,9 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Optio
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << "[#asyncBroadcastMessage] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage")
+                            << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
 }
 
@@ -663,7 +676,9 @@ P2PSessionInfos Service::sessionInfos()
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << "[#sessionInfos] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << LOG_DESC("sessionInfos")
+                            << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
     return infos;
 }
@@ -677,8 +692,8 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     auto it = m_groupID2NodeList.find(int(ret.first));
     if (it == m_groupID2NodeList.end())
     {
-        SERVICE_LOG(WARNING) << "[#sessionInfosByProtocolID] cannot find GroupID "
-                             << int(ret.first);
+        SERVICE_LOG(WARNING) << LOG_DESC("sessionInfosByProtocolID cannot find GroupID")
+                             << LOG_KV("GroupID", int(ret.first));
         return infos;
     }
     try
@@ -695,12 +710,10 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "[#sessionInfosByProtocolID] error:" << e.what();
+        SERVICE_LOG(ERROR) << LOG_DESC("sessionInfosByProtocolID")
+                           << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
-
-    // P2PMSG_LOG(DEBUG) << "[#sessionInfosByProtocolID] Finding nodeID in GroupID[" <<
-    // int(ret.first) << "], consensus nodes size:" << it->second.size() << ", " <<
-    // printSessionInfos(infos);
     return infos;
 }
 
@@ -724,10 +737,12 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     }
     catch (std::exception& e)
     {
-        P2PMSG_LOG(WARNING) << "[#getPeersByTopic] [EINFO]: " << e.what();
+        P2PMSG_LOG(WARNING) << LOG_DESC("getPeersByTopic")
+                            << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
-    P2PMSG_LOG(DEBUG) << "[#getPeersByTopic] [topic/peers size]: " << topic << "/"
-                      << nodeList.size();
+    P2PMSG_LOG(DEBUG) << LOG_DESC("getPeersByTopic") << LOG_KV("topic", topic)
+                      << LOG_KV("peersSize", nodeList.size());
     return nodeList;
 }
 
