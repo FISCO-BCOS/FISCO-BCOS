@@ -265,6 +265,7 @@ struct PrepareReq : public PBFTMsg
 {
     /// block data
     bytes block;
+    std::shared_ptr<dev::eth::Block> pBlock = nullptr;
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
@@ -336,6 +337,7 @@ struct PrepareReq : public PBFTMsg
         block_hash = sealing.block.blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
+        pBlock = std::make_shared<dev::eth::Block>(std::move(sealing.block));
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp << " , block_hash: " << toHex(block_hash) << std::endl;
     }

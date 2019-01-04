@@ -53,6 +53,11 @@ macro(configure_project)
     eth_default_option(TESTS OFF)
     # code coverage
     eth_default_option(COVERAGE OFF)
+    # log control
+    eth_default_option(EASYLOG OFF)
+    if (EASYLOG)
+        add_definitions(-DFISCO_EASYLOG)
+    endif()
 
     # guomi
     eth_default_option(BUILD_GM OFF)
@@ -65,6 +70,7 @@ macro(configure_project)
     if (DEBUG)
         add_definitions(-DETH_DEBUG)
     endif()
+
 
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})
@@ -109,6 +115,7 @@ endif()
 if (SUPPORT_TESTS)
     message("-- TESTS            Build tests                              ${TESTS}")
 endif()
+    message("-- EasyLog          Enable easyLog                           ${EASYLOG}")
     message("------------------------------------------------------------------------")
     message("")
 endmacro()

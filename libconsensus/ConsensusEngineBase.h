@@ -63,6 +63,7 @@ public:
             BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+        std::sort(m_minerList.begin(), m_minerList.end());
     }
 
     void start() override;

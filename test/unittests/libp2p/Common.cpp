@@ -26,6 +26,7 @@
 #include "libp2p/Common.h"
 
 #include <libdevcore/Assertions.h>
+#include <libp2p/P2PMessage.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -186,6 +187,36 @@ BOOST_AUTO_TEST_CASE(testPeerSessionInfo)
     BOOST_CHECK(peer_session_info.id == node_id);
     BOOST_CHECK(peer_session_info.host == "www.baidu.com");
 #endif
+}
+
+BOOST_AUTO_TEST_CASE(testMessage)
+{
+    auto msg = std::make_shared<p2p::P2PMessage>();
+    msg->setProtocolID(2);
+    msg->setPacketType(2);
+    msg->setSeq(1);
+    std::shared_ptr<bytes> buf(new bytes());
+    std::string s = "hello world!";
+    msg->setBuffer(buf);
+    buf->assign(s.begin(), s.end());
+    msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
+
+    auto buffer = std::make_shared<bytes>();
+    msg->encode(*buffer);
+
+    auto message = std::make_shared<p2p::P2PMessage>();
+    message->decode(buffer->data(), buffer->size());
+    BOOST_CHECK(message->protocolID() == 2);
+    BOOST_CHECK(message->packetType() == 2);
+    BOOST_CHECK(message->seq() == 1);
+    BOOST_CHECK(message->getResponceProtocolID() == -2);
+
+    message->printMsgWithPrefix("Show message");
+
+    msg->encodeAMOPBuffer("topic");
+    std::string t;
+    msg->decodeAMOPBuffer(buffer, t);
+    BOOST_CHECK_EQUAL("topic", t);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
