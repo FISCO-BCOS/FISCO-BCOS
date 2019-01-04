@@ -28,6 +28,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
+#include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libevm/ExtVMFace.h>
@@ -58,9 +59,9 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier(){};
+    BlockVerifier() {}
 
-    virtual ~BlockVerifier(){};
+    virtual ~BlockVerifier() {}
 
     ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, BlockInfo const& parentBlockInfo);
 
@@ -71,7 +72,6 @@ public:
         dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
         dev::eth::OnOpFunc const& _onOp,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext);
-
 
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
     {
