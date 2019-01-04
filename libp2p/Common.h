@@ -201,6 +201,17 @@ public:
 		return !operator == (_cmp);
  	}
 	
+	bool operator<(const NodeIPEndpoint& rhs) const
+	{
+		if (address < rhs.address)
+		{
+			return true;
+		}
+		if ((address == rhs.address) && tcpPort < rhs.tcpPort)
+			return true;
+		return false;
+	}
+
 	void streamRLP(RLPStream& _s, RLPAppend _append = StreamList) const;
 	void interpretRLP(RLP const& _r);
 	std::string name()const {
