@@ -62,7 +62,8 @@ bool Ledger::initLedger()
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
-    m_dbInitializer->initStateDB(genesisHash);
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::EM_BLOCK_VERIFIER);
+    m_dbInitializer->initStateDB(genesisHash, protocol_id);
     if (!m_dbInitializer->stateFactory())
     {
         Ledger_LOG(ERROR) << "#[initLedger] [#initBlockChain Failed for init stateFactory failed]"
@@ -289,8 +290,7 @@ bool Ledger::initBlockChain()
                           << std::endl;
         return false;
     }
-    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockChain);
-    std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>(protocol_id);
+    std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     m_blockChain = blockChain;
     std::string consensusType = m_param->mutableConsensusParam().consensusType;

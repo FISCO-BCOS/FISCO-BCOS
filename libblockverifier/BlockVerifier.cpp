@@ -38,7 +38,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
                             << LOG_KV("txNum", block.transactions().size())
                             << LOG_KV("num", block.blockHeader().number())
                             << LOG_KV("parentHash", parentBlockInfo.hash)
-                            << LOG_KV("parentNum", arentBlockInfo.number)
+                            << LOG_KV("parentNum", parentBlockInfo.number)
                             << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
 
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();

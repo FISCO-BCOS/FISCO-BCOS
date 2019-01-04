@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
     auto storage = std::make_shared<dev::storage::LevelDBStorage>();
     storage->setDB(storageDB);
 
-    auto blockChain = std::make_shared<dev::blockchain::BlockChainImp>(0);
+    auto blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
     blockChain->setStateStorage(storage);
     dev::blockchain::GenesisBlockParam initParam = {
         "std", dev::h512s(), dev::h512s(), "", "", "", 1000, 300000000};

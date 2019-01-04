@@ -41,9 +41,7 @@
 #include <memory>
 #include <mutex>
 
-#define BLOCKCHAIN_LOG(LEVEL)               \
-    LOG(LEVEL) << "[g:" << groupID() << "]" \
-               << "[p:" << protocolID() << "]" << LOG_BADGE("LIBBLOCKCHAIN")
+#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LIBBLOCKCHAIN")
 
 namespace dev
 {
@@ -79,13 +77,7 @@ DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 class BlockChainImp : public BlockChainInterface
 {
 public:
-    BlockChainImp(dev::PROTOCOL_ID _protocolID) : m_protocolID(_protocolID)
-    {
-        if (m_protocolID == 0)
-            BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
-                                  << errinfo_comment("Protocol id must be larger than 0"));
-        m_groupID = dev::eth::getGroupAndProtocol(m_protocolID).first;
-    }
+    BlockChainImp() {}
     virtual ~BlockChainImp(){};
     int64_t number() override;
     dev::h256 numberHash(int64_t _i) override;
@@ -107,8 +99,6 @@ public:
 
     dev::h512s minerList() override;
     dev::h512s observerList() override;
-    dev::PROTOCOL_ID protocolID() const { return m_protocolID; }
-    dev::GROUP_ID groupID() const { return m_groupID; }
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
     void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber);
 
@@ -156,9 +146,6 @@ private:
     /// cache the block number
     mutable SharedMutex m_blockNumberMutex;
     int64_t m_blockNumber = -1;
-
-    dev::PROTOCOL_ID m_protocolID;
-    dev::GROUP_ID m_groupID;
 };
 }  // namespace blockchain
 }  // namespace dev

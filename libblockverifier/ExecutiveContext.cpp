@@ -76,13 +76,11 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
-    EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("PrecompiledEngine isPrecompiled:" << m_blockInfo.hash << " " << address;
-
     auto p = getPrecompiled(address);
 
     if (p)
     {
-        LOG(DEBUG) << "internal contract:" << address;
+        LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address", address);
     }
 
     return p.get() != NULL;
@@ -91,9 +89,8 @@ bool ExecutiveContext::isPrecompiled(Address address) const
 Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
 {
     LOG(TRACE) << LOG_DESC("[#getPrecompiled]")
-    LOG_KV("") << m_blockInfo.hash << " " << address;
+               << LOG_KV("addressSize", m_address2Precompiled.size());
 
-    LOG(TRACE) << "address size:" << m_address2Precompiled.size();
     auto itPrecompiled = m_address2Precompiled.find(address);
 
     if (itPrecompiled != m_address2Precompiled.end())

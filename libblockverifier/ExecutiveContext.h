@@ -52,13 +52,7 @@ class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 public:
     typedef std::shared_ptr<ExecutiveContext> Ptr;
 
-    ExecutiveContext(dev::PROTOCOL_ID _protocolID) : m_protocolID(_protocolID)
-    {
-        if (m_protocolID == 0)
-            BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
-                                  << errinfo_comment("Protocol id must be larger than 0"));
-        m_groupID = dev::eth::getGroupAndProtocol(m_protocolID).first;
-    };
+    ExecutiveContext() {}
 
     virtual ~ExecutiveContext(){};
 
@@ -106,16 +100,6 @@ public:
     uint64_t txGasLimit() const { return m_txGasLimit; }
     void setTxGasLimit(uint64_t _txGasLimit) { m_txGasLimit = _txGasLimit; }
 
-    dev::PROTOCOL_ID protocolID() const
-    {
-        return m_protocolID;
-    }
-
-    dev::GROUP_ID groupID() const
-    {
-        return m_groupID;
-    }
-
 private:
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
     int m_addressCount = 0x10000;
@@ -124,9 +108,6 @@ private:
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
     uint64_t m_txGasLimit = 300000000;
-
-    dev::PROTOCOL_ID m_protocolID;
-    dev::GROUP_ID m_groupID;
 };
 
 }  // namespace blockverifier

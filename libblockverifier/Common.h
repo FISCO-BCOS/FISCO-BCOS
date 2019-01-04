@@ -25,14 +25,10 @@
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
+#include <memory>
 
-#define BLOCKVERIFIER_LOG(LEVEL)            \
-    LOG(LEVEL) << "[g:" << groupID() << "]" \
-               << "[p:" << protocolID() << "]" << LOG_BADGE("LIBBLOCKCHAIN")
-
-#define EXECUTIVECONTEXT_LOG(LEVEL)         \
-    LOG(LEVEL) << "[g:" << groupID() << "]" \
-               << "[p:" << protocolID() << "]" << LOG_BADGE("EXECUTIVECONTEXT")
+#define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LIBBLOCKCHAIN")
+#define EXECUTIVECONTEXT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("EXECUTIVECONTEXT")
 
 
 namespace dev
