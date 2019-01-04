@@ -23,7 +23,6 @@
 
 #include "BasicLevelDB.h"
 #include <libdevcore/easylog.h>
-#include <csignal>
 
 using namespace dev;
 using namespace dev::db;
@@ -50,6 +49,7 @@ void LevelDBWriteBatch::kill(Slice _key)
 }
 
 BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& _name)
+  : m_name(_name)
 {
     // Basic leveldb initralization(No encryption)
     auto db = static_cast<leveldb::DB*>(nullptr);
@@ -57,8 +57,9 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
 
     if (!m_openStatus.ok() || !db)
     {
-        LOG(ERROR) << "Database open error" << endl;
-        raise(SIGTERM);
+        std::stringstream exitInfo;
+        exitInfo << "Database open error" << endl;
+        errorExit(exitInfo);
     }
     m_db.reset(db);
 
@@ -70,8 +71,9 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
             m_db->Get(leveldb::ReadOptions(), leveldb::Slice(c_cipherDataKeyName), &key);
         if (!key.empty())
         {
-            LOG(ERROR) << "[ENCDB] Database is encrypted" << endl;
-            raise(SIGTERM);
+            std::stringstream exitInfo;
+            exitInfo << "[ENCDB] Database is encrypted" << endl;
+            errorExit(exitInfo);
         }
     }
 }
