@@ -70,19 +70,19 @@ public:
 
     ~FakeBlockChain() {}
 
-    int64_t number()
+    int64_t number() override
     {
         ReadGuard l(x_blockChain);
         return m_blockChain.size() - 1;
     }
 
-    std::pair<int64_t, int64_t> totalTransactionCount()
+    std::pair<int64_t, int64_t> totalTransactionCount() override
     {
         ReadGuard l(x_blockChain);
         return std::make_pair(m_totalTransactionCount, m_blockChain.size() - 1);
     }
 
-    dev::h256 numberHash(int64_t _i)
+    dev::h256 numberHash(int64_t _i) override
     {
         ReadGuard l(x_blockChain);
         return m_blockChain[_i]->headerHash();
@@ -159,9 +159,9 @@ public:
     FakeBlockSync() { m_status.state = SyncState::Idle; };
     virtual ~FakeBlockSync(){};
     /// start blockSync
-    void start(){};
+    void start() override{};
     /// stop blockSync
-    void stop(){};
+    void stop() override{};
 
     /// get status of block sync
     /// @returns Synchonization status
@@ -207,8 +207,8 @@ public:
         block.setTransactionReceipts(receipts);
     }
 
-    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) override
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;

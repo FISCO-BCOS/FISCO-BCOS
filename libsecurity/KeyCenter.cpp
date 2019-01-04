@@ -68,7 +68,7 @@ void KeyCenterHttpClient::connect()
     }
     catch (exception& e)
     {
-        LOG(ERROR) << "[KeyCenter] Init keycenter failed for " << e.what() << endl;
+        KC_LOG(ERROR) << LOG_DESC("Init keycenter failed.") << LOG_KV("reason", e.what()) << endl;
         BOOST_THROW_EXCEPTION(KeyCenterInitError());
     }
 }
@@ -84,7 +84,7 @@ void KeyCenterHttpClient::close()
 
     if (ec && ec != beast::errc::not_connected)
     {
-        LOG(ERROR) << "[KeyCenter] Close keycenter failed. error_code " << ec << endl;
+        KC_LOG(ERROR) << LOG_DESC("Close keycenter failed.") << LOG_KV("error_code", ec) << endl;
         BOOST_THROW_EXCEPTION(KeyCenterCloseError());
     }
 }
@@ -134,12 +134,13 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         // Receive the HTTP response
         http::read(m_socket, buffer, rsp);
 
-        LOG(DEBUG) << "[KeyCenter] [callMethod] keycenter respond [code/string]: "
-                   << rsp.result_int() << "/" << rsp.body() << endl;
+        KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("keycenter respond")
+                      << LOG_KV("code", rsp.result_int()) << LOG_KV("string", rsp.body());
 
         if (rsp.result_int() != 200)
         {
-            LOG(ERROR) << "[KeyCenter] [callMethod] http error: " << rsp.result_int() << endl;
+            KC_LOG(ERROR) << LOG_BADGE("callMethod") << LOG_DESC("http error")
+                          << LOG_KV("reason", rsp.result_int());
             throw;
         }
 
@@ -147,7 +148,8 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         bool parsingSuccessful = reader.parse(rsp.body().c_str(), res);
         if (!parsingSuccessful)
         {
-            LOG(ERROR) << "[KeyCenter] [callMethod] respond json error: " << rsp.body() << endl;
+            KC_LOG(ERROR) << LOG_BADGE("callMethod") << LOG_DESC("respond json error")
+                          << LOG_KV("code", rsp.result_int()) << LOG_KV("string", rsp.body());
             throw;
         }
 
@@ -155,7 +157,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
     }
     catch (exception& e)
     {
-        LOG(ERROR) << "[KeyCenter] CallMethod error: " << e.what() << endl;
+        KC_LOG(ERROR) << LOG_DESC("CallMethod error") << LOG_KV("reason", e.what());
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError());
     }
 
@@ -166,7 +168,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
 {
     if (_cipherDataKey.empty())
     {
-        LOG(ERROR) << "[KeyCenter] Get datakey exception. cipherDataKey is empty" << endl;
+        KC_LOG(ERROR) << LOG_DESC("Get datakey exception. cipherDataKey is empty");
         BOOST_THROW_EXCEPTION(KeyCenterDataKeyError());
     }
 
@@ -194,7 +196,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         string info = rsp["info"].asString();
         if (error)
         {
-            LOG(DEBUG) << "[KeyCenter] Get datakey exception. keycentr info: " << info << endl;
+            KC_LOG(DEBUG) << LOG_DESC("Get datakey exception") << LOG_KV("keycentr info", info);
             BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(info));
         }
 
@@ -209,7 +211,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     catch (exception& e)
     {
         clearCache();
-        LOG(DEBUG) << "[KeyCenter] Get datakey exception for: " << e.what() << endl;
+        KC_LOG(DEBUG) << LOG_DESC("Get datakey exception") << LOG_KV("reason", e.what());
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
@@ -231,7 +233,7 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
     m_ip = _ip;
     m_port = _port;
     m_url = m_ip + ":" + std::to_string(m_port);
-    LOG(DEBUG) << "[KeyCenter] Instance url: " << m_ip << ":" << m_port << endl;
+    KC_LOG(DEBUG) << LOG_DESC("Set instance url") << LOG_KV("IP", m_ip) << LOG_KV("port", m_port);
 }
 
 KeyCenter& KeyCenter::instance()

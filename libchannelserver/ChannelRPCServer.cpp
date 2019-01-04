@@ -207,8 +207,7 @@ void ChannelRPCServer::onConnect(
 void ChannelRPCServer::onDisconnect(
     dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session)
 {
-    CHANNEL_LOG(ERROR) << "remove session: " << session->host() << ":" << session->port()
-                       << " success";
+    CHANNEL_LOG(ERROR) << "remove session: " << session->host() << ":" << session->port();
 
     {
         std::lock_guard<std::mutex> lockSession(_sessionMutex);
