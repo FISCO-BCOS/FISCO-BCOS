@@ -676,7 +676,7 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
     try
     {
         RPC_LOG(INFO) << "[#getTransactionReceipt] [groupID/transactionHash]: " << _groupID << "/"
-                      << _transactionHash << "/" << std::endl;
+                      << _transactionHash << "/";
 
         Json::Value response;
 
