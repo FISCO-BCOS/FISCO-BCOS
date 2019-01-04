@@ -207,8 +207,7 @@ public:
         block.setTransactionReceipts(receipts);
     }
 
-    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) override
     {
         dev::executive::ExecutionResult res;

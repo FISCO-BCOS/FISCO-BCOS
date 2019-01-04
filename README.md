@@ -29,7 +29,7 @@ More senarios, read XXX.
 
 * Star our Github. 
 * Pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
-* [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues) and [submit bugs](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
+* [Ask questions && submit bugs](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
 * Discuss in [WeChat group](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
 ## Further Reading
