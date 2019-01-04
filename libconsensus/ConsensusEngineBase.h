@@ -132,7 +132,11 @@ public:
         m_accountType = _accountType;
     }
     /// get the node index if the node is a miner
-    IDXTYPE nodeIdx() const override { return m_idx; }
+    IDXTYPE nodeIdx() const override
+    {
+        ReadGuard l(m_idxMutex);
+        return m_idx;
+    }
 
     bool const& allowFutureBlocks() const { return m_allowFutureBlocks; }
     void setAllowFutureBlocks(bool isAllowFutureBlocks)
@@ -254,6 +258,7 @@ protected:
     NodeAccountType m_accountType;
     /// index of this node
     IDXTYPE m_idx = 0;
+    mutable SharedMutex m_idxMutex;
     /// miner list
     mutable SharedMutex m_minerListMutex;
     dev::h512s m_minerList;
