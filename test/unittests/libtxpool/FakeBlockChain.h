@@ -130,7 +130,7 @@ public:
     }
 
     int64_t number() override { return m_blockNumber - 1; }
-    void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
+    void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override
     {
         auto pBlock = getBlockByNumber(_blockNumber);
         for (auto trans : pBlock->transactions())
@@ -143,7 +143,7 @@ public:
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
 
-    dev::h256 numberHash(int64_t _i) { return m_blockChain[_i]->headerHash(); }
+    dev::h256 numberHash(int64_t _i) override { return m_blockChain[_i]->headerHash(); }
 
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
