@@ -1,3 +1,5 @@
+English / [中文](docs/README_CN.md)
+
 ![](docs/images/FISCO_BCOS_Logo.svg)
 
 **FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Two major camps of blockchain technology - public and consortium chains, to better serve the general public, open consortium chain is the perfect choice for enterprises to unlock the potential of collaborative businesses model. FISCO BCOS is born to support open consortium chain applications, by supporting multiple chains, and cross-chain communication.
@@ -23,7 +25,6 @@ bash start_all.sh
 ```
 
 More senarios, read XXX.
-
 
 ## Developing & Contributing
 

@@ -25,6 +25,7 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
+#include <libsecurity/EncryptedFile.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/algorithm/string/replace.hpp>
@@ -54,7 +55,10 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            keyContent = contents(key);
+            if (g_BCOSConfig.diskEncryption.enable)
+                keyContent = EncryptedFile::decryptContents(key);
+            else
+                keyContent = contents(key);
         }
         catch (std::exception& e)
         {
@@ -181,7 +185,10 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            keyContent = contents(key);
+            if (g_BCOSConfig.diskEncryption.enable)
+                keyContent = EncryptedFile::decryptContents(key);
+            else
+                keyContent = contents(key);
         }
         catch (std::exception& e)
         {
