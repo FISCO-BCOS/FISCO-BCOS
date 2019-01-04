@@ -76,8 +76,9 @@ string const SyncMaster::syncInfo() const
     syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
     syncInfo.push_back(
         json_spirit::Pair("latestHash", toHex(m_blockChain->numberHash(currentNumber))));
-    syncInfo.push_back(json_spirit::Pair("knownHighestNumber", m_syncStatus->knownHighestNumber));
-    syncInfo.push_back(json_spirit::Pair("knownLatestHash", toHex(m_syncStatus->knownLatestHash)));
+    // syncInfo.push_back(json_spirit::Pair("knownHighestNumber",
+    // m_syncStatus->knownHighestNumber)); syncInfo.push_back(json_spirit::Pair("knownLatestHash",
+    // toHex(m_syncStatus->knownLatestHash)));
     syncInfo.push_back(json_spirit::Pair("txPoolSize", std::to_string(m_txPool->pendingSize())));
 
     json_spirit::Array peersInfo;
@@ -207,7 +208,8 @@ void SyncMaster::maintainTransactions()
 
         peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
             bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
-            return unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
+            bool isMiner = _p->isMiner;
+            return isMiner && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
 
         for (auto const& p : peers)
@@ -512,6 +514,17 @@ void SyncMaster::maintainPeersConnection()
                             << LOG_KV("peer", session.nodeID.abridged());
         }
     }
+
+    // Update sync miner status
+    set<h512> minerSet;
+    h512s miners = m_blockChain->minerList();
+    for (auto miner : miners)
+        minerSet.insert(miner);
+
+    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        _p->isMiner = (minerSet.find(_p->nodeId) != minerSet.end());
+        return true;
+    });
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
