@@ -61,8 +61,7 @@ bool remove_files(const std::string& file_path, unsigned int max_retry = 10)
 }
 
 
-void testWriteFile(const std::string& file_dir, const std::string& content, unsigned int size,
-    bool write_delete_rename)
+void testWriteFile(const std::string& file_dir, const std::string& content, unsigned int size, bool)
 {
     std::string file_name;
     for (unsigned int i = 0; i < size; i++)

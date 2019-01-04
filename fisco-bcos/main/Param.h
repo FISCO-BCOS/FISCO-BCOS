@@ -28,6 +28,12 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 #include <memory>
+
+namespace dev
+{
+char const* Version = FISCO_BCOS_PROJECT_VERSION;
+}
+
 class MainParams
 {
 public:

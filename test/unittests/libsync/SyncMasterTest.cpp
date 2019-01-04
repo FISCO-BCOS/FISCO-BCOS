@@ -144,6 +144,24 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(102)) << endl;
 
+    // no miner packet number is 0
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 0);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 0);
+
+    // Set miner
+    sync->syncStatus()->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        _p->isMiner = true;
+        return true;
+    });
+
+    txs = fakeTransactions(2, currentBlockNumber);
+    for (auto& tx : *txs)
+        txPool->submit(tx);
+
+    sync->maintainTransactions();
+    cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
+    cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(102)) << endl;
+
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 1);
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 1);
 

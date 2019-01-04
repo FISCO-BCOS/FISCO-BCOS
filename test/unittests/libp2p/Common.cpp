@@ -211,8 +211,6 @@ BOOST_AUTO_TEST_CASE(testMessage)
     BOOST_CHECK(message->seq() == 1);
     BOOST_CHECK(message->getResponceProtocolID() == -2);
 
-    message->printMsgWithPrefix("Show message");
-
     msg->encodeAMOPBuffer("topic");
     std::string t;
     msg->decodeAMOPBuffer(buffer, t);

@@ -72,9 +72,9 @@ std::string getThreadName();
 #endif
 
 // BCOS log format
-#define LOG_BADGE(_NAME) "[" << _NAME << "]"
-#define LOG_DESC(_DESCRIPTION) _DESCRIPTION
-#define LOG_KV(_K, _V) "," << _K << "=" << _V
+#define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
+#define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
+#define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
 
 namespace dev
 {
