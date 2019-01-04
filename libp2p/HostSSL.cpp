@@ -154,14 +154,6 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 	shared_ptr<Peer> p;
 	DEV_RECURSIVE_GUARDED(x_sessions)
 	{
-		auto it = m_node2ID.find(_nodeIPEndpoint);
-		if(it == m_node2ID.end()) {
-			m_node2ID.insert(std::make_pair(_nodeIPEndpoint, _id));
-		}
-		else {
-			it->second = _id;
-		}
-
 		if (m_peers.count(_nodeIPEndpoint.name()))
 			p = m_peers[_nodeIPEndpoint.name()];
 		else
@@ -522,14 +514,15 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 		//if nodeIPEndpoint connected
 		{
 			DEV_RECURSIVE_GUARDED(x_sessions);
-			auto it = m_node2ID.find(_nodeIPEndpoint);
+			auto it = m_peers.find(_nodeIPEndpoint.name());
 
-			if(it != m_node2ID.end() && it->second != NodeID()) {
-				auto sIt = m_sessions.find(it->second);
+			if(it != m_peers.end() && it->second->address() != NodeID()) {
+				it->second->id;
+				auto sIt = m_sessions.find(it->second->address()); //address in peer means nodeid
 				if(sIt != m_sessions.end()) {
 					auto session = sIt->second.lock();
 					if(session && session->isConnected()) {
-						LOG(TRACE) << "NodeIPEndpoint: " << _nodeIPEndpoint.name() << " nodeID: " << it->second.hex() << " already connected, ignore";
+						LOG(TRACE) << "NodeIPEndpoint: " << _nodeIPEndpoint.name() << " nodeID: " << it->second->address().hex() << " already connected, ignore";
 						return;
 					}
 				}
@@ -734,8 +727,6 @@ void HostSSL::keepAlivePeers()
 		else {
 			LOG(WARNING) << "HostSSL::keepAlivePeers erase Session " << it->first;
 			it = m_sessions.erase(it);
-
-			m_node2ID.erase(p->info().nodeIPEndpoint);
 		}
 	}
 	
