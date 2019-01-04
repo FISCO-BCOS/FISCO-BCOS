@@ -27,7 +27,7 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
-const char* const ENTRYIES_METHOD_GET_INT = " get(int256)";
+const char* const ENTRYIES_METHOD_GET_INT = "get(int256)";
 const char* const ENTRYIES_METHOD_SIZE = "size()";
 
 EntriesPrecompiled::EntriesPrecompiled()
