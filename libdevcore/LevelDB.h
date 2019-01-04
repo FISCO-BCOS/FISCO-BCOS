@@ -40,6 +40,9 @@ public:
         leveldb::WriteOptions _writeOptions = defaultWriteOptions(),
         leveldb::Options _dbOptions = defaultDBOptions());
 
+    explicit LevelDB(BasicLevelDB* _db, leveldb::ReadOptions _readOptions = defaultReadOptions(),
+        leveldb::WriteOptions _writeOptions = defaultWriteOptions());
+
     std::string lookup(Slice _key) const override;
     bool exists(Slice _key) const override;
     void insert(Slice _key, Slice _value) override;
@@ -50,11 +53,16 @@ public:
 
     void forEach(std::function<bool(Slice, Slice)> f) const override;
 
+    static DatabaseStatus toDatabaseStatus(leveldb::Status const& _status);
+    static void checkStatus(
+        leveldb::Status const& _status, boost::filesystem::path const& _path = {});
+
 private:
     std::unique_ptr<BasicLevelDB> m_db;
     leveldb::ReadOptions const m_readOptions;
     leveldb::WriteOptions const m_writeOptions;
 };
+
 
 }  // namespace db
 }  // namespace dev
