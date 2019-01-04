@@ -278,7 +278,7 @@ protected:
         }
         /// check whether this node is in the miner list
         h512 node_id;
-        bool is_miner = getNodeIDByIndex(node_id, m_idx);
+        bool is_miner = getNodeIDByIndex(node_id, nodeIdx());
         if (!is_miner || session->nodeID() == node_id)
             return false;
         return true;
@@ -325,7 +325,7 @@ protected:
             return CheckResult::INVALID;
         }
         /// check the sealer of this request
-        if (req.idx == m_idx)
+        if (req.idx == nodeIdx())
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv own req")
                                   << LOG_KV("INFO", oss.str());

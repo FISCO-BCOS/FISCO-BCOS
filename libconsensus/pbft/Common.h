@@ -333,7 +333,7 @@ struct PrepareReq : public PBFTMsg
         view = req.view;
         idx = req.idx;
         p_execContext = sealing.p_execContext;
-        sealing.block.encode(block);
+        /// sealing.block.encode(block);
         timestamp = u256(utcTime());
         block_hash = sealing.block.blockHeader().hash();
         sig = signHash(block_hash, keyPair);
