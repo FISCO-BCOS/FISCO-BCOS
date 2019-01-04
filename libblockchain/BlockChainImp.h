@@ -24,8 +24,10 @@
 
 #include "BlockChainInterface.h"
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
+#include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/StateFactoryInterface.h>
@@ -39,8 +41,7 @@
 #include <memory>
 #include <mutex>
 
-#define BLOCKCACHE_LOG(LEVEL) LOG(LEVEL) << "[#BLOCKCACHE]"
-#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << "[#BLOCKCHAIN]"
+#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LIBBLOCKCHAIN")
 
 namespace dev
 {

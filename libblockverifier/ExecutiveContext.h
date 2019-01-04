@@ -28,6 +28,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/ChainOperationParams.h>
 #include <libethcore/PrecompiledContract.h>
+#include <libethcore/Protocol.h>
 #include <libexecutive/StateFace.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <memory>
@@ -51,7 +52,7 @@ class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 public:
     typedef std::shared_ptr<ExecutiveContext> Ptr;
 
-    ExecutiveContext(){};
+    ExecutiveContext() {}
 
     virtual ~ExecutiveContext(){};
 
@@ -75,7 +76,6 @@ public:
     void setState(std::shared_ptr<dev::executive::StateFace> state);
 
     std::shared_ptr<dev::storage::Table> getTable(const Address& address);
-
 
     virtual bool isOrginPrecompiled(Address const& _a) const;
 

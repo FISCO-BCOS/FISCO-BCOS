@@ -87,7 +87,7 @@ static void createTx(
             }
             try
             {
-                tx.setNonce(tx.nonce() + u256(1));
+                tx.setNonce(tx.nonce() + u256(utcTime()));
                 tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
                 dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
                 tx.updateSignature(SignatureStruct(sig));
