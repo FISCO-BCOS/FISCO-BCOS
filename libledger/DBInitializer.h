@@ -43,7 +43,7 @@ public:
     ///  must be open before init
     virtual void initStorageDB();
     virtual ~DBInitializer() = default;
-    virtual void initStateDB(dev::h256 const& genesisHash, dev::PROTOCOL_ID _protocolID)
+    virtual void initStateDB(dev::h256 const& genesisHash)
     {
         if (!m_param)
             return;

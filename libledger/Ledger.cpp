@@ -62,8 +62,8 @@ bool Ledger::initLedger()
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
-    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::EM_BLOCK_VERIFIER);
-    m_dbInitializer->initStateDB(genesisHash, protocol_id);
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId);
+    m_dbInitializer->initStateDB(genesisHash);
     if (!m_dbInitializer->stateFactory())
     {
         Ledger_LOG(ERROR) << "#[initLedger] [#initBlockChain Failed for init stateFactory failed]"
