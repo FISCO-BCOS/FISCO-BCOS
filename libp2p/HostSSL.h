@@ -132,8 +132,6 @@ namespace dev
 
 			void addConnParamsToNodeTable();
 
-			std::map<NodeIPEndpoint, NodeID> m_node2ID;
-
 			std::set<std::string> m_pendingPeerConns;                                                    
 			Mutex x_pendingNodeConns;
 			std::unordered_map<std::string, std::shared_ptr<Peer>> m_peers;
