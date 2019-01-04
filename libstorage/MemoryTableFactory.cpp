@@ -52,7 +52,8 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
-        STORAGE_LOG(TRACE) << "Table:" << tableName << " already open:" << it->second;
+        STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("table already open")
+                           << LOG_KV("table name", tableName);
         return it->second;
     }
     auto tableInfo = make_shared<storage::TableInfo>();
@@ -67,7 +68,9 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
-            STORAGE_LOG(DEBUG) << tableName << " doesn't exist in _sys_tables_.";
+            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory")
+                               << LOG_DESC("table doesn't exist in _sys_tables_")
+                               << LOG_KV("table name", tableName);
             return nullptr;
         }
         auto entry = tableEntries->get(0);
@@ -123,8 +126,9 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
 Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string& keyField,
     const std::string& valueField, bool authorigytFlag, Address const& _origin)
 {
-    STORAGE_LOG(DEBUG) << "Create Table:" << m_blockHash << " num:" << m_blockNum
-                       << " table:" << tableName;
+    STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("create table")
+                       << LOG_KV("table name", tableName) << LOG_KV("blockHash", m_blockHash)
+                       << LOG_KV("blockNum", m_blockNum);
 
     auto sysTable = openTable(SYS_TABLES, authorigytFlag);
 
@@ -132,7 +136,9 @@ Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
     if (tableEntries->size() != 0)
     {
-        STORAGE_LOG(ERROR) << "tableName " << tableName << " already exist in " << SYS_TABLES;
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
+                           << LOG_DESC("table already exist in _sys_tables_")
+                           << LOG_KV("table name", tableName);
         return nullptr;
     }
     // Write table entry
@@ -144,7 +150,9 @@ Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string
         sysTable->insert(tableName, tableEntry, std::make_shared<AccessOptions>(_origin));
     if (createTableCode == -1)
     {
-        STORAGE_LOG(WARNING) << tableName << " checkAuthority of " << _origin.hex() << " failed!";
+        STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
+                             << LOG_DESC("create table non-authorized")
+                             << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
         return nullptr;
     }
     return openTable(tableName);
@@ -163,12 +171,10 @@ void MemoryTableFactory::setBlockNum(int64_t blockNum)
 h256 MemoryTableFactory::hash()
 {
     bytes data;
-    /// STORAGE_LOG(DEBUG) << "this: " << this << " total table number:" << m_name2Table.size();
     for (auto& it : m_name2Table)
     {
         auto table = it.second;
         h256 hash = table->hash();
-        /// STORAGE_LOG(DEBUG) << "table:" << it.first << " hash:" << hash;
         if (hash == h256())
         {
             continue;
@@ -239,8 +245,6 @@ void MemoryTableFactory::commit() {}
 
 void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
-    /// STORAGE_LOG(DEBUG) << "Submiting TablePrecompiled";
-
     vector<dev::storage::TableData::Ptr> datas;
 
     for (auto dbIt : m_name2Table)
@@ -267,14 +271,12 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
         }
     }
 
-    /// STORAGE_LOG(DEBUG) << "Total: " << datas.size() << " key";
     if (!datas.empty())
     {
         if (m_hash == h256())
         {
             hash();
         }
-        /// STORAGE_LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
         stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
     }
 

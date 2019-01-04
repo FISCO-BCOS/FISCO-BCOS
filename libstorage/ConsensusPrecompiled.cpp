@@ -18,6 +18,7 @@
  *  @author chaychen
  *  @date 20181211
  */
+
 #include "ConsensusPrecompiled.h"
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
@@ -52,17 +53,16 @@ ConsensusPrecompiled::ConsensusPrecompiled()
 bytes ConsensusPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << "this: " << this << " call CRUD:" << toHex(param);
+    STORAGE_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("call")
+                       << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
-
     dev::eth::ContractABI abi;
     bytes out;
-    u256 count = 0;
+    int count = 0;
 
     showConsensusTable(context);
 
@@ -74,10 +74,14 @@ bytes ConsensusPrecompiled::call(
         abi.abiOut(data, nodeID);
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
-        STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addMiner params:" << nodeID;
+
+        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addMiner func")
+                           << LOG_KV("nodeID", nodeID);
+
         if (nodeID.size() != 128u)
         {
-            STORAGE_LOG(DEBUG) << "ConsensusPrecompiled nodeID length error. " << nodeID;
+            STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
         }
         else
         {
@@ -98,19 +102,40 @@ bytes ConsensusPrecompiled::call(
                 {
                     entry->setField(NODE_KEY_NODEID, nodeID);
                     count = table->insert(PRI_KEY, entry, getOptions(origin));
-                    STORAGE_LOG(DEBUG)
-                        << "ConsensusPrecompiled new miner node, nodeID : " << nodeID;
+                    if (count == -1)
+                    {
+                        STORAGE_LOG(DEBUG)
+                            << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
+
+                        out = abi.abiIn("", getOutJson(-1, "non-authorized"));
+                    }
+                    else
+                    {
+                        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                                           << LOG_DESC("addMiner successfully");
+
+                        out = abi.abiIn("", getOutJson(count, "success"));
+                    }
                 }
                 else
                 {
                     count = table->update(PRI_KEY, entry, condition, getOptions(origin));
-                    STORAGE_LOG(DEBUG)
-                        << "ConsensusPrecompiled change to miner, nodeID : " << nodeID;
+                    if (count == -1)
+                    {
+                        STORAGE_LOG(DEBUG)
+                            << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
+
+                        out = abi.abiIn("", getOutJson(-1, "non-authorized"));
+                    }
+                    else
+                    {
+                        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                                           << LOG_DESC("addMiner successfully");
+
+                        out = abi.abiIn("", getOutJson(count, "success"));
+                    }
                 }
             }
-
-            out = abi.abiIn("", count);
-            STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addMiner result:" << toHex(out);
         }
     }
     else if (func == name2Selector[CSS_METHOD_ADD_SER])
@@ -120,10 +145,12 @@ bytes ConsensusPrecompiled::call(
         abi.abiOut(data, nodeID);
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
-        STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addObserver params:" << nodeID;
+        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
+                           << LOG_KV("nodeID", nodeID);
         if (nodeID.size() != 128u)
         {
-            STORAGE_LOG(DEBUG) << "ConsensusPrecompiled nodeID length error. " << nodeID;
+            STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
         }
         else
         {
@@ -138,29 +165,43 @@ bytes ConsensusPrecompiled::call(
             entry->setField(NODE_KEY_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
 
-            if (entries.get())
+            if (entries->size() == 0u)
             {
-                if (entries->size() == 0u)
+                entry->setField(NODE_KEY_NODEID, nodeID);
+                count = table->insert(PRI_KEY, entry, getOptions(origin));
+                if (count == -1)
                 {
-                    entry->setField(NODE_KEY_NODEID, nodeID);
-                    count = table->insert(PRI_KEY, entry, getOptions(origin));
                     STORAGE_LOG(DEBUG)
-                        << "ConsensusPrecompiled new observer node, nodeID : " << nodeID;
-                }
-                else if (!checkIsLastMiner(table, nodeID))
-                {
-                    count = table->update(PRI_KEY, entry, condition, getOptions(origin));
-                    STORAGE_LOG(DEBUG)
-                        << "ConsensusPrecompiled change to observer, nodeID : " << nodeID;
-                }
-            }
-            else
-            {
-                STORAGE_LOG(WARNING) << "ConsensusPrecompiled select SYS_MINERS table failed.";
-            }
+                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
-            out = abi.abiIn("", count);
-            STORAGE_LOG(DEBUG) << "ConsensusPrecompiled addObserver result:" << toHex(out);
+                    out = abi.abiIn("", getOutJson(-1, "non-authorized"));
+                }
+                else
+                {
+                    STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                                       << LOG_DESC("addObserver successfully");
+
+                    out = abi.abiIn("", getOutJson(count, "success"));
+                }
+            }
+            else if (!checkIsLastMiner(table, nodeID))
+            {
+                count = table->update(PRI_KEY, entry, condition, getOptions(origin));
+                if (count == -1)
+                {
+                    STORAGE_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
+
+                    out = abi.abiIn("", getOutJson(-1, "non-authorized"));
+                }
+                else
+                {
+                    STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                                       << LOG_DESC("addObserver successfully");
+
+                    out = abi.abiIn("", getOutJson(count, "success"));
+                }
+            }
         }
     }
     else if (func == name2Selector[CSS_METHOD_REMOVE])
@@ -170,10 +211,12 @@ bytes ConsensusPrecompiled::call(
         abi.abiOut(data, nodeID);
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
-        STORAGE_LOG(DEBUG) << "ConsensusPrecompiled remove params:" << nodeID;
+        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
+                           << LOG_KV("nodeID", nodeID);
         if (nodeID.size() != 128u)
         {
-            STORAGE_LOG(DEBUG) << "ConsensusPrecompiled nodeID length error. " << nodeID;
+            STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
         }
         else
         {
@@ -184,15 +227,27 @@ bytes ConsensusPrecompiled::call(
                 auto condition = table->newCondition();
                 condition->EQ(NODE_KEY_NODEID, nodeID);
                 count = table->remove(PRI_KEY, condition, getOptions(origin));
-                STORAGE_LOG(DEBUG) << "ConsensusPrecompiled remove one node: " << nodeID;
+                if (count == -1)
+                {
+                    STORAGE_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", count);
+                    out = abi.abiIn("", getOutJson(-1, "non-authorized"));
+                }
+                else
+                {
+                    STORAGE_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully");
+
+                    out = abi.abiIn("", getOutJson(count, "success"));
+                }
             }
         }
     }
     else
     {
-        STORAGE_LOG(ERROR) << "ConsensusPrecompiled error func:" << std::hex << func;
+        STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("error func")
+                           << LOG_KV("func", func);
     }
     return out;
 }
@@ -200,12 +255,6 @@ bytes ConsensusPrecompiled::call(
 void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
 {
     storage::Table::Ptr table = openTable(context, SYS_MINERS);
-    if (!table)
-    {
-        STORAGE_LOG(WARNING) << "ConsensusPrecompiled open SYS_MINERS table failed.";
-        return;
-    }
-
     auto condition = table->newCondition();
     auto entries = table->select(PRI_KEY, condition);
 
@@ -224,7 +273,8 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
               << enable << "\n";
         }
     }
-    STORAGE_LOG(TRACE) << s.str();
+    STORAGE_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
+                       << LOG_KV("consensusTable", s.str());
 }
 
 bool ConsensusPrecompiled::checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID)
@@ -236,8 +286,11 @@ bool ConsensusPrecompiled::checkIsLastMiner(storage::Table::Ptr table, std::stri
     if (entries->size() == 1u && entries->get(0)->getField(NODE_KEY_NODEID) == nodeID)
     {
         // The nodeID in param is the last miner, cannot be deleted.
-        STORAGE_LOG(WARNING) << "ConsensusPrecompiled the nodeID in param is the last "
-                                "miner, cannot be deleted.";
+        STORAGE_LOG(WARNING)
+            << LOG_BADGE("ConsensusPrecompiled")
+            << LOG_DESC(
+                   "ConsensusPrecompiled the nodeID in param is the last miner, cannot be deleted.")
+            << LOG_KV("nodeID", nodeID);
         return true;
     }
     return false;

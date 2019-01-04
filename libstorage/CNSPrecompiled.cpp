@@ -48,7 +48,9 @@ std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
 
 Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::string& tableName)
 {
-    STORAGE_LOG(DEBUG) << "CNS open table:" << tableName;
+    STORAGE_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("open table")
+                       << LOG_KV("tableName", tableName);
+
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
@@ -58,13 +60,12 @@ Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::s
 bytes CNSPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << "this: " << this << " call CNS:" << toHex(param);
+    STORAGE_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call")
+                       << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-
-    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
     dev::eth::ContractABI abi;
     bytes out;
@@ -96,8 +97,10 @@ bytes CNSPrecompiled::call(
         }
         if (exist)
         {
-            STORAGE_LOG(WARNING) << "CNS entry with same name and version has existed.";
-            out = abi.abiIn("", u256(0));
+            STORAGE_LOG(WARNING) << LOG_BADGE("CNSPrecompiled")
+                                 << LOG_DESC("address and version exist");
+
+            out = abi.abiIn("", getOutJson(-50, "address and version exist"));
         }
         else
         {
@@ -108,7 +111,19 @@ bytes CNSPrecompiled::call(
             entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
             entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
             int count = table->insert(contractName, entry, getOptions(origin));
-            out = abi.abiIn("", u256(count));
+            if (count == -1)
+            {
+                STORAGE_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("non-authorized");
+
+                out = abi.abiIn("", getOutJson(-1, "non-authorized"));
+            }
+            else
+            {
+                STORAGE_LOG(DEBUG)
+                    << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully");
+
+                out = abi.abiIn("", getOutJson(count, "success"));
+            }
         }
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR])
@@ -179,7 +194,8 @@ bytes CNSPrecompiled::call(
     }
     else
     {
-        STORAGE_LOG(ERROR) << "error func:" << std::hex << func;
+        STORAGE_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("error func")
+                           << LOG_KV("func", func);
     }
 
     return out;

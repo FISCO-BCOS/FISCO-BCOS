@@ -49,8 +49,7 @@ std::string Entry::getField(const std::string& key) const
     {
         return it->second;
     }
-
-    STORAGE_LOG(ERROR) << "Entry: " << this << " can't find key: " + key;
+    STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
 
     return "";
 }
