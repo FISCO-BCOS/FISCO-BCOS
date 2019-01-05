@@ -53,7 +53,7 @@ void LogInitializer::initLog(
 {
     /// set file name
     std::string logDir = pt.get<std::string>("log.LOG_PATH", "log");
-    std::string fileName = logDir + "/" + logType + "_%Y%m%d%H.%M%S.log";
+    std::string fileName = logDir + "/" + logType + "_%Y%m%d%H.%M.log";
     boost::shared_ptr<boost::log::sinks::text_file_backend> backend(
         new boost::log::sinks::text_file_backend(boost::log::keywords::file_name = fileName,
             boost::log::keywords::open_mode = std::ios::app,
