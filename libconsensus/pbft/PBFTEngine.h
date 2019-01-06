@@ -91,6 +91,15 @@ public:
 
     virtual bool reachBlockIntervalTime()
     {
+        /// the block is sealed by the next leader, and can execute after the last block has been
+        /// consensused
+        if (m_exec)
+        {
+            if (m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader)
+                return true;
+            return false;
+        }
+        /// the block is sealed by the current leader
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
@@ -99,7 +108,10 @@ public:
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
-    void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
+    void onViewChange(std::function<void(dev::h256Hash const& filter)> const& _f)
+    {
+        m_onViewChange = _f;
+    }
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
@@ -413,6 +425,8 @@ protected:
         return true;
     }
 
+    inline IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
+
     inline std::pair<bool, IDXTYPE> getLeader() const
     {
         if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
@@ -426,7 +440,14 @@ protected:
     bool checkBlockSign(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
 
-    void changeViewForEmptyBlock();
+    void changeViewForEmptyBlock()
+    {
+        m_timeManager.changeView();
+        m_timeManager.m_changeCycle = 0;
+        m_emptyBlockViewChange = true;
+        m_signalled.notify_all();
+    }
+    void notifySealing(dev::eth::Block const& block);
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
         return boost::filesystem::space(path).available > 1024;
@@ -441,6 +462,7 @@ protected:
     std::string m_baseDir;
     bool m_cfgErr = false;
     bool m_leaderFailed = false;
+    bool m_exec = false;
 
     dev::storage::Storage::Ptr m_storage;
 
@@ -463,7 +485,7 @@ protected:
     std::condition_variable m_signalled;
     Mutex x_signalled;
 
-    std::function<void()> m_onViewChange;
+    std::function<void(dev::h256Hash const& filter)> m_onViewChange;
 
     /// the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;

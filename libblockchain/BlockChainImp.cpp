@@ -152,7 +152,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
             {
                 auto entry = entries->get(0);
                 strBlock = entry->getField(SYS_VALUE);
-                auto block = Block(fromHex(strBlock.c_str()));
+                auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
 
                 BLOCKCHAIN_LOG(TRACE) << "[#getBlock] Write to cache";
                 auto blockPtr = m_blockCache.add(block);

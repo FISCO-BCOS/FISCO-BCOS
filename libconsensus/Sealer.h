@@ -102,6 +102,7 @@ public:
         return (m_sealing.block.isSealed() ||
                 m_sealing.block.blockHeader().number() <= m_blockChain->number());
     }
+
     /// return the pointer of ConsensusInterface to access common interfaces
     std::shared_ptr<dev::consensus::ConsensusInterface> const consensusEngine()
     {
@@ -129,17 +130,22 @@ protected:
 
     virtual bool reachBlockIntervalTime() { return false; }
     virtual void handleBlock() {}
+    virtual bool shouldHandleBlock() { return true; }
     virtual void doWork(bool wait);
     void doWork() override { doWork(true); }
     bool isBlockSyncing();
-    inline void resetSealingBlock()
+
+    inline void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
     {
-        SEAL_LOG(DEBUG) << "[#resetSealingBlock] [number]" << m_blockChain->number() << std::endl;
+        SEAL_LOG(DEBUG) << "++++ Report [#resetSealingBlock] [number]" << m_blockChain->number()
+                        << std::endl;
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-        resetSealingBlock(m_sealing);
+        resetSealingBlock(m_sealing, filter, resetNextLeader);
     }
-    void resetSealingBlock(Sealing& sealing);
-    void resetBlock(dev::eth::Block& block);
+    void resetSealingBlock(
+        Sealing& sealing, h256Hash const& filter = h256Hash(), bool resetNextLeader = false);
+    void resetBlock(dev::eth::Block& block, bool resetNextLeader = false);
+
     void resetSealingHeader(dev::eth::BlockHeader& header);
     /// reset timestamp of block header
     void resetCurrentTime()

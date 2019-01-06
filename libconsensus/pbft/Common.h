@@ -296,6 +296,7 @@ struct PrepareReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         block = req.block;
+        pBlock = req.pBlock;
         p_execContext = nullptr;
     }
 
@@ -317,6 +318,7 @@ struct PrepareReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         blockStruct.encode(block);
+        pBlock = std::make_shared<dev::eth::Block>(std::move(blockStruct));
         p_execContext = nullptr;
     }
 

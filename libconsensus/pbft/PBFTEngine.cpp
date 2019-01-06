@@ -71,15 +71,8 @@ bool PBFTEngine::shouldSeal()
     /// fast view change
     if (ret.second != nodeIdx())
     {
-        /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
-        /// is not connect to leader.
-        h512 node_id = getMinerByIndex(ret.second);
-        if (node_id != h512() && !m_service->isConnected(node_id))
-        {
-            m_timeManager.m_lastConsensusTime = 0;
-            m_timeManager.m_lastSignTime = 0;
-            m_signalled.notify_all();
-        }
+        if (m_exec && getNextLeader() == nodeIdx())
+            return true;
         return false;
     }
     if (m_reqCache->committedPrepareCache().height == m_consensusBlockNumber)
@@ -221,20 +214,20 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 bool PBFTEngine::generatePrepare(Block const& block)
 {
     Guard l(m_mutex);
+    m_exec = false;
     PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
     bytes prepare_data;
     prepare_req.encode(prepare_data);
+
     /// broadcast the generated preparePacket
     bool succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
     if (succ)
     {
-        if (block.getTransactionSize() == 0 && m_omitEmptyBlock)
+        if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
         {
-            m_timeManager.changeView();
-            m_timeManager.m_changeCycle = 0;
-            m_emptyBlockViewChange = true;
             m_leaderFailed = true;
-            m_signalled.notify_all();
+            changeViewForEmptyBlock();
+            return true;
         }
         handlePrepareMsg(prepare_req);
     }
@@ -490,6 +483,7 @@ bool PBFTEngine::checkBlockSign(Block const& block)
 {
     ReadGuard l(m_minerListMutex);
     /// ignore the genesis block
+
     if (block.blockHeader().number() == 0)
         return true;
     /// check sealer list(node list)
@@ -537,10 +531,43 @@ bool PBFTEngine::checkBlockSign(Block const& block)
     return true;
 }
 
+void PBFTEngine::notifySealing(dev::eth::Block const& block)
+{
+    if (!m_onViewChange)
+        return;
+
+    if (getLeader().second != getNextLeader() && nodeIdx() == getNextLeader())
+    {
+        h256Hash filter;
+        for (auto& trans : block.transactions())
+        {
+            filter.insert(trans.sha3());
+        }
+
+        LOG(DEBUG) << "CONSENSUS ++++ Report: i am the next leader, reset now, next leader = "
+                   << getNextLeader() << " , filter size = " << filter.size();
+        m_timeManager.m_startSealNextLeader = utcTime();
+        m_exec = true;
+        m_onViewChange(filter);
+    }
+}
+
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
     auto start_exec_time = utcTime();
-    Block working_block(req.block);
+    Block working_block;
+    if (req.pBlock)
+    {
+        working_block = *req.pBlock;
+    }
+    else
+    {
+        working_block.decode(ref(req.block));
+    }
+    if (working_block.getTransactionSize() > 0)
+    {
+        notifySealing(working_block);
+    }
     PBFTENGINE_LOG(TRACE) << "[#execBlock] [myIdx/myNode/number/hash/idx]:  " << nodeIdx() << "/"
                           << m_keyPair.pub().abridged() << "/" << working_block.header().number()
                           << "/" << working_block.header().hash().abridged() << "/" << req.idx;
@@ -648,10 +675,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// whether to omit empty block
     if (needOmit(workingSealing))
     {
-        m_timeManager.changeView();
-        m_timeManager.m_changeCycle = 0;
-        m_emptyBlockViewChange = true;
-        m_signalled.notify_all();
+        changeViewForEmptyBlock();
         return;
     }
 
@@ -1084,9 +1108,9 @@ void PBFTEngine::checkTimeout()
                                   << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                                   << t.elapsed() * 1000 << "/" << m_view << "/" << m_toView;
         }
+        if (flag && m_onViewChange)
+            m_onViewChange(h256Hash());
     }
-    if (flag && m_onViewChange)
-        m_onViewChange();
 }
 
 void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)

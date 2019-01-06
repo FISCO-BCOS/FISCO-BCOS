@@ -83,7 +83,8 @@ void Sealer::reportNewBlock()
             if (shouldResetSealing())
             {
                 SEAL_LOG(DEBUG) << "[#reportNewBlock] Reset sealing: [number]:  "
-                                << m_blockChain->number();
+                                << m_blockChain->number()
+                                << ", sealing number:" << m_sealing.block.blockHeader().number();
                 resetSealingBlock();
             }
         }
@@ -126,8 +127,9 @@ void Sealer::doWork(bool wait)
                 m_signalled.wait_for(l, std::chrono::milliseconds(1));
                 return;
             }
-            handleBlock();
         }
+        if (shouldHandleBlock())
+            handleBlock();
     }
     if (shouldWait(wait))
     {
@@ -154,16 +156,26 @@ bool Sealer::isBlockSyncing()
     return (state.state != SyncState::Idle);
 }
 
-void Sealer::resetSealingBlock(Sealing& sealing)
+void Sealer::resetSealingBlock(Sealing& sealing, h256Hash const& filter, bool resetNextLeader)
 {
-    resetBlock(sealing.block);
-    sealing.m_transactionSet.clear();
+    resetBlock(sealing.block, resetNextLeader);
+    sealing.m_transactionSet = filter;
     sealing.p_execContext = nullptr;
 }
 
-void Sealer::resetBlock(Block& block)
+void Sealer::resetBlock(Block& block, bool resetNextLeader)
 {
-    block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+    if (resetNextLeader)
+    {
+        SEAL_LOG(DEBUG) << "reset nextleader number to:" << (m_blockChain->number() + 2);
+        block.header().setNumber(m_blockChain->number() + 2);
+        block.resetCurrentBlock();
+    }
+    else
+    {
+        block.resetCurrentBlock(
+            m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader())
+    }
 }
 
 void Sealer::resetSealingHeader(BlockHeader& header)

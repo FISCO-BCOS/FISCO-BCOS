@@ -37,8 +37,10 @@ class Block
 public:
     ///-----constructors of Block
     Block() = default;
-    explicit Block(bytesConstRef _data);
-    explicit Block(bytes const& _data);
+    explicit Block(
+        bytesConstRef _data, CheckTransaction const option = CheckTransaction::Everything);
+    explicit Block(
+        bytes const& _data, CheckTransaction const option = CheckTransaction::Everything);
     /// copy constructor
     Block(Block const& _block);
     /// assignment operator
@@ -65,7 +67,7 @@ public:
     void encode(bytes& _out) const;
 
     ///-----decode functions
-    void decode(bytesConstRef _block);
+    void decode(bytesConstRef _block, CheckTransaction const option = CheckTransaction::Everything);
 
     /// @returns the RLP serialisation of this block.
     bytes rlp() const
@@ -126,9 +128,13 @@ public:
     h256 const transactionRoot() { return header().transactionsRoot(); }
     h256 const receiptRoot() { return header().receiptsRoot(); }
 
-    void resetCurrentBlock(BlockHeader& _parent)
+    void resetCurrentBlock(BlockHeader const& _parent = BlockHeader())
     {
-        m_blockHeader.populateFromParent(_parent);
+        if (!(bool)(_parent))
+        {
+            m_blockHeader.populateFromParent(_parent);
+        }
+        m_blockHeader.setSealer(Invalid256);
         m_transactions.clear();
         m_transactionReceipts.clear();
         m_sigList.clear();
