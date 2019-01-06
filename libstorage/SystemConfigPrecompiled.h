@@ -36,13 +36,13 @@ const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
 const int TX_COUNT_LIMIT_MIN = 1;
 const int TX_GAS_LIMIT_MIN = 100000;
 
-/*
+#if 0
 contract SystemConfigTable
 {
     // Return 1 means successful setting, and 0 means cannot find the config key.
     function setValueByKey(string key, string value) public returns(int256);
 }
-*/
+#endif
 
 class SystemConfigPrecompiled : public CRUDPrecompiled
 {

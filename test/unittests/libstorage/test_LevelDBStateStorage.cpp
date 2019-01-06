@@ -127,18 +127,15 @@ public:
     {}
     virtual ~MockLevelDB() {}
 
-    virtual Status Put(const WriteOptions& options, const Slice& key, const Slice& value)
-    {
-        return Status::OK();
-    }
+    virtual Status Put(const WriteOptions&, const Slice&, const Slice&) { return Status::OK(); }
 
-    virtual Status Delete(const WriteOptions& options, const Slice& key)
+    virtual Status Delete(const WriteOptions&, const Slice& key)
     {
         db.erase(key.ToString());
         return Status::OK();
     }
 
-    virtual Status Write(const WriteOptions& options, WriteBatch* updates)
+    virtual Status Write(const WriteOptions&, WriteBatch* updates)
     {
         if (updates == nullptr)
             return Status::InvalidArgument(Slice("InvalidArgument"));
@@ -159,7 +156,7 @@ public:
         return Status::OK();
     }
 
-    virtual Status Get(const ReadOptions& options, const Slice& key, std::string* value)
+    virtual Status Get(const ReadOptions&, const Slice& key, std::string* value)
     {
         if (value == nullptr || key.empty() || key == "e_Exception")
             return Status::InvalidArgument(Slice("InvalidArgument"));
