@@ -452,6 +452,16 @@ void TxPool::transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
     m_transactionKnownBy[_txHash].insert(_nodeId);
 }
 
+/// set transactions is known by a node
+void TxPool::transactionsIsKnownBy(h256Hash const& _txHashSet, h512 const& _nodeId)
+{
+    WriteGuard l(x_transactionKnownBy);
+    for (auto txHash: _txHashSet)
+    {
+        m_transactionKnownBy[tx_Hash].insert(_nodeId);
+    }
+}
+
 /// Is the transaction is known by someone
 bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
 {

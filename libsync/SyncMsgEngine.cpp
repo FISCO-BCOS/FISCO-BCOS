@@ -172,7 +172,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     unsigned itemCount = rlps.itemCount();
 
     size_t successCnt = 0;
-    WriteGuard l(m_txPool->xtransactionKnownBy());
+    h256Hash knownSet;
     for (unsigned i = 0; i < itemCount; ++i)
     {
         try
@@ -197,14 +197,17 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                << int(importResult) << "/" << _packet.nodeId.abridged() << "/"
                                << move(tx.sha3()) << endl;
             }
-
-            m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
+            knownSet.push_back(tx.sha3());
         }
         catch (std::exception& e)
         {
             SYNCLOG(WARNING) << "[Tx] Invalid transaction RLP recieved [reason/rlp] " << e.what()
                              << "/" << toHex(rlps[i].toBytes()) << endl;
             continue;
+        }
+        if (knownSet.size() > 0)
+        {
+            m_txPool->transactionsIsKnownBy(knownSet, _packet.nodeId);
         }
     }
     SYNCLOG(DEBUG) << "[Tx] Import peer transactions [import/rcv/txPool]: " << successCnt << "/"

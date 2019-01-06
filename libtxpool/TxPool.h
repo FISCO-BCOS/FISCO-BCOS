@@ -133,6 +133,7 @@ public:
             return false;
         return p->second.find(_nodeId) != p->second.end();
     }
+    void transactionsIsKnownBy(h256Hash const& _txHashSet, h512 const& _nodeId) override;
     /// Is the transaction is known by someone
     bool isTransactionKnownBySomeone(h256 const& _txHash) override;
     SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
