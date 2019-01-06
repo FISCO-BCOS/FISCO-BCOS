@@ -68,9 +68,9 @@ public:
                 {
                     resetSealingBlock(filter);
                 }
-                m_signalled.notify_all();
-                m_blockSignalled.notify_all();
             }
+            m_signalled.notify_all();
+            m_blockSignalled.notify_all();
         });
     }
     void start() override;

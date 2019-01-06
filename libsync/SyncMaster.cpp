@@ -186,11 +186,7 @@ void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
-    auto ts =
-        m_txPool->topTransactionsCondition(c_maxSendTransactions, [&](Transaction const& _tx) {
-            bool unsent = !m_txPool->isTransactionKnownBy(_tx.sha3(), m_nodeId);
-            return unsent;
-        });
+    auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
 
     SYNCLOG(TRACE) << "[Tx] Transaction " << ts.size() << " of " << m_txPool->pendingSize()
                    << " need to broadcast" << endl;

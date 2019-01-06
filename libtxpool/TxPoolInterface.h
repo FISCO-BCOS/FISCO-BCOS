@@ -55,8 +55,8 @@ public:
     virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
     virtual dev::eth::Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
-    virtual dev::eth::Transactions topTransactionsCondition(uint64_t const& _limit,
-        std::function<bool(dev::eth::Transaction const&)> const& _condition = nullptr)
+    virtual dev::eth::Transactions topTransactionsCondition(
+        uint64_t const& _limit, dev::h512 const& _nodeId)
     {
         return dev::eth::Transactions();
     };

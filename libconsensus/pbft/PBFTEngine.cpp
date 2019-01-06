@@ -27,6 +27,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 #include <libstorage/Storage.h>
+#include <libtxpool/TxPool.h>
 using namespace dev::eth;
 using namespace dev::db;
 using namespace dev::blockverifier;
@@ -543,13 +544,9 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
         {
             filter.insert(trans.sha3());
         }
-
-        PBFT(DEBUG) << "CONSENSUS ++++ Report: i am the next leader, reset now, next leader = "
-                    << getNextLeader() << " , filter size = " << filter.size();
         PBFTENGINE_LOG(DEBUG) << "I am the next leader = " << getNextLeader()
                               << ", filter trans size = " << filter.size()
-                              << ", total trans = " << ;
-        << m_txPool->status().current();
+                              << ", total trans = " << m_txPool->status().current;
         m_timeManager.m_startSealNextLeader = utcTime();
         m_exec = true;
         m_onViewChange(filter);
@@ -575,13 +572,15 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     {
         notifySealing(working_block);
     }
-    PBFTENGINE_LOG(TRACE) << "[#execBlock] [myIdx/myNode/number/hash/idx]:  " << nodeIdx() << "/"
-                          << m_keyPair.pub().abridged() << "/" << working_block.header().number()
-                          << "/" << working_block.header().hash().abridged() << "/" << req.idx;
     checkBlockValid(working_block);
     m_blockSync->noteSealingBlockNumber(working_block.header().number());
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
+    PBFTENGINE_LOG(DEBUG) << "[#execBlock] [myIdx/myNode/number/hash/idx/timecost]:  " << nodeIdx()
+                          << "/" << m_keyPair.pub().abridged() << "/"
+                          << working_block.header().number() << "/"
+                          << working_block.header().hash().abridged() << "/" << req.idx
+                          << (utcTime() - start_exec_time);
     m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
 }
 
@@ -779,6 +778,7 @@ void PBFTEngine::checkAndSave()
             /// Block block(m_reqCache->prepareCache().block);
             std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
             m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
+            auto start_commit_time = utcTime();
             /// callback block chain to commit block
             CommitResult ret = m_blockChain->commitBlock((*p_block),
                 std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
@@ -787,10 +787,12 @@ void PBFTEngine::checkAndSave()
             {
                 dropHandledTransactions(*p_block);
                 PBFTENGINE_LOG(DEBUG)
-                    << "[#CommitBlock Succ:] [myIdx/myNode/idx/nodeId/number/hash]:  " << nodeIdx()
-                    << "/" << m_keyPair.pub().abridged() << "/" << m_reqCache->prepareCache().idx
-                    << "/" << m_keyPair.pub() << "/" << m_reqCache->prepareCache().height << "/"
-                    << m_reqCache->prepareCache().block_hash.abridged();
+                    << "[#CommitBlock Succ:] [myIdx/myNode/idx/nodeId/number/hash/timecost]:  "
+                    << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
+                    << m_reqCache->prepareCache().idx << "/" << m_keyPair.pub() << "/"
+                    << m_reqCache->prepareCache().height << "/"
+                    << m_reqCache->prepareCache().block_hash.abridged() << "/"
+                    << (utcTime() - start_commit_time);
             }
             else
             {

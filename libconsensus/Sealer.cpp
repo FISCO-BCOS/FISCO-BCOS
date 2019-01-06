@@ -168,8 +168,8 @@ void Sealer::resetBlock(Block& block, bool resetNextLeader)
     if (resetNextLeader)
     {
         SEAL_LOG(DEBUG) << "reset nextleader number to:" << (m_blockChain->number() + 2);
-        block.header().setNumber(m_blockChain->number() + 2);
         block.resetCurrentBlock();
+        block.header().setNumber(m_blockChain->number() + 2);
     }
     else
     {

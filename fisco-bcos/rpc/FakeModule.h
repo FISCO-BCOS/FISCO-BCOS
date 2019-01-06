@@ -83,7 +83,7 @@ public:
         return m_asyncSend[nodeID];
     }
 
-    dev::network::Message::Ptr getAsyncSendMessageByNodeID(NodeID const& nodeID)
+    dev::network::Message::Ptr getAsyncSendMessageByNodeID(dev::p2p::NodeID const& nodeID)
 
     {
         auto msg = m_asyncSendMsgs.find(nodeID);
