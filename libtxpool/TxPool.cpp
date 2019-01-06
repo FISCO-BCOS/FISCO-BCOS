@@ -317,7 +317,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
     for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
         /// check block limit and nonce again when obtain transactions
-        if (false == isBlockLimitOrNonceOk(*it, false))
+        if (false == m_txNonceCheck->isBlockLimitOk(*it))
         {
             invalidBlockLimitTxs.push_back(it->sha3());
             nonceKeyCache.push_back(m_commonNonceCheck->generateKey(*it));
