@@ -44,12 +44,10 @@ std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<Exe
 bytes dev::blockverifier::EntriesPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(DEBUG) << "call Entries:" << toHex(param);
-
+    STORAGE_LOG(TRACE) << LOG_BADGE("EntriesPrecompiled") << LOG_DESC("call")
+                       << LOG_KV("param", toHex(param));
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-
-    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
     dev::eth::ContractABI abi;
 

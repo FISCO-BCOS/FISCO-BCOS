@@ -26,15 +26,10 @@ namespace dev
 namespace blockverifier
 {
 #if 0
-contract Authority {
+contract AuthorityTable {
     function insert(string table_name, string addr) public returns(int);
     function remove(string table_name, string addr) public returns(int);
     function queryByName(string table_name) public constant returns(string);
-}
-{
-    "06e63ff8": "insert(string,string)",
-    "44590a7e": "remove(string,string)",
-    "20586031": "queryByName(string)"
 }
 #endif
 
