@@ -22,6 +22,7 @@
 #include "Rpc.h"
 #include "Common.h"
 #include "JsonHelper.h"
+#include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <libconfig/SystemConfigMgr.h>
 #include <libdevcore/CommonData.h>
@@ -269,12 +270,21 @@ std::string Rpc::getClientVersion()
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
 
         std::string version;
-        for (auto it : implementedModules())
-        {
-            version.append(it.name + ":" + it.version);
-        }
+        Json::Value versionJson;
 
-        return version;
+#ifdef FISCO_GM
+            versionJson["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION));
+#else
+        versionJson["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
+#endif
+            versionJson["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
+            versionJson["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
+                                        std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
+            versionJson["Git Branch"] = DEV_QUOTED(FISCO_BCOS_BUILD_BRANCH);
+            versionJson["Git Commit Hash"] = DEV_QUOTED(FISCO_BCOS_COMMIT_HASH);
+
+            version = versionJson.toStyledString();
+            return version;
     }
     catch (JsonRpcException& e)
     {
