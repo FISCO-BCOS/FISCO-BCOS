@@ -204,7 +204,6 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     m_txsHash.erase(p_tx);
     if (m_known.count(_txHash))
         m_known.erase(_txHash);
-    removeTransactionKnowBy(_txHash);  // Remove the record of transaction know by some peers
     return true;
 }
 
@@ -232,15 +231,25 @@ bool TxPool::insert(Transaction const& _tx)
  */
 bool TxPool::drop(h256 const& _txHash)
 {
-    UpgradableGuard l(m_lock);
-    if (!m_known.count(_txHash))
-        return false;
-    UpgradeGuard ul(l);
-    if (m_dropped.size() < m_limit)
-        m_dropped.insert(_txHash);
-    else
-        m_dropped.clear();
-    return removeTrans(_txHash);
+    bool succ = false;
+    /// drop transactions
+    {
+        UpgradableGuard l(m_lock);
+        if (!m_known.count(_txHash))
+            return false;
+        UpgradeGuard ul(l);
+        if (m_dropped.size() < m_limit)
+            m_dropped.insert(_txHash);
+        else
+            m_dropped.clear();
+        succ = removeTrans(_txHash);
+    }
+    /// drop information of transactions
+    {
+        WriteGuard l(x_transactionKnownBy);
+        removeTransactionKnowBy(_txHash);
+    }
+    return succ;
 }
 
 dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
@@ -251,6 +260,17 @@ dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
             block.blockHeader().hash(), block.blockHeader().number(), tx.safeSender(),
             tx.receiveAddress(), index, receipt.gasUsed(), receipt.contractAddress());
     return pTxReceipt;
+}
+
+bool TxPool::removeBlockKnowTrans(Block const& block)
+{
+    if (block.getTransactionSize() == 0)
+        return true;
+    WriteGuard l(x_transactionKnownBy);
+    for (auto const& trans : block.transactions())
+    {
+        removeTransactionKnowBy(trans.sha3());
+    }
 }
 
 bool TxPool::dropTransactions(Block const& block, bool needNotify)
@@ -287,6 +307,8 @@ bool TxPool::dropBlockTrans(Block const& block)
     /// update the nonce check related to block chain
     m_txNonceCheck->updateCache(false);
     bool ret = dropTransactions(block, true);
+    /// remove the information of known transactions from map
+    removeBlockKnowTrans(block);
     /// remove the nonce check related to txpool
     m_commonNonceCheck->delCache(block.transactions());
     return ret;
@@ -308,44 +330,56 @@ dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
 
 Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
 {
-    UpgradableGuard l(m_lock);
     uint64_t limit = min(m_limit, _limit);
     uint64_t txCnt = 0;
     Transactions ret;
     std::vector<dev::h256> invalidBlockLimitTxs;
     std::vector<dev::eth::NonceKeyType> nonceKeyCache;
-    for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
     {
-        /// check block limit and nonce again when obtain transactions
-        if (false == m_txNonceCheck->isBlockLimitOk(*it))
+        UpgradableGuard l(m_lock);
+        for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            invalidBlockLimitTxs.push_back(it->sha3());
-            nonceKeyCache.push_back(m_commonNonceCheck->generateKey(*it));
-            continue;
+            /// check block limit and nonce again when obtain transactions
+            if (false == m_txNonceCheck->isBlockLimitOk(*it))
+            {
+                invalidBlockLimitTxs.push_back(it->sha3());
+                nonceKeyCache.push_back(m_commonNonceCheck->generateKey(*it));
+                continue;
+            }
+            if (!_avoid.count(it->sha3()))
+            {
+                ret.push_back(*it);
+                txCnt++;
+                if (_updateAvoid)
+                    _avoid.insert(it->sha3());
+            }
         }
-        if (!_avoid.count(it->sha3()))
+        if (invalidBlockLimitTxs.size() > 0)
         {
-            ret.push_back(*it);
-            txCnt++;
-            if (_updateAvoid)
-                _avoid.insert(it->sha3());
+            UpgradeGuard ul(l);
+            for (auto txHash : invalidBlockLimitTxs)
+            {
+                removeTrans(txHash);
+                m_dropped.insert(txHash);
+            }
+        }
+        /// delete cached invalid nonce
+        if (nonceKeyCache.size() > 0)
+        {
+            for (auto key : nonceKeyCache)
+                m_commonNonceCheck->delCache(key);
         }
     }
+
     if (invalidBlockLimitTxs.size() > 0)
     {
-        UpgradeGuard ul(l);
+        WriteGuard l(x_transactionKnownBy);
         for (auto txHash : invalidBlockLimitTxs)
         {
-            removeTrans(txHash);
-            m_dropped.insert(txHash);
+            removeTransactionKnowBy(txHash);
         }
     }
-    /// delete cached invalid nonce
-    if (nonceKeyCache.size() > 0)
-    {
-        for (auto key : nonceKeyCache)
-            m_commonNonceCheck->delCache(key);
-    }
+
     return ret;
 }
 
@@ -427,9 +461,9 @@ bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
     return !p->second.empty();
 }
 
+// Remove the record of transaction know by some peers
 void TxPool::removeTransactionKnowBy(h256 const& _txHash)
 {
-    WriteGuard l(x_transactionKnownBy);
     auto p = m_transactionKnownBy.find(_txHash);
     if (p != m_transactionKnownBy.end())
         m_transactionKnownBy.erase(p);

@@ -172,7 +172,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     unsigned itemCount = rlps.itemCount();
 
     size_t successCnt = 0;
-
+    WriteGuard l(m_txPool->xtransactionKnownBy());
     for (unsigned i = 0; i < itemCount; ++i)
     {
         try

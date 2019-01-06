@@ -157,6 +157,7 @@ protected:
     virtual u256 filterCheck(const dev::eth::Transaction& _t) const { return u256(0); };
     void clear();
     bool dropTransactions(dev::eth::Block const& block, bool needNotify = false);
+    bool removeBlockKnowTrans(dev::eth::Block const& block);
 
 private:
     dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(

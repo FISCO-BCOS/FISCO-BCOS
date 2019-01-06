@@ -84,9 +84,17 @@ protected:
         return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1);
     }
 
-    bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
+    bool reachBlockIntervalTime() override
+    {
+        return m_pbftEngine->reachBlockIntervalTime() || emptyTxPool();
+    }
 
 private:
+    bool emptyTxPool()
+    {
+        return (m_sealing.block.getTransactionSize() > 0) &&
+               m_sealing.m_txPool->status().current == m_sealing.m_transactionSet.size();
+    }
     void setBlock();
 
     bool sealIsGeneratedByNextLeader()
