@@ -136,7 +136,7 @@ public:
     void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
     {
         auto pBlock = getBlockByNumber(_blockNumber);
-        for (auto trans : pBlock->transactions())
+        for (auto& trans : pBlock->transactions())
         {
             _nonceVector.push_back(boost::lexical_cast<dev::eth::NonceKeyType>(trans.nonce()));
         }

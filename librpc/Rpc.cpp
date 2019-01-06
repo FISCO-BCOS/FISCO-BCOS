@@ -377,7 +377,7 @@ Json::Value Rpc::getBlockByHash(
         response["sealer"] = toJS(block->header().sealer());
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
-        for (auto data : datas)
+        for (auto const& data : datas)
             response["extraData"].append(toJS(data));
         response["gasLimit"] = toJS(block->header().gasLimit());
         response["gasUsed"] = toJS(block->header().gasUsed());
@@ -438,7 +438,7 @@ Json::Value Rpc::getBlockByNumber(
         response["sealer"] = toJS(block->header().sealer());
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
-        for (auto data : datas)
+        for (auto const& data : datas)
             response["extraData"].append(toJS(data));
         response["gasLimit"] = toJS(block->header().gasLimit());
         response["gasUsed"] = toJS(block->header().gasUsed());

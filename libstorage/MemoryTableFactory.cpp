@@ -208,7 +208,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 
     vector<dev::storage::TableData::Ptr> datas;
 
-    for (auto dbIt : m_name2Table)
+    for (auto& dbIt : m_name2Table)
     {
         auto table = dbIt.second;
 
@@ -216,7 +216,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
         tableData->tableName = dbIt.first;
 
         bool dirtyTable = false;
-        for (auto it : *(table->data()))
+        for (auto& it : *(table->data()))
         {
             tableData->data.insert(make_pair(it.first, it.second));
 

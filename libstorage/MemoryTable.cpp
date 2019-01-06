@@ -66,7 +66,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
         }
         auto indexes = processEntries(entries, condition);
         Entries::Ptr resultEntries = std::make_shared<Entries>();
-        for (auto i : indexes)
+        for (auto& i : indexes)
         {
             resultEntries->addEntry(entries->get(i));
         }
@@ -116,10 +116,10 @@ size_t dev::storage::MemoryTable::update(
         auto indexes = processEntries(entries, condition);
         std::vector<Change::Record> records;
 
-        for (auto i : indexes)
+        for (auto& i : indexes)
         {
             Entry::Ptr updateEntry = entries->get(i);
-            for (auto it : *(entry->fields()))
+            for (auto& it : *(entry->fields()))
             {
                 records.emplace_back(i, it.first, updateEntry->getField(it.first));
                 updateEntry->setField(it.first, it.second);
@@ -214,7 +214,7 @@ size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr 
     auto indexes = processEntries(entries, condition);
 
     std::vector<Change::Record> records;
-    for (auto i : indexes)
+    for (auto& i : indexes)
     {
         Entry::Ptr removeEntry = entries->get(i);
 
@@ -231,7 +231,7 @@ size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr 
 h256 dev::storage::MemoryTable::hash()
 {
     bytes data;
-    for (auto it : m_cache)
+    for (auto& it : m_cache)
     {
         if (it.second->dirty())
         {
@@ -240,7 +240,7 @@ h256 dev::storage::MemoryTable::hash()
             {
                 if (it.second->get(i)->dirty())
                 {
-                    for (auto fieldIt : *(it.second->get(i)->fields()))
+                    for (auto& fieldIt : *(it.second->get(i)->fields()))
                     {
                         if (isHashField(fieldIt.first))
                         {
@@ -308,7 +308,7 @@ bool dev::storage::MemoryTable::processCondition(Entry::Ptr entry, Condition::Pt
 {
     try
     {
-        for (auto it : *condition->getConditions())
+        for (auto& it : *condition->getConditions())
         {
             if (entry->getStatus() == Entry::Status::DELETED)
             {

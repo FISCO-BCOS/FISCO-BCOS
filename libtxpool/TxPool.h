@@ -104,10 +104,10 @@ public:
      * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) override;
-    virtual dev::eth::Transactions topTransactions(
+    dev::eth::Transactions topTransactions(uint64_t const& _limit) override;
+    dev::eth::Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override;
-    virtual dev::eth::Transactions topTransactionsCondition(
+    dev::eth::Transactions topTransactionsCondition(
         uint64_t const& _limit, dev::h512 const& _nodeId) override;
 
     /// get all transactions(maybe blocksync module need this interface)
@@ -119,20 +119,23 @@ public:
     TxPoolStatus status() const override;
 
     /// protocol id used when register handler to p2p module
-    virtual PROTOCOL_ID const& getProtocolId() const { return m_protocolId; }
+    PROTOCOL_ID const& getProtocolId() const override { return m_protocolId; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
     /// Set transaction is known by a node
-    virtual void transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
+    void transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
 
     /// Is the transaction is known by the node ?
-    virtual bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) override
+    bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) override
     {
-        dev::ReadGuard l(x_transactionKnownBy);
-        return isTransactionKnownByWithoutGuard(_txHash, _nodeId);
+        auto p = m_transactionKnownBy.find(_txHash);
+        if (p == m_transactionKnownBy.end())
+            return false;
+        return p->second.find(_nodeId) != p->second.end();
     }
     /// Is the transaction is known by someone
-    virtual bool isTransactionKnownBySomeone(h256 const& _txHash) override;
+    bool isTransactionKnownBySomeone(h256 const& _txHash) override;
+    SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
 
 protected:
     /**
@@ -172,14 +175,6 @@ private:
             return false;
         }
         return true;
-    }
-
-    bool isTransactionKnownByWithoutGuard(h256 const& _txHash, h512 const& _nodeId)
-    {
-        auto p = m_transactionKnownBy.find(_txHash);
-        if (p == m_transactionKnownBy.end())
-            return false;
-        return p->second.find(_nodeId) != p->second.end();
     }
 
 private:

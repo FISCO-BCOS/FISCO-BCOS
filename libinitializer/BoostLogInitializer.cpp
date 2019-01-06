@@ -108,7 +108,7 @@ unsigned LogInitializer::getLogLevel(std::string const& levelStr)
 /// stop and remove all sinks after the program exit
 void LogInitializer::stopLogging()
 {
-    for (auto sink : m_sinks)
+    for (auto const& sink : m_sinks)
         stopLogging(sink);
     m_sinks.clear();
 }

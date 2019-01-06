@@ -108,7 +108,7 @@ public:
     /// append transactions
     void appendTransactions(Transactions const& _trans_array)
     {
-        for (auto trans : _trans_array)
+        for (auto const& trans : _trans_array)
             m_transactions.push_back(trans);
         noteChange();
     }

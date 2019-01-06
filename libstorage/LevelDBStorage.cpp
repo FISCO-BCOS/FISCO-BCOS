@@ -96,9 +96,9 @@ size_t LevelDBStorage::commit(
         leveldb::WriteBatch batch;
 
         size_t total = 0;
-        for (auto it : datas)
+        for (auto& it : datas)
         {
-            for (auto dataIt : it->data)
+            for (auto& dataIt : it->data)
             {
                 if (dataIt.second->size() == 0u)
                 {
@@ -110,7 +110,7 @@ size_t LevelDBStorage::commit(
                 for (size_t i = 0; i < dataIt.second->size(); ++i)
                 {
                     Json::Value value;
-                    for (auto fieldIt : *(dataIt.second->get(i)->fields()))
+                    for (auto& fieldIt : *(dataIt.second->get(i)->fields()))
                     {
                         value[fieldIt.first] = fieldIt.second;
                     }
@@ -144,7 +144,8 @@ size_t LevelDBStorage::commit(
     }
     catch (std::exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << "Commit leveldb exception" << boost::diagnostic_information(e);
+        STORAGE_LEVELDB_LOG(ERROR)
+            << "Commit leveldb exception" << boost::diagnostic_information(e);
 
         BOOST_THROW_EXCEPTION(e);
     }

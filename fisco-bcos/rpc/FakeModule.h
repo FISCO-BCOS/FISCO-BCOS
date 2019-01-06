@@ -332,8 +332,11 @@ public:
         return dev::eth::ImportResult::Success;
     }
 
+    SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
+
 private:
     dev::eth::Transactions transactions;
+    mutable dev::SharedMutex x_transactionKnownBy;
     dev::eth::Transaction transaction;
     dev::PROTOCOL_ID protocolId = 0;
 };

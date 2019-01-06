@@ -355,14 +355,19 @@ Transactions TxPool::topTransactionsCondition(uint64_t const& _limit, dev::h512 
     Transactions ret;
     uint64_t limit = min(m_limit, _limit);
     uint64_t txCnt = 0;
-    for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
+
     {
-        if (!isTransactionKnownBy(it->sha3(), _nodeId))
+        ReadGuard l_kownTrans(x_transactionKnownBy);
+        for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            ret.push_back(*it);
-            txCnt++;
+            if (!isTransactionKnownBy(it->sha3(), _nodeId))
+            {
+                ret.push_back(*it);
+                txCnt++;
+            }
         }
     }
+
     return ret;
 }
 
@@ -410,14 +415,12 @@ void TxPool::clear()
 /// Set transaction is known by a node
 void TxPool::transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
 {
-    WriteGuard l(x_transactionKnownBy);
     m_transactionKnownBy[_txHash].insert(_nodeId);
 }
 
 /// Is the transaction is known by someone
 bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
 {
-    ReadGuard l(x_transactionKnownBy);
     auto p = m_transactionKnownBy.find(_txHash);
     if (p == m_transactionKnownBy.end())
         return false;

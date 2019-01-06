@@ -321,10 +321,13 @@ public:
         return ImportResult::Success;
     }
 
+    SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
+
 private:
     Transactions transactions;
     Transaction transaction;
     PROTOCOL_ID protocolId = 0;
+    mutable dev::SharedMutex x_transactionKnownBy;
 };
 
 class MockBlockSync : public SyncInterface

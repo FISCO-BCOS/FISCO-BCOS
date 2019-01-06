@@ -92,7 +92,7 @@ public:
 
     virtual ~TrieBranchNode()
     {
-        for (auto i : m_nodes)
+        for (auto& i : m_nodes)
             delete i;
     }
 
@@ -172,7 +172,7 @@ void MemTrieNode::putRLP(RLPStream& _parentStream) const
 void TrieBranchNode::makeRLP(RLPStream& _intoStream) const
 {
     _intoStream.appendList(17);
-    for (auto i : m_nodes)
+    for (auto& i : m_nodes)
         if (i)
             i->putRLP(_intoStream);
         else
@@ -354,7 +354,7 @@ MemTrieNode* TrieInfixNode::remove(bytesConstRef _key)
         {
             // merge with child...
             m_ext.reserve(m_ext.size() + p->m_ext.size());
-            for (auto i : p->m_ext)
+            for (auto& i : p->m_ext)
                 m_ext.push_back(i);
             p->m_ext = m_ext;
             p->mark();
