@@ -31,17 +31,18 @@
 
 using namespace dev;
 using namespace dev::txpool;
+using namespace dev::p2p;
 using namespace dev::blockchain;
 
 namespace dev
 {
 namespace test
 {
-class FakeService : public Service
+class FakeService : public dev::p2p::Service
 {
 public:
     FakeService() : Service() {}
-    void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
     P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override
@@ -49,7 +50,7 @@ public:
         return m_sessionInfos;
     }
 
-    void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
+    void asyncSendMessageByNodeID(dev::p2p::NodeID nodeID, dev::p2p::P2PMessage::Ptr message,
         CallbackFuncWithSession callback, dev::p2p::Options options = dev::p2p::Options()) override
     {
         if (m_asyncSend.count(nodeID))

@@ -43,25 +43,25 @@ namespace dev
 {
 namespace demo
 {
-class MockService : public Service
+class MockService : public dev::p2p::Service
 {
 public:
     MockService() : Service()
     {
         p2p::NodeID nodeID = h512(100);
-        NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
-        P2PSessionInfo info(nodeID, m_endpoint, std::set<std::string>());
+        dev::p2p::NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
+        dev::p2p::P2PSessionInfo info(nodeID, m_endpoint, std::set<std::string>());
         std::set<std::string> topics;
         std::string topic = "Topic1";
         topics.insert(topic);
-        m_sessionInfos.push_back(P2PSessionInfo(nodeID, m_endpoint, topics));
+        m_sessionInfos.push_back(dev::p2p::P2PSessionInfo(nodeID, m_endpoint, topics));
     }
 
     virtual dev::p2p::P2PSessionInfos sessionInfos() override { return m_sessionInfos; }
     void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(dev::p2p::P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    dev::p2p::P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
+    dev::p2p::P2PSessionInfos sessionInfosByProtocolID(dev::PROTOCOL_ID _protocolID) const
     {
         return m_sessionInfos;
     }
