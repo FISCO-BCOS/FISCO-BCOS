@@ -29,6 +29,7 @@
 #include <boost/bind.hpp>
 #include <iostream>
 
+
 using namespace dev::channel;
 
 void dev::channel::ChannelServer::run()
@@ -56,10 +57,12 @@ void dev::channel::ChannelServer::run()
             }
             catch (std::exception& e)
             {
-                CHANNEL_LOG(ERROR) << "IO thread error:" << e.what();
+                CHANNEL_LOG(ERROR) << LOG_DESC("IO thread error")
+                                   << LOG_KV("what", boost::diagnostic_information(e));
+                ;
             }
 
-            CHANNEL_LOG(ERROR) << "Try restart";
+            CHANNEL_LOG(ERROR) << LOG_DESC("Try restart io_service");
 
             sleep(1);
 
@@ -78,22 +81,23 @@ void dev::channel::ChannelServer::onAccept(
     if (!error)
     {
         auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint();
-        CHANNEL_LOG(TRACE) << "Receive new connection: " << remoteEndpoint.address().to_string()
-                           << ":" << remoteEndpoint.port();
+        CHANNEL_LOG(TRACE) << LOG_DESC("Receive new connection")
+                           << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
+                           << remoteEndpoint.port();
 
         session->setHost(remoteEndpoint.address().to_string());
         session->setPort(remoteEndpoint.port());
 
         if (_enableSSL)
         {
-            CHANNEL_LOG(TRACE) << "Start SSL handshake";
+            CHANNEL_LOG(TRACE) << LOG_DESC("Start SSL handshake");
             session->sslSocket()->async_handshake(boost::asio::ssl::stream_base::server,
                 boost::bind(&ChannelServer::onHandshake, shared_from_this(),
                     boost::asio::placeholders::error, session));
         }
         else
         {
-            CHANNEL_LOG(TRACE) << "Call connectionHandler";
+            CHANNEL_LOG(TRACE) << LOG_DESC("Call connectionHandler");
 
             if (_connectionHandler)
             {
@@ -103,7 +107,7 @@ void dev::channel::ChannelServer::onAccept(
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "Accept failed: " << error.message();
+        CHANNEL_LOG(ERROR) << LOG_DESC("Accept failed") << LOG_KV("message", error.message());
 
         try
         {
@@ -111,7 +115,8 @@ void dev::channel::ChannelServer::onAccept(
         }
         catch (std::exception& e)
         {
-            CHANNEL_LOG(ERROR) << "Close error" << e.what();
+            CHANNEL_LOG(ERROR) << LOG_DESC("Close error")
+                               << LOG_KV("what", boost::diagnostic_information(e));
         }
     }
 
@@ -138,7 +143,8 @@ void dev::channel::ChannelServer::startAccept()
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << LOG_DESC("startAccept error")
+                           << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -146,7 +152,7 @@ void dev::channel::ChannelServer::stop()
 {
     try
     {
-        CHANNEL_LOG(DEBUG) << "Close acceptor";
+        CHANNEL_LOG(DEBUG) << LOG_DESC("Close acceptor");
 
         if (_acceptor->is_open())
         {
@@ -156,17 +162,20 @@ void dev::channel::ChannelServer::stop()
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << LOG_DESC("Close acceptor error")
+                           << LOG_KV("what", boost::diagnostic_information(e));
     }
 
     try
     {
-        CHANNEL_LOG(DEBUG) << "Close ioService";
+        CHANNEL_LOG(DEBUG) << LOG_DESC("Close ioService");
         _ioService->stop();
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << LOG_DESC("Close ioService")
+                           << LOG_KV("what", boost::diagnostic_information(e));
+        ;
     }
     _serverThread->join();
 }
@@ -178,19 +187,20 @@ void dev::channel::ChannelServer::onHandshake(
     {
         if (!error)
         {
-            CHANNEL_LOG(TRACE) << "SSL handshake success";
+            CHANNEL_LOG(TRACE) << LOG_DESC("SSL handshake success");
             if (_connectionHandler)
             {
                 _connectionHandler(ChannelException(), session);
             }
             else
             {
-                CHANNEL_LOG(ERROR) << "connectionHandler empty";
+                CHANNEL_LOG(ERROR) << LOG_DESC("connectionHandler empty");
             }
         }
         else
         {
-            CHANNEL_LOG(ERROR) << "SSL handshake error: " << error.message();
+            CHANNEL_LOG(ERROR) << LOG_DESC("SSL handshake error")
+                               << LOG_KV("message", error.message());
 
             try
             {
@@ -198,12 +208,13 @@ void dev::channel::ChannelServer::onHandshake(
             }
             catch (std::exception& e)
             {
-                CHANNEL_LOG(ERROR) << "Close error:" << e.what();
+                CHANNEL_LOG(ERROR)
+                    << "Close error" << LOG_KV("what", boost::diagnostic_information(e));
             }
         }
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
