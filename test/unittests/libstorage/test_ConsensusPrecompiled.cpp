@@ -185,17 +185,17 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 0u);
+    BOOST_TEST(count == 215u);
     in = abi.abiIn("addObserver(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 0u);
+    BOOST_TEST(count == 215u);
     in = abi.abiIn("remove(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 0u);
+    BOOST_TEST(count == 215u);
 }
 
 BOOST_AUTO_TEST_CASE(TestRemoveLastMiner)
