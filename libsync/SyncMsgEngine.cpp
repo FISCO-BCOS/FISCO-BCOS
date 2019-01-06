@@ -172,7 +172,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     unsigned itemCount = rlps.itemCount();
 
     size_t successCnt = 0;
-    h256Hash knownSet;
+    std::vector<dev::h256> knownTxHash;
     for (unsigned i = 0; i < itemCount; ++i)
     {
         try
@@ -197,7 +197,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                << int(importResult) << "/" << _packet.nodeId.abridged() << "/"
                                << move(tx.sha3()) << endl;
             }
-            knownSet.push_back(tx.sha3());
+            knownTxHash.push_back(tx.sha3());
         }
         catch (std::exception& e)
         {
@@ -205,9 +205,9 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                              << "/" << toHex(rlps[i].toBytes()) << endl;
             continue;
         }
-        if (knownSet.size() > 0)
+        if (knownTxHash.size() > 0)
         {
-            m_txPool->transactionsIsKnownBy(knownSet, _packet.nodeId);
+            m_txPool->transactionsIsKnownBy(knownTxHash, _packet.nodeId);
         }
     }
     SYNCLOG(DEBUG) << "[Tx] Import peer transactions [import/rcv/txPool]: " << successCnt << "/"

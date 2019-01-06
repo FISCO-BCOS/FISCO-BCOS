@@ -453,12 +453,12 @@ void TxPool::transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
 }
 
 /// set transactions is known by a node
-void TxPool::transactionsIsKnownBy(h256Hash const& _txHashSet, h512 const& _nodeId)
+void TxPool::transactionsIsKnownBy(std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId)
 {
     WriteGuard l(x_transactionKnownBy);
-    for (auto txHash: _txHashSet)
+    for (auto const& tx_hash : _txHashVec)
     {
-        m_transactionKnownBy[tx_Hash].insert(_nodeId);
+        m_transactionKnownBy[tx_hash].insert(_nodeId);
     }
 }
 
