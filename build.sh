@@ -14,7 +14,7 @@ build_source=0
 version=`cat ${SHELL_FOLDER}/release_note.txt| sed "s/^[vV]//"`
 package_name="fisco-bcos.tar.gz"
 binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}
-solc_link_prefix=https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/binariesfisco-solc-1.0.0/fisco-solc
+solc_link_prefix=https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/binaries/fisco-solc-1.0.0/fisco-solc
 Ubuntu_Platform=0
 Centos_Platform=1
 
