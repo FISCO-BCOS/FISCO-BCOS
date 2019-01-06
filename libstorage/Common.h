@@ -59,6 +59,5 @@ const int CODE_INVALID_NODEID = -41;
 /// CNSPrecompiled
 const int CODE_ADDRESS_AND_VERSION_EXIST = -50;
 
-std::string getOutJson(int _code, std::string _msg);
 }  // namespace storage
 }  // namespace dev
