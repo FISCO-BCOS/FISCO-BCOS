@@ -51,13 +51,11 @@ std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
 bytes TableFactoryPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(DEBUG) << "this: " << this << " call TableFactory:" << toHex(param);
-
+    STORAGE_LOG(TRACE) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("call")
+                       << LOG_KV("param", toHex(param));
 
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-
-    STORAGE_LOG(DEBUG) << "func:" << hex << func;
 
     dev::eth::ContractABI abi;
     bytes out;
@@ -66,8 +64,8 @@ bytes TableFactoryPrecompiled::call(
     {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
-
-        STORAGE_LOG(DEBUG) << "DBFactory open table:" << tableName;
+        STORAGE_LOG(DEBUG) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("open table")
+                           << LOG_KV("table name", tableName);
         tableName = storage::USER_TABLE_PREFIX + tableName;
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
@@ -79,7 +77,9 @@ bytes TableFactoryPrecompiled::call(
         }
         else
         {
-            STORAGE_LOG(DEBUG) << "Open new table:" << tableName << " failed.";
+            STORAGE_LOG(DEBUG) << LOG_BADGE("TableFactoryPrecompiled")
+                               << LOG_DESC("Open new table failed")
+                               << LOG_KV("table name", tableName);
         }
 
         out = abi.abiIn("", address);
@@ -100,8 +100,8 @@ bytes TableFactoryPrecompiled::call(
         auto table =
             m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
         // set createTableCode
-        int errorCode = m_memoryTableFactory->getCreateTableCode();
-        out = abi.abiIn("", u256(errorCode));
+        int createTableCode = m_memoryTableFactory->getCreateTableCode();
+        out = abi.abiIn("", createTableCode);
     }
     return out;
 }

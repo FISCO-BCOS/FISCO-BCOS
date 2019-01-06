@@ -123,8 +123,8 @@ BOOST_AUTO_TEST_CASE(remove)
     // remove not exist entry
     tableName = "t_ok";
     in = abi.abiIn("remove(string,string)", tableName, addr);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
-    BOOST_TEST(out[31] == 0);
+    authorityPrecompiled->call(context, bytesConstRef(&in));
+    BOOST_TEST(entries->size() == 0u);
 }
 
 BOOST_AUTO_TEST_CASE(queryByName)
