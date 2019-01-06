@@ -62,8 +62,8 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
         }
         catch (std::exception& e)
         {
-            INITIALIZER_LOG(ERROR)
-                << "[#SecureInitializer::initConfig] open privateKey failed: [file]: " << key;
+            INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", key);
 
             BOOST_THROW_EXCEPTION(PrivateKeyError());
         }
@@ -74,7 +74,8 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] load existing privateKey.";
+            INITIALIZER_LOG(DEBUG)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("loading privateKey");
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
             BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
 
@@ -92,15 +93,15 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
         catch (dev::Exception& e)
         {
             INITIALIZER_LOG(ERROR)
-                << "[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
-                << e.what();
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("load privateKey failed")
+                << LOG_KV("EINFO", boost::diagnostic_information(e));
             BOOST_THROW_EXCEPTION(e);
         }
     }
     else
     {
-        INITIALIZER_LOG(ERROR)
-            << "[#SecureInitializer::initConfig] channelserver privatekey not exists!";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("channelserver privateKey doesn't exist!");
         BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
     }
 
@@ -126,29 +127,31 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     SSL_CTX_set_tmp_ecdh(sslContext->native_handle(), ecdh.get());
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
-    INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] [nodeID]: " << keyPair.pub().hex();
+    INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
+                           << LOG_KV("nodeID", m_key.pub().hex());
 
     boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
     if (!cert.empty() && !contents(cert).empty())
     {
-        INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use user certificate: [file]: "
-                               << cert;
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use user certificate")
+                               << LOG_KV("file", cert);
         sslContext->use_certificate_chain_file(cert);
         sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate not exists!";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("certificate doesn't exist!");
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
 
     auto caCertContent = contents(caCert);
     if (!caCert.empty() && !caCertContent.empty())
     {
-        INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use ca certificate: [file]: "
-                               << caCert;
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca certificate")
+                               << LOG_KV("file", caCert);
 
         sslContext->add_certificate_authority(
             boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
@@ -156,14 +159,15 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] CA Certificate not exists!";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("CA Certificate doesn't exist!");
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
 
     if (!caPath.empty())
     {
-        INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use ca: [path]: " << caPath;
-
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca")
+                               << LOG_KV("file", caPath);
         sslContext->add_verify_path(caPath);
         sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
@@ -192,9 +196,8 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         }
         catch (std::exception& e)
         {
-            INITIALIZER_LOG(ERROR)
-                << "[#SecureInitializer::initConfig] open privateKey failed: [file]: " << key;
-
+            INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", key);
             BOOST_THROW_EXCEPTION(PrivateKeyError());
         }
     }
@@ -204,7 +207,8 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] load existing privateKey.";
+            INITIALIZER_LOG(DEBUG)
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("loading privateKey");
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
             BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
 
@@ -222,14 +226,15 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         catch (dev::Exception& e)
         {
             INITIALIZER_LOG(ERROR)
-                << "[#SecureInitializer::initConfig] parse privateKey failed: [EINFO]: "
-                << e.what();
+                << LOG_BADGE("SecureInitializer") << LOG_DESC("parse privateKey failed")
+                << LOG_KV("EINFO", boost::diagnostic_information(e));
             BOOST_THROW_EXCEPTION(e);
         }
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] privatekey not exists!";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("privateKey doesn't exist!");
         BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
     }
 
@@ -255,7 +260,8 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     SSL_CTX_set_tmp_ecdh(sslContext->native_handle(), ecdh.get());
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
-    INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] [nodeID]: " << keyPair.pub().hex();
+    INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
+                           << LOG_KV("nodeID", m_key.pub().hex());
 
     boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
@@ -264,34 +270,35 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     if (SSL_CTX_use_enc_PrivateKey_file(
             sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
     {
-        INITIALIZER_LOG(DEBUG)
-            << "[#SecureInitializer::initConfig] use GM enc ca certificate: [file]: " << enKey;
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("use GM enc ca certificate") << LOG_KV("file", enKey);
     }
     else
     {
-        INITIALIZER_LOG(ERROR)
-            << "[#SecureInitializer::initConfig] GM enc ca certificate not exists!";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("GM enc ca certificate not exists!");
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
 
     if (!cert.empty() && !contents(cert).empty())
     {
-        INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use user certificate: [file]: "
-                               << cert;
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use user certificate")
+                               << LOG_KV("file", cert);
         sslContext->use_certificate_chain_file(cert);
         sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] certificate not exists!";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("certificate doesn't exist!");
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
 
     auto caCertContent = contents(caCert);
     if (!caCert.empty() && !caCertContent.empty())
     {
-        INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use ca certificate: [file]: "
-                               << caCert;
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca certificate")
+                               << LOG_KV("file", caCert);
 
         sslContext->add_certificate_authority(
             boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
@@ -299,14 +306,15 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     }
     else
     {
-        INITIALIZER_LOG(ERROR) << "[#SecureInitializer::initConfig] CA Certificate not exists!";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("CA Certificate doesn't exist!");
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
 
     if (!caPath.empty())
     {
-        INITIALIZER_LOG(DEBUG) << "[#SecureInitializer::initConfig] use ca: [path]: " << caPath;
-
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca")
+                               << LOG_KV("file", caPath);
         sslContext->add_verify_path(caPath);
         sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
@@ -328,8 +336,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     }
     catch (Exception& e)
     {
-        INITIALIZER_LOG(ERROR)
-            << "[#SecureInitializer::initConfig] load verify file failed: [EINFO]: " << e.what();
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("load verify file failed")
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
 }
@@ -339,8 +348,8 @@ std::shared_ptr<bas::context> SecureInitializer::SSLContext(Usage _usage)
     auto defaultP = m_sslContexts.find(Usage::Default);
     if (defaultP == m_sslContexts.end())
     {
-        INITIALIZER_LOG(ERROR)
-            << "[#SecureInitializer::SSLContext] SecureInitializer has not been initialied";
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("SecureInitializer has not been initialied");
         BOOST_THROW_EXCEPTION(SecureInitializerNotInitConfig());
     }
 
