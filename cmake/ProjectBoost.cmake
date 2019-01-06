@@ -25,6 +25,8 @@ include(ProcessorCount)
 ProcessorCount(CORES)
 if(CORES EQUAL 0)
   set(CORES 1)
+elseif(CORES GREATER 2)
+  set(CORES 2)
 endif()
 
 set(BOOST_CXXFLAGS "")
