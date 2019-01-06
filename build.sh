@@ -14,6 +14,7 @@ build_source=0
 version=`cat ${SHELL_FOLDER}/release_note.txt| sed "s/^[vV]//"`
 package_name="fisco-bcos.tar.gz"
 binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}
+solc_link_prefix=https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/binariesfisco-solc-1.0.0/fisco-solc
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -133,16 +134,16 @@ install_all_deps()
 	if [ ${platform} -eq ${Ubuntu_Platform} ];then
 		install_ubuntu_deps
 		if [ $enable_guomi -eq 0 ];then
-			execute_cmd "sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc && sudo chmod +x /usr/bin/fisco-solc"
+			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc ${solc_link_prefix}-ubuntu && sudo chmod +x /usr/bin/fisco-solc"
 		else
-			execute_cmd "sudo cp fisco-solc-guomi-ubuntu  /usr/bin/fisco-solc-guomi && sudo chmod +x  /usr/bin/fisco-solc-guomi"
+			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc-guomi ${solc_link_prefix}-guomi-ubuntu   && sudo chmod +x  /usr/bin/fisco-solc-guomi"
 		fi
 	elif [ ${platform} -eq ${Centos_Platform} ];then
 		install_centos_deps
 		if [ $enable_guomi -eq 0 ];then
-			execute_cmd "sudo cp fisco-solc  /usr/bin/fisco-solc && sudo chmod +x /usr/bin/fisco-solc"
+			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc ${solc_link_prefix} && sudo chmod +x /usr/bin/fisco-solc"
 		else
-			execute_cmd "sudo cp fisco-solc-guomi-centos  /usr/bin/fisco-solc-guomi && sudo chmod +x /usr/bin/fisco-solc-guomi"
+			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc-guomi ${solc_link_prefix}-guomi-centos && sudo chmod +x /usr/bin/fisco-solc-guomi"
 		fi
 	else
 		LOG_ERROR "Unsupported Platform"
