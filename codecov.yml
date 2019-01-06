@@ -13,7 +13,7 @@ coverage:
         target: 70
         threshold: 0.05
       default:
-        target: 79
+        target: 80
         threshold: 0.05
     patch:
       default:
@@ -27,3 +27,8 @@ comment:
 flags:
   alltests:
     joined: false
+ignore:
+  - "fisco-bcos"
+  - "evmc"
+  - "utils"
+  

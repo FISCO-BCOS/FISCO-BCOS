@@ -23,13 +23,13 @@
 
 #pragma once
 
-#include "FixedHash.h"
 #pragma warning(push)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 #include <boost/exception/diagnostic_information.hpp>
 #pragma warning(pop)
 #pragma GCC diagnostic pop
+#include "FixedHash.h"
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/info.hpp>

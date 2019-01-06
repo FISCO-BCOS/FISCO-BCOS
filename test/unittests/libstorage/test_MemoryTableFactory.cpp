@@ -36,15 +36,13 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    virtual Entries::Ptr select(
-        h256 hash, int num, const std::string& table, const std::string& key) override
+    virtual Entries::Ptr select(h256, int, const std::string&, const std::string& key) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
 
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash) override
+    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&, h256) override
     {
         return 0;
     }
