@@ -544,8 +544,12 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
             filter.insert(trans.sha3());
         }
 
-        LOG(DEBUG) << "CONSENSUS ++++ Report: i am the next leader, reset now, next leader = "
-                   << getNextLeader() << " , filter size = " << filter.size();
+        PBFT(DEBUG) << "CONSENSUS ++++ Report: i am the next leader, reset now, next leader = "
+                    << getNextLeader() << " , filter size = " << filter.size();
+        PBFTENGINE_LOG(DEBUG) << "I am the next leader = " << getNextLeader()
+                              << ", filter trans size = " << filter.size()
+                              << ", total trans = " << ;
+        << m_txPool->status().current();
         m_timeManager.m_startSealNextLeader = utcTime();
         m_exec = true;
         m_onViewChange(filter);
@@ -556,14 +560,17 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
 {
     auto start_exec_time = utcTime();
     Block working_block;
+    /// no need to decode the local generated prepare packet
     if (req.pBlock)
     {
         working_block = *req.pBlock;
     }
+    /// decode the network received prepare packet
     else
     {
         working_block.decode(ref(req.block));
     }
+    /// notify the next leader seal a new block
     if (working_block.getTransactionSize() > 0)
     {
         notifySealing(working_block);

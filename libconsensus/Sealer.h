@@ -137,8 +137,7 @@ protected:
 
     inline void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
     {
-        SEAL_LOG(DEBUG) << "++++ Report [#resetSealingBlock] [number]" << m_blockChain->number()
-                        << std::endl;
+        SEAL_LOG(DEBUG) << "[#resetSealingBlock] [number]" << m_blockChain->number() << std::endl;
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         resetSealingBlock(m_sealing, filter, resetNextLeader);
     }

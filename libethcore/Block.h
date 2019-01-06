@@ -130,7 +130,8 @@ public:
 
     void resetCurrentBlock(BlockHeader const& _parent = BlockHeader())
     {
-        if (!(bool)(_parent))
+        /// the timestamp of the first block is UINT64_MAX
+        if ((bool)(_parent) || _parent.number() == 0)
         {
             m_blockHeader.populateFromParent(_parent);
         }

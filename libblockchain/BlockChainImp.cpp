@@ -317,6 +317,10 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
         }
 
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
+        {
+            WriteGuard l(m_blockNumberMutex);
+            m_blockNumber = 0;
+        }
         BLOCKCHAIN_LOG(INFO) << "[#setGroupMark] Insert the 0th block";
     }
     else

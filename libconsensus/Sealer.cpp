@@ -174,7 +174,7 @@ void Sealer::resetBlock(Block& block, bool resetNextLeader)
     else
     {
         block.resetCurrentBlock(
-            m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader())
+            m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
     }
 }
 
