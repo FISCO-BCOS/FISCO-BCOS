@@ -263,28 +263,26 @@ Json::Value Rpc::getSyncStatus(int _groupID)
 }
 
 
-std::string Rpc::getClientVersion()
+Json::Value Rpc::getClientVersion()
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
 
-        std::string version;
-        Json::Value versionJson;
+        Json::Value version;
 
 #ifdef FISCO_GM
-            versionJson["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION));
+        version["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION));
 #else
-        versionJson["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
+        version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
 #endif
-            versionJson["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
-            versionJson["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
-                                        std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
-            versionJson["Git Branch"] = DEV_QUOTED(FISCO_BCOS_BUILD_BRANCH);
-            versionJson["Git Commit Hash"] = DEV_QUOTED(FISCO_BCOS_COMMIT_HASH);
+        version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
+        version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
+                                std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
+        version["Git Branch"] = DEV_QUOTED(FISCO_BCOS_BUILD_BRANCH);
+        version["Git Commit Hash"] = DEV_QUOTED(FISCO_BCOS_COMMIT_HASH);
 
-            version = versionJson.toStyledString();
-            return version;
+        return version;
     }
     catch (JsonRpcException& e)
     {
@@ -296,7 +294,7 @@ std::string Rpc::getClientVersion()
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 
-    return "";
+    return Json::Value();
 }
 
 Json::Value Rpc::getPeers()

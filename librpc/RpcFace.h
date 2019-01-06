@@ -56,7 +56,7 @@ public:
             &dev::rpc::RpcFace::getSyncStatusI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_STRING, NULL),
+                                   jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getClientVersionI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL),
@@ -240,7 +240,7 @@ public:
     virtual Json::Value getSyncStatus(int param1) = 0;
 
     // p2p part
-    virtual std::string getClientVersion() = 0;
+    virtual Json::Value getClientVersion() = 0;
     virtual Json::Value getPeers() = 0;
     virtual Json::Value getGroupPeers(int param1) = 0;
     virtual Json::Value getGroupList() = 0;
