@@ -25,10 +25,11 @@
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
-
+using namespace dev::precompiled;
 
 const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
 
@@ -40,7 +41,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled()
 bytes SystemConfigPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
 
     // parse function name
@@ -58,12 +59,12 @@ bytes SystemConfigPrecompiled::call(
         abi.abiOut(data, configKey, configValue);
         // Uniform lowercase configKey
         boost::to_lower(configKey);
-        STORAGE_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("setValueByKey func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("setValueByKey func")
                            << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
 
         if (!checkValueValid(configKey, configValue))
         {
-            STORAGE_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
                                << LOG_DESC("SystemConfigPrecompiled set invalid value")
                                << LOG_KV("configKey", configKey)
                                << LOG_KV("configValue", configValue);
@@ -86,14 +87,14 @@ bytes SystemConfigPrecompiled::call(
             count = table->insert(configKey, entry, getOptions(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
-                STORAGE_LOG(DEBUG)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
 
                 out = abi.abiIn("", CODE_NO_AUTHORIZED);
             }
             else
             {
-                STORAGE_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
                                    << LOG_DESC("setValueByKey successfully");
 
                 out = abi.abiIn("", count);
@@ -104,14 +105,14 @@ bytes SystemConfigPrecompiled::call(
             count = table->update(configKey, entry, condition, getOptions(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
-                STORAGE_LOG(DEBUG)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
 
                 out = abi.abiIn("", CODE_NO_AUTHORIZED);
             }
             else
             {
-                STORAGE_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
                                    << LOG_DESC("update value by key successfully");
 
                 out = abi.abiIn("", count);
@@ -120,7 +121,7 @@ bytes SystemConfigPrecompiled::call(
     }
     else
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("error func")
                            << LOG_KV("func", func);
     }
     return out;

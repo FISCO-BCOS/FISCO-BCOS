@@ -28,6 +28,7 @@
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+using namespace dev::precompiled;
 
 const char* const CRUD_METHOD_SLT_STR_STR = "select(string,string)";
 
@@ -44,7 +45,7 @@ std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
 storage::Table::Ptr CRUDPrecompiled::openTable(
     ExecutiveContext::Ptr context, const std::string& tableName)
 {
-    STORAGE_LOG(DEBUG) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("open table")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("open table")
                        << LOG_KV("tableName", tableName);
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
@@ -55,7 +56,7 @@ storage::Table::Ptr CRUDPrecompiled::openTable(
 bytes CRUDPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
     // parse function name
     uint32_t func = getParamFunc(param);

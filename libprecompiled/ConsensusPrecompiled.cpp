@@ -26,9 +26,11 @@
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+using namespace dev::precompiled;
 
 /*
 contract ConsensusSystemTable
@@ -53,7 +55,7 @@ ConsensusPrecompiled::ConsensusPrecompiled()
 bytes ConsensusPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
 
     // parse function name
@@ -75,12 +77,12 @@ bytes ConsensusPrecompiled::call(
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
 
-        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addMiner func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addMiner func")
                            << LOG_KV("nodeID", nodeID);
 
         if (nodeID.size() != 128u)
         {
-            STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
             out = abi.abiIn("", CODE_INVALID_NODEID);
         }
@@ -105,14 +107,14 @@ bytes ConsensusPrecompiled::call(
                     count = table->insert(PRI_KEY, entry, getOptions(origin));
                     if (count == CODE_NO_AUTHORIZED)
                     {
-                        STORAGE_LOG(DEBUG)
+                        PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
                         out = abi.abiIn("", CODE_NO_AUTHORIZED);
                     }
                     else
                     {
-                        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                            << LOG_DESC("addMiner successfully");
 
                         out = abi.abiIn("", count);
@@ -123,14 +125,14 @@ bytes ConsensusPrecompiled::call(
                     count = table->update(PRI_KEY, entry, condition, getOptions(origin));
                     if (count == CODE_NO_AUTHORIZED)
                     {
-                        STORAGE_LOG(DEBUG)
+                        PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
                         out = abi.abiIn("", CODE_NO_AUTHORIZED);
                     }
                     else
                     {
-                        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                            << LOG_DESC("addMiner successfully");
 
                         out = abi.abiIn("", count);
@@ -146,11 +148,11 @@ bytes ConsensusPrecompiled::call(
         abi.abiOut(data, nodeID);
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
-        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
                            << LOG_KV("nodeID", nodeID);
         if (nodeID.size() != 128u)
         {
-            STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
             out = abi.abiIn("", CODE_INVALID_NODEID);
         }
@@ -173,14 +175,14 @@ bytes ConsensusPrecompiled::call(
                 count = table->insert(PRI_KEY, entry, getOptions(origin));
                 if (count == CODE_NO_AUTHORIZED)
                 {
-                    STORAGE_LOG(DEBUG)
+                    PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
                     out = abi.abiIn("", CODE_NO_AUTHORIZED);
                 }
                 else
                 {
-                    STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                        << LOG_DESC("addObserver successfully");
 
                     out = abi.abiIn("", count);
@@ -191,14 +193,14 @@ bytes ConsensusPrecompiled::call(
                 count = table->update(PRI_KEY, entry, condition, getOptions(origin));
                 if (count == CODE_NO_AUTHORIZED)
                 {
-                    STORAGE_LOG(DEBUG)
+                    PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
                     out = abi.abiIn("", CODE_NO_AUTHORIZED);
                 }
                 else
                 {
-                    STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
+                    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                        << LOG_DESC("addObserver successfully");
 
                     out = abi.abiIn("", count);
@@ -217,11 +219,11 @@ bytes ConsensusPrecompiled::call(
         abi.abiOut(data, nodeID);
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
-        STORAGE_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
                            << LOG_KV("nodeID", nodeID);
         if (nodeID.size() != 128u)
         {
-            STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
             out = abi.abiIn("", CODE_INVALID_NODEID);
         }
@@ -236,14 +238,14 @@ bytes ConsensusPrecompiled::call(
                 count = table->remove(PRI_KEY, condition, getOptions(origin));
                 if (count == CODE_NO_AUTHORIZED)
                 {
-                    STORAGE_LOG(DEBUG)
+                    PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
                     out = abi.abiIn("", CODE_NO_AUTHORIZED);
                 }
                 else
                 {
-                    STORAGE_LOG(DEBUG)
+                    PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully");
 
                     out = abi.abiIn("", count);
@@ -257,7 +259,7 @@ bytes ConsensusPrecompiled::call(
     }
     else
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("error func")
                            << LOG_KV("func", func);
     }
     return out;
@@ -284,7 +286,7 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
               << enable << "\n";
         }
     }
-    STORAGE_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
                        << LOG_KV("consensusTable", s.str());
 }
 
@@ -297,7 +299,7 @@ bool ConsensusPrecompiled::checkIsLastMiner(storage::Table::Ptr table, std::stri
     if (entries->size() == 1u && entries->get(0)->getField(NODE_KEY_NODEID) == nodeID)
     {
         // The nodeID in param is the last miner, cannot be deleted.
-        STORAGE_LOG(WARNING)
+        PRECOMPILED_LOG(WARNING)
             << LOG_BADGE("ConsensusPrecompiled")
             << LOG_DESC(
                    "ConsensusPrecompiled the nodeID in param is the last miner, cannot be deleted.")

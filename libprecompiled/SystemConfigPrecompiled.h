@@ -19,11 +19,12 @@
  *  @date 20181211
  */
 #pragma once
+#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
-#include "libstorage/CRUDPrecompiled.h"
+#include "libprecompiled/CRUDPrecompiled.h"
 namespace dev
 {
-namespace blockverifier
+namespace precompiled
 {
 const char* const SYSTEM_CONFIG_KEY = "key";
 const char* const SYSTEM_CONFIG_VALUE = "value";
@@ -52,7 +53,7 @@ public:
     virtual ~SystemConfigPrecompiled(){};
 
     virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
 private:
     bool checkValueValid(std::string const& key, std::string const& value);

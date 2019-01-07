@@ -27,7 +27,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libstorage/CNSPrecompiled.h>
+#include <libprecompiled/CNSPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -36,6 +36,7 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::storagestate;
+using namespace dev::precompiled;
 
 namespace test_CNSPrecompiled
 {

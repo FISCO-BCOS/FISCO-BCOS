@@ -19,10 +19,8 @@
  *  @date 20180921
  */
 #include "MemoryTableFactory.h"
-#include "CNSPrecompiled.h"
 #include "Common.h"
 #include "MemoryTable.h"
-#include "SystemConfigPrecompiled.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -326,15 +324,13 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     }
     else if (tableName == SYS_CNS)
     {
-        tableInfo->key = dev::SYS_CNS_FIELD_NAME;
-        tableInfo->fields = std::vector<std::string>{
-            dev::SYS_CNS_FIELD_VERSION, dev::SYS_CNS_FIELD_ADDRESS, dev::SYS_CNS_FIELD_ABI};
+        tableInfo->key = "name";
+        tableInfo->fields = std::vector<std::string>{"version", "address", "abi"};
     }
     else if (tableName == SYS_CONFIG)
     {
-        tableInfo->key = dev::blockverifier::SYSTEM_CONFIG_KEY;
-        tableInfo->fields = std::vector<std::string>{
-            dev::blockverifier::SYSTEM_CONFIG_VALUE, dev::blockverifier::SYSTEM_CONFIG_ENABLENUM};
+        tableInfo->key = "key";
+        tableInfo->fields = std::vector<std::string>{"value", "enable_num"};
     }
     else if (tableName == SYS_BLOCK_2_NONCES)
     {

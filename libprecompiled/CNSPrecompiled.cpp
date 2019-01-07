@@ -19,15 +19,16 @@
  *  @date 20181119
  */
 #include "CNSPrecompiled.h"
-#include "libstorage/EntriesPrecompiled.h"
-#include "libstorage/TableFactoryPrecompiled.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
+#include <libstorage/EntriesPrecompiled.h>
+#include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+using namespace dev::precompiled;
 
 const char* const CNS_METHOD_INS_STR4 = "insert(string,string,string,string)";
 const char* const CNS_METHOD_SLT_STR = "selectByName(string)";
@@ -48,7 +49,7 @@ std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
 
 Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::string& tableName)
 {
-    STORAGE_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("open table")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("open table")
                        << LOG_KV("tableName", tableName);
 
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
@@ -60,7 +61,7 @@ Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::s
 bytes CNSPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
 
     // parse function name
@@ -97,7 +98,7 @@ bytes CNSPrecompiled::call(
         }
         if (exist)
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("CNSPrecompiled")
+            PRECOMPILED_LOG(WARNING) << LOG_BADGE("CNSPrecompiled")
                                  << LOG_DESC("address and version exist");
 
             out = abi.abiIn("", CODE_ADDRESS_AND_VERSION_EXIST);
@@ -113,13 +114,13 @@ bytes CNSPrecompiled::call(
             int count = table->insert(contractName, entry, getOptions(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
-                STORAGE_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("non-authorized");
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("non-authorized");
 
                 out = abi.abiIn("", CODE_NO_AUTHORIZED);
             }
             else
             {
-                STORAGE_LOG(DEBUG)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully");
 
                 out = abi.abiIn("", count);
@@ -194,7 +195,7 @@ bytes CNSPrecompiled::call(
     }
     else
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("error func")
                            << LOG_KV("func", func);
     }
 
