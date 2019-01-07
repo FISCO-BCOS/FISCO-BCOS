@@ -133,9 +133,9 @@ install_all_deps()
 	if [ ${platform} -eq ${Ubuntu_Platform} ];then
 		install_ubuntu_deps
 		if [ $enable_guomi -eq 0 ];then
-			execute_cmd "sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc && sudo chmod +x /usr/bin/fisco-solc"
+			execute_cmd "wget https://github.com/FISCO-BCOS/solidity/releases/download/release-1.3/fisco-solc-ubuntu && sudo mv ./fisco-solc-ubuntu  /usr/bin/fisco-solc && sudo chmod +x /usr/bin/fisco-solc"
 		else
-			execute_cmd "sudo cp fisco-solc-guomi-ubuntu  /usr/bin/fisco-solc-guomi && sudo chmod +x  /usr/bin/fisco-solc-guomi"
+			execute_cmd "wget https://github.com/FISCO-BCOS/solidity/releases/download/release-1.3/fisco-solc-gm-ubuntu && sudo mv ./fisco-solc-gm-ubuntu  /usr/bin/fisco-solc-guomi && sudo chmod +x  /usr/bin/fisco-solc-guomi"
 		fi
 	elif [ ${platform} -eq ${Centos_Platform} ];then
 		install_centos_deps
