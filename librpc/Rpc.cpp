@@ -276,7 +276,7 @@ Json::Value Rpc::getClientVersion()
         Json::Value version;
 
 #ifdef FISCO_GM
-        version["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION));
+        version["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION;
 #else
         version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
 #endif
