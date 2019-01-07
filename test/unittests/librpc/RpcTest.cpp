@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(GM_testSyncPart)
 BOOST_AUTO_TEST_CASE(GM_testP2pPart)
 {
     Json::Value version = rpc->getClientVersion();
-    BOOST_CHECK(s == "FISCO BCOS:2.0");
+    BOOST_CHECK(version == "FISCO BCOS:2.0");
 
     Json::Value response = rpc->getPeers();
     BOOST_CHECK(response[0]["NodeID"].asString() != "");
