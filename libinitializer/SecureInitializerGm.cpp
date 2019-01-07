@@ -128,7 +128,7 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
-                           << LOG_KV("nodeID", m_key.pub().hex());
+                           << LOG_KV("nodeID", keyPair.pub().hex());
 
     boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
@@ -261,7 +261,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
-                           << LOG_KV("nodeID", m_key.pub().hex());
+                           << LOG_KV("nodeID", keyPair.pub().hex());
 
     boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
