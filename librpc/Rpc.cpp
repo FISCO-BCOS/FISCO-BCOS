@@ -41,6 +41,10 @@ using namespace dev::rpc;
 using namespace dev::sync;
 using namespace dev::ledger;
 
+static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
+static const int64_t gasPrice = 1;
+
+
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
@@ -866,9 +870,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         TransactionSkeleton txSkeleton = toTransactionSkeleton(request);
-        Transaction tx(txSkeleton.value, dev::config::SystemConfigMgr::maxTransactionGasLimit,
-            dev::config::SystemConfigMgr::maxTransactionGasLimit, txSkeleton.to, txSkeleton.data,
-            txSkeleton.nonce);
+        Transaction tx(txSkeleton.value, gasPrice, maxTransactionGasLimit, txSkeleton.to,
+            txSkeleton.data, txSkeleton.nonce);
         auto blockHeader = block->header();
         tx.forceSender(txSkeleton.from);
         auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
