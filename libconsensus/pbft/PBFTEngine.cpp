@@ -537,7 +537,7 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     if (!m_onViewChange)
         return;
 
-    if (getLeader().second != getNextLeader() && nodeIdx() == getNextLeader())
+    if (getLeader().second != nodeIdx() && nodeIdx() == getNextLeader())
     {
         h256Hash filter;
         for (auto& trans : block.transactions())
