@@ -67,10 +67,10 @@ void Initializer::init(std::string const& _path)
     }
     catch (std::exception& e)
     {
-        INITIALIZER_LOG(ERROR) << "[#Initializer::init] load configuration failed! [EINFO]:  "
-                               << boost::diagnostic_information(e);
-        ERROR_OUTPUT << "[#Initializer] INIT Failed, [ERROR INFO]: "
-                     << boost::diagnostic_information(e) << std::endl;
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("Initializer") << LOG_DESC("load configuration failed")
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        ERROR_OUTPUT << LOG_BADGE("Initializer") << LOG_DESC("load configuration failed")
+                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         BOOST_THROW_EXCEPTION(e);
     }
 }

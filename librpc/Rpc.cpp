@@ -22,6 +22,7 @@
 #include "Rpc.h"
 #include "Common.h"
 #include "JsonHelper.h"
+#include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <libconfig/SystemConfigMgr.h>
 #include <libdevcore/CommonData.h>
@@ -266,17 +267,24 @@ Json::Value Rpc::getSyncStatus(int _groupID)
 }
 
 
-std::string Rpc::getClientVersion()
+Json::Value Rpc::getClientVersion()
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
 
-        std::string version;
-        for (auto it : implementedModules())
-        {
-            version.append(it.name + ":" + it.version);
-        }
+        Json::Value version;
+
+#ifdef FISCO_GM
+        version["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION;
+#else
+        version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
+#endif
+        version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
+        version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
+                                std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
+        version["Git Branch"] = DEV_QUOTED(FISCO_BCOS_BUILD_BRANCH);
+        version["Git Commit Hash"] = DEV_QUOTED(FISCO_BCOS_COMMIT_HASH);
 
         return version;
     }
@@ -290,7 +298,7 @@ std::string Rpc::getClientVersion()
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 
-    return "";
+    return Json::Value();
 }
 
 Json::Value Rpc::getPeers()

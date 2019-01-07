@@ -31,6 +31,7 @@
 #include <libconsensus/raft/RaftSealer.h>
 #include <libdevcore/OverlayDB.h>
 #include <libdevcore/easylog.h>
+#include <libprecompiled/Common.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
@@ -43,6 +44,7 @@ using namespace dev::blockchain;
 using namespace dev::consensus;
 using namespace dev::sync;
 using namespace dev::config;
+using namespace dev::precompiled;
 namespace dev
 {
 namespace ledger

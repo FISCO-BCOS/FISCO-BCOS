@@ -5,7 +5,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libstorage/ConsensusPrecompiled.h>
+#include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <boost/test/unit_test.hpp>
 
@@ -13,6 +13,7 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::storagestate;
+using namespace dev::precompiled;
 
 namespace test_ConsensusPrecompiled
 {
@@ -185,17 +186,17 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 215u);
+    BOOST_TEST(count == 216u);
     in = abi.abiIn("addObserver(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 215u);
+    BOOST_TEST(count == 216u);
     in = abi.abiIn("remove(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 215u);
+    BOOST_TEST(count == 216u);
 }
 
 BOOST_AUTO_TEST_CASE(TestRemoveLastMiner)
@@ -226,13 +227,13 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastMiner)
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 0u);
+    BOOST_TEST(count == 215u);
 
     in = abi.abiIn("addObserver(string)", nodeID1);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 0u);
+    BOOST_TEST(count == 215u);
 }
 
 BOOST_AUTO_TEST_CASE(errFunc)

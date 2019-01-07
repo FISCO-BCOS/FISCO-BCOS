@@ -26,7 +26,7 @@ namespace dev
 {
 namespace storage
 {
-#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE] "
+#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE]"
 #define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << "[STORAGE] [LEVELDB]"
 
 /// \brief Sign of the DB key is valid or not
@@ -46,18 +46,6 @@ const std::string SYS_CONFIG = "_sys_config_";
 const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
 const std::string USER_TABLE_PREFIX = "_user_";
 const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
-
-/// MemoryTable
-const int CODE_NO_AUTHORIZED = -1;
-/// AuthorityPrecompiled
-const int CODE_TABLE_AND_ADDRESS_EXIST = -33;
-const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = -34;
-/// SystemConfigPrecompiled
-const int CODE_INVALID_CONFIGURATION_VALUES = -40;
-/// ConsensusPrecompiled
-const int CODE_INVALID_NODEID = -41;
-/// CNSPrecompiled
-const int CODE_ADDRESS_AND_VERSION_EXIST = -50;
 
 }  // namespace storage
 }  // namespace dev

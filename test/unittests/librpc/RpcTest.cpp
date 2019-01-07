@@ -413,8 +413,8 @@ BOOST_AUTO_TEST_CASE(testSyncPart)
 
 BOOST_AUTO_TEST_CASE(testP2pPart)
 {
-    std::string s = rpc->getClientVersion();
-    BOOST_CHECK(s == "FISCO BCOS:2.0");
+    Json::Value version = rpc->getClientVersion();
+    BOOST_CHECK(version.size() != 0);
 
     Json::Value response = rpc->getPeers();
     BOOST_CHECK(response[0]["NodeID"].asString() != "");

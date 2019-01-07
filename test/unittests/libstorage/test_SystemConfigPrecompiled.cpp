@@ -5,8 +5,8 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
+#include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/MemoryTable.h>
-#include <libstorage/SystemConfigPrecompiled.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -14,6 +14,7 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::storagestate;
+using namespace dev::precompiled;
 
 namespace test_SystemConfigPrecompiled
 {
@@ -96,13 +97,13 @@ BOOST_AUTO_TEST_CASE(InvalidValue)
     bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 216u);
+    BOOST_TEST(count == 196u);
 
     in = abi.abiIn("setValueByKey(string,string)", "tx_count_limit", "0");
     out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 216u);
+    BOOST_TEST(count == 196u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -14,11 +14,12 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file CNSPrecompiled.h
- *  @author chaychen
- *  @date 20181119
+/** @file CRUDPrecompiled.h
+ *  @author ancelmo
+ *  @date 20180921
  */
 #pragma once
+#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
 
 namespace dev
@@ -28,30 +29,25 @@ namespace storage
 class Table;
 }
 
-const std::string SYS_CNS_FIELD_NAME = "name";
-const std::string SYS_CNS_FIELD_VERSION = "version";
-const std::string SYS_CNS_FIELD_ADDRESS = "address";
-const std::string SYS_CNS_FIELD_ABI = "abi";
-
-namespace blockverifier
+namespace precompiled
 {
-class CNSPrecompiled : public Precompiled
+class CRUDPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
-    typedef std::shared_ptr<CNSPrecompiled> Ptr;
-    CNSPrecompiled();
-    virtual ~CNSPrecompiled(){};
+    typedef std::shared_ptr<CRUDPrecompiled> Ptr;
+    CRUDPrecompiled();
+    virtual ~CRUDPrecompiled(){};
 
-    std::string toString(ExecutiveContext::Ptr) override;
+    virtual std::string toString(dev::blockverifier::ExecutiveContext::Ptr);
 
-    bytes call(ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address()) override;
+    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address());
 
 protected:
     std::shared_ptr<storage::Table> openTable(
-        ExecutiveContext::Ptr context, const std::string& tableName);
+        dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

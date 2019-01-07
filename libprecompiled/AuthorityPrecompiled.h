@@ -19,11 +19,12 @@
  *  @date 20181204
  */
 #pragma once
+#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
 
 namespace dev
 {
-namespace blockverifier
+namespace precompiled
 {
 #if 0
 contract AuthorityTable {
@@ -38,24 +39,24 @@ const std::string SYS_AC_TABLE_NAME = "table_name";
 const std::string SYS_AC_ADDRESS = "address";
 const std::string SYS_AC_ENABLENUM = "enable_num";
 
-class AuthorityPrecompiled : public Precompiled
+class AuthorityPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<AuthorityPrecompiled> Ptr;
     AuthorityPrecompiled();
     virtual ~AuthorityPrecompiled(){};
 
-    virtual std::string toString(ExecutiveContext::Ptr);
+    virtual std::string toString(dev::blockverifier::ExecutiveContext::Ptr);
 
-    virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address());
 
 protected:
     std::shared_ptr<storage::Table> openTable(
-        ExecutiveContext::Ptr context, const std::string& tableName);
+        dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
     void addPrefixToUserTable(std::string& tableName);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev
