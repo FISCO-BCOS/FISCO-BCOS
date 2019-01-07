@@ -59,7 +59,8 @@ bool ChannelRPCServer::StartListening()
 {
     if (!_running)
     {
-        CHANNEL_LOG(TRACE) << "Start ChannelRPCServer: " << _listenAddr << ":" << _listenPort;
+        CHANNEL_LOG(TRACE) << "Start ChannelRPCServer" << LOG_KV("Host", _listenAddr) << ":"
+                           << _listenPort;
 
         std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp =
             std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1,
@@ -143,7 +144,8 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
     if (it != _seq2session.end())
     {
-        CHANNEL_LOG(INFO) << "send ethereum resp seq:" << it->first << " response:" << _response;
+        CHANNEL_LOG(INFO) << "send ethereum resp seq" << LOG_KV("seq", it->first)
+                          << LOG_KV("response", _response);
 
         std::shared_ptr<bytes> resp(new bytes());
 
@@ -159,7 +161,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "not found seq, may be timeout:" << addInfo;
+        CHANNEL_LOG(ERROR) << "not found seq may be timeout";
     }
 
     return false;
@@ -200,14 +202,16 @@ void ChannelRPCServer::onConnect(
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "connection error: " << e.errorCode() << ", " << e.what();
+        CHANNEL_LOG(ERROR) << "onConnect error" << LOG_KV("errorCode", e.errorCode())
+                           << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
 void ChannelRPCServer::onDisconnect(
     dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session)
 {
-    CHANNEL_LOG(ERROR) << "remove session: " << session->host() << ":" << session->port();
+    CHANNEL_LOG(ERROR) << "onDisconnect remove session" << LOG_KV("From", session->host()) << ":"
+                       << session->port();
 
     {
         std::lock_guard<std::mutex> lockSession(_sessionMutex);
@@ -218,7 +222,7 @@ void ChannelRPCServer::onDisconnect(
             if (it.second == session)
             {
                 auto c = _sessions.erase(it.first);
-                CHANNEL_LOG(DEBUG) << "sessions removed: " << c;
+                CHANNEL_LOG(DEBUG) << "sessions removed";
                 break;
             }
         }
@@ -228,7 +232,7 @@ void ChannelRPCServer::onDisconnect(
             if (it.second == session)
             {
                 auto c = _seq2session.erase(it.first);
-                CHANNEL_LOG(DEBUG) << "seq2session removed: " << c;
+                CHANNEL_LOG(DEBUG) << "seq2session removed";
                 break;
             }
         }
@@ -242,8 +246,8 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 {
     if (e.errorCode() == 0)
     {
-        CHANNEL_LOG(INFO) << "receive sdk message length:" << message->length()
-                          << " type:" << message->type() << " sessionID:" << message->seq();
+        CHANNEL_LOG(INFO) << "receive sdk message" << LOG_KV("length", message->length())
+                          << LOG_KV("type", message->type()) << LOG_KV("sessionID", message->seq());
 
         switch (message->type())
         {
@@ -270,13 +274,14 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
             onClientTopicRequest(session, message);
             break;
         default:
-            CHANNEL_LOG(ERROR) << "unknown client message: " << message->type();
+            CHANNEL_LOG(ERROR) << "unknown client message" << LOG_KV("type", message->type());
             break;
         }
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "error: " << e.errorCode() << ", " << e.what();
+        CHANNEL_LOG(ERROR) << "onClientRequest error" << LOG_KV("errorCode", e.errorCode())
+                           << LOG_KV("what", boost::diagnostic_information(e));
 
         onDisconnect(dev::channel::ChannelException(), session);
     }
@@ -289,8 +294,9 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 
     std::string body(message->data(), message->data() + message->dataSize());
 
-    CHANNEL_LOG(DEBUG) << "client ethereum request seq:" << message->seq() << "  ethereum request:"
-                       << std::string((char*)message->data(), message->dataSize());
+    CHANNEL_LOG(DEBUG) << "client ethereum request" << LOG_KV("seq", message->seq())
+                       << LOG_KV("ethereum request",
+                              std::string((char*)message->data(), message->dataSize()));
 
     {
         std::lock_guard<std::mutex> lock(_seqMutex);
@@ -311,28 +317,28 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 
     if (result <= 0)
     {
-        CHANNEL_LOG(ERROR) << "decode error:" << result
-                           << " package size:" << msg->buffer()->size();
+        CHANNEL_LOG(ERROR) << "onNodeChannelRequest decode error"
+                           << LOG_KV(" package size", msg->buffer()->size());
         return;
     }
 
-    CHANNEL_LOG(DEBUG) << "receive node from:" << s->nodeID()
-                       << " mssage length:" << msg->buffer()->size()
-                       << " type:" << channelMessage->type() << " seq:" << channelMessage->seq();
+    CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("from", s->nodeID())
+                       << LOG_KV("length", msg->buffer()->size())
+                       << LOG_KV("type", channelMessage->type())
+                       << LOG_KV("seq", channelMessage->seq());
 
     try
     {
         if (channelMessage->dataSize() < 1)
         {
-            CHANNEL_LOG(ERROR) << "invalid channel message, too short:"
-                               << channelMessage->dataSize();
+            CHANNEL_LOG(ERROR) << "invalid channel message too short";
             return;
         }
 
         uint8_t topicLen = *((uint8_t*)channelMessage->data());
         std::string topic((char*)channelMessage->data() + 1, topicLen - 1);
 
-        CHANNEL_LOG(DEBUG) << "target topic:" << topic;
+        CHANNEL_LOG(DEBUG) << "onNodeChannelRequest target" << LOG_KV("topic", topic);
 
         if (channelMessage->type() == 0x30)
         {
@@ -346,7 +352,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                         dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
                         if (e.errorCode())
                         {
-                            CHANNEL_LOG(ERROR) << "Push channel message failed: " << e.what();
+                            CHANNEL_LOG(ERROR) << "Push channel message failed"
+                                               << LOG_KV("what", boost::diagnostic_information(e));
 
                             channelMessage->setResult(e.errorCode());
                             channelMessage->setType(0x31);
@@ -367,7 +374,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                             return;
                         }
 
-                        CHANNEL_LOG(TRACE) << "Receive sdk response: " << response->seq();
+                        CHANNEL_LOG(TRACE)
+                            << "Receive sdk response" << LOG_KV("seq", response->seq());
                         auto buffer = std::make_shared<bytes>();
                         response->encode(*buffer);
                         auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
@@ -384,7 +392,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
             }
             catch (std::exception& e)
             {
-                CHANNEL_LOG(ERROR) << "push message totaly failed:" << e.what();
+                CHANNEL_LOG(ERROR) << "push message totaly failed"
+                                   << LOG_KV("what", boost::diagnostic_information(e));
 
                 channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
                 channelMessage->setType(0x31);
@@ -406,7 +415,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "error" << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -417,7 +426,8 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 
     std::string body(message->data(), message->data() + message->dataSize());
 
-    CHANNEL_LOG(DEBUG) << "SDK topic message seq:" << message->seq() << "  topic message:" << body;
+    CHANNEL_LOG(DEBUG) << "SDK topic message" << LOG_KV("seq", message->seq())
+                       << LOG_KV("message", body);
 
     try
     {
@@ -435,7 +445,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(
             {
                 std::string topic = topicsValue[(int)i].asString();
 
-                CHANNEL_LOG(DEBUG) << "topic:" << topic;
+                CHANNEL_LOG(TRACE) << "onClientTopicRequest insert" << LOG_KV("topic", topic);
 
                 topics->insert(topic);
             }
@@ -447,7 +457,8 @@ void dev::ChannelRPCServer::onClientTopicRequest(
     }
     catch (exception& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "onClientTopicRequest error"
+                           << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -458,7 +469,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
     if (message->dataSize() < 1)
     {
-        CHANNEL_LOG(ERROR) << "invalid channel2 message, too short:" << message->dataSize();
+        CHANNEL_LOG(ERROR) << "invalid channel2 message too short";
         return;
     }
 
@@ -471,7 +482,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
     {
         try
         {
-            CHANNEL_LOG(DEBUG) << "channel2 request:" << message->seq();
+            CHANNEL_LOG(DEBUG) << "channel2 request" << LOG_KV("seq", message->seq());
 
             auto buffer = std::make_shared<bytes>();
             message->encode(*buffer);
@@ -492,8 +503,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                     dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
                     {
-                        LOG(ERROR)
-                            << "ChannelMessage failed: " << e.errorCode() << ", " << e.what();
+                        LOG(ERROR) << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
+                                   << LOG_KV("what", boost::diagnostic_information(e));
                         message->setType(0x31);
                         message->setResult(REMOTE_PEER_UNAVAILIBLE);
                         message->clearData();
@@ -513,7 +524,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
         }
         catch (exception& e)
         {
-            CHANNEL_LOG(ERROR) << "send error:" << e.what();
+            CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
             message->setType(0x31);
             message->setResult(REMOTE_PEER_UNAVAILIBLE);
@@ -524,7 +535,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "unknown message type:" << message->type();
+        CHANNEL_LOG(ERROR) << "unknown message type" << LOG_KV("type", message->type());
     }
 }
 
@@ -581,7 +592,9 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 {
                     if (e.errorCode() != 0)
                     {
-                        CHANNEL_LOG(ERROR) << "ERROR:" << e.errorCode() << " message:" << e.what();
+                        CHANNEL_LOG(ERROR)
+                            << "onResponse error" << LOG_KV("errorCode", e.errorCode())
+                            << LOG_KV("what", boost::diagnostic_information(e));
 
                         _exclude.insert(_currentSession);
 
@@ -592,7 +605,8 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 }
                 catch (dev::channel::ChannelException& ex)
                 {
-                    CHANNEL_LOG(ERROR) << "ERROR:" << ex.errorCode() << " " << ex.what();
+                    CHANNEL_LOG(ERROR) << "onResponse error" << LOG_KV("errorCode", ex.errorCode())
+                                       << LOG_KV("what", ex.what());
 
                     try
                     {
@@ -600,7 +614,8 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                     }
                     catch (exception& e)
                     {
-                        CHANNEL_LOG(ERROR) << "ERROR" << e.what();
+                        CHANNEL_LOG(ERROR) << "onResponse error"
+                                           << LOG_KV("what", boost::diagnostic_information(e));
                     }
 
                     return;
@@ -612,7 +627,8 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 }
                 catch (exception& e)
                 {
-                    CHANNEL_LOG(ERROR) << "ERROR" << e.what();
+                    CHANNEL_LOG(ERROR)
+                        << "onResponse error" << LOG_KV("what", boost::diagnostic_information(e));
                 }
             }
 
@@ -623,7 +639,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 if (activedSessions.empty())
                 {
-                    CHANNEL_LOG(ERROR) << "no session use topic:" << _topic;
+                    CHANNEL_LOG(ERROR) << "no session use topic" << LOG_KV("topic", _topic);
                     throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
                 }
 
@@ -650,7 +666,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 boost::uniform_int<int> index(0, activedSessions.size() - 1);
 
                 auto ri = index(rng);
-                CHANNEL_LOG(DEBUG) << "random node:" << ri;
+                CHANNEL_LOG(TRACE) << "random node" << ri;
 
                 auto session = activedSessions[ri];
 
@@ -659,9 +675,8 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                         std::placeholders::_2);
                 session->asyncSendMessage(_message, fp, 5000);
 
-                CHANNEL_LOG(INFO) << "Push channel message: " << _message->seq()
-                                  << "to session: " << session->host() << ":" << session->port()
-                                  << " success";
+                CHANNEL_LOG(INFO) << "Push channel message" << _message->seq() << "to session"
+                                  << session->host() << ":" << session->port() << " success";
                 _currentSession = session;
             }
 
@@ -681,7 +696,8 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
     }
     catch (exception& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "asyncPushChannelMessage error"
+                           << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
 
@@ -692,12 +708,13 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
     {
         std::string topic = message->topic();
 
-        CHANNEL_LOG(DEBUG) << "Push to SDK:" << message->seq();
+        CHANNEL_LOG(DEBUG) << "Push to SDK" << LOG_KV("topic", topic)
+                           << LOG_KV("seq", message->seq());
         std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
 
         if (activedSessions.empty())
         {
-            CHANNEL_LOG(ERROR) << "no SDK follow topic:" << topic;
+            CHANNEL_LOG(ERROR) << "no SDK follow topic" << LOG_KV("topic", topic);
 
             throw dev::channel::ChannelException(103, "send failed, no node follow topic:" + topic);
         }
@@ -723,7 +740,8 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
     }
     catch (dev::channel::ChannelException& e)
     {
-        CHANNEL_LOG(ERROR) << "ERROR:" << e.what();
+        CHANNEL_LOG(ERROR) << "pushChannelMessage error"
+                           << LOG_KV("what", boost::diagnostic_information(e));
 
         throw e;
     }

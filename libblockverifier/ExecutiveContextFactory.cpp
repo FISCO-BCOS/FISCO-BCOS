@@ -20,17 +20,18 @@
  */
 #include "ExecutiveContextFactory.h"
 #include <libdevcore/Common.h>
-#include <libstorage/AuthorityPrecompiled.h>
-#include <libstorage/CNSPrecompiled.h>
-#include <libstorage/CRUDPrecompiled.h>
-#include <libstorage/ConsensusPrecompiled.h>
+#include <libprecompiled/AuthorityPrecompiled.h>
+#include <libprecompiled/CNSPrecompiled.h>
+#include <libprecompiled/CRUDPrecompiled.h>
+#include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
-#include <libstorage/SystemConfigPrecompiled.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::executive;
+using namespace dev::precompiled;
 
 void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
@@ -46,16 +47,16 @@ void ExecutiveContextFactory::initExecutiveContext(
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
 
     context->setAddress2Precompiled(
-        Address(0x1000), std::make_shared<dev::blockverifier::SystemConfigPrecompiled>());
+        Address(0x1000), std::make_shared<dev::precompiled::SystemConfigPrecompiled>());
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
     context->setAddress2Precompiled(
-        Address(0x1002), std::make_shared<dev::blockverifier::CRUDPrecompiled>());
+        Address(0x1002), std::make_shared<dev::precompiled::CRUDPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1003), std::make_shared<dev::blockverifier::ConsensusPrecompiled>());
+        Address(0x1003), std::make_shared<dev::precompiled::ConsensusPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1004), std::make_shared<dev::blockverifier::CNSPrecompiled>());
+        Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1005), std::make_shared<dev::blockverifier::AuthorityPrecompiled>());
+        Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
     context->setMemoryTableFactory(memoryTableFactory);
 
     context->setBlockInfo(blockInfo);

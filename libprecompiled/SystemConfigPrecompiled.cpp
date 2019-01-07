@@ -25,10 +25,11 @@
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
-
+using namespace dev::precompiled;
 
 const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
 
@@ -40,17 +41,16 @@ SystemConfigPrecompiled::SystemConfigPrecompiled()
 bytes SystemConfigPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << "this: " << this << " call SystemConfig:" << toHex(param);
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("call")
+                           << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
-
     dev::eth::ContractABI abi;
     bytes out;
-    u256 count = 0;
+    int count = 0;
 
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
@@ -59,14 +59,17 @@ bytes SystemConfigPrecompiled::call(
         abi.abiOut(data, configKey, configValue);
         // Uniform lowercase configKey
         boost::to_lower(configKey);
-        STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled params:" << configKey << ", " << configValue;
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                               << LOG_DESC("setValueByKey func") << LOG_KV("configKey", configKey)
+                               << LOG_KV("configValue", configValue);
 
         if (!checkValueValid(configKey, configValue))
         {
-            // The transaction returns 0, indicating that the system config setting failed.
-            // TODO: Different values returned indicate different reasons for failure.
-            out = abi.abiIn("", 0);
-            STORAGE_LOG(WARNING) << "SystemConfigPrecompiled set invalid value";
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("SystemConfigPrecompiled")
+                << LOG_DESC("SystemConfigPrecompiled set invalid value")
+                << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
+            out = abi.abiIn("", CODE_INVALID_CONFIGURATION_VALUES);
             return out;
         }
 
@@ -80,30 +83,47 @@ bytes SystemConfigPrecompiled::call(
         entry->setField(SYSTEM_CONFIG_ENABLENUM,
             boost::lexical_cast<std::string>(context->blockInfo().number + 1));
 
-        if (entries.get())
+        if (entries->size() == 0u)
         {
-            if (entries->size() == 0u)
+            count = table->insert(configKey, entry, getOptions(origin));
+            if (count == CODE_NO_AUTHORIZED)
             {
-                count = table->insert(configKey, entry, getOptions(origin));
-                STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled insert config key successfully.";
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
+
+                out = abi.abiIn("", CODE_NO_AUTHORIZED);
             }
             else
             {
-                count = table->update(configKey, entry, condition, getOptions(origin));
-                STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled update config key successfully.";
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                                       << LOG_DESC("setValueByKey successfully");
+
+                out = abi.abiIn("", count);
             }
         }
         else
         {
-            STORAGE_LOG(WARNING) << "SystemConfigPrecompiled select SYS_CONFIG table failed.";
-        }
+            count = table->update(configKey, entry, condition, getOptions(origin));
+            if (count == CODE_NO_AUTHORIZED)
+            {
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
 
-        out = abi.abiIn("", count);
-        STORAGE_LOG(DEBUG) << "SystemConfigPrecompiled setValueByKey result:" << toHex(out);
+                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+            }
+            else
+            {
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                                       << LOG_DESC("update value by key successfully");
+
+                out = abi.abiIn("", count);
+            }
+        }
     }
     else
     {
-        STORAGE_LOG(ERROR) << "SystemConfigPrecompiled error func:" << std::hex << func;
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("error func")
+                               << LOG_KV("func", func);
     }
     return out;
 }
