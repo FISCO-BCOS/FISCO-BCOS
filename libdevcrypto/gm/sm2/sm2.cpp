@@ -19,9 +19,20 @@
  * @author: websterchen
  *
  * @date: 2018
+ * 
+ * @author: asherli
+ *
+ * @date: 2019 
+ * use GmSSL
  */
+// #pragma once
 #include "sm2.h"
 #include <libdevcore/easylog.h>
+// #include <openssl/ec.h>
+// #include <openssl/evp.h>
+// #include <openssl/is_gmssl.h>
+// #include <openssl/objects.h>
+// #include <openssl/sm2.h>
 #define SM3_DIGEST_LENGTH 32
 using namespace std;
 
@@ -33,7 +44,7 @@ bool SM2::genKey()
     char* pri = NULL;
     char* pub = NULL;
 
-    sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
+    sm2Group = EC_GROUP_new_by_curve_name(NID_sm2p256v1);
     if (!sm2Group)
     {
         CRYPTO_LOG(ERROR) << "[#CRYPTO::SM2::genKey] Error Of Gain SM2 Group Object";
@@ -116,7 +127,7 @@ bool SM2::sign(
     // originalDataLen:"<<originalDataLen<<" Sign privateKey:"<<privateKey;
 
     bool lresult = false;
-    SM3_CTX sm3Ctx;
+    sm3_ctx_t sm3Ctx;
     EC_KEY* sm2Key = NULL;
     unsigned char zValue[SM3_DIGEST_LENGTH];
     size_t zValueLen;
@@ -126,15 +137,13 @@ bool SM2::sign(
     string str = "";   // big int data
     string _str = "";  // big int swap data
     int _size = 0;     // big int padding size
-    BIGNUM start;
     BIGNUM* res = NULL;
     BN_CTX* ctx = NULL;
-    BN_init(&start);
+    BN_init(res);
     ctx = BN_CTX_new();
 
-    res = &start;
     BN_hex2bn(&res, (const char*)privateKey.c_str());
-    sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
+    sm2Key = EC_KEY_new_by_curve_name(NID_sm2p256v1);
     EC_KEY_set_private_key(sm2Key, res);
 
     zValueLen = sizeof(zValue);
@@ -145,12 +154,11 @@ bool SM2::sign(
         goto err;
     }
     // SM3 Degist
-    SM3_Init(&sm3Ctx);
-    SM3_Update(&sm3Ctx, zValue, zValueLen);
-    SM3_Update(&sm3Ctx, originalData, originalDataLen);
-    SM3_Final(zValue, &sm3Ctx);
+    sm3_init(&sm3Ctx);
+    sm3_update(&sm3Ctx, reinterpret_cast<const unsigned char*>(originalData), originalDataLen);
+    sm3_final(&sm3Ctx, zValue);
 
-    signData = ECDSA_do_sign_ex(zValue, zValueLen, NULL, NULL, sm2Key);
+    signData = SM2_do_sign(zValue, zValueLen, sm2Key);
     if (signData == NULL)
     {
         CRYPTO_LOG(ERROR) << "[#CRYPTO::SM2::sign] Error Of SM2 Signature";
@@ -198,7 +206,7 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
     // originalData:"<<(originalData,originalDataLen)<<"
     // originalDataLen:"<<originalDataLen<<" publicKey:"<<publicKey;
     bool lresult = false;
-    SM3_CTX sm3Ctx;
+    sm3_ctx_t sm3Ctx;
     EC_KEY* sm2Key = NULL;
     EC_POINT* pubPoint = NULL;
     EC_GROUP* sm2Group = NULL;
@@ -209,7 +217,7 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
     string s = _signData.substr(64, 64);
     // LOG(DEBUG)<<"r:"<<r<<" s:"<<s;
 
-    sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
+    sm2Group = EC_GROUP_new_by_curve_name(NID_sm2p256v1);
     if (sm2Group == NULL)
     {
         CRYPTO_LOG(ERROR) << "[#CRYPTO::SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_namee";
@@ -232,7 +240,7 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
         goto err;
     }
 
-    sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
+    sm2Key = EC_KEY_new_by_curve_name(NID_sm2p256v1);
 
     if (sm2Key == NULL)
     {
@@ -249,17 +257,19 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
         goto err;
     }
 
-    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
+    if (!SM2_compute_message_digest(EVP_sm3(), EVP_sm3(),
+            reinterpret_cast<const unsigned char*>(originalData), sizeof(originalData), NULL, NULL,
+            zValue, &zValueLen, sm2Key))
     {
         CRYPTO_LOG(ERROR) << "[#CRYPTO::SM2::veify] Error Of Compute Z";
         ERROR_OUTPUT << "[#CRYPTO::SM2::veify] Error Of Compute Z" << std::endl;
         goto err;
     }
     // SM3 Degist
-    SM3_Init(&sm3Ctx);
-    SM3_Update(&sm3Ctx, zValue, zValueLen);
-    SM3_Update(&sm3Ctx, originalData, originalDataLen);
-    SM3_Final(zValue, &sm3Ctx);
+    sm3_init(&sm3Ctx);
+    sm3_update(&sm3Ctx, reinterpret_cast<const unsigned char*>(zValue), zValueLen);
+    sm3_update(&sm3Ctx, reinterpret_cast<const unsigned char*>(originalData), originalDataLen);
+    sm3_final(&sm3Ctx, zValue);
 
     /*Now Verify it*/
     signData = ECDSA_SIG_new();
@@ -277,7 +287,7 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
         goto err;
     }
 
-    if (ECDSA_do_verify(zValue, zValueLen, signData, sm2Key) != 1)
+    if (SM2_do_verify(zValue, zValueLen, signData, sm2Key) != 1)
     {
         CRYPTO_LOG(ERROR) << "[#CRYPTO::SM2::veify] Error Of SM2 Verify";
         ERROR_OUTPUT << "[#CRYPTO::SM2::veify] Error Of SM2 Verify" << std::endl;
@@ -303,16 +313,14 @@ string SM2::priToPub(const string& pri)
     EC_POINT* pubPoint = NULL;
     const EC_GROUP* sm2Group = NULL;
     string pubKey = "";
-    BIGNUM start;
     BIGNUM* res;
     BN_CTX* ctx;
-    BN_init(&start);
+    BN_init(res);
     ctx = BN_CTX_new();
     char* pub = NULL;
     // LOG(DEBUG)<<"pri:"<<pri;
-    res = &start;
     BN_hex2bn(&res, (const char*)pri.c_str());
-    sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
+    sm2Key = EC_KEY_new_by_curve_name(NID_sm2p256v1);
     if (!EC_KEY_set_private_key(sm2Key, res))
     {
         CRYPTO_LOG(ERROR) << "[#CRYPTO::SM2::priToPub] Error PriToPub EC_KEY_set_private_key";

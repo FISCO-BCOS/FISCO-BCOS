@@ -19,25 +19,35 @@
  * @author: websterchen
  *
  * @date: 2018
+ * 
+ * @author: asherli
+ *
+ * @date: 2019
+ * use GmSSL
  */
 
 #include <string.h>
 using namespace std;
 #include "sm4.h"
 
-int SM4::setKey(const unsigned char* userKey, size_t length)
+void SM4::setEncKey(const unsigned char* userKey)
 {
-    return ::SM4_set_key(userKey, length, &key);
+    ::sms4_set_encrypt_key(&key, userKey);
+}
+
+void SM4::setDecKey(const unsigned char* userKey)
+{
+    ::sms4_set_decrypt_key(&key, userKey);
 }
 
 void SM4::encrypt(const unsigned char* in, unsigned char* out)
 {
-    ::SM4_encrypt(in, out, &key);
+    ::sms4_encrypt(in, out, &key);
 }
 
 void SM4::decrypt(const unsigned char* in, unsigned char* out)
 {
-    ::SM4_decrypt(in, out, &key);
+    ::sms4_decrypt(in, out, &key);
 }
 
 void SM4::cbcEncrypt(
@@ -45,7 +55,7 @@ void SM4::cbcEncrypt(
 {
     unsigned char* iv = (unsigned char*)malloc(16);
     memcpy(iv, ivec, 16);
-    ::SM4_cbc_encrypt(in, out, length, &key, iv, enc);
+    ::sms4_cbc_encrypt(in, out, length, &key, iv, enc);
     free(iv);
 }
 

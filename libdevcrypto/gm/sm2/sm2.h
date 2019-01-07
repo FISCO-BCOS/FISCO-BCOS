@@ -19,6 +19,10 @@
  * @author: websterchen
  *
  * @date: 2018
+ * 
+ * @author: asherli
+ *
+ * @date: 2019 use GmSSL
  */
 #pragma once
 #include <openssl/sm2.h>
@@ -27,6 +31,7 @@
 #include <string>
 #define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[#CRYPTO] "
 #define ERROR_OUTPUT std::cout << "[#CRYPTO] "
+
 class SM2
 {
 public:

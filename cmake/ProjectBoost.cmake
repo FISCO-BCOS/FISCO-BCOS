@@ -77,7 +77,7 @@ ExternalProject_Add(boost
     BUILD_BYPRODUCTS ${BOOST_BUILD_FILES}
 )
 if (BUILD_GM)
-    add_dependencies(boost tassl)
+    add_dependencies(boost gmssl)
 endif()
 
 ExternalProject_Get_Property(boost SOURCE_DIR)

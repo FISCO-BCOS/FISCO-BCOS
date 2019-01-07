@@ -19,33 +19,42 @@
  * @author: websterchen
  *
  * @date: 2018
+ * 
+ * @author: asherli
+ *
+ * @date: 2019 use GmSSL
  */
 
 #include "sm3.h"
-int SM3Hash::init(SM3_CTX* c)
+#include <iostream>
+int SM3Hash::init(sm3_ctx_t* c)
 {
-    return ::SM3_Init(c);
+    ::sm3_init(c);
+    return 1;
 }
 
-int SM3Hash::update(SM3_CTX* c, const void* data, size_t len)
+int SM3Hash::update(sm3_ctx_t* c, const unsigned char* data, size_t len)
 {
-    return ::SM3_Update(c, data, len);
+    ::sm3_update(c, data, len);
+    return 1;
 }
 
-int SM3Hash::final(unsigned char* md, SM3_CTX* c)
+int SM3Hash::final(unsigned char* md, sm3_ctx_t* c)
 {
-    return ::SM3_Final(md, c);
+    ::sm3_final(c, md);
+    return 1;
 }
 
 unsigned char* SM3Hash::sm3(const unsigned char* d, size_t n, unsigned char* md)
 {
-    return ::SM3(d, n, md);
+    ::sm3(d, n, md);
+    return md;
 }
 
-void SM3Hash::transForm(SM3_CTX* c, const unsigned char* data)
-{
-    ::SM3_Transform(c, data);
-}
+// void SM3Hash::transForm(sm3_ctx_t* c, const unsigned char* data)
+// {
+//     ::SM3_Transform(c, data);
+// }
 
 SM3Hash& SM3Hash::getInstance()
 {
