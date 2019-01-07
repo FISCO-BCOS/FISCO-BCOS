@@ -14,7 +14,7 @@ build_source=0
 version=`cat ${SHELL_FOLDER}/release_note.txt| sed "s/^[vV]//"`
 package_name="fisco-bcos.tar.gz"
 binary_link=https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}
-solc_link_prefix=https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/binaries/fisco-solc-1.0.0/fisco-solc
+solc_link_prefix=https://github.com/FISCO-BCOS/solidity/releases/download/release-1.3/fisco-solc
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -141,7 +141,7 @@ install_all_deps()
 	elif [ ${platform} -eq ${Centos_Platform} ];then
 		install_centos_deps
 		if [ $enable_guomi -eq 0 ];then
-			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc ${solc_link_prefix} && sudo chmod +x /usr/bin/fisco-solc"
+			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc ${solc_link_prefix}-centos && sudo chmod +x /usr/bin/fisco-solc"
 		else
 			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc-guomi ${solc_link_prefix}-guomi-centos && sudo chmod +x /usr/bin/fisco-solc-guomi"
 		fi
