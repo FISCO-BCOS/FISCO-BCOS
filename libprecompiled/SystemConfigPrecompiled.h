@@ -52,13 +52,13 @@ public:
     SystemConfigPrecompiled();
     virtual ~SystemConfigPrecompiled(){};
 
-    virtual bytes call(
-        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address());
 
 private:
     bool checkValueValid(std::string const& key, std::string const& value);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev
