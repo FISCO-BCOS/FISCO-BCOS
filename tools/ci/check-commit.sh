@@ -6,7 +6,8 @@
 # @ date    : 2018
 
 # !/bin/bash
-check_script=/usr/bin/run-clang-format.py
+SHELL_FOLDER=$(cd $(dirname $0);pwd)
+check_script=${SHELL_FOLDER}/run-clang-format.py
 Ubuntu_Platform=0
 Centos_Platform=1
 
@@ -34,12 +35,11 @@ execute_cmd() {
 }
 
 # get platform: now support debain/ubuntu, fedora/centos, oracle
-get_platform() {
+install_deps() {
     uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
     case $(uname -s) in
     Darwin)
-        LOG_ERROR "FISCO-BCOS V2.0 Don't Support MAC OS Yet!"
-        exit 1;;
+        LOG_INFO "OSX Platform";;
     FreeBSD)
         LOG_ERROR "FISCO-BCOS V2.0 Don't Support FreeBSD Yet!"
         exit 1;;
@@ -51,10 +51,14 @@ get_platform() {
             case $DISTRO_NAME in
             Debian*|Ubuntu)
                 LOG_INFO "Debian*|Ubuntu Platform"
-                return ${Ubuntu_Platform};; #ubuntu type
+                # execute_cmd "sudo apt-get update"
+                # execute_cmd "sudo apt-get install -y clang-format"
+                ;;
             Fedora|CentOS*|Oracle*)
                 LOG_INFO "Fedora|CentOS* Platform"
-                return ${Centos_Platform};; #centos type
+                # execute_cmd "sudo yum upgrade"
+                # execute_cmd "sudo yum install clang"
+                ;;
             esac
         else
             LOG_ERROR "Unsupported Platform"
@@ -62,30 +66,9 @@ get_platform() {
     esac
 }
 
-function install_clang_format() 
-{
-    get_platform
-    platform=`echo $?`
-    if [ ${platform} -eq ${Ubuntu_Platform} ];then
-        execute_cmd "sudo apt-get update"
-        #execute_cmd "sudo apt-get install clang"
-    elif [ ${platform} -eq ${Centos_Platform} ];then
-        execute_cmd "sudo yum upgrade"
-        #execute_cmd "sudo yum install clang"
-    else
-        LOG_ERROR "Unsupported platform!"
-    fi
-}
-
-function deploy_check_script() 
-{
-    execute_cmd "sudo cp ./tools/ci/run-clang-format.py /usr/bin/run-clang-format.py"
-    execute_cmd "sudo chmod a+x /usr/bin/run-clang-format.py"
-}
-
 function check()
 {
-    #install_clang_format
+    #install_deps
     deploy_check_script
     if git rev-parse --verify HEAD >/dev/null 2>&1;then
         against=HEAD^
