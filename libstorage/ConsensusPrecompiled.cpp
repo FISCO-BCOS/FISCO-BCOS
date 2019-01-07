@@ -204,6 +204,10 @@ bytes ConsensusPrecompiled::call(
                     out = abi.abiIn("", count);
                 }
             }
+            else
+            {
+                out = abi.abiIn("", CODE_LAST_MINER);
+            }
         }
     }
     else if (func == name2Selector[CSS_METHOD_REMOVE])
@@ -244,6 +248,10 @@ bytes ConsensusPrecompiled::call(
 
                     out = abi.abiIn("", count);
                 }
+            }
+            else
+            {
+                out = abi.abiIn("", CODE_LAST_MINER);
             }
         }
     }
