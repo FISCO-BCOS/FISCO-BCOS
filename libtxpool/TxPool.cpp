@@ -271,6 +271,7 @@ bool TxPool::removeBlockKnowTrans(Block const& block)
     {
         removeTransactionKnowBy(trans.sha3());
     }
+    return true;
 }
 
 bool TxPool::dropTransactions(Block const& block, bool needNotify)
