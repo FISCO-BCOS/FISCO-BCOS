@@ -581,7 +581,8 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
                           << working_block.header().number() << "/"
                           << working_block.header().hash().abridged() << "/" << req.idx
                           << (utcTime() - start_exec_time) << "/"
-                          << ((utcTime() - start_exec_time) / sealing.block.getTransactionSize());
+                          << ((float)(utcTime() - start_exec_time) /
+                                 (float)sealing.block.getTransactionSize());
 }
 
 /// check whether the block is empty
