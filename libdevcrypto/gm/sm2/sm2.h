@@ -25,8 +25,8 @@
 #include <openssl/sm3.h>
 #include <iostream>
 #include <string>
-#define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[#CRYPTO] "
-#define ERROR_OUTPUT std::cout << "[#CRYPTO] "
+#define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
+#define ERROR_OUTPUT std::cout << "[CRYPTO] "
 class SM2
 {
 public:
