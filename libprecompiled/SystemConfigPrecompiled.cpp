@@ -42,7 +42,7 @@ bytes SystemConfigPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
+                           << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
@@ -59,15 +59,16 @@ bytes SystemConfigPrecompiled::call(
         abi.abiOut(data, configKey, configValue);
         // Uniform lowercase configKey
         boost::to_lower(configKey);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("setValueByKey func")
-                           << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                               << LOG_DESC("setValueByKey func") << LOG_KV("configKey", configKey)
+                               << LOG_KV("configValue", configValue);
 
         if (!checkValueValid(configKey, configValue))
         {
-            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
-                               << LOG_DESC("SystemConfigPrecompiled set invalid value")
-                               << LOG_KV("configKey", configKey)
-                               << LOG_KV("configValue", configValue);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("SystemConfigPrecompiled")
+                << LOG_DESC("SystemConfigPrecompiled set invalid value")
+                << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
             out = abi.abiIn("", CODE_INVALID_CONFIGURATION_VALUES);
             return out;
         }
@@ -95,7 +96,7 @@ bytes SystemConfigPrecompiled::call(
             else
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
-                                   << LOG_DESC("setValueByKey successfully");
+                                       << LOG_DESC("setValueByKey successfully");
 
                 out = abi.abiIn("", count);
             }
@@ -113,7 +114,7 @@ bytes SystemConfigPrecompiled::call(
             else
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
-                                   << LOG_DESC("update value by key successfully");
+                                       << LOG_DESC("update value by key successfully");
 
                 out = abi.abiIn("", count);
             }
@@ -122,7 +123,7 @@ bytes SystemConfigPrecompiled::call(
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("error func")
-                           << LOG_KV("func", func);
+                               << LOG_KV("func", func);
     }
     return out;
 }

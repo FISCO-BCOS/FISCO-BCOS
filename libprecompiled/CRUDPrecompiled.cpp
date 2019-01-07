@@ -46,7 +46,7 @@ storage::Table::Ptr CRUDPrecompiled::openTable(
     ExecutiveContext::Ptr context, const std::string& tableName)
 {
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("open table")
-                       << LOG_KV("tableName", tableName);
+                           << LOG_KV("tableName", tableName);
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
@@ -57,7 +57,7 @@ bytes CRUDPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
+                           << LOG_KV("param", toHex(param));
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);

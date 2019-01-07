@@ -56,7 +56,7 @@ bytes ConsensusPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
+                           << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
@@ -78,12 +78,12 @@ bytes ConsensusPrecompiled::call(
         boost::to_lower(nodeID);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addMiner func")
-                           << LOG_KV("nodeID", nodeID);
+                               << LOG_KV("nodeID", nodeID);
 
         if (nodeID.size() != 128u)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                                   << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
             out = abi.abiIn("", CODE_INVALID_NODEID);
         }
         else
@@ -115,7 +115,7 @@ bytes ConsensusPrecompiled::call(
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addMiner successfully");
+                                               << LOG_DESC("addMiner successfully");
 
                         out = abi.abiIn("", count);
                     }
@@ -133,7 +133,7 @@ bytes ConsensusPrecompiled::call(
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addMiner successfully");
+                                               << LOG_DESC("addMiner successfully");
 
                         out = abi.abiIn("", count);
                     }
@@ -149,11 +149,11 @@ bytes ConsensusPrecompiled::call(
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
-                           << LOG_KV("nodeID", nodeID);
+                               << LOG_KV("nodeID", nodeID);
         if (nodeID.size() != 128u)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                                   << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
             out = abi.abiIn("", CODE_INVALID_NODEID);
         }
         else
@@ -183,7 +183,7 @@ bytes ConsensusPrecompiled::call(
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                       << LOG_DESC("addObserver successfully");
+                                           << LOG_DESC("addObserver successfully");
 
                     out = abi.abiIn("", count);
                 }
@@ -201,7 +201,7 @@ bytes ConsensusPrecompiled::call(
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                       << LOG_DESC("addObserver successfully");
+                                           << LOG_DESC("addObserver successfully");
 
                     out = abi.abiIn("", count);
                 }
@@ -220,11 +220,11 @@ bytes ConsensusPrecompiled::call(
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
-                           << LOG_KV("nodeID", nodeID);
+                               << LOG_KV("nodeID", nodeID);
         if (nodeID.size() != 128u)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
+                                   << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
             out = abi.abiIn("", CODE_INVALID_NODEID);
         }
         else
@@ -260,7 +260,7 @@ bytes ConsensusPrecompiled::call(
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("error func")
-                           << LOG_KV("func", func);
+                               << LOG_KV("func", func);
     }
     return out;
 }
@@ -287,7 +287,7 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
         }
     }
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("showConsensusTable")
-                       << LOG_KV("consensusTable", s.str());
+                           << LOG_KV("consensusTable", s.str());
 }
 
 bool ConsensusPrecompiled::checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID)

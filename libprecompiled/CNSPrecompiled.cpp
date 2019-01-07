@@ -50,7 +50,7 @@ std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
 Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::string& tableName)
 {
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("open table")
-                       << LOG_KV("tableName", tableName);
+                           << LOG_KV("tableName", tableName);
 
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
@@ -62,7 +62,7 @@ bytes CNSPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
+                           << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
@@ -98,8 +98,8 @@ bytes CNSPrecompiled::call(
         }
         if (exist)
         {
-            PRECOMPILED_LOG(WARNING) << LOG_BADGE("CNSPrecompiled")
-                                 << LOG_DESC("address and version exist");
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist");
 
             out = abi.abiIn("", CODE_ADDRESS_AND_VERSION_EXIST);
         }
@@ -196,7 +196,7 @@ bytes CNSPrecompiled::call(
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("error func")
-                           << LOG_KV("func", func);
+                               << LOG_KV("func", func);
     }
 
     return out;
