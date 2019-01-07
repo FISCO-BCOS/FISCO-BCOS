@@ -139,8 +139,8 @@ public:
         return result;
     }
 
-    virtual evmc_result create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op,
-        u256 _salt, OnOpFunc const& _onOp)
+    virtual evmc_result create(u256 const& _endowment, u256& io_gas, bytesConstRef _code,
+        Instruction _op, u256 const& _salt, OnOpFunc const& _onOp)
     {
         u256 nonce = u256(00013443);
         Address m_newAddress = right160(sha3(rlpList(myAddress(), nonce)));
@@ -168,14 +168,14 @@ public:
         return result;
     }
     /// account related function
-    virtual bool exists(Address addr)
+    virtual bool exists(Address const& addr)
     {
         if (account_map.count(addr))
             return true;
         return false;
     }
     /// Read storage location.
-    virtual u256 store(u256 key)
+    virtual u256 store(u256 const& key)
     {
         auto it = storage_map.find(key);
         if (it != storage_map.end())
@@ -185,7 +185,7 @@ public:
         return u256(0);
     }
     /// Write a value in storage.
-    virtual void setStore(u256 _key, u256 _value)
+    virtual void setStore(u256 const& _key, u256 const& _value)
     {
         auto it = storage_map.find(_key);
         if (it != storage_map.end())
@@ -200,7 +200,7 @@ public:
     }
 
     /// Read address's balance.
-    virtual u256 balance(Address addr)
+    virtual u256 balance(Address const& addr)
     {
         auto it = balance_map.find(addr);
         if (it != balance_map.end())
@@ -210,27 +210,27 @@ public:
         return 0;
     }
     /// @returns the size of the code in bytes at the given address.
-    virtual size_t codeSizeAt(Address contract_addr)
+    virtual size_t codeSizeAt(Address const& contract_addr)
     {
         if (account_map.count(contract_addr))
             return code().size();
         return 0;
     }
 
-    virtual h256 codeHashAt(Address contract_addr)
+    virtual h256 codeHashAt(Address const& contract_addr)
     {
         if (account_map.count(contract_addr))
             return codeHash();
         return h256{};
     }
     /// Read address's code.
-    virtual bytes const codeAt(Address contract_addr) { return code(); }
+    virtual bytes const codeAt(Address const& contract_addr) { return code(); }
 
     virtual h256 blockHash(int64_t number) { return sha3(toString(number)); }
 
-    FakeExtVM(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin,
-        u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash,
-        unsigned _depth, bool _isCreate, bool _staticCall)
+    FakeExtVM(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+        Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
+        bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
       : ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code,
             _codeHash, _depth, _isCreate, _staticCall)
     {

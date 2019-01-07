@@ -195,7 +195,7 @@ evmc_result ExtVM::call(CallParameters& _p)
     return evmcResult;
 }
 
-size_t ExtVM::codeSizeAt(dev::Address _a)
+size_t ExtVM::codeSizeAt(dev::Address const& _a)
 {
     if (m_envInfo.precompiledEngine()->isPrecompiled(_a))
     {
@@ -205,18 +205,18 @@ size_t ExtVM::codeSizeAt(dev::Address _a)
     return m_s->codeSize(_a);
 }
 
-h256 ExtVM::codeHashAt(Address _a)
+h256 ExtVM::codeHashAt(Address const& _a)
 {
     return exists(_a) ? m_s->codeHash(_a) : h256{};
 }
 
-void ExtVM::setStore(u256 _n, u256 _v)
+void ExtVM::setStore(u256 const& _n, u256 const& _v)
 {
     m_s->setStorage(myAddress(), _n, _v);
 }
 
-evmc_result ExtVM::create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op,
-    u256 _salt, OnOpFunc const& _onOp)
+evmc_result ExtVM::create(u256 const& _endowment, u256& io_gas, bytesConstRef _code,
+    Instruction _op, u256 _salt, OnOpFunc const& _onOp)
 {
     Executive e{m_s, envInfo(), depth() + 1};
     bool result = false;
@@ -241,7 +241,7 @@ evmc_result ExtVM::create(u256 _endowment, u256& io_gas, bytesConstRef _code, In
     return evmcResult;
 }
 
-void ExtVM::suicide(Address _a)
+void ExtVM::suicide(Address const& _a)
 {
     // Why transfer is not used here? That caused a consensus issue before (see Quirk #2 in
     // http://martin.swende.se/blog/Ethereum_quirks_and_vulns.html). There is one test case
