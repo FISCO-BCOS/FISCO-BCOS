@@ -380,15 +380,22 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
                 message->setSeq(m_p2pMessageFactory->newSeq());
             }
             auto session = it->second;
-            session->session()->asyncSendMessage(message, options,
-                [session, callback](
-                    dev::network::NetworkException e, dev::network::Message::Ptr message) {
-                    P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-                    if (callback)
-                    {
-                        callback(e, session, p2pMessage);
-                    }
-                });
+            if (callback)
+            {
+                session->session()->asyncSendMessage(message, options,
+                    [session, callback](
+                        dev::network::NetworkException e, dev::network::Message::Ptr message) {
+                        P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+                        if (callback)
+                        {
+                            callback(e, session, p2pMessage);
+                        }
+                    });
+            }
+            else
+            {
+                session->session()->asyncSendMessage(message, options, nullptr);
+            }
         }
         else
         {
@@ -475,12 +482,13 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
     if (nodeIDsToSend.size() == 0)
     {
         SERVICE_LOG(WARNING) << "[#asyncSendMessageByTopic] no topic to be sent.";
-
-        m_host->threadPool()->enqueue([callback]() {
-            dev::network::NetworkException e(TOPIC_NOT_FOUND, "No topic to be sent");
-            callback(e, std::shared_ptr<dev::p2p::P2PSession>(), dev::p2p::P2PMessage::Ptr());
-        });
-
+        if (callback)
+        {
+            m_host->threadPool()->enqueue([callback]() {
+                dev::network::NetworkException e(TOPIC_NOT_FOUND, "No topic to be sent");
+                callback(e, std::shared_ptr<dev::p2p::P2PSession>(), dev::p2p::P2PMessage::Ptr());
+            });
+        }
         return;
     }
 
@@ -501,10 +509,12 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
                 if (m_nodeIDs.empty())
                 {
                     SERVICE_LOG(WARNING) << "Send topics message all failed";
-                    m_callback(dev::network::NetworkException(
-                                   e.errorCode(), "Send topics message all failed"),
-                        session, P2PMessage::Ptr());
-
+                    if (m_callback)
+                    {
+                        m_callback(dev::network::NetworkException(
+                                       e.errorCode(), "Send topics message all failed"),
+                            session, P2PMessage::Ptr());
+                    }
                     return;
                 }
 
@@ -529,7 +539,10 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
             }
             else
             {
-                m_callback(e, session, msg);
+                if (m_callback)
+                {
+                    m_callback(e, session, msg);
+                }
             }
         }
 
