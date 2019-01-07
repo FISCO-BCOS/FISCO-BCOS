@@ -19,7 +19,7 @@
  * @date 2018
  *
  * AES
- * todo: use openssl tassl
+ * todo: use openssl gmssl
  */
 
 #pragma once

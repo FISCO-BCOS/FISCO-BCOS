@@ -25,7 +25,6 @@
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
-#include <libsecurity/EncryptedFile.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/algorithm/string/replace.hpp>
@@ -55,10 +54,7 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            if (g_BCOSConfig.diskEncryption.enable)
-                keyContent = EncryptedFile::decryptContents(key);
-            else
-                keyContent = contents(key);
+            keyContent = contents(key);
         }
         catch (std::exception& e)
         {
@@ -175,8 +171,8 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 {
     std::string dataPath = pt.get<std::string>("secure.data_path", "./conf/");
     std::string key = dataPath + pt.get<std::string>("secure.key", "gmnode.key");
-    std::string enKey = dataPath + pt.get<std::string>("secure.en_key", "gmennode.key");
-    std::string enCert = dataPath + pt.get<std::string>("secure.en_cert", "gmennode.crt");
+    // std::string enKey = dataPath + pt.get<std::string>("secure.en_key", "gmennode.key");
+    // std::string enCert = dataPath + pt.get<std::string>("secure.en_cert", "gmennode.crt");
     std::string cert = dataPath + pt.get<std::string>("secure.cert", "gmnode.crt");
     std::string caCert = dataPath + pt.get<std::string>("secure.ca_cert", "gmca.crt");
     std::string caPath = dataPath + pt.get<std::string>("secure.ca_path", "");
@@ -185,10 +181,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            if (g_BCOSConfig.diskEncryption.enable)
-                keyContent = EncryptedFile::decryptContents(key);
-            else
-                keyContent = contents(key);
+            keyContent = contents(key);
         }
         catch (std::exception& e)
         {
@@ -260,19 +253,19 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
-    sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
-    if (SSL_CTX_use_enc_PrivateKey_file(
-            sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
-    {
-        INITIALIZER_LOG(DEBUG)
-            << "[#SecureInitializer::initConfig] use GM enc ca certificate: [file]: " << enKey;
-    }
-    else
-    {
-        INITIALIZER_LOG(ERROR)
-            << "[#SecureInitializer::initConfig] GM enc ca certificate not exists!";
-        BOOST_THROW_EXCEPTION(CertificateNotExists());
-    }
+    // sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
+    // if (SSL_CTX_use_PrivateKey_file(
+    //         sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
+    // {
+    //     INITIALIZER_LOG(DEBUG)
+    //         << "[#SecureInitializer::initConfig] use GM enc ca certificate: [file]: " << enKey;
+    // }
+    // else
+    // {
+    //     INITIALIZER_LOG(ERROR)
+    //         << "[#SecureInitializer::initConfig] GM enc ca certificate not exists!";
+    //     BOOST_THROW_EXCEPTION(CertificateNotExists());
+    // }
 
     if (!cert.empty() && !contents(cert).empty())
     {

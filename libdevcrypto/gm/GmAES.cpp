@@ -23,7 +23,6 @@
 #include "libdevcrypto/Exceptions.h"
 #include "sm4/sm4.h"
 #include <libdevcore/easylog.h>
-#include <openssl/sm4.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -43,7 +42,7 @@ bytes dev::aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key)
     memset(inDataV.data() + _plainData.size(), nSize, nSize);
 
     bytes enData(inDataVLen);
-    SM4::getInstance().setKey((unsigned char*)_key.data(), _key.size());
+    SM4::getInstance().setEncKey((unsigned char*)_key.data());
     SM4::getInstance().cbcEncrypt(
         inDataV.data(), enData.data(), inDataVLen, (unsigned char*)ivData.data(), 1);
     // LOG(DEBUG)<<"ivData:"<<ascii2hex((const char*)ivData.data(),ivData.size());
@@ -53,7 +52,7 @@ bytes dev::aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key)
 {
     bytesConstRef ivData = _key.cropped(0, 16);
     bytes deData(_cypherData.size());
-    SM4::getInstance().setKey((unsigned char*)_key.data(), _key.size());
+    SM4::getInstance().setDecKey((unsigned char*)_key.data());
     SM4::getInstance().cbcEncrypt((unsigned char*)_cypherData.data(), deData.data(),
         _cypherData.size(), (unsigned char*)ivData.data(), 0);
     int padding = deData.data()[_cypherData.size() - 1];

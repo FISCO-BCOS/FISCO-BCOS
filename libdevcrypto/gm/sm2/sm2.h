@@ -19,6 +19,10 @@
  * @author: websterchen
  *
  * @date: 2018
+ * 
+ * @author: asherli
+ *
+ * @date: 2019 use GmSSL
  */
 #pragma once
 #include <iostream>
@@ -26,6 +30,7 @@
 using namespace std;
 #include <openssl/sm2.h>
 #include <openssl/sm3.h>
+
 class SM2
 {
 public:
