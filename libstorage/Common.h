@@ -51,6 +51,9 @@ const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 /// system error: code from -29 to -1
 /// logic error: each Precompiled occupy range of 10 numbers for code
 
+/// note: abi.abiOut will return a positive number related to the negative number.
+/// It maybe coincide with the positive number that should have been returned.
+
 const int CODE_NO_AUTHORIZED = -1;
 
 /// AuthorityPrecompiled -30 ~ -39
