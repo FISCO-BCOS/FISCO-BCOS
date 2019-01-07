@@ -26,7 +26,6 @@
 #include <iostream>
 #include <string>
 #define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
-#define ERROR_OUTPUT std::cout << "[CRYPTO] "
 class SM2
 {
 public:

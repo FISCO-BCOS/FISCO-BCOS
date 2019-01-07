@@ -37,7 +37,6 @@ bool SM2::genKey()
     if (!sm2Group)
     {
         CRYPTO_LOG(ERROR) << "[SM2::genKey] Error Of Gain SM2 Group Object";
-        ERROR_OUTPUT << "[SM2::genKey] Error Of Gain SM2 Group Object" << std::endl;
         goto err;
     }
 
@@ -46,21 +45,18 @@ bool SM2::genKey()
     if (!sm2Key)
     {
         CRYPTO_LOG(ERROR) << "[SM2::genKey] Error Of Alloc Memory for SM2 Key";
-        ERROR_OUTPUT << "[SM2::genKey] Error Of Alloc Memory for SM2 Key" << std::endl;
         goto err;
     }
 
     if (EC_KEY_set_group(sm2Key, (const EC_GROUP*)sm2Group) == 0)
     {
         CRYPTO_LOG(ERROR) << "[SM2::genKey] Error Of Set SM2 Group into key";
-        ERROR_OUTPUT << "[SM2::genKey] Error Of Set SM2 Group into key" << std::endl;
         goto err;
     }
 
     if (EC_KEY_generate_key(sm2Key) == 0)
     {
         CRYPTO_LOG(ERROR) << "[SM2::genKey] Error Of Generate SM2 Key";
-        ERROR_OUTPUT << "[SM2::genKey] Error Of Generate SM2 Key" << std::endl;
         goto err;
     }
 
@@ -68,7 +64,6 @@ bool SM2::genKey()
     if (!pri)
     {
         CRYPTO_LOG(ERROR) << "[SM2::genKey] Error Of Output SM2 Private key";
-        ERROR_OUTPUT << "[SM2::genKey] Error Of Output SM2 Private key" << std::endl;
         goto err;
     }
     privateKey = pri;
@@ -79,7 +74,6 @@ bool SM2::genKey()
     if (!pub)
     {
         CRYPTO_LOG(ERROR) << "[SM2::genKey] Error Of Output SM2 Public key";
-        ERROR_OUTPUT << "[SM2::genKey] Error Of Output SM2 Public key" << std::endl;
         goto err;
     }
     publicKey = pub;
@@ -141,7 +135,6 @@ bool SM2::sign(
     if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
     {
         CRYPTO_LOG(ERROR) << "[SM2::sign] Error Of Compute Z";
-        ERROR_OUTPUT << "[SM2::sign] Error Of Compute Z" << std::endl;
         goto err;
     }
     // SM3 Degist
@@ -154,7 +147,6 @@ bool SM2::sign(
     if (signData == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::sign] Error Of SM2 Signature";
-        ERROR_OUTPUT << "[SM2::sign] Error Of SM2 Signature" << std::endl;
         goto err;
     }
     rData = BN_bn2hex(signData->r);
@@ -213,22 +205,18 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
     if (sm2Group == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_namee";
-        ERROR_OUTPUT << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_name"
-                     << std::endl;
         goto err;
     }
 
     if ((pubPoint = EC_POINT_new(sm2Group)) == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new";
-        ERROR_OUTPUT << "[SM2::veify] ERROR of Verify EC_POINT_new" << std::endl;
         goto err;
     }
 
     if (!EC_POINT_hex2point(sm2Group, (const char*)publicKey.c_str(), pubPoint, NULL))
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point";
-        ERROR_OUTPUT << "[SM2::veify] ERROR of Verify EC_POINT_hex2point" << std::endl;
         goto err;
     }
 
@@ -237,22 +225,18 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
     if (sm2Key == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name";
-        ERROR_OUTPUT << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name"
-                     << std::endl;
         goto err;
     }
 
     if (!EC_KEY_set_public_key(sm2Key, pubPoint))
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key";
-        ERROR_OUTPUT << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key" << std::endl;
         goto err;
     }
 
     if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z";
-        ERROR_OUTPUT << "[SM2::veify] Error Of Compute Z" << std::endl;
         goto err;
     }
     // SM3 Degist
@@ -266,21 +250,18 @@ int SM2::verify(const string& _signData, int _signDataLen, const char* originalD
     if (!BN_hex2bn(&signData->r, r.c_str()))
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_hex2bn R:" << r;
-        ERROR_OUTPUT << "[SM2::veify] ERROR of BN_hex2bn R:" << r << std::endl;
         goto err;
     }
 
     if (!BN_hex2bn(&signData->s, s.c_str()))
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_hex2bn S:" << s;
-        ERROR_OUTPUT << "[SM2::veify] ERROR BN_hex2bn S:" << s << std::endl;
         goto err;
     }
 
     if (ECDSA_do_verify(zValue, zValueLen, signData, sm2Key) != 1)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify";
-        ERROR_OUTPUT << "[SM2::veify] Error Of SM2 Verify" << std::endl;
         goto err;
     }
     // LOG(DEBUG)<<"SM2 Verify successed.";
@@ -316,8 +297,6 @@ string SM2::priToPub(const string& pri)
     if (!EC_KEY_set_private_key(sm2Key, res))
     {
         CRYPTO_LOG(ERROR) << "[SM2::priToPub] Error PriToPub EC_KEY_set_private_key";
-        ERROR_OUTPUT << "[SM2::priToPub] Error PriToPub EC_KEY_set_private_key"
-                     << std::endl;
         goto err;
     }
 
@@ -327,7 +306,6 @@ string SM2::priToPub(const string& pri)
     if (!EC_POINT_mul(sm2Group, pubPoint, res, NULL, NULL, ctx))
     {
         CRYPTO_LOG(ERROR) << "[SM2::priToPub] Error of PriToPub EC_POINT_mul";
-        ERROR_OUTPUT << "[SM2::priToPub] Error of PriToPub EC_POINT_mul" << std::endl;
         goto err;
     }
 
