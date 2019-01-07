@@ -576,12 +576,12 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto start_exec_time = utcTime();
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
-    PBFTENGINE_LOG(DEBUG) << "[#execBlock] [myIdx/myNode/number/hash/idx/timecost]:  " << nodeIdx()
-                          << "/" << m_keyPair.pub().abridged() << "/"
+    PBFTENGINE_LOG(DEBUG) << "[#execBlock] [myIdx/myNode/number/hash/idx/timecost/execPerTx]:  "
+                          << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                           << working_block.header().number() << "/"
                           << working_block.header().hash().abridged() << "/" << req.idx
-                          << (utcTime() - start_exec_time);
-    m_timeManager.updateTimeAfterHandleBlock(sealing.block.getTransactionSize(), start_exec_time);
+                          << (utcTime() - start_exec_time) << "/"
+                          << ((utcTime() - start_exec_time) / sealing.block.getTransactionSize());
 }
 
 /// check whether the block is empty

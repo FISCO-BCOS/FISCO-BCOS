@@ -73,48 +73,6 @@ struct TimeManager
         /// LOG(DEBUG) << "##### interval:"<< interval << " , real-time:"<<(now-last);
         return (now - last >= interval);
     }
-
-    inline void updateTimeAfterHandleBlock(size_t const& txNum, uint64_t const& startExecTime)
-    {
-        m_lastExecFinishTime = utcTime();
-        if (txNum != 0)
-        {
-            float execTime_per_tx = (float)(m_lastExecFinishTime - startExecTime) / txNum;
-            m_execTimePerTx = (m_execTimePerTx + execTime_per_tx) / 2;
-            if (m_execTimePerTx >= (float)m_intervalBlockTime)
-                m_execTimePerTx = (float)m_intervalBlockTime;
-            /// for prediction
-            LOG(DEBUG) << "[#CONSENSUS] [txNum/execTimePerTx]: " << txNum << "/" << m_execTimePerTx;
-        }
-    }
-
-    inline uint64_t calculateMaxPackTxNum(uint64_t defaultMaxTxNum, VIEWTYPE& view)
-    {
-        auto last_exec_finish_time = m_lastExecFinishTime;
-        unsigned passed_time = 0;
-        if (view != 0)
-            passed_time = utcTime() - m_lastConsensusTime;
-        else
-        {
-            if (m_lastConsensusTime - last_exec_finish_time >= m_intervalBlockTime)
-                passed_time = utcTime() - m_lastConsensusTime;
-            else
-                passed_time = utcTime() - last_exec_finish_time;
-        }
-        auto left_time = 0;
-        if (passed_time < m_intervalBlockTime)
-            left_time = m_intervalBlockTime - passed_time;
-        uint64_t max_tx_num = defaultMaxTxNum;
-        if (m_execTimePerTx != 0)
-        {
-            max_tx_num = left_time / m_execTimePerTx;
-            if (left_time > 0 && left_time < m_execTimePerTx)
-                max_tx_num = 1;
-            if (max_tx_num > defaultMaxTxNum)
-                max_tx_num = defaultMaxTxNum;
-        }
-        return max_tx_num;
-    }
 };
 }  // namespace consensus
 }  // namespace dev
