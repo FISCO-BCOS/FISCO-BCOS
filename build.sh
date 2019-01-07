@@ -141,7 +141,7 @@ install_all_deps()
 	elif [ ${platform} -eq ${Centos_Platform} ];then
 		install_centos_deps
 		if [ $enable_guomi -eq 0 ];then
-			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc ${solc_link_prefix} && sudo chmod +x /usr/bin/fisco-solc"
+			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc ${solc_link_prefix}-centos && sudo chmod +x /usr/bin/fisco-solc"
 		else
 			execute_cmd "sudo curl -Lo /usr/bin/fisco-solc-guomi ${solc_link_prefix}-guomi-centos && sudo chmod +x /usr/bin/fisco-solc-guomi"
 		fi
