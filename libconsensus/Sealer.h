@@ -97,7 +97,7 @@ public:
     void setExtraData(std::vector<bytes> const& _extra) { m_extraData = _extra; }
     std::vector<bytes> const& extraData() const { return m_extraData; }
 
-    bool inline shouldResetSealing()
+    virtual bool shouldResetSealing()
     {
         return (m_sealing.block.isSealed() ||
                 m_sealing.block.blockHeader().number() <= m_blockChain->number());

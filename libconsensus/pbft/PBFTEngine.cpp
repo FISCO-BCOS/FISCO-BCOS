@@ -555,7 +555,6 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
 
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
-    auto start_exec_time = utcTime();
     Block working_block;
     /// no need to decode the local generated prepare packet
     if (req.pBlock)
@@ -574,6 +573,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
     checkBlockValid(working_block);
     m_blockSync->noteSealingBlockNumber(working_block.header().number());
+    auto start_exec_time = utcTime();
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
     PBFTENGINE_LOG(DEBUG) << "[#execBlock] [myIdx/myNode/number/hash/idx/timecost]:  " << nodeIdx()
@@ -624,6 +624,7 @@ void PBFTEngine::onRecvPBFTMessage(
     if (pbft_msg.packet_id <= ViewChangeReqPacket)
     {
         m_msgQueue.push(pbft_msg);
+        m_signalled.notify_all();
     }
     else
     {
@@ -633,12 +634,12 @@ void PBFTEngine::onRecvPBFTMessage(
     }
 }
 
-void PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& pbftMsg)
 {
     bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
     if (!valid)
-        return;
-    handlePrepareMsg(prepare_req, pbftMsg.endpoint);
+        return false;
+    return handlePrepareMsg(prepare_req, pbftMsg.endpoint);
 }
 
 /**
@@ -653,7 +654,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
  * @param self: if generated-prepare-request need to handled, then set self to be true;
  *              else this function will filter the self-generated prepareReq
  */
-void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string const& endpoint)
+bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string const& endpoint)
 {
     Timer t;
     std::ostringstream oss;
@@ -663,7 +664,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
         << m_consensusBlockNumber << "/" << endpoint << "/" << prepareReq.block_hash.abridged();
     /// check the prepare request is valid or not
     if (!isValidPrepare(prepareReq, oss))
-        return;
+        return false;
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
     Sealing workingSealing;
@@ -676,13 +677,13 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
         PBFTENGINE_LOG(WARNING) << "[#handlePrepareMsg] Block execute failed: [EINFO]:  "
                                 << boost::diagnostic_information(e) << "  [INFO]: " << oss.str()
                                 << std::endl;
-        return;
+        return true;
     }
     /// whether to omit empty block
     if (needOmit(workingSealing))
     {
         changeViewForEmptyBlock();
-        return;
+        return true;
     }
 
     /// generate prepare request with signature of this node to broadcast
@@ -703,6 +704,7 @@ void PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     checkAndCommit();
     PBFTENGINE_LOG(DEBUG) << "[#handlePrepareMsg Succ] [Timecost]:  " << 1000 * t.elapsed()
                           << "  [INFO]:  " << oss.str();
+    return true;
 }
 
 
@@ -856,6 +858,7 @@ void PBFTEngine::reportBlock(Block const& block)
                              << " , myIdx= " << nodeIdx()
                              << ", myNode=" << m_keyPair.pub().abridged();
     }
+    m_signalled.notify_all();
 }
 
 /**
@@ -866,12 +869,12 @@ void PBFTEngine::reportBlock(Block const& block)
  * @param sign_req: return value, the decoded signReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
-void PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
     bool valid = decodeToRequests(sign_req, ref(pbftMsg.data));
     if (!valid)
-        return;
+        return false;
     std::ostringstream oss;
     oss << "[#handleSignMsg] [myIdx/myNode/number/highNum/idx/Sview/view/from/fromIp/hash]:  "
         << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << sign_req.height << "/"
@@ -881,11 +884,12 @@ void PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
 
     valid = isValidSignReq(sign_req, oss);
     if (!valid)
-        return;
+        return false;
     m_reqCache->addSignReq(sign_req);
     checkAndCommit();
     PBFTENGINE_LOG(DEBUG) << "[#handleSignMsg Succ] [Timecost]:  " << 1000 * t.elapsed()
                           << "  [INFO]:  " << oss.str();
+    return true;
 }
 
 /**
@@ -924,12 +928,12 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
  * @param commit_req: return value, the decoded commitReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
-void PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
     bool valid = decodeToRequests(commit_req, ref(pbftMsg.data));
     if (!valid)
-        return;
+        return false;
     std::ostringstream oss;
     oss << "[#handleCommitMsg] [myIdx/myNode/number/highNum/idx/Cview/view/from/fromIp/hash]:  "
         << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << commit_req.height << "/"
@@ -939,12 +943,12 @@ void PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
 
     valid = isValidCommitReq(commit_req, oss);
     if (!valid)
-        return;
+        return false;
     m_reqCache->addCommitReq(commit_req);
     checkAndSave();
     PBFTENGINE_LOG(DEBUG) << "[#handleCommitMsg Succ] [Timecost]:  " << 1000 * t.elapsed()
                           << "  [INFO]:  " << oss.str();
-    return;
+    return true;
 }
 
 /**
@@ -972,11 +976,11 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
     return true;
 }
 
-void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
 {
     bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
     if (!valid)
-        return;
+        return false;
     std::ostringstream oss;
     oss << "[handleViewChangeMsg] [myIdx/myNode/number/highNum/idx/Cview/view/from/fromIp/hash]:  "
         << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << viewChange_req.height << "/"
@@ -986,7 +990,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
 
     valid = isValidViewChangeReq(viewChange_req, pbftMsg.node_idx, oss);
     if (!valid)
-        return;
+        return false;
 
     m_reqCache->addViewChangeReq(viewChange_req);
     if (viewChange_req.view == m_toView)
@@ -1009,6 +1013,7 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         }
     }
     PBFTENGINE_LOG(DEBUG) << "[#handleViewChangeMsg Succ]: " << oss.str();
+    return true;
 }
 
 bool PBFTEngine::isValidViewChangeReq(
@@ -1117,9 +1122,9 @@ void PBFTEngine::checkTimeout()
                                   << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                                   << t.elapsed() * 1000 << "/" << m_view << "/" << m_toView;
         }
-        if (flag && m_onViewChange)
-            m_onViewChange(h256Hash());
     }
+    if (flag && m_onViewChange)
+        m_onViewChange(h256Hash());
 }
 
 void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
@@ -1127,12 +1132,13 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     Guard l(m_mutex);
     PBFTMsg pbft_msg;
     std::string key;
+    bool succ = false;
     switch (pbftMsg.packet_id)
     {
     case PrepareReqPacket:
     {
         PrepareReq prepare_req;
-        handlePrepareMsg(prepare_req, pbftMsg);
+        succ = handlePrepareMsg(prepare_req, pbftMsg);
         key = prepare_req.uniqueKey();
         pbft_msg = prepare_req;
         break;
@@ -1140,7 +1146,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case SignReqPacket:
     {
         SignReq req;
-        handleSignMsg(req, pbftMsg);
+        succ = handleSignMsg(req, pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1148,7 +1154,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case CommitReqPacket:
     {
         CommitReq req;
-        handleCommitMsg(req, pbftMsg);
+        succ = handleCommitMsg(req, pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1156,7 +1162,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case ViewChangeReqPacket:
     {
         ViewChangeReq req;
-        handleViewChangeMsg(req, pbftMsg);
+        succ = handleViewChangeMsg(req, pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1174,7 +1180,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         return;
     bool height_flag = (pbft_msg.height > m_highestBlock.number()) ||
                        (m_highestBlock.number() - pbft_msg.height < 10);
-    if (key.size() > 0 && height_flag)
+    if (succ && key.size() > 0 && height_flag)
     {
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);

@@ -76,6 +76,11 @@ public:
     void start() override;
     void stop() override;
 
+    bool shouldResetSealing() override
+    {
+        return Sealer::shouldResetSealing() && isLeaderOrNextLeader();
+    }
+
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
@@ -84,17 +89,20 @@ protected:
         return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1);
     }
 
-    bool reachBlockIntervalTime() override
-    {
-        return m_pbftEngine->reachBlockIntervalTime() || emptyTxPool();
-    }
+    bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
 
 private:
+    bool inline isLeaderOrNextLeader()
+    {
+        return (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx() ||
+                m_pbftEngine->getNextLeader() == m_pbftEngine->nodeIdx());
+    }
+    /*
     bool emptyTxPool()
     {
         return (m_sealing.block.getTransactionSize() > 0) &&
                m_txPool->status().current == m_sealing.m_transactionSet.size();
-    }
+    }*/
     void setBlock();
 
     bool sealIsGeneratedByNextLeader()

@@ -133,7 +133,8 @@ public:
             return false;
         return p->second.find(_nodeId) != p->second.end();
     }
-    void transactionsIsKnownBy(std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId) override;
+    void transactionsIsKnownBy(
+        std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId) override;
     /// Is the transaction is known by someone
     bool isTransactionKnownBySomeone(h256 const& _txHash) override;
     SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }

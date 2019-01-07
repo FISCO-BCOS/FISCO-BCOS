@@ -122,6 +122,17 @@ public:
 
     void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
 
+    inline IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
+
+    inline std::pair<bool, IDXTYPE> getLeader() const
+    {
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
+        {
+            return std::make_pair(false, MAXIDX);
+        }
+        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
+    }
+
 protected:
     void workLoop() override;
     void handleFutureBlock();
@@ -155,16 +166,16 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
-    void handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
+    bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
-    void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+    bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
     /// heck the size of the collected signReq is over 2/3 or not
-    void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
-    void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
-    void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
+    bool handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
+    bool handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
+    bool handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
     void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
@@ -425,16 +436,6 @@ protected:
         return true;
     }
 
-    inline IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
-
-    inline std::pair<bool, IDXTYPE> getLeader() const
-    {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
-        {
-            return std::make_pair(false, MAXIDX);
-        }
-        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
-    }
     void checkMinerList(dev::eth::Block const& block);
     /// check block sign
     bool checkBlockSign(dev::eth::Block const& block);
