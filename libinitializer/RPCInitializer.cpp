@@ -32,9 +32,14 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 0);
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
-        INITIALIZER_LOG(ERROR) << "[#RPCInitializer] initConfig for RPCInitializer failed";
-        ERROR_OUTPUT << "[#RPCInitializer] initConfig for RPCInitializer failed! Invalid "
-                        "ListenPort for RPC, must between [0,65536]"
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
+                               << LOG_DESC(
+                                      "initConfig for RPCInitializer failed! Invalid ListenPort "
+                                      "for RPC, must between [0,65536]");
+        ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+                     << LOG_DESC(
+                            "initConfig for RPCInitializer failed! Invalid ListenPort for RPC, "
+                            "must between [0,65536]")
                      << std::endl;
         exit(1);
     }
@@ -65,7 +70,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
         m_channelRPCHttpServer->StartListening();
-        INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer started.";
+        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
+                              << LOG_DESC("ChannelRPCHttpServer started.");
 
         /// init httpListenPort
         ///< Donot to set destructions, the ModularServer will destruct.
@@ -74,14 +80,17 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
         m_jsonrpcHttpServer->StartListening();
-        INITIALIZER_LOG(INFO) << "JsonrpcHttpServer started.";
+        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
+                              << LOG_DESC("JsonrpcHttpServer started.");
     }
     catch (std::exception& e)
     {
-        INITIALIZER_LOG(ERROR) << "[#RPCInitializer] init RPC/channelserver failed, [EINFO]: "
-                               << boost::diagnostic_information(e);
-        ERROR_OUTPUT << "Init rpc/channelserver failed! Please check port: " << listenPort
-                     << " is unused! ERROR: " << boost::diagnostic_information(e) << std::endl;
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
+                               << LOG_DESC("init RPC/channelserver failed")
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+
+        ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC/channelserver failed")
+                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }
 }
