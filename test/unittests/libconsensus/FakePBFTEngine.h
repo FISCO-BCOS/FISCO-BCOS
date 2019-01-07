@@ -146,12 +146,12 @@ public:
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
-    void handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
+    bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
-    void handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+    bool handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
@@ -166,7 +166,7 @@ public:
         return PBFTEngine::isValidCommitReq(req, oss);
     }
 
-    void handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+    bool handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleCommitMsg(commit_req, pbftMsg);
     }
