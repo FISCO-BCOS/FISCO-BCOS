@@ -19,11 +19,12 @@
  *  @date 20180921
  */
 #pragma once
+#include "CRUDPrecompiled.h"
+#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
-#include "libstorage/CRUDPrecompiled.h"
 namespace dev
 {
-namespace blockverifier
+namespace precompiled
 {
 #if 0
 contract Miner {
@@ -52,14 +53,14 @@ public:
     ConsensusPrecompiled();
     virtual ~ConsensusPrecompiled(){};
 
-    virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address());
 
 private:
-    void showConsensusTable(ExecutiveContext::Ptr context);
+    void showConsensusTable(dev::blockverifier::ExecutiveContext::Ptr context);
     bool checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

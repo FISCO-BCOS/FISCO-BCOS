@@ -26,7 +26,7 @@ namespace dev
 {
 namespace storage
 {
-#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE] "
+#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE]"
 #define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << "[STORAGE] [LEVELDB]"
 
 /// \brief Sign of the DB key is valid or not
@@ -46,30 +46,6 @@ const std::string SYS_CONFIG = "_sys_config_";
 const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
 const std::string USER_TABLE_PREFIX = "_user_";
 const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
-
-/// correct return: code great or equal 0
-/// system error: code from -29 to -1
-/// logic error: each Precompiled occupy range of 10 numbers for code
-
-/// note: abi.abiOut will return a positive number related to the negative number.
-/// It maybe coincide with the positive number that should have been returned.
-
-const int CODE_NO_AUTHORIZED = -1;
-
-/// AuthorityPrecompiled -30 ~ -39
-const int CODE_TABLE_AND_ADDRESS_EXIST = -30;
-const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = -31;
-
-/// ConsensusPrecompiled
-const int CODE_INVALID_NODEID = -40;
-const int CODE_LAST_MINER = -41;
-
-/// CNSPrecompiled -50 ~ -59
-const int CODE_ADDRESS_AND_VERSION_EXIST = -50;
-
-/// SystemConfigPrecompiled -60 ~ -69
-const int CODE_INVALID_CONFIGURATION_VALUES = -60;
-
 
 }  // namespace storage
 }  // namespace dev

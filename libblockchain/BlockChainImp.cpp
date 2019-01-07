@@ -28,7 +28,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libstorage/ConsensusPrecompiled.h>
+#include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -45,6 +45,8 @@ using namespace dev::blockchain;
 using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::executive;
+using namespace dev::precompiled;
+
 using boost::lexical_cast;
 
 std::shared_ptr<Block> BlockCache::add(Block& _block)
@@ -420,7 +422,7 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
             return list;
         }
 
-        auto nodes = tb->select(blockverifier::PRI_KEY, tb->newCondition());
+        auto nodes = tb->select(PRI_KEY, tb->newCondition());
         if (!nodes)
             return list;
 
@@ -430,11 +432,10 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
             if (!node)
                 return list;
 
-            if ((node->getField(blockverifier::NODE_TYPE) == type) &&
-                (boost::lexical_cast<int>(node->getField(blockverifier::NODE_KEY_ENABLENUM)) <=
-                    blockNumber))
+            if ((node->getField(NODE_TYPE) == type) &&
+                (boost::lexical_cast<int>(node->getField(NODE_KEY_ENABLENUM)) <= blockNumber))
             {
-                h512 nodeID = h512(node->getField(blockverifier::NODE_KEY_NODEID));
+                h512 nodeID = h512(node->getField(NODE_KEY_NODEID));
                 list.push_back(nodeID);
             }
         }
@@ -464,7 +465,7 @@ dev::h512s BlockChainImp::minerList()
                               << LOG_KV("size", m_minerList.size());
         return m_minerList;
     }
-    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_MINER);
+    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_MINER);
     UpgradeGuard ul(l);
     m_cacheNumByMiner = blockNumber;
     m_minerList = list;
@@ -482,7 +483,7 @@ dev::h512s BlockChainImp::observerList()
                               << LOG_KV("size", m_observerList.size());
         return m_observerList;
     }
-    dev::h512s list = getNodeListByType(blockNumber, blockverifier::NODE_TYPE_OBSERVER);
+    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_OBSERVER);
     UpgradeGuard ul(l);
     m_cacheNumByObserver = blockNumber;
     m_observerList = list;
@@ -531,10 +532,9 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
             return ret;
         }
 
-        if (boost::lexical_cast<int>(value->getField(blockverifier::SYSTEM_CONFIG_ENABLENUM)) <=
-            blockNumber)
+        if (boost::lexical_cast<int>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <= blockNumber)
         {
-            ret = value->getField(blockverifier::SYSTEM_CONFIG_VALUE);
+            ret = value->getField(SYSTEM_CONFIG_VALUE);
         }
     }
     catch (std::exception& e)

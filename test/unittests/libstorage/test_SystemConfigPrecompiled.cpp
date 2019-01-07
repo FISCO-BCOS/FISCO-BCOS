@@ -5,8 +5,8 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
+#include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/MemoryTable.h>
-#include <libstorage/SystemConfigPrecompiled.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -14,6 +14,7 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::storagestate;
+using namespace dev::precompiled;
 
 namespace test_SystemConfigPrecompiled
 {
