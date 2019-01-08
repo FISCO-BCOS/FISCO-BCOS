@@ -57,13 +57,13 @@ void LogInitializer::initLog(
     boost::shared_ptr<boost::log::sinks::text_file_backend> backend(
         new boost::log::sinks::text_file_backend(boost::log::keywords::file_name = fileName,
             boost::log::keywords::open_mode = std::ios::app,
-            boost::log::keywords::auto_flush = true,
             boost::log::keywords::time_based_rotation = &canRotate,
             boost::log::keywords::channel = channel));
     boost::shared_ptr<sink_t> sink(new sink_t(backend));
     /// set rotation size
     uint64_t rotation_size = pt.get<uint64_t>(logType + ".MaxLogFileSize", 209715200 * 8);
     sink->locked_backend()->set_rotation_size(rotation_size);
+    sink->locked_backend()->auto_flush(false);
     /// set file format
     sink->set_formatter(
         boost::log::expressions::format("%1%|%2%| %3%") %
@@ -75,8 +75,6 @@ void LogInitializer::initLog(
     unsigned log_level = getLogLevel(pt.get<std::string>(logType + ".Level", "debug"));
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= log_level);
-    /// sink->locked_backend()->set_file_name_pattern
-    /// be->scan_for_files(boost::log::sinks::file::scan_method::scan_matching, true);
     boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);
     // add attributes
