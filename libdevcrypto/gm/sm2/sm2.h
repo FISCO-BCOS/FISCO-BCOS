@@ -21,27 +21,27 @@
  * @date: 2018
  */
 #pragma once
-#include <iostream>
-#include <string>
-using namespace std;
 #include <openssl/sm2.h>
 #include <openssl/sm3.h>
+#include <iostream>
+#include <string>
+#define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
 class SM2
 {
 public:
     bool genKey();
-    string getPublicKey();
-    string getPrivateKey();
-    bool sign(const char* originalData, int originalDataLen, const string& privateKey, string& r,
-        string& s);
-    int verify(const string& signData, int signDataLen, const char* originalData,
-        int originalDataLen, const string& publicKey);
-    string priToPub(const string& privateKey);
+    std::string getPublicKey();
+    std::string getPrivateKey();
+    bool sign(const char* originalData, int originalDataLen, const std::string& privateKey,
+        std::string& r, std::string& s);
+    int verify(const std::string& signData, int signDataLen, const char* originalData,
+        int originalDataLen, const std::string& publicKey);
+    std::string priToPub(const std::string& privateKey);
     char* strlower(char* s);
-    string ascii2hex(const char* chs, int len);
+    std::string ascii2hex(const char* chs, int len);
     static SM2& getInstance();
 
 private:
-    string publicKey;
-    string privateKey;
+    std::string publicKey;
+    std::string privateKey;
 };
