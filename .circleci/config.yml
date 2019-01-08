@@ -1,32 +1,49 @@
 version: 2
-jobs:
-  build_test_static:
+jobs:            
+  build_static_test:
+    working_directory: /root/FISCO-BCOS
     docker:
       - image: ubuntu:16.04
-
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
             apt-get update 
-            apt-get install -y git g++ make build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}
       - run:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            cmake -DSTATIC_BUILD=ON -DTESTS=ON ..
+            cmake -DSTATIC_BUILD=ON -DTESTS=ON -DCOVERAGE=ON .. 
             make -j2
-            # CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - run:
+          name: Unit test
+          command: |
+            cd /root/FISCO-BCOS/build
+            CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - run:
+          name: Upload Coverage
+          command: |
+            bash <(curl -s https://codecov.io/bash)
+      - run:
+          name: Upload binary
+          command: |
+            pwd
+            # create hald static binary
+      - store_artifacts:
+          path: /root/FISCO-BCOS/build/bin/fisco-bcos
+          destination: fisco-bcos
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}
           paths:
             - deps
-            - build
+            # - build
 
   build_test_guomi:
+    working_directory: /root/FISCO-BCOS-gm
     docker:
         - image: centos:7
     steps:
@@ -37,48 +54,30 @@ jobs:
             yum install -y epel-release
             yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
+          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}-guomi
       - run:
           name: Compile
           command: |
             mkdir -p build && cd build
             cmake3 -DBUILD_GM=ON -DTESTS=ON ..
             make -j2
+      - run:
+          name: Unit test
+          command: |
+            cd /root/FISCO-BCOS-gm/build
             ./bin/test-fisco-bcos -- --testpath=../test/data/ 
+      - store_artifacts:
+          path: /root/FISCO-BCOS-gm/build/bin/fisco-bcos
+          destination: fisco-bcos-gm-centos7
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
+          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}-guomi
           paths:
             - deps
-            - build
-
-  # build_macOS:
-  #   macos:
-  #     xcode: "9.0"
-  #   steps:
-  #     - checkout
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-  #           brew install -y openssl leveldb
-  #     - restore_cache:
-  #         key: dependency-cache-{{ arch }}
-  #     - run:
-  #         name: Compile
-  #         command: |
-  #           mkdir -p build && cd build
-  #           cmake ..
-  #           make -j2
-  #     - save_cache:
-  #         key: dependency-cache-{{ arch }}
-  #         paths:
-  #           - deps
-  #           - build
+            # - build
 
 workflows:
   version: 2
   build_and_test:
     jobs:
-      - build_test_static
+      - build_static_test
       - build_test_guomi
-      # - build_macOS
