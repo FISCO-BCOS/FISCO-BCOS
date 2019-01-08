@@ -54,16 +54,14 @@ public:
     }
     NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     void start() override {}
-    void disconnect(dev::network::DisconnectReason _reason) override {}
+    void disconnect(dev::network::DisconnectReason) override {}
 
     bool isConnected() const override { return true; }
 
-    void asyncSendMessage(Message::Ptr message, Options options = Options(),
-        CallbackFunc callback = CallbackFunc()) override
+    void asyncSendMessage(Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override
     {}
     void setMessageHandler(
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
-            messageHandler) override
+        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>) override
     {}
     bool actived() const override { return true; }
     std::shared_ptr<SocketFace> socket() override { return nullptr; }
@@ -85,7 +83,7 @@ public:
 
     void start() override { m_run = true; }
 
-    virtual void stop(dev::network::DisconnectReason reason) { m_run = false; }
+    virtual void stop(dev::network::DisconnectReason) { m_run = false; }
 
     NodeID nodeID() override { return m_id; }
 

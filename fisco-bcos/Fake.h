@@ -95,18 +95,17 @@ public:
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
-    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
         return LocalisedTransaction();
     }
-    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
-    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override
+    dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
+    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
     {
         return TransactionReceipt();
     }
 
-    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
-        dev::h256 const& _txHash) override
+    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(dev::h256 const&) override
     {
         return LocalisedTransactionReceipt(
             TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
@@ -134,16 +133,16 @@ public:
         return CommitResult::OK;
     }
 
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override { return true; }
+    bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
 
     dev::h512s minerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
-    std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) override
+    std::string getSystemConfigByKey(std::string const&, int64_t = -1) override
     {
         return "300000000";
     };
 
-    dev::bytes getCode(dev::Address _address) override { return bytes(); }
+    dev::bytes getCode(dev::Address) override { return bytes(); }
 
 private:
     std::map<h256, uint64_t> m_blockHash;
@@ -170,7 +169,7 @@ public:
 
     /// protocol id used when register handler to p2p module
     PROTOCOL_ID const& protocolId() const override { return m_protocolID; };
-    void setProtocolId(PROTOCOL_ID const _protocolId) override{};
+    void setProtocolId(PROTOCOL_ID const) override{};
 
 private:
     SyncStatus m_status;
@@ -187,7 +186,7 @@ public:
     };
     virtual ~FakeBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override
+        dev::eth::Block& block, BlockInfo const&) override
     {
         /// execute time: 1000
         /// usleep(1000 * (block.getTransactionSize()));
@@ -208,7 +207,7 @@ public:
     }
 
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) override
+        const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;

@@ -238,6 +238,7 @@ static inline void checkDelCommitCache(
     BOOST_CHECK(p_commit == fake_pbft.consensus()->reqCache()->mutableCommitCache().end());
 }
 
+/*
 static void checkReportBlock(
     FakeConsensus<FakePBFTEngine>& fake_pbft, BlockHeader const& highest, bool isMiner = false)
 {
@@ -253,6 +254,7 @@ static void checkReportBlock(
     /// check delCommitCache
     checkDelCommitCache(fake_pbft, highest);
 }
+*/
 
 static void checkBackupMsg(FakeConsensus<FakePBFTEngine>& fake_pbft, std::string const& key,
     bytes const& msgData, bool shouldClean = true)

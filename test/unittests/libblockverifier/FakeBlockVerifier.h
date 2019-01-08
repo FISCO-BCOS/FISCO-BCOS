@@ -34,13 +34,12 @@ namespace test
 class FakeBlockverifier : public BlockVerifierInterface
 {
 public:
-    std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override
+    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block&, BlockInfo const&) override
     {
         return m_execContext;
     }
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t)
+    executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&)
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;

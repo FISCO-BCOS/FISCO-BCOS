@@ -72,7 +72,7 @@ public:
     }
 
     void setConnected() { m_connected = true; }
-    bool isConnected(NodeID const& nodeId) const { return m_connected; }
+    bool isConnected(NodeID const&) const { return m_connected; }
 
 private:
     P2PSessionInfos m_sessionInfos;

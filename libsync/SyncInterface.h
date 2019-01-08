@@ -54,9 +54,7 @@ public:
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) = 0;
 
     // verify handler to check downloading block
-    virtual void registerConsensusVerifyHandler(
-        std::function<bool(dev::eth::Block const&)> _handler)
-    {}
+    virtual void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) {}
 };
 
 }  // namespace sync
