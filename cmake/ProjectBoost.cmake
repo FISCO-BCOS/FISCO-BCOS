@@ -134,6 +134,7 @@ add_dependencies(Boost::program_options boost)
 add_library(Boost::Log STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Log PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_log${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::Log PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+set_property(TARGET Boost::Log PROPERTY INTERFACE_LINK_LIBRARIES Boost::Filesystem Boost::Thread)
 add_dependencies(Boost::Log boost)
 
 unset(SOURCE_DIR)
