@@ -20,16 +20,16 @@
  */
 #include "AuthorityPrecompiled.h"
 #include "Common.h"
-#include "libstorage/TableFactoryPrecompiled.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
+#include <libstorage/TableFactoryPrecompiled.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
-
+using namespace dev::precompiled;
 
 const char* const AUP_METHOD_INS = "insert(string,string)";
 const char* const AUP_METHOD_REM = "remove(string,string)";
@@ -52,8 +52,8 @@ std::string AuthorityPrecompiled::toString(ExecutiveContext::Ptr)
 storage::Table::Ptr AuthorityPrecompiled::openTable(
     ExecutiveContext::Ptr context, const std::string& tableName)
 {
-    STORAGE_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("open table")
-                       << LOG_KV("tableName", tableName);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("open table")
+                           << LOG_KV("tableName", tableName);
 
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
@@ -64,8 +64,8 @@ storage::Table::Ptr AuthorityPrecompiled::openTable(
 bytes AuthorityPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("call")
+                           << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
@@ -80,8 +80,8 @@ bytes AuthorityPrecompiled::call(
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
-        STORAGE_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("insert func")
-                           << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("insert func")
+                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         auto condition = table->newCondition();
@@ -89,8 +89,8 @@ bytes AuthorityPrecompiled::call(
         auto entries = table->select(tableName, condition);
         if (entries->size() != 0u)
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("AuthorityPrecompiled")
-                                 << LOG_DESC("tableName and address exist");
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("tableName and address exist");
 
             out = abi.abiIn("", CODE_TABLE_AND_ADDRESS_EXIST);
         }
@@ -104,14 +104,14 @@ bytes AuthorityPrecompiled::call(
             int count = table->insert(tableName, entry, getOptions(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
-                STORAGE_LOG(DEBUG)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
 
                 out = abi.abiIn("", CODE_NO_AUTHORIZED);
             }
             else
             {
-                STORAGE_LOG(DEBUG)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("insert successfully");
 
                 out = abi.abiIn("", count);
@@ -125,8 +125,8 @@ bytes AuthorityPrecompiled::call(
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
 
-        STORAGE_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("remove func")
-                           << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("remove func")
+                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
@@ -135,8 +135,8 @@ bytes AuthorityPrecompiled::call(
         auto entries = table->select(tableName, condition);
         if (entries->size() == 0u)
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("AuthorityPrecompiled")
-                                 << LOG_DESC("tableName and address does not exist");
+            PRECOMPILED_LOG(WARNING) << LOG_BADGE("AuthorityPrecompiled")
+                                     << LOG_DESC("tableName and address does not exist");
 
             out = abi.abiIn("", CODE_TABLE_AND_ADDRESS_NOT_EXIST);
         }
@@ -145,14 +145,14 @@ bytes AuthorityPrecompiled::call(
             int count = table->remove(tableName, condition, getOptions(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
-                STORAGE_LOG(DEBUG)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
 
                 out = abi.abiIn("", CODE_NO_AUTHORIZED);
             }
             else
             {
-                STORAGE_LOG(DEBUG)
+                PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("remove successfully");
 
                 out = abi.abiIn("", count);
@@ -166,8 +166,8 @@ bytes AuthorityPrecompiled::call(
         abi.abiOut(data, tableName);
         addPrefixToUserTable(tableName);
 
-        STORAGE_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("queryByName func")
-                           << LOG_KV("tableName", tableName);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("queryByName func")
+                               << LOG_KV("tableName", tableName);
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
@@ -195,8 +195,8 @@ bytes AuthorityPrecompiled::call(
     }
     else
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("error func")
-                           << LOG_KV("func", func);
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("error func")
+                               << LOG_KV("func", func);
     }
     return out;
 }

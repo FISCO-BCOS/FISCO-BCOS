@@ -24,11 +24,13 @@
 #include <json/json.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
+#include <libprecompiled/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
 using namespace dev::storage;
+using namespace dev::precompiled;
 
 void dev::storage::MemoryTable::init(const std::string& tableName)
 {
