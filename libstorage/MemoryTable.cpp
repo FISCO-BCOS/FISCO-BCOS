@@ -257,9 +257,6 @@ h256 dev::storage::MemoryTable::hash()
     {
         return h256();
     }
-
-    std::string str(data.begin(), data.end());
-
     bytesConstRef bR(data.data(), data.size());
     h256 hash = dev::sha256(bR);
 
