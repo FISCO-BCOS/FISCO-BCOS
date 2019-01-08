@@ -18,12 +18,15 @@ public:
             _minElectTime, _maxElectTime, _protocolId, _minerList)
     {}
 
+    /*
     void updateMinerList()
     {
         if (m_highestBlock.number() == m_lastObtainMinerNum)
             return;
         m_lastObtainMinerNum = m_highestBlock.number();
     }
+    */
+    void updateConsensusNodeList() override {}
 
     dev::p2p::P2PMessage::Ptr generateVoteReq()
     {
