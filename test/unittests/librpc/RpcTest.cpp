@@ -613,7 +613,7 @@ BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
 
     BOOST_CHECK_THROW(rpc->getTransactionReceipt(invalidGroup, txHash), JsonRpcException);
 }
-BOOST_AUTO_TEST_CASE(testGetpendingTransactions)
+BOOST_AUTO_TEST_CASE(testGetPendingTransactions)
 {
     Json::Value response = rpc->getPendingTransactions(groupId);
 
@@ -626,6 +626,13 @@ BOOST_AUTO_TEST_CASE(testGetpendingTransactions)
     BOOST_CHECK(response[0]["value"].asString() == "0x0");
 
     BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
+}
+BOOST_AUTO_TEST_CASE(testGetPendingTxSize)
+{
+    std::string response = rpc->getPendingTxSize(groupId);
+    BOOST_CHECK(response == "1");
+
+    BOOST_CHECK_THROW(rpc->getPendingTxSize(invalidGroup), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetCode)
