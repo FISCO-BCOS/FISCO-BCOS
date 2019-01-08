@@ -81,7 +81,7 @@ void RaftEngine::initRaftEnv()
 
 void RaftEngine::resetConfig()
 {
-    updateMinerList();
+    updateConsensusNodeList();
 
     auto shouldSwitchToFollower = false;
     {
@@ -126,71 +126,6 @@ void RaftEngine::resetConfig()
     {
         switchToFollower(InvalidIndex);
         resetElectTimeout();
-    }
-}
-
-void RaftEngine::updateMinerList()
-{
-    if (m_storage == nullptr)
-        return;
-    if (m_highestBlock.number() == m_lastObtainMinerNum)
-        return;
-    try
-    {
-        UpgradableGuard guard(m_minerListMutex);
-        auto minerList = m_minerList;
-        int64_t curBlockNum = m_highestBlock.number();
-        /// get node from storage DB
-        auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
-        /// obtain miner list
-        if (!nodes)
-            return;
-        for (size_t i = 0; i < nodes->size(); i++)
-        {
-            auto node = nodes->get(i);
-            if (!node)
-                return;
-            if ((node->getField("type") == "miner") &&
-                (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
-            {
-                h512 nodeId = h512(node->getField("node_id"));
-                if (find(minerList.begin(), minerList.end(), nodeId) == minerList.end())
-                {
-                    minerList.push_back(nodeId);
-                    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#updateMinerList]Add miner node")
-                                          << LOG_KV("nodeId", toHex(nodeId)) << LOG_KV("idx", i);
-                }
-            }
-        }
-        /// remove observe nodes
-        for (size_t i = 0; i < nodes->size(); i++)
-        {
-            auto node = nodes->get(i);
-            if (!node)
-                return;
-            if ((node->getField("type") == "observer") &&
-                (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
-            {
-                h512 nodeId = h512(node->getField("node_id"));
-                auto it = find(minerList.begin(), minerList.end(), nodeId);
-                if (it != minerList.end())
-                {
-                    minerList.erase(it);
-                    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#updateMinerList]Remove observe node")
-                                          << LOG_KV("nodeId", toHex(nodeId)) << LOG_KV("idx", i);
-                }
-            }
-        }
-        UpgradeGuard ul(guard);
-        m_minerList = minerList;
-        /// to make sure the index of all miners are consistent
-        std::sort(m_minerList.begin(), m_minerList.end());
-        m_lastObtainMinerNum = m_highestBlock.number();
-    }
-    catch (std::exception& e)
-    {
-        RAFTENGINE_LOG(ERROR) << LOG_DESC("[#updateMinerList]Update minerList failed")
-                              << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
 }
 

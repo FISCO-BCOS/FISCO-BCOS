@@ -30,15 +30,15 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
 
-#define RAFTENGINE_LOG(LEVEL)                                               \
-    LOG(LEVEL) << "[g:" << m_groupId << "]"                                 \
-               << "[p:" << m_protocolId << "]" << LOG_BADGE("LIBCONSENSUS") \
+#define RAFTENGINE_LOG(LEVEL)                                                               \
+    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "]"                                 \
+               << "[p:" << std::to_string(m_protocolId) << "]" << LOG_BADGE("LIBCONSENSUS") \
                << LOG_BADGE("RAFTENGINE")
 
-#define RAFTSEALER_LOG(LEVEL)                                                             \
-    LOG(LEVEL) << "[g:" << m_raftEngine->groupId() << "]"                                 \
-               << "[p:" << m_raftEngine->protocolId() << "]" << LOG_BADGE("LIBCONSENSUS") \
-               << LOG_BADGE("RAFTSEALER")
+#define RAFTSEALER_LOG(LEVEL)                                                \
+    LOG(LEVEL) << "[g:" << std::to_string(m_raftEngine->groupId()) << "]"    \
+               << "[p:" << std::to_string(m_raftEngine->protocolId()) << "]" \
+               << LOG_BADGE("LIBCONSENSUS") << LOG_BADGE("RAFTSEALER")
 
 namespace dev
 {

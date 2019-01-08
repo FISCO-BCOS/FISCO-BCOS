@@ -142,7 +142,6 @@ protected:
 
     void workLoop() override;
     void resetConfig() override;
-    void updateMinerList();
 
     void runAsLeader();
     bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& _memberHeartbeatLog);
