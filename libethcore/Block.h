@@ -128,13 +128,21 @@ public:
     h256 const transactionRoot() { return header().transactionsRoot(); }
     h256 const receiptRoot() { return header().receiptsRoot(); }
 
+    /**
+     * @brief: reset the current block
+     *  1. if the blockHeader param has been set, then populate a new block header from the
+     * blockHeader passed by param
+     *  2. if the blockHeader param is default, doesn't populate a new block header
+     * @param _parent: the block header used to populate a new block header
+     */
     void resetCurrentBlock(BlockHeader const& _parent = BlockHeader())
     {
-        /// the timestamp of the first block is UINT64_MAX
-        if ((bool)(_parent) || _parent.number() == 0)
+        /// the default sealer of blockHeader is Invalid256
+        if (_parent.sealer() == Invalid256)
         {
             m_blockHeader.populateFromParent(_parent);
         }
+        /// sealer must be reseted since it's used to decide a block is valid or not
         m_blockHeader.setSealer(Invalid256);
         m_transactions.clear();
         m_transactionReceipts.clear();
