@@ -115,7 +115,7 @@ shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
 std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
 {
     /// the future block
-    if (_i > m_blockNumber)
+    if (_i > number())
         return nullptr;
     string blockHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
@@ -346,7 +346,7 @@ void BlockChainImp::setGroupMark(std::string const& groupMark)
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
     /// return directly if the blocknumber is invalid
-    if (_i > m_blockNumber)
+    if (_i > number())
         return nullptr;
     auto block = getBlock(_i);
     if (bool(block))
