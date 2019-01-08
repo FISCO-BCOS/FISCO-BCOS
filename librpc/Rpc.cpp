@@ -792,6 +792,31 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
     }
 }
 
+std::string Rpc::getPendingTxSize(int _groupID)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getPendingTxSize") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID);
+
+        auto txPool = ledgerManager()->txPool(_groupID);
+        if (!txPool)
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+
+        return toJS(txPool->status().current);
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
 std::string Rpc::getCode(int _groupID, const std::string& _address)
 {
     try
