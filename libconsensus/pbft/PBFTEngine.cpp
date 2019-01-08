@@ -72,7 +72,9 @@ bool PBFTEngine::shouldSeal()
     /// fast view change
     if (ret.second != nodeIdx())
     {
-        if (m_exec && getNextLeader() == nodeIdx())
+        /// if current node is the next leader
+        /// and it has been notified to seal new block, return true
+        if (m_notifyNextLeaderSeal && getNextLeader() == nodeIdx())
             return true;
         return false;
     }
@@ -215,7 +217,7 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 bool PBFTEngine::generatePrepare(Block const& block)
 {
     Guard l(m_mutex);
-    m_exec = false;
+    m_notifyNextLeaderSeal = false;
     PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
     bytes prepare_data;
     prepare_req.encode(prepare_data);
@@ -532,13 +534,19 @@ bool PBFTEngine::checkBlockSign(Block const& block)
     return true;
 }
 
+/**
+ * @brief: notify the seal module to seal block if the current node is the next leader
+ * @param block: block obtained from the prepare packet, used to filter transactions
+ */
 void PBFTEngine::notifySealing(dev::eth::Block const& block)
 {
-    if (!m_onViewChange)
+    if (!m_onNotifyNextLeaderReset)
         return;
-
+    /// only if the current node is the next leader and not the current leader
+    /// notify the seal module to seal new block
     if (getLeader().second != nodeIdx() && nodeIdx() == getNextLeader())
     {
+        /// obtain transaction filters
         h256Hash filter;
         for (auto& trans : block.transactions())
         {
@@ -547,9 +555,12 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
         PBFTENGINE_LOG(DEBUG) << "I am the next leader = " << getNextLeader()
                               << ", filter trans size = " << filter.size()
                               << ", total trans = " << m_txPool->status().current;
+        /// m_startSealNextLeader: the begining sealing time of the next leader
         m_timeManager.m_startSealNextLeader = utcTime();
-        m_exec = true;
-        m_onViewChange(filter);
+        m_notifyNextLeaderSeal = true;
+        /// function registered in PBFTSealer to reset the block for the next leader by
+        /// resetting the block number to current block number + 2
+        m_onNotifyNextLeaderReset(filter);
     }
 }
 
@@ -1125,7 +1136,7 @@ void PBFTEngine::checkTimeout()
         }
     }
     if (flag && m_onViewChange)
-        m_onViewChange(h256Hash());
+        m_onViewChange();
 }
 
 void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)

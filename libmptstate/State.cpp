@@ -149,7 +149,7 @@ Account* State::account(Address const& _addr)
     if (it != m_cache.end())
         return &it->second;
 
-    if (m_nonExistingAccountsCache.find(_addr) == m_nonExistingAccountsCache.end())
+    if (m_nonExistingAccountsCache.find(_addr) != m_nonExistingAccountsCache.end())
         return nullptr;
 
     // Populate basic info.

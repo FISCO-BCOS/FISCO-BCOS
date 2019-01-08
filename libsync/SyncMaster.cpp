@@ -206,11 +206,11 @@ void SyncMaster::maintainTransactions()
             if (0 == peers.size())
                 return;
             UpgradeGuard ul(l);
-            m_txPool->transactionIsKnownBy(t.sha3(), m_nodeId);
+            m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
             for (auto const& p : peers)
             {
                 peerTransactions[p].push_back(i);
-                m_txPool->transactionIsKnownBy(t.sha3(), p);
+                m_txPool->setTransactionIsKnownBy(t.sha3(), p);
             }
         }
     }

@@ -148,7 +148,7 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
 {
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
-    if (m_known.count(tx_hash))
+    if (m_txsHash.find(tx_hash) != m_txHash.end())
     {
         TXPOOL_LOG(DEBUG) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
         return ImportResult::AlreadyKnown;
@@ -196,14 +196,14 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
         return false;
     }
     /// trigger callback from RPC
+    /// todo: there is performace problem here,
+    ///       need to use the thread pool to execute this callback
     if (needTriggerCallback && pReceipt)
     {
         p_tx->second->tiggerRpcCallback(pReceipt);
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
-    if (m_known.count(_txHash))
-        m_known.erase(_txHash);
     return true;
 }
 
@@ -214,12 +214,6 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
 bool TxPool::insert(Transaction const& _tx)
 {
     h256 tx_hash = _tx.sha3();
-    if (m_txsHash.count(tx_hash))
-    {
-        TXPOOL_LOG(DEBUG) << "[#Insert] Already known tx:  " << tx_hash.abridged() << std::endl;
-        return false;
-    }
-    m_known.insert(tx_hash);
     TransactionQueue::iterator p_tx = m_txsQueue.emplace(_tx).first;
     m_txsHash[tx_hash] = p_tx;
     return true;
@@ -235,7 +229,7 @@ bool TxPool::drop(h256 const& _txHash)
     /// drop transactions
     {
         UpgradableGuard l(m_lock);
-        if (!m_known.count(_txHash))
+        if (m_txsHash.find(_txHash) == m_txsHash.end())
             return false;
         UpgradeGuard ul(l);
         if (m_dropped.size() < m_limit)
@@ -439,7 +433,6 @@ TxPoolStatus TxPool::status() const
 void TxPool::clear()
 {
     WriteGuard l(m_lock);
-    m_known.clear();
     m_txsQueue.clear();
     m_txsHash.clear();
     m_dropped.clear();
@@ -448,13 +441,14 @@ void TxPool::clear()
 }
 
 /// Set transaction is known by a node
-void TxPool::transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
+void TxPool::setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
 {
     m_transactionKnownBy[_txHash].insert(_nodeId);
 }
 
 /// set transactions is known by a node
-void TxPool::transactionsIsKnownBy(std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId)
+void TxPool::setTransactionsAreKnownBy(
+    std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId)
 {
     WriteGuard l(x_transactionKnownBy);
     for (auto const& tx_hash : _txHashVec)

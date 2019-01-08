@@ -93,10 +93,11 @@ public:
     {
         /// the block is sealed by the next leader, and can execute after the last block has been
         /// consensused
-        if (m_exec)
+        if (m_notifyNextLeaderSeal)
         {
             if (m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader)
-                return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+                return (utcTime() - m_timeManager.m_lastConsensusTime) >=
+                       m_timeManager.m_intervalBlockTime;
             return false;
         }
         /// the block is sealed by the current leader
@@ -108,10 +109,12 @@ public:
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
-    void onViewChange(std::function<void(dev::h256Hash const& filter)> const& _f)
+    void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
+    void onNotifyNextLeaderReset(std::function<void(dev::h256Hash const& filter)> const& _f)
     {
-        m_onViewChange = _f;
+        m_onNotifyNextLeaderReset = _f;
     }
+
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
@@ -463,7 +466,7 @@ protected:
     std::string m_baseDir;
     bool m_cfgErr = false;
     bool m_leaderFailed = false;
-    bool m_exec = false;
+    bool m_notifyNextLeaderSeal = false;
 
     dev::storage::Storage::Ptr m_storage;
 
@@ -486,7 +489,8 @@ protected:
     std::condition_variable m_signalled;
     Mutex x_signalled;
 
-    std::function<void(dev::h256Hash const& filter)> m_onViewChange;
+    std::function<void()> m_onViewChange;
+    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
 
     /// the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;

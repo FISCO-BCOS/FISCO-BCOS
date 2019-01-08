@@ -123,7 +123,7 @@ public:
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
     /// Set transaction is known by a node
-    void transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
+    void setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
 
     /// Is the transaction is known by the node ?
     bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) override
@@ -133,7 +133,7 @@ public:
             return false;
         return p->second.find(_nodeId) != p->second.end();
     }
-    void transactionsIsKnownBy(
+    void setTransactionsAreKnownBy(
         std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId) override;
     /// Is the transaction is known by someone
     bool isTransactionKnownBySomeone(h256 const& _txHash) override;
@@ -197,11 +197,8 @@ private:
     using TransactionQueue = std::set<dev::eth::Transaction, transactionCompare>;
     TransactionQueue m_txsQueue;
     std::unordered_map<h256, TransactionQueue::iterator> m_txsHash;
-    /// hash of imported transactions
-    h256Hash m_known;
     /// hash of dropped transactions
     h256Hash m_dropped;
-
     /// Transaction is known by some peers
     mutable SharedMutex x_transactionKnownBy;
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;

@@ -207,7 +207,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         }
         if (knownTxHash.size() > 0)
         {
-            m_txPool->transactionsIsKnownBy(knownTxHash, _packet.nodeId);
+            m_txPool->setTransactionsAreKnownBy(knownTxHash, _packet.nodeId);
         }
     }
     SYNCLOG(DEBUG) << "[Tx] Import peer transactions [import/rcv/txPool]: " << successCnt << "/"
