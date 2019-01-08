@@ -51,8 +51,8 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("records", entries->size());
+                STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                                   << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -104,8 +104,8 @@ int dev::storage::MemoryTable::update(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("records", entries->size());
+                STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                                   << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -169,8 +169,8 @@ int dev::storage::MemoryTable::insert(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("records", entries->size());
+                STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                                   << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -222,8 +222,8 @@ int dev::storage::MemoryTable::remove(
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
             m_cache.insert(std::make_pair(key, entries));
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                               << LOG_KV("records", entries->size());
+            STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                               << LOG_KV("key", key) << LOG_KV("records", entries->size());
         }
     }
     else
