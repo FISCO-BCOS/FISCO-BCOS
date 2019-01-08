@@ -972,7 +972,8 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    if [ -z "$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")" ];then
+    checkIP=$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")
+    if [ -z "${checkIP}" ];then
         LOG_WARN "Please check IP address: ${ip}"
     fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}

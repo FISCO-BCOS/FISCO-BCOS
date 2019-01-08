@@ -5,12 +5,12 @@ jobs:
     docker:
       - image: ubuntu:16.04
     steps:
-      - checkout
       - run:
           name: Install dependencies
           command: |
             apt-get update 
             apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+      - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}
       - run:
@@ -47,12 +47,12 @@ jobs:
     docker:
         - image: centos:7
     steps:
-      - checkout
       - run:
           name: Install dependencies
           command: |
             yum install -y epel-release
             yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
+      - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
       - run:
