@@ -53,6 +53,13 @@ public:
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
+    void reset()
+    {
+        resetSealingBlock();
+        m_signalled.notify_all();
+        m_blockSignalled.notify_all();
+    }
+
     bool reachBlockIntervalTime() override;
 
 private:
