@@ -31,7 +31,6 @@ struct TimeManager
 {
     /// last execution finish time, only one will be used at last
     /// the finish time of executing tx by leader
-    uint64_t m_lastExecFinishTime;
     unsigned m_viewTimeout;
     unsigned m_changeCycle = 0;
     uint64_t m_lastSignTime = 0;
@@ -42,10 +41,9 @@ struct TimeManager
     std::chrono::system_clock::time_point m_lastGarbageCollection;
     static const unsigned kMaxChangeCycle = 20;
     static const unsigned CollectInterval = 60;
-    float m_execTimePerTx = 0;
     inline void initTimerManager(unsigned view_timeout)
     {
-        m_lastExecFinishTime = m_lastConsensusTime = m_startSealNextLeader = utcTime();
+        m_lastConsensusTime = m_startSealNextLeader = utcTime();
         m_lastSignTime = 0;
         m_viewTimeout = view_timeout;
         m_changeCycle = 0;

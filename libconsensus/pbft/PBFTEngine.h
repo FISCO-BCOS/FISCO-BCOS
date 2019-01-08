@@ -96,7 +96,7 @@ public:
         if (m_exec)
         {
             if (m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader)
-                return true;
+                return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
             return false;
         }
         /// the block is sealed by the current leader

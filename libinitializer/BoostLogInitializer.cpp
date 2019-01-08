@@ -63,7 +63,6 @@ void LogInitializer::initLog(
     /// set rotation size
     uint64_t rotation_size = pt.get<uint64_t>(logType + ".MaxLogFileSize", 209715200 * 8);
     sink->locked_backend()->set_rotation_size(rotation_size);
-    sink->locked_backend()->auto_flush(false);
     /// set file format
     sink->set_formatter(
         boost::log::expressions::format("%1%|%2%| %3%") %
