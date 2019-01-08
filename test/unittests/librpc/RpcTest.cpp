@@ -630,7 +630,7 @@ BOOST_AUTO_TEST_CASE(testGetPendingTransactions)
 BOOST_AUTO_TEST_CASE(testGetPendingTxSize)
 {
     std::string response = rpc->getPendingTxSize(groupId);
-    BOOST_CHECK(response == "1");
+    BOOST_CHECK(response == "0x1");
 
     BOOST_CHECK_THROW(rpc->getPendingTxSize(invalidGroup), JsonRpcException);
 }

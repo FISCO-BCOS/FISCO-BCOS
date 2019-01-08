@@ -804,7 +804,7 @@ std::string Rpc::getPendingTxSize(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
-        return std::to_string(txPool->status().current);
+        return toJS(txPool->status().current);
     }
     catch (JsonRpcException& e)
     {
