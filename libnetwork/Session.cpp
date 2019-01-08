@@ -46,7 +46,7 @@ Session::Session()
 
 Session::~Session()
 {
-    SESSION_LOG(INFO) << "Closing peer session";
+    SESSION_LOG(INFO) << "Deconstruct peer session";
 
     try
     {
@@ -118,7 +118,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     if (!m_socket->isConnected())
         return;
 
-    SESSION_LOG(TRACE) << "Session send, writeQueue: " << m_writeQueue.size();
+    SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
     {
         Guard l(x_writeQueue);
 
@@ -140,8 +140,8 @@ void Session::onWrite(
     {
         if (ec)
         {
-            SESSION_LOG(WARNING) << "Error sending: " << ec.message() << " at "
-                                 << nodeIPEndpoint().name();
+            SESSION_LOG(WARNING) << "onWrite error sending" << LOG_KV("message", ec.message())
+                                 << LOG_KV("endpoint", nodeIPEndpoint().name());
             drop(TCPError);
             return;
         }
@@ -157,7 +157,7 @@ void Session::onWrite(
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "Error:" << boost::diagnostic_information(e);
+        SESSION_LOG(ERROR) << "onWrite error" << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
     }
@@ -225,14 +225,14 @@ void Session::write()
         }
         else
         {
-            SESSION_LOG(WARNING) << "Host is gone";
+            SESSION_LOG(WARNING) << "Host has gone";
             drop(TCPError);
             return;
         }
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "Error:" << boost::diagnostic_information(e);
+        SESSION_LOG(ERROR) << "write error:" << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
     }
@@ -254,7 +254,7 @@ void Session::drop(DisconnectReason _reason)
         errorMsg = "DuplicateSession";
     }
 
-    SESSION_LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
+    SESSION_LOG(INFO) << "drop, call and erase all callbackFunc in this session!";
     RecursiveGuard l(x_seq2Callback);
     for (auto it : *m_seq2Callback)
     {
@@ -292,15 +292,15 @@ void Session::drop(DisconnectReason _reason)
             if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
                 _reason == ClientQuit || _reason == UserReason)
             {
-                SESSION_LOG(DEBUG)
-                    << "Disconnecting| Closing " << m_socket->remote_endpoint() << "("
-                    << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
+                SESSION_LOG(DEBUG) << "[drop] closing remote" << m_socket->remote_endpoint()
+                                   << LOG_KV("reason", reasonOf(_reason))
+                                   << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
             else
             {
-                SESSION_LOG(WARNING)
-                    << "Disconnecting | Closing " << m_socket->remote_endpoint() << "("
-                    << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
+                SESSION_LOG(WARNING) << "[drop] closing remote" << m_socket->remote_endpoint()
+                                     << LOG_KV("reason", reasonOf(_reason))
+                                     << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
 
             /// if get Host object failed, close the socket directly
@@ -318,25 +318,24 @@ void Session::drop(DisconnectReason _reason)
                 /// drop operation has been aborted
                 if (error == boost::asio::error::operation_aborted)
                 {
-                    SESSION_LOG(DEBUG)
-                        << "[#drop] operation aborted  by async_shutdown [ECODE/EINFO]:"
-                        << error.value() << "/" << error.message();
+                    SESSION_LOG(DEBUG) << "[drop] operation aborted  by async_shutdown"
+                                       << LOG_KV("errorValue", error.value())
+                                       << LOG_KV("message", error.message());
                     return;
                 }
                 /// shutdown timer error
                 if (error && error != boost::asio::error::operation_aborted)
                 {
                     SESSION_LOG(WARNING)
-                        << "[#drop] shutdown timer error [ECODE/EINFO]: " << error.value() << "/"
-                        << error.message();
+                        << "[drop] shutdown timer error" << LOG_KV("errorValue", error.value())
+                        << LOG_KV("message", error.message());
                 }
                 /// force to shutdown when timeout
                 if (socket->ref().is_open())
                 {
                     SESSION_LOG(WARNING)
-                        << "[#drop] timeout, force close the socket [remote_ip:remote_port]"
-                        << socket->ref().remote_endpoint().address().to_string() << ":"
-                        << socket->ref().remote_endpoint().port();
+                        << "[drop] timeout, force close the socket, remote endpoint"
+                        << socket->ref().remote_endpoint();
                     socket->close();
                 }
             });
@@ -348,8 +347,8 @@ void Session::drop(DisconnectReason _reason)
                     if (error)
                     {
                         SESSION_LOG(WARNING)
-                            << "[#drop] shutdown failed [ECODE/EINFO]: " << error.value() << "/"
-                            << error.message();
+                            << "[drop] shutdown failed " << LOG_KV("errorValue", error.value())
+                            << LOG_KV("message", error.message());
                     }
                     /// force to close the socket
                     if (socket->ref().is_open())
@@ -396,8 +395,9 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(WARNING) << "Error reading: " << ec.message() << " at "
-                                         << s->nodeIPEndpoint().name();
+                    SESSION_LOG(WARNING)
+                        << "doRead error" << LOG_KV("endpoint", s->nodeIPEndpoint().name())
+                        << LOG_KV("message", ec.message());
                     s->drop(TCPError);
                     return;
                 }
@@ -422,7 +422,8 @@ void Session::doRead()
                     }
                     else
                     {
-                        SESSION_LOG(ERROR) << "Decode message error: " << result;
+                        SESSION_LOG(ERROR)
+                            << LOG_DESC("Decode message error") << LOG_KV("result", result);
                         s->onMessage(
                             NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"), s,
                             message);
@@ -451,7 +452,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
         _ec.value() != boost::asio::error::eof)
     {
-        SESSION_LOG(WARNING) << "Error reading: " << _ec.message();
+        SESSION_LOG(WARNING) << "checkRead error" << LOG_KV("message", _ec.message());
         drop(TCPError);
 
         return false;
@@ -496,7 +497,8 @@ void Session::onMessage(
         }
         else
         {
-            SESSION_LOG(TRACE) << "Not found callback, call messageHandler: " << message->seq();
+            SESSION_LOG(TRACE) << "onMessage can't found callback, call messageHandler: "
+                               << LOG_KV("message.seq", message->seq());
 
             if (m_messageHandler)
             {
