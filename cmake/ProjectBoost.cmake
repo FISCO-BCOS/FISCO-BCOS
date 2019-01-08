@@ -25,6 +25,8 @@ include(ProcessorCount)
 ProcessorCount(CORES)
 if(CORES EQUAL 0)
   set(CORES 1)
+elseif(CORES GREATER 2)
+  set(CORES 2)
 endif()
 
 set(BOOST_CXXFLAGS "")
@@ -40,7 +42,7 @@ set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/src/boost/stage/lib/libboost_)
 set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}random.a ${BOOST_LIB_PREFIX}regex.a 
         ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a 
-        ${BOOST_LIB_PREFIX}unit_test_framework.a
+        ${BOOST_LIB_PREFIX}unit_test_framework.a ${BOOST_LIB_PREFIX}log.a
         ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
 set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 

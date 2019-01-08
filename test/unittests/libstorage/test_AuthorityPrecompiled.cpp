@@ -27,7 +27,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libstorage/AuthorityPrecompiled.h>
+#include <libprecompiled/AuthorityPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -36,6 +36,7 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::storagestate;
+using namespace dev::precompiled;
 
 namespace test_AuthorityPrecompiled
 {
@@ -123,8 +124,8 @@ BOOST_AUTO_TEST_CASE(remove)
     // remove not exist entry
     tableName = "t_ok";
     in = abi.abiIn("remove(string,string)", tableName, addr);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
-    BOOST_TEST(out[31] == 0);
+    authorityPrecompiled->call(context, bytesConstRef(&in));
+    BOOST_TEST(entries->size() == 0u);
 }
 
 BOOST_AUTO_TEST_CASE(queryByName)

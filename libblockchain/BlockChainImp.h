@@ -31,9 +31,9 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
-#include <libstorage/SystemConfigPrecompiled.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/thread/shared_mutex.hpp>
 #include <deque>

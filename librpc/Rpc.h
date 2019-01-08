@@ -64,7 +64,7 @@ public:
     virtual Json::Value getSyncStatus(int _groupID) override;
 
     // p2p part
-    virtual std::string getClientVersion() override;
+    virtual Json::Value getClientVersion() override;
     virtual Json::Value getPeers() override;
     virtual Json::Value getGroupPeers(int _groupID) override;
     virtual Json::Value getGroupList() override;

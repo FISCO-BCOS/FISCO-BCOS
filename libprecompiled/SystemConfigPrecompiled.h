@@ -19,11 +19,12 @@
  *  @date 20181211
  */
 #pragma once
+#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
-#include "libstorage/CRUDPrecompiled.h"
+#include "libprecompiled/CRUDPrecompiled.h"
 namespace dev
 {
-namespace blockverifier
+namespace precompiled
 {
 const char* const SYSTEM_CONFIG_KEY = "key";
 const char* const SYSTEM_CONFIG_VALUE = "value";
@@ -36,13 +37,13 @@ const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
 const int TX_COUNT_LIMIT_MIN = 1;
 const int TX_GAS_LIMIT_MIN = 100000;
 
-/*
+#if 0
 contract SystemConfigTable
 {
     // Return 1 means successful setting, and 0 means cannot find the config key.
     function setValueByKey(string key, string value) public returns(int256);
 }
-*/
+#endif
 
 class SystemConfigPrecompiled : public CRUDPrecompiled
 {
@@ -51,13 +52,13 @@ public:
     SystemConfigPrecompiled();
     virtual ~SystemConfigPrecompiled(){};
 
-    virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address());
 
 private:
     bool checkValueValid(std::string const& key, std::string const& value);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

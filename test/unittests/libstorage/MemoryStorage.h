@@ -37,7 +37,7 @@ public:
     virtual ~MemoryStorage(){};
 
     virtual Entries::Ptr select(
-        h256 hash, int num, const std::string& table, const std::string& key) override
+        h256, int, const std::string& table, const std::string& key) override
     {
         auto search = data.find(table);
         if (search != data.end())
@@ -58,8 +58,7 @@ public:
         }
         return std::make_shared<Entries>();
     }
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash) override
+    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas, h256) override
     {
         for (auto it : datas)
         {

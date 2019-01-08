@@ -19,22 +19,18 @@
  *  @date 20181204
  */
 #pragma once
+#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
 
 namespace dev
 {
-namespace blockverifier
+namespace precompiled
 {
 #if 0
-contract Authority {
+contract AuthorityTable {
     function insert(string table_name, string addr) public returns(int);
     function remove(string table_name, string addr) public returns(int);
     function queryByName(string table_name) public constant returns(string);
-}
-{
-    "06e63ff8": "insert(string,string)",
-    "44590a7e": "remove(string,string)",
-    "20586031": "queryByName(string)"
 }
 #endif
 
@@ -43,24 +39,24 @@ const std::string SYS_AC_TABLE_NAME = "table_name";
 const std::string SYS_AC_ADDRESS = "address";
 const std::string SYS_AC_ENABLENUM = "enable_num";
 
-class AuthorityPrecompiled : public Precompiled
+class AuthorityPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<AuthorityPrecompiled> Ptr;
     AuthorityPrecompiled();
     virtual ~AuthorityPrecompiled(){};
 
-    virtual std::string toString(ExecutiveContext::Ptr);
+    virtual std::string toString(dev::blockverifier::ExecutiveContext::Ptr);
 
-    virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+        Address const& origin = Address());
 
 protected:
     std::shared_ptr<storage::Table> openTable(
-        ExecutiveContext::Ptr context, const std::string& tableName);
+        dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
     void addPrefixToUserTable(std::string& tableName);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

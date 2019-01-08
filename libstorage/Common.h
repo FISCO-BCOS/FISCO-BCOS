@@ -19,14 +19,15 @@
  *  @date 20180921
  */
 #pragma once
+#include <json_spirit/JsonSpiritHeaders.h>
 #include <string>
 
 namespace dev
 {
 namespace storage
 {
-#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[#STORAGE] "
-#define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << "[#STORAGE] [LEVELDB]"
+#define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE]"
+#define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << "[STORAGE] [LEVELDB]"
 
 /// \brief Sign of the DB key is valid or not
 const std::string STATUS = "_status_";
@@ -45,5 +46,6 @@ const std::string SYS_CONFIG = "_sys_config_";
 const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
 const std::string USER_TABLE_PREFIX = "_user_";
 const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
+
 }  // namespace storage
 }  // namespace dev

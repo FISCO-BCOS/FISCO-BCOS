@@ -35,9 +35,11 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     g_BCOSConfig.diskEncryption.cipherDataKey =
         _pt.get<std::string>("data_secure.cipher_data_key", "");
 
-    INITIALIZER_LOG(DEBUG) << "[#initDiskEncryptionConfig] [enable/url/key]:  "
-                           << g_BCOSConfig.diskEncryption.enable << "/"
-                           << g_BCOSConfig.diskEncryption.keyCenterIP << ":"
-                           << g_BCOSConfig.diskEncryption.keyCenterPort << "/"
-                           << g_BCOSConfig.diskEncryption.cipherDataKey << std::endl;
+    INITIALIZER_LOG(DEBUG) << LOG_BADGE("initDiskEncryptionConfig")
+                           << LOG_DESC("load configuration")
+                           << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)
+                           << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
+                           << LOG_KV("url.port",
+                                  std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
+                           << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey);
 }

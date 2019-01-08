@@ -28,8 +28,8 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-#define INITIALIZER_LOG(LEVEL) LOG(LEVEL) << "[#INITIALIZER] "
-#define ERROR_OUTPUT std::cout << "[#INITIALIZER] "
+#define INITIALIZER_LOG(LEVEL) LOG(LEVEL) << "[INITIALIZER]"
+#define ERROR_OUTPUT std::cout << "[INITIALIZER]"
 
 namespace dev
 {
@@ -39,11 +39,9 @@ DEV_SIMPLE_EXCEPTION(InvalidConfig);
 DEV_SIMPLE_EXCEPTION(InitFailed);
 namespace initializer
 {
-static uint16_t maxPort = 65535;
-
 static inline bool isValidPort(int port)
 {
-    if (port < 0 || port > maxPort)
+    if (port < 0 || port > 65535)
         return false;
     return true;
 }

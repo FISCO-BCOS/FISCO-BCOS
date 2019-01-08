@@ -23,7 +23,13 @@
 #pragma once
 
 #include <string>
-#define CHANNEL_LOG(LEVEL) LOG(LEVEL) << "[#channel] "
+#define CHANNEL_LOG(LEVEL) LOG(LEVEL) << "[channel]"
+#pragma warning(push)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include <boost/exception/diagnostic_information.hpp>
+#pragma warning(pop)
+#pragma GCC diagnostic pop
 namespace dev
 {
 namespace channel
