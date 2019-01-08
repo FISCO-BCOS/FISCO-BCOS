@@ -947,8 +947,6 @@ if [ ! -e "$ca_file" ]; then
     ca_file="$output_dir/cert/ca.key"
 fi
 
-echo "guomi mode " $guomi_mode
-
 if [ -n "$guomi_mode" ]; then
     check_and_install_tassl
 
