@@ -43,10 +43,10 @@ using namespace dev::blockverifier;
 using namespace dev::executive;
 using boost::lexical_cast;
 
-std::shared_ptr<Block> BlockCache::add(Block& _block)
+std::shared_ptr<Block> BlockCache::add(Block const& _block)
 {
     BLOCKCHAIN_LOG(TRACE) << "[#add] Add block to block cache, [blockHash]: "
-                          << _block.header().hash();
+                          << _block.blockHeader().hash();
 
     {
         WriteGuard guard(m_sharedMutex);
@@ -66,9 +66,9 @@ std::shared_ptr<Block> BlockCache::add(Block& _block)
             }
         }
 
-        auto blockHash = _block.header().hash();
-        auto block = std::make_shared<Block>(_block);
-        m_blockCache.insert(std::make_pair(blockHash, std::make_pair(block, blockHash)));
+        auto blockHash = _block.blockHeader().hash();
+        auto block = std::make_shared<Block>(std::move(_block));
+        m_blockCache.insert(std::make_pair(blockHash, block));
         // add hashindex to the blockCache queue, use to remove first element when the cache is full
         m_blockCacheFIFO.push_back(blockHash);
 
@@ -88,7 +88,7 @@ std::pair<std::shared_ptr<Block>, h256> BlockCache::get(h256 const& _hash)
             return std::make_pair(nullptr, h256(0));
         }
 
-        return it->second;
+        return std::make_pair(it->second, _hash);
     }
 
     return std::make_pair(nullptr, h256(0));  // just make compiler happy
@@ -114,6 +114,9 @@ shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
 
 std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
 {
+    /// the future block
+    if (_i > m_blockCache)
+        return nullptr;
     string blockHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
