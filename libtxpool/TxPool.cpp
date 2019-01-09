@@ -133,7 +133,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
     return verify_ret;
 }
 
-void TxPool::verifyAndSetSendForBlock(dev::eth::Block& block)
+void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 {
     ReadGuard l(m_lock);
     for (size_t i = 0; i < block.getTransactionSize(); i++)
