@@ -41,16 +41,15 @@ public:
     }
     virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     virtual void start() override {}
-    virtual void disconnect(dev::network::DisconnectReason _reason) override {}
+    virtual void disconnect(dev::network::DisconnectReason) override {}
 
     virtual bool isConnected() const override { return true; }
 
-    virtual void asyncSendMessage(dev::network::Message::Ptr message,
-        dev::network::Options options = Options(), CallbackFunc callback = CallbackFunc()) override
+    virtual void asyncSendMessage(dev::network::Message::Ptr, dev::network::Options = Options(),
+        CallbackFunc = CallbackFunc()) override
     {}
     void setMessageHandler(std::function<void(NetworkException,
-            std::shared_ptr<dev::network::SessionFace>, dev::network::Message::Ptr)>
-            messageHandler) override
+            std::shared_ptr<dev::network::SessionFace>, dev::network::Message::Ptr)>) override
     {}
     bool actived() const override { return true; }
 
@@ -75,7 +74,7 @@ public:
 
     virtual void start() override { m_run = true; }
 
-    virtual void stop(dev::network::DisconnectReason reason) override { m_run = false; }
+    virtual void stop(dev::network::DisconnectReason) override { m_run = false; }
 
     virtual NodeID nodeID() override { return m_id; }
 
@@ -112,7 +111,6 @@ public:
 
     P2PSession::Ptr createSession(std::string _ip = "127.0.0.1")
     {
-        unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(_ip), m_listenPort, m_listenPort);
         KeyPair key_pair = KeyPair::create();
 #if 0
@@ -130,7 +128,6 @@ public:
 
     P2PSession::Ptr createSessionWithID(NodeID _peerID, std::string _ip = "127.0.0.1")
     {
-        unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(_ip), m_listenPort, m_listenPort);
 #if 0
         dev::p2p::P2PSessionInfo peer_info(

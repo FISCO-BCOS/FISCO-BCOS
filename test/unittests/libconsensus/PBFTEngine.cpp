@@ -594,7 +594,6 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     {
         appendSessionInfo(fake_pbft, fake_pbft.m_minerList[i]);
     }
-    int64_t block_number = obtainBlockNumber(fake_pbft);
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
     testReHandleCommitPrepareCache(fake_pbft, prepareReq);
 

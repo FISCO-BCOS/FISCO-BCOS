@@ -44,7 +44,7 @@ struct StorageStateFixture
     dev::storagestate::StorageState m_state;
 };
 
-BOOST_FIXTURE_TEST_SUITE(StorageState, StorageStateFixture);
+BOOST_FIXTURE_TEST_SUITE(StorageState, StorageStateFixture)
 
 BOOST_AUTO_TEST_CASE(Balance)
 {
