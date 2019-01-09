@@ -25,6 +25,9 @@ coverage:
         enabled: no
 comment:
   layout: "reach, diff"
+  behavior: default
+  require_changes: false  # if true: only post the comment if coverage changes
+  require_base: no        # [yes :: must have a base report to post]
 flags:
   alltests:
     joined: false

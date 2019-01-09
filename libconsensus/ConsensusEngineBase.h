@@ -146,7 +146,7 @@ public:
 
     IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::Block const& block) override {}
+    virtual void reportBlock(dev::eth::Block const&) override {}
 
 protected:
     virtual void resetConfig() { m_nodeNum = m_minerList.size(); }
@@ -162,8 +162,8 @@ protected:
         return h512();
     }
 
-    virtual bool isValidReq(dev::p2p::P2PMessage::Ptr message,
-        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex)
+    virtual bool isValidReq(
+        dev::p2p::P2PMessage::Ptr, std::shared_ptr<dev::p2p::P2PSession>, ssize_t&)
     {
         return false;
     }

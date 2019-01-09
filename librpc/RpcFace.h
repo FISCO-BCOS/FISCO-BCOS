@@ -103,6 +103,9 @@ public:
             jsonrpc::Procedure("getPendingTransactions", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getPendingTransactionsI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getPendingTxSize", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getPendingTxSizeI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("call", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                 jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_OBJECT, NULL),
@@ -153,11 +156,11 @@ public:
         response = this->getSyncStatus(request[0u].asInt());
     }
 
-    inline virtual void getClientVersionI(const Json::Value& request, Json::Value& response)
+    inline virtual void getClientVersionI(const Json::Value&, Json::Value& response)
     {
         response = this->getClientVersion();
     }
-    inline virtual void getPeersI(const Json::Value& request, Json::Value& response)
+    inline virtual void getPeersI(const Json::Value&, Json::Value& response)
     {
         response = this->getPeers();
     }
@@ -165,7 +168,7 @@ public:
     {
         response = this->getGroupPeers(request[0u].asInt());
     }
-    inline virtual void getGroupListI(const Json::Value& request, Json::Value& response)
+    inline virtual void getGroupListI(const Json::Value&, Json::Value& response)
     {
         response = this->getGroupList();
     }
@@ -208,6 +211,10 @@ public:
     inline virtual void getPendingTransactionsI(const Json::Value& request, Json::Value& response)
     {
         response = this->getPendingTransactions(request[0u].asInt());
+    }
+    inline virtual void getPendingTxSizeI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getPendingTxSize(request[0u].asInt());
     }
     inline virtual void getCodeI(const Json::Value& request, Json::Value& response)
     {
@@ -262,8 +269,10 @@ public:
     /// @return the receipt of a transaction by transaction hash.
     /// @note That the receipt is not available for pending transactions.
     virtual Json::Value getTransactionReceipt(int param1, const std::string& param2) = 0;
-    /// @return information about getPendingTransactions.
+    /// @return information about PendingTransactions.
     virtual Json::Value getPendingTransactions(int param1) = 0;
+    /// @return size about PendingTransactions.
+    virtual std::string getPendingTxSize(int param1) = 0;
     /// Returns code at a given address.
     virtual std::string getCode(int param1, const std::string& param2) = 0;
     /// Returns the count of transactions and blocknumber.

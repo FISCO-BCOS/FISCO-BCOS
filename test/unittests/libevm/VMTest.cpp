@@ -115,7 +115,7 @@ public:
 
     BlockHeader blockHeader{initBlockHeader()};
     LastBlockHashes lastBlockHashes;
-    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+    static dev::h256 fakeCallBack(int64_t) { return h256(); }
     EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
 
@@ -285,7 +285,7 @@ public:
 
     BlockHeader blockHeader{initBlockHeader()};
     LastBlockHashes lastBlockHashes;
-    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+    static dev::h256 fakeCallBack(int64_t) { return h256(); }
     EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
     Address extAddress{KeyPair::create().address()};

@@ -87,6 +87,7 @@ public:
     virtual Json::Value getTransactionReceipt(
         int _groupID, const std::string& _transactionHash) override;
     virtual Json::Value getPendingTransactions(int _groupID) override;
+    virtual std::string getPendingTxSize(int _groupID) override;
     virtual std::string getCode(int _groupID, const std::string& address) override;
     virtual Json::Value getTotalTransactionCount(int _groupID) override;
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
