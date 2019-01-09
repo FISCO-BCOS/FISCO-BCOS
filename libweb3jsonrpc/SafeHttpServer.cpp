@@ -183,7 +183,15 @@ int SafeHttpServer::callback(void* cls, MHD_Connection* connection, const char* 
             else
             {
                 client_connection->code = MHD_HTTP_OK;
-                handler->HandleRequest(client_connection->request.str(), response);
+                try {
+                	handler->HandleRequest(client_connection->request.str(), response);
+                }
+                catch(std::exception &e) {
+                	client_connection->server->SendResponse(
+                	                    std::string("ERROR while handleRequest:") + e.what(), client_connection);
+
+                	return MHD_YES;
+                }
                 client_connection->server->SendResponse(response, client_connection);
             }
         }
