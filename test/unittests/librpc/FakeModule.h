@@ -423,6 +423,8 @@ public:
         initTxPool();
         /// init sync
         initBlockSync();
+        /// init
+        initLedgerParam();
     }
     virtual bool initLedger() override { return true; };
     virtual void initConfig(std::string const& configPath) override{};
@@ -460,6 +462,11 @@ public:
     void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
     void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
     void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    void initLedgerParam()
+    {
+        m_param = std::make_shared<LedgerParam>();
+        m_param->mutableConsensusParam().consensusType = "pbft";
+    }
     virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
     virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
     virtual void startAll() override {}
@@ -477,6 +484,7 @@ private:
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
+    int m_flag;
 };
 
 }  // namespace test
