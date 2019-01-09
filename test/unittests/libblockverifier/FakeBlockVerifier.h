@@ -39,7 +39,7 @@ public:
         return m_execContext;
     }
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&)
+    executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;
