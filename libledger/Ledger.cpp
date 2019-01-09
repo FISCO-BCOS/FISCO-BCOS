@@ -24,6 +24,7 @@
 #include "Ledger.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
+#include <libblockverifier/ParaTxExecutor.h>
 #include <libconfig/SystemConfigMgr.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
@@ -225,6 +226,9 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
     m_param->mutableTxParam().txGasLimit = pt.get<unsigned>("tx.gas_limit", 300000000);
     Ledger_LOG(DEBUG) << LOG_BADGE("initTxConfig")
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
+    m_param->mutableTxParam().enableParallel = pt.get<bool>("tx.enable_parallel", false);
+    Ledger_LOG(DEBUG) << LOG_BADGE("initTxConfig")
+                      << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
 }
 
 /// init mark of this group
@@ -269,7 +273,12 @@ bool Ledger::initBlockVerifier()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier Failed");
         return false;
     }
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>();
+    std::shared_ptr<ParaTxExecutor> executor = nullptr;
+    if (m_param->mutableTxParam().enableParallel)
+    {
+        executor = std::make_shared<ParaTxExecutor>();
+    }
+    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(executor);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =
