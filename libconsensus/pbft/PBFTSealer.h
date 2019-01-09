@@ -59,7 +59,7 @@ public:
 
     void start() override;
     void stop() override;
-
+    /// can reset the sealing block or not?
     bool shouldResetSealing() override
     {
         /// only the leader need reset sealing in PBFT

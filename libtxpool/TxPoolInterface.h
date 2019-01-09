@@ -92,7 +92,7 @@ public:
 
     /// Set transaction is known by a node
     virtual void setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId){};
-    virtual void transactionsAreKnownBy(
+    virtual void setTransactionsAreKnownBy(
         std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId){};
     /// Is the transaction is known by the node ?
     virtual bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) { return false; };

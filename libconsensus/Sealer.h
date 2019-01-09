@@ -138,10 +138,13 @@ protected:
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         resetSealingBlock(m_sealing, filter, resetNextLeader);
     }
+    /// reset the sealing block before loadTransactions
     void resetSealingBlock(
         Sealing& sealing, h256Hash const& filter = h256Hash(), bool resetNextLeader = false);
     void resetBlock(dev::eth::Block& block, bool resetNextLeader = false);
 
+    /// reset the sealing Header after loadTransactions, before generate and broadcast local prepare
+    /// message
     void resetSealingHeader(dev::eth::BlockHeader& header);
     /// reset timestamp of block header
     void resetCurrentTime()

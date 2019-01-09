@@ -156,6 +156,17 @@ bool Sealer::isBlockSyncing()
     return (state.state != SyncState::Idle);
 }
 
+/**
+ * @brief : reset specified sealing block by generating an empty block
+ *
+ * @param sealing :  the block should be resetted
+ * @param filter : the tx hashes of transactions that should't be packeted into sealing block when
+ * loadTransactions(used to set m_transactionSet)
+ * @param resetNextLeader : reset realing for the next leader or not ? default is false.
+ *                          true: reset sealing for the next leader; the block number of the sealing
+ * header should be reset to the current block number add 2 false: reset sealing for the current
+ * leader; the sealing header should be populated from the current block
+ */
 void Sealer::resetSealingBlock(Sealing& sealing, h256Hash const& filter, bool resetNextLeader)
 {
     resetBlock(sealing.block, resetNextLeader);
@@ -163,14 +174,27 @@ void Sealer::resetSealingBlock(Sealing& sealing, h256Hash const& filter, bool re
     sealing.p_execContext = nullptr;
 }
 
+/**
+ * @brief : reset specified block according to 'resetNextLeader' option
+ *
+ * @param block : the block that should be resetted
+ * @param resetNextLeader: reset the block for the next leader or not ? default is false.
+ *                         true: reset block for the next leader; the block number of the block
+ * header should be reset to the current block number add 2 false: reset block for the current
+ * leader; the block header should be populated from the current block
+ */
 void Sealer::resetBlock(Block& block, bool resetNextLeader)
 {
+    /// reset block for the next leader:
+    /// 1. clear the block; 2. set the block number to current block number add 2
     if (resetNextLeader)
     {
         SEAL_LOG(DEBUG) << "reset nextleader number to:" << (m_blockChain->number() + 2);
         block.resetCurrentBlock();
         block.header().setNumber(m_blockChain->number() + 2);
     }
+    /// reset block for current leader:
+    /// 1. clear the block; 2. populate header from the highest block
     else
     {
         block.resetCurrentBlock(
@@ -178,6 +202,16 @@ void Sealer::resetBlock(Block& block, bool resetNextLeader)
     }
 }
 
+/**
+ * @brief : set some important fields for specified block header (called by PBFTSealer after load
+ * transactions finished)
+ *
+ * @param header : the block header should be setted
+ * the resetted fields including to:
+ * 1. block import time;
+ * 2. sealer list: reset to current leader list
+ * 3. sealer: reset to the idx of the block generator
+ */
 void Sealer::resetSealingHeader(BlockHeader& header)
 {
     /// import block

@@ -148,7 +148,7 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
 {
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
-    if (m_txsHash.find(tx_hash) != m_txHash.end())
+    if (m_txsHash.find(tx_hash) != m_txsHash.end())
     {
         TXPOOL_LOG(DEBUG) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
         return ImportResult::AlreadyKnown;
