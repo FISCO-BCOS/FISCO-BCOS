@@ -98,29 +98,13 @@ public:
             /// represent that the latest block has been consensused
             if (m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader)
             {
-                return canFinishSealing();
+                return (utcTime() - m_timeManager.m_lastConsensusTime) >=
+                       m_timeManager.m_intervalBlockTime;
             }
             return false;
         }
         /// the block is sealed by the current leader
-        if (canFinishSealing())
-        {
-            return true;
-        }
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
-    }
-
-    /**
-     * @brief : decide can finish sealing or not
-     *          1. the block is not an empty block(namely the txqueue size is equal to the
-     * transaction size of the block)
-     *          2. the transaction pool is empty
-     * @return true : can  finish sealing
-     * @return false : can't finish sealing
-     */
-    bool inline canFinishSealing()
-    {
-        return (m_sealing.block.getTransactionSize() > 0) && (m_txPool->status.current() == (m_sealing.block.getTransactionSize());
     }
 
     /// in case of the next leader packeted the number of maxTransNum transactions before the last

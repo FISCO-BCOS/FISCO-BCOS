@@ -75,7 +75,10 @@ protected:
         return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1);
     }
 
-    bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
+    bool reachBlockIntervalTime() override
+    {
+        return m_pbftEngine->reachBlockIntervalTime() || canFinishSealing();
+    }
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
     bool canHandleBlockForNextLeader() override
@@ -84,6 +87,21 @@ protected:
     }
 
 private:
+    /**
+     * @brief : decide can finish sealing or not
+     *          1. the block is not an empty block(namely the txqueue size is equal to the
+     * transaction size of the block)
+     *          2. the transaction pool is empty
+     * @return true : can  finish sealing
+     * @return false : can't finish sealing
+     */
+    bool inline canFinishSealing()
+    {
+        return (m_sealing.block.getTransactionSize() > 0) &&
+               (m_txPool->status().current == m_sealing.block.getTransactionSize());
+    }
+
+    /// reset block when view changes
     void resetBlockForViewChange()
     {
         {
@@ -94,6 +112,7 @@ private:
         m_blockSignalled.notify_all();
     }
 
+    /// reset block for the next leader
     void resetBlockForNextLeader(dev::h256Hash const& filter)
     {
         {
