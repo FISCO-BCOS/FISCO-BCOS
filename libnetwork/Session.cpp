@@ -127,7 +127,6 @@ void Session::send(std::shared_ptr<bytes> _msg)
 
         m_writeQueue.push(make_pair(_msg, u256(utcTime())));
     }
-    SESSION_LOG(TRACE) << "Session send, writeQueue: " << m_writeQueue.size();
 
     write();
 }
