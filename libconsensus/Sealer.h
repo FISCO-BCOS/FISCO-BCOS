@@ -120,7 +120,7 @@ protected:
         bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
         if (enough)
         {
-            SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num << std::endl;
+            SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num;
         }
         return enough;
     }
@@ -134,7 +134,7 @@ protected:
 
     inline void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
     {
-        SEAL_LOG(DEBUG) << "[#resetSealingBlock] [number]" << m_blockChain->number() << std::endl;
+        SEAL_LOG(DEBUG) << "[#resetSealingBlock] [number]" << m_blockChain->number();
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         resetSealingBlock(m_sealing, filter, resetNextLeader);
     }

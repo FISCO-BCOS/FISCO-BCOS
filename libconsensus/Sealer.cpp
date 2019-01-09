@@ -42,10 +42,10 @@ void Sealer::start()
 {
     if (m_startConsensus)
     {
-        SEAL_LOG(WARNING) << "[#Sealer module has already been started]" << std::endl;
+        SEAL_LOG(WARNING) << "[#Sealer module has already been started]";
         return;
     }
-    SEAL_LOG(INFO) << "[#Start sealer module]" << std::endl;
+    SEAL_LOG(INFO) << "[#Start sealer module]";
     resetSealingBlock();
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     m_syncBlock = false;
@@ -228,10 +228,10 @@ void Sealer::stop()
 {
     if (m_startConsensus == false)
     {
-        SEAL_LOG(WARNING) << "[#Sealer module has already been stopped]" << std::endl;
+        SEAL_LOG(WARNING) << "[#Sealer module has already been stopped]";
         return;
     }
-    SEAL_LOG(INFO) << "[#Stop sealer module...]" << std::endl;
+    SEAL_LOG(INFO) << "[#Stop sealer module...]";
     m_startConsensus = false;
     doneWorking();
     if (isWorking())

@@ -688,8 +688,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     catch (std::exception& e)
     {
         PBFTENGINE_LOG(WARNING) << "[#handlePrepareMsg] Block execute failed: [EINFO]:  "
-                                << boost::diagnostic_information(e) << "  [INFO]: " << oss.str()
-                                << std::endl;
+                                << boost::diagnostic_information(e) << "  [INFO]: " << oss.str();
         return true;
     }
     /// whether to omit empty block
@@ -832,7 +831,7 @@ void PBFTEngine::checkAndSave()
                 << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                 << m_reqCache->prepareCache().height << "/" << m_highestBlock.number() << "/"
                 << m_reqCache->prepareCache().block_hash.abridged() << "/"
-                << m_highestBlock.hash().abridged() << std::endl;
+                << m_highestBlock.hash().abridged();
         }
     }
 }
@@ -1085,8 +1084,7 @@ void PBFTEngine::checkAndChangeView()
     IDXTYPE count = m_reqCache->getViewChangeSize(m_toView);
     if (count >= minValidNodes() - 1)
     {
-        PBFTENGINE_LOG(INFO) << "[#checkAndChangeView] [Reach consensus, to_view]:  " << m_toView
-                             << std::endl;
+        PBFTENGINE_LOG(INFO) << "[#checkAndChangeView] [Reach consensus, to_view]:  " << m_toView;
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
         m_view = m_toView;
@@ -1108,8 +1106,7 @@ void PBFTEngine::collectGarbage()
     {
         m_reqCache->collectGarbage(m_highestBlock);
         m_timeManager.m_lastGarbageCollection = now;
-        PBFTENGINE_LOG(TRACE) << "[#collectGarbage] [Timecost]:  " << 1000 * t.elapsed()
-                              << std::endl;
+        PBFTENGINE_LOG(TRACE) << "[#collectGarbage] [Timecost]:  " << 1000 * t.elapsed();
     }
 }
 
@@ -1219,7 +1216,7 @@ void PBFTEngine::workLoop()
                 PBFTENGINE_LOG(TRACE)
                     << "[#workLoop: handleMsg] [myIdx/myNode/type/idx]:  " << nodeIdx() << "/"
                     << m_keyPair.pub().abridged() << "/" << std::to_string(ret.second.packet_id)
-                    << "/" << ret.second.node_idx << std::endl;
+                    << "/" << ret.second.node_idx;
                 handleMsg(ret.second);
             }
             else
@@ -1250,7 +1247,7 @@ void PBFTEngine::handleFutureBlock()
             << "[#handleFutureBlock] [myIdx/myNode/number/highNum/view/conNum/hash]:  " << nodeIdx()
             << "/" << m_keyPair.pub().abridged() << "/" << m_reqCache->futurePrepareCache().height
             << "/" << m_highestBlock.number() << "/" << m_view << "/" << m_consensusBlockNumber
-            << "/" << m_reqCache->futurePrepareCache().block_hash.abridged() << std::endl;
+            << "/" << m_reqCache->futurePrepareCache().block_hash.abridged();
         handlePrepareMsg(future_req);
         m_reqCache->resetFuturePrepare();
     }

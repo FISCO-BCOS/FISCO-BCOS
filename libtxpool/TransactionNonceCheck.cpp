@@ -45,7 +45,7 @@ bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
         NONCECHECKER_LOG(ERROR) << "[#Verify] [#InvalidBlockLimit] invalid blockLimit: "
                                    "[blkLimit/maxBlkLimit/number/tx]:  "
                                 << _tx.blockLimit() << "/" << m_maxBlockLimit << "/"
-                                << m_blockNumber << "/" << _tx.sha3() << std::endl;
+                                << m_blockNumber << "/" << _tx.sha3();
         return false;
     }
     return true;
@@ -78,9 +78,8 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
 
             NONCECHECKER_LOG(TRACE)
                 << "[#updateCache] [rebuild/startBlk/endBlk/prestartBlk/preEndBlk]:  " << _rebuild
-                << "/" << m_startblk << "/" << m_endblk << "/" << prestartblk << "/" << preendblk
-                << std::endl;
-            if (_rebuild)
+                << "/" << m_startblk << "/" << m_endblk << "/" << prestartblk << "/" << preendblk;
+            s if (_rebuild)
             {
                 m_cache.clear();
                 preendblk = 0;
@@ -107,14 +106,13 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 }
             }  // for
             NONCECHECKER_LOG(TRACE) << "[#updateCache] [cacheSize/costTime]:  " << m_cache.size()
-                                    << "/" << (timer.elapsed() * 1000) << std::endl;
+                                    << "/" << (timer.elapsed() * 1000);
         }
         catch (...)
         {
             // should not happen as exceptions
-            NONCECHECKER_LOG(WARNING)
-                << "[#updateCache] update nonce cache failed: [EINFO]:  "
-                << boost::current_exception_diagnostic_information() << std::endl;
+            NONCECHECKER_LOG(WARNING) << "[#updateCache] update nonce cache failed: [EINFO]:  "
+                                      << boost::current_exception_diagnostic_information();
         }
     }
 }  // fun

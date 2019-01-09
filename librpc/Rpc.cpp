@@ -50,7 +50,7 @@ std::string Rpc::getBlockNumber(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getBlockNumber] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getBlockNumber] [groupID]: " << _groupID;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
@@ -75,7 +75,7 @@ std::string Rpc::getPbftView(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getPbftView] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getPbftView] [groupID]: " << _groupID;
 
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
@@ -108,7 +108,7 @@ Json::Value Rpc::getMinerList(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getMinerList] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getMinerList] [groupID]: " << _groupID;
 
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
@@ -140,7 +140,7 @@ Json::Value Rpc::getObserverList(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getObserverList] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getObserverList] [groupID]: " << _groupID;
 
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
@@ -173,7 +173,7 @@ Json::Value Rpc::getConsensusStatus(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getConsensusStatus] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getConsensusStatus] [groupID]: " << _groupID;
 
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
@@ -204,7 +204,7 @@ Json::Value Rpc::getSyncStatus(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getSyncStatus] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getSyncStatus] [groupID]: " << _groupID;
 
         auto sync = ledgerManager()->sync(_groupID);
         if (!sync)
@@ -236,7 +236,7 @@ std::string Rpc::getClientVersion()
 {
     try
     {
-        RPC_LOG(INFO) << "[#getClientVersion]" << std::endl;
+        RPC_LOG(INFO) << "[#getClientVersion]";
 
         std::string version;
         for (auto it : implementedModules())
@@ -263,7 +263,7 @@ Json::Value Rpc::getPeers()
 {
     try
     {
-        RPC_LOG(INFO) << "[#getPeers]" << std::endl;
+        RPC_LOG(INFO) << "[#getPeers]";
 
         Json::Value response = Json::Value(Json::arrayValue);
 
@@ -298,7 +298,7 @@ Json::Value Rpc::getGroupPeers(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getGroupPeers] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getGroupPeers] [groupID]: " << _groupID;
 
         Json::Value response = Json::Value(Json::arrayValue);
 
@@ -328,7 +328,7 @@ Json::Value Rpc::getGroupList()
 {
     try
     {
-        RPC_LOG(INFO) << "[#getGroupList]" << std::endl;
+        RPC_LOG(INFO) << "[#getGroupList]";
 
         Json::Value response = Json::Value(Json::arrayValue);
 
@@ -352,7 +352,7 @@ Json::Value Rpc::getBlockByHash(
     try
     {
         RPC_LOG(INFO) << "[#getBlockByHash] [groupID/blockHash/includeTransactions]: " << _groupID
-                      << "/" << _blockHash << "/" << _includeTransactions << std::endl;
+                      << "/" << _blockHash << "/" << _includeTransactions;
 
         Json::Value response;
 
@@ -413,8 +413,7 @@ Json::Value Rpc::getBlockByNumber(
     try
     {
         RPC_LOG(INFO) << "[#getBlockByNumber] [groupID/blockNumber/includeTransactions]: "
-                      << _groupID << "/" << _blockNumber << "/" << _includeTransactions
-                      << std::endl;
+                      << _groupID << "/" << _blockNumber << "/" << _includeTransactions;
 
         Json::Value response;
 
@@ -472,7 +471,7 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
     try
     {
         RPC_LOG(INFO) << "[#getBlockHashByNumber] [groupID/blockNumber]: " << _groupID << "/"
-                      << _blockNumber << std::endl;
+                      << _blockNumber;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
@@ -499,7 +498,7 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
     try
     {
         RPC_LOG(INFO) << "[#getTransactionByHash] [groupID/transactionHash]: " << _groupID << "/"
-                      << _transactionHash << std::endl;
+                      << _transactionHash;
 
         Json::Value response;
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -545,7 +544,7 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
     {
         RPC_LOG(INFO)
             << "[#getTransactionByBlockHashAndIndex] [groupID/blockHash/transactionIndex]: "
-            << _groupID << "/" << _blockHash << "/" << _transactionIndex << std::endl;
+            << _groupID << "/" << _blockHash << "/" << _transactionIndex;
 
         Json::Value response;
 
@@ -600,7 +599,7 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
     {
         RPC_LOG(INFO)
             << "[#getTransactionByBlockNumberAndIndex] [groupID/blockNumber/transactionIndex]: "
-            << _groupID << "/" << _blockNumber << "/" << _transactionIndex << std::endl;
+            << _groupID << "/" << _blockNumber << "/" << _transactionIndex;
 
         Json::Value response;
 
@@ -708,7 +707,7 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getPendingTransactions] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getPendingTransactions] [groupID]: " << _groupID;
 
         Json::Value response;
 
@@ -751,8 +750,7 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getCode] [groupID/address]: " << _groupID << "/" << _address << "/"
-                      << std::endl;
+        RPC_LOG(INFO) << "[#getCode] [groupID/address]: " << _groupID << "/" << _address << "/";
 
         auto blockChain = ledgerManager()->blockChain(_groupID);
         if (!blockChain)
@@ -776,7 +774,7 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << "[#getTotalTransactionCount] [groupID]: " << _groupID << std::endl;
+        RPC_LOG(INFO) << "[#getTotalTransactionCount] [groupID]: " << _groupID;
 
         auto blockChain = ledgerManager()->blockChain(_groupID);
         if (!blockChain)
@@ -804,8 +802,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 {
     try
     {
-        RPC_LOG(INFO) << "[#call] [groupID/Object]: " << _groupID << "/" << request.toStyledString()
-                      << std::endl;
+        RPC_LOG(INFO) << "[#call] [groupID/Object]: " << _groupID << "/"
+                      << request.toStyledString();
 
         if (request["from"].empty() || request["from"].asString().empty())
             BOOST_THROW_EXCEPTION(
@@ -851,8 +849,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
     try
     {
-        RPC_LOG(INFO) << "[#sendRawTransaction] [groupID/rlp]: " << _groupID << "/" << _rlp
-                      << std::endl;
+        RPC_LOG(INFO) << "[#sendRawTransaction] [groupID/rlp]: " << _groupID << "/" << _rlp;
 
         auto txPool = ledgerManager()->txPool(_groupID);
         if (!txPool)

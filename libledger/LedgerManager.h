@@ -63,19 +63,18 @@ public:
         {
             LedgerManager_LOG(ERROR)
                 << "[initSingleLedger] invalid GroupId: " << _groupId << ", must between [1"
-                << ", " << maxGroupID << "]" << std::endl;
+                << ", " << maxGroupID << "]";
             return false;
         }
         if (m_ledgerMap.count(_groupId) > 0)
         {
             LedgerManager_LOG(ERROR) << "[initSingleLedger] Group already inited [GroupId]:  "
-                                     << std::to_string(_groupId) << std::endl;
+                                     << std::to_string(_groupId);
             return false;
         }
         std::shared_ptr<LedgerInterface> ledger =
             std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
-        LedgerManager_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId)
-                                << std::endl;
+        LedgerManager_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
         bool succ = ledger->initLedger();
         if (!succ)
             return false;

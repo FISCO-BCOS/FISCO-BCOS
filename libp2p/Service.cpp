@@ -111,25 +111,23 @@ void Service::heartBeat()
         if ((it.first.address == m_host->tcpClient().address() &&
                 it.first.tcpPort == m_host->listenPort()))
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost()
-                               << std::endl;
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost();
             continue;
         }
         /// exclude myself
         if (it.second == id())
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [nodeId]: " << it.second << std::endl;
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [nodeId]: " << it.second;
             continue;
         }
         if (it.second != NodeID() && isConnected(it.second))
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore connected [nodeId]: " << it.second
-                               << std::endl;
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore connected [nodeId]: " << it.second;
             continue;
         }
         if (it.first.address.to_string().empty())
         {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address" << std::endl;
+            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore invalid address";
             continue;
         }
         SERVICE_LOG(DEBUG) << "[#heartBeat] try to reconnect [endpoint]" << it.first.name();
@@ -166,7 +164,7 @@ void Service::updateStaticNodes(
     if (it != m_staticNodes.end())
     {
         SERVICE_LOG(DEBUG) << "[#startPeerSession-updateStaticNodes] [nodeId/endpoint]:  "
-                           << toHex(nodeId) << "/" << endpoint.name() << std::endl;
+                           << toHex(nodeId) << "/" << endpoint.name();
         it->second = nodeId;
     }
 }

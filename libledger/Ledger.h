@@ -77,7 +77,7 @@ public:
             m_configFileName = "./config.group" + std::to_string(_groupId) + m_postfix;
 
         Ledger_LOG(INFO) << "[#LedgerConstructor] [configPath/baseDir]:  " << m_configFileName
-                         << "/" << m_param->baseDir() << std::endl;
+                         << "/" << m_param->baseDir();
         initConfig(m_configFileName);
     }
 
@@ -85,7 +85,7 @@ public:
     void startAll() override
     {
         assert(m_sync && m_sealer);
-        Ledger_LOG(INFO) << "[#startAll...]" << std::endl;
+        Ledger_LOG(INFO) << "[#startAll...]";
         m_sync->start();
         m_sealer->start();
     }
@@ -94,7 +94,7 @@ public:
     void stopAll() override
     {
         assert(m_sync && m_sealer);
-        Ledger_LOG(INFO) << "[#stopAll...]" << std::endl;
+        Ledger_LOG(INFO) << "[#stopAll...]";
         m_sealer->stop();
         m_sync->stop();
     }

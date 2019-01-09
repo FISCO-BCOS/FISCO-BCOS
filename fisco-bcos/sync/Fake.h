@@ -111,7 +111,7 @@ public:
         SYNCLOG(TRACE) << "[Commit] Conencus block commit "
                           "[blockNumber/txNumber/totalTxCommitThisNode/blockHash/parentHash]: "
                        << currentNumber + 1 << "/" << txs.size() << "/" << m_totalTxCommit << "/"
-                       << block->headerHash() << "/" << parentHash << std::endl;
+                       << block->headerHash() << "/" << parentHash;
     }
 
 private:

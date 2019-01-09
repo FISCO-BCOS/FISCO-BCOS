@@ -341,7 +341,7 @@ struct PrepareReq : public PBFTMsg
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         pBlock = std::make_shared<dev::eth::Block>(std::move(sealing.block));
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
-                   << timestamp << " , block_hash: " << toHex(block_hash) << std::endl;
+                   << timestamp << " , block_hash: " << block_hash.abridged();
     }
 
     bool operator==(PrepareReq const& req) const

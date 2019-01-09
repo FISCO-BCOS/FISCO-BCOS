@@ -174,7 +174,7 @@ private:
     {
         if (!m_commonNonceCheck->isNonceOk(tx, true))
         {
-            TXPOOL_LOG(WARNING) << "[#txPoolNonceCheck] check TxPool Nonce Failed" << std::endl;
+            TXPOOL_LOG(WARNING) << "[#txPoolNonceCheck] check TxPool Nonce Failed";
             return false;
         }
         return true;

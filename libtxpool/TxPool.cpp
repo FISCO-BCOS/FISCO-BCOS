@@ -99,7 +99,7 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
     catch (std::exception& e)
     {
         TXPOOL_LOG(ERROR) << "[#import] import transaction failed, [EINFO]:  "
-                          << boost::diagnostic_information(e) << std::endl;
+                          << boost::diagnostic_information(e);
         return ImportResult::Malformed;
     }
     return import(tx, _ik);
@@ -150,13 +150,13 @@ ImportResult TxPool::verify(Transaction const& trans, IfDropped _drop_policy, bo
     h256 tx_hash = trans.sha3();
     if (m_txsHash.find(tx_hash) != m_txsHash.end())
     {
-        TXPOOL_LOG(DEBUG) << "[#Verify] already known tx: " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(DEBUG) << "[#Verify] already known tx: " << tx_hash.abridged();
         return ImportResult::AlreadyKnown;
     }
     /// the transaction has been dropped before
     if (m_dropped.count(tx_hash) && _drop_policy == IfDropped::Ignore)
     {
-        TXPOOL_LOG(DEBUG) << "[#Verify] already dropped tx: " << tx_hash.abridged() << std::endl;
+        TXPOOL_LOG(DEBUG) << "[#Verify] already dropped tx: " << tx_hash.abridged();
         return ImportResult::AlreadyInChain;
     }
     /// check nonce

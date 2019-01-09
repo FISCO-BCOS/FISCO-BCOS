@@ -384,7 +384,7 @@ protected:
         {
             PBFTENGINE_LOG(DEBUG) << "[#hasConsensused] [height/consNum/reqView/Cview]:  "
                                   << req.height << "/" << m_consensusBlockNumber << "/" << req.view
-                                  << "/" << m_view << std::endl;
+                                  << "/" << m_view;
             return true;
         }
         return false;
@@ -398,7 +398,7 @@ protected:
         {
             PBFTENGINE_LOG(DEBUG) << "[#FutureBlock] [height/consNum/reqView/Cview]:  "
                                   << req.height << "/" << m_consensusBlockNumber << "/" << req.view
-                                  << "/" << m_view << std::endl;
+                                  << "/" << m_view;
             return true;
         }
         return false;
@@ -413,8 +413,7 @@ protected:
                                      "[height/cacheHeight/hash/cachHash]:  "
                                   << req.height << "/" << m_reqCache->committedPrepareCache().height
                                   << "/" << req.block_hash.abridged() << "/"
-                                  << m_reqCache->committedPrepareCache().block_hash.abridged()
-                                  << std::endl;
+                                  << m_reqCache->committedPrepareCache().block_hash.abridged();
             return false;
         }
         return true;

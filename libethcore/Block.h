@@ -138,7 +138,7 @@ public:
     void resetCurrentBlock(BlockHeader const& _parent = BlockHeader())
     {
         /// the default sealer of blockHeader is Invalid256
-        if (_parent.sealer() == Invalid256)
+        if (_parent.sealer() != Invalid256)
         {
             m_blockHeader.populateFromParent(_parent);
         }

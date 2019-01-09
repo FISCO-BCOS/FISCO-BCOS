@@ -41,7 +41,7 @@ static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPt
 {
     CONSENSUS_MAIN_LOG(TRACE) << "[#rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
                               << receiptPtr->blockNumber() << "/" << receiptPtr->hash() << "/"
-                              << receiptPtr->blockHash() << std::endl;
+                              << receiptPtr->blockHash();
 }
 
 static void createTx(
@@ -359,7 +359,7 @@ static void createTx(
             catch (std::exception& e)
             {
                 LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
-                           << boost::diagnostic_information(e) << std::endl;
+                           << boost::diagnostic_information(e);
             }
         }
         LogInitializer::logRotateByTime();
