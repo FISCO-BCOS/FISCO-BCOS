@@ -79,7 +79,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             NONCECHECKER_LOG(TRACE)
                 << "[#updateCache] [rebuild/startBlk/endBlk/prestartBlk/preEndBlk]:  " << _rebuild
                 << "/" << m_startblk << "/" << m_endblk << "/" << prestartblk << "/" << preendblk;
-            s if (_rebuild)
+            if (_rebuild)
             {
                 m_cache.clear();
                 preendblk = 0;
