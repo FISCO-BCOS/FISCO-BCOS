@@ -581,16 +581,6 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
 }
 
-
-void PBFTEngine::verifyTransactionsAndSetSenders(dev::eth::Block& block)
-{
-    for (auto& trans : block.transactions())
-    {
-        if (m_txPool->)
-    }
-}
-
-
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
     Block working_block;
