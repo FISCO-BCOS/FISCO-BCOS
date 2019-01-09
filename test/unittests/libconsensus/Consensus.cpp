@@ -83,14 +83,16 @@ BOOST_AUTO_TEST_CASE(testLoadTransactions)
     fake_pbft.engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.checkTxsEnough(10) == true);
     fake_pbft.engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.checkTxsEnough(11) == false);
+    /// the transaction pool is empty, stop sealing
+    BOOST_CHECK(fake_pbft.checkTxsEnough(11) == true);
     ///< Load 12 transactions in txpool, actually only 10.
     fake_pbft.loadTransactions(12);
     ///< The following two checks ensure that the size of transactions is 10.
     fake_pbft.engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
     BOOST_CHECK(fake_pbft.checkTxsEnough(10) == true);
     fake_pbft.engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
-    BOOST_CHECK(fake_pbft.checkTxsEnough(11) == false);
+    /// the transaction pool is empty, stop sealing
+    BOOST_CHECK(fake_pbft.checkTxsEnough(11) == true);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
