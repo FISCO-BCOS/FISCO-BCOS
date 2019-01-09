@@ -133,6 +133,8 @@ public:
         return CommitResult::OK;
     }
 
+    void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
+
     bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
 
     dev::h512s minerList() override { return dev::h512s(); };
@@ -170,6 +172,8 @@ public:
     /// protocol id used when register handler to p2p module
     PROTOCOL_ID const& protocolId() const override { return m_protocolID; };
     void setProtocolId(PROTOCOL_ID const) override{};
+
+    void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
 
 private:
     SyncStatus m_status;

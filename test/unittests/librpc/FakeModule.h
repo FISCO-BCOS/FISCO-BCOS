@@ -144,6 +144,7 @@ public:
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
     }
+    void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
     {
         m_initParam = initParam;
@@ -395,6 +396,8 @@ public:
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t){};
+
+    void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
 
 private:
     SyncStatus m_syncStatus;

@@ -187,7 +187,6 @@ public:
     }
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
-
     bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
     dev::h512s minerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
