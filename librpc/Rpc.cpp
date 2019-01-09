@@ -115,10 +115,10 @@ std::string Rpc::getPbftView(int _groupID)
         }
         auto consensusParam = ledgerParam->mutableConsensusParam();
         std::string consensusType = consensusParam.consensusType;
-        if (consensusType == "raft")
+        if (consensusType != "pbft")
         {
             BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::RaftView, RPCMsg[RPCExceptionType::RaftView]));
+                JsonRpcException(RPCExceptionType::NoView, RPCMsg[RPCExceptionType::NoView]));
         }
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)

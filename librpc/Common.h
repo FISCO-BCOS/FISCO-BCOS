@@ -40,12 +40,12 @@ enum RPCExceptionType
     BlockNumberT,
     TransactionIndex,
     CallFrom,
-    RaftView
+    NoView
 };
 
 const std::string RPCMsg[] = {"Success", "GroupID does not exist", "Response json parse error",
     "BlockHash does not exist", "BlockNumber does not exist", "TransactionIndex is out of range",
-    "Call needs a 'from' field", "Raft does not support the view property"};
+    "Call needs a 'from' field", "Only pbft consensus supports the view property"};
 
 }  // namespace rpc
 }  // namespace dev
