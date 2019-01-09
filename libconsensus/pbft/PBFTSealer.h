@@ -63,7 +63,8 @@ public:
     bool shouldResetSealing() override
     {
         /// only the leader need reset sealing in PBFT
-        return (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
+        return Sealer::shouldResetSealing() &&
+               (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
 protected:
@@ -90,6 +91,7 @@ private:
     void resetBlockForNextLeader(dev::h256Hash const& filter)
     {
         {
+            DEV_WRITE_GUARDED(x_sealing)
             resetSealingBlock(filter, true);
         }
         m_signalled.notify_all();
