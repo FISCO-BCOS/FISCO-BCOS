@@ -259,7 +259,6 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     status->knownHighestNumber = latestNumber;
     status->knownLatestHash = latestBlockChain.getBlockByNumber(latestNumber)->headerHash();
 
-    int64_t currentNumber = 0;
     vector<shared_ptr<Block>> blocks;
 
     cout << " latestNumber: 6  curr:[0] -> downloadqueue:[1] -> curr:[0, 1]  not finish " << endl;
@@ -343,7 +342,6 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
 BOOST_AUTO_TEST_CASE(DoWorkTest)
 {
     int64_t currentBlockNumber = 0;
-    int64_t latestNumber = 6;
     FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100));
     std::shared_ptr<SyncMaster> sync = syncTools.sync;
 

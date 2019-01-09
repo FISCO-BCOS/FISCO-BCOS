@@ -186,7 +186,8 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
             if (find(crl.begin(), crl.end(), nodeID) != crl.end())
             {
-                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate rejected list.");
+                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate rejected list")
+                               << LOG_KV("nodeID", nodeID.substr(0, 4));
                 return false;
             }
 

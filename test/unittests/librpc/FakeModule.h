@@ -70,13 +70,10 @@ public:
     void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
-    {
-        return m_sessionInfos;
-    }
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const { return m_sessionInfos; }
 
-    void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
-        CallbackFuncWithSession callback, dev::p2p::Options) override
+    void asyncSendMessageByNodeID(
+        NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession, dev::p2p::Options) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
@@ -100,7 +97,7 @@ public:
     }
 
     void setConnected() { m_connected = true; }
-    bool isConnected(NodeID const& nodeId) const { return m_connected; }
+    bool isConnected(NodeID const&) const { return m_connected; }
 
 private:
     P2PSessionInfos m_sessionInfos;
@@ -147,6 +144,7 @@ public:
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
     }
+    void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
     {
         m_initParam = initParam;
@@ -154,7 +152,7 @@ public:
     }
     dev::h512s minerList() override { return m_initParam.minerList; };
     dev::h512s observerList() override { return m_initParam.observerList; };
-    std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) override
+    std::string getSystemConfigByKey(std::string const&, int64_t = -1) override
     {
         return "300000000";
     };
@@ -184,7 +182,7 @@ public:
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
     }
-    dev::h256 numberHash(int64_t _i) { return blockHash; }
+    dev::h256 numberHash(int64_t) override { return blockHash; }
 
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
@@ -193,7 +191,7 @@ public:
         return nullptr;
     }
 
-    virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override
+    virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
         return LocalisedTransaction(transaction, blockHash, 0, 0);
     }
@@ -215,10 +213,9 @@ public:
                 TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
-    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override { return Transaction(); }
+    dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
 
-    virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(
-        dev::h256 const& _txHash) override
+    virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
     {
         LogEntries entries;
         LogEntry entry;
@@ -245,7 +242,7 @@ public:
         return CommitResult::OK;
     }
 
-    dev::bytes getCode(dev::Address _address) override { return bytes(); }
+    dev::bytes getCode(dev::Address) override { return bytes(); }
 
     BlockHeader blockHeader;
     Transactions transactions;
@@ -271,14 +268,13 @@ public:
     };
     virtual ~MockBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo) override
+        dev::eth::Block& block, BlockInfo const&) override
     {
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) override
+    executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;
@@ -322,17 +318,17 @@ public:
     virtual dev::eth::Transactions pendingList() const override { return transactions; };
     virtual size_t pendingSize() override { return 1; }
     virtual dev::eth::Transactions topTransactions(
-        uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override
+        uint64_t const&, h256Hash&, bool = false) override
     {
         return transactions;
     }
-    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) override
+    virtual dev::eth::Transactions topTransactions(uint64_t const&) override
     {
         return transactions;
     }
-    virtual bool drop(h256 const& _txHash) override { return true; }
-    virtual bool dropBlockTrans(dev::eth::Block const& block) override { return true; }
-    bool handleBadBlock(Block const& block) override { return true; }
+    virtual bool drop(h256 const&) override { return true; }
+    virtual bool dropBlockTrans(dev::eth::Block const&) override { return true; }
+    bool handleBadBlock(Block const&) override { return true; }
     virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
     virtual TxPoolStatus status() const override
     {
@@ -346,12 +342,12 @@ public:
         return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
     }
     virtual dev::eth::ImportResult import(
-        dev::eth::Transaction& _tx, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) override
+        dev::eth::Transaction&, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {
         return ImportResult::Success;
     }
     virtual dev::eth::ImportResult import(
-        bytesConstRef _txBytes, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) override
+        bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {
         return ImportResult::Success;
     }
@@ -399,12 +395,13 @@ public:
     bool isSyncing() const override { return m_isSyncing; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
-    void noteSealingBlockNumber(int64_t _number){};
+    void noteSealingBlockNumber(int64_t) override{};
+
+    void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
 
 private:
     SyncStatus m_syncStatus;
     bool m_isSyncing;
-    bool m_forceSync;
     Block m_latestSentBlock;
     PROTOCOL_ID m_protocolId;
 };
@@ -412,8 +409,8 @@ private:
 class FakeLedger : public LedgerInterface
 {
 public:
-    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
+    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface>, dev::GROUP_ID const&, dev::KeyPair const&,
+        std::string const&, std::string const&)
     {
         /// init blockChain
         initBlockChain();
@@ -427,7 +424,7 @@ public:
         initLedgerParam();
     }
     virtual bool initLedger() override { return true; };
-    virtual void initConfig(std::string const& configPath) override{};
+    virtual void initConfig(std::string const&) override{};
     virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
     {
         return m_txPool;

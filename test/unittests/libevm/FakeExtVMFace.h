@@ -73,7 +73,7 @@ public:
 class FakeLastBlockHashes : public LastBlockHashesFace
 {
 public:
-    virtual h256s precedingHashes(h256 const& _mostRecentHash) const
+    virtual h256s precedingHashes(h256 const&) const
     {
         h256s tmp;
         return tmp;
@@ -109,7 +109,7 @@ public:
         return genesis;
     }
 
-    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+    static dev::h256 fakeCallBack(int64_t) { return h256(); }
 
     static EnvInfo& createEnvInfo(u256 const gasUsed, u256 const gasLimit = u256(300000))
     {
@@ -139,8 +139,8 @@ public:
         return result;
     }
 
-    virtual evmc_result create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op,
-        u256 _salt, OnOpFunc const& _onOp)
+    virtual evmc_result create(
+        u256, u256& io_gas, bytesConstRef, Instruction, u256, OnOpFunc const&)
     {
         u256 nonce = u256(00013443);
         Address m_newAddress = right160(sha3(rlpList(myAddress(), nonce)));
@@ -224,7 +224,7 @@ public:
         return h256{};
     }
     /// Read address's code.
-    virtual bytes const codeAt(Address contract_addr) { return code(); }
+    virtual bytes const codeAt(Address) { return code(); }
 
     virtual h256 blockHash(int64_t number) { return sha3(toString(number)); }
 

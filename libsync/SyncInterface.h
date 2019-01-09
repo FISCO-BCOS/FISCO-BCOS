@@ -55,8 +55,7 @@ public:
 
     // verify handler to check downloading block
     virtual void registerConsensusVerifyHandler(
-        std::function<bool(dev::eth::Block const&)> _handler)
-    {}
+        std::function<bool(dev::eth::Block const&)> _handler) = 0;
 };
 
 }  // namespace sync
