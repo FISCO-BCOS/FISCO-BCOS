@@ -73,8 +73,8 @@ public:
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;
     virtual dev::bytes getCode(dev::Address _address) = 0;
-    virtual void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
-    {}
+    virtual void getNonces(
+        std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) = 0;
 
     /// If it is a genesis block, function returns true.
     /// If it is a subsequent block with same extra data, function returns true.

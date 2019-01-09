@@ -43,7 +43,7 @@ namespace test
 {
 class FakeKeyCenter : public KeyCenter
 {
-    const dev::bytes getDataKey(const std::string& _cipherDataKey) override
+    const dev::bytes getDataKey(const std::string&) override
     {
         return fromHex("3031323334353637303132333435363730313233343536373031323334353637");
     }

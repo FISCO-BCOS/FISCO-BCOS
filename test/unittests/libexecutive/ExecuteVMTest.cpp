@@ -58,7 +58,7 @@ private:
 class ExecuteVMTestFixture : public TestOutputHelperFixture
 {
 public:
-    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+    static dev::h256 fakeCallBack(int64_t) { return h256(); }
 
     ExecuteVMTestFixture()
       : TestOutputHelperFixture(),

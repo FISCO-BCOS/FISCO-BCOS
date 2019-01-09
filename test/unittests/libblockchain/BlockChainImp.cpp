@@ -103,7 +103,7 @@ public:
         m_fakeStorage[SYS_TX_HASH_2_BLOCK][c_commonHash] = entry;
     }
 
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
+    virtual Entries::Ptr select(const std::string& key, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -122,8 +122,8 @@ public:
         return 0;
     }
 
-    virtual int update(
-        const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr)
+    int update(
+        const std::string& key, Entry::Ptr entry, Condition::Ptr, AccessOptions::Ptr) override
     {
         entry->setField(
             "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));
@@ -140,7 +140,7 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 public:
     MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
 
-    Table::Ptr openTable(const std::string& _table, bool authorityFlag = true) override
+    Table::Ptr openTable(const std::string& _table, bool = true) override
     {
         m_mockTable->m_table = _table;
         return m_mockTable;
@@ -169,7 +169,7 @@ class MockState : public StorageState
 public:
     MockState() : StorageState(u256(0)) {}
 
-    void dbCommit(h256 const& _blockHash, int64_t _blockNumber) override {}
+    void dbCommit(h256 const&, int64_t) override {}
 };
 
 struct EmptyFixture

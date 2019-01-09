@@ -46,7 +46,7 @@ Session::Session()
 
 Session::~Session()
 {
-    SESSION_LOG(INFO) << "Deconstruct peer session";
+    SESSION_LOG(DEBUG) << "Deconstruct peer session";
 
     try
     {
@@ -140,7 +140,8 @@ void Session::onWrite(
     {
         if (ec)
         {
-            SESSION_LOG(WARNING) << "onWrite error sending" << LOG_KV("message", ec.message())
+            SESSION_LOG(WARNING) << LOG_DESC("onWrite error sending")
+                                 << LOG_KV("message", ec.message())
                                  << LOG_KV("endpoint", nodeIPEndpoint().name());
             drop(TCPError);
             return;
@@ -157,7 +158,8 @@ void Session::onWrite(
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "onWrite error" << LOG_KV("what", boost::diagnostic_information(e));
+        SESSION_LOG(ERROR) << LOG_DESC("onWrite error")
+                           << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
     }
@@ -232,7 +234,8 @@ void Session::write()
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "write error:" << LOG_KV("what", boost::diagnostic_information(e));
+        SESSION_LOG(ERROR) << LOG_DESC("write error")
+                           << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
     }
@@ -264,7 +267,7 @@ void Session::drop(DisconnectReason _reason)
         }
         if (it.second->callbackFunc)
         {
-            SESSION_LOG(TRACE) << "Session::drop, call callbackFunc by seq=" << it.first;
+            SESSION_LOG(TRACE) << "drop, call callbackFunc by seq" << LOG_KV("seq", it.first);
             if (server)
             {
                 auto callback = it.second;
@@ -334,8 +337,8 @@ void Session::drop(DisconnectReason _reason)
                 if (socket->ref().is_open())
                 {
                     SESSION_LOG(WARNING)
-                        << "[drop] timeout, force close the socket, remote endpoint"
-                        << socket->ref().remote_endpoint();
+                        << "[drop] timeout, force close the socket"
+                        << LOG_KV("remote endpoint", socket->ref().remote_endpoint());
                     socket->close();
                 }
             });
@@ -395,9 +398,9 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(WARNING)
-                        << "doRead error" << LOG_KV("endpoint", s->nodeIPEndpoint().name())
-                        << LOG_KV("message", ec.message());
+                    SESSION_LOG(WARNING) << LOG_DESC("doRead error")
+                                         << LOG_KV("endpoint", s->nodeIPEndpoint().name())
+                                         << LOG_KV("message", ec.message());
                     s->drop(TCPError);
                     return;
                 }
@@ -440,7 +443,7 @@ void Session::doRead()
         }
         else
         {
-            SESSION_LOG(WARNING) << "Error Reading ssl socket is close!";
+            SESSION_LOG(WARNING) << LOG_DESC("Error Reading ssl socket is close!");
             drop(TCPError);
             return;
         }
@@ -452,7 +455,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
         _ec.value() != boost::asio::error::eof)
     {
-        SESSION_LOG(WARNING) << "checkRead error" << LOG_KV("message", _ec.message());
+        SESSION_LOG(WARNING) << LOG_DESC("checkRead error") << LOG_KV("message", _ec.message());
         drop(TCPError);
 
         return false;

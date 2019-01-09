@@ -44,7 +44,9 @@ public:
     bool isSyncing() const override { return m_isSyncing; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
-    void noteSealingBlockNumber(int64_t _number){};
+    void noteSealingBlockNumber(int64_t) override{};
+
+    void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
 
 private:
     SyncStatus m_syncStatus;

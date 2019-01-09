@@ -89,7 +89,7 @@ public:
     }
 
     IDXTYPE const& f() { return m_f; }
-    void resetConfig() { PBFTEngine::resetConfig(); }
+    void resetConfig() override { PBFTEngine::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
         NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)

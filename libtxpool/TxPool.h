@@ -150,7 +150,7 @@ protected:
     /// check nonce
     virtual bool isBlockLimitOrNonceOk(Transaction const& _ts, bool _needinsert) const;
     /// interface for filter check
-    virtual u256 filterCheck(const Transaction& _t) const { return u256(0); };
+    virtual u256 filterCheck(const Transaction&) const { return u256(0); };
     void clear();
     bool dropTransactions(Block const& block, bool needNotify = false);
 
