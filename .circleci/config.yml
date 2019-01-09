@@ -5,14 +5,14 @@ jobs:
     docker:
       - image: ubuntu:16.04
     steps:
-      - checkout
       - run:
           name: Install dependencies
           command: |
             apt-get update 
             apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+      - checkout
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}
+          key: dependency-cache-{{ arch }}-{{ .Branch }}
       - run:
           name: Compile
           command: |
@@ -37,7 +37,7 @@ jobs:
           path: /root/FISCO-BCOS/build/bin/fisco-bcos
           destination: fisco-bcos
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}
+          key: dependency-cache-{{ arch }}-{{ .Branch }}
           paths:
             - deps
             # - build
@@ -47,14 +47,14 @@ jobs:
     docker:
         - image: centos:7
     steps:
-      - checkout
       - run:
           name: Install dependencies
           command: |
             yum install -y epel-release
             yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
+      - checkout
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}-guomi
+          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
       - run:
           name: Compile
           command: |
@@ -70,7 +70,7 @@ jobs:
           path: /root/FISCO-BCOS-gm/build/bin/fisco-bcos
           destination: fisco-bcos-gm-centos7
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CACHE_VERSION }}-guomi
+          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
           paths:
             - deps
             # - build

@@ -1,4 +1,8 @@
 codecov:
+  notify:
+    require_ci_to_pass: no
+  ci:
+    - !travis
   branch: dev-2.0
 coverage:
   range: 30...100
@@ -11,10 +15,11 @@ coverage:
     project:
       app:
         target: 70
-        threshold: 0.05
+        threshold: 0.1
+        paths: "!test/"
       default:
         target: 80
-        threshold: 0.05
+        threshold: 0.1
     patch:
       default:
         target: 10
