@@ -90,7 +90,8 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     /// check existence of this block (Must non-exist)
     if (blockExists(block_hash))
     {
-        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Block already exist: [hash]:  " << block_hash.abridged();
+        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Block already exist: [hash]:  "
+                          << block_hash.abridged();
         BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
     }
     /// check the existence of the parent block (Must exist)
