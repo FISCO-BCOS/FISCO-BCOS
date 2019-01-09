@@ -332,7 +332,7 @@ public:
     virtual TxPoolStatus status() const override
     {
         TxPoolStatus status;
-        status.current = 0;
+        status.current = 1;
         status.dropped = 0;
         return status;
     }

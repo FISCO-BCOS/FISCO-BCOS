@@ -83,9 +83,7 @@ void Host::startAccept(boost::system::error_code boost_error)
             [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
                 auto endpoint = socket->remote_endpoint();
-                HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect Try")
-                                << LOG_KV("From", endpoint.address().to_string()) << ":"
-                                << endpoint.port();
+                HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
                 /// network acception failed
                 if (ec || !m_run)
                 {
@@ -97,9 +95,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 socket->setNodeIPEndpoint(
                     NodeIPEndpoint(endpoint.address(), endpoint.port(), endpoint.port()));
 
-                HOST_LOG(INFO) << LOG_DESC("P2P Recv Connect")
-                               << LOG_KV("From", endpoint.address().to_string()) << ":"
-                               << endpoint.port();
+                HOST_LOG(INFO) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
@@ -198,7 +194,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
         }
         catch (std::exception& e)
         {
-            HOST_LOG(ERROR) << LOG_DESC("Cert verify failed:") << boost::diagnostic_information(e);
+            HOST_LOG(ERROR) << LOG_DESC("Cert verify failed") << boost::diagnostic_information(e);
             return preverified;
         }
     };
@@ -265,9 +261,8 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
             HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
         }
     });
-    HOST_LOG(INFO) << LOG_DESC("startPeerSession")
-                   << LOG_KV("remoteEndpoint", socket->remote_endpoint().address().to_string())
-                   << ":" << socket->remote_endpoint().port() << LOG_KV("nodeID", nodeID);
+    HOST_LOG(INFO) << LOG_DESC("startPeerSession, From=") << socket->remote_endpoint()
+                   << LOG_KV("nodeID", nodeID.abridged());
 }
 
 /**
@@ -320,13 +315,13 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         return;
     }
     HOST_LOG(INFO) << LOG_DESC("Attempting connection to node")
-                   << LOG_KV("name", _nodeIPEndpoint.name());
+                   << LOG_KV("endpoint", _nodeIPEndpoint.name());
     {
         Guard l(x_pendingConns);
         if (m_pendingConns.count(_nodeIPEndpoint.name()))
         {
             LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
-                       << LOG_KV("name", _nodeIPEndpoint.name());
+                       << LOG_KV("endpoint", _nodeIPEndpoint.name());
             return;
         }
     }
@@ -353,7 +348,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         if (socket->isConnected())
         {
             LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                         << LOG_KV("name", _nodeIPEndpoint.name());
+                         << LOG_KV("endpoint", _nodeIPEndpoint.name());
             erasePendingConns(_nodeIPEndpoint);
             socket->close();
         }
@@ -363,8 +358,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         socket, _nodeIPEndpoint, [=](boost::system::error_code const& ec) {
             if (ec)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Connection refused by node")
-                                << LOG_KV("name", _nodeIPEndpoint.name())
+                HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
+                                << LOG_KV("endpoint", _nodeIPEndpoint.name())
                                 << LOG_KV("message", ec.message());
                 socket->close();
 
@@ -406,7 +401,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
-                          << LOG_KV("name", _nodeIPEndpoint.name())
+                          << LOG_KV("endpoint", _nodeIPEndpoint.name())
                           << LOG_KV("errorValue", error.value())
                           << LOG_KV("message", error.message());
 
