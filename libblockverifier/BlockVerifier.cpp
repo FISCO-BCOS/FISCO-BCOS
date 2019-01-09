@@ -20,6 +20,7 @@
  */
 #include "BlockVerifier.h"
 #include "ExecutiveContext.h"
+#include "TxDAG.h"
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
@@ -58,18 +59,38 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
 
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
-    for (Transaction const& tr : block.transactions())
-    {
+    ///*
+    TxDAG txDag;
+    txDag.init(block.transactions());
+    txDag.setTxExecuteFunc([&](Transaction const& _tr) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
             block.getTransactionReceipts().size() > 0 ?
                 block.getTransactionReceipts().back().gasUsed() :
                 0);
         envInfo.setPrecompiledEngine(executiveContext);
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, tr, OnOpFunc(), executiveContext);
+            execute(envInfo, _tr, OnOpFunc(), executiveContext);
         block.appendTransactionReceipt(resultReceipt.second);
         executiveContext->getState()->commit();
-    }
+        return true;
+    });
+    while (!txDag.hasFinished())
+        txDag.executeUnit();
+    //*/
+    /*
+        for (Transaction const& tr : block.transactions())
+        {
+            EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
+                block.getTransactionReceipts().size() > 0 ?
+                    block.getTransactionReceipts().back().gasUsed() :
+                    0);
+            envInfo.setPrecompiledEngine(executiveContext);
+            std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+                execute(envInfo, tr, OnOpFunc(), executiveContext);
+            block.appendTransactionReceipt(resultReceipt.second);
+            executiveContext->getState()->commit();
+        }
+        //*/
     block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
