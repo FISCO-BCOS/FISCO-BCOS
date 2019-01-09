@@ -116,7 +116,9 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
 {
     /// the future block
     if (_i > number())
+    {
         return nullptr;
+    }
     string blockHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -347,7 +349,9 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
     /// return directly if the blocknumber is invalid
     if (_i > number())
+    {
         return nullptr;
+    }
     auto block = getBlock(_i);
     if (bool(block))
     {
@@ -375,7 +379,9 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
             if (!pblock)
+            {
                 return Transaction();
+            }
             const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
@@ -402,7 +408,9 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblockhash));
             if (!pblock)
+            {
                 return LocalisedTransaction(Transaction(), h256(0), -1, -1);
+            }
             const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
@@ -430,7 +438,9 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
             if (!pblock)
+            {
                 return TransactionReceipt();
+            }
             std::vector<TransactionReceipt> receipts = pblock->transactionReceipts();
             if (receipts.size() > lexical_cast<uint>(txIndex))
             {
@@ -457,8 +467,10 @@ LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256
 
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(blockNum));
             if (!pblock)
+            {
                 return LocalisedTransactionReceipt(
                     TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+            }
             const Transactions& txs = pblock->transactions();
             const TransactionReceipts& receipts = pblock->transactionReceipts();
             if (receipts.size() > txIndex && txs.size() > txIndex)

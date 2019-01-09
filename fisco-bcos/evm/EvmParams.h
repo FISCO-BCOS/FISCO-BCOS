@@ -128,8 +128,8 @@ public:
                 }
                 catch (std::exception& e)
                 {
-                    EVMC_LOG(WARNING) << "[EvmParams/Parse Key Failed] "
-                                      << boost::diagnostic_information(e);
+                    EVMC_LOG(WARNING)
+                        << "[EvmParams/Parse Key Failed] " << boost::diagnostic_information(e);
                     continue;
                 }
             }

@@ -125,7 +125,8 @@ protected:
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
-        bool enough = (tx_num >= maxTxsCanSeal) || reachBlockIntervalTime();
+        bool enough =
+            (tx_num >= maxTxsCanSeal) && canHandleBlockForNextLeader() || reachBlockIntervalTime();
         if (enough)
         {
             SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num;
@@ -133,6 +134,9 @@ protected:
         return enough;
     }
 
+    /// in case of the next leader packeted the number of maxTransNum transactions before the last
+    /// block is consensused
+    virtual bool canHandleBlockForNextLeader() { return true; }
     virtual bool reachBlockIntervalTime() { return false; }
     virtual void handleBlock() {}
     virtual bool shouldHandleBlock() { return true; }

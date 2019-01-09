@@ -96,12 +96,27 @@ public:
         if (m_notifyNextLeaderSeal)
         {
             if (m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader)
+            {
                 return (utcTime() - m_timeManager.m_lastConsensusTime) >=
                        m_timeManager.m_intervalBlockTime;
+            }
             return false;
         }
         /// the block is sealed by the current leader
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+    }
+
+    /// in case of the next leader packeted the number of maxTransNum transactions before the last
+    /// block is consensused
+    /// when sealing for the next leader,  return true only if the last block has been consensused
+    /// even if the maxTransNum condition has been meeted
+    bool canHandleBlockForNextLeader()
+    {
+        if (m_notifyNextLeaderSeal)
+        {
+            return m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader;
+        }
+        return true;
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();

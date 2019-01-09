@@ -76,6 +76,12 @@ protected:
     }
 
     bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
+    /// in case of the next leader packeted the number of maxTransNum transactions before the last
+    /// block is consensused
+    bool canHandleBlockForNextLeader() override
+    {
+        return m_pbftEngine->canHandleBlockForNextLeader();
+    }
 
 private:
     void resetBlockForViewChange()

@@ -64,18 +64,24 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
 bool PBFTEngine::shouldSeal()
 {
     if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
+    {
         return false;
+    }
     /// check leader
     std::pair<bool, IDXTYPE> ret = getLeader();
     if (!ret.first)
+    {
         return false;
+    }
     /// fast view change
     if (ret.second != nodeIdx())
     {
         /// if current node is the next leader
         /// and it has been notified to seal new block, return true
         if (m_notifyNextLeaderSeal && getNextLeader() == nodeIdx())
+        {
             return true;
+        }
         return false;
     }
     if (m_reqCache->committedPrepareCache().height == m_consensusBlockNumber)
@@ -167,7 +173,9 @@ void PBFTEngine::initBackupDB()
 void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
 {
     if (!m_backupDB || !msg)
+    {
         return;
+    }
     try
     {
         bytes data = fromHex(m_backupDB->lookup(key));
@@ -199,7 +207,9 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
 void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
 {
     if (!m_backupDB)
+    {
         return;
+    }
     bytes message_data;
     _msg.encode(message_data);
     try
@@ -253,7 +263,9 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
     sign_req.encode(sign_req_data);
     bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
     if (succ)
+    {
         m_reqCache->addSignReq(sign_req);
+    }
     return succ;
 }
 
@@ -488,7 +500,9 @@ bool PBFTEngine::checkBlockSign(Block const& block)
     /// ignore the genesis block
 
     if (block.blockHeader().number() == 0)
+    {
         return true;
+    }
     /// check sealer list(node list)
     if (m_minerList != block.blockHeader().sealerList())
     {
@@ -541,7 +555,9 @@ bool PBFTEngine::checkBlockSign(Block const& block)
 void PBFTEngine::notifySealing(dev::eth::Block const& block)
 {
     if (!m_onNotifyNextLeaderReset)
+    {
         return;
+    }
     /// only if the current node is the next leader and not the current leader
     /// notify the seal module to seal new block
     if (getLeader().second != nodeIdx() && nodeIdx() == getNextLeader())
@@ -651,7 +667,9 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
 {
     bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
     if (!valid)
+    {
         return false;
+    }
     return handlePrepareMsg(prepare_req, pbftMsg.endpoint);
 }
 
@@ -677,7 +695,9 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
         << m_consensusBlockNumber << "/" << endpoint << "/" << prepareReq.block_hash.abridged();
     /// check the prepare request is valid or not
     if (!isValidPrepare(prepareReq, oss))
+    {
         return false;
+    }
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
     Sealing workingSealing;
@@ -886,7 +906,9 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     Timer t;
     bool valid = decodeToRequests(sign_req, ref(pbftMsg.data));
     if (!valid)
+    {
         return false;
+    }
     std::ostringstream oss;
     oss << "[#handleSignMsg] [myIdx/myNode/number/highNum/idx/Sview/view/from/fromIp/hash]:  "
         << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << sign_req.height << "/"
@@ -896,7 +918,9 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
 
     valid = isValidSignReq(sign_req, oss);
     if (!valid)
+    {
         return false;
+    }
     m_reqCache->addSignReq(sign_req);
     checkAndCommit();
     PBFTENGINE_LOG(DEBUG) << "[#handleSignMsg Succ] [Timecost]:  " << 1000 * t.elapsed()
@@ -928,7 +952,9 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
         return false;
     }
     if (result == CheckResult::INVALID)
+    {
         return false;
+    }
     return true;
 }
 
@@ -945,7 +971,9 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
     Timer t;
     bool valid = decodeToRequests(commit_req, ref(pbftMsg.data));
     if (!valid)
+    {
         return false;
+    }
     std::ostringstream oss;
     oss << "[#handleCommitMsg] [myIdx/myNode/number/highNum/idx/Cview/view/from/fromIp/hash]:  "
         << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << commit_req.height << "/"
@@ -955,7 +983,9 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
 
     valid = isValidCommitReq(commit_req, oss);
     if (!valid)
+    {
         return false;
+    }
     m_reqCache->addCommitReq(commit_req);
     checkAndSave();
     PBFTENGINE_LOG(DEBUG) << "[#handleCommitMsg Succ] [Timecost]:  " << 1000 * t.elapsed()
@@ -984,7 +1014,9 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
         return false;
     }
     if (result == CheckResult::INVALID)
+    {
         return false;
+    }
     return true;
 }
 
@@ -992,7 +1024,9 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
 {
     bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
     if (!valid)
+    {
         return false;
+    }
     std::ostringstream oss;
     oss << "[handleViewChangeMsg] [myIdx/myNode/number/highNum/idx/Cview/view/from/fromIp/hash]:  "
         << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/" << viewChange_req.height << "/"
@@ -1002,11 +1036,15 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
 
     valid = isValidViewChangeReq(viewChange_req, pbftMsg.node_idx, oss);
     if (!valid)
+    {
         return false;
+    }
 
     m_reqCache->addViewChangeReq(viewChange_req);
     if (viewChange_req.view == m_toView)
+    {
         checkAndChangeView();
+    }
     else
     {
         VIEWTYPE min_view = 0;
@@ -1042,7 +1080,9 @@ bool PBFTEngine::isValidViewChangeReq(
         return false;
     }
     if (req.view + 1 < m_toView && req.idx == source)
+    {
         catchupView(req, oss);
+    }
     /// check view and block height
     if (req.height < m_highestBlock.number() || req.view <= m_view)
     {
@@ -1075,7 +1115,9 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
         dev::network::NodeID nodeId;
         bool succ = getNodeIDByIndex(nodeId, req.idx);
         if (succ)
+        {
             sendViewChangeMsg(nodeId);
+        }
     }
 }
 
@@ -1098,7 +1140,9 @@ void PBFTEngine::collectGarbage()
 {
     Guard l(m_mutex);
     if (!m_highestBlock)
+    {
         return;
+    }
     Timer t;
     std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
@@ -1126,7 +1170,9 @@ void PBFTEngine::checkTimeout()
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
             if (!broadcastViewChangeReq())
+            {
                 return;
+            }
             checkAndChangeView();
             PBFTENGINE_LOG(DEBUG) << "[#checkTimeout Succ] [myIdx/myNode/timecost/view/toView]:  "
                                   << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
@@ -1187,7 +1233,9 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     }
 
     if (pbftMsg.ttl == 1)
+    {
         return;
+    }
     bool height_flag = (pbft_msg.height > m_highestBlock.number()) ||
                        (m_highestBlock.number() - pbft_msg.height < 10);
     if (succ && key.size() > 0 && height_flag)
@@ -1197,7 +1245,9 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         /// get the origin gen node id of the request
         h512 gen_node_id = getMinerByIndex(pbft_msg.idx);
         if (gen_node_id != h512())
+        {
             filter.insert(gen_node_id);
+        }
         unsigned current_ttl = pbftMsg.ttl - 1;
         broadcastMsg(pbftMsg.packet_id, key, ref(pbftMsg.data), filter, current_ttl);
     }
@@ -1281,9 +1331,13 @@ const std::string PBFTEngine::consensusStatus() const
 void PBFTEngine::updateMinerList()
 {
     if (m_storage == nullptr)
+    {
         return;
+    }
     if (m_highestBlock.number() == m_lastObtainMinerNum)
+    {
         return;
+    }
     try
     {
         UpgradableGuard l(m_minerListMutex);
@@ -1293,12 +1347,16 @@ void PBFTEngine::updateMinerList()
         auto nodes = m_storage->select(m_highestBlock.hash(), curBlockNum, "_sys_miners_", "node");
         /// obtain miner list
         if (!nodes)
+        {
             return;
+        }
         for (size_t i = 0; i < nodes->size(); i++)
         {
             auto node = nodes->get(i);
             if (!node)
+            {
                 return;
+            }
             if ((node->getField("type") == "miner") &&
                 (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
             {
@@ -1316,7 +1374,9 @@ void PBFTEngine::updateMinerList()
         {
             auto node = nodes->get(i);
             if (!node)
+            {
                 return;
+            }
             if ((node->getField("type") == "observer") &&
                 (boost::lexical_cast<int>(node->getField("enable_num")) <= curBlockNum))
             {
