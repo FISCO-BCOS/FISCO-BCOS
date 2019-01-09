@@ -122,7 +122,8 @@ public:
         return 0;
     }
 
-    virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr, AccessOptions::Ptr)
+    int update(
+        const std::string& key, Entry::Ptr entry, Condition::Ptr, AccessOptions::Ptr) override
     {
         entry->setField(
             "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));
