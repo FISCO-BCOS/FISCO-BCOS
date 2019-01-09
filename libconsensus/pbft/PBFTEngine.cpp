@@ -595,7 +595,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
         working_block.decode(ref(req.block), CheckTransaction::None);
     }
     /// return directly if it's an empty block
-    if (needOmit(sealing))
+    if (working_block.getTransactionSize() == 0 && m_omitEmptyBlock)
     {
         return;
     }
