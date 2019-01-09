@@ -83,7 +83,7 @@ public:
 
     void start() override { m_run = true; }
 
-    virtual void stop(dev::network::DisconnectReason) { m_run = false; }
+    void stop(dev::network::DisconnectReason) override { m_run = false; }
 
     NodeID nodeID() override { return m_id; }
 

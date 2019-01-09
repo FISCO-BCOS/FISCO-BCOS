@@ -127,12 +127,12 @@ public:
         return dev::consensus::RaftEngine::handleVoteResponse(_from, _node, _resp, vote);
     }
 
-    void reportBlock(dev::eth::Block const& _block)
+    void reportBlock(dev::eth::Block const& _block) override
     {
         dev::consensus::RaftEngine::reportBlock(_block);
     }
 
-    void workLoop() {}
+    void workLoop() override {}
 
     bool heartbeatTimeout = false;
     bool electTimeout = false;
