@@ -899,11 +899,11 @@ void PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
         return;
     std::ostringstream oss;
     oss << LOG_DESC("handleSignMsg") << LOG_KV("num", sign_req.height)
-        << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("idx", sign_req.idx)
+        << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("GenIdx", sign_req.idx)
         << LOG_KV("Sview", sign_req.view) << LOG_KV("view", m_view)
-        << LOG_KV("from", pbftMsg.node_id.abridged()) << LOG_KV("fromIp", pbftMsg.endpoint)
-        << LOG_KV("hash", sign_req.block_hash.abridged()) << LOG_KV("myIdx", nodeIdx())
-        << LOG_KV("myNode", m_keyPair.pub().abridged());
+        << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
+        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", sign_req.block_hash.abridged())
+        << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
     valid = isValidSignReq(sign_req, oss);
     if (!valid)
         return;
@@ -958,11 +958,11 @@ void PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
         return;
     std::ostringstream oss;
     oss << LOG_DESC("handleCommitMsg") << LOG_KV("blkNum", commit_req.height)
-        << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("idx", commit_req.idx)
+        << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("GenIdx", commit_req.idx)
         << LOG_KV("Cview", commit_req.view) << LOG_KV("view", m_view)
-        << LOG_KV("from", pbftMsg.node_id.abridged()) << LOG_KV("fromIp", pbftMsg.endpoint)
-        << LOG_KV("hash", commit_req.block_hash.abridged()) << LOG_KV("myIdx", nodeIdx())
-        << LOG_KV("myNode", m_keyPair.pub().abridged());
+        << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
+        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", commit_req.block_hash.abridged())
+        << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
 
     valid = isValidCommitReq(commit_req, oss);
     if (!valid)
@@ -1007,9 +1007,10 @@ void PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         return;
     std::ostringstream oss;
     oss << LOG_DESC("handleViewChangeMsg") << LOG_KV("blkNum", viewChange_req.height)
-        << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("idx", viewChange_req.idx)
+        << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("GenIdx", viewChange_req.idx)
         << LOG_KV("Cview", viewChange_req.view) << LOG_KV("view", m_view)
-        << LOG_KV("from", pbftMsg.node_id.abridged()) << LOG_KV("fromIp", pbftMsg.endpoint)
+        << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
+        << LOG_KV("fromIp", pbftMsg.endpoint)
         << LOG_KV("hash", viewChange_req.block_hash.abridged()) << LOG_KV("myIdx", nodeIdx())
         << LOG_KV("myNode", m_keyPair.pub().abridged());
     valid = isValidViewChangeReq(viewChange_req, pbftMsg.node_idx, oss);
