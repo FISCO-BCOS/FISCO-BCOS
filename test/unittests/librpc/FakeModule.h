@@ -484,7 +484,6 @@ private:
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
-    int m_flag;
 };
 
 }  // namespace test
