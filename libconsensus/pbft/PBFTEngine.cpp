@@ -248,6 +248,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
     PBFTENGINE_LOG(DEBUG) << "[#generateLocalPrepare] [myIdx/myNode/prepHash/prepHeight]:  "
                           << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                           << prepare_req.block_hash.abridged() << "/" << prepare_req.height;
+    m_signalled.notify_all();
     return succ;
 }
 
@@ -580,6 +581,16 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
 }
 
+
+void PBFTEngine::verifyTransactionsAndSetSenders(dev::eth::Block& block)
+{
+    for (auto& trans : block.transactions())
+    {
+        if (m_txPool->)
+    }
+}
+
+
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
     Block working_block;
@@ -591,22 +602,32 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     /// decode the network received prepare packet
     else
     {
-        working_block.decode(ref(req.block));
+        working_block.decode(ref(req.block), CheckTransaction::None);
     }
-    /// notify the next leader seal a new block
-    if (working_block.getTransactionSize() > 0)
+    /// return directly if it's an empty block
+    if (needOmit(sealing))
     {
-        notifySealing(working_block);
+        return;
     }
+
+    /// notify the next leader seal a new block
+    notifySealing(working_block);
+
     checkBlockValid(working_block);
     m_blockSync->noteSealingBlockNumber(working_block.header().number());
+
+    /// ignore the signature verification of the transactions have already been verified in
+    /// transation pool
+    /// the transactions that has not been verified by the txpool should be verified
+    m_txPool->verifyAndSetSenderForBlock(working_block);
+
     auto start_exec_time = utcTime();
     sealing.p_execContext = executeBlock(working_block);
-    sealing.block = working_block;
+    sealing.block = std::move(working_block);
     PBFTENGINE_LOG(DEBUG) << "[#execBlock] [myIdx/myNode/number/hash/idx/timecost/execPerTx]:  "
                           << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
                           << working_block.header().number() << "/"
-                          << working_block.header().hash().abridged() << "/" << req.idx
+                          << working_block.header().hash().abridged() << "/" << req.idx << "/"
                           << (utcTime() - start_exec_time) << "/"
                           << ((float)(utcTime() - start_exec_time) /
                                  (float)sealing.block.getTransactionSize());
@@ -648,7 +669,9 @@ void PBFTEngine::onRecvPBFTMessage(
     PBFTMsgPacket pbft_msg;
     bool valid = decodeToRequests(pbft_msg, message, session);
     if (!valid)
+    {
         return;
+    }
     if (pbft_msg.packet_id <= ViewChangeReqPacket)
     {
         m_msgQueue.push(pbft_msg);

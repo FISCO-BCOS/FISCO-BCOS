@@ -133,6 +133,25 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
     return verify_ret;
 }
 
+void TxPool::verifyAndSetSendForBlock(dev::eth::Block& block)
+{
+    ReadGuard l(m_lock);
+    for (size_t i = 0; i < block.getTransactionSize(); i++)
+    {
+        /// force sender for the transaction
+        auto p_tx = m_txsHash.find(block.transactions()[i].sha3());
+        if (p_tx != m_txsHash.end())
+        {
+            block.setSenderForTransaction(i, p_tx->second->sender());
+        }
+        /// verify the transaction
+        else
+        {
+            block.setSenderForTransaction(i);
+        }
+    }
+}
+
 /**
  * @brief : verify specified transaction, including:
  *  1. whether the transaction is known (refuse repeated transaction)

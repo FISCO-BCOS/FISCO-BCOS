@@ -457,7 +457,6 @@ protected:
     /// check block sign
     bool checkBlockSign(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
-
     void changeViewForEmptyBlock()
     {
         m_timeManager.changeView();

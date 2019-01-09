@@ -107,6 +107,7 @@ public:
         return m_onReady.add(_t);
     }
     virtual SharedMutex& xtransactionKnownBy() = 0;
+    virtual void verifyAndSetSenderForBlock(dev::eth::Block& block) {}
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be

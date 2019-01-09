@@ -61,19 +61,6 @@ void Executive::initialize(Transaction const& _transaction)
 
     if (!m_t.hasZeroSignature())
     {
-        // Avoid invalid transactions.
-        Address sender;
-        try
-        {
-            sender = m_t.sender();
-        }
-        catch (InvalidSignature const&)
-        {
-            LOG(WARNING) << "Invalid Signature";
-            m_excepted = TransactionException::InvalidSignature;
-            throw;
-        }
-
         // No need nonce increasing sequently at all. See random id for more.
 
         // Avoid unaffordable transactions.
@@ -97,12 +84,6 @@ void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction con
 bool Executive::execute()
 {
     // Entry point for a user-executed transaction.
-
-    // Pay...
-    LOG(TRACE) << "Paying " << m_gasCost << " from sender for gas (" << m_t.gas() << " gas at "
-               << m_t.gasPrice() << ")";
-    // m_s.subBalance(m_t.sender(), m_gasCost);
-
     assert(m_t.gas() >= (u256)m_baseGasRequired);
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),

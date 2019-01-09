@@ -139,6 +139,9 @@ public:
     bool isTransactionKnownBySomeone(h256 const& _txHash) override;
     SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
 
+    /// verify and set the sender of known transactions of sepcified block
+    void verifyAndSetSenderForBlock(dev::eth::Block& block) override;
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue

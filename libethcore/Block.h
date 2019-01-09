@@ -175,6 +175,27 @@ public:
     void calTransactionRoot(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
 
+    /**
+     * @brief: set sender for specified transaction, if the sender hasn't been set, then recover
+     * sender from the signature
+     *
+     * @param index: the index of the transaction
+     * @param sender: the sender address
+     */
+    void setSenderForTransaction(size_t index, dev::Address const& sender = ZeroAddress)
+    {
+        if (sender == ZeroAddress)
+        {
+            /// verify signature and recover sender from the signature
+            m_transactions[index].sender();
+        }
+        else
+        {
+            m_transactions[index].forceSender(sender);
+        }
+        noteChange();
+    }
+
 private:
     /// callback this function when transaction has changed
     void noteChange()

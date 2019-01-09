@@ -134,15 +134,13 @@ int main(int argc, const char* argv[])
     /// test deploy
     for (size_t i = 0; i < param.code().size(); i++)
     {
-        EVMC_LOG(INFO) << "=======[evm_main/BEGIN deploy Contract/index]:" << i
-                       << "=======";
+        EVMC_LOG(INFO) << "=======[evm_main/BEGIN deploy Contract/index]:" << i << "=======";
         deployContract(mptState, envInfo, param.code()[i], param);
     }
     /// test callfunctions
     for (size_t i = 0; i < param.input().size(); i++)
     {
-        EVMC_LOG(INFO) << "=======[evm_main/BEGIN call transaction/index]:" << i
-                       << "=======";
+        EVMC_LOG(INFO) << "=======[evm_main/BEGIN call transaction/index]:" << i << "=======";
         callTransaction(mptState, envInfo, param.input()[i], param);
     }
     return 0;
