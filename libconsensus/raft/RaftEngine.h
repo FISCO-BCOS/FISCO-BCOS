@@ -69,8 +69,7 @@ public:
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
-        m_blockSync->registerConsensusVerifyHandler(
-            [](dev::eth::Block const& block) { return true; });
+        m_blockSync->registerConsensusVerifyHandler([](dev::eth::Block const&) { return true; });
     }
 
     raft::NodeIndex getNodeIdx() const

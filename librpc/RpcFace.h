@@ -156,11 +156,11 @@ public:
         response = this->getSyncStatus(request[0u].asInt());
     }
 
-    inline virtual void getClientVersionI(const Json::Value& request, Json::Value& response)
+    inline virtual void getClientVersionI(const Json::Value&, Json::Value& response)
     {
         response = this->getClientVersion();
     }
-    inline virtual void getPeersI(const Json::Value& request, Json::Value& response)
+    inline virtual void getPeersI(const Json::Value&, Json::Value& response)
     {
         response = this->getPeers();
     }
@@ -168,7 +168,7 @@ public:
     {
         response = this->getGroupPeers(request[0u].asInt());
     }
-    inline virtual void getGroupListI(const Json::Value& request, Json::Value& response)
+    inline virtual void getGroupListI(const Json::Value&, Json::Value& response)
     {
         response = this->getGroupList();
     }

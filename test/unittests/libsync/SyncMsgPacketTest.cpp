@@ -54,7 +54,6 @@ public:
 
     std::shared_ptr<P2PSession> createFakeSession(std::string ip = "127.0.0.1")
     {
-        unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(ip), m_listenPort, m_listenPort);
         ;
         KeyPair key_pair = KeyPair::create();

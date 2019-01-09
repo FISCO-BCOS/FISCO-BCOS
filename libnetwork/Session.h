@@ -56,8 +56,8 @@ public:
 
     virtual bool isConnected() const override;
 
-    virtual void asyncSendMessage(Message::Ptr message, Options options = Options(),
-        CallbackFunc callback = CallbackFunc()) override;
+    virtual void asyncSendMessage(
+        Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override;
     // virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
@@ -149,8 +149,8 @@ private:
     class QueueCompare
     {
     public:
-        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>& lhs,
-            const std::pair<std::shared_ptr<bytes>, u256>& rhs) const
+        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>&,
+            const std::pair<std::shared_ptr<bytes>, u256>&) const
         {
             return false;
         }

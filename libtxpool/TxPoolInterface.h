@@ -36,7 +36,7 @@ class TxPoolInterface
 public:
     TxPoolInterface() = default;
     virtual ~TxPoolInterface(){};
-    void setMaxBlockLimit(unsigned const& limit) {}
+    void setMaxBlockLimit(unsigned const&) {}
     /**
      * @brief Remove transaction from the queue
      * @param _txHash: transaction hash
@@ -55,8 +55,8 @@ public:
     virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
     virtual dev::eth::Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
-    virtual dev::eth::Transactions topTransactionsCondition(uint64_t const& _limit,
-        std::function<bool(dev::eth::Transaction const&)> const& _condition = nullptr)
+    virtual dev::eth::Transactions topTransactionsCondition(
+        uint64_t const&, std::function<bool(dev::eth::Transaction const&)> const& = nullptr)
     {
         return dev::eth::Transactions();
     };

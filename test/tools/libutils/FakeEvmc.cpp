@@ -56,8 +56,8 @@ void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address c
     *o_result = fakeState.get(*_addr, *_key);
 }
 
-evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr,
-    evmc_uint256be const* _key, evmc_uint256be const* _value) noexcept
+evmc_storage_status setStorage(evmc_context*, evmc_address const* _addr, evmc_uint256be const* _key,
+    evmc_uint256be const* _value) noexcept
 {
     u256 oldValue = fromEvmC(fakeState.get(*_addr, *_key));
     u256 value = fromEvmC(*_value);
@@ -99,8 +99,8 @@ void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address 
     *o_result = reinterpret_cast<evmc_uint256be const&>(codeHash);
 }
 
-size_t copyCode(evmc_context* _context, evmc_address const* _addr, size_t _codeOffset,
-    byte* _bufferData, size_t _bufferSize)
+size_t copyCode(evmc_context*, evmc_address const* _addr, size_t _codeOffset, byte* _bufferData,
+    size_t _bufferSize)
 {
     bytes const& code = fakeState.accountCode(*_addr);
     // Handle "big offset" edge case.
@@ -120,7 +120,7 @@ void selfdestruct(
     fakeState.accountSuicide(*_beneficiary);
 }
 
-void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _msg) noexcept
+void call(evmc_result* o_result, evmc_context*, evmc_message const* _msg) noexcept
 {
     EVMSchedule const& schedule = DefaultSchedule;
     int64_t gas = _msg->gas;
@@ -165,7 +165,7 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
     }
 }
 
-void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
+void getTxContext(evmc_tx_context* result, evmc_context*) noexcept
 {
     result->tx_gas_price = toEvmC(FAKE_GAS_PRICE);
     result->tx_origin = reinterpret_cast<evmc_address const&>(FAKE_ORIGIN);
@@ -176,7 +176,7 @@ void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
     result->block_difficulty = toEvmC(FAKE_DIFFICULTY);
 }
 
-void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number)
+void getBlockHash(evmc_uint256be* o_hash, evmc_context*, int64_t)
 {
     bytes const& fakeBlock = bytes();
     h256 blockHash = sha3(fakeBlock);
