@@ -688,7 +688,7 @@ P2PSessionInfos Service::sessionInfos()
     return infos;
 }
 
-P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
+P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
 {
     std::pair<GROUP_ID, MODULE_ID> ret = dev::eth::getGroupAndProtocol(_protocolID);
     P2PSessionInfos infos;
@@ -749,20 +749,14 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     return nodeList;
 }
 
-bool Service::isConnected(NodeID nodeID)
+bool Service::isConnected(NodeID const& nodeID) const
 {
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
 
-    if (it == m_sessions.end())
+    if (it != m_sessions.end() && it->second->actived())
     {
-        return false;
+        return true;
     }
-
-    if (!it->second->actived())
-    {
-        return false;
-    }
-
-    return true;
+    return false;
 }
