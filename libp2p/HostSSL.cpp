@@ -324,7 +324,7 @@ void HostSSL::sslHandshakeServer(const boost::system::error_code& error, std::sh
 }
 
 
-bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std::shared_ptr<RLPXSocketSSL> socket)
+bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx)
 {
 	ParseCert parseCert;
 	parseCert.ParseInfo(ctx);
@@ -340,10 +340,7 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std:
 	if (isExpire)
 	{
 		LOG(WARNING) << "Verify Certificate Expire Data Error!";
-		if(socket->ref().is_open()) {
-			socket->ref().close();
-		}
-		return preverified;
+		return false;
 	}
 
 	if (certType == 1)
@@ -351,10 +348,7 @@ bool HostSSL::sslVerifyCert(bool preverified, ba::ssl::verify_context& ctx, std:
 		if ( true == NodeConnManagerSingleton::GetInstance().checkCertOut(serialNumber) )
 		{
 			LOG(WARNING) << "Verify Certificate: Has Out! ("<<serialNumber<<")";
-			if(socket->ref().is_open()) {
-				socket->ref().close();
-			}
-			return preverified;
+			return false;
 		}
 	}
 	return preverified;
@@ -373,7 +367,7 @@ void HostSSL::runAcceptor()
 		std::shared_ptr<RLPXSocketSSL> socket;
 		socket.reset(new RLPXSocketSSL(m_ioService,NodeIPEndpoint()));
 			
-		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2, socket));
+		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
 	
 		m_tcp4Acceptor.async_accept(socket->ref(), m_strand.wrap([ = ](boost::system::error_code ec)
 		{
@@ -536,12 +530,13 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 		m_tcpClient = socket->remoteEndpoint();
 		socket->sslref().set_verify_mode(ba::ssl::verify_peer);
 		socket->sslref().set_verify_depth(3);
-		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2, socket));
+		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
 
 		auto connectTimer = std::make_shared<boost::asio::deadline_timer>(m_ioService, boost::posix_time::milliseconds(30000));
+		auto weakSocket = std::weak_ptr<RLPXSocketSSL>(socket);
 		auto self = std::weak_ptr<HostSSL>(std::dynamic_pointer_cast<HostSSL>(shared_from_this()));
 		connectTimer->async_wait(
-				[socket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
+				[weakSocket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
 					try {
 						LOG(TRACE) << "enter connectTimer: " << error.value();
 						if (error)
@@ -554,7 +549,8 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 							}
 						}
 
-						if(socket->ref().is_open()) {
+						auto socket = weakSocket.lock();
+						if(socket && socket->ref().is_open()) {
 							LOG(WARNING) << "connection timeout, force close";
 							socket->ref().close();
 						}
@@ -569,7 +565,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 					}
 				});
 
-		socket->ref().async_connect(_nodeIPEndpoint, m_strand.wrap([ self, socket, _nodeIPEndpoint, connectTimer ](boost::system::error_code const & ec)
+		socket->ref().async_connect(_nodeIPEndpoint, [ self, socket, _nodeIPEndpoint, connectTimer ](boost::system::error_code const & ec)
 		{
 			auto host = self.lock();
 			if(host) {
@@ -596,7 +592,7 @@ void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 					} );
 				}
 			}
-		}));
+		});
 	}
 	catch (std::exception &e) {
 		LOG(ERROR) << "connect error:" << e.what();
