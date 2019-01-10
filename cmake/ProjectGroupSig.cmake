@@ -16,7 +16,7 @@ ExternalProject_Add(group_sig_lib
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME group_sig_lib.tgz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/deps/src/group_sig_lib.tgz
+    URL https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/libs/group_sig_lib.tgz
     URL_HASH SHA256=99d82282730654c587d142c772ca6bf79db9efb7f6709909874c7a3d9de4df1e
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
