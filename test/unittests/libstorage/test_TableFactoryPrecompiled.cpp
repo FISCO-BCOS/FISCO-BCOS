@@ -36,21 +36,12 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 {
 public:
     virtual ~MockMemoryTableFactory(){};
-
-    virtual dev::storage::Table::Ptr openTable(const std::string&, bool) override
-    {
-        return dev::storage::Table::Ptr();
-    }
 };
 
 class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
-
-    virtual Address registerPrecompiled(Precompiled::Ptr) override { return ++address; }
-
-    h160 address;
 };
 
 struct TableFactoryPrecompiledFixture
@@ -114,16 +105,6 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     addressOut.clear();
     abi.abiOut(&out, addressOut);
     BOOST_TEST(addressOut == Address(++addressCount));
-
-    auto tablePrecompiled =
-        std::dynamic_pointer_cast<TablePrecompiled>(context->getPrecompiled(addressOut));
-    auto memTable = tablePrecompiled->getTable();
-    auto entry = memTable->newEntry();
-    entry->setField("id", "张三");
-    entry->setField("item_id", "4");
-    entry->setField("item_name", "M5");
-    entry->setStatus(Entry::Status::NORMAL);
-    memTable->insert("张三", entry);
 }
 
 BOOST_AUTO_TEST_CASE(hash)
