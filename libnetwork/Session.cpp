@@ -215,9 +215,10 @@ void Session::write()
         {
             if (m_socket->isConnected())
             {
+                // asio::buffer referecne buffer, so buffer need alive before asio::buffer be used
                 server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
-                        boost::asio::placeholders::bytes_transferred, nullptr));
+                        boost::asio::placeholders::bytes_transferred, buffer));
             }
             else
             {
