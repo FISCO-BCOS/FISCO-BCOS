@@ -263,7 +263,7 @@ void Session::drop(DisconnectReason _reason)
 
     SESSION_LOG(INFO) << "drop, call and erase all callbackFunc in this session!";
     RecursiveGuard l(x_seq2Callback);
-    for (auto it : *m_seq2Callback)
+    for (auto& it : *m_seq2Callback)
     {
         if (it.second->timeoutHandler)
         {
