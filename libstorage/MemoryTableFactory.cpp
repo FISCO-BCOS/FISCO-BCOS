@@ -47,7 +47,6 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName)
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
-        STORAGE_LOG(TRACE) << "Table:" << tableName << " already open:" << it->second;
         return it->second;
     }
     auto tableInfo = make_shared<storage::TableInfo>();

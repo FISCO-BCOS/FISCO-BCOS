@@ -597,13 +597,16 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     /// return directly if it's an empty block
     if (working_block.getTransactionSize() == 0 && m_omitEmptyBlock)
     {
+        sealing.p_execContext = nullptr;
+        sealing.block = std::move(working_block);
         return;
     }
+
+    checkBlockValid(working_block);
 
     /// notify the next leader seal a new block
     notifySealing(working_block);
 
-    checkBlockValid(working_block);
     m_blockSync->noteSealingBlockNumber(working_block.header().number());
 
     /// ignore the signature verification of the transactions have already been verified in
