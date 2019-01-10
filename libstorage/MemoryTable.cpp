@@ -38,7 +38,7 @@ void dev::storage::MemoryTable::init(const std::string& tableName)
                        << LOG_KV("tableName", tableName);
 }
 
-Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
+inline Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -82,7 +82,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
     return std::make_shared<Entries>();
 }
 
-int dev::storage::MemoryTable::update(
+inline int dev::storage::MemoryTable::update(
     const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     try
@@ -125,7 +125,7 @@ int dev::storage::MemoryTable::update(
         for (auto i : indexes)
         {
             Entry::Ptr updateEntry = entries->get(i);
-            for (auto it : *(entry->fields()))
+            for (auto& it : *(entry->fields()))
             {
                 records.emplace_back(i, it.first, updateEntry->getField(it.first));
                 updateEntry->setField(it.first, it.second);
@@ -146,7 +146,7 @@ int dev::storage::MemoryTable::update(
     return 0;
 }
 
-int dev::storage::MemoryTable::insert(
+inline int dev::storage::MemoryTable::insert(
     const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options)
 {
     try
@@ -202,7 +202,7 @@ int dev::storage::MemoryTable::insert(
     return 1;
 }
 
-int dev::storage::MemoryTable::remove(
+inline int dev::storage::MemoryTable::remove(
     const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     if (!checkAuthority(options->origin))
@@ -251,7 +251,7 @@ int dev::storage::MemoryTable::remove(
 h256 dev::storage::MemoryTable::hash()
 {
     bytes data;
-    for (auto it : m_cache)
+    for (auto& it : m_cache)
     {
         if (it.second->dirty())
         {

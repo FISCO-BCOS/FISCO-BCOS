@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
     BOOST_CHECK(block.sigList().size() == node_num);
     std::vector<std::pair<u256, Signature>> sig_list = block.sigList();
     /// check the signature
-    for (auto item : sig_list)
+    for (auto &item : sig_list)
     {
         auto p = dev::recover(item.second, prepare_req.block_hash);
         BOOST_CHECK(!!p);

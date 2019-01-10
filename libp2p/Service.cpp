@@ -246,7 +246,7 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
         SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
                              << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
-        for (auto it : m_staticNodes)
+        for (auto& it : m_staticNodes)
         {
             if (it.second == p2pSession->nodeID())
             {
