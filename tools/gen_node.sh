@@ -133,8 +133,35 @@ gen_node_cert() {
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
     openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
+    cp $agpath/ca.crt $agpath/agency.crt $ndpath
+}
 
+generate_script_template()
+{
+    local filepath=$1
+    cat << EOF > "${filepath}"
+#!/bin/bash
+SHELL_FOLDER=\$(cd \$(dirname \$0);pwd)
 
+EOF
+    chmod +x ${filepath}
+}
+
+generate_node_scripts()
+{
+    local output=$1
+    generate_script_template "$output/start.sh"
+    cat << EOF >> "$output/start.sh"
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+cd \${SHELL_FOLDER}
+nohup \${fisco_bcos} -c config.ini&
+EOF
+    generate_script_template "$output/stop.sh"
+    cat << EOF >> "$output/stop.sh"
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+kill \${weth_pid}
+EOF
 }
 
 main()
@@ -157,6 +184,7 @@ main()
         fi
         break;
     done
+    generate_node_scripts "${output_dir}"
     cat ${key_path}/agency.crt >> ${output_dir}/${conf_path}/node.crt
     cat ${key_path}/ca.crt >> ${output_dir}/${conf_path}/node.crt
     rm ${logfile}
