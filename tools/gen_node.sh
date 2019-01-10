@@ -2,7 +2,7 @@
 
 set -e
 
-SHELL_FOLDER=$(cd $(dirname $0);pwd)
+# SHELL_FOLDER=$(cd $(dirname $0);pwd)
 current_dir=$(pwd)
 key_path=""
 output_dir="newNode"
@@ -115,7 +115,7 @@ gen_cert_secp256k1() {
 }
 
 gen_node_cert() {
-    if [ "" == "`openssl ecparam -list_curves 2>&1 | grep secp256k1`" ]; then
+    if [ "" == "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
         echo "openssl don't support secp256k1, please upgrade openssl!"
         exit -1
     fi

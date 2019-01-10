@@ -15,7 +15,7 @@ port_start=30300
 state_type=mpt 
 storage_type=LevelDB
 conf_path="conf"
-eth_path=
+bin_path=
 pkcs12_passwd=""
 make_tar=
 debug_log="false"
@@ -83,7 +83,7 @@ while getopts "f:l:o:p:e:P:t:iszhgT" option;do
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
     p) port_start=$OPTARG;;
-    e) eth_path=$OPTARG;;
+    e) bin_path=$OPTARG;;
     P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
        [[ "$pkcs12_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
         echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
@@ -105,7 +105,7 @@ done
 print_result()
 {
 echo "=============================================================="
-LOG_INFO "FISCO-BCOS Path   : $eth_path"
+LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 LOG_INFO "Start Port        : $port_start"
@@ -129,8 +129,6 @@ fail_message()
 EXIT_CODE=-1
 
 check_env() {
-    local version="$()"
-
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1.0)" ] || [ ! -z "$(openssl version | grep 2.6)" ] || {
         echo "please install openssl 1.0.2k-fips!"
         #echo "please install openssl 1.0.2 series!"
@@ -907,8 +905,8 @@ else
     help 
 fi
 
-if [ -z ${eth_path} ];then
-    eth_path=${output_dir}/${bcos_bin_name}
+if [ -z ${bin_path} ];then
+    bin_path=${output_dir}/${bcos_bin_name}
     Download=true
 fi
 
@@ -917,8 +915,8 @@ mkdir -p "$output_dir"
 
 if [ "${Download}" == "true" ];then
     echo "Downloading fisco-bcos binary..." 
-    curl -Lo ${eth_path} ${Download_Link}
-    chmod a+x ${eth_path}
+    curl -Lo ${bin_path} ${Download_Link}
+    chmod a+x ${bin_path}
 fi
 
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
@@ -1043,14 +1041,6 @@ for line in ${ip_array[*]};do
             cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
         fi
 
-        # gen sdk files
-        mkdir -p ${node_dir}/sdk/
-        # read_password
-        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${node_dir}/${conf_path}/node.crt" -inkey "${node_dir}/${conf_path}/node.key" -out "${node_dir}/sdk/keystore.p12"
-        cp ${output_dir}/cert/ca.crt ${node_dir}/sdk/
-        # gen_sdk_cert ${output_dir}/cert/agency ${node_dir}
-        # mv ${node_dir}/* ${node_dir}/sdk/
-
         if [ -n "$guomi_mode" ]; then
             nodeid=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         else
@@ -1083,6 +1073,15 @@ for line in ${ip_array[*]};do
     "
         ((++count))
     done
+    sdk_path="$output_dir/${ip}/sdk"
+    if [ ! -d ${sdk_path} ];then
+        gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">$output_dir/${logfile} 2>&1
+        rm node.json node.param node.private node.ca node.pubkey
+        mkdir -p ${sdk_path}/data/ && mv ${sdk_path}/*.* ${sdk_path}/data/
+        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${sdk_path}/data/node.crt" -inkey "${sdk_path}/data/node.key" -out "$output_dir/${ip}/sdk/keystore.p12"
+        cp ${output_dir}/cert/ca.crt ${sdk_path}/
+        cd $output_dir
+    fi
     ((++server_count))
 done 
 cd ..
@@ -1120,7 +1119,7 @@ for line in ${ip_array[*]};do
         start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} + 3 ))
     done
     generate_server_scripts "$output_dir/${ip}"
-    cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
+    cp "$bin_path" "$output_dir/${ip}/fisco-bcos"
     echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
