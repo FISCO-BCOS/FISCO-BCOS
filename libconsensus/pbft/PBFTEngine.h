@@ -96,12 +96,11 @@ public:
         if (m_notifyNextLeaderSeal)
         {
             /// represent that the latest block has been consensused
-            if (m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader)
+            if (m_timeManager.m_lastConsensusTime <= m_timeManager.m_startSealNextLeader)
             {
-                return (utcTime() - m_timeManager.m_lastConsensusTime) >=
-                       m_timeManager.m_intervalBlockTime;
+                return false;
             }
-            return false;
+            return true;
         }
         /// the block is sealed by the current leader
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;

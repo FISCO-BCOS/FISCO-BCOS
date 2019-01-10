@@ -70,15 +70,14 @@ public:
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
+    // only the leader can generate the latest block
     bool shouldHandleBlock() override
     {
-        return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1);
+        return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1) &&
+               &&(m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
-    bool reachBlockIntervalTime() override
-    {
-        return m_pbftEngine->reachBlockIntervalTime() || canFinishSealing();
-    }
+    bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
     bool canHandleBlockForNextLeader() override
@@ -87,15 +86,6 @@ protected:
     }
 
 private:
-    /**
-     * @brief : decide can finish sealing or not
-     *          the block is not an empty block(namely the txqueue size is equal to the
-     * transaction size of the block)
-     * @return true : can  finish sealing
-     * @return false : can't finish sealing
-     */
-    bool inline canFinishSealing() { return m_sealing.block.getTransactionSize() > 0; }
-
     /// reset block when view changes
     void resetBlockForViewChange()
     {

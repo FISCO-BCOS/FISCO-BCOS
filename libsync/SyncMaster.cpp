@@ -175,6 +175,7 @@ void SyncMaster::noteSealingBlockNumber(int64_t _number)
 {
     WriteGuard l(x_currentSealingNumber);
     m_currentSealingNumber = _number;
+    m_signalled.notify_all();
 }
 
 bool SyncMaster::isSyncing() const

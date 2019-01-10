@@ -46,13 +46,6 @@ public:
     {
         return m_rawPrepareCache.block_hash == req.block_hash;
     }
-    /// decide whether the block height of the specified prepare req is equal to the current prepare
-    /// req or not in case of solving the future prepare and the latest prepare concurrently
-    inline bool hasWorkingRawPrepare(PrepareReq const& req)
-    {
-        return m_rawPrepareCache.height == req.height;
-    }
-
     /// specified SignReq exists in the sign-cache or not?
     inline bool isExistSign(SignReq const& req)
     {

@@ -449,14 +449,6 @@ bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) 
         PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
         return false;
     }
-    /// in case of the future prepare and the current prepare has been solved concurrently
-    if (m_reqCache->hasWorkingRawPrepare(req))
-    {
-        PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Has the working prepare:"
-                              << "raw prepare cache = " << m_reqCache->rawPrepareCache().height
-                              << "[INFO]: " << oss.str();
-        return false;
-    }
     if (hasConsensused(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Consensused Prep: [INFO]:  " << oss.str();
@@ -973,7 +965,7 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
-        return false;
+        return true;
     }
     if (result == CheckResult::INVALID)
     {
@@ -1035,7 +1027,7 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
     if (result == CheckResult::FUTURE)
     {
         m_reqCache->addCommitReq(req);
-        return false;
+        return true;
     }
     if (result == CheckResult::INVALID)
     {
@@ -1315,7 +1307,8 @@ void PBFTEngine::handleFutureBlock()
 {
     Guard l(m_mutex);
     PrepareReq future_req = m_reqCache->futurePrepareCache();
-    if (future_req.height == m_consensusBlockNumber && future_req.view == m_view)
+    if (nodeIdx() == getLeader().second && future_req.height == m_consensusBlockNumber &&
+        future_req.view == m_view)
     {
         PBFTENGINE_LOG(INFO)
             << "[#handleFutureBlock] [myIdx/myNode/number/highNum/view/conNum/hash]:  " << nodeIdx()
