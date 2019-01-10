@@ -37,10 +37,6 @@ class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
-
-    virtual Address registerPrecompiled(BlockInfo, Precompiled::Ptr) { return ++address; }
-
-    h160 address;
 };
 
 class MockMemoryDB : public dev::storage::MemoryTable

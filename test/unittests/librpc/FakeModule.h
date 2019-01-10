@@ -70,7 +70,7 @@ public:
     void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const { return m_sessionInfos; }
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const override { return m_sessionInfos; }
 
     void asyncSendMessageByNodeID(
         NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession, dev::p2p::Options) override
@@ -97,7 +97,7 @@ public:
     }
 
     void setConnected() { m_connected = true; }
-    bool isConnected(NodeID const&) const { return m_connected; }
+    bool isConnected(NodeID const&) const override { return m_connected; }
 
 private:
     P2PSessionInfos m_sessionInfos;

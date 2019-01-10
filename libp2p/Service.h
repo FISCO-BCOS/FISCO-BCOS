@@ -88,9 +88,9 @@ public:
 
     virtual P2PSessionInfos sessionInfos() override;  ///< Only connected node
 
-    virtual P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) override;
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const override;
 
-    virtual bool isConnected(NodeID nodeID) override;
+    bool isConnected(NodeID const& nodeID) const override;
 
     virtual h512s getNodeListByGroupID(GROUP_ID groupID) override
     {
@@ -147,7 +147,7 @@ private:
     std::shared_ptr<dev::network::Host> m_host;
 
     std::unordered_map<NodeID, P2PSession::Ptr> m_sessions;
-    RecursiveMutex x_sessions;
+    mutable RecursiveMutex x_sessions;
 
     std::atomic<uint32_t> m_topicSeq = {0};
     std::shared_ptr<std::vector<std::string>> m_topics;
@@ -156,7 +156,7 @@ private:
     ///< key is the group that the node joins
     ///< value is the list of node members for the group
     ///< the data is currently statically loaded and not synchronized between nodes
-    RecursiveMutex x_nodeList;
+    mutable RecursiveMutex x_nodeList;
     std::map<GROUP_ID, h512s> m_groupID2NodeList;
 
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
