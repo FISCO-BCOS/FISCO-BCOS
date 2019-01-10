@@ -74,7 +74,7 @@ protected:
     bool shouldHandleBlock() override
     {
         return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1) &&
-               &&(m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
+               (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
     bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
