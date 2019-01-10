@@ -483,7 +483,8 @@ gen_sdk_cert() {
 generate_config_ini()
 {
     local output=${1}
-    local index=${2}
+    local ip=${2}
+    local begin_port=${start_ports[${ip//./}]}
     local node_groups=(${3//,/ })
     local group_conf_list=
     local prefix=""
@@ -503,14 +504,14 @@ generate_config_ini()
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    channel_listen_port=$(( port_start + 1 + index * 3 ))
+    channel_listen_port=$(( begin_port + 1))
     ;jsonrpc listen port
-    jsonrpc_listen_port=$(( port_start + 2 + index * 3 ))
+    jsonrpc_listen_port=$(( begin_port + 2))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( port_start + index * 3 ))
+    listen_port=$(( begin_port))
     ;nodes to connect
     $ip_list
 ;certificate rejected list		
@@ -972,6 +973,7 @@ ip_list=""
 count=0
 server_count=0
 groups=
+start_ports=
 groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
@@ -986,10 +988,10 @@ for line in ${ip_array[*]};do
     else
         echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     fi
-    
+    [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${i}"
+        node_dir="$output_dir/${ip}/node_${ip}_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
         [ -d "${node_dir}" ] && echo "${node_dir} exist! Please delete!" && exit 1
         
         while :
@@ -1076,7 +1078,8 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + i * 3 ))"
+        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} +  3 ))
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${start_ports[${ip//./}]} + 3 ))"
     "
         ((++count))
     done
@@ -1084,7 +1087,7 @@ for line in ${ip_array[*]};do
 done 
 cd ..
 
-
+start_ports=()
 echo "=============================================================="
 echo "Generating configurations..."
 generate_script_template "$output_dir/replace_all.sh"
@@ -1093,6 +1096,7 @@ for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
+    [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     if [ "${use_ip_param}" == "true" ];then
         echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
     else
@@ -1100,8 +1104,8 @@ for line in ${ip_array[*]};do
     fi
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${i}"
-        generate_config_ini "${node_dir}/config.ini" ${i} "${group_array[server_count]}"
+        node_dir="$output_dir/${ip}/node_${ip}_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
+        generate_config_ini "${node_dir}/config.ini" ${ip} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
@@ -1113,6 +1117,7 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
+        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} + 3 ))
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
