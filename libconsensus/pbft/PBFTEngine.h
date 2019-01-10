@@ -327,7 +327,7 @@ protected:
     }
 
     /// check the specified prepareReq is valid or not
-    bool isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
 
     /**
      * @brief: common check process when handle SignReq and CommitReq
@@ -387,8 +387,8 @@ protected:
         return CheckResult::VALID;
     }
 
-    bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
-    bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
     bool isValidViewChangeReq(
         ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss);
 

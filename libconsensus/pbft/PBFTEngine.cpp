@@ -442,40 +442,40 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
  * @return true: the specified prepareReq is valid
  * @return false: the specified prepareReq is invalid
  */
-bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistPrepare(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Duplicated Prep: [INFO]:  " << oss.str();
-        return false;
+        return CheckResult::INVALID;
     }
     if (hasConsensused(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Consensused Prep: [INFO]:  " << oss.str();
-        return false;
+        return CheckResult::INVALID;
     }
 
     if (isFutureBlock(req))
     {
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
         m_reqCache->addFuturePrepareCache(req);
-        return false;
+        return CheckResult::FUTURE;
     }
     if (!isValidLeader(req))
     {
-        return false;
+        return CheckResult::INVALID;
     }
     if (!isHashSavedAfterCommit(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Not saved after commit: [INFO]:  " << oss.str();
-        return false;
+        return CheckResult::INVALID;
     }
     if (!checkSign(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidPrepare] Invalid sig: [INFO]:  " << oss.str();
-        return false;
+        return CheckResult::INVALID;
     }
-    return true;
+    return CheckResult::VALID;
 }
 
 /// check miner list
@@ -710,9 +710,14 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
         << prepareReq.view << "/" << prepareReq.height << "/" << m_highestBlock.number() << "/"
         << m_consensusBlockNumber << "/" << endpoint << "/" << prepareReq.block_hash.abridged();
     /// check the prepare request is valid or not
-    if (!isValidPrepare(prepareReq, oss))
+    auto valid_ret = isValidPrepare(prepareReq, oss);
+    if (valid_ret == CheckResult::INVALID)
     {
         return false;
+    }
+    if (valid_ret == CheckResult::FUTURE)
+    {
+        return true;
     }
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
@@ -932,10 +937,14 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
         << "/" << pbftMsg.node_id.abridged() << "/" << pbftMsg.endpoint << "/"
         << sign_req.block_hash.abridged() << "\n";
 
-    valid = isValidSignReq(sign_req, oss);
-    if (!valid)
+    auto check_ret = isValidSignReq(sign_req, oss);
+    if (check_ret == CheckResult::INVALID)
     {
         return false;
+    }
+    if (check_ret == CheckResult::FUTURE)
+    {
+        return true;
     }
     m_reqCache->addSignReq(sign_req);
     checkAndCommit();
@@ -953,25 +962,20 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
  * @return true: check succeed
  * @return false: check failed
  */
-bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistSign(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InValidSignReq] Duplicated sign: [INFO]:  " << oss.str();
-        return false;
+        return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
     if (result == CheckResult::FUTURE)
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
-        return true;
     }
-    if (result == CheckResult::INVALID)
-    {
-        return false;
-    }
-    return true;
+    return result;
 }
 
 /**
@@ -997,10 +1001,14 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
         << m_view << "/" << pbftMsg.node_id.abridged() << "/" << pbftMsg.endpoint << "/"
         << commit_req.block_hash.abridged();
 
-    valid = isValidCommitReq(commit_req, oss);
-    if (!valid)
+    auto valid_ret = isValidCommitReq(commit_req, oss);
+    if (valid_ret == CheckResult::INVALID)
     {
         return false;
+    }
+    if (valid_ret == CheckResult::FUTURE)
+    {
+        return true;
     }
     m_reqCache->addCommitReq(commit_req);
     checkAndSave();
@@ -1016,24 +1024,19 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
  * @return true: the given commitReq is valid
  * @return false: the given commitReq is invalid
  */
-bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
 {
     if (m_reqCache->isExistCommit(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidCommitReq] Duplicated: [INFO]:  " << oss.str();
-        return false;
+        return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
     if (result == CheckResult::FUTURE)
     {
         m_reqCache->addCommitReq(req);
-        return true;
     }
-    if (result == CheckResult::INVALID)
-    {
-        return false;
-    }
-    return true;
+    return result;
 }
 
 bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
@@ -1307,8 +1310,7 @@ void PBFTEngine::handleFutureBlock()
 {
     Guard l(m_mutex);
     PrepareReq future_req = m_reqCache->futurePrepareCache();
-    if (nodeIdx() == getLeader().second && future_req.height == m_consensusBlockNumber &&
-        future_req.view == m_view)
+    if (future_req.height == m_consensusBlockNumber && future_req.view == m_view)
     {
         PBFTENGINE_LOG(INFO)
             << "[#handleFutureBlock] [myIdx/myNode/number/highNum/view/conNum/hash]:  " << nodeIdx()
