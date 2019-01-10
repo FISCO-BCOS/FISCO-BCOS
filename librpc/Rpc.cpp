@@ -856,7 +856,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
-        Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        /// move the overhead of transaction decode from rpc to txpool
+        Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::None);
         std::pair<h256, Address> ret = txPool->submit(tx);
 
         return toJS(ret.first);

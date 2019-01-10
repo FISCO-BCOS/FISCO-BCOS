@@ -155,7 +155,7 @@ protected:
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
     /// verify transcation
     virtual ImportResult verify(
-        Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
+        Transaction& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
     /// check nonce
     virtual bool isBlockLimitOrNonceOk(dev::eth::Transaction const& _ts, bool _needinsert) const;
     /// interface for filter check
