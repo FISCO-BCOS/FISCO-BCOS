@@ -121,12 +121,8 @@ public:
             {
                 fake_block.m_block.header().setParentHash(
                     m_blockChain[blockHeight - 1]->headerHash());
-                std::cout << "### setParent:" << toHex(m_blockChain[blockHeight - 1]->headerHash())
-                          << std::endl;
                 fake_block.m_block.header().setNumber(blockHeight);
             }
-            std::cout << "#### push back:" << toHex(fake_block.m_block.header().hash())
-                      << std::endl;
             m_blockHash[fake_block.m_block.header().hash()] = blockHeight;
             m_blockChain.push_back(std::make_shared<Block>(fake_block.m_block));
         }

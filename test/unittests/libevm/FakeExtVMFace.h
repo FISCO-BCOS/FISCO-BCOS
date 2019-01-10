@@ -134,8 +134,6 @@ public:
             result.status_code = EVMC_FAILURE;
         result.gas_left = static_cast<int64_t>(param.gas);
         copyToOptionalStorage(std::move(output), &result);
-        std::cout << "call result:" << (char*)result.output_data << std::endl;
-        std::cout << "call size:" << result.output_size << std::endl;
         return result;
     }
 
@@ -162,8 +160,6 @@ public:
             output = {std::move(fake_result_bytes), 0, fake_result_bytes.size()};
             result.create_address = toEvmC(m_newAddress);
             copyToOptionalStorage(std::move(output), &result);
-            std::cout << "create result:" << (char*)result.output_data << std::endl;
-            std::cout << "create size:" << result.output_size << std::endl;
         }
         return result;
     }
@@ -257,7 +253,6 @@ private:
     void copyToOptionalStorage(owning_bytes_ref&& _output_own_bytes, evmc_result* o_result)
     {
         owning_bytes_ref output_own_bytes(std::move(_output_own_bytes));
-        std::cout << "### size:" << output_own_bytes.size() << std::endl;
         o_result->output_data = output_own_bytes.data();
         o_result->output_size = output_own_bytes.size();
 
@@ -265,8 +260,6 @@ private:
         auto* data = evmc_get_optional_storage(o_result);
         static_assert(sizeof(bytes) <= sizeof(*data), "Vector is too big");
         new (data) bytes(output_own_bytes.takeBytes());
-
-        std::cout << "###data FINAL:" << (char*)data->pointer << std::endl;
         /// to avoid memory leak
         // Set the destructor to delete the vector.
         o_result->release = [](evmc_result const* _result) {
