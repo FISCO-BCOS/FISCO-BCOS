@@ -191,7 +191,7 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
         bytes data = fromHex(m_backupDB->lookup(key));
         if (data.empty())
         {
-            LOG(ERROR) << "reloadMsg failed";
+            LOG(DEBUG) << "reloadMsg failed";
             PBFTENGINE_LOG(WARNING)
                 << LOG_DESC("reloadMsg: Empty message stored") << LOG_KV("idx", nodeIdx())
                 << LOG_KV("nodeId", m_keyPair.pub().abridged());
