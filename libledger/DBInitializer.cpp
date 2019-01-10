@@ -68,11 +68,12 @@ void DBInitializer::initLevelDBStorage()
             leveldb::DB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
         if (!status.ok())
         {
-            DBInitializer_LOG(ERROR) << "[#initStorageDB] [openLevelDBStorage failed]";
-            throw std::runtime_error("open LevelDB failed");
+            DBInitializer_LOG(ERROR)
+                << "[#initStorageDB] [openLevelDBStorage failed], status = " << status.ToString();
+            throw std::runtime_error("open LevelDB failed, status = " + status.ToString());
         }
         DBInitializer_LOG(DEBUG) << "[#initStorageDB] [#initLevelDBStorage] [status]: "
-                                 << status.ok();
+                                 << status.ToString();
         std::shared_ptr<LevelDBStorage> leveldb_storage = std::make_shared<LevelDBStorage>();
         assert(leveldb_storage);
         std::shared_ptr<leveldb::DB> leveldb_handler = std::shared_ptr<leveldb::DB>(pleveldb);

@@ -89,17 +89,12 @@ protected:
 private:
     /**
      * @brief : decide can finish sealing or not
-     *          1. the block is not an empty block(namely the txqueue size is equal to the
+     *          the block is not an empty block(namely the txqueue size is equal to the
      * transaction size of the block)
-     *          2. the transaction pool is empty
      * @return true : can  finish sealing
      * @return false : can't finish sealing
      */
-    bool inline canFinishSealing()
-    {
-        return (m_sealing.block.getTransactionSize() > 0) &&
-               (m_txPool->status().current == m_sealing.block.getTransactionSize());
-    }
+    bool inline canFinishSealing() { return m_sealing.block.getTransactionSize() > 0; }
 
     /// reset block when view changes
     void resetBlockForViewChange()

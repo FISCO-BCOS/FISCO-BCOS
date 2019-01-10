@@ -135,8 +135,9 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
 
 void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 {
+    auto trans_num = block.getTransactionSize();
     ReadGuard l(m_lock);
-    for (size_t i = 0; i < block.getTransactionSize(); i++)
+    for (size_t i = 0; i < trans_num; i++)
     {
         /// force sender for the transaction
         auto p_tx = m_txsHash.find(block.transactions()[i].sha3());
@@ -233,6 +234,10 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
 bool TxPool::insert(Transaction const& _tx)
 {
     h256 tx_hash = _tx.sha3();
+    if (m_txsHash.find(tx_hash) != m_txsHash.end())
+    {
+        return true;
+    }
     TransactionQueue::iterator p_tx = m_txsQueue.emplace(_tx).first;
     m_txsHash[tx_hash] = p_tx;
     return true;
