@@ -77,23 +77,26 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
 
         return;
     }
-
-    auto handler = std::make_shared<ResponseCallback>();
-    handler->callbackFunc = callback;
-    if (options.timeout > 0)
+    if (callback)
     {
-        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
-            server->asioInterface()->newTimer(options.timeout);
+        auto handler = std::make_shared<ResponseCallback>();
+        handler->callbackFunc = callback;
+        if (options.timeout > 0)
+        {
+            std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
+                server->asioInterface()->newTimer(options.timeout);
 
-        auto session = std::weak_ptr<Session>(shared_from_this());
-        timeoutHandler->async_wait(boost::bind(&Session::onTimeout, shared_from_this(),
-            boost::asio::placeholders::error, message->seq()));
+            auto session = std::weak_ptr<Session>(shared_from_this());
+            timeoutHandler->async_wait(boost::bind(&Session::onTimeout, shared_from_this(),
+                boost::asio::placeholders::error, message->seq()));
 
-        handler->timeoutHandler = timeoutHandler;
-        handler->m_startTime = utcTime();
+            handler->timeoutHandler = timeoutHandler;
+            handler->m_startTime = utcTime();
+        }
+        addSeqCallback(message->seq(), handler);
     }
-
-    addSeqCallback(message->seq(), handler);
+    SESSION_LOG(TRACE) << "Session asyncSendMessage"
+                       << "seq2Callback.size=" << m_seq2Callback->size();
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
     message.reset();
@@ -216,7 +219,7 @@ void Session::write()
             {
                 server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
-                        boost::asio::placeholders::bytes_transferred, buffer));
+                        boost::asio::placeholders::bytes_transferred, nullptr));
             }
             else
             {

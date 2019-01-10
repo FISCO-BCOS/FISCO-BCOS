@@ -507,7 +507,7 @@ void SyncMaster::maintainPeersConnection()
 
             m_service->asyncSendMessageByNodeID(session.nodeID, packet.toMessage(m_protocolId),
                 CallbackFuncWithSession(), Options());
-            SYNC_LOG(ERROR) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
+            SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
                             << LOG_KV("number", int(currentNumber))
                             << LOG_KV("genesisHash", m_genesisHash)
                             << LOG_KV("currentHash", currentHash)
