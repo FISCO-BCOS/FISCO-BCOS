@@ -107,6 +107,19 @@ std::string Rpc::getPbftView(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getPbftView") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
+        if (!ledgerParam)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        }
+        auto consensusParam = ledgerParam->mutableConsensusParam();
+        std::string consensusType = consensusParam.consensusType;
+        if (consensusType != "pbft")
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::NoView, RPCMsg[RPCExceptionType::NoView]));
+        }
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
         {
