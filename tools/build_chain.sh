@@ -858,6 +858,7 @@ generate_server_scripts()
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+        if [[ \${directory} == *"sdk"* ]]; then continue;fi
         echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
     fi  
 done  
@@ -867,6 +868,7 @@ EOF
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+        if [[ \${directory} == *"sdk"* ]]; then continue;fi
         echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
     fi  
 done  
@@ -929,6 +931,7 @@ fi
 if [ "${use_ip_param}" == "true" ];then
     for i in `seq 0 ${#ip_array[*]}`;do
         agency_array[i]="agency"
+        group_array[i]=1
     done
 fi
 
@@ -981,11 +984,7 @@ for line in ${ip_array[*]};do
         LOG_WARN "Please check IP address: ${ip}"
     fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
-    if [ "${use_ip_param}" == "true" ];then
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
-    else
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    fi
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
@@ -1096,11 +1095,7 @@ for line in ${ip_array[*]};do
     num=${line#*:}
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
-    if [ "${use_ip_param}" == "true" ];then
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
-    else
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    fi
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
         node_dir="$output_dir/${ip}/node_${ip}_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
