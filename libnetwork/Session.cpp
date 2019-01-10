@@ -219,7 +219,7 @@ void Session::write()
             {
                 server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
-                        boost::asio::placeholders::bytes_transferred, nullptr));
+                        boost::asio::placeholders::bytes_transferred, buffer));
             }
             else
             {
@@ -262,7 +262,7 @@ void Session::drop(DisconnectReason _reason)
 
     SESSION_LOG(INFO) << "drop, call and erase all callbackFunc in this session!";
     RecursiveGuard l(x_seq2Callback);
-    for (auto it : *m_seq2Callback)
+    for (auto& it : *m_seq2Callback)
     {
         if (it.second->timeoutHandler)
         {
