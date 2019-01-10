@@ -187,7 +187,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
         return ImportResult::TxPoolNonceCheckFail;
 
     /// check transaction signature here when everything is ok
-    trans->sender();
+    trans.sender();
 
     /// TODO: filter check
     return ImportResult::Success;
