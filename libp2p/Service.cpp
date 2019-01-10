@@ -112,14 +112,15 @@ void Service::heartBeat()
         if ((it.first.address == m_host->tcpClient().address() &&
                 it.first.tcpPort == m_host->listenPort()))
         {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself")
-                               << LOG_KV("endpoint", it.first.name());
+            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself IP:Port same")
+                               << LOG_KV("endpoint", it.first.name())
+                               << LOG_KV("nodeID", it.second.abridged());
             continue;
         }
         /// exclude myself
         if (it.second == id())
         {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself")
+            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself nodeID same")
                                << LOG_KV("endpoint", it.first.name())
                                << LOG_KV("nodeID", it.second.abridged());
             continue;
@@ -246,7 +247,7 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
         SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
                              << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
-        for (auto it : m_staticNodes)
+        for (auto& it : m_staticNodes)
         {
             if (it.second == p2pSession->nodeID())
             {

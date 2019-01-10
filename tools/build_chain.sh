@@ -988,7 +988,7 @@ for line in ${ip_array[*]};do
     [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
+        node_dir="$output_dir/${ip}/node_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
         [ -d "${node_dir}" ] && echo "${node_dir} exist! Please delete!" && exit 1
         
         while :
@@ -1067,9 +1067,9 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} +  3 ))
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${start_ports[${ip//./}]} + 3 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${start_ports[${ip//./}]} ))"
     "
+        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} +  3 ))
         ((++count))
     done
     sdk_path="$output_dir/${ip}/sdk"
@@ -1098,7 +1098,7 @@ for line in ${ip_array[*]};do
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
+        node_dir="$output_dir/${ip}/node_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
         generate_config_ini "${node_dir}/config.ini" ${ip} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })

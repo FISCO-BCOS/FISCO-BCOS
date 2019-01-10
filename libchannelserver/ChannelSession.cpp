@@ -525,7 +525,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
 
             if (!_responseCallbacks.empty())
             {
-                for (auto it : _responseCallbacks)
+                for (auto& it : _responseCallbacks)
                 {
                     try
                     {
