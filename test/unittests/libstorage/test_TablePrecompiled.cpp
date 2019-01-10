@@ -38,7 +38,7 @@ class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
 public:
     virtual ~MockPrecompiledEngine() {}
 
-    virtual Address registerPrecompiled(BlockInfo, Precompiled::Ptr) { return ++address; }
+    virtual Address registerPrecompiled(Precompiled::Ptr) override { return ++address; }
 
     h160 address;
 };

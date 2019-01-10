@@ -36,6 +36,8 @@ set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
 if (${BUILD_SHARED_LIBS})
     set(BOOST_CXXFLAGS "cxxflags=-fPIC")
+else()
+    set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 endif()
 
 set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/src/boost/stage/lib/libboost_)
@@ -44,7 +46,6 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a 
         ${BOOST_LIB_PREFIX}unit_test_framework.a ${BOOST_LIB_PREFIX}log.a
         ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
-set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps

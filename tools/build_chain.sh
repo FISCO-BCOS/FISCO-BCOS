@@ -25,7 +25,6 @@ listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 bcos_bin_name=fisco-bcos
-osx=""
 guomi_mode=
 gm_conf_path="gmconf/"
 CUR_DIR=$(pwd)
@@ -140,7 +139,7 @@ check_env() {
         exit $EXIT_CODE
     }
     if [ ! -z "$(openssl version | grep reSSL)" ];then
-        osx="true"
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
 }
 
@@ -261,13 +260,8 @@ gen_cert_secp256k1() {
     openssl genpkey -paramfile $certpath/${type}.param -out $certpath/${type}.key
     openssl pkey -in $certpath/${type}.key -pubout -out $certpath/${type}.pubkey
     openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
-    if [ -z "${osx}"];then
     openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $capath/agency.key -CA $capath/agency.crt\
         -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $capath/cert.cnf
-    else
-    openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $capath/agency.key -CA $capath/agency.crt\
-        -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $capath/cert.cnf
-    fi
     openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
     rm -f $certpath/${type}.csr
 }

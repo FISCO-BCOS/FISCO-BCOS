@@ -107,7 +107,7 @@ void Service::heartBeat()
 
     // Reconnect all nodes
     size_t connectedCount = 0;
-    for (auto it : staticNodes)
+    for (auto& it : staticNodes)
     {
         if ((it.first.address == m_host->tcpClient().address() &&
                 it.first.tcpPort == m_host->listenPort()))

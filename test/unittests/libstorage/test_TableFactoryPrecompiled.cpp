@@ -37,7 +37,7 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 public:
     virtual ~MockMemoryTableFactory(){};
 
-    virtual dev::storage::Table::Ptr openTable(h256, int, const std::string&)
+    virtual dev::storage::Table::Ptr openTable(const std::string&, bool) override
     {
         return dev::storage::Table::Ptr();
     }
@@ -48,7 +48,7 @@ class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
 public:
     virtual ~MockPrecompiledEngine() {}
 
-    virtual Address registerPrecompiled(BlockInfo, Precompiled::Ptr) { return ++address; }
+    virtual Address registerPrecompiled(Precompiled::Ptr) override { return ++address; }
 
     h160 address;
 };
