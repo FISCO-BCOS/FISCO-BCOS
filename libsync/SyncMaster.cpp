@@ -292,8 +292,8 @@ void SyncMaster::maintainPeersStatus()
             // no need: maxPeerNumber - currentNumber <= 0
             SYNCLOG(TRACE) << "[Download] No need to download when mining or no need "
                               "[currentNumber/currentSealingNumber/maxPeerNumber]: "
-                           << currentNumber << "/" << m_currentSealingNumber << "/" << maxPeerNumber
-                           << endl;
+                           << currentNumber << "/" << m_currentSealingNumber << "/"
+                           << maxPeerNumber;
             return;  // no need to sync
         }
     }

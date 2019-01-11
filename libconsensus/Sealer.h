@@ -125,8 +125,8 @@ protected:
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
-        bool enough = ((tx_num >= maxTxsCanSeal) && canHandleBlockForNextLeader()) ||
-                      reachBlockIntervalTime();
+        bool enough =
+            canHandleBlockForNextLeader() && (tx_num >= maxTxsCanSeal || reachBlockIntervalTime());
         if (enough)
         {
             SEAL_LOG(DEBUG) << "[#checkTxsEnough] Tx enough: [txNum]: " << tx_num;
