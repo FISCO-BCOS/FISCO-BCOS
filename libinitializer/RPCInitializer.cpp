@@ -32,8 +32,6 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 0);
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                               << LOG_DESC("initConfig for RPCInitializer failed!");
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
                      << LOG_DESC(
                             "initConfig for RPCInitializer failed! Invalid ListenPort for RPC!")
