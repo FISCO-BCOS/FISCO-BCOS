@@ -43,6 +43,7 @@ public:
         bytes _bytes, Address const& _contractAddress = Address());
     TransactionReceipt(TransactionReceipt const& _other);
     h256 const& stateRoot() const { return m_stateRoot; }
+    void setStateRoot(h256 const& _stateRoot) { m_stateRoot = _stateRoot; }
     u256 const& gasUsed() const { return m_gasUsed; }
     Address const& contractAddress() const { return m_contractAddress; }
     LogBloom const& bloom() const { return m_bloom; }
