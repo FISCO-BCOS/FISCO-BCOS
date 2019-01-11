@@ -406,10 +406,28 @@ protected:
     }
 
     template <typename T>
-    inline bool isFutureBlock(T const& req) const
+    inline bool isFuturePrepare(T const& req) const
     {
         if (req.height > m_consensusBlockNumber ||
             (req.height == m_consensusBlockNumber && req.view > m_view))
+        {
+            PBFTENGINE_LOG(DEBUG) << "[#FutureBlock] [height/consNum/reqView/Cview]:  "
+                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
+                                  << "/" << m_view;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @brief : decide the sign or commit request is the future request or not
+     *          1. the block number is no smalller than the current consensused block number
+     *          2. or the view is no smaller than the current consensused block number
+     */
+    template <typename T>
+    inline bool isFutureBlock(T const& req) const
+    {
+        if (req.height >= m_consensusBlockNumber || req.view > m_view)
         {
             PBFTENGINE_LOG(DEBUG) << "[#FutureBlock] [height/consNum/reqView/Cview]:  "
                                   << req.height << "/" << m_consensusBlockNumber << "/" << req.view

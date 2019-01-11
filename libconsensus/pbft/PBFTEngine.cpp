@@ -455,7 +455,7 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
         return CheckResult::INVALID;
     }
 
-    if (isFutureBlock(req))
+    if (isFuturePrepare(req))
     {
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
         m_reqCache->addFuturePrepareCache(req);
@@ -841,6 +841,7 @@ void PBFTEngine::checkAndSave()
             if (ret == CommitResult::OK)
             {
                 dropHandledTransactions(*p_block);
+                m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache().height);
                 PBFTENGINE_LOG(DEBUG)
                     << "[#CommitBlock Succ:] [myIdx/myNode/idx/nodeId/number/hash/timecost]:  "
                     << nodeIdx() << "/" << m_keyPair.pub().abridged() << "/"
@@ -856,13 +857,12 @@ void PBFTEngine::checkAndSave()
                     << "/" << m_keyPair.pub().abridged() << "/" << m_highestBlock.number() << "/"
                     << p_block->blockHeader().number() << "/"
                     << p_block->blockHeader().hash().abridged();
-                /// note blocksync to sync
+                /// note block number to the sync
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(*p_block);
             }
             /// clear caches to in case of repeated commit
-            m_reqCache->clearAllExceptCommitCache();
-            m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
+            m_reqCache->delCacheExceptPrepare(m_reqCache->prepareCache().block_hash);
         }
         else
         {
@@ -901,7 +901,6 @@ void PBFTEngine::reportBlock(Block const& block)
             m_reqCache->delInvalidViewChange(m_highestBlock);
         }
         resetConfig();
-        m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
         PBFTENGINE_LOG(INFO) << "^^^^Report: number= " << m_highestBlock.number()
                              << ", idx= " << m_highestBlock.sealer()

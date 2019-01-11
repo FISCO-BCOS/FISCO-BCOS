@@ -185,6 +185,20 @@ public:
     }
     /// delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
     void delCache(h256 const& hash);
+    /// update the sign cache and commit cache immediately
+    /// in case of that the commit/sign requests with the same hash are solved in
+    /// handleCommitMsg/handleSignMsg again
+    void delCacheExceptPrepare(h256 const& hash)
+    {
+        /// delete from sign cache
+        auto psign = m_signCache.find(hash);
+        if (psign != m_signCache.end())
+            m_signCache.erase(psign);
+        /// delete from commit cache
+        auto pcommit = m_commitCache.find(hash);
+        if (pcommit != m_commitCache.end())
+            m_commitCache.erase(pcommit);
+    }
     inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);

@@ -34,14 +34,7 @@ namespace consensus
 void PBFTReqCache::delCache(h256 const& hash)
 {
     PBFTReqCache_LOG(DEBUG) << "[delCache] [hash]: " << hash.abridged();
-    /// delete from sign cache
-    auto psign = m_signCache.find(hash);
-    if (psign != m_signCache.end())
-        m_signCache.erase(psign);
-    /// delete from commit cache
-    auto pcommit = m_commitCache.find(hash);
-    if (pcommit != m_commitCache.end())
-        m_commitCache.erase(pcommit);
+    delCacheExceptPrepare(hash);
     /// delete from prepare cache
     if (hash == m_prepareCache.block_hash)
         m_prepareCache.clear();
