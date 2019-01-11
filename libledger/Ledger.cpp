@@ -134,10 +134,10 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
 
 void Ledger::initTxPoolConfig(ptree const& pt)
 {
-    m_param->mutableTxPoolParam().txPoolLimit =
-        pt.get<uint64_t>("tx_pool.limit", SYNC_TX_POOL_SIZE_DEFAULT);
     try
     {
+        m_param->mutableTxPoolParam().txPoolLimit =
+            pt.get<uint64_t>("tx_pool.limit", SYNC_TX_POOL_SIZE_DEFAULT);
         Ledger_LOG(DEBUG) << LOG_BADGE("initTxPoolConfig")
                           << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
     }
@@ -267,7 +267,6 @@ bool Ledger::initTxPool()
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initTxPool")
                       << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
-    ;
     if (!m_blockChain)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool Failed");
