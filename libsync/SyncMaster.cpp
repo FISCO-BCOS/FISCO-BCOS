@@ -487,7 +487,9 @@ void SyncMaster::maintainPeersConnection()
     // If myself is not in groupMembers, ignore all peers
     bool isMyselfInGroup = false;
     for (auto const& member : groupMembers)
+    {
         isMyselfInGroup |= (m_nodeId == member);
+    }
     if (!isMyselfInGroup)
     {
         // Delete all peers
@@ -524,7 +526,7 @@ void SyncMaster::maintainPeersConnection()
 
             m_service->asyncSendMessageByNodeID(
                 member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-            SYNC_LOG(ERROR) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
+            SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
                             << LOG_KV("number", int(currentNumber))
                             << LOG_KV("genesisHash", m_genesisHash)
                             << LOG_KV("currentHash", currentHash)
