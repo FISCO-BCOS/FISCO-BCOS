@@ -22,6 +22,7 @@
 
 #include "Storage.h"
 #include "Table.h"
+#include <libdevcore/Guards.h>
 
 namespace dev
 {
@@ -64,6 +65,8 @@ private:
     std::map<std::string, Entries::Ptr> m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;
+
+    mutable dev::SharedMutex x_table;
 };
 
 }  // namespace storage

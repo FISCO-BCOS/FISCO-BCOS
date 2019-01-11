@@ -40,6 +40,7 @@ void dev::storage::MemoryTable::init(const std::string& tableName)
 
 Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
 {
+    ReadGuard l(x_table);
     try
     {
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -85,6 +86,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
 int dev::storage::MemoryTable::update(
     const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options)
 {
+    WriteGuard l(x_table);
     try
     {
         if (!checkAuthority(options->origin))
@@ -149,6 +151,7 @@ int dev::storage::MemoryTable::update(
 int dev::storage::MemoryTable::insert(
     const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options)
 {
+    WriteGuard l(x_table);
     try
     {
         if (!checkAuthority(options->origin))
@@ -205,6 +208,7 @@ int dev::storage::MemoryTable::insert(
 int dev::storage::MemoryTable::remove(
     const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
+    WriteGuard l(x_table);
     if (!checkAuthority(options->origin))
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")

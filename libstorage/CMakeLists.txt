@@ -4,4 +4,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(storage ${SRC_LIST} ${HEADERS})
 target_link_libraries(storage PRIVATE blockverifier ethcore)
-target_link_libraries(storage PUBLIC devcore JsonCpp)
+target_link_libraries(storage PUBLIC devcore JsonCpp Boost::Thread)
