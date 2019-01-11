@@ -70,20 +70,6 @@ bool PBFTEngine::shouldSeal()
     std::pair<bool, IDXTYPE> ret = getLeader();
     if (!ret.first)
         return false;
-    /// fast view change
-    if (ret.second != nodeIdx())
-    {
-        /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
-        /// is not connect to leader.
-        h512 node_id = getMinerByIndex(ret.second);
-        if (node_id != h512() && !m_service->isConnected(node_id))
-        {
-            m_timeManager.m_lastConsensusTime = 0;
-            m_timeManager.m_lastSignTime = 0;
-            m_signalled.notify_all();
-        }
-        return false;
-    }
     if (m_reqCache->committedPrepareCache().height == m_consensusBlockNumber)
     {
         if (m_reqCache->rawPrepareCache().height != m_consensusBlockNumber)
