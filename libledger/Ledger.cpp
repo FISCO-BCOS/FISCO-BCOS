@@ -87,7 +87,8 @@ void Ledger::initConfig(std::string const& configPath)
     try
     {
         Ledger_LOG(INFO) << LOG_BADGE("initConfig")
-                         << LOG_DESC("initConsensusConfig/initDBConfig/initTxConfig");
+                         << LOG_DESC("initConsensusConfig/initDBConfig/initTxConfig")
+                         << LOG_KV("configFile", configPath);
         ptree pt;
         /// read the configuration file for a specified group
         read_ini(configPath, pt);
@@ -133,9 +134,10 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
 
 void Ledger::initTxPoolConfig(ptree const& pt)
 {
-    m_param->mutableTxPoolParam().txPoolLimit = pt.get<uint64_t>("tx_pool.limit", 102400);
+    m_param->mutableTxPoolParam().txPoolLimit =
+        pt.get<uint64_t>("tx_pool.limit", SYNC_TX_POOL_SIZE_DEFAULT);
     Ledger_LOG(DEBUG) << LOG_BADGE("initTxPoolConfig")
-                      << LOG_KV("limit", m_param->mutableTxPoolParam().txPoolLimit);
+                      << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
 }
 
 /// init consensus configurations:
@@ -193,10 +195,18 @@ void Ledger::initConsensusConfig(ptree const& pt)
 /// 1. idleWaitMs: default is 30ms
 void Ledger::initSyncConfig(ptree const& pt)
 {
-    m_param->mutableSyncParam().idleWaitMs =
-        pt.get<unsigned>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
+    try
+    {
+        m_param->mutableSyncParam().idleWaitMs =
+            pt.get<unsigned>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
+        Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                          << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
+    }
+    catch (std::exception& e)
+    {
+        Ledger_LOG(ERROR) << LOG_BADGE("initSyncConfig") << LOG_DESC("idleWaitMs invalid");
+        exit(1);
+    }
 }
 
 /// init db related configurations:
@@ -247,7 +257,9 @@ void Ledger::initMark()
 bool Ledger::initTxPool()
 {
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initTxPool");
+    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initTxPool")
+                      << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
+    ;
     if (!m_blockChain)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool Failed");
@@ -410,7 +422,8 @@ bool Ledger::consensusInitFactory()
 /// init sync
 bool Ledger::initSync()
 {
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initSync");
+    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initSync")
+                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
     if (!m_txPool || !m_blockChain || !m_blockVerifier)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("#initSync Failed");
