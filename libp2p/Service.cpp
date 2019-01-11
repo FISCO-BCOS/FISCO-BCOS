@@ -109,19 +109,11 @@ void Service::heartBeat()
     size_t connectedCount = 0;
     for (auto& it : staticNodes)
     {
-        if ((it.first.address == m_host->tcpClient().address() &&
-                it.first.tcpPort == m_host->listenPort()))
-        {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself IP:Port same")
-                               << LOG_KV("endpoint", it.first.name())
-                               << LOG_KV("nodeID", it.second.abridged());
-            continue;
-        }
         /// exclude myself
         if (it.second == id())
         {
             SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself nodeID same")
-                               << LOG_KV("endpoint", it.first.name())
+                               << LOG_KV("remote endpoint", it.first.name())
                                << LOG_KV("nodeID", it.second.abridged());
             continue;
         }

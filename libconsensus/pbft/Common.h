@@ -78,7 +78,7 @@ struct PBFTMsgPacket
     bool operator==(PBFTMsgPacket const& msg)
     {
         return node_idx == msg.node_idx && node_id == msg.node_id && packet_id == msg.packet_id &&
-               data == msg.data && timestamp == msg.timestamp;
+               data == msg.data;
     }
     bool operator!=(PBFTMsgPacket const& msg) { return !operator==(msg); }
     /**
