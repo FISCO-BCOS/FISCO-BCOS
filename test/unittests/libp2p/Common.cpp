@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     std::map<NodeIPEndpoint, bool> m_endpoint_map;
     m_endpoint_map[m_endpoint] = true;
     BOOST_CHECK(m_endpoint_map.size() == 1);
-    m_endpoint_map[m_endpoint2] == false;
+    m_endpoint_map[m_endpoint2] = false;
     BOOST_CHECK(m_endpoint_map.size() == 2);
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == false);
     m_endpoint_map[NodeIPEndpoint(bi::address::from_string("127.0.0.1"), port, port)] = true;

@@ -107,20 +107,13 @@ void Service::heartBeat()
 
     // Reconnect all nodes
     size_t connectedCount = 0;
-    for (auto it : staticNodes)
+    for (auto& it : staticNodes)
     {
-        if ((it.first.address == m_host->tcpClient().address() &&
-                it.first.tcpPort == m_host->listenPort()))
-        {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself")
-                               << LOG_KV("endpoint", it.first.name());
-            continue;
-        }
         /// exclude myself
         if (it.second == id())
         {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself")
-                               << LOG_KV("endpoint", it.first.name())
+            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself nodeID same")
+                               << LOG_KV("remote endpoint", it.first.name())
                                << LOG_KV("nodeID", it.second.abridged());
             continue;
         }
@@ -246,7 +239,7 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
         SERVICE_LOG(WARNING) << LOG_DESC("onDisconnect") << LOG_KV("errorCode", e.errorCode())
                              << LOG_KV("what", boost::diagnostic_information(e));
         RecursiveGuard l(x_nodes);
-        for (auto it : m_staticNodes)
+        for (auto& it : m_staticNodes)
         {
             if (it.second == p2pSession->nodeID())
             {
@@ -701,7 +694,7 @@ P2PSessionInfos Service::sessionInfos()
     return infos;
 }
 
-P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID)
+P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
 {
     std::pair<GROUP_ID, MODULE_ID> ret = dev::eth::getGroupAndProtocol(_protocolID);
     P2PSessionInfos infos;
@@ -762,20 +755,14 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
     return nodeList;
 }
 
-bool Service::isConnected(NodeID nodeID)
+bool Service::isConnected(NodeID const& nodeID) const
 {
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
 
-    if (it == m_sessions.end())
+    if (it != m_sessions.end() && it->second->actived())
     {
-        return false;
+        return true;
     }
-
-    if (!it->second->actived())
-    {
-        return false;
-    }
-
-    return true;
+    return false;
 }

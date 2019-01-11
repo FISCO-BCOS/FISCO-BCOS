@@ -217,7 +217,7 @@ void ChannelRPCServer::onDisconnect(
         std::lock_guard<std::mutex> lockSession(_sessionMutex);
         std::lock_guard<std::mutex> lockSeqMutex(_seqMutex);
 
-        for (auto it : _sessions)
+        for (auto& it : _sessions)
         {
             if (it.second == session)
             {
@@ -227,7 +227,7 @@ void ChannelRPCServer::onDisconnect(
             }
         }
 
-        for (auto it : _seq2session)
+        for (auto& it : _seq2session)
         {
             if (it.second == session)
             {
@@ -720,7 +720,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
         }
 
         dev::channel::TopicChannelMessage::Ptr response;
-        for (auto it : activedSessions)
+        for (auto& it : activedSessions)
         {
             dev::channel::Message::Ptr responseMessage = it->sendMessage(message, 0);
 
@@ -762,7 +762,7 @@ void ChannelRPCServer::updateHostTopics()
     auto allTopics = std::make_shared<std::vector<std::string> >();
 
     std::lock_guard<std::mutex> lock(_sessionMutex);
-    for (auto it : _sessions)
+    for (auto& it : _sessions)
     {
         auto topics = it.second->topics();
         allTopics->insert(allTopics->end(), topics->begin(), topics->end());
@@ -777,7 +777,7 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
     std::vector<dev::channel::ChannelSession::Ptr> activedSessions;
 
     std::lock_guard<std::mutex> lock(_sessionMutex);
-    for (auto it : _sessions)
+    for (auto& it : _sessions)
     {
         if (it.second->topics()->empty() || !it.second->actived())
         {

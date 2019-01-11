@@ -15,7 +15,7 @@ port_start=30300
 state_type=mpt 
 storage_type=LevelDB
 conf_path="conf"
-eth_path=
+bin_path=
 pkcs12_passwd=""
 make_tar=
 debug_log="false"
@@ -25,7 +25,6 @@ listen_ip="127.0.0.1"
 Download=false
 Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 bcos_bin_name=fisco-bcos
-
 guomi_mode=
 gm_conf_path="gmconf/"
 CUR_DIR=$(pwd)
@@ -84,7 +83,7 @@ while getopts "f:l:o:p:e:P:t:iszhgT" option;do
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
     p) port_start=$OPTARG;;
-    e) eth_path=$OPTARG;;
+    e) bin_path=$OPTARG;;
     P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
        [[ "$pkcs12_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
         echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
@@ -106,7 +105,7 @@ done
 print_result()
 {
 echo "=============================================================="
-LOG_INFO "FISCO-BCOS Path   : $eth_path"
+LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 LOG_INFO "Start Port        : $port_start"
@@ -130,13 +129,16 @@ fail_message()
 EXIT_CODE=-1
 
 check_env() {
-    [ ! -z "`openssl version 2>&1 | grep 1.0.2`" ] || [ ! -z "`openssl version 2>&1 | grep 1.1.0`" ] || {
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1.0)" ] || [ ! -z "$(openssl version | grep 2.6)" ] || {
         echo "please install openssl 1.0.2k-fips!"
         #echo "please install openssl 1.0.2 series!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
         exit $EXIT_CODE
     }
+    if [ ! -z "$(openssl version | grep reSSL)" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
+    fi
 }
 
 # TASSL env
@@ -479,7 +481,8 @@ gen_sdk_cert() {
 generate_config_ini()
 {
     local output=${1}
-    local index=${2}
+    local ip=${2}
+    local begin_port=${start_ports[${ip//./}]}
     local node_groups=(${3//,/ })
     local group_conf_list=
     local prefix=""
@@ -499,14 +502,14 @@ generate_config_ini()
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    channel_listen_port=$(( port_start + 1 + index * 3 ))
+    channel_listen_port=$(( begin_port + 1))
     ;jsonrpc listen port
-    jsonrpc_listen_port=$(( port_start + 2 + index * 3 ))
+    jsonrpc_listen_port=$(( begin_port + 2))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( port_start + index * 3 ))
+    listen_port=$(( begin_port))
     ;nodes to connect
     $ip_list
 ;certificate rejected list		
@@ -785,7 +788,7 @@ generate_node_scripts()
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
-nohup setsid \${fisco_bcos} -c config.ini&
+nohup \${fisco_bcos} -c config.ini&
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
@@ -855,6 +858,7 @@ generate_server_scripts()
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+        if [[ \${directory} == *"sdk"* ]]; then continue;fi
         echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
     fi  
 done  
@@ -864,6 +868,7 @@ EOF
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+        if [[ \${directory} == *"sdk"* ]]; then continue;fi
         echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
     fi  
 done  
@@ -902,8 +907,8 @@ else
     help 
 fi
 
-if [ -z ${eth_path} ];then
-    eth_path=${output_dir}/${bcos_bin_name}
+if [ -z ${bin_path} ];then
+    bin_path=${output_dir}/${bcos_bin_name}
     Download=true
 fi
 
@@ -912,8 +917,8 @@ mkdir -p "$output_dir"
 
 if [ "${Download}" == "true" ];then
     echo "Downloading fisco-bcos binary..." 
-    curl -Lo ${eth_path} ${Download_Link}
-    chmod a+x ${eth_path}
+    curl -Lo ${bin_path} ${Download_Link}
+    chmod a+x ${bin_path}
 fi
 
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
@@ -926,6 +931,7 @@ fi
 if [ "${use_ip_param}" == "true" ];then
     for i in `seq 0 ${#ip_array[*]}`;do
         agency_array[i]="agency"
+        group_array[i]=1
     done
 fi
 
@@ -968,6 +974,7 @@ ip_list=""
 count=0
 server_count=0
 groups=
+start_ports=
 groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
@@ -977,15 +984,11 @@ for line in ${ip_array[*]};do
         LOG_WARN "Please check IP address: ${ip}"
     fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
-    if [ "${use_ip_param}" == "true" ];then
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
-    else
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    fi
-    
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${i}"
+        node_dir="$output_dir/${ip}/node_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
         [ -d "${node_dir}" ] && echo "${node_dir} exist! Please delete!" && exit 1
         
         while :
@@ -1037,14 +1040,6 @@ for line in ${ip_array[*]};do
             cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
         fi
 
-        # gen sdk files
-        mkdir -p ${node_dir}/sdk/
-        # read_password
-        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${node_dir}/${conf_path}/node.crt" -inkey "${node_dir}/${conf_path}/node.key" -out "${node_dir}/sdk/keystore.p12"
-        cp ${output_dir}/cert/ca.crt ${node_dir}/sdk/
-        # gen_sdk_cert ${output_dir}/cert/agency ${node_dir}
-        # mv ${node_dir}/* ${node_dir}/sdk/
-
         if [ -n "$guomi_mode" ]; then
             nodeid=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         else
@@ -1072,15 +1067,25 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + i * 3 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${start_ports[${ip//./}]} ))"
     "
+        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} +  3 ))
         ((++count))
     done
+    sdk_path="$output_dir/${ip}/sdk"
+    if [ ! -d ${sdk_path} ];then
+        gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">$output_dir/${logfile} 2>&1
+        rm node.json node.param node.private node.ca node.pubkey
+        mkdir -p ${sdk_path}/data/ && mv ${sdk_path}/*.* ${sdk_path}/data/
+        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${sdk_path}/data/node.crt" -inkey "${sdk_path}/data/node.key" -out "$output_dir/${ip}/sdk/keystore.p12"
+        cp ${output_dir}/cert/ca.crt ${sdk_path}/
+        cd $output_dir
+    fi
     ((++server_count))
 done 
 cd ..
 
-
+start_ports=()
 echo "=============================================================="
 echo "Generating configurations..."
 generate_script_template "$output_dir/replace_all.sh"
@@ -1089,15 +1094,12 @@ for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
-    if [ "${use_ip_param}" == "true" ];then
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
-    else
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    fi
+    [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${i}"
-        generate_config_ini "${node_dir}/config.ini" ${i} "${group_array[server_count]}"
+        node_dir="$output_dir/${ip}/node_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
+        generate_config_ini "${node_dir}/config.ini" ${ip} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
@@ -1109,9 +1111,10 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
+        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} + 3 ))
     done
     generate_server_scripts "$output_dir/${ip}"
-    cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
+    cp "$bin_path" "$output_dir/${ip}/fisco-bcos"
     echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))

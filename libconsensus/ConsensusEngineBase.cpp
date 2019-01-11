@@ -76,7 +76,7 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     {
         ENGINE_LOG(DEBUG) << "[#checkBlockValid] Future timestamp: [timestamp/utcTime/hash]:  "
                           << block.blockHeader().timestamp() << "/" << utcTime() << "/"
-                          << block_hash << std::endl;
+                          << block_hash;
         BOOST_THROW_EXCEPTION(DisabledFutureTime() << errinfo_comment("Future time Disabled"));
     }
     /// check the block number
@@ -84,21 +84,19 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     {
         ENGINE_LOG(DEBUG) << "[#checkBlockValid] Old height: [blockNumber/number/hash]:  "
                           << block.blockHeader().number() << "/" << m_blockChain->number() << "/"
-                          << block_hash << std::endl;
+                          << block_hash;
         BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
     }
     /// check existence of this block (Must non-exist)
     if (blockExists(block_hash))
     {
-        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Block already exist: [hash]:  " << block_hash
-                          << std::endl;
+        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Block already exist: [hash]:  " << block_hash;
         BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
     }
     /// check the existence of the parent block (Must exist)
     if (!blockExists(block.blockHeader().parentHash()))
     {
-        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Parent doesn't exist: [hash]:  " << block_hash
-                          << std::endl;
+        ENGINE_LOG(DEBUG) << "[#checkBlockValid] Parent doesn't exist: [hash]:  " << block_hash;
         BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
     }
     if (block.blockHeader().number() > 1)
@@ -109,8 +107,7 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
             ENGINE_LOG(DEBUG) << "[#checkBlockValid] Invalid block for unconsistent parentHash: "
                                  "[block.parentHash/parentHash]:  "
                               << toHex(block.blockHeader().parentHash()) << "/"
-                              << toHex(m_blockChain->numberHash(block.blockHeader().number() - 1))
-                              << std::endl;
+                              << toHex(m_blockChain->numberHash(block.blockHeader().number() - 1));
         }
     }
 }
