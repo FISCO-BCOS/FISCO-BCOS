@@ -1317,6 +1317,8 @@ void PBFTEngine::handleFutureBlock()
             << "/" << m_highestBlock.number() << "/" << m_view << "/" << m_consensusBlockNumber
             << "/" << m_reqCache->futurePrepareCache().block_hash.abridged();
         handlePrepareMsg(future_req);
+        /// add checkAndSave here to in case of that the node has collected over 2f sign packets
+        checkAndSave();
         m_reqCache->resetFuturePrepare();
     }
 }
