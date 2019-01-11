@@ -1783,7 +1783,7 @@ int main(int argc, char** argv)
 					new rpc::Eth(*web3.ethereum(), *accountHolder.get()),
 					nullptr, //new rpc::LevelDB(),
 					nullptr, //new rpc::Whisper(web3, { }),
-					new rpc::Net(web3),
+					nullptr, //new rpc::Net(web3),
 					new rpc::Web3(web3.clientVersion()),
 					nullptr, //new rpc::Personal(keyManager, *accountHolder, *web3.ethereum()),
 					nullptr, //new rpc::AdminEth(*web3.ethereum(), *gasPricer.get(), keyManager, *sessionManager.get()),
