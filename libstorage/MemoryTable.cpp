@@ -38,7 +38,8 @@ void dev::storage::MemoryTable::init(const std::string& tableName)
                        << LOG_KV("tableName", tableName);
 }
 
-inline Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
+inline Entries::Ptr dev::storage::MemoryTable::select(
+    const std::string& key, Condition::Ptr condition)
 {
     try
     {
