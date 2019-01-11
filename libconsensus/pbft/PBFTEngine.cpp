@@ -70,6 +70,10 @@ bool PBFTEngine::shouldSeal()
     std::pair<bool, IDXTYPE> ret = getLeader();
     if (!ret.first)
         return false;
+    if (ret.second != nodeIdx())
+    {
+        return false;
+    }
     if (m_reqCache->committedPrepareCache().height == m_consensusBlockNumber)
     {
         if (m_reqCache->rawPrepareCache().height != m_consensusBlockNumber)
