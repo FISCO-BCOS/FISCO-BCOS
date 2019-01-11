@@ -58,7 +58,7 @@ bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& 
     std::vector<std::pair<u256, Signature>> sig_list;
     if (m_commitCache.count(m_prepareCache.block_hash) > 0)
     {
-        for (auto item : m_commitCache[m_prepareCache.block_hash])
+        for (auto& item : m_commitCache[m_prepareCache.block_hash])
         {
             sig_list.push_back(
                 std::make_pair(u256(item.second.idx), Signature(item.first.c_str())));

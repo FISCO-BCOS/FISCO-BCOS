@@ -254,7 +254,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
         tableData->tableName = dbIt.first;
 
         bool dirtyTable = false;
-        for (auto it : *(table->data()))
+        for (auto& it : *(table->data()))
         {
             tableData->data.insert(make_pair(it.first, it.second));
 

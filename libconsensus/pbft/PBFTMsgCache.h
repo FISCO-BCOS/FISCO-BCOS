@@ -192,7 +192,7 @@ public:
     /// clear all caches
     inline void clearAll()
     {
-        for (auto item : m_broadCastKeyCache)
+        for (auto& item : m_broadCastKeyCache)
             item.second->clearAll();
     }
 
