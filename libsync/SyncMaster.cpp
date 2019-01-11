@@ -481,6 +481,24 @@ bool SyncMaster::maintainDownloadingQueue()
 
 void SyncMaster::maintainPeersConnection()
 {
+    h512s miners = m_blockChain->minerList();
+    h512s groupMembers = miners + m_blockChain->observerList();
+
+    // If myself is not in groupMembers, ignore all peers
+    bool isMyselfInGroup = false;
+    for (auto const& member : groupMembers)
+        isMyselfInGroup |= (m_nodeId == member);
+    if (!isMyselfInGroup)
+    {
+        // Delete all peers
+        NodeIDs nodeIds = m_syncStatus->peers();
+        for (NodeID const& id : nodeIds)
+        {
+            m_syncStatus->deletePeer(id);
+        }
+        return;
+    }
+
     // Delete inactive peers
     NodeIDs nodeIds = m_syncStatus->peers();
     for (NodeID const& id : nodeIds)
@@ -490,34 +508,32 @@ void SyncMaster::maintainPeersConnection()
     }
 
     // Add new peers
-    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     int64_t currentNumber = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(currentNumber);
-    for (auto const& session : sessions)
+    for (auto const& member : groupMembers)
     {
-        if (!m_syncStatus->hasPeer(session.nodeID))
+        if (!m_syncStatus->hasPeer(member))
         {
             // create a peer
-            SyncPeerInfo newPeer{session.nodeID, 0, m_genesisHash, m_genesisHash};
+            SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash};
             m_syncStatus->newSyncPeerStatus(newPeer);
 
             // send my status to her
             SyncStatusPacket packet;
             packet.encode(currentNumber, m_genesisHash, currentHash);
 
-            m_service->asyncSendMessageByNodeID(session.nodeID, packet.toMessage(m_protocolId),
-                CallbackFuncWithSession(), Options());
-            SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
+            m_service->asyncSendMessageByNodeID(
+                member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+            SYNC_LOG(ERROR) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
                             << LOG_KV("number", int(currentNumber))
                             << LOG_KV("genesisHash", m_genesisHash)
                             << LOG_KV("currentHash", currentHash)
-                            << LOG_KV("peer", session.nodeID.abridged());
+                            << LOG_KV("peer", member.abridged());
         }
     }
 
     // Update sync miner status
     set<h512> minerSet;
-    h512s miners = m_blockChain->minerList();
     for (auto miner : miners)
         minerSet.insert(miner);
 
