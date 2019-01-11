@@ -136,8 +136,16 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 {
     m_param->mutableTxPoolParam().txPoolLimit =
         pt.get<uint64_t>("tx_pool.limit", SYNC_TX_POOL_SIZE_DEFAULT);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initTxPoolConfig")
-                      << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
+    try
+    {
+        Ledger_LOG(DEBUG) << LOG_BADGE("initTxPoolConfig")
+                          << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
+    }
+    catch (std::exception& e)
+    {
+        m_param->mutableTxPoolParam().txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
+        Ledger_LOG(WARNING) << LOG_BADGE("txPoolLimit") << LOG_DESC("txPoolLimit invalid");
+    }
 }
 
 /// init consensus configurations:
@@ -204,8 +212,8 @@ void Ledger::initSyncConfig(ptree const& pt)
     }
     catch (std::exception& e)
     {
-        Ledger_LOG(ERROR) << LOG_BADGE("initSyncConfig") << LOG_DESC("idleWaitMs invalid");
-        exit(1);
+        m_param->mutableSyncParam().idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+        Ledger_LOG(WARNING) << LOG_BADGE("initSyncConfig") << LOG_DESC("idleWaitMs invalid");
     }
 }
 
