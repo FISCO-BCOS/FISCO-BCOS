@@ -1097,9 +1097,9 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
 bool PBFTEngine::isValidViewChangeReq(
     ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss)
 {
-    if (hasConsensused(req))
+    if (req.height < m_highestBlock.number())
     {
-        LOG(TRACE) << "[#InvalidViewChangeReq] has consensused: [INFO]: " << oss.str();
+        LOG(TRACE) << "[#InvalidViewChangeReq] expired viewchange: [INFO]: " << oss.str();
         return CheckResult::INVALID;
     }
     if (m_reqCache->isExistViewChange(req))
