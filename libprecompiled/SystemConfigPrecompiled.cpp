@@ -138,5 +138,6 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
     }
-    return true;
+    // only can insert tx_count_limit and tx_gas_limit as system config
+    return false;
 }

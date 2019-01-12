@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(TestAddConfig)
     eth::ContractABI abi;
 
     LOG(INFO) << "Add a config key-value";
-    std::string key1 = "key_1";
+    std::string key1 = "tx_count_limit";
     uint64_t value1 = 10000000;
     bytes in =
         abi.abiIn("setValueByKey(string,string)", key1, boost::lexical_cast<std::string>(value1));
