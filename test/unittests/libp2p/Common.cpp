@@ -24,6 +24,7 @@
 
 #include "libnetwork/Common.h"
 #include "libp2p/Common.h"
+#include <libdevcore/CommonIO.h>
 
 #include <libdevcore/Assertions.h>
 #include <libp2p/P2PMessage.h>
