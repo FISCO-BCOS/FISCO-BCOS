@@ -963,6 +963,11 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
  */
 CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
 {
+    if (hasConsensused(req))
+    {
+        LOG(TRACE) << "[#InvalidSignReq] has consensused: [INFO]: " << oss.str();
+        return CheckResult::INVALID;
+    }
     if (m_reqCache->isExistSign(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InValidSignReq] Duplicated sign: [INFO]:  " << oss.str();
@@ -1025,6 +1030,11 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
  */
 CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
 {
+    if (hasConsensused(req))
+    {
+        LOG(TRACE) << "[#InvalidCommitReq] has consensused: [INFO]: " << oss.str();
+        return CheckResult::INVALID;
+    }
     if (m_reqCache->isExistCommit(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidCommitReq] Duplicated: [INFO]:  " << oss.str();
@@ -1087,6 +1097,11 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
 bool PBFTEngine::isValidViewChangeReq(
     ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss)
 {
+    if (hasConsensused(req))
+    {
+        LOG(TRACE) << "[#InvalidViewChangeReq] has consensused: [INFO]: " << oss.str();
+        return CheckResult::INVALID;
+    }
     if (m_reqCache->isExistViewChange(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Duplicated: [INFO]  " << oss.str();

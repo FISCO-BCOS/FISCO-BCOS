@@ -183,12 +183,20 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
     /// check nonce
     if (false == isBlockLimitOrNonceOk(trans, _needinsert))
         return ImportResult::TransactionNonceCheckFail;
+    try
+    {
+        /// check transaction signature here when everything is ok
+        trans.sender();
+    }
+    catch (std::exception& e)
+    {
+        TXPOOL_LOG(ERROR) << "[#Verify] invalid signature, tx = " << tx_hash.abridged();
+        return ImportResult::Malformed;
+    }
+    /// nonce related to txpool must be checked at the last, since this will insert nonce of the
+    /// valid transaction into the txpool nonce cache
     if (false == txPoolNonceCheck(trans))
         return ImportResult::TxPoolNonceCheckFail;
-
-    /// check transaction signature here when everything is ok
-    trans.sender();
-
     /// TODO: filter check
     return ImportResult::Success;
 }
