@@ -9,10 +9,10 @@ jobs:
           name: Install dependencies
           command: |
             apt-get update 
-            apt-get install -y clang make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+            apt-get install -y git clang make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
       - checkout
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-static-{{ arch }}-{{ .Branch }}
       - run:
           name: Compile
           command: |
@@ -37,7 +37,7 @@ jobs:
           path: /root/FISCO-BCOS/build/bin/fisco-bcos
           destination: fisco-bcos
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-static-{{ arch }}-{{ .Branch }}
           paths:
             - deps
             # - build
@@ -54,7 +54,7 @@ jobs:
             yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
       - checkout
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
+          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}
       - run:
           name: Compile
           command: |
@@ -70,7 +70,7 @@ jobs:
           path: /root/FISCO-BCOS-gm/build/bin/fisco-bcos
           destination: fisco-bcos-gm-centos7
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
+          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}
           paths:
             - deps
             # - build

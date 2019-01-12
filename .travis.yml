@@ -28,6 +28,7 @@ env:
       - TRAVIS_BUILD_TYPE=RelWithDebInfo
       - TRAVIS_TESTS=ON
 matrix:
+    fast_finish: true
     include:
         - os: linux
           dist: xenial
@@ -40,6 +41,7 @@ matrix:
           env: CACHE_NAME=osx
 git:
     depth: 1
+compiler: clang
 cache:
   directories:
   - $TRAVIS_BUILD_DIR/deps
