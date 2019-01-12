@@ -85,8 +85,6 @@ size_t dev::storage::MemoryTable::update(
 {
     try
     {
-        STORAGE_LOG(TRACE) << "Update MemoryTable: " << key;
-
         Entries::Ptr entries = std::make_shared<Entries>();
 
         auto it = m_cache.find(key);
@@ -190,8 +188,6 @@ size_t dev::storage::MemoryTable::insert(const std::string& key, Entry::Ptr entr
 
 size_t dev::storage::MemoryTable::remove(const std::string& key, Condition::Ptr condition)
 {
-    STORAGE_LOG(TRACE) << "Remove MemoryTable data" << key;
-
     Entries::Ptr entries = std::make_shared<Entries>();
 
     auto it = m_cache.find(key);

@@ -263,7 +263,9 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
     bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
-    if (succ)
+    /// to ensure that the collected signature size is equal to minValidNodes
+    /// so that checkAndCommit can be called, and the committed request backup can be stored
+    if (succ && m_reqCache->getSigCacheSize(sign_req.block_hash) < minValidNodes())
     {
         m_reqCache->addSignReq(sign_req);
     }
@@ -459,6 +461,8 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     {
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
         m_reqCache->addFuturePrepareCache(req);
+        /// note the blocksync module early
+        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         return CheckResult::FUTURE;
     }
     if (!isValidLeader(req))
@@ -945,7 +949,12 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return true;
     }
-    m_reqCache->addSignReq(sign_req);
+    /// to ensure that the collected signature size is equal to minValidNodes
+    /// so that checkAndCommit can be called, and the committed request backup can be stored
+    if (m_reqCache->getSigCacheSize(sign_req.block_hash) < minValidNodes())
+    {
+        m_reqCache->addSignReq(sign_req);
+    }
     checkAndCommit();
     PBFTENGINE_LOG(DEBUG) << "[#handleSignMsg Succ] [Timecost]:  " << 1000 * t.elapsed()
                           << "  [INFO]:  " << oss.str();
@@ -963,18 +972,21 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
  */
 CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
 {
-    if (hasConsensused(req))
-    {
-        LOG(TRACE) << "[#InvalidSignReq] has consensused: [INFO]: " << oss.str();
-        return CheckResult::INVALID;
-    }
     if (m_reqCache->isExistSign(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InValidSignReq] Duplicated sign: [INFO]:  " << oss.str();
         return CheckResult::INVALID;
     }
+    if (hasConsensused(req))
+    {
+        LOG(TRACE) << "[#InvalidSignReq] has consensused: [INFO]: " << oss.str();
+        return CheckResult::INVALID;
+    }
     CheckResult result = checkReq(req, oss);
-    if (result == CheckResult::FUTURE)
+    /// to ensure that the collected signature size is equal to minValidNodes
+    /// so that checkAndCommit can be called, and the committed request backup can be stored
+    if ((result == CheckResult::FUTURE) &&
+        m_reqCache->getSigCacheSize(req.block_hash) < minValidNodes())
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
@@ -1030,14 +1042,14 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
  */
 CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
 {
-    if (hasConsensused(req))
-    {
-        LOG(TRACE) << "[#InvalidCommitReq] has consensused: [INFO]: " << oss.str();
-        return CheckResult::INVALID;
-    }
     if (m_reqCache->isExistCommit(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidCommitReq] Duplicated: [INFO]:  " << oss.str();
+        return CheckResult::INVALID;
+    }
+    if (hasConsensused(req))
+    {
+        LOG(TRACE) << "[#InvalidCommitReq] has consensused: [INFO]: " << oss.str();
         return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
@@ -1097,11 +1109,6 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
 bool PBFTEngine::isValidViewChangeReq(
     ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss)
 {
-    if (req.height < m_highestBlock.number())
-    {
-        LOG(TRACE) << "[#InvalidViewChangeReq] expired viewchange: [INFO]: " << oss.str();
-        return CheckResult::INVALID;
-    }
     if (m_reqCache->isExistViewChange(req))
     {
         PBFTENGINE_LOG(TRACE) << "[#InvalidViewChangeReq] Duplicated: [INFO]  " << oss.str();
@@ -1332,9 +1339,12 @@ void PBFTEngine::handleFutureBlock()
             << "/" << m_highestBlock.number() << "/" << m_view << "/" << m_consensusBlockNumber
             << "/" << m_reqCache->futurePrepareCache().block_hash.abridged();
         handlePrepareMsg(future_req);
-        /// add checkAndSave here to in case of that the node has collected over 2f sign packets
-        checkAndSave();
         m_reqCache->resetFuturePrepare();
+    }
+    /// to trigger block sync
+    if (future_req.height > m_consensusBlockNumber)
+    {
+        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     }
 }
 

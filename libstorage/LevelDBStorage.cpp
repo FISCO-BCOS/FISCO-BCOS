@@ -91,8 +91,6 @@ size_t LevelDBStorage::commit(
 {
     try
     {
-        STORAGE_LEVELDB_LOG(INFO) << "leveldb commit data. blockHash:" << blockHash
-                                  << " num:" << num;
         leveldb::WriteBatch batch;
 
         size_t total = 0;
@@ -124,8 +122,6 @@ size_t LevelDBStorage::commit(
 
                 batch.Put(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-                STORAGE_LEVELDB_LOG(TRACE)
-                    << "leveldb commit key:" << entryKey << " data size:" << ssOut.tellp();
             }
         }
 

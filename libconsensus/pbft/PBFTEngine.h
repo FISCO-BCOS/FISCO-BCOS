@@ -395,7 +395,8 @@ protected:
     template <class T>
     inline bool hasConsensused(T const& req) const
     {
-        if (req.height < m_consensusBlockNumber || req.view < m_view)
+        if (req.height < m_consensusBlockNumber ||
+            (req.height == m_consensusBlockNumber && req.view < m_view))
         {
             PBFTENGINE_LOG(DEBUG) << "[#hasConsensused] [height/consNum/reqView/Cview]:  "
                                   << req.height << "/" << m_consensusBlockNumber << "/" << req.view
