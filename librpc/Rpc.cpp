@@ -50,6 +50,11 @@ Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
+bool Rpc::isValidSystemConfig(std::string const& key)
+{
+    return (key == "tx_count_limit" || key == "tx_gas_limit");
+}
+
 std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
 {
     try
@@ -61,6 +66,11 @@ std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
         {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        }
+        if (!isValidSystemConfig(key))
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::InvalidSystemConfig, RPCMsg[RPCExceptionType::InvalidSystemConfig]));
         }
         return blockchain->getSystemConfigByKey(key);
     }
