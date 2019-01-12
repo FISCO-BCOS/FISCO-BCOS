@@ -19,7 +19,7 @@
  *  @date 20181211
  */
 #include "SystemConfigPrecompiled.h"
-#include "Common.h"
+
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>

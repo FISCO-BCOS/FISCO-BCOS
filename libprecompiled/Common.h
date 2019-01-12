@@ -19,10 +19,22 @@
  *  @date 20180921
  */
 #pragma once
+#include "libblockverifier/Precompiled.h"
+#include <memory>
 #include <string>
 
 namespace dev
 {
+namespace blockverifier
+{
+class ExecutiveContext;
+}
+
+namespace storage
+{
+class Table;
+}
+
 namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) LOG(LEVEL) << "[PRECOMPILED]"

@@ -19,8 +19,9 @@
  *  @date 20181119
  */
 #include "CNSPrecompiled.h"
-#include "Common.h"
+
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/EntriesPrecompiled.h>
