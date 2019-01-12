@@ -69,8 +69,8 @@ std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
         }
         if (!isValidSystemConfig(key))
         {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::InvalidSystemConfig, RPCMsg[RPCExceptionType::InvalidSystemConfig]));
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidSystemConfig,
+                RPCMsg[RPCExceptionType::InvalidSystemConfig]));
         }
         return blockchain->getSystemConfigByKey(key);
     }
