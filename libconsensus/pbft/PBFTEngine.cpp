@@ -23,6 +23,7 @@
  */
 #include "PBFTEngine.h"
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>

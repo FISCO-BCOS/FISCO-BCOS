@@ -23,7 +23,6 @@
 
 #include "Exceptions.h"
 #include "TrieCommon.h"
-#include "easylog.h"
 #include <libdevcrypto/Hash.h>
 #include <memory>
 
@@ -244,7 +243,7 @@ public:
         }
         catch (...)
         {
-            LOG(WARNING) << boost::current_exception_diagnostic_information();
+            // LOG(WARNING) << boost::current_exception_diagnostic_information();
             return false;
         }
     }

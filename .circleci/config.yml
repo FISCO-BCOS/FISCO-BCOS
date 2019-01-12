@@ -9,7 +9,7 @@ jobs:
           name: Install dependencies
           command: |
             apt-get update 
-            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+            apt-get install -y clang make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
       - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}
@@ -17,7 +17,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            cmake -DSTATIC_BUILD=ON -DTESTS=ON -DCOVERAGE=ON .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DTESTS=ON -DCOVERAGE=ON .. 
             make -j2
       - run:
           name: Unit test
