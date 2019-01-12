@@ -103,6 +103,7 @@ protected:
 private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
+    bool isValidSystemConfig(std::string const& key);
 };
 
 }  // namespace rpc
