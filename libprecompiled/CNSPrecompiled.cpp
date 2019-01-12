@@ -19,6 +19,7 @@
  *  @date 20181119
  */
 #include "CNSPrecompiled.h"
+#include "Common.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>

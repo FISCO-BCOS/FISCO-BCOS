@@ -19,7 +19,6 @@
  *  @date 20180921
  */
 #pragma once
-#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
 
 namespace dev

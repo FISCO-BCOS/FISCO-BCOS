@@ -29,8 +29,9 @@
 #include <libledger/LedgerManager.h>
 #include <libledger/LedgerParam.h>
 #include <libp2p/P2PInterface.h>
-#include <iostream>
+#include <iosfwd>
 #include <memory>
+
 namespace dev
 {
 namespace rpc

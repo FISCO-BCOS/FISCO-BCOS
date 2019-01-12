@@ -19,7 +19,6 @@
  *  @date 20181211
  */
 #pragma once
-#include "Common.h"
 #include "libblockverifier/ExecutiveContext.h"
 #include "libprecompiled/CRUDPrecompiled.h"
 namespace dev

@@ -19,11 +19,15 @@
  *  @date 20181119
  */
 #pragma once
-#include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
 
 namespace dev
 {
+namespace blockverifier
+{
+class ExecutiveContext;
+}
+
 namespace storage
 {
 class Table;
