@@ -50,7 +50,7 @@ int main(int argc, const char* argv[])
     }
     catch (std::exception& e)
     {
-        std::cerr << boost::diagnostic_information(e) << std::endl;
+        std::cerr << "Init failed!!!" << std::endl;
         return -1;
     }
     /// input the success info
