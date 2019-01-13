@@ -42,6 +42,14 @@ public:
         int keyCenterPort;
         std::string cipherDataKey;
     } diskEncryption;
+
+
+    /// default block time
+    const unsigned c_intervalBlockTime = 1000;
+    /// omit empty block or not
+    const bool c_omitEmptyBlock = true;
+    /// default blockLimit
+    const unsigned c_blockLimit = 1000;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

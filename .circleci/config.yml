@@ -12,7 +12,7 @@ jobs:
             apt-get install -y git clang make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
       - checkout
       - restore_cache:
-          key: dependency-cache-static-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-static-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - run:
           name: Compile
           command: |
@@ -37,7 +37,7 @@ jobs:
           path: /root/FISCO-BCOS/build/bin/fisco-bcos
           destination: fisco-bcos
       - save_cache:
-          key: dependency-cache-static-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-static-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             # - build
@@ -54,7 +54,7 @@ jobs:
             yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
       - checkout
       - restore_cache:
-          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - run:
           name: Compile
           command: |
@@ -70,7 +70,7 @@ jobs:
           path: /root/FISCO-BCOS-gm/build/bin/fisco-bcos
           destination: fisco-bcos-gm-centos7
       - save_cache:
-          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             # - build
