@@ -284,7 +284,7 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
         auto txList = root[1];
         auto expectedRoot = trieRootOver(txList.itemCount(), [&](unsigned i) { return rlp(i); },
             [&](unsigned i) { return txList[i].data().toBytes(); });
-        LOG(WARNING) << "Expected trie root: " << toString(expectedRoot);
+        LOG(WARNING) << "Expected trie root: " << expectedRoot;
         if (m_transactionsRoot != expectedRoot)
             BOOST_THROW_EXCEPTION(InvalidTransactionsRoot()
                                   << Hash256RequirementError(expectedRoot, m_transactionsRoot));

@@ -21,6 +21,7 @@
  */
 
 #include "P2PInitializer.h"
+#include "libp2p/P2PMessage.h"
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
 #include <boost/algorithm/algorithm.hpp>
@@ -136,11 +137,12 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer")
                                << LOG_DESC("initConfig for P2PInitializer failed")
+                               << LOG_KV("check Port", listenPort)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
         ERROR_OUTPUT << LOG_BADGE("P2PInitializer")
                      << LOG_DESC("initConfig for P2PInitializer failed")
-                     << "Please check port: " << listenPort
-                     << " is unused! ERROR:" << boost::diagnostic_information(e) << std::endl;
+                     << LOG_KV("check Port", listenPort)
+                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }
 }

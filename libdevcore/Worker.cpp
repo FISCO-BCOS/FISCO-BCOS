@@ -18,9 +18,8 @@
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
  */
-
 #include "Worker.h"
-
+#include "Common.h"
 #include "easylog.h"
 #include <pthread.h>
 #include <chrono>

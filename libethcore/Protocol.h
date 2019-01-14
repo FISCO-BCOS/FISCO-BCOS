@@ -23,7 +23,7 @@
 
 #pragma once
 #include <stdint.h>
-#include <iostream>
+#include <iosfwd>
 
 namespace dev
 {

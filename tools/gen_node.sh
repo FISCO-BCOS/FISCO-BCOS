@@ -152,13 +152,13 @@ generate_node_scripts()
     local output=$1
     generate_script_template "$output/start.sh"
     cat << EOF >> "$output/start.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
 cd \${SHELL_FOLDER}
 nohup \${fisco_bcos} -c config.ini&
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
 weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 kill \${weth_pid}
 EOF

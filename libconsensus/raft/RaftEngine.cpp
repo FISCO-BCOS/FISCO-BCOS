@@ -23,7 +23,7 @@
  */
 #include "RaftEngine.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libconfig/SystemConfigMgr.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libconsensus/Common.h>
 #include <libdevcore/Guards.h>
 #include <boost/lexical_cast.hpp>
@@ -1467,5 +1467,5 @@ bool RaftEngine::reachBlockIntervalTime()
     auto nowTime = utcTime();
     auto parentTime = m_lastBlockTime;
 
-    return nowTime - parentTime >= dev::config::SystemConfigMgr::c_intervalBlockTime;
+    return nowTime - parentTime >= g_BCOSConfig.c_intervalBlockTime;
 }

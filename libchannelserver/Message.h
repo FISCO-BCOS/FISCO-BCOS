@@ -23,7 +23,6 @@
 
 #pragma once
 
-#include "ChannelException.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>

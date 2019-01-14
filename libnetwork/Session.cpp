@@ -23,18 +23,16 @@
  */
 
 #include "Session.h"
-
+#include "ASIOInterface.h"
+#include "Common.h"
+#include "Host.h"
+#include "SocketFace.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
-
-#include "ASIOInterface.h"
-#include "Common.h"
-#include "Host.h"
-#include "SessionFace.h"
 
 using namespace dev;
 using namespace dev::network;
@@ -63,6 +61,11 @@ Session::~Session()
     {
         SESSION_LOG(ERROR) << "Deconstruct Session exception";
     }
+}
+
+NodeIPEndpoint Session::nodeIPEndpoint() const
+{
+    return m_socket->nodeIPEndpoint();
 }
 
 void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback)
