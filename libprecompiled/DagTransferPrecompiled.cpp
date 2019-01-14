@@ -162,23 +162,23 @@ bytes DagTransferPrecompiled::call(
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
-        userAddCall(context, data, out)
+        userAddCall(context, data, origin, out)
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_SAV_STR_UINT])
     {  // userSave(string,uint256)
-        userSaveCall(context, data, out);
+        userSaveCall(context, data, origin, out);
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_DRAW_STR_UINT])
     {  // userDraw(string,uint256)
-        userDrawCall(context, data, out);
+        userDrawCall(context, data, origin, out);
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT])
     {  // userTransfer(string,string,uint256)
-        userTransferCall(context, data, out);
+        userTransferCall(context, data, origin, out);
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_BAL_STR])
     {  // userBalance(string user)
-        userBalanceCall(context, data, out);
+        userBalanceCall(context, data, origin, out);
     }
     else
     {
