@@ -42,7 +42,7 @@ contract DagTransfer{
 
 const char* const DAG_TRANSFER_METHOD_ADD_STR_UINT = "userAdd(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_SAV_STR_UINT = "userSave(string,uint256)";
-const char* const DAG_TRANSFER_METHOD_DRA_STR_UINT = "userDraw(string,uint256)";
+const char* const DAG_TRANSFER_METHOD_DRAW_STR_UINT = "userDraw(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_TRS_STR2_UINT = "userTransfer(string,string,uint256)";
 const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
 
@@ -52,8 +52,8 @@ DagTransferPrecompiled::DagTransferPrecompiled()
         getFuncSelector(DAG_TRANSFER_METHOD_ADD_STR_UINT);
     name2Selector[DAG_TRANSFER_METHOD_SAV_STR_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_SAV_STR_UINT);
-    name2Selector[DAG_TRANSFER_METHOD_DRA_STR_UINT] =
-        getFuncSelector(DAG_TRANSFER_METHOD_DRA_STR_UINT);
+    name2Selector[DAG_TRANSFER_METHOD_DRAW_STR_UINT] =
+        getFuncSelector(DAG_TRANSFER_METHOD_DRAW_STR_UINT);
     name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_TRS_STR2_UINT);
     name2Selector[DAG_TRANSFER_METHOD_BAL_STR] = getFuncSelector(DAG_TRANSFER_METHOD_BAL_STR);
