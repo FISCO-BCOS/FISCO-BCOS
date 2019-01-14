@@ -507,10 +507,10 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         {
             // If to user not exist, add it first.
             auto entry = table->newEntry();
-            entry->setField(DAG_TRANSFER_FIELD_NAME, user);
+            entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, dev::u256(0).str());
 
-            auto count = table->insert(user, entry, getOptions(origin));
+            auto count = table->insert(toUser, entry, getOptions(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
