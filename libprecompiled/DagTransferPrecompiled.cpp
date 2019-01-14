@@ -299,7 +299,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         }
         else
         {
-            entry = entries->get(0);  // only one record for every user
+            auto entry = entries->get(0);  // only one record for every user
             balance = dev::u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE)));
 
             // if overflow
