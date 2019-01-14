@@ -300,7 +300,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         else
         {
             auto entry = entries->get(0);  // only one record for every user
-            balance = dev::u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE)));
+            balance = dev::u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
 
             // if overflow
             auto new_balance = balance + amount;
@@ -377,7 +377,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         }
 
         // only one record for every user
-        balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE)));
+        balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         if (balance < amount)
         {
             strErrorMsg = "insufficient balance";
@@ -444,7 +444,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         }
 
         // only one record for every user
-        balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE)));
+        balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         result = true;
 
     } while (0);
@@ -495,7 +495,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
             break;
         }
 
-        fromUserBalance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE)));
+        fromUserBalance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         if (fromUserBalance < amount)
         {
             strErrorMsg = "from user insufficient balance";
