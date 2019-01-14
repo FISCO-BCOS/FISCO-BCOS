@@ -46,6 +46,7 @@ const std::string SYS_CONFIG = "_sys_config_";
 const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
 const std::string USER_TABLE_PREFIX = "_user_";
 const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
+const std::string DAG_TRANSFER = "_dag_transfer_";
 
 }  // namespace storage
 }  // namespace dev

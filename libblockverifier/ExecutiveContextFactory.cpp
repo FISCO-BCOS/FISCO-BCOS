@@ -24,6 +24,7 @@
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprecompiled/DagTransferPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
@@ -57,6 +58,8 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
+    context->setAddress2Precompiled(
+        Address(0xffff), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setMemoryTableFactory(memoryTableFactory);
 
     context->setBlockInfo(blockInfo);
