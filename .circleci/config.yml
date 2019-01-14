@@ -27,7 +27,7 @@ jobs:
       - run:
           name: Upload Coverage
           command: |
-            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g "/usr/**" -g "**deps/**" 
       - run:
           name: Upload binary
           command: |
