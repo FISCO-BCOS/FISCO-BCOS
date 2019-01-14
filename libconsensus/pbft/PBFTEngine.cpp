@@ -23,6 +23,7 @@
  */
 #include "PBFTEngine.h"
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
@@ -1116,7 +1117,7 @@ void PBFTEngine::collectGarbage()
     Timer t;
     std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
-        std::chrono::seconds(TimeManager::CollectInterval))
+        std::chrono::seconds(m_timeManager.CollectInterval))
     {
         m_reqCache->collectGarbage(m_highestBlock);
         m_timeManager.m_lastGarbageCollection = now;

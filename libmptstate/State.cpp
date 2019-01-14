@@ -22,6 +22,7 @@
 #include "State.h"
 
 #include "Defaults.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/TrieHash.h>

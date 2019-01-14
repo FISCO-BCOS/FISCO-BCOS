@@ -21,6 +21,7 @@
  */
 
 #include "SecureInitializer.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/easylog.h>

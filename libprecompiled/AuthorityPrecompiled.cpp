@@ -19,7 +19,7 @@
  *  @date 20181205
  */
 #include "AuthorityPrecompiled.h"
-#include "Common.h"
+
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>

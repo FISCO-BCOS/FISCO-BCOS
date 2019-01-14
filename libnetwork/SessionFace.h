@@ -27,13 +27,14 @@
  */
 
 #pragma once
-#include "SocketFace.h"
+#include "Common.h"
 #include <memory>
 
 namespace dev
 {
 namespace network
 {
+class SocketFace;
 #define CallbackFunc std::function<void(dev::network::NetworkException, dev::network::Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>

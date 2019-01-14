@@ -23,6 +23,7 @@
 
 #pragma once
 #include <libp2p/Common.h>
+#include <libp2p/Service.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <test/unittests/libp2p/FakeHost.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>

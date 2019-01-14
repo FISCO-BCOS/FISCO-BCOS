@@ -19,6 +19,7 @@
  * @author: chaychen
  * @date 2018
  */
+#include <iostream>
 
 #include <libdevcore/Assertions.h>
 #include <libdevcore/Base64.h>

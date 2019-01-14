@@ -624,7 +624,8 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
 
     /// can trigger collectGarbage
     fake_pbft.consensus()->mutableTimeManager().m_lastGarbageCollection =
-        std::chrono::system_clock::now() - std::chrono::seconds(TimeManager::CollectInterval + 10);
+        std::chrono::system_clock::now() -
+        std::chrono::seconds(fake_pbft.consensus()->timeManager().CollectInterval + 10);
     fake_pbft.consensus()->collectGarbage();
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(highest.hash()) == 0);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(highest.hash()) == 0);

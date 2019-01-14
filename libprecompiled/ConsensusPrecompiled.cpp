@@ -20,6 +20,7 @@
  */
 
 #include "ConsensusPrecompiled.h"
+
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>

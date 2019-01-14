@@ -39,8 +39,8 @@ struct TimeManager
     unsigned m_intervalBlockTime = 1000;
     /// time point of last signature collection
     std::chrono::system_clock::time_point m_lastGarbageCollection;
-    static const unsigned kMaxChangeCycle = 20;
-    static const unsigned CollectInterval = 60;
+    const unsigned kMaxChangeCycle = 20;
+    const unsigned CollectInterval = 60;
     float m_execTimePerTx = 0;
     inline void initTimerManager(unsigned view_timeout)
     {
