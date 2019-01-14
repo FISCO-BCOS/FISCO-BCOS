@@ -24,10 +24,15 @@ jobs:
           command: |
             cd /root/FISCO-BCOS/build
             CTEST_OUTPUT_ON_FAILURE=TRUE make test
+      - save_cache:
+          key: dependency-cache-static-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          paths:
+            - deps
+            # - build
       - run:
           name: Upload Coverage
           command: |
-            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g "/usr/**" -g "**deps/**" 
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1
       - run:
           name: Upload binary
           command: |
@@ -35,11 +40,6 @@ jobs:
       - store_artifacts:
           path: /root/FISCO-BCOS/fisco-static.tar.gz
           destination: fisco-static.tar.gz
-      - save_cache:
-          key: dependency-cache-static-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-          paths:
-            - deps
-            # - build
 
   build_test_guomi:
     working_directory: /root/FISCO-BCOS-gm

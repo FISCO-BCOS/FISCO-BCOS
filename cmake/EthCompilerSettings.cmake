@@ -120,7 +120,6 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
         set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
         find_program(LCOV_TOOL lcov)
-        # find_program(LCOV_TOOL llvm-cov)
         message(STATUS "lcov tool: ${LCOV_TOOL}")
         if (LCOV_TOOL)
             add_custom_target(coverage
