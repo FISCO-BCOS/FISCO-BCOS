@@ -107,6 +107,7 @@ public:
     bool shouldSeal();
     bool commit(dev::eth::Block const& _block);
     bool reachBlockIntervalTime();
+    void resetLastBlockTime() { m_lastBlockTime = dev::utcTime(); }
 
 protected:
     void initRaftEnv();

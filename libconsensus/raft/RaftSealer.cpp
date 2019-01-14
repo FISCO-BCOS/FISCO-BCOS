@@ -64,6 +64,8 @@ void RaftSealer::handleBlock()
     {
         RAFTSEALER_LOG(INFO) << LOG_DESC("[#handleBlock]Empty block will not be committed");
         reset();
+        m_raftEngine->resetLastBlockTime();
+        return;
     }
 
     bool succ = m_raftEngine->commit(m_sealing.block);
