@@ -314,7 +314,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             entry->setField(DAG_TRANSFER_FIELD_NAME, user);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
-            auto count = table->update(user, entry, getOptions(origin));
+            auto count = table->update(user, entry, table->newCondition(), getOptions(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
@@ -389,7 +389,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         entry->setField(DAG_TRANSFER_FIELD_NAME, user);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
-        auto count = table->update(user, entry, getOptions(origin));
+        auto count = table->update(user, entry, table->newCondition(), getOptions(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -537,7 +537,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         auto entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, fromUser);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, newFromUserBalance.str());
-        auto count = table->update(fromUser, entry, getOptions(origin));
+        auto count = table->update(fromUser, entry, table->newCondition(), getOptions(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -548,7 +548,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, newToUserBalance.str());
-        count = table->update(toUser, entry, getOptions(origin));
+        count = table->update(toUser, entry, table->newCondition(), getOptions(origin));
 
         // end with success
         result = true;
