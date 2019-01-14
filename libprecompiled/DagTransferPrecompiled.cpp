@@ -109,7 +109,7 @@ std::vector<std::string> DagTransferPrecompiled::getDagTag(bytesConstRef param)
             results.push_back(user);
         }
     }
-    else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR3_UINT])
+    else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT])
     {  // userTransfer(string,string,uint256)
         std::string fromUser, toUser;
         dev::u256 amount;
@@ -172,7 +172,7 @@ bytes DagTransferPrecompiled::call(
     {  // userDraw(string,uint256)
         userDrawCall(context, data, out);
     }
-    else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR3_UINT])
+    else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT])
     {  // userTransfer(string,string,uint256)
         userTransferCall(context, data, out);
     }
