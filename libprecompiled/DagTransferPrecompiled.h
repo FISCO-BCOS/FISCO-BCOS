@@ -21,6 +21,7 @@
 #pragma once
 #include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
+
 #include <libdevcore/Common.h>
 #include <libethcore/Common.h>
 
@@ -60,15 +61,15 @@ protected:
 private:
     bool invalidUserName(const std::string& user);
     void userAddCall(
-        ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
+        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
     void userSaveCall(
-        ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
+        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
     void userDrawCall(
-        ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
+        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
     void userBalanceCall(
-        ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
+        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
     void userTransferCall(
-        ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
+        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
 };
 
 }  // namespace precompiled

@@ -131,7 +131,7 @@ std::vector<std::string> DagTransferPrecompiled::getDagTag(bytesConstRef param)
     return results;
 }
 
-std::string DagTransferPrecompiled::toString(ExecutiveContext::Ptr)
+std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContext::Ptr)
 {
     return "DagTransfer";
 }
@@ -149,7 +149,7 @@ Table::Ptr DagTransferPrecompiled::openTable(
 }
 
 bytes DagTransferPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -192,8 +192,8 @@ bytes DagTransferPrecompiled::call(
     return out;
 }
 
-void DagTransferPrecompiled::userAddCall(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::Ptr context,
+    bytesConstRef data, Address const& origin, bytes& out)
 {  // userAdd(string,uint256)
 
     std::string user;
@@ -252,8 +252,8 @@ void DagTransferPrecompiled::userAddCall(
     out = abi.abiIn("", result);
 }
 
-void DagTransferPrecompiled::userSaveCall(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::Ptr context,
+    bytesConstRef data, Address const& origin, bytes& out)
 {  // userSave(string,uint256)
     std::string user;
     dev::u256 amount;
@@ -341,8 +341,8 @@ void DagTransferPrecompiled::userSaveCall(
     out = abi.abiIn("", result);
 }
 
-void DagTransferPrecompiled::userDrawCall(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::Ptr context,
+    bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string user;
     dev::u256 amount;
@@ -414,8 +414,8 @@ void DagTransferPrecompiled::userDrawCall(
     out = abi.abiIn("", result);
 }
 
-void DagTransferPrecompiled::userBalanceCall(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context,
+    bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string user;
     dev::eth::ContractABI abi;
@@ -461,8 +461,8 @@ void DagTransferPrecompiled::userBalanceCall(
     out = abi.abiIn("", result, balance);
 }
 
-void DagTransferPrecompiled::userTransferCall(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveContext::Ptr context,
+    bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string fromUser, toUser;
     dev::u256 amount;
