@@ -277,6 +277,7 @@ bool Ledger::initBlockVerifier()
     if (m_param->mutableTxParam().enableParallel)
     {
         executor = std::make_shared<ParaTxExecutor>();
+        executor->initialize();
     }
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(executor);
     /// set params for blockverifier

@@ -22,7 +22,6 @@
  * @date: 2018-01-09
  */
 #include <libblockverifier/ParaTxExecutor.h>
-#include <libdevcore/easylog.h>
 #include <cassert>
 #include <mutex>
 
@@ -37,8 +36,6 @@ void ParaTxWorker::doWork()
         return;
     }
 
-    m_wakeupNotifier->wait();
-
     assert(m_txDAG != nullptr && m_countDownLatch != nullptr);
 
     while (!m_txDAG->hasFinished())
@@ -47,6 +44,15 @@ void ParaTxWorker::doWork()
     }
     m_txDAG.reset();
     m_countDownLatch->countDown();
+}
+
+void ParaTxWorker::workLoop()
+{
+    while (workerState() == WorkerState::Started)
+    {
+        m_wakeupNotifier->wait();
+        doWork();
+    }
 }
 
 void ParaTxExecutor::initialize(unsigned _threadNum)

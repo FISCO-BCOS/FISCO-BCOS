@@ -24,12 +24,15 @@
 #pragma once
 
 #include <libblockverifier/TxDAG.h>
+#include <libblockverifier/Common.h>
 #include <libdevcore/Worker.h>
 #include <condition_variable>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
+
+#define PARA_TX_EXECUTOR_LOG(LEVEL) BLOCKVERIFIER_LOG(LEVEL) << LOG_BADGE("PARATXEXECUTOR")
 
 namespace dev
 {
@@ -119,10 +122,13 @@ public:
         m_wakeupNotifier(_wakeupNotifier),
         m_countDownLatch(nullptr)
     {}
-    void doWork() override;
     void setDAG(std::shared_ptr<TxDAG> _txDAG) { m_txDAG = _txDAG; }
     void setCountDownLatch(std::shared_ptr<CountDownLatch> _latch) { m_countDownLatch = _latch; }
     void start() { startWorking(); }
+
+protected:
+    void workLoop() override;
+    void doWork() override;
 
 private:
     std::shared_ptr<TxDAG> m_txDAG;
