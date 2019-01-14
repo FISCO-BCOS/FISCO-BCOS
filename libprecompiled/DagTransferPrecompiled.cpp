@@ -310,7 +310,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
                 break;
             }
 
-            auto entry = table->newEntry();
+            entry = table->newEntry();
             entry->setField(DAG_TRANSFER_FIELD_NAME, user);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
