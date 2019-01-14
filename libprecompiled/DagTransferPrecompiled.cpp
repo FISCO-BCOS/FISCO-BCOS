@@ -162,7 +162,7 @@ bytes DagTransferPrecompiled::call(
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
-        userAddCall(context, data, origin, out)
+        userAddCall(context, data, origin, out);
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_SAV_STR_UINT])
     {  // userSave(string,uint256)
@@ -262,6 +262,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
 
     bool result = false;
     dev::u256 balance;
+    std::string strErrorMsg;
 
     do
     {
@@ -351,6 +352,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
 
     dev::u256 balance;
     bool result = false;
+    std::string strErrorMsg;
 
     do
     {
@@ -423,6 +425,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
 
     dev::u256 balance;
     bool result = false;
+    std::string strErrorMsg;
 
     do
     {
