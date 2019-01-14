@@ -64,14 +64,14 @@ public:
     // Called by thread
     // Execute a unit in DAG
     // This function can be parallel
-    virtual void executeUnit() = 0;
+    virtual int executeUnit() = 0;
 };
 
 class TxDAG : public TxDAGFace
 {
 public:
     TxDAG() : m_dag() {}
-    ~TxDAG() { m_dag.clear(); }
+    ~TxDAG() {}
 
     // Generate DAG according with given transactions
     void init(dev::eth::Transactions const& _txs);
@@ -86,11 +86,13 @@ public:
     // Called by thread
     // Execute a unit in DAG
     // This function can be parallel
-    void executeUnit() override;
+    int executeUnit() override;
 
     void executeSerialTxs();
 
-    ID getParaTxsNumber() { return m_totalParaTxs; }
+    ID paraTxsNumber() { return m_totalParaTxs; }
+
+    ID haveExecuteNumber() { return m_exeCnt; }
 
 private:
     ExecuteTxFunc f_executeTx;

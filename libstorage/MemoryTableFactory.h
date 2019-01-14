@@ -22,6 +22,7 @@
 
 #include "Storage.h"
 #include "Table.h"
+#include <libdevcore/Guards.h>
 
 namespace dev
 {
@@ -68,6 +69,8 @@ private:
     h256 m_hash;
     std::vector<std::string> m_sysTables;
     int createTableCode;
+
+    mutable dev::SharedMutex x_changeLog;
 };
 
 }  // namespace storage

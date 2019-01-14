@@ -113,6 +113,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
                                  vector<Change::Record>& _records) {
+        dev::WriteGuard l(x_changeLog);
         m_changeLog.emplace_back(_table, _kind, _key, _records);
     });
 

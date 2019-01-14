@@ -66,10 +66,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(block.transactions());
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
-            block.getTransactionReceipts().size() > 0 ?
-                block.getTransactionReceipts().back().gasUsed() :
-                0);
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
             execute(envInfo, _tr, OnOpFunc(), executiveContext);
@@ -81,14 +78,15 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
                              << LOG_DESC("Init DAG takes")
                              << LOG_KV("time(ms)", utcTime() - startTime)
                              << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
-    /*if (m_paraTxExecutor != nullptr)
+    if (m_paraTxExecutor != nullptr)
     {
         m_paraTxExecutor->start(txDag);
     }
-    else*/
+    else
     {
         while (!txDag->hasFinished())
             txDag->executeUnit();
@@ -96,7 +94,8 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
                              << LOG_DESC("Run para tx takes")
                              << LOG_KV("time(ms)", utcTime() - pastTime)
-                             << LOG_KV("txNum", txDag->getParaTxsNumber())
+                             << LOG_KV("txNum", txDag->paraTxsNumber())
+                             << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
                              << LOG_KV("num", block.blockHeader().number());
     pastTime = utcTime();
 
@@ -105,8 +104,9 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
                              << LOG_DESC("Run serial tx takes")
                              << LOG_KV("time(ms)", utcTime() - pastTime)
-                             << LOG_KV("txNum",
-                                    block.transactions().size() - txDag->getParaTxsNumber())
+                             << LOG_KV(
+                                    "txNum", block.transactions().size() - txDag->paraTxsNumber())
+                             << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
                              << LOG_KV("num", block.blockHeader().number());
     pastTime = utcTime();
     //*/
@@ -128,6 +128,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
     block.setStateRootToAllReceipt(stateRoot);
+    block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
 

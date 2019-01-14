@@ -162,6 +162,16 @@ public:
         noteChange();
     }
 
+    void updateSequenceReceiptGas()
+    {
+        u256 totalGas = 0;
+        for (auto& receipt : m_transactionReceipts)
+        {
+            totalGas += receipt.gasUsed();
+            receipt.setGasUsed(totalGas);
+        }
+    }
+
     void setStateRootToAllReceipt(h256 const& _stateRoot)
     {
         for (auto& receipt : m_transactionReceipts)

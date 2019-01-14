@@ -41,7 +41,7 @@ void TxDAG::init(Transactions const& _txs)
     {
         auto& tx = _txs[id];
 
-        // Is para transaction?
+        // Is para transaction? //XXX Serial transaction has all criticals it will seperate DAG
         if (!dev::precompile::DagTransferPrecompiled::isDagTransfer(tx.receiveAddress()))
         {
             serialTxs.emplace_back(id);
@@ -80,7 +80,7 @@ void TxDAG::setTxExecuteFunc(ExecuteTxFunc const& _f)
     f_executeTx = _f;
 }
 
-void TxDAG::executeUnit()
+int TxDAG::executeUnit()
 {
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit") << LOG_KV("exeCnt", m_exeCnt)
     //              << LOG_KV("total", m_txs->size());
@@ -88,7 +88,7 @@ void TxDAG::executeUnit()
     {
         id = m_dag.pop();
         if (id == INVALID_ID)
-            return;
+            return 0;
     }
 
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit transaction") << LOG_KV("txid", id);
@@ -101,6 +101,7 @@ void TxDAG::executeUnit()
         // PARA_LOG(TRACE) << LOG_DESC("executeUnit finish") << LOG_KV("exeCnt", m_exeCnt)
         //                << LOG_KV("total", m_txs->size());
     }
+    return 1;
 }
 
 void TxDAG::executeSerialTxs()

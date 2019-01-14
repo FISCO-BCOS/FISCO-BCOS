@@ -56,6 +56,8 @@ public:
     bool checkAuthority(Address const& _origin) const override;
 
 private:
+    typedef std::map<std::string, Entries::Ptr>::iterator CacheItr;
+
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
     bool isHashField(const std::string& _key);
@@ -66,7 +68,8 @@ private:
     h256 m_blockHash;
     int m_blockNum = 0;
 
-    mutable dev::SharedMutex x_table;
+    mutable dev::SharedMutex x_tableInfo;
+    mutable dev::SharedMutex x_cache;
 };
 
 }  // namespace storage

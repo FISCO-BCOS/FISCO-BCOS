@@ -36,6 +36,7 @@ void DAG::init(ID _maxSize)
     clear();
     for (ID i = 0; i < _maxSize; i++)
         m_vtxs.emplace_back(make_shared<Vertex>());
+    m_totalVtxs = _maxSize;
 }
 
 void DAG::addEdge(ID _f, ID _t)
@@ -64,7 +65,7 @@ void DAG::generate()
 
 ID DAG::pop()
 {
-    WriteGuard l(x_topLevel);
+    Guard l(x_topLevel);
     if (m_topLevel.empty())
         return INVALID_ID;
 
@@ -73,8 +74,25 @@ ID DAG::pop()
     return top;
 }
 
+ID DAG::waitPop()
+{
+    std::unique_lock<std::mutex> ul(x_topLevel);
+    while (m_topLevel.empty())
+    {
+        if (m_totalConsume >= m_totalVtxs)
+            return INVALID_ID;
+        else
+            cv_topLevel.wait(ul);
+    }
+
+    ID top = m_topLevel.front();
+    m_topLevel.pop();
+    return top;
+}
+
 void DAG::consume(ID _id)
 {
+    ID producedNum = 0;
     for (ID id : m_vtxs[_id]->outEdge)
     {
         auto vtx = m_vtxs[id];
@@ -84,10 +102,19 @@ void DAG::consume(ID _id)
         }
         if (vtx->inDegree == 0)
         {
-            WriteGuard l(x_topLevel);
+            Guard l(x_topLevel);
             m_topLevel.push(id);
+            producedNum++;
+            if (producedNum >= 1)
+                cv_topLevel.notify_one();  // await other thread
         }
     }
+
+    Guard l(x_topLevel);
+    m_totalConsume += 1;
+    if (m_totalConsume >= m_totalVtxs)
+        cv_topLevel.notify_all();  // If DAG reach the end, awake all waitPop thread to exit
+
     // PARA_LOG(TRACE) << LOG_BADGE("DAG") << LOG_DESC("consumed")
     //                << LOG_KV("queueSize", m_topLevel.size());
     // for (ID id = 0; id < m_vtxs.size(); id++)
@@ -96,8 +123,8 @@ void DAG::consume(ID _id)
 
 void DAG::clear()
 {
-    m_vtxs.clear();
-    WriteGuard l(x_topLevel);
+    m_vtxs = std::vector<std::shared_ptr<Vertex>>();
+    Guard l(x_topLevel);
     m_topLevel = queue<ID>();
 }
 

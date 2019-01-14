@@ -24,8 +24,10 @@
 #pragma once
 #include "Common.h"
 #include <libdevcore/Guards.h>
+#include <condition_variable>
 #include <cstdint>
 #include <queue>
+#include <thread>
 #include <vector>
 
 namespace dev
@@ -63,6 +65,9 @@ public:
     // Pop the top of DAG (thread safe), return INVALID_ID if queue is empty
     ID pop();
 
+    // Wait until topLevel is not empty, return INVALID_ID if DAG reach the end
+    ID waitPop();
+
     // Consume the top and add new top in top queue (thread safe)
     void consume(ID _id);
 
@@ -73,9 +78,13 @@ private:
     std::vector<std::shared_ptr<Vertex>> m_vtxs;
     std::queue<ID> m_topLevel;
 
+    ID m_totalVtxs = 0;
+    ID m_totalConsume = 0;
+
 private:
     void printVtx(ID _id);
-    mutable dev::SharedMutex x_topLevel;
+    mutable std::mutex x_topLevel;
+    std::condition_variable cv_topLevel;
 };
 
 }  // namespace blockverifier
