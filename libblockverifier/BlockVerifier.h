@@ -23,7 +23,6 @@
 #include "BlockVerifierInterface.h"
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
-#include "Precompiled.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -40,9 +39,7 @@ namespace dev
 {
 namespace eth
 {
-class PrecompiledContract;
 class TransactionReceipt;
-class LastBlockHashesFace;
 
 }  // namespace eth
 

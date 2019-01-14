@@ -28,11 +28,15 @@
 /// DEVified by Gav Wood.
 #pragma once
 
-#include "FixedHash.h"
+#include "vector_ref.h"
 #include <string>
 
 namespace dev
 {
+using byte = uint8_t;
+using bytesConstRef = vector_ref<byte const>;
+using bytes = std::vector<byte>;
+
 std::string toBase64(bytesConstRef _in);
 bytes fromBase64(std::string const& _in);
 

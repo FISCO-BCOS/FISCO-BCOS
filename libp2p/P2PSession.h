@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "P2PMessage.h"
 #include <libnetwork/Common.h>
 #include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
@@ -31,6 +30,7 @@ namespace dev
 {
 namespace p2p
 {
+class P2PMessage;
 class Service;
 
 class P2PSession : public std::enable_shared_from_this<P2PSession>
@@ -61,7 +61,7 @@ public:
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
 
-    virtual void onTopicMessage(P2PMessage::Ptr message);
+    virtual void onTopicMessage(std::shared_ptr<P2PMessage> message);
 
     virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<std::string> > topics)
     {

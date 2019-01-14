@@ -151,7 +151,7 @@ struct RaftMsg
     size_t term;
     int64_t height;
     h256 blockHash;
-
+    virtual ~RaftMsg() = default;
     virtual void streamRLPFields(RLPStream& _s) const { _s << idx << term << height << blockHash; }
     virtual void populate(RLP const& _rlp)
     {

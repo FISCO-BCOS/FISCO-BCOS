@@ -166,6 +166,7 @@ struct PBFTMsg
         sig = signHash(block_hash, _keyPair);
         sig2 = signHash(fieldsWithoutBlock(), _keyPair);
     }
+    virtual ~PBFTMsg() = default;
 
     bool operator==(PBFTMsg const& req) const
     {

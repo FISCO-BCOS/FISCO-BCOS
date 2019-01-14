@@ -20,14 +20,13 @@
  */
 
 #include "Service.h"
-
 #include "Common.h"
+#include "P2PMessage.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
-#include <libp2p/Service.h>
 #include <boost/random.hpp>
 #include <unordered_map>
 

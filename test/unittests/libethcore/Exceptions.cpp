@@ -20,6 +20,7 @@
  * @author: yujiechen
  * @date 2018-08-24
  */
+#include <iostream>
 
 #include <libdevcore/Assertions.h>
 #include <libdevcore/Exceptions.h>

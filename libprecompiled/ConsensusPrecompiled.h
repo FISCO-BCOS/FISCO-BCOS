@@ -21,7 +21,6 @@
 #pragma once
 #include "CRUDPrecompiled.h"
 #include "Common.h"
-#include "libblockverifier/ExecutiveContext.h"
 namespace dev
 {
 namespace precompiled
@@ -53,11 +52,11 @@ public:
     ConsensusPrecompiled();
     virtual ~ConsensusPrecompiled(){};
 
-    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address());
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address());
 
 private:
-    void showConsensusTable(dev::blockverifier::ExecutiveContext::Ptr context);
+    void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     bool checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID);
 };
 

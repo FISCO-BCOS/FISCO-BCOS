@@ -20,6 +20,7 @@
  */
 
 #include "P2PSession.h"
+#include "P2PMessage.h"
 #include "Service.h"
 #include <libdevcore/Common.h>
 #include <libnetwork/Common.h>
