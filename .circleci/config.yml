@@ -32,7 +32,8 @@ jobs:
       - run:
           name: Upload Coverage
           command: |
-            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1
+            rm -rf /root/FISCO-BCOS/deps
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g ./deps/**
       - run:
           name: Upload binary
           command: |
