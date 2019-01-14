@@ -547,7 +547,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         // update toUser balance info.
         entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
-        entry->setField(DAG_TRANSFER_FIELD_BALANCE, toFromUserBalance.str());
+        entry->setField(DAG_TRANSFER_FIELD_BALANCE, newToUserBalance.str());
         count = table->update(toUser, entry, getOptions(origin));
 
         // end with success
