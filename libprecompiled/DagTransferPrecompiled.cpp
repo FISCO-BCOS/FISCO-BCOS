@@ -520,7 +520,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         }
         else
         {
-            toUserBalance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE)));
+            toUserBalance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         }
 
         // overflow check
