@@ -115,7 +115,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
     try
     {
         Ledger_LOG(INFO) << LOG_BADGE("initIniConfig")
-                         << LOG_DESC("initTxPoolConfig/initSyncConfig")
+                         << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                          << LOG_KV("configFile", iniConfigFileName);
         ptree pt;
         /// read the configuration file for a specified group
@@ -124,12 +124,20 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         initTxPoolConfig(pt);
         /// init params related to sync
         initSyncConfig(pt);
+        initTxExecuteConfig(pt);
     }
     catch (std::exception& e)
     {
         Ledger_LOG(ERROR) << LOG_DESC("initConfig Failed")
                           << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
+}
+
+void Ledger::initTxExecuteConfig(ptree const& pt)
+{
+    m_param->mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
+    Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
+                      << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
 }
 
 void Ledger::initTxPoolConfig(ptree const& pt)
@@ -226,9 +234,6 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
     m_param->mutableTxParam().txGasLimit = pt.get<unsigned>("tx.gas_limit", 300000000);
     Ledger_LOG(DEBUG) << LOG_BADGE("initTxConfig")
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
-    m_param->mutableTxParam().enableParallel = pt.get<bool>("tx.enable_parallel", false);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initTxConfig")
-                      << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
 }
 
 /// init mark of this group
