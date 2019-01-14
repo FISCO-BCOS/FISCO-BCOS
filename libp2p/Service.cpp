@@ -713,7 +713,7 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
         for (auto const& i : m_sessions)
         {
             /// ignore the node self and the inactived session
-            if (i.first == id() || i.second->inactived())
+            if (i.first == id() || false == i.second->actived())
             {
                 continue;
             }
