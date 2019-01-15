@@ -47,7 +47,10 @@ public:
         fakeMsgEngine(fakeSyncToolsSet.getServicePtr(), fakeSyncToolsSet.getTxPoolPtr(),
             fakeSyncToolsSet.getBlockChainPtr(), fakeStatusPtr, 0, NodeID(0xabcd), h256(0xcdef)),
         fakeException()
-    {}
+    {
+        SyncPeerInfo newPeer{NodeID(), 0, h256(0x1024), h256(0x1024)};
+        fakeStatusPtr->newSyncPeerStatus(newPeer);
+    }
     FakeSyncToolsSet fakeSyncToolsSet;
     shared_ptr<SyncMasterStatus> fakeStatusPtr;
     SyncMsgEngine fakeMsgEngine;
@@ -75,14 +78,16 @@ BOOST_AUTO_TEST_CASE(InvalidInputTest)
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
     auto statusPacket = SyncStatusPacket();
-    statusPacket.encode(0x00, h256(0xcdef), h256(0xcd));
+    statusPacket.encode(0x1, h256(0xcdef), h256(0xcd));
     auto msgPtr = statusPacket.toMessage(0x01);
-    auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0x1234));
+    auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
-    BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0x1234)));
+    BOOST_CHECK(fakeStatusPtr->hasPeer(NodeID()));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
-    BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0x1234)));
+    BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->number, 0x1);
+    BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->genesisHash, h256(0xcdef));
+    BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->latestHash, h256(0xcd));
 }
 
 BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)

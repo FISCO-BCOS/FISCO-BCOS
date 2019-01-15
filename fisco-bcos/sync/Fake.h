@@ -61,6 +61,7 @@ public:
         m_blockVerifier(_blockVerifier),
         m_totalTxCommit(0),
         m_protocolId(0),
+        m_nodeId(0),
         m_blockGenerationInterval(_idleWaitMs)
     {
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
@@ -187,6 +188,7 @@ private:
 
     size_t m_totalTxCommit;
     dev::PROTOCOL_ID m_protocolId;
+    dev::h512 m_nodeId;
     dev::GROUP_ID m_groupId;
     unsigned m_blockGenerationInterval;
 };

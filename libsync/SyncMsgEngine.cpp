@@ -40,7 +40,7 @@ void SyncMsgEngine::messageHandler(
     if (!checkSession(_session) || !checkMessage(_msg))
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
-                          << LOG_DESC("Reject packet: [reason]: session or msg illegal");
+                          << LOG_DESC("Reject packet: [reason]: session/msg/group illegal");
         _session->stop(dev::network::LocalIdentity);
         return;
     }
@@ -68,6 +68,10 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
     if (_session->nodeID() == m_nodeId)
+        return false;
+
+    /// Drop packets comes from other groups
+    if (!m_syncStatus->hasPeer(_session->nodeID()))
         return false;
     return true;
 }
