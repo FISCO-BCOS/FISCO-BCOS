@@ -188,7 +188,7 @@ private:
 
     size_t m_totalTxCommit;
     dev::PROTOCOL_ID m_protocolId;
-    dev::NodeID m_nodeId;
+    dev::h512 m_nodeId;
     dev::GROUP_ID m_groupId;
     unsigned m_blockGenerationInterval;
 };
