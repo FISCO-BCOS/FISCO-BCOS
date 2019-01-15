@@ -58,18 +58,18 @@ protected:
     std::shared_ptr<storage::Table> openTable(
         dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
 
-private:
+public:
     bool invalidUserName(const std::string& user);
-    void userAddCall(
-        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
-    void userSaveCall(
-        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
-    void userDrawCall(
-        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
-    void userBalanceCall(
-        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
-    void userTransferCall(
-        dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out);
+    void userAddCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    void userSaveCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    void userDrawCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    void userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    void userTransferCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+        Address const& origin, bytes& out);
 };
 
 }  // namespace precompiled
