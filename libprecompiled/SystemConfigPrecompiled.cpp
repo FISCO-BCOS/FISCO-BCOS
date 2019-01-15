@@ -132,11 +132,27 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
 {
     if (SYSTEM_KEY_TX_COUNT_LIMIT == key)
     {
-        return (boost::lexical_cast<uint64_t>(value) >= TX_COUNT_LIMIT_MIN);
+        try
+        {
+            return (boost::lexical_cast<uint64_t>(value) >= TX_COUNT_LIMIT_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE(e.what());
+            return false;
+        }
     }
     else if (SYSTEM_KEY_TX_GAS_LIMIT == key)
     {
-        return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
+        try
+        {
+            return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE(e.what());
+            return false;
+        }
     }
     // only can insert tx_count_limit and tx_gas_limit as system config
     return false;
