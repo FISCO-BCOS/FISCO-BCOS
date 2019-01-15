@@ -22,24 +22,26 @@ jobs:
       - run:
           name: Unit test
           command: |
-            cd /root/FISCO-BCOS/build
+            cd build
             CTEST_OUTPUT_ON_FAILURE=TRUE make test
-      - run:
-          name: Upload Coverage
-          command: |
-            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1
-      - run:
-          name: Upload binary
-          command: |
-            tar -zcf fisco-static.tar.gz build/bin/fisco-bcos
-      - store_artifacts:
-          path: /root/FISCO-BCOS/fisco-static.tar.gz
-          destination: fisco-static.tar.gz
       - save_cache:
           key: dependency-cache-static-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             # - build
+      - run:
+          name: Upload Coverage
+          command: |
+            rm -rf deps
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g ./deps/**
+      - run:
+          name: Upload binary
+          command: |
+            cd build/bin
+            tar -zcf fisco-static.tar.gz fisco-bcos
+      - store_artifacts:
+          path: /root/FISCO-BCOS/build/bin/fisco-static.tar.gz
+          destination: fisco-static.tar.gz
 
   build_test_guomi:
     working_directory: /root/FISCO-BCOS-gm
@@ -63,14 +65,15 @@ jobs:
       - run:
           name: Unit test
           command: |
-            cd /root/FISCO-BCOS-gm/build
+            cd build
             ./bin/test-fisco-bcos -- --testpath=../test/data/ 
       - run:
           name: Upload binary
           command: |
-            tar -zcf fisco-gm-centos7.tar.gz build/bin/fisco-bcos
+            cd build/bin
+            tar -zcf fisco-gm-centos7.tar.gz fisco-bcos
       - store_artifacts:
-          path: /root/FISCO-BCOS-gm/fisco-gm-centos7.tar.gz
+          path: /root/FISCO-BCOS-gm/build/bin/fisco-gm-centos7.tar.gz
           destination: fisco-gm-centos7.tar.gz
       - save_cache:
           key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
