@@ -107,7 +107,7 @@ public:
         knownLatestHash(_genesisHash),
         m_protocolId(0),
         m_nodeId(0),
-        m_downloadingBlockQueue(nullptr, 0, 0)
+        m_downloadingBlockQueue(nullptr, 0, NodeID())
     {}
 
     bool hasPeer(NodeID const& _id);
