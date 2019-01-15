@@ -402,7 +402,8 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
         }
-        else
+        /// ignore the node self
+        else if (nodeID != id())
         {
             SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeID", nodeID.abridged());
 
@@ -711,6 +712,11 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
         RecursiveGuard l(x_sessions);
         for (auto const& i : m_sessions)
         {
+            /// ignore the node self and the inactived session
+            if (i.first == id() || false == i.second->actived())
+            {
+                continue;
+            }
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
                 infos.push_back(P2PSessionInfo(
