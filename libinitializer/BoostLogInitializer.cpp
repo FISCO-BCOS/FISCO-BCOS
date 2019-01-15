@@ -72,7 +72,7 @@ void LogInitializer::initLog(
             "TimeStamp", "%Y-%m-%d %H:%M:%S.%f") %
         boost::log::expressions::smessage);
     /// set log level
-    unsigned log_level = getLogLevel(pt.get<std::string>(logType + ".Level", "debug"));
+    unsigned log_level = getLogLevel(pt.get<std::string>(logType + ".Level", "info"));
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= log_level);
     /// sink->locked_backend()->set_file_name_pattern
