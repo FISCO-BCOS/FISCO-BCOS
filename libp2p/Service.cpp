@@ -108,13 +108,6 @@ void Service::heartBeat()
     // Reconnect all nodes
     for (auto it : staticNodes)
     {
-        if ((it.first.address == m_host->tcpClient().address() &&
-                it.first.tcpPort == m_host->listenPort()))
-        {
-            SERVICE_LOG(DEBUG) << "[#heartBeat] ignore myself [address]: " << m_host->listenHost()
-                               << std::endl;
-            continue;
-        }
         /// exclude myself
         if (it.second == id())
         {
