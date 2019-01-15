@@ -374,6 +374,11 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 {
     try
     {
+        if (nodeID == id())
+        {
+            // exclude myself
+            return;
+        }
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(nodeID);
 
