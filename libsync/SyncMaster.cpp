@@ -500,7 +500,7 @@ void SyncMaster::maintainPeersConnection()
     h256 const& currentHash = m_blockChain->numberHash(currentNumber);
     for (auto const& member : groupMembers)
     {
-        if (!m_syncStatus->hasPeer(member))
+        if (member != m_nodeId && !m_syncStatus->hasPeer(member))
         {
             // create a peer
             SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash};

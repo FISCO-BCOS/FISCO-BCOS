@@ -47,7 +47,10 @@ public:
         fakeMsgEngine(fakeSyncToolsSet.getServicePtr(), fakeSyncToolsSet.getTxPoolPtr(),
             fakeSyncToolsSet.getBlockChainPtr(), fakeStatusPtr, 0, NodeID(0xabcd), h256(0xcdef)),
         fakeException()
-    {}
+    {
+        SyncPeerInfo newPeer{NodeID(), 0, h256(0x1024), h256(0x1024)};
+        fakeStatusPtr->newSyncPeerStatus(newPeer);
+    }
     FakeSyncToolsSet fakeSyncToolsSet;
     shared_ptr<SyncMasterStatus> fakeStatusPtr;
     SyncMsgEngine fakeMsgEngine;
