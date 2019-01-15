@@ -302,38 +302,45 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
         std::lock_guard<std::mutex> lock(_seqMutex);
         _seq2session.insert(std::make_pair(message->seq(), session));
 
-        if(m_callbackSetter) {
-			auto seq = message->seq();
-			auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
-			auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
+        if (m_callbackSetter)
+        {
+            auto seq = message->seq();
+            auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
+            auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
 
-			auto function = new std::function<void()>();
-			m_callbackSetter(new std::function<void()>([serverRef, sessionRef, seq]() {
-				auto server = serverRef.lock();
-				auto session = sessionRef.lock();
-				if(server && session) {
-					auto channelMessage = server->messageFactory()->buildMessage();
-					channelMessage->setType(0x1000);
-					channelMessage->setSeq(seq);
-					channelMessage->setResult(0);
+            auto function = new std::function<void()>();
+            m_callbackSetter(new std::function<void()>([serverRef, sessionRef, seq]() {
+                auto server = serverRef.lock();
+                auto session = sessionRef.lock();
+                if (server && session)
+                {
+                    auto channelMessage = server->messageFactory()->buildMessage();
+                    channelMessage->setType(0x1000);
+                    channelMessage->setSeq(seq);
+                    channelMessage->setResult(0);
 
-					session->asyncSendMessage(channelMessage, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
-				}
-			}));
+                    LOG(TRACE) << "Push transaction notify: " << seq;
+                    session->asyncSendMessage(channelMessage,
+                        std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+                }
+            }));
         }
     }
 
     std::string* addInfo = new std::string(message->seq());
 
-    try {
-    	OnRequest(body, addInfo);
+    try
+    {
+        OnRequest(body, addInfo);
     }
-    catch(std::exception &e) {
-    	LOG(ERROR) << "Error while onRequest rpc: " << boost::diagnostic_information(e);
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Error while onRequest rpc: " << boost::diagnostic_information(e);
     }
 
-    if(m_callbackSetter) {
-    	m_callbackSetter(NULL);
+    if (m_callbackSetter)
+    {
+        m_callbackSetter(NULL);
     }
 }
 

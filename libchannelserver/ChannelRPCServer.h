@@ -116,7 +116,10 @@ public:
 
     virtual std::string newSeq();
 
-    void setCallbackSetter(std::function<void(std::function<void()>*)> callbackSetter) { m_callbackSetter = callbackSetter; };
+    void setCallbackSetter(std::function<void(std::function<void()>*)> callbackSetter)
+    {
+        m_callbackSetter = callbackSetter;
+    };
 
 private:
     void initSSLContext();

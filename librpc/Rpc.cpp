@@ -953,13 +953,14 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
-        if(m_currentTransactionCallback.get()) {
-        	auto transactionCallback = *m_currentTransactionCallback;
-			tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
-				transactionCallback();
-			});
+        if (m_currentTransactionCallback.get())
+        {
+            auto transactionCallback = *m_currentTransactionCallback;
+            tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
+                transactionCallback();
+            });
 
-			m_currentTransactionCallback.reset(NULL);
+            m_currentTransactionCallback.reset(NULL);
         }
         std::pair<h256, Address> ret = txPool->submit(tx);
 
