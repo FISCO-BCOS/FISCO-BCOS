@@ -143,8 +143,8 @@ BOOST_AUTO_TEST_CASE(getDagTag)
     // transfer test
     // valid input parameters
     std::string from = "from";
-    std::strin to = "to";
-    dev::u256 amount = 1111111;
+    std::string to = "to";
+    amount = 1111111;
     param = abi.abiIn(userTransferFunc, from, to, amount);
     vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
     BOOST_TEST(((vTags.size() == 2) && (vTags[0] == from) && (vTags[1] == to)));
@@ -187,25 +187,25 @@ BOOST_AUTO_TEST_CASE(userAdd)
 
     // invalid input, user name empty string
     user = "";
-    param = abi.abiIn(userAddFunc, user, amount);
-    out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    params = abi.abiIn(userAddFunc, user, amount);
+    out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST((!result));
 
     // normal input, first add this user
     user = "user";
     amount = 11111;
-    param = abi.abiIn(userAddFunc, user, amount);
-    out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    params = abi.abiIn(userAddFunc, user, amount);
+    out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     // user already exist, add this user again
     user = "user";
     amount = 11111;
-    param = abi.abiIn(userAddFunc, user, amount);
-    out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    params = abi.abiIn(userAddFunc, user, amount);
+    out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 }
 
@@ -224,7 +224,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     user = "";
     params = abi.abiIn(userSaveFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST((!result));
 
     // invalid input, amount zero
@@ -232,7 +232,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     amount = 0;
     params = abi.abiIn(userSaveFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST((!result));
 
     // normal input, user is not exist, add this user.
@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     amount = 1111;
     params = abi.abiIn(userSaveFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     // normal input, user exist, add balance of this user.
@@ -254,7 +254,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     dev::u256 balance;
     params = abi.abiIn(userBalanceFunc, user);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
+    abi.abiOut(bytesConstRef(&out), result, balance);
     BOOST_TEST(((result) && (balance == (amount + amount))));
 
     // normal input, user exist, add balance of this user, balance overflow.
@@ -262,7 +262,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     amount = dev::u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
     params = abi.abiIn(userSaveFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 }
 
@@ -281,7 +281,7 @@ BOOST_AUTO_TEST_CASE(userDraw)
     user = "";
     params = abi.abiIn(userDrawFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST((!result));
 
     // invalid input, amount zero
@@ -289,7 +289,7 @@ BOOST_AUTO_TEST_CASE(userDraw)
     amount = 0;
     params = abi.abiIn(userDrawFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST((!result));
 
     // add user first, after this the balance of "user" is 11111
@@ -297,7 +297,7 @@ BOOST_AUTO_TEST_CASE(userDraw)
     amount = 11111;
     params = abi.abiIn(userAddFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     // draw 11110 , after this the balance of "user" is 1
@@ -305,20 +305,20 @@ BOOST_AUTO_TEST_CASE(userDraw)
     amount = 11110;
     params = abi.abiIn(userDrawFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     // draw 11110  again, insufficient balance
     params = abi.abiIn(userDrawFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 
     // get balance of this user
     dev::u256 balance;
     params = abi.abiIn(userBalanceFunc, user);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
+    abi.abiOut(bytesConstRef(&out), result, balance);
     BOOST_TEST(((result) && (balance == dev::u256(1))));
 }
 
@@ -338,7 +338,7 @@ BOOST_AUTO_TEST_CASE(userBalance)
     balance = 0;
     params = abi.abiIn(userBalanceFunc, user);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
+    abi.abiOut(bytesConstRef(&out), result, balance);
     BOOST_TEST(!(result));
 
     // normal input, user not exist
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(userBalance)
     balance = 0;
     params = abi.abiIn(userBalanceFunc, user);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
+    abi.abiOut(bytesConstRef(&out), result, balance);
     BOOST_TEST(!(result));
 
     // create user
@@ -354,14 +354,14 @@ BOOST_AUTO_TEST_CASE(userBalance)
     amount = 1111111;
     params = abi.abiIn(userAddFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
+    abi.abiOut(bytesConstRef(&out), result, balance);
     BOOST_TEST(result);
 
     // get balance of user
     params = abi.abiIn(userBalanceFunc, user);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
-    BOOST_TEST(((result) && (balance == amount));
+    abi.abiOut(bytesConstRef(&out), result, balance);
+    BOOST_TEST(((result) && (balance == amount))) d;
 }
 
 BOOST_AUTO_TEST_CASE(userTransfer)
@@ -378,7 +378,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     // invalid input, from user name empty string, to user name empty string.
     params = abi.abiIn(userTransferFunc, from, to, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 
     // invalid input, from user name empty string.
@@ -396,7 +396,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     amount = 12345;
     params = abi.abiIn(userTransferFunc, from, to, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 
     // invalid input, amount zero.
@@ -405,7 +405,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     amount = 0;
     params = abi.abiIn(userTransferFunc, from, to, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 
     // from and to user all not exist
@@ -414,7 +414,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     amount = 11111;
     params = abi.abiIn(userTransferFunc, from, to, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 
     // insert three user: user0(111111)  user1(2222222)
@@ -423,54 +423,54 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     dev::u256 amount0 = 111111;
     params = abi.abiIn(userAddFunc, user0, amount0);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     std::string user1 = "user1";
     dev::u256 amount1 = 2222222;
     params = abi.abiIn(userAddFunc, user1, amount1);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     std::string user2 = "user2";
     dev::u256 amount2("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
     params = abi.abiIn(userAddFunc, user2, amount2);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     // user0 transfer 111110 to user1
     dev::u256 transfer = 111110;
     params = abi.abiIn(userTransferFunc, user0, user1, transfer);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result);
 
     // user0 transfer 111110 to user1 again
     dev::u256 transfer = 111110;
     params = abi.abiIn(userTransferFunc, user0, user1, transfer);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 
     dev::u256 balance;
     // get balance of user0
     params = abi.abiIn(userBalanceFunc, user0);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
+    abi.abiOut(bytesConstRef(&out), result, balance);
     BOOST_TEST(((result) && (balance == (amount0 - transfer)));
 
     params = abi.abiIn(userBalanceFunc, user1);
     // get balance of user1
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result, balance);
+    abi.abiOut(bytesConstRef(&out), result, balance);
     BOOST_TEST(((result) && (balance == (amount1 + transfer)));
 
     // user1 transfer 111110 to user2, balance of user2 will overflow
     params = abi.abiIn(userTransferFunc, user1, user2, transfer);
     out = dtPrecompiled->call(context, bytesConstRef(&param), origin);
-    abi.abiOut(out, result);
+    abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(!(result));
 }
 
