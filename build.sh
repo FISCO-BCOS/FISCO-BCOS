@@ -150,7 +150,6 @@ install_all_deps()
 		exit 1
 	fi
 	execute_cmd "chmod +x scripts/install_deps.sh && sudo ./scripts/install_deps.sh"
-	execute_cmd "sudo chmod +x /usr/bin/fisco-solc"
 	#install console
 	execute_cmd "sudo cnpm install -g ethereum-console"
 }
