@@ -460,13 +460,13 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userBalanceFunc, user0);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result, balance);
-    BOOST_TEST(((result) && (balance == (amount0 - transfer)));
+    BOOST_TEST(result && (balance == (amount0 - transfer)));
 
     params = abi.abiIn(userBalanceFunc, user1);
     // get balance of user1
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result, balance);
-    BOOST_TEST(((result) && (balance == (amount1 + transfer)));
+    BOOST_TEST(result && (balance == (amount1 + transfer)));
 
     // user1 transfer 111110 to user2, balance of user2 will overflow
     params = abi.abiIn(userTransferFunc, user1, user2, transfer);
