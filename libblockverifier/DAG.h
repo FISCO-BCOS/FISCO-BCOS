@@ -69,7 +69,7 @@ public:
     ID waitPop();
 
     // Consume the top and add new top in top queue (thread safe)
-    void consume(ID _id);
+    ID consume(ID _id);
 
     // Clear all data of this class (thread safe)
     void clear();

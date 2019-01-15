@@ -93,10 +93,14 @@ int TxDAG::executeUnit()
 
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit transaction") << LOG_KV("txid", id);
     // TODO catch execute exception
-    f_executeTx((*m_txs)[id], id);
-
+    while (id != INVALID_ID)
     {
-        m_dag.consume(id);
+        f_executeTx((*m_txs)[id], id);
+
+
+        id = m_dag.consume(id);
+
+        Guard l(x_exeCnt);
         m_exeCnt += 1;
         // PARA_LOG(TRACE) << LOG_DESC("executeUnit finish") << LOG_KV("exeCnt", m_exeCnt)
         //                << LOG_KV("total", m_txs->size());

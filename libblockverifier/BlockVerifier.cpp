@@ -65,6 +65,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     ///*
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(block.transactions());
+    /*
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
@@ -72,6 +73,11 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
             execute(envInfo, _tr, OnOpFunc(), executiveContext);
         block.setTransactionReceipt(_txId, resultReceipt.second);
         executiveContext->getState()->commit();
+        return true;
+    });*/
+    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
+        executiveContext->getState()->createContract(_tr.sender());
+        executiveContext->getState()->setStorage(_tr.sender(), u256(1), u256(2));
         return true;
     });
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
@@ -85,6 +91,12 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     if (m_paraTxExecutor != nullptr)
     {
         m_paraTxExecutor->start(txDag);
+        /*#pragma omp for
+                for (int i = 0; i < 8; i++)
+                {
+                    while (!txDag->hasFinished())
+                        txDag->executeUnit();
+                }*/
     }
     else
     {

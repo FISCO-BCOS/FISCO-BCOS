@@ -60,7 +60,7 @@ void ParaTxExecutor::initialize(unsigned _threadNum)
     m_workers.reserve(_threadNum);
     for (auto i = _threadNum; i > 0; --i)
     {
-        m_workers.push_back(ParaTxWorker(m_wakeupNotifier));
+        m_workers.push_back(ParaTxWorker(m_wakeupNotifier, "ParaTxExecutor_" + std::to_string(i)));
         m_workers.back().start();
     }
 }
