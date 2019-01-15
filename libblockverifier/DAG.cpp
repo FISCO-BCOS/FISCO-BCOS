@@ -90,9 +90,10 @@ ID DAG::waitPop()
     return top;
 }
 
-void DAG::consume(ID _id)
+ID DAG::consume(ID _id)
 {
     ID producedNum = 0;
+    ID nextId = INVALID_ID;
     for (ID id : m_vtxs[_id]->outEdge)
     {
         auto vtx = m_vtxs[id];
@@ -102,11 +103,17 @@ void DAG::consume(ID _id)
         }
         if (vtx->inDegree == 0)
         {
-            Guard l(x_topLevel);
-            m_topLevel.push(id);
             producedNum++;
-            if (producedNum >= 1)
+            if (producedNum == 1)
+            {
+                nextId = id;
+            }
+            else
+            {
+                Guard l(x_topLevel);
+                m_topLevel.push(id);
                 cv_topLevel.notify_one();  // await other thread
+            }
         }
     }
 
@@ -119,6 +126,7 @@ void DAG::consume(ID _id)
     //                << LOG_KV("queueSize", m_topLevel.size());
     // for (ID id = 0; id < m_vtxs.size(); id++)
     // printVtx(id);
+    return nextId;
 }
 
 void DAG::clear()

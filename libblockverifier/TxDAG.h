@@ -103,6 +103,8 @@ private:
 
     ID m_exeCnt = 0;
     ID m_totalParaTxs = 0;
+
+    mutable std::mutex x_exeCnt;
 };
 
 template <typename T>
