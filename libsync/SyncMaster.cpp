@@ -483,31 +483,17 @@ bool SyncMaster::maintainDownloadingQueue()
 
 void SyncMaster::maintainPeersConnection()
 {
-    h512s miners = m_blockChain->minerList();
-    h512s groupMembers = miners + m_blockChain->observerList();
+    NodeIDs miners = m_blockChain->minerList();
+    NodeIDs groupMembers = miners + m_blockChain->observerList();
 
-    // If myself is not in groupMembers, ignore all peers
-    bool isMyselfInGroup = false;
-    for (auto const& member : groupMembers)
-    {
-        isMyselfInGroup |= (m_nodeId == member);
-    }
-    if (!isMyselfInGroup)
-    {
-        // Delete all peers
-        NodeIDs nodeIds = m_syncStatus->peers();
-        for (NodeID const& id : nodeIds)
-        {
-            m_syncStatus->deletePeer(id);
-        }
-        return;
-    }
-
-    // Delete inactive peers
+    // Delete uncorrelated peers
+    set<NodeID> memberSet;
+    for (auto member : groupMembers)
+        memberSet.insert(member);
     NodeIDs nodeIds = m_syncStatus->peers();
     for (NodeID const& id : nodeIds)
     {
-        if (!m_service->isConnected(id))
+        if (memberSet.find(id) == memberSet.end())
             m_syncStatus->deletePeer(id);
     }
 
@@ -516,7 +502,7 @@ void SyncMaster::maintainPeersConnection()
     h256 const& currentHash = m_blockChain->numberHash(currentNumber);
     for (auto const& member : groupMembers)
     {
-        if (!m_syncStatus->hasPeer(member))
+        if (member != m_nodeId && !m_syncStatus->hasPeer(member))
         {
             // create a peer
             SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash};
@@ -537,7 +523,7 @@ void SyncMaster::maintainPeersConnection()
     }
 
     // Update sync miner status
-    set<h512> minerSet;
+    set<NodeID> minerSet;
     for (auto miner : miners)
         minerSet.insert(miner);
 
