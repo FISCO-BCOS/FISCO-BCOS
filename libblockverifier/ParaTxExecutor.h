@@ -23,8 +23,8 @@
  */
 #pragma once
 
-#include <libblockverifier/TxDAG.h>
 #include <libblockverifier/Common.h>
+#include <libblockverifier/TxDAG.h>
 #include <libdevcore/Worker.h>
 #include <condition_variable>
 #include <memory>
