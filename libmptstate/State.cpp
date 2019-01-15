@@ -418,9 +418,10 @@ u256 State::getNonce(Address const& _addr) const
         return m_accountStartNonce;
 }
 
-u256 State::storage(Address const& _id, u256 const& _key) const
+/// modify here to enable account storage cache
+u256 State::storage(Address const& _id, u256 const& _key)
 {
-    if (Account const* a = account(_id))
+    if (Account* a = account(_id))
     {
         auto mit = a->storageOverlay().find(_key);
         if (mit != a->storageOverlay().end())
@@ -431,7 +432,7 @@ u256 State::storage(Address const& _id, u256 const& _key) const
             a->baseRoot());  // promise we won't change the overlay! :)
         string payload = memdb.at(_key);
         u256 ret = payload.size() ? RLP(payload).toInt<u256>() : 0;
-        a->setStorageCache(_key, ret);
+        a->setStorage(_key, ret);
         return ret;
     }
     else

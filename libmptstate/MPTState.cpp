@@ -80,7 +80,7 @@ h256 MPTState::storageRoot(Address const& _contract) const
     return m_state.storageRoot(_contract);
 }
 
-u256 MPTState::storage(Address const& _contract, u256 const& _memory) const
+u256 MPTState::storage(Address const& _contract, u256 const& _memory)
 {
     return m_state.storage(_contract, _memory);
 }
