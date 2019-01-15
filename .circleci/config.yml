@@ -28,7 +28,6 @@ jobs:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
-            # - build
       - run:
           name: Upload Coverage
           command: |
@@ -63,7 +62,6 @@ jobs:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
-            # - build
 
   deploy_static:
     working_directory: /root/FISCO-BCOS
@@ -135,16 +133,16 @@ workflows:
     jobs:
       - build_static_test
       - build_test_guomi
-      - deploy_static
-        - filters:
+      - deploy_static:
+          filters:
             branches:
               only: 
                 - /release-2.*/
             tags:
               only: 
                 - /v2.*/
-      - deploy_guomi
-        - filters:
+      - deploy_guomi:
+          filters:
             branches:
               only: 
                 - /release-2.*/
