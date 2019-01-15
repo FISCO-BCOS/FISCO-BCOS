@@ -83,8 +83,7 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
-    // Will no update
-    BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0x1234)));
+    BOOST_CHECK(fakeStatusPtr->hasPeer(NodeID()));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
     BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->number, 0x1);
     BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->genesisHash, h256(0xcdef));
