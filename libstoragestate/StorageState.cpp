@@ -168,7 +168,7 @@ h256 StorageState::storageRoot(Address const& _address) const
     return h256();
 }
 
-u256 StorageState::storage(Address const& _address, u256 const& _key) const
+u256 StorageState::storage(Address const& _address, u256 const& _key)
 {
     auto table = getTable(_address);
     if (table)

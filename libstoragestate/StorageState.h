@@ -88,7 +88,7 @@ public:
 
     /// Get the value of a storage position of an account.
     /// @returns 0 if no account exists at that address.
-    virtual u256 storage(Address const& _contract, u256 const& _memory) const override;
+    virtual u256 storage(Address const& _contract, u256 const& _memory) override;
 
     /// Set the value of a storage position of an account.
     virtual void setStorage(
