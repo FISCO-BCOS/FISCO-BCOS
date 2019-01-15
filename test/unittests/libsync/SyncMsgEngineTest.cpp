@@ -78,14 +78,17 @@ BOOST_AUTO_TEST_CASE(InvalidInputTest)
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
     auto statusPacket = SyncStatusPacket();
-    statusPacket.encode(0x00, h256(0xcdef), h256(0xcd));
+    statusPacket.encode(0x1, h256(0xcdef), h256(0xcd));
     auto msgPtr = statusPacket.toMessage(0x01);
-    auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0x1234));
+    auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
+    // Will no update
     BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0x1234)));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
-    BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0x1234)));
+    BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->number, 0x1);
+    BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->genesisHash, h256(0xcdef));
+    BOOST_CHECK_EQUAL(fakeStatusPtr->peerStatus(NodeID())->latestHash, h256(0xcd));
 }
 
 BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
