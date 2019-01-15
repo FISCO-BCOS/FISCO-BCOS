@@ -23,6 +23,7 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>

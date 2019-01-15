@@ -20,11 +20,11 @@
  * @author: jimmyshi
  * @date 2018-09-02
  */
+#include <iostream>
 
 #include <libethcore/ABI.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-#include <iostream>
 #include <string>
 
 using namespace std;
@@ -51,7 +51,6 @@ BOOST_AUTO_TEST_CASE(ContractABITest)
         0, 0, 0, 0, 0, 0}};
     byte b = 'a';
     bytes serialBytes = ct.abiIn("caculate(u256,u160)", b, xs, x, str32, y, ys);
-    std::cout << "abi serialBytes ====>" << serialBytes << std::endl;
     bytesConstRef serial = bytesConstRef(&serialBytes).cropped(4);
 
     u256 compareX;

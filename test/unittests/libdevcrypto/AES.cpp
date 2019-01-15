@@ -19,6 +19,7 @@
  * @author: chaychen asherli
  * @date 2018
  */
+#include <iostream>
 
 #include <libdevcore/Assertions.h>
 #include <libdevcore/CommonJS.h>

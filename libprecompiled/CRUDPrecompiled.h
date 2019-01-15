@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "Common.h"
-#include "libblockverifier/ExecutiveContext.h"
 
 namespace dev
 {
@@ -38,14 +37,15 @@ public:
     CRUDPrecompiled();
     virtual ~CRUDPrecompiled(){};
 
-    virtual std::string toString(dev::blockverifier::ExecutiveContext::Ptr);
+    virtual std::string toString(std::shared_ptr<dev::blockverifier::ExecutiveContext>);
 
-    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address());
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address());
 
 protected:
     std::shared_ptr<storage::Table> openTable(
-        dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        const std::string& tableName);
 };
 
 }  // namespace precompiled

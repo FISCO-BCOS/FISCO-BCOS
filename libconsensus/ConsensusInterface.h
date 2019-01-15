@@ -25,7 +25,6 @@
 #include <libethcore/Protocol.h>
 namespace dev
 {
-class ConsensusStatus;
 namespace consensus
 {
 class ConsensusInterface

@@ -34,13 +34,14 @@
 
 #include "Common.h"
 #include "SessionFace.h"
-#include "SocketFace.h"
+
 
 namespace dev
 {
 namespace network
 {
 class Host;
+class SocketFace;
 
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
@@ -60,7 +61,7 @@ public:
         Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override;
     // virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
-    virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
+    virtual NodeIPEndpoint nodeIPEndpoint() const override;
 
     virtual bool actived() const override;
 

@@ -31,6 +31,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libp2p/P2PInterface.h>
+#include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -163,7 +164,7 @@ protected:
     }
 
     virtual bool isValidReq(
-        dev::p2p::P2PMessage::Ptr, std::shared_ptr<dev::p2p::P2PSession>, ssize_t&)
+        std::shared_ptr<dev::p2p::P2PMessage>, std::shared_ptr<dev::p2p::P2PSession>, ssize_t&)
     {
         return false;
     }
@@ -179,8 +180,8 @@ protected:
      * @return false : decode failed
      */
     template <class T>
-    inline bool decodeToRequests(
-        T& req, dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::P2PSession> session)
+    inline bool decodeToRequests(T& req, std::shared_ptr<dev::p2p::P2PMessage> message,
+        std::shared_ptr<dev::p2p::P2PSession> session)
     {
         ssize_t peer_index = 0;
         bool valid = isValidReq(message, session, peer_index);

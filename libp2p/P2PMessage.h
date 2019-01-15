@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "Common.h"
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
