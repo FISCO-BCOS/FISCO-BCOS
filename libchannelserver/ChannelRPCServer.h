@@ -116,6 +116,8 @@ public:
 
     virtual std::string newSeq();
 
+    void setCallbackSetter(std::function<void(std::function<void()>*)> callbackSetter) { m_callbackSetter = callbackSetter; };
+
 private:
     void initSSLContext();
 
@@ -145,6 +147,8 @@ private:
     int _sessionCount = 1;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+
+    std::function<void(std::function<void()>*)> m_callbackSetter;
 };
 
 }  // namespace dev

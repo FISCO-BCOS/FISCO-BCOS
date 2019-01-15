@@ -31,6 +31,8 @@
 #include <libp2p/P2PInterface.h>
 #include <iostream>
 #include <memory>
+#include <mutex>
+
 namespace dev
 {
 namespace rpc
@@ -93,6 +95,9 @@ public:
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
+    void setCurrentTransactionCallback(std::function<void()> *callback) { m_currentTransactionCallback.reset(callback); }
+    void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
+
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
@@ -103,6 +108,9 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
+    std::function< std::function<void>() > setTransactionCallbackFactory();
+
+    boost::thread_specific_ptr<std::function<void()> > m_currentTransactionCallback;
 };
 
 }  // namespace rpc
