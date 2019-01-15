@@ -96,7 +96,7 @@ public:
         if (m_notifyNextLeaderSeal)
         {
             /// represent that the latest block has been consensused
-            if (m_timeManager.m_lastConsensusTime <= m_timeManager.m_startSealNextLeader)
+            if (getNextLeader() == nodeIdx())
             {
                 return false;
             }
@@ -112,9 +112,9 @@ public:
     /// even if the maxTransNum condition has been meeted
     bool canHandleBlockForNextLeader()
     {
-        if (m_notifyNextLeaderSeal)
+        if (m_notifyNextLeaderSeal && getNextLeader() == nodeIdx())
         {
-            return m_timeManager.m_lastConsensusTime > m_timeManager.m_startSealNextLeader;
+            return false;
         }
         return true;
     }
@@ -425,8 +425,7 @@ protected:
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
-        if (req.height > m_consensusBlockNumber ||
-            (req.height == m_consensusBlockNumber && req.view > m_view))
+        if (req.height > m_consensusBlockNumber || req.view > m_view)
         {
             return true;
         }

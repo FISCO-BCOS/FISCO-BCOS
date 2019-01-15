@@ -77,7 +77,10 @@ protected:
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
-    bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
+    bool reachBlockIntervalTime() override
+    {
+        return m_pbftEngine->reachBlockIntervalTime() || m_sealing.block.getTransactionSize() > 0;
+    }
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
     bool canHandleBlockForNextLeader() override

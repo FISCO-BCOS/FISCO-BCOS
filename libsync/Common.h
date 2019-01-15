@@ -43,7 +43,7 @@ namespace sync
 {
 DEV_SIMPLE_EXCEPTION(SyncVerifyHandlerNotSet);
 
-static unsigned const c_maxSendTransactions = 128;
+static unsigned const c_maxSendTransactions = 1000;
 
 // Every c_downloadingRequestTimeout request:
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks

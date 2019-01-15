@@ -263,12 +263,7 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
     bytes sign_req_data;
     sign_req.encode(sign_req_data);
     bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
-    /// to ensure that the collected signature size is equal to minValidNodes
-    /// so that checkAndCommit can be called, and the committed request backup can be stored
-    if (succ && m_reqCache->getSigCacheSize(sign_req.block_hash) < minValidNodes())
-    {
-        m_reqCache->addSignReq(sign_req);
-    }
+    m_reqCache->addSignReq(sign_req);
     return succ;
 }
 
@@ -461,8 +456,6 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     {
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
         m_reqCache->addFuturePrepareCache(req);
-        /// note the blocksync module early
-        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         return CheckResult::FUTURE;
     }
     if (!isValidLeader(req))
@@ -576,8 +569,6 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
         PBFTENGINE_LOG(DEBUG) << "I am the next leader = " << getNextLeader()
                               << ", filter trans size = " << filter.size()
                               << ", total trans = " << m_txPool->status().current;
-        /// m_startSealNextLeader: the begining sealing time of the next leader
-        m_timeManager.m_startSealNextLeader = utcTime();
         m_notifyNextLeaderSeal = true;
         /// function registered in PBFTSealer to reset the block for the next leader by
         /// resetting the block number to current block number + 2
@@ -866,7 +857,7 @@ void PBFTEngine::checkAndSave()
                 m_txPool->handleBadBlock(*p_block);
             }
             /// clear caches to in case of repeated commit
-            m_reqCache->delCacheExceptPrepare(m_reqCache->prepareCache().block_hash);
+            m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
         }
         else
         {
@@ -949,12 +940,8 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return true;
     }
-    /// to ensure that the collected signature size is equal to minValidNodes
-    /// so that checkAndCommit can be called, and the committed request backup can be stored
-    if (m_reqCache->getSigCacheSize(sign_req.block_hash) < minValidNodes())
-    {
-        m_reqCache->addSignReq(sign_req);
-    }
+    m_reqCache->addSignReq(sign_req);
+
     checkAndCommit();
     PBFTENGINE_LOG(DEBUG) << "[#handleSignMsg Succ] [Timecost]:  " << 1000 * t.elapsed()
                           << "  [INFO]:  " << oss.str();
@@ -986,7 +973,7 @@ CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& o
     /// to ensure that the collected signature size is equal to minValidNodes
     /// so that checkAndCommit can be called, and the committed request backup can be stored
     if ((result == CheckResult::FUTURE) &&
-        m_reqCache->getSigCacheSize(req.block_hash) < minValidNodes())
+        m_reqCache->getSigCacheSize(req.block_hash) < (size_t)(minValidNodes() - 1))
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << "[#FutureBlock] [INFO]:  " << oss.str();
@@ -1016,7 +1003,11 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
         << m_highestBlock.number() << "/" << commit_req.idx << "/" << commit_req.view << "/"
         << m_view << "/" << pbftMsg.node_id.abridged() << "/" << pbftMsg.endpoint << "/"
         << commit_req.block_hash.abridged();
-
+    /// return directly if the number of the collected commit requests are enough
+    if (m_reqCache->getCommitCacheSize(commit_req.block_hash) >= minValidNodes())
+    {
+        return true;
+    }
     auto valid_ret = isValidCommitReq(commit_req, oss);
     if (valid_ret == CheckResult::INVALID)
     {
@@ -1309,7 +1300,7 @@ void PBFTEngine::workLoop()
                     << "/" << ret.second.node_idx;
                 handleMsg(ret.second);
             }
-            else
+            else if (m_reqCache->futurePrepareCacheSize() == 0)
             {
                 std::unique_lock<std::mutex> l(x_signalled);
                 m_signalled.wait_for(l, std::chrono::milliseconds(5));
@@ -1330,21 +1321,18 @@ void PBFTEngine::workLoop()
 void PBFTEngine::handleFutureBlock()
 {
     Guard l(m_mutex);
-    PrepareReq future_req = m_reqCache->futurePrepareCache();
-    if (future_req.height == m_consensusBlockNumber && future_req.view == m_view)
+    bool exist = false;
+    std::shared_ptr<PrepareReq> p_future_prepare =
+        m_reqCache->futurePrepareCache(m_consensusBlockNumber);
+    if (p_future_prepare && p_future_prepare->view == m_view)
     {
         PBFTENGINE_LOG(INFO)
             << "[#handleFutureBlock] [myIdx/myNode/number/highNum/view/conNum/hash]:  " << nodeIdx()
-            << "/" << m_keyPair.pub().abridged() << "/" << m_reqCache->futurePrepareCache().height
-            << "/" << m_highestBlock.number() << "/" << m_view << "/" << m_consensusBlockNumber
-            << "/" << m_reqCache->futurePrepareCache().block_hash.abridged();
-        handlePrepareMsg(future_req);
-        m_reqCache->resetFuturePrepare();
-    }
-    /// to trigger block sync
-    if (future_req.height > m_consensusBlockNumber)
-    {
-        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+            << "/" << m_keyPair.pub().abridged() << "/" << p_future_prepare->height << "/"
+            << m_highestBlock.number() << "/" << m_view << "/" << m_consensusBlockNumber << "/"
+            << p_future_prepare->block_hash.abridged();
+        handlePrepareMsg(*p_future_prepare);
+        m_reqCache->eraseHandledFutureReq(p_future_prepare->height);
     }
 }
 

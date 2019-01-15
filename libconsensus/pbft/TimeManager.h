@@ -35,7 +35,6 @@ struct TimeManager
     unsigned m_changeCycle = 0;
     uint64_t m_lastSignTime = 0;
     uint64_t m_lastConsensusTime;
-    uint64_t m_startSealNextLeader;
     unsigned m_intervalBlockTime = 1000;
     /// time point of last signature collection
     std::chrono::system_clock::time_point m_lastGarbageCollection;
@@ -43,7 +42,7 @@ struct TimeManager
     static const unsigned CollectInterval = 60;
     inline void initTimerManager(unsigned view_timeout)
     {
-        m_lastConsensusTime = m_startSealNextLeader = utcTime();
+        m_lastConsensusTime = utcTime();
         m_lastSignTime = 0;
         m_viewTimeout = view_timeout;
         m_changeCycle = 0;
@@ -53,7 +52,6 @@ struct TimeManager
     inline void changeView()
     {
         m_lastConsensusTime = 0;
-        m_startSealNextLeader = 0;
         m_lastSignTime = 0;
         /// m_changeCycle = 0;
     }

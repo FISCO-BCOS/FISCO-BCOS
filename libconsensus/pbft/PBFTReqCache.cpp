@@ -34,10 +34,19 @@ namespace consensus
 void PBFTReqCache::delCache(h256 const& hash)
 {
     PBFTReqCache_LOG(DEBUG) << "[delCache] [hash]: " << hash.abridged();
-    delCacheExceptPrepare(hash);
+    /// delete from sign cache
+    auto psign = m_signCache.find(hash);
+    if (psign != m_signCache.end())
+        m_signCache.erase(psign);
+    /// delete from commit cache
+    auto pcommit = m_commitCache.find(hash);
+    if (pcommit != m_commitCache.end())
+        m_commitCache.erase(pcommit);
     /// delete from prepare cache
     if (hash == m_prepareCache.block_hash)
+    {
         m_prepareCache.clear();
+    }
 }
 
 /**
@@ -188,7 +197,6 @@ void PBFTReqCache::getCacheConsensusStatus(json_spirit::Array& status_array) con
     /// commited prepare cache
     getCacheStatus(status_array, "committedPrepareCache", m_committedPrepareCache);
     /// future prepare cache
-    getCacheStatus(status_array, "futureCache", m_futurePrepareCache);
     /// signCache
     getCollectedCacheStatus(status_array, "signCache", m_signCache);
     getCollectedCacheStatus(status_array, "commitCache", m_commitCache);
