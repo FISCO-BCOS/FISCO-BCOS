@@ -61,10 +61,11 @@ public:
     using ShardPtrVec = std::vector<ShardPtr>;
 
 public:
-    DownloadingBlockQueue(
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain, PROTOCOL_ID _protocolId)
+    DownloadingBlockQueue(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        PROTOCOL_ID _protocolId, NodeID const& _nodeId)
       : m_blockChain(_blockChain),
         m_protocolId(_protocolId),
+        m_nodeId(_nodeId),
         m_blocks(),
         m_buffer(std::make_shared<ShardPtrVec>())
     {
@@ -108,6 +109,7 @@ public:
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     PROTOCOL_ID m_protocolId;
+    NodeID m_nodeId;
     GROUP_ID m_groupId;
 
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //
