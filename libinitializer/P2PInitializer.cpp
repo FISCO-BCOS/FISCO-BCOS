@@ -21,6 +21,7 @@
  */
 
 #include "P2PInitializer.h"
+#include "libp2p/P2PMessage.h"
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
 #include <boost/algorithm/algorithm.hpp>

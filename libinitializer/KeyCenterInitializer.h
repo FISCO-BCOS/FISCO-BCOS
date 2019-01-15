@@ -20,7 +20,7 @@
  * @date: 2018-12-03
  */
 #pragma once
-#include <libdevcore/Common.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libsecurity/KeyCenter.h>
 
 namespace dev

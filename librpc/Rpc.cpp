@@ -24,7 +24,7 @@
 #include "JsonHelper.h"
 #include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
-#include <libconfig/SystemConfigMgr.h>
+#include <jsonrpccpp/server.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>

@@ -20,14 +20,13 @@
  */
 
 #include "Service.h"
-
 #include "Common.h"
+#include "P2PMessage.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
-#include <libp2p/Service.h>
 #include <boost/random.hpp>
 #include <unordered_map>
 
@@ -375,6 +374,11 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 {
     try
     {
+        if (nodeID == id())
+        {
+            // exclude myself
+            return;
+        }
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(nodeID);
 
@@ -403,7 +407,8 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
         }
-        else
+        /// ignore the node self
+        else if (nodeID != id())
         {
             SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeID", nodeID.abridged());
 
@@ -712,6 +717,11 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
         RecursiveGuard l(x_sessions);
         for (auto const& i : m_sessions)
         {
+            /// ignore the node self and the inactived session
+            if (i.first == id() || false == i.second->actived())
+            {
+                continue;
+            }
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
                 infos.push_back(P2PSessionInfo(

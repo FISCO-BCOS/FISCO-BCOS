@@ -35,4 +35,6 @@ ignore:
   - "fisco-bcos"
   - "evmc"
   - "utils"
+  - "deps/**/*"
+  - "/usr/**/*"
   

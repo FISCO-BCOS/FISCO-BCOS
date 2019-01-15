@@ -22,14 +22,12 @@
 #pragma once
 
 #include "RpcFace.h"
-#include <jsonrpccpp/common/exception.h>
-#include <jsonrpccpp/server.h>
 #include <libdevcrypto/Common.h>
 #include <libledger/LedgerInterface.h>
 #include <libledger/LedgerManager.h>
 #include <libledger/LedgerParam.h>
 #include <libp2p/P2PInterface.h>
-#include <iostream>
+#include <iosfwd>
 #include <memory>
 #include <mutex>
 

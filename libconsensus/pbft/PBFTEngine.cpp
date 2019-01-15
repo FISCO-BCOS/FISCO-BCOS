@@ -23,6 +23,7 @@
  */
 #include "PBFTEngine.h"
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
@@ -70,18 +71,8 @@ bool PBFTEngine::shouldSeal()
     std::pair<bool, IDXTYPE> ret = getLeader();
     if (!ret.first)
         return false;
-    /// fast view change
     if (ret.second != nodeIdx())
     {
-        /// If the node is a miner and is not the leader, then will trigger fast viewchange if it
-        /// is not connect to leader.
-        h512 node_id = getMinerByIndex(ret.second);
-        if (node_id != h512() && !m_service->isConnected(node_id))
-        {
-            m_timeManager.m_lastConsensusTime = 0;
-            m_timeManager.m_lastSignTime = 0;
-            m_signalled.notify_all();
-        }
         return false;
     }
     if (m_reqCache->committedPrepareCache().height == m_consensusBlockNumber)
@@ -592,6 +583,13 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
                           << LOG_KV("myIdx", nodeIdx())
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
     checkBlockValid(working_block);
+    /// omit the empty block execution
+    if (working_block.getTransactionSize() == 0)
+    {
+        sealing.p_execContext = nullptr;
+        sealing.block = std::move(working_block);
+        return;
+    }
     m_blockSync->noteSealingBlockNumber(working_block.header().number());
     sealing.p_execContext = executeBlock(working_block);
     sealing.block = working_block;
@@ -1116,7 +1114,7 @@ void PBFTEngine::collectGarbage()
     Timer t;
     std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
-        std::chrono::seconds(TimeManager::CollectInterval))
+        std::chrono::seconds(m_timeManager.CollectInterval))
     {
         m_reqCache->collectGarbage(m_highestBlock);
         m_timeManager.m_lastGarbageCollection = now;

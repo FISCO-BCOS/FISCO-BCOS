@@ -52,17 +52,15 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-DELPP_THREAD_SAFE)
     add_compile_options(-DELPP_NO_DEFAULT_LOG_FILE)
     add_compile_options(-Wa,-march=generic64)
-
+    # Disable warnings about unknown pragmas (which is enabled by -Wall).
+    add_compile_options(-Wno-unknown-pragmas)
+    add_compile_options(-fno-omit-frame-pointer)
+    
     if(STATIC_BUILD)
         SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
         SET(BUILD_SHARED_LIBRARIES OFF)
         SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
-
-    # Disable warnings about unknown pragmas (which is enabled by -Wall).
-    add_compile_options(-Wno-unknown-pragmas)
-    
-    add_compile_options(-fno-omit-frame-pointer)
 
 	# Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG")
@@ -109,7 +107,27 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
             add_compile_options(-fcolor-diagnostics)
         endif()
     endif()
-# If you don't have GCC, Clang then you are on your own.  Good luck!
+
+    if (COVERAGE)
+        if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") 
+            set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
+            set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
+        elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+            add_compile_options(-Wno-unused-command-line-argument)
+            set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
+            set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
+        endif()
+        set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
+        set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
+        find_program(LCOV_TOOL lcov)
+        message(STATUS "lcov tool: ${LCOV_TOOL}")
+        if (LCOV_TOOL)
+            add_custom_target(coverage
+                COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -c -d ${CMAKE_BINARY_DIR}
+                COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -r ${CMAKE_BINARY_DIR}/coverage.info '/usr*' '${CMAKE_BINARY_DIR}/deps/*' '${CMAKE_SOURCE_DIR}/deps/*' '*evmc*'
+                COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
+        endif()
+    endif ()
 else ()
     message(WARNING "Your compiler is not tested, if you run into any issues, we'd welcome any patches.")
 endif ()
@@ -121,17 +139,3 @@ if (SANITIZE)
     endif()
 endif()
 
-if (COVERAGE)
-    set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
-    set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
-    set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
-    set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
-    find_program(LCOV_TOOL lcov)
-    message(STATUS "lcov tool: ${LCOV_TOOL}")
-    if (LCOV_TOOL)
-        add_custom_target(coverage
-            COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -c -d ${CMAKE_BINARY_DIR}
-            COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -r ${CMAKE_BINARY_DIR}/coverage.info '/usr*' '${CMAKE_BINARY_DIR}/deps/*' '${CMAKE_SOURCE_DIR}/deps/*'
-            COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
-    endif()
-endif ()

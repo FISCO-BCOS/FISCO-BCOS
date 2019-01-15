@@ -29,10 +29,6 @@
 
 namespace dev
 {
-namespace storage
-{
-class Table;
-}
 namespace blockverifier
 {
 class ExecutiveContext;

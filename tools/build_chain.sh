@@ -509,7 +509,7 @@ generate_config_ini()
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( begin_port))
+    listen_port=$(( begin_port ))
     ;nodes to connect
     $ip_list
 ;certificate rejected list		
@@ -829,7 +829,7 @@ send_a_tx()
     limit=\$(block_limit \$1)
     if [ \${#limit} -gt 4 ];then echo "blockLimit exceed 0xffff, this scripts is unavailable!"; exit 0;fi
     txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\`date +%s\`00000000085174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
-g    #echo \$txBytes
+    #echo \$txBytes
     curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "'\$txBytes'"],"id":83}' \$1
 }
 
@@ -975,6 +975,7 @@ count=0
 server_count=0
 groups=
 start_ports=
+ip_node_counts=
 groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
@@ -986,9 +987,10 @@ for line in ${ip_array[*]};do
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
+    [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
+        node_dir="$output_dir/${ip}/node${ip_node_counts[${ip//./}]}"
         [ -d "${node_dir}" ] && echo "${node_dir} exist! Please delete!" && exit 1
         
         while :
@@ -1070,6 +1072,7 @@ for line in ${ip_array[*]};do
         ip_list=$"${ip_list}node.${count}="${ip}:$(( ${start_ports[${ip//./}]} ))"
     "
         start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} +  3 ))
+        ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
         ((++count))
     done
     sdk_path="$output_dir/${ip}/sdk"
@@ -1086,6 +1089,7 @@ done
 cd ..
 
 start_ports=()
+ip_node_counts=()
 echo "=============================================================="
 echo "Generating configurations..."
 generate_script_template "$output_dir/replace_all.sh"
@@ -1094,11 +1098,12 @@ for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
+    [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${start_ports[${ip//./}]}_${group_array[server_count]//,/_}"
+        node_dir="$output_dir/${ip}/node${ip_node_counts[${ip//./}]}"
         generate_config_ini "${node_dir}/config.ini" ${ip} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
@@ -1112,6 +1117,7 @@ for line in ${ip_array[*]};do
         fi
         generate_node_scripts "${node_dir}"
         start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} + 3 ))
+        ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$bin_path" "$output_dir/${ip}/fisco-bcos"
