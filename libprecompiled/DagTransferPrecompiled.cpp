@@ -348,7 +348,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
     std::string user;
     dev::u256 amount;
     dev::eth::ContractABI abi;
-    abi.abiOut(data, user);
+    abi.abiOut(data, user, amount);
 
     dev::u256 balance;
     bool result = false;
