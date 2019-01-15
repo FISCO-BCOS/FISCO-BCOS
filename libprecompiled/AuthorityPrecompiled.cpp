@@ -21,6 +21,7 @@
 #include "AuthorityPrecompiled.h"
 
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/TableFactoryPrecompiled.h>
@@ -43,22 +44,9 @@ AuthorityPrecompiled::AuthorityPrecompiled()
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
 }
 
-
 std::string AuthorityPrecompiled::toString(ExecutiveContext::Ptr)
 {
     return "Authority";
-}
-
-storage::Table::Ptr AuthorityPrecompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
-{
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("open table")
-                           << LOG_KV("tableName", tableName);
-
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
 bytes AuthorityPrecompiled::call(
@@ -101,7 +89,7 @@ bytes AuthorityPrecompiled::call(
             entry->setField(SYS_AC_ADDRESS, addr);
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-            int count = table->insert(tableName, entry, getOptions(origin));
+            int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
@@ -142,7 +130,8 @@ bytes AuthorityPrecompiled::call(
         }
         else
         {
-            int count = table->remove(tableName, condition, getOptions(origin));
+            int count =
+                table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)

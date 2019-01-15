@@ -20,7 +20,9 @@
  */
 #include "TableFactoryPrecompiled.h"
 #include "MemoryTable.h"
+#include "MemoryTableFactory.h"
 #include "TablePrecompiled.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>

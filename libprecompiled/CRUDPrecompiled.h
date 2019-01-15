@@ -41,11 +41,6 @@ public:
 
     virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address());
-
-protected:
-    std::shared_ptr<storage::Table> openTable(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        const std::string& tableName);
 };
 
 }  // namespace precompiled
