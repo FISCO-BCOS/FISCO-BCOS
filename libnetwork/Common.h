@@ -56,8 +56,6 @@ namespace dev
 {
 namespace network
 {
-extern unsigned c_defaultIPPort;
-
 struct NodeIPEndpoint;
 class Node;
 extern const NodeIPEndpoint UnspecifiedNodeIPEndpoint;
@@ -155,8 +153,6 @@ private:
     std::string m_msg = "";
 };
 
-class Session;
-
 /// @returns the string form of the given disconnection reason.
 inline std::string reasonOf(DisconnectReason _r)
 {
@@ -199,7 +195,6 @@ inline std::string reasonOf(DisconnectReason _r)
 struct NodeIPEndpoint
 {
     /// Setting true causes isAllowed to return true for all addresses. (Used by test fixtures)
-    static bool test_allowLocal;
 
     NodeIPEndpoint() = default;
     NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp)

@@ -32,6 +32,8 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 
+static unsigned const c_maxSendTransactions = 128;
+
 void SyncMaster::printSyncInfo()
 {
     SYNC_LOG(TRACE) << "[Sync Info] --------------------------------------------" << endl;

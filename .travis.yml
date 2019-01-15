@@ -28,6 +28,7 @@ env:
       - TRAVIS_BUILD_TYPE=RelWithDebInfo
       - TRAVIS_TESTS=ON
 matrix:
+    fast_finish: true
     include:
         - os: linux
           dist: xenial
@@ -40,12 +41,13 @@ matrix:
           env: CACHE_NAME=osx
 git:
     depth: 1
+compiler: clang
 cache:
   directories:
   - $TRAVIS_BUILD_DIR/deps
-  - $TRAVIS_BUILD_DIR/build
+#   - $TRAVIS_BUILD_DIR/build
 before_cache:
-      - cd $TRAVIS_BUILD_DIR && rm -rf $TRAVIS_BUILD_DIR/build/nodes $TRAVIS_BUILD_DIR/build/bin
+    #   - cd $TRAVIS_BUILD_DIR && rm -rf $TRAVIS_BUILD_DIR/build/nodes $TRAVIS_BUILD_DIR/build/bin
 addons:
   apt:
     packages:
@@ -53,6 +55,7 @@ addons:
     - libssl-dev
     - libleveldb-dev
     - libsnappy-dev
+    - clang
     # - ninja-build
     - openssl
   homebrew:
@@ -63,7 +66,7 @@ addons:
 install: |
       chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash ./tools/ci/check-commit.sh;
 script: |
-    mkdir -p build && cd build && cmake .. && make -j2
+    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && make -j2
     ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
 after_success:
     # if [ $TRAVIS_OS_NAME == linux ]; then

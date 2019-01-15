@@ -509,7 +509,7 @@ generate_config_ini()
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( begin_port))
+    listen_port=$(( begin_port ))
     ;nodes to connect
     $ip_list
 ;certificate rejected list		

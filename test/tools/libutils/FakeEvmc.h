@@ -32,7 +32,7 @@
 #include <libinterpreter/interpreter.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-#include <iostream>
+#include <iosfwd>
 #include <map>
 #include <memory>
 

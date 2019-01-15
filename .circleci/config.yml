@@ -9,10 +9,10 @@ jobs:
           name: Install dependencies
           command: |
             apt-get update 
-            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+            apt-get install -y git gcc g++ make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
       - checkout
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-static-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - run:
           name: Compile
           command: |
@@ -27,17 +27,16 @@ jobs:
       - run:
           name: Upload Coverage
           command: |
-            bash <(curl -s https://codecov.io/bash)
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1
       - run:
           name: Upload binary
           command: |
-            pwd
-            # create hald static binary
+            tar -zcf fisco-static.tar.gz build/bin/fisco-bcos
       - store_artifacts:
-          path: /root/FISCO-BCOS/build/bin/fisco-bcos
-          destination: fisco-bcos
+          path: /root/FISCO-BCOS/fisco-static.tar.gz
+          destination: fisco-static.tar.gz
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}
+          key: dependency-cache-static-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             # - build
@@ -54,7 +53,7 @@ jobs:
             yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
       - checkout
       - restore_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
+          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - run:
           name: Compile
           command: |
@@ -66,11 +65,15 @@ jobs:
           command: |
             cd /root/FISCO-BCOS-gm/build
             ./bin/test-fisco-bcos -- --testpath=../test/data/ 
+      - run:
+          name: Upload binary
+          command: |
+            tar -zcf fisco-gm-centos7.tar.gz build/bin/fisco-bcos
       - store_artifacts:
-          path: /root/FISCO-BCOS-gm/build/bin/fisco-bcos
-          destination: fisco-bcos-gm-centos7
+          path: /root/FISCO-BCOS-gm/fisco-gm-centos7.tar.gz
+          destination: fisco-gm-centos7.tar.gz
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Branch }}-guomi
+          key: dependency-cache-guomi-{{ arch }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             # - build
