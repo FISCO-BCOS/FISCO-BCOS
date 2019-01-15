@@ -425,7 +425,7 @@ protected:
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
-        if (req.height > m_consensusBlockNumber || req.view > m_view)
+        if (req.height >= m_consensusBlockNumber || req.view > m_view)
         {
             return true;
         }
