@@ -43,7 +43,7 @@ public:
 
     virtual h256 hash();
     virtual void clear();
-    virtual std::map<std::string, Entries::Ptr>* data() override;
+    virtual std::unordered_map<std::string, Entries::Ptr>* data() override;
 
     void setStateStorage(Storage::Ptr amopDB);
     void setBlockHash(h256 blockHash);
@@ -57,7 +57,7 @@ private:
     void checkFiled(Entry::Ptr entry);
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
-    std::map<std::string, Entries::Ptr> m_cache;
+    std::unordered_map<std::string, Entries::Ptr> m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;
 };

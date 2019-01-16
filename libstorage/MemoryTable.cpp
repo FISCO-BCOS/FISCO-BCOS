@@ -264,7 +264,7 @@ void dev::storage::MemoryTable::clear()
     m_cache.clear();
 }
 
-std::map<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
+std::unordered_map<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
 {
     return &m_cache;
 }
