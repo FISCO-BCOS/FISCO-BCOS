@@ -44,8 +44,7 @@ std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
     return "CRUD";
 }
 
-bytes CRUDPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));

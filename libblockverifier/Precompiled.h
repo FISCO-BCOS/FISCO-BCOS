@@ -29,7 +29,6 @@ namespace dev
 namespace storage
 {
 class Table;
-struct AccessOptions;
 }  // namespace storage
 
 namespace blockverifier

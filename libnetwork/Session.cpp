@@ -136,8 +136,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     write();
 }
 
-void Session::onWrite(
-    boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer)
+void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes>)
 {
     if (!actived())
     {

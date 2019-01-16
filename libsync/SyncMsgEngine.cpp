@@ -32,7 +32,7 @@ using namespace dev::txpool;
 static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 
 void SyncMsgEngine::messageHandler(
-    NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
+    NetworkException, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
     SYNC_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Receive packet from")
                     << LOG_KV("peer", _session->nodeID().abridged());

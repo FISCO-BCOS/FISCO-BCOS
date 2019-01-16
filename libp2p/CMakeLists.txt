@@ -6,5 +6,4 @@ file(GLOB HEADERS "*.h")
 add_library(p2p ${SRC_LIST} ${HEADERS})
 
 target_link_libraries(p2p PUBLIC network devcore)
-
-# install(TARGETS p2p RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+target_compile_options(p2p BEFORE PRIVATE -Wno-error)
