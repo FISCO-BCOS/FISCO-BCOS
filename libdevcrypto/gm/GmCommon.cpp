@@ -195,8 +195,7 @@ void dev::encryptECIES(Public const&, bytesConstRef, bytes&)
     BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
 }
 
-void dev::encryptECIES(
-    Public const&, bytesConstRef, bytesConstRef, bytes&)
+void dev::encryptECIES(Public const&, bytesConstRef, bytesConstRef, bytes&)
 {
     BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
 }
@@ -207,8 +206,7 @@ bool dev::decryptECIES(Secret const& _k, bytesConstRef _cipher, bytes& o_plainte
     return decryptECIES(_k, bytesConstRef(), _cipher, o_plaintext);
 }
 
-bool dev::decryptECIES(
-    Secret const&, bytesConstRef, bytesConstRef, bytes&)
+bool dev::decryptECIES(Secret const&, bytesConstRef, bytesConstRef, bytes&)
 {
     BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return true;
