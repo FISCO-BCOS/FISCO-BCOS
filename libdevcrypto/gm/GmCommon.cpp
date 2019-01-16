@@ -196,7 +196,7 @@ void dev::encryptECIES(Public const&, bytesConstRef, bytes&)
 }
 
 void dev::encryptECIES(
-    Public const& _k, bytesConstRef, bytesConstRef, bytes&)
+    Public const&, bytesConstRef, bytesConstRef, bytes&)
 {
     BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
 }

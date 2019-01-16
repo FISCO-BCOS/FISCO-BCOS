@@ -72,7 +72,7 @@ private:
     {}
 };
 
-inline CryptoPP::ECP::Point publicToPoint(Public const& _p)
+inline CryptoPP::ECP::Point publicToPoint(Public const&)
 {
     BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
     return CryptoPP::ECP::Point(0, 0);
