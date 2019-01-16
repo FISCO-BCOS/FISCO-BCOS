@@ -32,7 +32,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::initializer;
 
-int main(int argc, const char* argv[])
+int main()
 {
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.ini");

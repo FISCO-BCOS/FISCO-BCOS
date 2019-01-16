@@ -208,7 +208,7 @@ void ChannelRPCServer::onConnect(
 }
 
 void ChannelRPCServer::onDisconnect(
-    dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session)
+    dev::channel::ChannelException, dev::channel::ChannelSession::Ptr session)
 {
     CHANNEL_LOG(ERROR) << "onDisconnect remove session" << LOG_KV("From", session->host()) << ":"
                        << session->port();

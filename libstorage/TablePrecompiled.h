@@ -20,9 +20,7 @@
  */
 #pragma once
 
-#include "Table.h"
-#include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/Common.h>
+#include "libblockverifier/Precompiled.h"
 
 namespace dev
 {
@@ -57,16 +55,16 @@ public:
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) override;
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param,
+    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) override;
 
-    dev::storage::Table::Ptr getTable() { return m_table; }
-    void setTable(dev::storage::Table::Ptr table) { m_table = table; }
+    std::shared_ptr<dev::storage::Table> getTable() { return m_table; }
+    void setTable(std::shared_ptr<dev::storage::Table> table) { m_table = table; }
 
     h256 hash();
 
 private:
-    dev::storage::Table::Ptr m_table;
+    std::shared_ptr<storage::Table> m_table;
 };
 
 }  // namespace blockverifier

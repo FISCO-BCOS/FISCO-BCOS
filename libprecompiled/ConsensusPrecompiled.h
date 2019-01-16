@@ -19,7 +19,6 @@
  *  @date 20180921
  */
 #pragma once
-#include "CRUDPrecompiled.h"
 #include "Common.h"
 namespace dev
 {
@@ -45,7 +44,7 @@ const char* const NODE_KEY_ENABLENUM = "enable_num";
 const char* const PRI_COLUMN = "name";
 const char* const PRI_KEY = "node";
 
-class ConsensusPrecompiled : public CRUDPrecompiled
+class ConsensusPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<ConsensusPrecompiled> Ptr;
@@ -57,7 +56,7 @@ public:
 
 private:
     void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
-    bool checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID);
+    bool checkIsLastMiner(std::shared_ptr<storage::Table> table, std::string const& nodeID);
 };
 
 }  // namespace precompiled

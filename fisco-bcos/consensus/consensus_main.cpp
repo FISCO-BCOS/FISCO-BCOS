@@ -44,8 +44,7 @@ static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPt
                               << receiptPtr->blockHash() << std::endl;
 }
 
-static void createTx(
-    std::shared_ptr<LedgerManager> ledgerManager, float txSpeed, KeyPair const& key_pair)
+static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed, KeyPair const&)
 {
     ///< transaction related
 #ifdef FISCO_GM
