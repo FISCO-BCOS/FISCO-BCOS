@@ -116,7 +116,7 @@ static void callTransaction(
     EVMC_LOG(INFO) << "[evm_main/callTransaction/result string]: " << result << std::endl;
 }
 
-int main(int argc, const char* argv[])
+int main()
 {
     /// init configuration
     ptree pt;

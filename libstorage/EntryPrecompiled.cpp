@@ -19,6 +19,7 @@
  *  @date 20180921
  */
 #include "EntryPrecompiled.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
@@ -50,8 +51,7 @@ std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
     return "Entry";
 }
 
-bytes EntryPrecompiled::call(
-    std::shared_ptr<ExecutiveContext> context, bytesConstRef param, Address const& origin)
+bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const&)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("EntryPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
