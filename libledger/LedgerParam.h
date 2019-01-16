@@ -80,6 +80,7 @@ struct StateParam
 struct TxParam
 {
     uint64_t txGasLimit;
+    bool enableParallel;
 };
 class LedgerParam : public LedgerParamInterface
 {

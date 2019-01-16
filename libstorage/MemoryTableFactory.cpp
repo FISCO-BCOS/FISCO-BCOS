@@ -114,6 +114,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
                                  vector<Change::Record>& _records) {
+        dev::WriteGuard l(x_changeLog);
         m_changeLog.emplace_back(_table, _kind, _key, _records);
     });
 
@@ -125,10 +126,11 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
 Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string& keyField,
     const std::string& valueField, bool authorigytFlag, Address const& _origin)
 {
+    /*
     STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("create table")
                        << LOG_KV("table name", tableName) << LOG_KV("blockHash", m_blockHash)
                        << LOG_KV("blockNum", m_blockNum);
-
+*/
     auto sysTable = openTable(SYS_TABLES, authorigytFlag);
 
     // To make sure the table exists
@@ -181,6 +183,9 @@ h256 MemoryTableFactory::hash()
         }
 
         bytes tableHash = table->hash().asBytes();
+        // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("tableHash")
+        //<< LOG_KV(it.first, dev::sha256(ref(tableHash)));
+
         data.insert(data.end(), tableHash.begin(), tableHash.end());
     }
     if (data.empty())
@@ -188,6 +193,7 @@ h256 MemoryTableFactory::hash()
         return h256();
     }
     m_hash = dev::sha256(&data);
+    // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("allTableHash") << LOG_KV("stateRoot", m_hash);
     return m_hash;
 }
 
@@ -281,6 +287,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     }
 
     m_name2Table.clear();
+    dev::WriteGuard l(x_changeLog);
     m_changeLog.clear();
 }
 

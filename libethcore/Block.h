@@ -150,6 +150,35 @@ public:
         noteChange();
     }
 
+    void resizeTransactionReceipt(size_t _totalReceipt)
+    {
+        m_transactionReceipts.resize(_totalReceipt);
+        noteChange();
+    }
+
+    void setTransactionReceipt(size_t _receiptId, TransactionReceipt const& _tran)
+    {
+        m_transactionReceipts[_receiptId] = _tran;
+        noteChange();
+    }
+
+    void updateSequenceReceiptGas()
+    {
+        u256 totalGas = 0;
+        for (auto& receipt : m_transactionReceipts)
+        {
+            totalGas += receipt.gasUsed();
+            receipt.setGasUsed(totalGas);
+        }
+    }
+
+    void setStateRootToAllReceipt(h256 const& _stateRoot)
+    {
+        for (auto& receipt : m_transactionReceipts)
+            receipt.setStateRoot(_stateRoot);
+        noteChange();
+    }
+
     void clearAllReceipts()
     {
         m_transactionReceipts.clear();

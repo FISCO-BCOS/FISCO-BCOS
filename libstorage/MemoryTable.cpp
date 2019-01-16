@@ -44,15 +44,22 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
     {
         Entries::Ptr entries = std::make_shared<Entries>();
 
-        auto it = m_cache.find(key);
+        CacheItr it;
+        {
+            ReadGuard l(x_cache);
+            it = m_cache.find(key);
+        }
         if (it == m_cache.end())
         {
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("records", entries->size());
+                {
+                    WriteGuard l(x_cache);
+                    m_cache.insert(std::make_pair(key, entries));
+                }
+                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //<< LOG_KV("records", entries->size());
             }
         }
         else
@@ -62,7 +69,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
 
         if (!entries)
         {
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
+            // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
             return std::make_shared<Entries>();
         }
         auto indexes = processEntries(entries, condition);
@@ -75,8 +82,8 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
-                           << LOG_KV("msg", boost::diagnostic_information(e));
+        // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
+        //                   << LOG_KV("msg", boost::diagnostic_information(e));
     }
 
     return std::make_shared<Entries>();
@@ -89,23 +96,31 @@ int dev::storage::MemoryTable::update(
     {
         if (!checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update non-authorized")
-                                 << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
+            // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update non-authorized")
+            //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return CODE_NO_AUTHORIZED;
         }
-        STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key", key);
+        // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
+        // key);
 
         Entries::Ptr entries = std::make_shared<Entries>();
 
-        auto it = m_cache.find(key);
+        CacheItr it;
+        {
+            ReadGuard l(x_cache);
+            it = m_cache.find(key);
+        }
         if (it == m_cache.end())
         {
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("records", entries->size());
+                {
+                    WriteGuard l(x_cache);
+                    m_cache.insert(std::make_pair(key, entries));
+                }
+                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                   << LOG_KV("records", entries->size());
             }
         }
         else
@@ -115,7 +130,7 @@ int dev::storage::MemoryTable::update(
 
         if (!entries)
         {
-            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
+            // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
             return 0;
         }
         checkFiled(entry);
@@ -153,24 +168,32 @@ int dev::storage::MemoryTable::insert(
     {
         if (!checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert non-authorized")
-                                 << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
+            // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert non-authorized")
+            //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return CODE_NO_AUTHORIZED;
         }
-        STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key", key);
+        // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
+        // key);
 
         Entries::Ptr entries = std::make_shared<Entries>();
         Condition::Ptr condition = std::make_shared<Condition>();
 
-        auto it = m_cache.find(key);
+        CacheItr it;
+        {
+            ReadGuard l(x_cache);
+            it = m_cache.find(key);
+        }
         if (it == m_cache.end())
         {
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("records", entries->size());
+                {
+                    WriteGuard l(x_cache);
+                    m_cache.insert(std::make_pair(key, entries));
+                }
+                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                   << LOG_KV("records", entries->size());
             }
         }
         else
@@ -184,7 +207,10 @@ int dev::storage::MemoryTable::insert(
         if (entries->size() == 0)
         {
             entries->addEntry(entry);
-            m_cache.insert(std::make_pair(key, entries));
+            {
+                WriteGuard l(x_cache);
+                m_cache.insert(std::make_pair(key, entries));
+            }
             return 1;
         }
         else
@@ -207,23 +233,30 @@ int dev::storage::MemoryTable::remove(
 {
     if (!checkAuthority(options->origin))
     {
-        STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
-                             << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
+        // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
+        //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
         return CODE_NO_AUTHORIZED;
     }
-    STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
+    // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
 
     Entries::Ptr entries = std::make_shared<Entries>();
 
-    auto it = m_cache.find(key);
+    CacheItr it;
+    {
+        ReadGuard l(x_cache);
+        it = m_cache.find(key);
+    }
     if (it == m_cache.end())
     {
         if (m_remoteDB)
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-            m_cache.insert(std::make_pair(key, entries));
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                               << LOG_KV("records", entries->size());
+            {
+                WriteGuard l(x_cache);
+                m_cache.insert(std::make_pair(key, entries));
+            }
+            // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+            //                   << LOG_KV("records", entries->size());
         }
     }
     else
@@ -251,17 +284,26 @@ int dev::storage::MemoryTable::remove(
 h256 dev::storage::MemoryTable::hash()
 {
     bytes data;
+
+    // Table
     for (auto it : m_cache)
     {
         if (it.second->dirty())
         {
+            // Entries = vector<Entry>
+            // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Entries") << LOG_KV(it.first, "--->");
             data.insert(data.end(), it.first.begin(), it.first.end());
             for (size_t i = 0; i < it.second->size(); ++i)
             {
                 if (it.second->get(i)->dirty())
                 {
+                    // Entry = map<name, fields>
+                    // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Entry") << LOG_KV("id", i);
                     for (auto fieldIt : *(it.second->get(i)->fields()))
                     {
+                        // Field
+                        // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Field")
+                        //          << LOG_KV(fieldIt.first, toHex(fieldIt.second));
                         if (isHashField(fieldIt.first))
                         {
                             data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
@@ -288,7 +330,10 @@ h256 dev::storage::MemoryTable::hash()
 
 void dev::storage::MemoryTable::clear()
 {
-    m_cache.clear();
+    {
+        WriteGuard l(x_cache);
+        m_cache.clear();
+    }
 }
 
 std::map<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
@@ -436,7 +481,7 @@ bool MemoryTable::isHashField(const std::string& _key)
         return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
                 (_key == STATUS));
     }
-    STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Empty key error");
+    // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Empty key error");
     return false;
 }
 
@@ -452,9 +497,9 @@ inline void MemoryTable::checkFiled(Entry::Ptr entry)
         if (m_tableInfo->fields.end() ==
             find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
         {
-            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not exist")
-                               << LOG_KV("table name", m_tableInfo->name)
-                               << LOG_KV("field", it.first);
+            // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not exist")
+            //                   << LOG_KV("table name", m_tableInfo->name)
+            //                   << LOG_KV("field", it.first);
             throw std::invalid_argument("Invalid key.");
         }
     }

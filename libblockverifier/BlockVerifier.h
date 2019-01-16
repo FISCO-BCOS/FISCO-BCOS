@@ -24,6 +24,7 @@
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
 #include "Precompiled.h"
+#include <libblockverifier/ParaTxExecutor.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -59,11 +60,21 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier() {}
+    BlockVerifier(std::shared_ptr<dev::blockverifier::ParaTxExecutor> _executor = nullptr)
+      : m_paraTxExecutor(_executor)
+    {}
 
     virtual ~BlockVerifier() {}
 
     ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr queueExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr parallelExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr parallelCqExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr parallelOmpExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
 
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
@@ -86,6 +97,7 @@ public:
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
+    std::shared_ptr<dev::blockverifier::ParaTxExecutor> m_paraTxExecutor;
 };
 
 }  // namespace blockverifier

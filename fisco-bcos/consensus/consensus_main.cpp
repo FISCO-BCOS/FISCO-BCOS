@@ -89,6 +89,7 @@ static void createTx(
             {
                 tx.setNonce(tx.nonce() + u256(utcTime()));
                 tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
+                sec = KeyPair::create().secret();
                 dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
                 tx.updateSignature(SignatureStruct(sig));
                 ledgerManager->txPool(group)->submit(tx);
