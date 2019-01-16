@@ -506,19 +506,18 @@ static void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq co
 {
     if (!succ)
     {
-        /// test inconsistent with the prepareCache
         fake_pbft.consensus()->reqCache()->clearAll();
-        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == CheckResult::INVALID);
         /// test is the future block
         SignReq copiedReq = signReq;
         copiedReq.height = fake_pbft.consensus()->mutableConsensusNumber() + 1;
+        FakeValidNodeNum(fake_pbft, 4);
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::INVALID);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
         /// modify the signature
         copiedReq.sig = dev::sign(fake_pbft.m_secrets[copiedReq.idx], copiedReq.block_hash);
         copiedReq.sig2 =
             dev::sign(fake_pbft.m_secrets[copiedReq.idx], copiedReq.fieldsWithoutBlock());
-        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::INVALID);
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::FUTURE);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == true);
 
         fake_pbft.consensus()->reqCache()->clearAll();

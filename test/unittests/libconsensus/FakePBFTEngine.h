@@ -139,7 +139,7 @@ public:
     bool broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
     void checkTimeout() { return PBFTEngine::checkTimeout(); }
     void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
-    bool isValidPrepare(PrepareReq const& req) const
+    CheckResult isValidPrepare(PrepareReq const& req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidPrepare(req, oss);
@@ -155,12 +155,12 @@ public:
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
-    bool isValidSignReq(SignReq const& req) const
+    CheckResult isValidSignReq(SignReq const& req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidSignReq(req, oss);
     }
-    bool isValidCommitReq(CommitReq const& req) const
+    CheckResult isValidCommitReq(CommitReq const& req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidCommitReq(req, oss);

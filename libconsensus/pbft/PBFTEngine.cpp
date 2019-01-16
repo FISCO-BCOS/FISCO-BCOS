@@ -1003,11 +1003,6 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
         << m_highestBlock.number() << "/" << commit_req.idx << "/" << commit_req.view << "/"
         << m_view << "/" << pbftMsg.node_id.abridged() << "/" << pbftMsg.endpoint << "/"
         << commit_req.block_hash.abridged();
-    /// return directly if the number of the collected commit requests are enough
-    if (m_reqCache->getCommitCacheSize(commit_req.block_hash) >= minValidNodes())
-    {
-        return true;
-    }
     auto valid_ret = isValidCommitReq(commit_req, oss);
     if (valid_ret == CheckResult::INVALID)
     {

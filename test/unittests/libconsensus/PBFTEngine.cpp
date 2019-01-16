@@ -641,8 +641,7 @@ BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
     fake_pbft.consensus()->handleFutureBlock();
     /// check the functurePrepareCache has been cleared
     BOOST_CHECK(
-        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq.height)->block_hash ==
-        h256());
+        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq.height) == nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
