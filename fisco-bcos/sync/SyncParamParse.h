@@ -52,7 +52,7 @@ public:
     }
 
     void initParams(boost::program_options::variables_map const& vm,
-        boost::program_options::options_description const& option)
+        boost::program_options::options_description const&)
     {
         if (vm.count("blockSpeed") || vm.count("b"))
             m_blockSpeed = vm["blockSpeed"].as<float>();

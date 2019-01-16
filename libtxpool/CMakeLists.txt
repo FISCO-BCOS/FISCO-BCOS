@@ -4,3 +4,5 @@ file(GLOB HEADERS "*.h")
 
 add_library(txpool ${SRC_LIST} ${HEADERS})
 target_link_libraries(txpool PUBLIC ethcore devcore)
+target_compile_options(txpool BEFORE PRIVATE -Wno-error)
+
