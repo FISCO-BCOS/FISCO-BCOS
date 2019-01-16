@@ -20,9 +20,7 @@
  */
 #pragma once
 
-#include "Table.h"
-#include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/Common.h>
+#include "libblockverifier/Precompiled.h"
 
 namespace dev
 {
@@ -57,7 +55,7 @@ public:
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>) override;
 
-    virtual bytes call(ExecutiveContext::Ptr context, bytesConstRef param,
+    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) override;
 
     std::shared_ptr<dev::storage::Table> getTable() { return m_table; }

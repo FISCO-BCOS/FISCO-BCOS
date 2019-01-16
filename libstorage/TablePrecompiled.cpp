@@ -23,6 +23,7 @@
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
 #include "Table.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 
