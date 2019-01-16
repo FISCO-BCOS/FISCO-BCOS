@@ -74,10 +74,12 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
     if (!actived())
     {
         SESSION_LOG(WARNING) << "Session inactived";
-
-        server->threadPool()->enqueue(
-            [callback] { callback(NetworkException(-1, "Session inactived"), Message::Ptr()); });
-
+        if (callback)
+        {
+            server->threadPool()->enqueue([callback] {
+                callback(NetworkException(-1, "Session inactived"), Message::Ptr());
+            });
+        }
         return;
     }
     if (callback)

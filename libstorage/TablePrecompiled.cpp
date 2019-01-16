@@ -23,6 +23,7 @@
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
 #include "Table.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 
@@ -94,7 +95,7 @@ bytes TablePrecompiled::call(
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
 
-        int count = m_table->insert(key, entry, getOptions(origin));
+        int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
         out = abi.abiIn("", u256(count));
     }
     else if (func == name2Selector[TABLE_METHOD_NEWCOND])
@@ -126,7 +127,7 @@ bytes TablePrecompiled::call(
                 context->getPrecompiled(conditionAddress));
         auto condition = conditionPrecompiled->getCondition();
 
-        int count = m_table->remove(key, condition, getOptions(origin));
+        int count = m_table->remove(key, condition, std::make_shared<AccessOptions>(origin));
         out = abi.abiIn("", u256(count));
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
@@ -144,7 +145,7 @@ bytes TablePrecompiled::call(
         auto entry = entryPrecompiled->getEntry();
         auto condition = conditionPrecompiled->getCondition();
 
-        int count = m_table->update(key, entry, condition, getOptions(origin));
+        int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
         out = abi.abiIn("", u256(count));
     }
     return out;

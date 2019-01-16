@@ -44,17 +44,6 @@ std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
     return "CRUD";
 }
 
-storage::Table::Ptr CRUDPrecompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
-{
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("open table")
-                           << LOG_KV("tableName", tableName);
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
-}
-
 bytes CRUDPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {

@@ -23,11 +23,12 @@ log_level="INFO"
 logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
-Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
+Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/raw/dev/bin/fisco-bcos
 bcos_bin_name=fisco-bcos
 guomi_mode=
 gm_conf_path="gmconf/"
 CUR_DIR=$(pwd)
+consensus_type="pbft"
 TASSL_INSTALL_DIR="${HOME}/TASSL"
 OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
 
@@ -44,8 +45,9 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
     -i <rpc listen public ip>           Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
+    -c <Consensus Algorithm>            Default PBFT. If set -c, use raft
     -s <State type>                     Default mpt. if set -s, use storage 
+    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -z <Generate tar packet>            Default no
@@ -72,7 +74,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:P:t:iszhgT" option;do
+while getopts "f:l:o:p:e:P:t:icszhgT" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -92,6 +94,7 @@ while getopts "f:l:o:p:e:P:t:iszhgT" option;do
     ;;
     s) state_type=storage;;
     t) CertConfig=$OPTARG;;
+    c) consensus_type="raft";;
     T) debug_log="true"
     log_level=DEBUG
     ;;
@@ -569,7 +572,7 @@ generate_group_genesis()
 ;consensus configuration
 [consensus]
     ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
-    consensus_type=pbft
+    consensus_type=${consensus_type}
     ;the max number of transactions of a block
     max_trans_num=1000
     ;the ttl of broadcasted pbft message
