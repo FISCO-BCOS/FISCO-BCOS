@@ -159,7 +159,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     {
         m_gas = _p.gas;
 
-        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
+        // LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
         auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
         size_t outputSize = result.size();

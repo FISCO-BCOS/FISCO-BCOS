@@ -77,12 +77,13 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
     auto p = getPrecompiled(address);
-
-    if (p)
-    {
-        LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address", address);
-    }
-
+    /*
+        if (p)
+        {
+            LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address",
+       address);
+        }
+    */
     return p.get() != NULL;
 }
 
