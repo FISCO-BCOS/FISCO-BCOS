@@ -67,7 +67,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     block.resizeTransactionReceipt(block.transactions().size());
     ///*
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
-    txDag->init(block.transactions());
+    txDag->init(executiveContext, block.transactions());
     /*
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
@@ -411,7 +411,7 @@ ExecutiveContext::Ptr BlockVerifier::queueExecuteBlock(
     block.resizeTransactionReceipt(block.transactions().size());
     ///*
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
-    txDag->init(block.transactions());
+    txDag->init(executiveContext, block.transactions());
     /*
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
