@@ -22,6 +22,7 @@
 
 #pragma once
 #include "DAG.h"
+#include "ExecutiveContext.h"
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <memory>

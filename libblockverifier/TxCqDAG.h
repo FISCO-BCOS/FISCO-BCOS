@@ -41,7 +41,7 @@ public:
     ~TxCqDAG() {}
 
     // Generate DAG according with given transactions
-    void init(dev::eth::Transactions const& _txs);
+    void init(ExecutiveContext::Ptr _ctx, dev::eth::Transactions const& _txs);
 
     // Set transaction execution function
     void setTxExecuteFunc(ExecuteTxFunc const& _f);

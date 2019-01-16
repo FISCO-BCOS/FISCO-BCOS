@@ -65,22 +65,16 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
     block.resizeTransactionReceipt(block.transactions().size());
-    ///*
+
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(executiveContext, block.transactions());
-    /*
+
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
             execute(envInfo, _tr, OnOpFunc(), executiveContext);
         block.setTransactionReceipt(_txId, resultReceipt.second);
-        executiveContext->getState()->commit();
-        return true;
-    });*/
-    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        executiveContext->getState()->createContract(_tr.sender());
-        executiveContext->getState()->setStorage(_tr.sender(), u256(1), u256(2));
         executiveContext->getState()->commit();
         return true;
     });
@@ -114,22 +108,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                              << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
                              << LOG_KV("num", block.blockHeader().number());
     pastTime = utcTime();
-
-    //*/
-    /*
-        for (Transaction const& tr : block.transactions())
-        {
-            EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
-                block.getTransactionReceipts().size() > 0 ?
-                    block.getTransactionReceipts().back().gasUsed() :
-                    0);
-            envInfo.setPrecompiledEngine(executiveContext);
-            std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-                execute(envInfo, tr, OnOpFunc(), executiveContext);
-            block.appendTransactionReceipt(resultReceipt.second);
-            executiveContext->getState()->commit();
-        }
-        //*/
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
@@ -191,20 +169,14 @@ ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
     block.resizeTransactionReceipt(block.transactions().size());
     ///*
     shared_ptr<TxCqDAG> txDag = make_shared<TxCqDAG>();
-    txDag->init(block.transactions());
-    /*
+    txDag->init(executiveContext, block.transactions());
+
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
             execute(envInfo, _tr, OnOpFunc(), executiveContext);
         block.setTransactionReceipt(_txId, resultReceipt.second);
-        executiveContext->getState()->commit();
-        return true;
-    });*/
-    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        executiveContext->getState()->createContract(_tr.sender());
-        executiveContext->getState()->setStorage(_tr.sender(), u256(1), u256(2));
         executiveContext->getState()->commit();
         return true;
     });
@@ -238,22 +210,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
                              << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
                              << LOG_KV("num", block.blockHeader().number());
     pastTime = utcTime();
-
-    //*/
-    /*
-        for (Transaction const& tr : block.transactions())
-        {
-            EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
-                block.getTransactionReceipts().size() > 0 ?
-                    block.getTransactionReceipts().back().gasUsed() :
-                    0);
-            envInfo.setPrecompiledEngine(executiveContext);
-            std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-                execute(envInfo, tr, OnOpFunc(), executiveContext);
-            block.appendTransactionReceipt(resultReceipt.second);
-            executiveContext->getState()->commit();
-        }
-        //*/
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
@@ -322,25 +278,16 @@ ExecutiveContext::Ptr BlockVerifier::parallelOmpExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
-/*for (Transaction const& tr : block.transactions())
-{
-    EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
-        block.getTransactionReceipts().size() > 0 ?
-            block.getTransactionReceipts().back().gasUsed() :
-            0);
-    envInfo.setPrecompiledEngine(executiveContext);
-    std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-        execute(envInfo, tr, OnOpFunc(), executiveContext);
-    block.appendTransactionReceipt(resultReceipt.second);
-    executiveContext->getState()->commit();
-}*/
 #pragma omp parallel for
     for (size_t i = 0; i < block.transactions().size(); i++)
     // for (Transaction const& tr : block.transactions())
     {
         auto& tr = block.transactions()[i];
-        executiveContext->getState()->createContract(tr.sender());
-        executiveContext->getState()->setStorage(tr.sender(), u256(1), u256(2));
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, tr, OnOpFunc(), executiveContext);
+        block.setTransactionReceipt(i, resultReceipt.second);
         executiveContext->getState()->commit();
     }
 
@@ -409,22 +356,16 @@ ExecutiveContext::Ptr BlockVerifier::queueExecuteBlock(
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
     block.resizeTransactionReceipt(block.transactions().size());
-    ///*
+
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(executiveContext, block.transactions());
-    /*
+
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
         std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
             execute(envInfo, _tr, OnOpFunc(), executiveContext);
         block.setTransactionReceipt(_txId, resultReceipt.second);
-        executiveContext->getState()->commit();
-        return true;
-    });*/
-    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        executiveContext->getState()->createContract(_tr.sender());
-        executiveContext->getState()->setStorage(_tr.sender(), u256(1), u256(2));
         executiveContext->getState()->commit();
         return true;
     });
@@ -458,22 +399,6 @@ ExecutiveContext::Ptr BlockVerifier::queueExecuteBlock(
                              << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
                              << LOG_KV("num", block.blockHeader().number());
     pastTime = utcTime();
-
-    //*/
-    /*
-        for (Transaction const& tr : block.transactions())
-        {
-            EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
-                block.getTransactionReceipts().size() > 0 ?
-                    block.getTransactionReceipts().back().gasUsed() :
-                    0);
-            envInfo.setPrecompiledEngine(executiveContext);
-            std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-                execute(envInfo, tr, OnOpFunc(), executiveContext);
-            block.appendTransactionReceipt(resultReceipt.second);
-            executiveContext->getState()->commit();
-        }
-        //*/
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
@@ -541,25 +466,17 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
-    /*for (Transaction const& tr : block.transactions())
-    {
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
-            block.getTransactionReceipts().size() > 0 ?
-                block.getTransactionReceipts().back().gasUsed() :
-                0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, tr, OnOpFunc(), executiveContext);
-        block.appendTransactionReceipt(resultReceipt.second);
-        executiveContext->getState()->commit();
-    }*/
+
     //#pragma omp parallel for
     for (size_t i = 0; i < block.transactions().size(); i++)
     // for (Transaction const& tr : block.transactions())
     {
         auto& tr = block.transactions()[i];
-        executiveContext->getState()->createContract(tr.sender());
-        executiveContext->getState()->setStorage(tr.sender(), u256(1), u256(2));
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, tr, OnOpFunc(), executiveContext);
+        block.setTransactionReceipt(i, resultReceipt.second);
         executiveContext->getState()->commit();
     }
 

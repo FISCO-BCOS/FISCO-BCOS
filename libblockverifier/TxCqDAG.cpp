@@ -30,7 +30,7 @@ using namespace dev::eth;
 using namespace dev::blockverifier;
 
 // Generate DAG according with given transactions
-void TxCqDAG::init(Transactions const& _txs)
+void TxCqDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
 {
     m_txs = make_shared<Transactions const>(_txs);
     m_dag.init(_txs.size());
@@ -42,14 +42,14 @@ void TxCqDAG::init(Transactions const& _txs)
         auto& tx = _txs[id];
 
         // Is para transaction? //XXX Serial transaction has all criticals it will seperate DAG
-        if (!dev::precompile::DagTransferPrecompiled::isDagTransfer(tx.receiveAddress()))
+        auto p = _ctx->getPrecompiled(tx.receiveAddress());
+        if (!p || !p->isDagPrecompiled())
         {
-            serialTxs.emplace_back(id);
             continue;
         }
 
         // Get critical field
-        vector<string> criticals = dev::precompile::DagTransferPrecompiled::getTransferDagTag(tx);
+        vector<string> criticals = p->getDagTag(ref(tx.data()));
 
         // Add edge between critical transaction
         for (string const& c : criticals)

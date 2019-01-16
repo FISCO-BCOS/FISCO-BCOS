@@ -49,7 +49,7 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
         }
 
         // Get critical field
-        vector<string> criticals = p->getTransferDagTag(bytesConstRef(tx.data()));
+        vector<string> criticals = p->getDagTag(ref(tx.data()));
 
         // Add edge between critical transaction
         for (string const& c : criticals)

@@ -21,12 +21,15 @@
  * @date 2019-01-15
  */
 #include <libdevcore/easylog.h>
+#include <libethcore/ABI.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <omp.h>
+#include <unistd.h>
 #include <chrono>
+#include <ctime>
 
 using namespace std;
 using namespace dev;
@@ -36,7 +39,7 @@ using namespace dev::initializer;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 INITIALIZE_EASYLOGGINGPP
-
+/*
 static Transactions createTxs(std::shared_ptr<LedgerManager> ledgerManager)
 {
     ///< transaction related
@@ -77,17 +80,79 @@ static Transactions createTxs(std::shared_ptr<LedgerManager> ledgerManager)
 
     return txs;
 }
+*/
+void genTxUserAddBlock(Block& _block, size_t _userNum)
+{
+    Transactions txs;
+    Secret sec = KeyPair::create().secret();
+    for (size_t i = 0; i < _userNum; i++)
+    {
+        u256 value = 0;
+        u256 gasPrice = 0;
+        u256 gas = 10000000;
+        Address dest = Address(0xffff);
+        string user = to_string(i);
+        u256 money = 1000000000;
+        dev::eth::ContractABI abi;
+        bytes data = abi.abiIn("userAdd(string,uint256)", user, money);  // add 1000000000 to user i
+        u256 nonce = u256(utcTime());
+        Transaction tx(value, gasPrice, gas, dest, data, nonce);
+        tx.setBlockLimit(250);
+        sec = KeyPair::create().secret();
+        Signature sig = sign(sec, tx.sha3(WithoutSignature));
+        tx.updateSignature(SignatureStruct(sig));
+        txs.push_back(tx);
+    }
+
+    _block.setTransactions(txs);
+}
+
+void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier)
+{
+    Block userAddBlock;
+    genTxUserAddBlock(userAddBlock, _userNum);
+    _blockVerifier->executeBlock(userAddBlock, _parentBlockInfo);
+}
+
+void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
+{
+    Transactions txs;
+    Secret sec = KeyPair::create().secret();
+    srand(utcTime());
+    for (size_t i = 0; i < _txNum; i++)
+    {
+        u256 value = 0;
+        u256 gasPrice = 0;
+        u256 gas = 10000000;
+        Address dest = Address(0xffff);
+        string userFrom = to_string(rand() % _userNum);
+        string userTo = to_string(rand() % _userNum);
+        u256 money = 1;
+        dev::eth::ContractABI abi;
+        bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
+            money);  // add 1000000000 to user i
+        u256 nonce = u256(utcTime());
+        Transaction tx(value, gasPrice, gas, dest, data, nonce);
+        tx.setBlockLimit(250);
+        sec = KeyPair::create().secret();
+        Signature sig = sign(sec, tx.sha3(WithoutSignature));
+        tx.updateSignature(SignatureStruct(sig));
+        txs.push_back(tx);
+    }
+
+    _block.setTransactions(txs);
+}
+
 
 static void startExecute()
 {
+    auto start = chrono::system_clock::now();
     ///< initialize component
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.ini");
 
     auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
-    /// create transaction
-    std::cout << "Creating txs..." << std::endl;
-    auto txs = createTxs(ledgerManager);
 
     auto blockChain = ledgerManager->blockChain(1);
     auto height = blockChain->number();
@@ -95,67 +160,72 @@ static void startExecute()
     BlockInfo parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
         parentBlock->header().stateRoot()};
 
-    Block block;
-    block.setTransactions(txs);
     auto blockVerifier = ledgerManager->blockVerifier(1);
-    /// serial transaction
-    std::cout << "serial executing txs..." << std::endl;
-    auto start = chrono::system_clock::now();
-    blockVerifier->executeBlock(block, parentBlockInfo);
-    auto end = chrono::system_clock::now();
-    std::cout << "Executed" << std::endl;
+
+    std::cout << "Creating user..." << std::endl;
+    initUser(10, parentBlockInfo, blockVerifier);
+
+    /// serial execution
+    {
+        std::cout << "Generating transfer txs..." << std::endl;
+        Block block;
+        genTxUserTransfer(block, 10, 10000);
+        std::cout << "serial executing txs..." << std::endl;
+        blockVerifier->executeBlock(block, parentBlockInfo);
+        std::cout << "Executed" << std::endl;
+    }
 
     /// serial queue transaction
-    std::cout << "Creating txs..." << std::endl;
-    txs = createTxs(ledgerManager);
-    block.setTransactions(txs);
-    start = chrono::system_clock::now();
-    std::cout << "serial queue executing txs..." << std::endl;
-    blockVerifier->queueExecuteBlock(block, parentBlockInfo);
-    end = chrono::system_clock::now();
-    std::cout << "Executed" << std::endl;
+    {
+        std::cout << "Generating transfer txs..." << std::endl;
+        Block block;
+        genTxUserTransfer(block, 10, 10000);
+        std::cout << "serial queue executing txs..." << std::endl;
+        blockVerifier->queueExecuteBlock(block, parentBlockInfo);
+        std::cout << "Executed" << std::endl;
+    }
 
     /// parallel execution
-    std::cout << "Creating txs..." << std::endl;
-    txs = createTxs(ledgerManager);
-    block.setTransactions(txs);
-    start = chrono::system_clock::now();
-    std::cout << "parallel executing txs..." << std::endl;
-    blockVerifier->parallelExecuteBlock(block, parentBlockInfo);
-    end = chrono::system_clock::now();
-    std::cout << "Executed" << std::endl;
+    {
+        std::cout << "Generating transfer txs..." << std::endl;
+        Block block;
+        genTxUserTransfer(block, 10, 10000);
+        std::cout << "parallel executing txs..." << std::endl;
+        blockVerifier->parallelExecuteBlock(block, parentBlockInfo);
+        std::cout << "Executed" << std::endl;
+    }
 
     /// parallel concurrent queue execution
-    std::cout << "Creating txs..." << std::endl;
-    txs = createTxs(ledgerManager);
-    block.setTransactions(txs);
-    start = chrono::system_clock::now();
-    std::cout << "parallel concurrent queue executing txs..." << std::endl;
-    blockVerifier->parallelCqExecuteBlock(block, parentBlockInfo);
-    end = chrono::system_clock::now();
-    std::cout << "Executed" << std::endl;
+    {
+        std::cout << "Generating transfer txs..." << std::endl;
+        Block block;
+        genTxUserTransfer(block, 10, 10000);
+        std::cout << "parallel concurrent queue executing txs..." << std::endl;
+        blockVerifier->parallelCqExecuteBlock(block, parentBlockInfo);
+        std::cout << "Executed" << std::endl;
+    }
 
     /// parallel openmp execution
-    std::cout << "Creating txs..." << std::endl;
-    txs = createTxs(ledgerManager);
-    block.setTransactions(txs);
-    start = chrono::system_clock::now();
-    std::cout << "parallel openmp executing txs..." << std::endl;
-    blockVerifier->parallelOmpExecuteBlock(block, parentBlockInfo);
-    end = chrono::system_clock::now();
-    std::cout << "Executed" << std::endl;
+    {
+        std::cout << "Generating transfer txs..." << std::endl;
+        Block block;
+        genTxUserTransfer(block, 10, 10000);
+        std::cout << "parallel openmp executing txs..." << std::endl;
+        blockVerifier->parallelOmpExecuteBlock(block, parentBlockInfo);
+        std::cout << "Executed" << std::endl;
+    }
 
-    /// serial transaction
-    std::cout << "Creating txs..." << std::endl;
-    txs = createTxs(ledgerManager);
-    block.setTransactions(txs);
-    start = chrono::system_clock::now();
-    std::cout << "serial executing txs..." << std::endl;
-    blockVerifier->executeBlock(block, parentBlockInfo);
-    end = chrono::system_clock::now();
-    std::cout << "Executed" << std::endl;
+    /// serial execution
+    {
+        std::cout << "Generating transfer txs..." << std::endl;
+        Block block;
+        genTxUserTransfer(block, 10, 10000);
+        std::cout << "serial executing txs..." << std::endl;
+        blockVerifier->executeBlock(block, parentBlockInfo);
+        std::cout << "Executed" << std::endl;
+    }
 
-
+    auto end = chrono::system_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);
     std::cout << "Elapsed: " << elapsed.count() << " us" << std::endl;
 }
