@@ -183,7 +183,7 @@ err:
     return lresult;
 }
 
-int SM2::verify(const string& _signData, int _signDataLen, const char* originalData,
+int SM2::verify(const string& _signData, int, const char* originalData,
     int originalDataLen, const string& publicKey)
 {
     // LOG(DEBUG)<<"_signData:"<<_signData<<" _signDataLen:"<<_signDataLen<<"
