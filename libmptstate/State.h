@@ -257,7 +257,7 @@ public:
 
     /// Get the value of a storage position of an account.
     /// @returns 0 if no account exists at that address.
-    u256 storage(Address const& _contract, u256 const& _memory) const;
+    u256 storage(Address const& _contract, u256 const& _memory);
 
     /// Set the value of a storage position of an account.
     void setStorage(Address const& _contract, u256 const& _location, u256 const& _value);
@@ -306,7 +306,7 @@ public:
     u256 getNonce(Address const& _addr) const;
 
     /// The hash of the root of our state tree.
-    h256 rootHash() const { return m_state.root(); }
+    h256 rootHash(bool _needCal = true) const { return m_state.root(); }
 
     /// Commit all changes waiting in the address cache to the DB. Remove empty account
     void commit();
@@ -355,9 +355,9 @@ private:
     mutable std::vector<Address> m_unchangedCacheEntries;  ///< Tracks entries in m_cache that can
                                                            ///< potentially be purged if it grows
                                                            ///< too large.
-    mutable std::set<Address> m_nonExistingAccountsCache;  ///< Tracks addresses that are known to
-                                                           ///< not exist.
-    AddressHash m_touched;                                 ///< Tracks all addresses touched so far.
+    mutable std::unordered_set<Address> m_nonExistingAccountsCache;  ///< Tracks addresses that are
+                                                                     ///< known to not exist.
+    AddressHash m_touched;  ///< Tracks all addresses touched so far.
 
     u256 m_accountStartNonce;
 

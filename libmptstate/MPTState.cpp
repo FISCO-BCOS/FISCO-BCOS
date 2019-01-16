@@ -80,7 +80,7 @@ h256 MPTState::storageRoot(Address const& _contract) const
     return m_state.storageRoot(_contract);
 }
 
-u256 MPTState::storage(Address const& _contract, u256 const& _memory) const
+u256 MPTState::storage(Address const& _contract, u256 const& _memory)
 {
     return m_state.storage(_contract, _memory);
 }
@@ -140,7 +140,7 @@ u256 MPTState::getNonce(Address const& _addr) const
     return m_state.getNonce(_addr);
 }
 
-h256 MPTState::rootHash() const
+h256 MPTState::rootHash(bool _needCal) const
 {
     return m_state.rootHash();
 }

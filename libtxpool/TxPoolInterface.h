@@ -56,7 +56,7 @@ public:
     virtual dev::eth::Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
     virtual dev::eth::Transactions topTransactionsCondition(
-        uint64_t const&, std::function<bool(dev::eth::Transaction const&)> const& = nullptr)
+        uint64_t const& _limit, dev::h512 const& _nodeId)
     {
         return dev::eth::Transactions();
     };
@@ -91,8 +91,9 @@ public:
     virtual PROTOCOL_ID const& getProtocolId() const = 0;
 
     /// Set transaction is known by a node
-    virtual void transactionIsKnownBy(h256 const&, h512 const&){};
-
+    virtual void setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId){};
+    virtual void setTransactionsAreKnownBy(
+        std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId){};
     /// Is the transaction is known by the node ?
     virtual bool isTransactionKnownBy(h256 const&, h512 const&) { return false; };
 
@@ -105,6 +106,8 @@ public:
     {
         return m_onReady.add(_t);
     }
+    virtual SharedMutex& xtransactionKnownBy() = 0;
+    virtual void verifyAndSetSenderForBlock(dev::eth::Block& block) {}
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be

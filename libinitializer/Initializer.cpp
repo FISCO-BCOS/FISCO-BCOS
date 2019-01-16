@@ -24,6 +24,7 @@
 
 using namespace dev;
 using namespace dev::initializer;
+using namespace dev::p2p;
 
 void Initializer::init(std::string const& _path)
 {

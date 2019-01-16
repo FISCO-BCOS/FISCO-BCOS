@@ -57,7 +57,6 @@ void LogInitializer::initLog(
     boost::shared_ptr<boost::log::sinks::text_file_backend> backend(
         new boost::log::sinks::text_file_backend(boost::log::keywords::file_name = fileName,
             boost::log::keywords::open_mode = std::ios::app,
-            boost::log::keywords::auto_flush = true,
             boost::log::keywords::time_based_rotation = &canRotate,
             boost::log::keywords::channel = channel));
     boost::shared_ptr<sink_t> sink(new sink_t(backend));
@@ -75,8 +74,6 @@ void LogInitializer::initLog(
     unsigned log_level = getLogLevel(pt.get<std::string>(logType + ".Level", "info"));
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= log_level);
-    /// sink->locked_backend()->set_file_name_pattern
-    /// be->scan_for_files(boost::log::sinks::file::scan_method::scan_matching, true);
     boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);
     // add attributes
@@ -108,7 +105,7 @@ unsigned LogInitializer::getLogLevel(std::string const& levelStr)
 /// stop and remove all sinks after the program exit
 void LogInitializer::stopLogging()
 {
-    for (auto sink : m_sinks)
+    for (auto const& sink : m_sinks)
         stopLogging(sink);
     m_sinks.clear();
 }

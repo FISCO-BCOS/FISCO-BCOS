@@ -228,7 +228,6 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "mpt");
-
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)

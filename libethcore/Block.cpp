@@ -29,14 +29,14 @@ namespace dev
 {
 namespace eth
 {
-Block::Block(bytesConstRef _data)
+Block::Block(bytesConstRef _data, CheckTransaction const option)
 {
-    decode(_data);
+    decode(_data, option);
 }
 
-Block::Block(bytes const& _data)
+Block::Block(bytes const& _data, CheckTransaction const option)
 {
-    decode(ref(_data));
+    decode(ref(_data), option);
 }
 
 Block::Block(Block const& _block)
@@ -151,7 +151,7 @@ void Block::calReceiptRoot(bool update) const
  * @brief : decode specified data of block into Block class
  * @param _block : the specified data of block
  */
-void Block::decode(bytesConstRef _block_bytes)
+void Block::decode(bytesConstRef _block_bytes, CheckTransaction const option)
 {
     /// no try-catch to throw exceptions directly
     /// get RLP of block
@@ -163,7 +163,7 @@ void Block::decode(bytesConstRef _block_bytes)
     m_transactions.resize(transactions_rlp.itemCount());
     for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
     {
-        m_transactions[i].decode(transactions_rlp[i]);
+        m_transactions[i].decode(transactions_rlp[i], option);
     }
     /// get transactionReceipt list
     RLP transactionReceipts_rlp = block_rlp[2];

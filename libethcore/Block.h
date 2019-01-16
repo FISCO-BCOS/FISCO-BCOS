@@ -37,8 +37,10 @@ class Block
 public:
     ///-----constructors of Block
     Block() = default;
-    explicit Block(bytesConstRef _data);
-    explicit Block(bytes const& _data);
+    explicit Block(
+        bytesConstRef _data, CheckTransaction const option = CheckTransaction::Everything);
+    explicit Block(
+        bytes const& _data, CheckTransaction const option = CheckTransaction::Everything);
     /// copy constructor
     Block(Block const& _block);
     /// assignment operator
@@ -65,7 +67,7 @@ public:
     void encode(bytes& _out) const;
 
     ///-----decode functions
-    void decode(bytesConstRef _block);
+    void decode(bytesConstRef _block, CheckTransaction const option = CheckTransaction::Everything);
 
     /// @returns the RLP serialisation of this block.
     bytes rlp() const
@@ -106,7 +108,7 @@ public:
     /// append transactions
     void appendTransactions(Transactions const& _trans_array)
     {
-        for (auto trans : _trans_array)
+        for (auto const& trans : _trans_array)
             m_transactions.push_back(trans);
         noteChange();
     }
@@ -126,9 +128,22 @@ public:
     h256 const transactionRoot() { return header().transactionsRoot(); }
     h256 const receiptRoot() { return header().receiptsRoot(); }
 
-    void resetCurrentBlock(BlockHeader& _parent)
+    /**
+     * @brief: reset the current block
+     *  1. if the blockHeader param has been set, then populate a new block header from the
+     * blockHeader passed by param
+     *  2. if the blockHeader param is default, doesn't populate a new block header
+     * @param _parent: the block header used to populate a new block header
+     */
+    void resetCurrentBlock(BlockHeader const& _parent = BlockHeader())
     {
-        m_blockHeader.populateFromParent(_parent);
+        /// the default sealer of blockHeader is Invalid256
+        if (_parent.sealer() != Invalid256)
+        {
+            m_blockHeader.populateFromParent(_parent);
+        }
+        /// sealer must be reseted since it's used to decide a block is valid or not
+        m_blockHeader.setSealer(Invalid256);
         m_transactions.clear();
         m_transactionReceipts.clear();
         m_sigList.clear();
@@ -159,6 +174,27 @@ public:
     const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
     void calTransactionRoot(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
+
+    /**
+     * @brief: set sender for specified transaction, if the sender hasn't been set, then recover
+     * sender from the signature
+     *
+     * @param index: the index of the transaction
+     * @param sender: the sender address
+     */
+    void setSenderForTransaction(size_t index, dev::Address const& sender = ZeroAddress)
+    {
+        if (sender == ZeroAddress)
+        {
+            /// verify signature and recover sender from the signature
+            m_transactions[index].sender();
+        }
+        else
+        {
+            m_transactions[index].forceSender(sender);
+        }
+        noteChange();
+    }
 
 private:
     /// callback this function when transaction has changed

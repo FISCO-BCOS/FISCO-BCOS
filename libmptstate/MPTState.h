@@ -80,7 +80,7 @@ public:
 
     virtual h256 storageRoot(Address const& _contract) const override;
 
-    virtual u256 storage(Address const& _contract, u256 const& _memory) const override;
+    virtual u256 storage(Address const& _contract, u256 const& _memory) override;
 
     virtual void setStorage(
         Address const& _contract, u256 const& _location, u256 const& _value) override;
@@ -108,7 +108,7 @@ public:
 
     virtual u256 getNonce(Address const& _addr) const override;
 
-    virtual h256 rootHash() const override;
+    virtual h256 rootHash(bool _needCal = true) const override;
 
     virtual void commit() override;
 

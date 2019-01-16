@@ -193,9 +193,9 @@ class ExtVMFace : public evmc_context
 {
 public:
     /// Full constructor.
-    ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin,
-        u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash,
-        unsigned _depth, bool _isCreate, bool _staticCall);
+    ExtVMFace(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+        Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
+        bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall);
 
     virtual ~ExtVMFace() = default;
 
@@ -203,31 +203,32 @@ public:
     ExtVMFace& operator=(ExtVMFace const&) = delete;
 
     /// Read storage location.
-    virtual u256 store(u256) { return 0; }
+    virtual u256 store(u256 const&) = 0;
 
     /// Write a value in storage.
-    virtual void setStore(u256, u256) {}
+    virtual void setStore(u256 const&, u256 const&) = 0;
 
     /// Read address's balance.
-    virtual u256 balance(Address) { return 0; }
+    virtual u256 balance(Address const&) = 0;
 
     /// Read address's code.
-    virtual bytes const codeAt(Address) { return NullBytes; }
+    virtual bytes const codeAt(Address const&) { return NullBytes; }
 
     /// @returns the size of the code in bytes at the given address.
-    virtual size_t codeSizeAt(Address) { return 0; }
+    virtual size_t codeSizeAt(Address const&) { return 0; }
 
     /// @returns the hash of the code at the given address.
-    virtual h256 codeHashAt(Address) { return h256{}; }
+    virtual h256 codeHashAt(Address const&) { return h256{}; }
 
     /// Does the account exist?
-    virtual bool exists(Address) { return false; }
+    virtual bool exists(Address const&) { return false; }
 
     /// Suicide the associated contract and give proceeds to the given address.
-    virtual void suicide(Address) { m_sub.suicides.insert(m_myAddress); }
+    virtual void suicide(Address const&) { m_sub.suicides.insert(m_myAddress); }
 
     /// Create a new (contract) account.
-    virtual evmc_result create(u256, u256&, bytesConstRef, Instruction, u256, OnOpFunc const&) = 0;
+    virtual evmc_result create(
+        u256 const&, u256&, bytesConstRef, Instruction, u256, OnOpFunc const&) = 0;
 
     /// Make a new message call.
     virtual evmc_result call(CallParameters&) = 0;
@@ -264,15 +265,15 @@ public:
     bool const& isCreate() { return m_isCreate; }
     bool const& staticCall() { return m_staticCall; }
     /// ------ set interfaces related to ExtVMFace------
-    void setMyAddress(Address _contractAddr) { m_myAddress = _contractAddr; }
-    void setCaller(Address _senderAddr) { m_caller = _senderAddr; }
-    void setOrigin(Address _origin) { m_origin = _origin; }
-    void setValue(u256 _value) { m_value = _value; }
-    void setGasePrice(u256 _gasPrice) { m_gasPrice = _gasPrice; }
+    void setMyAddress(Address const& _contractAddr) { m_myAddress = _contractAddr; }
+    void setCaller(Address const& _senderAddr) { m_caller = _senderAddr; }
+    void setOrigin(Address const& _origin) { m_origin = _origin; }
+    void setValue(u256 const& _value) { m_value = _value; }
+    void setGasePrice(u256 const& _gasPrice) { m_gasPrice = _gasPrice; }
     void setData(bytesConstRef _data) { m_data = _data; }
-    void setCode(bytes _code) { m_code = _code; }
-    void setCodeHash(h256 _codeHash) { m_codeHash = _codeHash; }
-    void setSalt(u256 _salt) { m_salt = _salt; }
+    void setCode(bytes& _code) { m_code = _code; }
+    void setCodeHash(h256 const& _codeHash) { m_codeHash = _codeHash; }
+    void setSalt(u256 const& _salt) { m_salt = _salt; }
     void setSub(SubState _sub) { m_sub = _sub; }
     void setDepth(unsigned _depth) { m_depth = _depth; }
     void setCreate(bool _isCreate) { m_isCreate = _isCreate; }

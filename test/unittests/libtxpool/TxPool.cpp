@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
             ->transactions();
     /// set valid nonce
     size_t i = 0;
-    for (auto tx : transaction_vec)
+    for (auto& tx : transaction_vec)
     {
         tx.setNonce(tx.nonce() + u256(i) + u256(1));
         tx.setBlockLimit(pool_test.m_blockChain->number() + u256(1));

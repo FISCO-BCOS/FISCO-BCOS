@@ -33,17 +33,18 @@
 
 using namespace dev;
 using namespace dev::txpool;
+using namespace dev::p2p;
 using namespace dev::blockchain;
 
 namespace dev
 {
 namespace test
 {
-class FakeService : public Service
+class FakeService : public dev::p2p::Service
 {
 public:
     FakeService() : Service() {}
-    void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
     P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const override { return m_sessionInfos; }
@@ -119,12 +120,8 @@ public:
             {
                 fake_block.m_block.header().setParentHash(
                     m_blockChain[blockHeight - 1]->headerHash());
-                std::cout << "### setParent:" << toHex(m_blockChain[blockHeight - 1]->headerHash())
-                          << std::endl;
                 fake_block.m_block.header().setNumber(blockHeight);
             }
-            std::cout << "#### push back:" << toHex(fake_block.m_block.header().hash())
-                      << std::endl;
             m_blockHash[fake_block.m_block.header().hash()] = blockHeight;
             m_blockChain.push_back(std::make_shared<Block>(fake_block.m_block));
         }
@@ -134,7 +131,7 @@ public:
     void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override
     {
         auto pBlock = getBlockByNumber(_blockNumber);
-        for (auto trans : pBlock->transactions())
+        for (auto& trans : pBlock->transactions())
         {
             _nonceVector.push_back(boost::lexical_cast<dev::eth::NonceKeyType>(trans.nonce()));
         }
