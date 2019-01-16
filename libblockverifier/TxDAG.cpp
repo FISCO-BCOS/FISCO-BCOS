@@ -86,7 +86,7 @@ int TxDAG::executeUnit()
     //              << LOG_KV("total", m_txs->size());
     ID id;
     {
-        id = m_dag.pop();
+        id = m_dag.waitPop();
         if (id == INVALID_ID)
             return 0;
     }
@@ -97,8 +97,8 @@ int TxDAG::executeUnit()
     {
         f_executeTx((*m_txs)[id], id);
 
-
         id = m_dag.consume(id);
+
 
         Guard l(x_exeCnt);
         m_exeCnt += 1;

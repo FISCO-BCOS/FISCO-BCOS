@@ -41,6 +41,7 @@ public:
     {
         h256 txHash = param.sha3();
         std::vector<std::string> res;
+        // return res;
         for (size_t i = 0; i < 2; i++)
         {
             std::string randStr = std::string() + char(txHash.data()[i] % 10);
