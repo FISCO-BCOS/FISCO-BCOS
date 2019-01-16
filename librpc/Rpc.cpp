@@ -359,14 +359,22 @@ Json::Value Rpc::getPeers()
     return Json::Value();
 }
 
-std::string Rpc::getNodeID()
+Json::Value Rpc::getNodeIDList()
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("getNodeID") << LOG_DESC("request");
+        RPC_LOG(INFO) << LOG_BADGE("getNodeIDList") << LOG_DESC("request");
 
-        NodeID id = service()->id();
-        return id.hex();
+        Json::Value response = Json::Value(Json::arrayValue);
+
+        response.append(service()->id().hex());
+        auto sessions = service()->sessionInfos();
+        for (auto it = sessions.begin(); it != sessions.end(); ++it)
+        {
+            response.append(it->nodeID.hex());
+        }
+
+        return response;
     }
     catch (JsonRpcException& e)
     {

@@ -427,8 +427,8 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
     response = rpc->getGroupList();
     BOOST_CHECK(response.size() == 1);
 
-    std::string nodeID = rpc->getNodeID();
-    BOOST_CHECK(nodeID == h512(101).hex());
+    response = rpc->getNodeIDList();
+    BOOST_CHECK(response.size() == 2);
 }
 
 BOOST_AUTO_TEST_CASE(testGetBlockByHash)

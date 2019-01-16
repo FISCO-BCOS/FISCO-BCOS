@@ -67,7 +67,7 @@ public:
     virtual Json::Value getPeers() override;
     virtual Json::Value getGroupPeers(int _groupID) override;
     virtual Json::Value getGroupList() override;
-    virtual std::string getNodeID() override;
+    virtual Json::Value getNodeIDList() override;
 
     // block part
     virtual Json::Value getBlockByHash(
