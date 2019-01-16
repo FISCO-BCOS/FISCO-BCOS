@@ -58,7 +58,7 @@ State::State(State const& _s)
     m_changeLog(_s.m_changeLog)
 {}
 
-OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, WithExisting _we)
+OverlayDB State::openDB(fs::path const& _basePath, h256 const&, WithExisting _we)
 {
     fs::path path = _basePath.empty() ? Defaults::get()->m_dbPath : _basePath;
     path /= fs::path("state");

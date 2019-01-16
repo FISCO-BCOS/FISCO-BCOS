@@ -205,7 +205,7 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
     }
 }
 
-void StorageState::clearStorage(Address const& _address) {}
+void StorageState::clearStorage(Address const&) {}
 
 void StorageState::setCode(Address const& _address, bytes&& _code)
 {
@@ -348,13 +348,13 @@ void StorageState::commit()
     m_memoryTableFactory->commit();
 }
 
-void StorageState::dbCommit(h256 const& _blockHash, int64_t _blockNumber)
+void StorageState::dbCommit(h256 const&, int64_t)
 {
     // ExecutiveContext will commit
     // m_memoryTableFactory->commitDB(_blockHash, _blockNumber);
 }
 
-void StorageState::setRoot(h256 const& _root) {}
+void StorageState::setRoot(h256 const&) {}
 
 u256 const& StorageState::accountStartNonce() const
 {

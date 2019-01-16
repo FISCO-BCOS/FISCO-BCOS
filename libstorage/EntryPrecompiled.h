@@ -20,11 +20,14 @@
  */
 #pragma once
 
-#include "Table.h"
-#include <libblockverifier/ExecutiveContext.h>
+#include "libblockverifier/Precompiled.h"
 
 namespace dev
 {
+namespace storage
+{
+class Entry;
+}
 namespace blockverifier
 {
 #if 0
@@ -57,13 +60,13 @@ public:
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
     virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+        std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const& origin = Address());
 
-    void setEntry(dev::storage::Entry::Ptr entry) { m_entry = entry; }
-    dev::storage::Entry::Ptr getEntry() { return m_entry; }
+    void setEntry(std::shared_ptr<dev::storage::Entry> entry) { m_entry = entry; }
+    std::shared_ptr<dev::storage::Entry> getEntry() { return m_entry; }
 
 private:
-    dev::storage::Entry::Ptr m_entry;
+    std::shared_ptr<dev::storage::Entry> m_entry;
 };
 
 }  // namespace blockverifier

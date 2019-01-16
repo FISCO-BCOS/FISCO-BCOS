@@ -42,18 +42,18 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
-    add_compile_options(-Wno-unused-parameter)
-    add_compile_options(-Wno-unused-variable)
+    # add_compile_options(-Wno-unused-variable)
+    # add_compile_options(-Wno-unused-parameter)
     # add_compile_options(-Wno-unused-function)
     # add_compile_options(-Wno-missing-field-initializers)
+    # Disable warnings about unknown pragmas (which is enabled by -Wall).
+    add_compile_options(-Wno-unknown-pragmas)
+    add_compile_options(-fno-omit-frame-pointer)
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
     # for easy log
     add_compile_options(-DELPP_THREAD_SAFE)
     add_compile_options(-DELPP_NO_DEFAULT_LOG_FILE)
-    # Disable warnings about unknown pragmas (which is enabled by -Wall).
-    add_compile_options(-Wno-unknown-pragmas)
-    add_compile_options(-fno-omit-frame-pointer)
     
     if(STATIC_BUILD)
     SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
@@ -69,11 +69,11 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     
     option(USE_LD_GOLD "Use GNU gold linker" ON)
     if (USE_LD_GOLD)
-    execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
-    if ("${LD_VERSION}" MATCHES "GNU gold")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=gold")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
-    endif ()
+        execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
+        if ("${LD_VERSION}" MATCHES "GNU gold")
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=gold")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
+        endif ()
     endif ()
     
     # Additional GCC-specific compiler settings.
