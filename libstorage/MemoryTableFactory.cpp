@@ -235,10 +235,6 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     /// STORAGE_LOG(DEBUG) << "Total: " << datas.size() << " key";
     if (!datas.empty())
     {
-        if (m_hash == h256())
-        {
-            hash();
-        }
         /// STORAGE_LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
         stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
     }
