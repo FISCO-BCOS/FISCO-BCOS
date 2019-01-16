@@ -67,6 +67,9 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getGroupListI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getNodeID", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::getNodeIDI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
@@ -172,6 +175,10 @@ public:
     {
         response = this->getGroupList();
     }
+    inline virtual void getNodeIDI(const Json::Value&, Json::Value& response)
+    {
+        response = this->getNodeID();
+    }
 
     inline virtual void getBlockByHashI(const Json::Value& request, Json::Value& response)
     {
@@ -251,6 +258,7 @@ public:
     virtual Json::Value getPeers() = 0;
     virtual Json::Value getGroupPeers(int param1) = 0;
     virtual Json::Value getGroupList() = 0;
+    virtual std::string getNodeID() = 0;
 
     // block part
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;

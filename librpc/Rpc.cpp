@@ -359,6 +359,26 @@ Json::Value Rpc::getPeers()
     return Json::Value();
 }
 
+std::string Rpc::getNodeID()
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getNodeID") << LOG_DESC("request");
+
+        NodeID id = service()->id();
+        return id.hex();
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
 Json::Value Rpc::getGroupPeers(int _groupID)
 {
     try
