@@ -401,7 +401,7 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
         RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsLeaderImp]Heartbeat Timeout");
         for (auto& i : memberHeartbeatLog)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsLeader]Heartbeat Log")
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsLeaderImp]Heartbeat Log")
                                   << LOG_KV("node", i.first.hex().substr(0, 5))
                                   << LOG_KV("hbLog", i.second);
         }

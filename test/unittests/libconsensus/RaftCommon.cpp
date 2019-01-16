@@ -194,6 +194,25 @@ BOOST_AUTO_TEST_CASE(testBadMessage)
     BOOST_CHECK_THROW(hb.populate(r[0]), Exception);
     RaftHeartBeatResp hbResp;
     BOOST_CHECK_THROW(hbResp.populate(r[0]), Exception);
+    BOOST_CHECK_THROW(msg.populate(RLP()), Exception);
+}
+
+BOOST_AUTO_TEST_CASE(testMsgPacket)
+{
+    RaftMsgPacket packet1;
+
+    packet1.setOtherField(2, Public("0x1234"), "127.0.0.1");
+    packet1.packetType = RaftPacketType::RaftHeartBeatPacket;
+    packet1.data = fromHex("0xfff0fff");
+
+    bytes data;
+    packet1.encode(data);
+
+    RaftMsgPacket packet2;
+    packet2.decode(ref(data));
+
+    BOOST_CHECK(packet1.packetType == packet2.packetType);
+    BOOST_CHECK(packet1.data == packet2.data);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
