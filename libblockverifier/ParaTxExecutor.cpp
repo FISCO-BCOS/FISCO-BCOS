@@ -65,7 +65,7 @@ void ParaTxExecutor::initialize(unsigned _threadNum)
     }
 }
 
-void ParaTxExecutor::start(shared_ptr<TxDAG> _txDAG)
+void ParaTxExecutor::start(shared_ptr<TxDAGFace> _txDAG)
 {
     auto countDownLatch = make_shared<CountDownLatch>(threadNum());
 

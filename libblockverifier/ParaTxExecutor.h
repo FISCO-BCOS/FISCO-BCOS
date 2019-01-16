@@ -122,7 +122,7 @@ public:
         m_wakeupNotifier(_wakeupNotifier),
         m_countDownLatch(nullptr)
     {}
-    void setDAG(std::shared_ptr<TxDAG> _txDAG) { m_txDAG = _txDAG; }
+    void setDAG(std::shared_ptr<TxDAGFace> _txDAG) { m_txDAG = _txDAG; }
     void setCountDownLatch(std::shared_ptr<CountDownLatch> _latch) { m_countDownLatch = _latch; }
     void start() { startWorking(); }
 
@@ -131,7 +131,7 @@ protected:
     void doWork() override;
 
 private:
-    std::shared_ptr<TxDAG> m_txDAG;
+    std::shared_ptr<TxDAGFace> m_txDAG;
     std::shared_ptr<WakeupNotifier> m_wakeupNotifier;
     std::shared_ptr<CountDownLatch> m_countDownLatch;
 };
@@ -143,7 +143,7 @@ public:
     // Initialize thread pool when fisco-bcos process started
     void initialize(unsigned _threadNum = std::thread::hardware_concurrency());
     // Start to execute DAG, block the calller until the execution of DAG is finished
-    void start(std::shared_ptr<TxDAG> _txDAG);
+    void start(std::shared_ptr<TxDAGFace> _txDAG);
     // Count of the worker threads;
     unsigned threadNum() { return m_workers.size(); }
 
