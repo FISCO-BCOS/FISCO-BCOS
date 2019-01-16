@@ -52,6 +52,26 @@ public:
 
     virtual ExecutiveContext::Ptr executeBlock(
         dev::eth::Block& block, BlockInfo const& parentBlockInfo) = 0;
+    virtual ExecutiveContext::Ptr queueExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo)
+    {
+        return nullptr;
+    };
+    virtual ExecutiveContext::Ptr parallelExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo)
+    {
+        return nullptr;
+    };
+    virtual ExecutiveContext::Ptr parallelCqExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo)
+    {
+        return nullptr;
+    };
+    virtual ExecutiveContext::Ptr parallelOmpExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo)
+    {
+        return nullptr;
+    };
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
     executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) = 0;
