@@ -43,7 +43,7 @@ jobs:
           name: Install dependencies
           command: |
             yum install -y epel-release
-            yum install -y git make clang cmake3 openssl-devel leveldb-devel
+            yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
       - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -51,7 +51,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake3 -DBUILD_GM=ON -DTESTS=ON ..
+            cmake3 -DBUILD_GM=ON -DTESTS=ON ..
             make -j2
       - run:
           name: Unit test
