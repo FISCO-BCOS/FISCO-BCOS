@@ -71,7 +71,7 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
         return false;
 
     /// Drop packets comes from other groups
-    if (!m_syncStatus->hasPeer(_session->nodeID()))
+    if (needCheckPacketInGroup && !m_syncStatus->hasPeer(_session->nodeID()))
         return false;
     return true;
 }
