@@ -173,7 +173,7 @@ void Block::decode(bytesConstRef _block_bytes, CheckTransaction const option)
     }
 
     /// get txsCache
-    m_txsCache = std::move(transactions_rlp.data().toBytes());
+    m_txsCache = transactions_rlp.data().toBytes();
 
     /// get transactionReceipt list
     RLP transactionReceipts_rlp = block_rlp[2];
