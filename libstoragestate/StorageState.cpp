@@ -341,7 +341,9 @@ u256 StorageState::getNonce(Address const& _address) const
 h256 StorageState::rootHash(bool _needCal) const
 {
     if (_needCal)
+    {
         return m_memoryTableFactory->hash();
+    }
     return h256();
 }
 

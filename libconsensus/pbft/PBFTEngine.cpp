@@ -621,7 +621,7 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
 }
 
-void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
+void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& )
 {
     /// no need to decode the local generated prepare packet
     if (req.pBlock)
@@ -661,7 +661,8 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
                           << LOG_KV("myIdx", nodeIdx())
                           << LOG_KV("myNode", m_keyPair.pub().abridged())
                           << LOG_KV("timecost", time_cost)
-                          << LOG_KV("execPerTx", ((float) time_cost/ (float)sealing.block.getTransactionSize());
+                          << LOG_KV("execPerTx",
+                                 (float)time_cost / (float)sealing.block.getTransactionSize());
 }
 
 /// check whether the block is empty
@@ -1379,17 +1380,16 @@ void PBFTEngine::workLoop()
 void PBFTEngine::handleFutureBlock()
 {
     Guard l(m_mutex);
-    bool exist = false;
     std::shared_ptr<PrepareReq> p_future_prepare =
         m_reqCache->futurePrepareCache(m_consensusBlockNumber);
     if (p_future_prepare && p_future_prepare->view == m_view)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock")
-                             << LOG_KV("blkNum", m_reqCache->futurePrepareCache().height)
+                             << LOG_KV("blkNum", p_future_prepare->height)
                              << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("view", m_view)
                              << LOG_KV("conNum", m_consensusBlockNumber)
                              << LOG_KV(
-                                    "hash", m_reqCache->futurePrepareCache().block_hash.abridged())
+                                    "hash", p_future_prepare->block_hash.abridged())
                              << LOG_KV("myIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
         handlePrepareMsg(*p_future_prepare);

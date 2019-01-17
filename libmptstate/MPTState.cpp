@@ -142,7 +142,11 @@ u256 MPTState::getNonce(Address const& _addr) const
 
 h256 MPTState::rootHash(bool _needCal) const
 {
-    return m_state.rootHash();
+    if (_needCal)
+    {
+        return m_state.rootHash();
+    }
+    return h256();
 }
 
 void MPTState::commit()

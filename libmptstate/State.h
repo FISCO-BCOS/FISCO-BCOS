@@ -312,6 +312,7 @@ public:
         {
             return m_state.root();
         }
+        return h256();
     }
 
     /// Commit all changes waiting in the address cache to the DB. Remove empty account

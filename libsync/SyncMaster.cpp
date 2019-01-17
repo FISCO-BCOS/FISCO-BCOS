@@ -219,29 +219,28 @@ void SyncMaster::maintainTransactions()
             m_txPool->setTransactionIsKnownBy(t.sha3(), p);
         }
     }
-}
 
+    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        bytes txRLPs;
+        unsigned txsSize = peerTransactions[_p->nodeId].size();
+        if (0 == txsSize)
+            return true;  // No need to send
 
-m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-    bytes txRLPs;
-    unsigned txsSize = peerTransactions[_p->nodeId].size();
-    if (0 == txsSize)
-        return true;  // No need to send
+        for (auto const& i : peerTransactions[_p->nodeId])
+            txRLPs += ts[i].rlp();
 
-    for (auto const& i : peerTransactions[_p->nodeId])
-        txRLPs += ts[i].rlp();
+        SyncTransactionsPacket packet;
+        packet.encode(txsSize, txRLPs);
 
-    SyncTransactionsPacket packet;
-    packet.encode(txsSize, txRLPs);
+        auto msg = packet.toMessage(m_protocolId);
+        m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
 
-    auto msg = packet.toMessage(m_protocolId);
-    m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
-
-    SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
-                    << LOG_KV("txNum", int(txsSize)) << LOG_KV("toNodeId", _p->nodeId.abridged())
-                    << LOG_KV("messageSize(B)", msg->buffer()->size());
-    return true;
-});
+        SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
+                        << LOG_KV("txNum", int(txsSize))
+                        << LOG_KV("toNodeId", _p->nodeId.abridged())
+                        << LOG_KV("messageSize(B)", msg->buffer()->size());
+        return true;
+    });
 }
 
 void SyncMaster::maintainBlocks()

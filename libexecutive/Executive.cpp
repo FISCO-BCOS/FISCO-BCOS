@@ -72,8 +72,8 @@ void Executive::initialize(Transaction const& _transaction)
     }
 }
 
-void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction const& _t,
-    BlockHeader const& _header, u256 const& _gasUsed) const
+void Executive::verifyTransaction(
+    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&) const
 {
     eth::EVMSchedule const& schedule = DefaultSchedule;
 
@@ -88,7 +88,7 @@ void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction con
 
 bool Executive::execute()
 {
-    // Entry point for a user-executed transaction.
+    uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
     assert(m_t.gas() >= (u256)m_baseGasRequired);
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),

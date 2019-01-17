@@ -65,7 +65,10 @@ bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& 
             sig_list.push_back(
                 std::make_pair(u256(item.second.idx), Signature(item.first.c_str())));
         }
-        assert(sig_list.size() >= minSigSize);
+        if (sig_list.size() < minSigSize)
+        {
+            return false;
+        }
         /// set siglist for prepare cache
         block.setSigList(sig_list);
         return true;
