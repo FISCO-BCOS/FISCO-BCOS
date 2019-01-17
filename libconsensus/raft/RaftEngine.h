@@ -150,6 +150,7 @@ protected:
     void runAsCandidate();
     bool runAsCandidateImp(dev::consensus::VoteState& _voteState);
 
+    void tryCommitUncommitedBlock(dev::consensus::RaftHeartBeatResp& _resp);
     virtual bool checkHeartbeatTimeout();
     virtual bool checkElectTimeout();
     ssize_t getIndexByMiner(dev::h512 const& _nodeId);
@@ -241,7 +242,7 @@ protected:
     std::condition_variable m_commitCV;
     bool m_commitReady;
     bool m_waitingForCommitting;
-    std::unordered_map<h256, std::unordered_set<dev::Public>> m_commitFingerPrint;
+    std::unordered_map<h256, std::unordered_set<dev::consensus::IDXTYPE>> m_commitFingerPrint;
 
 private:
     static typename raft::NodeIndex InvalidIndex;
