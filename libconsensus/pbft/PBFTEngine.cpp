@@ -621,7 +621,7 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
 }
 
-void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& )
+void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream&)
 {
     /// no need to decode the local generated prepare packet
     if (req.pBlock)
@@ -1388,8 +1388,7 @@ void PBFTEngine::handleFutureBlock()
                              << LOG_KV("blkNum", p_future_prepare->height)
                              << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("view", m_view)
                              << LOG_KV("conNum", m_consensusBlockNumber)
-                             << LOG_KV(
-                                    "hash", p_future_prepare->block_hash.abridged())
+                             << LOG_KV("hash", p_future_prepare->block_hash.abridged())
                              << LOG_KV("myIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
         handlePrepareMsg(*p_future_prepare);
