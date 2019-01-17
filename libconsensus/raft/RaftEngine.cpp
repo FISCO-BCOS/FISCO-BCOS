@@ -1516,3 +1516,27 @@ bool RaftEngine::reachBlockIntervalTime()
 
     return nowTime - parentTime >= g_BCOSConfig.c_intervalBlockTime;
 }
+
+const std::string RaftEngine::consensusStatus() const
+{
+    json_spirit::Array status;
+    json_spirit::Object statusObj;
+    getBasicConsensusStatus(statusObj);
+    // get current leader idx
+    statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
+    // get current leader ID
+    h512 leaderId;
+    auto isSucc = getNodeIdByIndex(leaderId, m_leader);
+    if (isSucc)
+    {
+        statusObj.push_back(json_spirit::Pair("leaderId", toString(leaderId)));
+    }
+    else
+    {
+        statusObj.push_back(json_spirit::Pair("leaderId", "get leader ID failed"));
+    }
+    status.push_back(statusObj);
+    json_spirit::Value value(status);
+    std::string status_str = json_spirit::write_string(value, true);
+    return status_str;
+}
