@@ -61,12 +61,16 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         m_channelRPCServer->setChannelServer(server);
 
+
         auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
         m_channelRPCHttpServer->StartListening();
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                               << LOG_DESC("ChannelRPCHttpServer started.");
+
+        m_channelRPCServer->setCallbackSetter(
+            std::bind(&rpc::Rpc::setCurrentTransactionCallback, rpcEntity, std::placeholders::_1));
 
         /// init httpListenPort
         ///< Donot to set destructions, the ModularServer will destruct.

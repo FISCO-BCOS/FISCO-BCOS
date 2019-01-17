@@ -63,7 +63,7 @@ $ make -j$(nproc)
 * 点亮我们的小星星！  
 * 提交代码（Pull requests），我们有 [代码贡献流程](CONTRIBUTING.md) 和 [编码规范](CODING_STYLE.md)。
 * 也可以[提问](https://github.com/FISCO-BCOS/lab-bcos/issues) 和 [提交BUG](https://github.com/FISCO-BCOS/lab-bcos/issues)。
-* 或者可以在i[微信群](docs/images/WeChatQR.jpeg) 和 [Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
+* 或者可以在[微信群](docs/images/WeChatQR.jpeg) 和 [Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
 
 ## 更多参考
 

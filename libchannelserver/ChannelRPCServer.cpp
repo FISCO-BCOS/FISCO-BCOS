@@ -221,7 +221,7 @@ void ChannelRPCServer::onDisconnect(
         {
             if (it.second == session)
             {
-                auto c = _sessions.erase(it.first);
+                _sessions.erase(it.first);
                 CHANNEL_LOG(DEBUG) << "sessions removed";
                 break;
             }
@@ -231,7 +231,7 @@ void ChannelRPCServer::onDisconnect(
         {
             if (it.second == session)
             {
-                auto c = _seq2session.erase(it.first);
+                _seq2session.erase(it.first);
                 CHANNEL_LOG(DEBUG) << "seq2session removed";
                 break;
             }
@@ -301,12 +301,47 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
     {
         std::lock_guard<std::mutex> lock(_seqMutex);
         _seq2session.insert(std::make_pair(message->seq(), session));
+
+        if (m_callbackSetter)
+        {
+            auto seq = message->seq();
+            auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
+            auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
+
+            m_callbackSetter(new std::function<void(const std::string &receiptContext)>([serverRef, sessionRef, seq](const std::string &receiptContext) {
+                auto server = serverRef.lock();
+                auto session = sessionRef.lock();
+                if (server && session)
+                {
+                    auto channelMessage = server->messageFactory()->buildMessage();
+                    channelMessage->setType(0x1000);
+                    channelMessage->setSeq(seq);
+                    channelMessage->setResult(0);
+                    channelMessage->setData((const byte*)receiptContext.c_str(), receiptContext.size());
+
+                    LOG(TRACE) << "Push transaction notify: " << seq;
+                    session->asyncSendMessage(channelMessage,
+                        std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+                }
+            }));
+        }
     }
 
     std::string* addInfo = new std::string(message->seq());
 
-    OnRequest(body, addInfo);
-    // TODO:txpool regist callback
+    try
+    {
+        OnRequest(body, addInfo);
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Error while onRequest rpc: " << boost::diagnostic_information(e);
+    }
+
+    if (m_callbackSetter)
+    {
+        m_callbackSetter(NULL);
+    }
 }
 
 void dev::ChannelRPCServer::onNodeChannelRequest(
@@ -499,8 +534,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
             m_service->asyncSendMessageByTopic(topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
-                    std::shared_ptr<dev::p2p::P2PSession> p2pSession,
-                    dev::p2p::P2PMessage::Ptr response) {
+                    std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
                     {
                         LOG(ERROR) << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())

@@ -358,6 +358,34 @@ Json::Value Rpc::getPeers()
     return Json::Value();
 }
 
+Json::Value Rpc::getNodeIDList()
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getNodeIDList") << LOG_DESC("request");
+
+        Json::Value response = Json::Value(Json::arrayValue);
+
+        response.append(service()->id().hex());
+        auto sessions = service()->sessionInfos();
+        for (auto it = sessions.begin(); it != sessions.end(); ++it)
+        {
+            response.append(it->nodeID.hex());
+        }
+
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
 Json::Value Rpc::getGroupPeers(int _groupID)
 {
     try
@@ -951,6 +979,40 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        if (m_currentTransactionCallback.get())
+        {
+            auto transactionCallback = *m_currentTransactionCallback;
+            tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
+            	Json::Value response;
+
+				response["transactionHash"] = toJS(receipt->hash());
+				response["transactionIndex"] = toJS(receipt->transactionIndex());
+				response["blockNumber"] = toJS(receipt->blockNumber());
+				response["blockHash"] = toJS(receipt->blockHash());
+				response["from"] = toJS(receipt->from());
+				response["to"] = toJS(receipt->to());
+				response["gasUsed"] = toJS(receipt->gasUsed());
+				response["contractAddress"] = toJS(receipt->contractAddress());
+				response["logs"] = Json::Value(Json::arrayValue);
+				for (unsigned int i = 0; i < receipt->log().size(); ++i)
+				{
+					Json::Value log;
+					log["address"] = toJS(receipt->log()[i].address);
+					log["topics"] = Json::Value(Json::arrayValue);
+					for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+						log["topics"].append(toJS(receipt->log()[i].topics[j]));
+					log["data"] = toJS(receipt->log()[i].data);
+					response["logs"].append(log);
+				}
+				response["logsBloom"] = toJS(receipt->bloom());
+				response["status"] = toJS(receipt->status());
+				response["output"] = toJS(receipt->outputBytes());
+
+				auto receiptContent = response.toStyledString();
+
+                transactionCallback(receiptContent);
+            });
+        }
         std::pair<h256, Address> ret = txPool->submit(tx);
 
         return toJS(ret.first);
