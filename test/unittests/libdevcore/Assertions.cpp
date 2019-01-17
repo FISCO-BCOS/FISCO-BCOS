@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(testAssertAux)
 /// test template function "assertEqualAux"
 BOOST_AUTO_TEST_CASE(testAssertEqualAux)
 {
-    int a = 0xffffffff;
+    unsigned int a = 0xffffffff;
     unsigned b = -1;
     int c = -1;
     const char* aStr = "(signed)(-1)";
