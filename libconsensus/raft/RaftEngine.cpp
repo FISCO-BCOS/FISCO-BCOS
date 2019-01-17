@@ -232,8 +232,8 @@ bool RaftEngine::getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const
     return true;
 }
 
-void RaftEngine::onRecvRaftMessage(dev::p2p::NetworkException _exception,
-    dev::p2p::P2PSession::Ptr _session, dev::p2p::P2PMessage::Ptr _message)
+void RaftEngine::onRecvRaftMessage(dev::p2p::NetworkException, dev::p2p::P2PSession::Ptr _session,
+    dev::p2p::P2PMessage::Ptr _message)
 {
     RaftMsgPacket raftMsg;
 

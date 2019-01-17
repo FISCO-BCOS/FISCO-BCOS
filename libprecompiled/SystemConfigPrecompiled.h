@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "Common.h"
-#include "libprecompiled/CRUDPrecompiled.h"
 namespace dev
 {
 namespace precompiled
@@ -44,7 +43,7 @@ contract SystemConfigTable
 }
 #endif
 
-class SystemConfigPrecompiled : public CRUDPrecompiled
+class SystemConfigPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<SystemConfigPrecompiled> Ptr;
