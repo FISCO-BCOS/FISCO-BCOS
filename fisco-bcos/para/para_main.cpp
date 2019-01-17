@@ -150,7 +150,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 }
 
 
-static void startExecute()
+static void startExecute(int _totalUser, int _totalTxs)
 {
     auto start = chrono::system_clock::now();
     ///< initialize component
@@ -168,7 +168,7 @@ static void startExecute()
     auto blockVerifier = ledgerManager->blockVerifier(1);
 
     std::cout << "Creating user..." << std::endl;
-    initUser(10, parentBlockInfo, blockVerifier, blockChain);
+    initUser(_totalUser, parentBlockInfo, blockVerifier, blockChain);
 
     parentBlock = blockChain->getBlockByNumber(height + 1);
     parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
@@ -178,7 +178,7 @@ static void startExecute()
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
-        genTxUserTransfer(block, 10, 10000);
+        genTxUserTransfer(block, _totalUser, _totalTxs);
         std::cout << "serial executing txs..." << std::endl;
         blockVerifier->executeBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
@@ -188,7 +188,7 @@ static void startExecute()
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
-        genTxUserTransfer(block, 10, 10000);
+        genTxUserTransfer(block, _totalUser, _totalTxs);
         std::cout << "serial queue executing txs..." << std::endl;
         blockVerifier->queueExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
@@ -198,7 +198,7 @@ static void startExecute()
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
-        genTxUserTransfer(block, 10, 10000);
+        genTxUserTransfer(block, _totalUser, _totalTxs);
         std::cout << "parallel executing txs..." << std::endl;
         blockVerifier->parallelExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
@@ -208,7 +208,7 @@ static void startExecute()
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
-        genTxUserTransfer(block, 10, 10000);
+        genTxUserTransfer(block, _totalUser, _totalTxs);
         std::cout << "parallel concurrent queue executing txs..." << std::endl;
         blockVerifier->parallelCqExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
@@ -218,7 +218,7 @@ static void startExecute()
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
-        genTxUserTransfer(block, 10, 10000);
+        genTxUserTransfer(block, _totalUser, _totalTxs);
         std::cout << "parallel level DAG executing txs..." << std::endl;
         blockVerifier->parallelLevelExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
@@ -228,7 +228,7 @@ static void startExecute()
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
-        genTxUserTransfer(block, 10, 10000);
+        genTxUserTransfer(block, _totalUser, _totalTxs);
         std::cout << "parallel openmp executing txs..." << std::endl;
         blockVerifier->parallelOmpExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
@@ -238,7 +238,7 @@ static void startExecute()
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
-        genTxUserTransfer(block, 10, 10000);
+        genTxUserTransfer(block, _totalUser, _totalTxs);
         std::cout << "serial executing txs..." << std::endl;
         blockVerifier->executeBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
@@ -251,5 +251,14 @@ static void startExecute()
 
 int main(int argc, const char* argv[])
 {
-    startExecute();
+    if (argc != 3)
+    {
+        std::cout << "Usage:   mini-para <total user> <total txs>" << std::endl;
+        std::cout << "Example: mini-para 1000 10000" << std::endl;
+        return 0;
+    }
+    int totalUser = atoi(argv[1]);
+    int totalTxs = atoi(argv[2]);
+    startExecute(totalUser, totalTxs);
+    return 0;
 }
