@@ -112,7 +112,7 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
  * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
  * @return ImportResult : Import result code.
  */
-ImportResult TxPool::import(Transaction& _tx, IfDropped _ik)
+ImportResult TxPool::import(Transaction& _tx, IfDropped)
 {
     _tx.setImportTime(u256(utcTime()));
     UpgradableGuard l(m_lock);
@@ -256,7 +256,7 @@ dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
     return pTxReceipt;
 }
 
-bool TxPool::dropTransactions(Block const& block, bool needNotify)
+bool TxPool::dropTransactions(Block const& block, bool)
 {
     if (block.getTransactionSize() == 0)
         return true;
@@ -276,8 +276,8 @@ bool TxPool::dropTransactions(Block const& block, bool needNotify)
     return succ;
 }
 
-/// drop a block when it has been committed failed
-bool TxPool::handleBadBlock(Block const& block)
+// TODO: drop a block when it has been committed failed
+bool TxPool::handleBadBlock(Block const&)
 {
     /// bool ret = dropTransactions(block, false);
     /// remove the nonce check related to txpool
