@@ -307,7 +307,7 @@ bool TxPool::removeBlockKnowTrans(Block const& block)
     return true;
 }
 
-bool TxPool::dropTransactions(Block const& block)
+bool TxPool::dropTransactions(Block const& block, bool)
 {
     if (block.getTransactionSize() == 0)
         return true;
@@ -336,7 +336,7 @@ bool TxPool::handleBadBlock(Block const&)
     return true;
 }
 /// drop a block when it has been committed successfully
-bool TxPool::dropBlockTrans(Block const& block, bool)
+bool TxPool::dropBlockTrans(Block const& block)
 {
     /// update the nonce check related to block chain
     m_txNonceCheck->updateCache(false);
