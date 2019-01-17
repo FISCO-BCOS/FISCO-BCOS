@@ -532,7 +532,7 @@ void SyncMaster::maintainPeersConnection()
         return true;
     });
 
-    // If myself is not in group, ignore receive packet from all peers
+    // If myself is not in group, ignore receive packet checking from all peers
     if (memberSet.find(m_nodeId) == memberSet.end())
         m_msgEngine->needCheckPacketInGroup = false;
     else
