@@ -111,6 +111,16 @@ void Sealer::doWork(bool wait)
             uint64_t tx_num = m_sealing.block.getTransactionSize();
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
+
+            /// add this to in case of unlimited-loop
+            if (m_txPool->status().current == 0)
+            {
+                m_syncTxPool = false;
+            }
+            else
+            {
+                m_syncTxPool = true;
+            }
             /// load transaction from transaction queue
             if (m_syncTxPool == true && !reachBlockIntervalTime())
                 loadTransactions(max_blockCanSeal - tx_num);
@@ -140,7 +150,6 @@ void Sealer::doWork(bool wait)
 void Sealer::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
-    SEAL_LOG(DEBUG) << "[#loadTransactions] [transToFetch]: " << transToFetch;
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }

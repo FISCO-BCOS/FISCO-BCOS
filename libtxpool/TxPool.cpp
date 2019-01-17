@@ -411,6 +411,8 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
         for (auto txHash : invalidBlockLimitTxs)
         {
             removeTransactionKnowBy(txHash);
+            TXPOOL_LOG(DEBUG) << LOG_DESC("remove imported tx: the block limit expired")
+                              << LOG_KV("hash", txHash.abridged());
         }
     }
 
