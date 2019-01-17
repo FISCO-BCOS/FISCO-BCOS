@@ -20,6 +20,7 @@
 #include "Common.h"
 #include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/Guards.h>
 #include <map>
 #include <memory>
 #include <vector>
@@ -73,6 +74,8 @@ public:
 private:
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
+
+    mutable dev::SharedMutex x_fields;
 };
 
 class Entries : public std::enable_shared_from_this<Entries>
@@ -95,6 +98,7 @@ public:
 private:
     std::vector<Entry::Ptr> m_entries;
     bool m_dirty = false;
+    mutable dev::SharedMutex x_entries;
 };
 
 class Condition : public std::enable_shared_from_this<Condition>

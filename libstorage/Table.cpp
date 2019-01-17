@@ -43,6 +43,7 @@ Entry::Entry()
 
 std::string Entry::getField(const std::string& key) const
 {
+    dev::ReadGuard l(x_fields);
     auto it = m_fields.find(key);
 
     if (it != m_fields.end())
@@ -56,6 +57,7 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
+    dev::WriteGuard l(x_fields);
     auto it = m_fields.find(key);
 
     if (it != m_fields.end())
@@ -77,6 +79,7 @@ std::map<std::string, std::string>* Entry::fields()
 
 uint32_t Entry::getStatus()
 {
+    dev::ReadGuard l(x_fields);
     auto it = m_fields.find(STATUS);
     if (it == m_fields.end())
     {
@@ -90,6 +93,7 @@ uint32_t Entry::getStatus()
 
 void Entry::setStatus(int status)
 {
+    dev::WriteGuard l(x_fields);
     auto it = m_fields.find(STATUS);
     if (it == m_fields.end())
     {
@@ -115,6 +119,7 @@ void Entry::setDirty(bool dirty)
 
 Entry::Ptr Entries::get(size_t i)
 {
+    dev::ReadGuard l(x_entries);
     if (m_entries.size() <= i)
     {
         throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
@@ -127,17 +132,20 @@ Entry::Ptr Entries::get(size_t i)
 
 size_t Entries::size() const
 {
+    dev::ReadGuard l(x_entries);
     return m_entries.size();
 }
 
 void Entries::addEntry(Entry::Ptr entry)
 {
+    dev::WriteGuard l(x_entries);
     m_entries.push_back(entry);
     m_dirty = true;
 }
 
 void Entries::removeEntry(size_t index)
 {
+    dev::WriteGuard l(x_entries);
     m_entries.erase(m_entries.begin() + index);
 }
 
