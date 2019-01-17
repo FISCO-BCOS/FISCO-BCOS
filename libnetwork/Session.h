@@ -139,8 +139,7 @@ private:
     void write();
 
     /// call by doRead() to deal with mesage
-    void onMessage(
-        NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message);
+    void onMessage(NetworkException const& e, Message::Ptr message);
 
     std::weak_ptr<Host> m_server;          ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.

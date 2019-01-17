@@ -40,7 +40,6 @@ void SyncMsgEngine::messageHandler(
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                           << LOG_DESC("Reject packet: [reason]: session/msg/group illegal");
-        _session->stop(dev::network::LocalIdentity);
         return;
     }
 
@@ -52,7 +51,6 @@ void SyncMsgEngine::messageHandler(
                           << LOG_KV("nodeId", _session->nodeID().abridged())
                           << LOG_KV("size", _msg->buffer()->size())
                           << LOG_KV("message", toHex(*_msg->buffer()));
-        _session->stop(dev::network::BadProtocol);
         return;
     }
 
@@ -70,7 +68,7 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
         return false;
 
     /// Drop packets comes from other groups
-    if (!m_syncStatus->hasPeer(_session->nodeID()))
+    if (needCheckPacketInGroup && !m_syncStatus->hasPeer(_session->nodeID()))
         return false;
     return true;
 }

@@ -59,22 +59,6 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
 
-BOOST_AUTO_TEST_CASE(InvalidInputTest)
-{
-    auto fakeMsgPtr = make_shared<P2PMessage>();
-    // Invalid Session
-    auto fakeSessionPtr = fakeSyncToolsSet.createSessionWithID(h512(0xabcd));
-    BOOST_CHECK(fakeSessionPtr->actived() == true);
-    fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, fakeMsgPtr);
-    BOOST_CHECK(fakeSessionPtr->actived() == false);
-
-    // Invalid Message
-    fakeSessionPtr = fakeSyncToolsSet.createSession();
-    BOOST_CHECK(fakeSessionPtr->actived() == true);
-    fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, fakeMsgPtr);
-    BOOST_CHECK(fakeSessionPtr->actived() == false);
-}
-
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
     auto statusPacket = SyncStatusPacket();
